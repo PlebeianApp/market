@@ -76,10 +76,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// price is always accepted within the GRACE window. Recomputes
 	// every tick via `useAuctionCountdown.now`, so the bidder watches
 	// the floor rise in real time once the curve window opens.
-	const curveFloor = useMemo(
-		() => computeAuctionBidFloor(auction, currentPrice, countdown.now),
-		[auction, currentPrice, countdown.now],
-	)
+	const curveFloor = useMemo(() => computeAuctionBidFloor(auction, currentPrice, countdown.now), [auction, currentPrice, countdown.now])
 	const flatFloor = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const minBid = Math.max(flatFloor, curveFloor)
 	const inCurveWindow = countdown.now > endAt && countdown.now < (getAuctionMaxEndAt(auction) || endAt)

@@ -198,11 +198,7 @@ export const getAuctionMinBidCurve = (auctionEvent: NDKEvent): AuctionMinBidCurv
  * Returns a positive integer (rounded up — bidder must pay at least the
  * computed floor; rounding down would let bidders shave a sat off).
  */
-export const computeAuctionBidFloor = (
-	auctionEvent: NDKEvent,
-	topBid: number,
-	atSeconds: number,
-): number => {
+export const computeAuctionBidFloor = (auctionEvent: NDKEvent, topBid: number, atSeconds: number): number => {
 	const endAt = getAuctionEndAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent) || endAt
 	const startingBid = getAuctionStartingBid(auctionEvent)

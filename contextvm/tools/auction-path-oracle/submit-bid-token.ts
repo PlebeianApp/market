@@ -1,10 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { AUCTION_BID_TOKEN_TOPIC, type AuctionBidTokenEnvelope } from '../../../src/lib/auctionTransfers'
-import {
-	buildAuctionPathRegistry,
-	findAuctionPathEntryByChildPubkey,
-	upsertAuctionPathEntry,
-} from '../../../src/lib/auctionPathOracle'
+import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, upsertAuctionPathEntry } from '../../../src/lib/auctionPathOracle'
 import { getAuctionMaxEndAt, getAuctionSettlementGrace, getAuctionTagValue } from '../../../src/lib/auctionSettlement'
 import type { AuctionContext } from '../../../src/server/auction/context'
 import { loadAuctionEvent } from '../../../src/server/auction/loadAuction'

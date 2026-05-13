@@ -254,8 +254,7 @@ const normalizeAuctionPublishInput = (
 	}
 
 	const peakRaw = typeof input.minBidCurvePeakMultiplier === 'number' ? input.minBidCurvePeakMultiplier : 2
-	const minBidCurvePeakMultiplier =
-		Number.isFinite(peakRaw) && peakRaw >= 1 && peakRaw <= 100 ? peakRaw : 2
+	const minBidCurvePeakMultiplier = Number.isFinite(peakRaw) && peakRaw >= 1 && peakRaw <= 100 ? peakRaw : 2
 	if (!Number.isFinite(peakRaw) || peakRaw < 1 || peakRaw > 100) {
 		issues.push({
 			field: 'minBidCurvePeakMultiplier',

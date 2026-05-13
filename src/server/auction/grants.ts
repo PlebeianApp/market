@@ -200,11 +200,7 @@ export async function buildAuctionPathGrant(
  * the current top": a bid that's structurally invalid is still
  * something a bidder might have committed to outbid.
  */
-async function fetchCurrentTopBidAmount(
-	ctx: AuctionContext,
-	auctionEventId: string,
-	auctionCoordinates: string,
-): Promise<number> {
+async function fetchCurrentTopBidAmount(ctx: AuctionContext, auctionEventId: string, auctionCoordinates: string): Promise<number> {
 	const filters = [
 		{
 			kinds: [AUCTION_BID_KIND],

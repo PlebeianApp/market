@@ -1508,9 +1508,7 @@ export const nip60Actions = {
 		} else if (params.preferredMints && params.preferredMints.length > 0) {
 			targetMint = params.preferredMints.find((mint) => (mintBalances[mint] ?? 0) >= amount)
 			if (!targetMint) {
-				const breakdown = params.preferredMints
-					.map((mint) => `${getMintHostname(mint)}: ${mintBalances[mint] ?? 0} sats`)
-					.join(', ')
+				const breakdown = params.preferredMints.map((mint) => `${getMintHostname(mint)}: ${mintBalances[mint] ?? 0} sats`).join(', ')
 				throw new Error(
 					`No trusted mint has ${amount} sats. ${breakdown}. Deposit to one of the auction's trusted mints (or move existing funds there) and try again.`,
 				)

@@ -195,28 +195,23 @@ describe('min_bid_curve parsing + floor multiplier (AUCTIONS.md §6.1)', () => {
 	})
 
 	test('shape=none is a no-op regardless of peak', () => {
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'none', peakMultiplier: 10 }),
-		).toBe(1)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'none', peakMultiplier: 10 })).toBe(1)
 	})
 
 	test('zero-duration window disables the curve', () => {
 		// max_end_at == end_at — no anti-snipe window picked by seller.
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 200, shape: 'exponential', peakMultiplier: 5 }),
-		).toBe(1)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 200, shape: 'exponential', peakMultiplier: 5 })).toBe(1)
 	})
 
 	test('peak=1 is a no-op (no flat-floor regression)', () => {
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 1 }),
-		).toBe(1)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 1 })).toBe(1)
 	})
 
 	test('linear: midpoint = (1 + peak) / 2', () => {
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 5 }),
-		).toBeCloseTo(3, 10)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 5 })).toBeCloseTo(
+			3,
+			10,
+		)
 	})
 
 	test('exponential: midpoint = sqrt(peak)', () => {
@@ -225,18 +220,12 @@ describe('min_bid_curve parsing + floor multiplier (AUCTIONS.md §6.1)', () => {
 	})
 
 	test('boundary: at exactly end_at → multiplier = 1', () => {
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 200, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 10 }),
-		).toBe(1)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 200, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 10 })).toBe(1)
 	})
 
 	test('boundary: at or beyond max_end_at → multiplier = peak', () => {
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 7 }),
-		).toBe(7)
-		expect(
-			computeAuctionFloorMultiplier({ atSeconds: 500, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 7 }),
-		).toBe(7)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 7 })).toBe(7)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 500, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 7 })).toBe(7)
 	})
 
 	test('parser clamps absurd peak to [1, 100]', () => {

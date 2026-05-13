@@ -270,15 +270,7 @@ function DateTimePicker({
  * where its inputs are. Keeping the ladder lean lets sellers reason
  * about the bid-amount mechanics without the timing axis muddling it.
  */
-function BidLadderViz({
-	startingBid,
-	bidIncrement,
-	reserve,
-}: {
-	startingBid: number
-	bidIncrement: number
-	reserve: number
-}) {
+function BidLadderViz({ startingBid, bidIncrement, reserve }: { startingBid: number; bidIncrement: number; reserve: number }) {
 	const validStart = Number.isFinite(startingBid) && startingBid >= 0
 	const validInc = Number.isFinite(bidIncrement) && bidIncrement > 0
 
@@ -486,14 +478,9 @@ function AuctionTimelinePreview({
 			    below. Anchored to keep edges in-card. */}
 			<div className="relative mt-3 h-7 text-[9px]">
 				{ticks.map((tick) => {
-					const translate =
-						tick.anchor === 'start' ? 'translate-x-0' : tick.anchor === 'end' ? '-translate-x-full' : '-translate-x-1/2'
+					const translate = tick.anchor === 'start' ? 'translate-x-0' : tick.anchor === 'end' ? '-translate-x-full' : '-translate-x-1/2'
 					return (
-						<div
-							key={tick.label}
-							className={`absolute top-0 ${translate} flex flex-col`}
-							style={{ left: `${tick.xPct}%` }}
-						>
+						<div key={tick.label} className={`absolute top-0 ${translate} flex flex-col`} style={{ left: `${tick.xPct}%` }}>
 							<span className="font-semibold leading-tight" style={{ color: tick.color }}>
 								{tick.label}
 							</span>
@@ -523,9 +510,7 @@ function AuctionTimelinePreview({
 
 				{/* Phase 2: curve in [end_at, max_end_at] when enabled */}
 				{curvePath && <path d={curvePath} fill="none" stroke="#10b981" strokeWidth="1.4" />}
-				{!curvePath && hasWindow && (
-					<line x1={endX} y1={flatY} x2={maxEndX} y2={flatY} stroke="#10b981" strokeWidth="1.4" />
-				)}
+				{!curvePath && hasWindow && <line x1={endX} y1={flatY} x2={maxEndX} y2={flatY} stroke="#10b981" strokeWidth="1.4" />}
 
 				{/* Phase 3: settlement window in [max_end_at, locktime] — dashed at
 				    whatever floor was reached. No bids accepted here; only the
@@ -664,7 +649,9 @@ function AntiSnipeCurveSettings({
 									)
 								}
 								className={`rounded-md border px-3 py-1.5 text-xs ${
-									isActive ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+									isActive
+										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
 								}`}
 							>
 								{minutes === 0 ? 'No window' : `${minutes} min`}
@@ -697,9 +684,7 @@ function AntiSnipeCurveSettings({
 						)
 					})}
 				</div>
-				{windowDisabled && (
-					<p className="text-[11px] text-amber-700">Pick a window above to enable the curve.</p>
-				)}
+				{windowDisabled && <p className="text-[11px] text-amber-700">Pick a window above to enable the curve.</p>}
 			</div>
 
 			<div className="grid gap-1.5">
@@ -795,7 +780,9 @@ function SettlementGraceSettings({
 							type="button"
 							onClick={() => setFormData((prev) => ({ ...prev, settlementGracePreset: option.value }))}
 							className={`flex flex-col items-start rounded-md border px-3 py-1.5 text-left text-xs ${
-								isActive ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+								isActive
+									? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+									: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
 							}`}
 						>
 							<span className="font-semibold">{option.label}</span>

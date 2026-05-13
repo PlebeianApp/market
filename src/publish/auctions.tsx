@@ -323,7 +323,8 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	// AUCTIONS.md §6.1 — replaces the legacy `extension_rule:anti_sniping:*`
 	// scheme. Floor is monotonic over time; bidder UI displays the floor
 	// at `client_now`, server enforces with a 5 s grace.
-	const minBidCurveTagValue = formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
+	const minBidCurveTagValue =
+		formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
 	const settlementGraceSeconds = AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
 	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow(formData.pathIssuerPubkey)

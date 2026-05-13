@@ -120,7 +120,7 @@ There is intentionally no product reference (`a` tag) in v1.
   leg at the mint, and publish the kind-1024 event.
 - `min_bid_curve`: anti-snipe floor curve applied in `(end_at, max_end_at]`.
   Format `<shape>:<peak_multiplier>` where `shape ∈ {none, linear,
-  exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
+exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   Floor computed as `baseline × multiplier(t)`:
   - `baseline = top_bid === 0 ? starting_bid : top_bid + bid_increment`
   - `multiplier(t) = 1` when `t ≤ end_at` or `shape = none`
@@ -128,10 +128,10 @@ There is intentionally no product reference (`a` tag) in v1.
   - In `(end_at, max_end_at)` with `t_norm = (t - end_at) / (max_end_at - end_at)`:
     - `shape = linear` → `1 + (peak_multiplier - 1) × t_norm`
     - `shape = exponential` → `peak_multiplier ^ t_norm`
-  v1 form presets for `peak_multiplier`: `2.0` / `5.0` / `10.0`. Default
-  when tag is missing: `none:1.0` (no curve, flat floor through the
-  whole bidding window). The path issuer enforces this floor at
-  `request_path` time and re-checks at settlement per-bid.
+      v1 form presets for `peak_multiplier`: `2.0` / `5.0` / `10.0`. Default
+      when tag is missing: `none:1.0` (no curve, flat floor through the
+      whole bidding window). The path issuer enforces this floor at
+      `request_path` time and re-checks at settlement per-bid.
 
 ### Optional auction tags
 
@@ -614,11 +614,11 @@ Every path-oracle auction is parameterised by three monotonically ordered
 timestamps. Implementations MUST treat each as a separate concern; collapsing
 any two of them into one is unsafe.
 
-| Tag / value          | Symbol     | Meaning                                                                                                                                                                              |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `end_at`             | `T_end`    | Nominal close. Floor stays flat in `[start_at, end_at]`. After this point the curve in `min_bid_curve` ramps the floor up.                                                           |
-| `max_end_at`         | `T_cutoff` | **Hard bidding cutoff.** No new bids accepted past this. Equals `T_end` when the seller chose no anti-snipe window; otherwise sits `(max_end_at − end_at)` seconds later by tag.    |
-| `locktime` (per bid) | `T_unlock` | Unix-seconds value embedded in every Cashu P2PK secret. The mint opens the refund path at this moment.                                                                               |
+| Tag / value          | Symbol     | Meaning                                                                                                                                                                          |
+| -------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `end_at`             | `T_end`    | Nominal close. Floor stays flat in `[start_at, end_at]`. After this point the curve in `min_bid_curve` ramps the floor up.                                                       |
+| `max_end_at`         | `T_cutoff` | **Hard bidding cutoff.** No new bids accepted past this. Equals `T_end` when the seller chose no anti-snipe window; otherwise sits `(max_end_at − end_at)` seconds later by tag. |
+| `locktime` (per bid) | `T_unlock` | Unix-seconds value embedded in every Cashu P2PK secret. The mint opens the refund path at this moment.                                                                           |
 
 The invariants:
 
