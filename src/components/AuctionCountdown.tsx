@@ -1,10 +1,5 @@
 import { cn } from '@/lib/utils'
-import {
-	formatAuctionCountdownDetailed,
-	formatAuctionEndTimeLabel,
-	formatAuctionTimeLeft,
-	getAuctionCountdownLabels,
-} from '@/lib/auctionCountdownLabels'
+import { formatAuctionCountdownDetailed, formatAuctionEndTimeLabel, getAuctionCountdownLabels } from '@/lib/auctionCountdownLabels'
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from './shared/ProgressBar'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -16,7 +11,6 @@ import {
 	getAuctionStartAt,
 	useAuctionBids,
 } from '@/queries/auctions'
-import { Badge } from './ui/badge'
 
 type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'endingSoon' | 'finalBids' | 'ended'
 
@@ -56,24 +50,6 @@ function getProgressColor(urgency: AuctionCountdownUrgency): string {
 			return '#e7e3e8' // White/Light Grey
 		default:
 			return '#18b9fe'
-	}
-}
-
-// Map urgency to the new CSS class names
-function getBadgeClassName(urgency: AuctionCountdownUrgency): string {
-	switch (urgency) {
-		case 'calm':
-			return 'badge-info'
-		case 'lastDay':
-			return 'badge-warn'
-		case 'lastHour':
-			return 'badge-amber'
-		case 'endingSoon':
-			return 'badge-error'
-		case 'finalBids':
-			return 'badge-pink'
-		default:
-			return 'badge-neutral'
 	}
 }
 
@@ -142,12 +118,14 @@ export function AuctionCountdown({
 
 	const urgency = getUrgency(remaining)
 	const color = getProgressColor(urgency)
+	const isEnded = remaining <= 0
+	const centerLabel = isEnded ? formatAuctionEndTimeLabel(endTimeEffective, true) : `${formatAuctionCountdownDetailed(remaining)} left`
 
-	// 1. Calculate Inverse Progress
+	// 1. Calculate forward progress so the bar fills from left to right as time runs out.
 	let progress = 0
 	if (totalDuration > 0) {
 		const elapsed = totalDuration - remaining
-		progress = 1 - Math.min(Math.max(elapsed / totalDuration, 0), 1)
+		progress = Math.min(Math.max(elapsed / totalDuration, 0), 1)
 	}
 	if (remaining < 0) progress = 1
 
@@ -171,43 +149,23 @@ export function AuctionCountdown({
 		}
 	}, [urgency])
 
-	const badgeClass = getBadgeClassName(urgency)
-
 	return (
 		<div className={cn('flex flex-col items-start gap-2', className)}>
-			<div className="flex flex-row justify-between items-center w-full">
-				<div className="flex flex-row gap-4 items-center">
-					{/* Shadcn Badge Component */}
-					<Badge
-						variant="outline"
-						className={cn(
-							'px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm border-2',
-							badgeClass,
-							// Overrides for badge class (bg -> primary, fg -> primary fg, border -> primary border. No hover state)
-							' bg-primary hover:bg-primary text-primary-foreground hover:text-primary-foreground border-primary-border hover:border-primary-border',
-						)}
-					>
-						{formatAuctionTimeLeft(remaining)}
-					</Badge>
-					{!compact && (
-						<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatAuctionCountdownDetailed(remaining)}</span>
-					)}
-				</div>
-
-				{/* Rightmost Element: "Absolute" end time */}
-				{compact ? (
-					<span className="text-foreground whitespace-nowrap text-base text-end font-semibold">
-						{formatAuctionCountdownDetailed(remaining)}
-					</span>
-				) : (
-					<span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(endTimeEffective, remaining <= 0)}</span>
-				)}
-			</div>
-
-			{/* Progress Bar */}
 			<div className="w-full">
-				<ProgressBar progress={progress} color={color} fillDuration={1} height={16} {...progressConfig} />
+				<div className="relative overflow-hidden rounded-md w-full">
+					<ProgressBar progress={progress} color={color} fillDuration={1} height={28} badgeStyle {...progressConfig} />
+					<div className="absolute inset-0 flex items-center justify-center px-2 pointer-events-none">
+						<span className={cn('text-foreground font-semibold max-w-full truncate', isEnded ? 'text-xs' : 'text-sm whitespace-nowrap')}>
+							{centerLabel}
+						</span>
+					</div>
+				</div>
 			</div>
+
+			{/* Non-compact metadata line sits below the badge to avoid squeezing the bar. */}
+			{compact || isEnded ? null : (
+				<span className="text-foreground/80 text-end w-full">{formatAuctionEndTimeLabel(endTimeEffective, false)}</span>
+			)}
 		</div>
 	)
 }

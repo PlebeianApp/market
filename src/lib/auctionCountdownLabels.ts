@@ -81,7 +81,7 @@ export function formatAuctionEndTimeLabel(endTimestamp: number, isEnded: boolean
 	const timeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
 	if (isEnded) {
-		return `Ended on ${endDate.toLocaleDateString()} at ${timeStr}`
+		return `Ended on ${endDate.toLocaleDateString()} ${timeStr}`
 	}
 
 	if (endDateStr === todayStr) {

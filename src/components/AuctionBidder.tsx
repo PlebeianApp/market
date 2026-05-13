@@ -252,7 +252,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				<Button
 					onClick={handleSubmitBid}
 					disabled={isDisabledBid}
-					variant={isOwnAuction ? 'secondary' : 'default'}
+					variant={ended ? 'ghost' : isOwnAuction ? 'secondary' : 'default'}
 					className={cn('whitespace-nowrap flex grow')}
 				>
 					{buttonText}

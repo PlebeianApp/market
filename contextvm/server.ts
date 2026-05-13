@@ -1,10 +1,4 @@
-import {
-	NostrServerTransport,
-	PrivateKeySigner,
-	ApplesauceRelayPool,
-	withCommonToolSchemas,
-	GiftWrapMode,
-} from '@contextvm/sdk'
+import { NostrServerTransport, PrivateKeySigner, ApplesauceRelayPool, withCommonToolSchemas, GiftWrapMode } from '@contextvm/sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
@@ -310,7 +304,7 @@ async function main() {
 		{
 			title: 'Get current auction state',
 			description:
-				'Read-only view of an auction\'s current floor, top bid, bid count, and registry health (paths issued vs locked). Public — no caller identity required.',
+				"Read-only view of an auction's current floor, top bid, bid count, and registry health (paths issued vs locked). Public — no caller identity required.",
 			inputSchema: getAuctionStateInputSchema,
 			outputSchema: getAuctionStateOutputSchema,
 		},
