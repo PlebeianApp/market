@@ -35,10 +35,8 @@ import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CalendarIcon, Plus, X } from 'lucide-react'
-import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
-import { InfoTooltip } from '@/components/shared/InfoTooltip'
-import { Slider } from '@/components/ui/slider'
+import { CalendarIcon, Plus, Trash2, X } from 'lucide-react'
+import { useMemo, useState, useEffect, useRef, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
@@ -164,6 +162,39 @@ function NameTab({ formData, setFormData }: TabProps) {
 
 type StartMode = 'immediate' | 'scheduled'
 type EndMode = 'duration' | 'absolute'
+
+const AUCTION_DRAFT_KEY = 'auction-form-draft'
+
+interface AuctionFormDraft {
+	formData: AuctionFormData
+	images: AuctionImage[]
+	subCategoryInput: string
+	startMode: StartMode
+	endMode: EndMode
+	durationSeconds: number
+	activeTab: AuctionTab
+}
+
+function saveDraft(draft: AuctionFormDraft): void {
+	try {
+		localStorage.setItem(AUCTION_DRAFT_KEY, JSON.stringify(draft))
+	} catch {}
+}
+
+function loadDraft(): AuctionFormDraft | null {
+	try {
+		const raw = localStorage.getItem(AUCTION_DRAFT_KEY)
+		return raw ? (JSON.parse(raw) as AuctionFormDraft) : null
+	} catch {
+		return null
+	}
+}
+
+function clearDraft(): void {
+	try {
+		localStorage.removeItem(AUCTION_DRAFT_KEY)
+	} catch {}
+}
 
 const DURATION_PRESETS: { label: string; seconds: number }[] = [
 	{ label: '1m', seconds: 1 * 60 },
@@ -1521,13 +1552,39 @@ export function AuctionFormContent() {
 		[walletDevMode],
 	)
 
-	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
-	const [images, setImages] = useState<AuctionImage[]>([])
-	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
-	const [subCategoryInput, setSubCategoryInput] = useState('')
-	const [startMode, setStartMode] = useState<StartMode>('immediate')
-	const [endMode, setEndMode] = useState<EndMode>('duration')
-	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
+	const draft = useMemo(() => loadDraft(), [])
+
+	const [formData, setFormData] = useState<AuctionFormData>(() => draft?.formData ?? { ...INITIAL_FORM, trustedMints: [...availableMints] })
+	const [images, setImages] = useState<AuctionImage[]>(() => draft?.images ?? [])
+	const [activeTab, setActiveTab] = useState<AuctionTab>(() => draft?.activeTab ?? 'name')
+	const [subCategoryInput, setSubCategoryInput] = useState<string>(() => draft?.subCategoryInput ?? '')
+	const [startMode, setStartMode] = useState<StartMode>(() => draft?.startMode ?? 'immediate')
+	const [endMode, setEndMode] = useState<EndMode>(() => draft?.endMode ?? 'duration')
+	const [durationSeconds, setDurationSeconds] = useState<number>(() => draft?.durationSeconds ?? 24 * 60 * 60)
+	const [hasDraft, setHasDraft] = useState<boolean>(() => !!draft)
+	const isMounted = useRef(false)
+
+	useEffect(() => {
+		if (!isMounted.current) {
+			isMounted.current = true
+			return
+		}
+		saveDraft({ formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab })
+		setHasDraft(true)
+	}, [formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab])
+
+	const handleClearDraft = () => {
+		clearDraft()
+		isMounted.current = false
+		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
+		setImages([])
+		setActiveTab('name')
+		setSubCategoryInput('')
+		setStartMode('immediate')
+		setEndMode('duration')
+		setDurationSeconds(24 * 60 * 60)
+		setHasDraft(false)
+	}
 
 	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
@@ -1589,6 +1646,7 @@ export function AuctionFormContent() {
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
 			if (!publishedEventId) return
 
+			clearDraft()
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 			navigate({ to: '/auctions/$auctionId', params: { auctionId: publishedEventId } })
 		} catch (error) {
@@ -1670,7 +1728,20 @@ export function AuctionFormContent() {
 				</Tabs>
 			</div>
 
-			<div className="bg-white border-t pt-4 pb-2 mt-2">
+			<div className="bg-white border-t pt-4 pb-2 mt-2 space-y-2">
+				{hasDraft && (
+					<div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+						<span className="flex-1">Draft saved</span>
+						<button
+							type="button"
+							onClick={handleClearDraft}
+							className="flex items-center gap-1 font-semibold text-amber-900 hover:text-red-700 shrink-0"
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+							Clear draft
+						</button>
+					</div>
+				)}
 				<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
 					{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
 				</Button>
