@@ -1557,7 +1557,7 @@ export function AuctionFormContent() {
 			if (!publishedEventId) return
 
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-			navigate({ to: '/auctions' })
+			navigate({ to: '/auctions/$auctionId', params: { auctionId: publishedEventId } })
 		} catch (error) {
 			console.error('Failed to submit auction form:', error)
 		}
