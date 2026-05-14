@@ -43,7 +43,7 @@ export interface AuctionFilterState {
 
 export interface UseFilteredAuctionsProps {
 	auctions: NDKEvent[]
-	bidsByAuctionId: Map<string, any> | undefined // Adjust 'any' to your actual bid type if known
+	bidsByAuctionId?: Map<string, NDKEvent[]>
 	filters: AuctionFilterState
 	tag: string | undefined
 }

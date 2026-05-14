@@ -348,7 +348,9 @@ function AuctionsOverviewComponent() {
 						</SelectTrigger>
 						<SelectContent>
 							{auctionSortOptionValues.map((value) => (
-								<SelectItem value={value}>{getAuctionSortOptionTitle(value)}</SelectItem>
+								<SelectItem key={value} value={value}>
+									{getAuctionSortOptionTitle(value)}
+								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
@@ -376,7 +378,9 @@ function AuctionsOverviewComponent() {
 						</SelectTrigger>
 						<SelectContent>
 							{auctionSortOptionValues.map((value) => (
-								<SelectItem value={value}>{getAuctionSortOptionTitle(value)}</SelectItem>
+								<SelectItem key={value} value={value}>
+									{getAuctionSortOptionTitle(value)}
+								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>

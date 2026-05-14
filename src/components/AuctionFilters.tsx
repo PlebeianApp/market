@@ -21,7 +21,8 @@ interface AuctionFiltersProps {
 
 export function AuctionFilters({ filters, onFiltersChange, className }: AuctionFiltersProps) {
 	const appliedFilterCount = calculateAppliedFilterCount(filters)
-	const hasEnabledHideEnded = filters.hideEnded !== defaultAuctionFilters.hideEnded
+	const hasEnabledHideEnded = filters.hideEnded ?? defaultAuctionFilters.hideEnded
+	const sort = filters.sort ?? defaultAuctionFilters.sort
 
 	const toggleFilterHideEnded = () => {
 		onFiltersChange({ ...filters, hideEnded: !hasEnabledHideEnded })
@@ -67,13 +68,15 @@ export function AuctionFilters({ filters, onFiltersChange, className }: AuctionF
 								<SortAsc className="w-4 h-4" />
 								Sort by
 							</div>
-							<Select value={filters.sort} onValueChange={handleSortChange}>
+							<Select value={sort} onValueChange={handleSortChange}>
 								<SelectTrigger className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
 									{auctionSortOptionValues.map((value) => (
-										<SelectItem value={value}>{getAuctionSortOptionTitle(value)}</SelectItem>
+										<SelectItem key={value} value={value}>
+											{getAuctionSortOptionTitle(value)}
+										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
