@@ -243,7 +243,7 @@ export const ndkActions = {
 
 		if (!configRelaySyncInitialized) {
 			configRelaySyncInitialized = true
-			configStore.subscribe(({ currentVal }) => {
+			configStore.subscribe((currentVal) => {
 				const appRelay = currentVal.config.appRelay
 				if (!appRelay) return
 				if (lastSyncedAppRelay === appRelay) return
