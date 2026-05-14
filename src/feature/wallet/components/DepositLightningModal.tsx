@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
@@ -6,25 +6,41 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
+import { normalizeMintUrl } from '@/lib/wallet'
 
 interface DepositLightningModalProps {
 	open: boolean
 	onClose: () => void
+	initialAmount?: number
+	preferredMint?: string
 }
 
-export function DepositLightningModal({ open, onClose }: DepositLightningModalProps) {
+export function DepositLightningModal({ open, onClose, initialAmount, preferredMint }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [copied, setCopied] = useState(false)
 
-	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
+	// Sync defaults once when the modal opens so user edits are not overwritten.
+	const wasOpenRef = useRef(false)
+
 	useEffect(() => {
-		if (open) {
-			setSelectedMint(defaultMint ?? mints[0] ?? '')
+		if (!open) {
+			wasOpenRef.current = false
+			return
 		}
-	}, [open, defaultMint, mints])
+
+		if (wasOpenRef.current) return
+		wasOpenRef.current = true
+
+		const preferred = preferredMint ? mints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(preferredMint)) : ''
+		setSelectedMint(preferred || defaultMint || mints[0] || '')
+
+		if (typeof initialAmount === 'number' && Number.isFinite(initialAmount) && initialAmount > 0) {
+			setAmount(String(Math.ceil(initialAmount)))
+		}
+	}, [open, defaultMint, mints, initialAmount, preferredMint])
 
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)

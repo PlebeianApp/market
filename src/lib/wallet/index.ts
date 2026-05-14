@@ -8,4 +8,4 @@ export { extractProofsByMint, getProofsForMint } from './proofs'
 export { loadUserData, saveUserData, removeUserData } from './storage'
 
 // Display utilities
-export { getMintHostname, formatSats } from './display'
+export { getMintHostname, formatSats, normalizeMintUrl } from './display'
