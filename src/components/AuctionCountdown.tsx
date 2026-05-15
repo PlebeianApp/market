@@ -143,7 +143,7 @@ export function AuctionCountdown({
 			case 'lastHour':
 				return { glow: true, stripeWidth: 26, stripeGap: 8, stripeOpacity: 0.4, stripeSpeed: 0.8, stripeHeight: 38 }
 			case 'finalBids':
-				return { glow: true, stripeWidth: 2, stripeGap: 2, stripeOpacity: 0.8, stripeSpeed: 0.2, stripeHeight: 38 }
+				return { glow: true, stripeWidth: 26, stripeGap: 2, stripeOpacity: 0.8, stripeSpeed: 0.4, stripeHeight: 38 }
 			case 'ended':
 				return {
 					glow: false,
