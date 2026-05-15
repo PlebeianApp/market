@@ -4,7 +4,7 @@ import {
 	type ProductShippingSelectionInput,
 } from './utils/productShippingSelections'
 
-export const AUCTION_MIN_DURATION_SECONDS = 30 * 60
+export const AUCTION_MIN_DURATION_SECONDS = 60
 
 export type AuctionPublishValidationField =
 	| 'title'
@@ -233,7 +233,7 @@ const normalizeAuctionPublishInput = (
 
 	const durationSeconds = parsedEndAt === null ? 0 : parsedEndAt - effectiveStartBoundary
 	if (parsedEndAt !== null && options.minDurationSeconds !== undefined && durationSeconds < options.minDurationSeconds) {
-		issues.push({ field: 'duration', message: 'Auction duration must be at least 30 minutes' })
+		issues.push({ field: 'duration', message: 'Auction duration must be at least 1 minute' })
 	}
 
 	// Anti-snipe window in minutes → seconds. `0` means no window
