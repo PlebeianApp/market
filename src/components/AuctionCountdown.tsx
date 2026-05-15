@@ -85,8 +85,6 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 export function AuctionCountdown({
 	auction,
 	bids: bidsProp,
-	className,
-	compact = false,
 }: {
 	auction: NDKEvent
 	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
@@ -163,15 +161,8 @@ export function AuctionCountdown({
 	}, [urgency])
 
 	return (
-		<div className={cn('flex flex-col items-start gap-2', className)}>
-			<div className="w-full">
-				<ProgressBar label={centerLabel} progress={progress} color={color} fillDuration={1} {...progressConfig} />
-			</div>
-
-			{/* Non-compact metadata line sits below the badge to avoid squeezing the bar. */}
-			{compact || isEnded ? null : (
-				<span className="text-foreground/80 text-end w-full">{formatAuctionEndTimeLabel(endTimeEffective, false)}</span>
-			)}
+		<div className="w-full">
+			<ProgressBar label={centerLabel} progress={progress} color={color} fillDuration={1} {...progressConfig} />
 		</div>
 	)
 }
