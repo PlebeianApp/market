@@ -20,12 +20,19 @@ import {
 	CheckStateEnum,
 	getDecodedToken,
 	getEncodedToken,
-	getTokenMetadata,
 	type MintKeys,
 	type MintKeyset,
 	type Proof,
 } from '@cashu/cashu-ts'
-import { getP2PKLocktime } from '@cashu/cashu-ts/crypto/client/NUT11'
+import { parseSecret } from '@cashu/crypto/modules/common/NUT11'
+
+function getP2PKLocktime(secret: Uint8Array | string): number {
+	try {
+		const parsed = parseSecret(secret instanceof Uint8Array ? new TextDecoder().decode(secret) : secret)
+		if (Array.isArray(parsed) && parsed[0] === 'P2PK' && parsed[1]?.locktime != null) return parsed[1].locktime
+	} catch {}
+	return NaN
+}
 import { secp256k1 } from '@noble/curves/secp256k1'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
@@ -664,7 +671,7 @@ const receiveTokenIntoWallet = async (
 		privkey?: string
 	},
 ): Promise<{ amount: number; mintUrl: string }> => {
-	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
+	const mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
 	try {
