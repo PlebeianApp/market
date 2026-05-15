@@ -106,13 +106,13 @@ const parseNonNegativeInteger = (
 ): number | null => {
 	const text = toTrimmedString(value)
 	if (!INTEGER_PATTERN.test(text)) {
-		issues.push({ field, message: `${label} must be an integer greater than or equal to 0` })
+		issues.push({ field, message: 'Please enter a valid number.' })
 		return null
 	}
 
 	const parsed = Number(text)
 	if (!Number.isSafeInteger(parsed)) {
-		issues.push({ field, message: `${label} must be a safe integer greater than or equal to 0` })
+		issues.push({ field, message: 'Please enter a valid number.' })
 		return null
 	}
 

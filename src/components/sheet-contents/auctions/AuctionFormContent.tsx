@@ -49,7 +49,7 @@ const INITIAL_FORM: AuctionFormData = {
 	description: '',
 	startingBid: '',
 	bidIncrement: '1',
-	reserve: '0',
+	reserve: undefined,
 	startAt: '',
 	endAt: '',
 	// Anti-snipe defaults: no window, no curve, 1h settlement grace.
@@ -816,6 +816,8 @@ function AuctionTabContent({
 	setDurationSeconds: Dispatch<SetStateAction<number>>
 	validationMessages: ValidationMessages
 }) {
+	const [useReserve, setUseReserve] = useState(false)
+
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -832,7 +834,7 @@ function AuctionTabContent({
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve, 10)
+	const reserveNum = parseInt(formData.reserve ?? '', 10)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -1013,7 +1015,7 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid sm:grid-cols-2 gap-4">
+			<div className="grid sm:grid-cols-2 gap-4 items-start">
 				<div className="grid w-full gap-1.5">
 					<Label htmlFor="auction-starting-bid">
 						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
@@ -1042,17 +1044,36 @@ function AuctionTabContent({
 				</div>
 			</div>
 
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-				<Input
-					id="auction-reserve"
-					type="number"
-					min="0"
-					value={formData.reserve}
-					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+			<div className="flex items-center space-x-2">
+				<Checkbox
+					id="use-reserve"
+					checked={!!formData.reserve || useReserve}
+					onCheckedChange={(checked) => {
+						if (checked === true) {
+							setUseReserve(true)
+							setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
+						} else {
+							setUseReserve(false)
+							setFormData((prev) => ({ ...prev, reserve: undefined }))
+						}
+					}}
 				/>
-				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+				<Label htmlFor="use-reserve">Set Reserve Price</Label>
 			</div>
+
+			{(!!formData.reserve || useReserve) && (
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+					<Input
+						id="auction-reserve"
+						type="number"
+						min="0"
+						value={formData.reserve}
+						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+					/>
+					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+				</div>
+			)}
 
 			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
 

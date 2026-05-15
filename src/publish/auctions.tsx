@@ -67,7 +67,7 @@ export interface AuctionFormData {
 	description: string
 	startingBid: string
 	bidIncrement: string
-	reserve: string
+	reserve?: string
 	startAt?: string
 	endAt: string
 	/**
