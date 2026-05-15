@@ -37,6 +37,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, X } from 'lucide-react'
 import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
@@ -1059,6 +1060,7 @@ function AuctionTabContent({
 					}}
 				/>
 				<Label htmlFor="use-reserve">Set Reserve Price</Label>
+				<InfoTooltip content="A reserve price sets a minimum bid amount that must be met for the auction to be successful. If the highest bid is below the reserve, the auction ends with no winner." />
 			</div>
 
 			{(!!formData.reserve || useReserve) && (
