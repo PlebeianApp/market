@@ -997,7 +997,7 @@ function AuctionTabContent({
 								className="w-full accent-secondary"
 							/>
 							<div className="flex items-center justify-between text-[10px] text-zinc-500">
-								<span>1h</span>
+								<span>1m</span>
 								<span>30d</span>
 							</div>
 						</div>
