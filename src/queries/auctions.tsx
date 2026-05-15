@@ -366,6 +366,10 @@ export const auctionBidsForListQueryOptions = (auctionRootEventIds: string[], li
 	})
 }
 
+/*
+ * One batched bid query for the whole list.
+ * See `auctionBidsForListQueryOptions` for rationale.
+ */
 export const useAuctionBidsForList = (auctionRootEventIds: string[], limit: number = 1000) =>
 	useQuery({
 		...auctionBidsForListQueryOptions(auctionRootEventIds, limit),
