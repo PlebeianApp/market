@@ -26,9 +26,8 @@ export interface AuctionCountdownState {
 
 function getUrgency(secondsRemaining: number): AuctionCountdownUrgency {
 	if (secondsRemaining <= 0) return 'ended'
-	if (secondsRemaining < 15) return 'finalBids' // < 15s - Final bids
-	if (secondsRemaining <= 900) return 'endingSoon' // 15s - 15m (900s)
-	if (secondsRemaining <= 3600) return 'lastHour' // 15m - 1h
+	if (secondsRemaining < 60) return 'finalBids' // < 1m - Final bids
+	if (secondsRemaining <= 3600) return 'lastHour' // 1m - 1h
 	if (secondsRemaining <= 86400) return 'lastDay' // 1h - 24h
 	return 'calm' // 24h+
 }
@@ -39,10 +38,8 @@ function getProgressColor(urgency: AuctionCountdownUrgency): string {
 		case 'calm':
 			return '#18b9fe' // Light Blue
 		case 'lastDay':
-			return '#ffd53d' // Yellow
+			return '#ffc200' // Orange
 		case 'lastHour':
-			return '#ff9f43' // Orange
-		case 'endingSoon':
 			return '#bf4040' // Red
 		case 'finalBids':
 			return '#ff3eb5' // Pink
@@ -133,33 +130,42 @@ export function AuctionCountdown({
 	const progressConfig = useMemo(() => {
 		switch (urgency) {
 			case 'calm':
-				return { glow: false, stripeWidth: 20, stripeGap: 20, stripeOpacity: 0.15, stripeSpeed: 2.5, stripeAngle: 45 }
+				return { glow: false, stripeWidth: 26, stripeGap: 18, stripeOpacity: 0.15, stripeSpeed: 2.5, stripeHeight: 38 }
 			case 'lastDay':
-				return { glow: true, stripeWidth: 3, stripeGap: 10, stripeOpacity: 0.4, stripeSpeed: 1.5, stripeAngle: 45 }
+				return {
+					glow: true,
+					stripeWidth: 26,
+					stripeGap: 14,
+					stripeOpacity: 0.3,
+					stripeSpeed: 1.2,
+					stripeHeight: 38,
+					backgroundColor: '#EEEEEE',
+					textOnDark: false,
+				}
 			case 'lastHour':
-				return { glow: true, stripeWidth: 3, stripeGap: 6, stripeOpacity: 0.6, stripeSpeed: 0.8, stripeAngle: 45 }
-			case 'endingSoon':
-				return { glow: true, stripeWidth: 3, stripeGap: 4, stripeOpacity: 0.8, stripeSpeed: 0.4, stripeAngle: 45 }
+				return { glow: true, stripeWidth: 26, stripeGap: 8, stripeOpacity: 0.4, stripeSpeed: 0.8, stripeHeight: 38 }
 			case 'finalBids':
-				return { glow: true, stripeWidth: 2, stripeGap: 2, stripeOpacity: 0.8, stripeSpeed: 0.2, stripeAngle: 45 }
+				return { glow: true, stripeWidth: 2, stripeGap: 2, stripeOpacity: 0.8, stripeSpeed: 0.2, stripeHeight: 38 }
 			case 'ended':
-				return { glow: false, stripeWidth: 0, stripeGap: 10, stripeOpacity: 0, stripeSpeed: 0, stripeAngle: 0 }
+				return {
+					glow: false,
+					stripeWidth: 0,
+					stripeGap: 10,
+					stripeOpacity: 0,
+					stripeSpeed: 0,
+					stripeAngle: 0,
+					backgroundColor: '#EEEEEE',
+					textOnDark: false,
+				}
 			default:
-				return { glow: false, stripeWidth: 2, stripeGap: 8, stripeOpacity: 0.3, stripeSpeed: 1, stripeAngle: 45 }
+				return { glow: false, stripeWidth: 2, stripeGap: 8, stripeOpacity: 0.3, stripeSpeed: 1 }
 		}
 	}, [urgency])
 
 	return (
 		<div className={cn('flex flex-col items-start gap-2', className)}>
 			<div className="w-full">
-				<div className="relative overflow-hidden rounded-md w-full">
-					<ProgressBar progress={progress} color={color} fillDuration={1} height={28} badgeStyle {...progressConfig} />
-					<div className="absolute inset-0 flex items-center justify-center px-2 pointer-events-none">
-						<span className={cn('text-foreground font-semibold max-w-full truncate', isEnded ? 'text-xs' : 'text-sm whitespace-nowrap')}>
-							{centerLabel}
-						</span>
-					</div>
-				</div>
+				<ProgressBar label={centerLabel} progress={progress} color={color} fillDuration={1} {...progressConfig} />
 			</div>
 
 			{/* Non-compact metadata line sits below the badge to avoid squeezing the bar. */}

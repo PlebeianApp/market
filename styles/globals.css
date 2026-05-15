@@ -262,6 +262,7 @@ button {
 	--color-sidebar: var(--sidebar-background);
 	--color-light-gray: var(--light-gray);
 	--color-neo-purple: var(--neo-purple);
+
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -547,54 +548,6 @@ button {
 	/* Custom utility classes */
 	.bg-off-black {
 		background-color: var(--off-black);
-	}
-
-	/* Badge variants */
-
-	/* INFO - Light Blue */
-	.badge-info {
-		/* Based on --neo-blue */
-		--primary: #d8f3ff;
-		--primary-foreground: #076289;
-		--primary-border: #afe7ff;
-	}
-
-	/* WARN - Yellow */
-	.badge-warn {
-		/* Based on --focus */
-		--primary: #fff3c9;
-		--primary-foreground: #705700;
-		--primary-border: #ffe484;
-	}
-
-	/* ERROR - Red */
-	.badge-error {
-		/* Based on --destructive */
-		--primary: #f7baba;
-		--primary-foreground: #8d0a0a;
-		--primary-border: #f19999;
-	}
-
-	/* PINK - Pink */
-	.badge-pink {
-		/* Based on --secondary / "plebeian pink" */
-		--primary: #ffceec;
-		--primary-foreground: #97005d;
-		--primary-border: #fc9fd9;
-	}
-
-	/* AMBER - Amber */
-	.badge-amber {
-		--primary: #ffd8a8;
-		--primary-foreground: #b46300;
-		--primary-border: #ffc884;
-	}
-
-	/* NEUTRAL - Grey */
-	.badge-neutral {
-		--primary: hsl(0, 0%, 96%);
-		--primary-foreground: hsl(0, 0%, 20%);
-		--primary-border: hsl(0, 0%, 85%);
 	}
 
 	/* Custom CSS Targetting Selected ToggleGroupItems */
