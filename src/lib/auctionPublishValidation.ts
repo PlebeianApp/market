@@ -63,7 +63,7 @@ export type ValidatedAuctionPublishData = {
 	description: string
 	startingBid: number
 	bidIncrement: number
-	reserve: number
+	reserve?: number
 	startAt: number
 	endAt: number
 	durationSeconds: number
@@ -103,17 +103,17 @@ const parseNonNegativeInteger = (
 	field: AuctionPublishValidationField,
 	label: string,
 	issues: AuctionPublishValidationIssue[],
-): number | null => {
+): number | undefined => {
 	const text = toTrimmedString(value)
 	if (!INTEGER_PATTERN.test(text)) {
 		issues.push({ field, message: 'Please enter a valid number.' })
-		return null
+		return
 	}
 
 	const parsed = Number(text)
 	if (!Number.isSafeInteger(parsed)) {
 		issues.push({ field, message: 'Please enter a valid number.' })
-		return null
+		return
 	}
 
 	return parsed
@@ -124,12 +124,13 @@ const parsePositiveInteger = (
 	field: AuctionPublishValidationField,
 	label: string,
 	issues: AuctionPublishValidationIssue[],
-): number | null => {
+): number | undefined => {
 	const parsed = parseNonNegativeInteger(value, field, label, issues)
-	if (parsed === null) return null
+	if (!parsed) return
+
 	if (parsed <= 0) {
 		issues.push({ field, message: `${label} must be greater than 0` })
-		return null
+		return
 	}
 
 	return parsed
@@ -140,14 +141,14 @@ const parseOptionalUnixTimestamp = (
 	field: AuctionPublishValidationField,
 	label: string,
 	issues: AuctionPublishValidationIssue[],
-): number | null => {
+): number | undefined => {
 	const text = toTrimmedString(value)
-	if (!text) return null
+	if (!text) return
 
 	const timestampMs = new Date(text).getTime()
 	if (!Number.isFinite(timestampMs)) {
 		issues.push({ field, message: `${label} must be a valid date and time` })
-		return null
+		return
 	}
 
 	return Math.floor(timestampMs / 1000)
@@ -212,10 +213,14 @@ const normalizeAuctionPublishInput = (
 
 	const startingBid = parseNonNegativeInteger(input.startingBid, 'startingBid', 'Starting bid', issues)
 	const bidIncrement = parsePositiveInteger(input.bidIncrement, 'bidIncrement', 'Bid increment', issues)
-	const reserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
 
-	if (startingBid !== null && reserve !== null && reserve < startingBid) {
-		issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
+	let reserve
+	if (input.reserve) {
+		const reserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
+
+		if (startingBid && reserve && reserve < startingBid) {
+			issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
+		}
 	}
 
 	const parsedStartAt = parseOptionalUnixTimestamp(input.startAt, 'startAt', 'Auction start time', issues)
@@ -227,12 +232,12 @@ const normalizeAuctionPublishInput = (
 
 	const endAt = parsedEndAt ?? 0
 	const effectiveStartBoundary = Math.max(startAt, nowSeconds)
-	if (parsedEndAt !== null && parsedEndAt <= effectiveStartBoundary) {
+	if (parsedEndAt && parsedEndAt <= effectiveStartBoundary) {
 		issues.push({ field: 'endAt', message: 'Auction end time must be after the start time and current time' })
 	}
 
-	const durationSeconds = parsedEndAt === null ? 0 : parsedEndAt - effectiveStartBoundary
-	if (parsedEndAt !== null && options.minDurationSeconds !== undefined && durationSeconds < options.minDurationSeconds) {
+	const durationSeconds = parsedEndAt ? parsedEndAt - effectiveStartBoundary : 0
+	if (parsedEndAt && options.minDurationSeconds && durationSeconds < options.minDurationSeconds) {
 		issues.push({ field: 'duration', message: 'Auction duration must be at least 1 minute' })
 	}
 
@@ -300,7 +305,7 @@ const normalizeAuctionPublishInput = (
 			description,
 			startingBid: startingBid ?? 0,
 			bidIncrement: bidIncrement ?? 0,
-			reserve: reserve ?? 0,
+			reserve,
 			startAt,
 			endAt,
 			durationSeconds,

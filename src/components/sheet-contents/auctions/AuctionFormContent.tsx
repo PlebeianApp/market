@@ -203,15 +203,12 @@ const DURATION_PRESETS: { label: string; seconds: number }[] = [
 	{ label: '30d', seconds: 30 * 86400 },
 ]
 
-const MIN_DURATION_HOURS = 1 / 60 // 1 minute in hours
-const MAX_DURATION_HOURS = 30 * 24
-
 function pad2(n: number): string {
 	return n.toString().padStart(2, '0')
 }
 
 function toDatetimeLocal(date: Date): string {
-	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
 }
 
 function parseDatetimeLocalSeconds(value: string): number | null {
@@ -1568,7 +1565,6 @@ export function AuctionFormContent() {
 	const hasValidBidding =
 		!validationMessages.startingBid &&
 		!validationMessages.bidIncrement &&
-		!validationMessages.reserve &&
 		!validationMessages.startAt &&
 		!validationMessages.endAt &&
 		!validationMessages.duration &&
