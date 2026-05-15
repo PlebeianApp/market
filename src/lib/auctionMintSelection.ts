@@ -12,6 +12,7 @@ export interface MintSelectionInput {
 	walletMints: string[]
 	mintBalances: Record<string, number>
 	bidAmount: number
+	previousBidAmount?: number
 }
 
 export interface MintSelectionResult {
@@ -26,7 +27,7 @@ export interface MintSelectionResult {
 const normalizeMintUrl = (url: string): string => url.trim().replace(/\/+$/, '')
 
 export function resolveAuctionMintSelection(input: MintSelectionInput): MintSelectionResult {
-	const { trustedMints, walletMints, mintBalances, bidAmount } = input
+	const { trustedMints, walletMints, mintBalances, bidAmount, previousBidAmount = 0 } = input
 
 	if (!trustedMints.length) {
 		return {
@@ -38,6 +39,8 @@ export function resolveAuctionMintSelection(input: MintSelectionInput): MintSele
 			error: 'Auction has no trusted mints configured',
 		}
 	}
+
+	const deltaAmount = Math.max(0, bidAmount - previousBidAmount)
 
 	const normalizedWalletMints = new Set(walletMints.map(normalizeMintUrl))
 
@@ -53,7 +56,7 @@ export function resolveAuctionMintSelection(input: MintSelectionInput): MintSele
 					mintUrl,
 					hostname: getMintHostname(mintUrl),
 					balance,
-					hasSufficientBalance: balance >= bidAmount,
+					hasSufficientBalance: balance >= deltaAmount,
 				})
 			} else {
 				unfundedTrustedMints.push(mintUrl)
@@ -85,7 +88,7 @@ export function resolveAuctionMintSelection(input: MintSelectionInput): MintSele
 			eligibleMints: [],
 			insufficientBalanceMints,
 			unfundedTrustedMints,
-			error: `Insufficient balance. Need ${bidAmount} sats. Closest: ${getMintHostname(bestMint.mintUrl)} (${bestMint.balance} sats)`,
+			error: `Insufficient balance. Need ${deltaAmount} sats (delta: ${bidAmount} - ${previousBidAmount}). Closest: ${getMintHostname(bestMint.mintUrl)} (${bestMint.balance} sats)`,
 		}
 	}
 

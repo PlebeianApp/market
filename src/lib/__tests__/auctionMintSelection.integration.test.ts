@@ -81,6 +81,7 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 			walletMints: wallet.mints,
 			mintBalances: wallet.mintBalances,
 			bidAmount: 500,
+			previousBidAmount: 100,
 		})
 		expect(rebidResult.selectedMint).toBe(MINT_B)
 		expect(rebidResult.error).toBeNull()
@@ -147,5 +148,38 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 		expect(result.error).toContain('Insufficient balance')
 		expect(result.error).toContain('50')
 		expect(result.insufficientBalanceMints).toHaveLength(2)
+	})
+
+	test('rebid with small delta keeps first mint eligible', () => {
+		const wallet = makeNip60Snapshot({
+			mints: [MINT_A, MINT_B],
+			mintBalances: { [MINT_A]: 200, [MINT_B]: 2000 },
+		})
+		const result = resolveAuctionMintSelection({
+			trustedMints: [MINT_A, MINT_B],
+			walletMints: wallet.mints,
+			mintBalances: wallet.mintBalances,
+			bidAmount: 500,
+			previousBidAmount: 400,
+		})
+		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.error).toBeNull()
+		expect(result.eligibleMints).toHaveLength(2)
+	})
+
+	test('rebid with large delta falls back to second mint', () => {
+		const wallet = makeNip60Snapshot({
+			mints: [MINT_A, MINT_B],
+			mintBalances: { [MINT_A]: 100, [MINT_B]: 2000 },
+		})
+		const result = resolveAuctionMintSelection({
+			trustedMints: [MINT_A, MINT_B],
+			walletMints: wallet.mints,
+			mintBalances: wallet.mintBalances,
+			bidAmount: 1000,
+			previousBidAmount: 200,
+		})
+		expect(result.selectedMint).toBe(MINT_B)
+		expect(result.error).toBeNull()
 	})
 })

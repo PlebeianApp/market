@@ -17,6 +17,7 @@ import {
 	getAuctionMaxEndAt,
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
+	getBidAmount,
 } from '@/queries/auctions'
 import { computeAuctionBidFloor, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -40,9 +41,11 @@ interface AuctionBidderProps {
 	compact?: boolean
 }
 
-export function useAuctionMintSelection(trustedMints: string[], bidAmount: number) {
+export function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
 	const nip60State = useStore(nip60Store)
 	const [manualMint, setManualMint] = useState<string | null>(null)
+
+	const deltaAmount = Math.max(0, bidAmount - previousBidAmount)
 
 	const result = useMemo<MintSelectionResult>(
 		() =>
@@ -51,24 +54,39 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 				walletMints: nip60State.mints ?? [],
 				mintBalances: nip60State.mintBalances ?? {},
 				bidAmount,
+				previousBidAmount,
 			}),
-		[trustedMints, nip60State.mints, nip60State.mintBalances, bidAmount],
+		[trustedMints, nip60State.mints, nip60State.mintBalances, bidAmount, previousBidAmount],
 	)
 
-	const selectedMint = manualMint && result.availableMints.some((m) => m.mintUrl === manualMint) ? manualMint : result.selectedMint
+	const manualMintValid = manualMint
+		? result.availableMints.some((m) => m.mintUrl === manualMint)
+		: false
+
+	const manualMintCanFund = manualMint
+		? result.availableMints.find((m) => m.mintUrl === manualMint)?.balance ?? 0 >= deltaAmount
+		: false
+
+	const selectedMint = manualMintValid ? manualMint : result.selectedMint
 
 	const setSelectedMint = useCallback((mintUrl: string | null) => {
 		setManualMint(mintUrl)
 	}, [])
 
+	const eligibleMints = result.eligibleMints
+
 	return {
 		selectedMint,
 		availableMints: result.availableMints,
-		eligibleMints: result.eligibleMints,
+		eligibleMints,
 		insufficientBalanceMints: result.insufficientBalanceMints,
 		mintError: result.error,
 		setSelectedMint,
 		showMintSelector: result.availableMints.filter((m) => m.balance > 0).length > 1,
+		canFund: selectedMint
+			? (result.availableMints.find((m) => m.mintUrl === selectedMint)?.balance ?? 0) >= deltaAmount
+			: eligibleMints.length > 0,
+		deltaAmount,
 	}
 }
 
@@ -105,6 +123,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const notStarted = startAt > 0 && countdown.now < startAt
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const previousBidAmount = useMemo(() => {
+		if (!currentUserPubkey) return 0
+		const myBids = bids.filter((b) => b.pubkey === currentUserPubkey)
+		if (!myBids.length) return 0
+		return Math.max(...myBids.map(getBidAmount))
+	}, [bids, currentUserPubkey])
 	// AUCTIONS.md §6.1 — bidder-side live floor. Display the floor at
 	// `client_now` (no inflation). The CVM server is more lenient by
 	// `BID_FLOOR_TIME_GRACE_SECONDS = 5`, so a click at the displayed
@@ -146,9 +170,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return Number.isFinite(val) ? val : NaN
 	}, [bidAmountInput])
 
-	const { selectedMint, availableMints, showMintSelector, mintError, setSelectedMint } = useAuctionMintSelection(
+	const { selectedMint, availableMints, showMintSelector, mintError, setSelectedMint, canFund } = useAuctionMintSelection(
 		trustedMints,
 		Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0,
+		previousBidAmount,
 	)
 
 	// Initialize input to min bid on mount or when min changes
@@ -158,7 +183,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	// Disable logic
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
-	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
+	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid || !canFund
 
 	// Determine which toggle is active based on current input
 	const getSelectedValue = () => {
@@ -380,6 +405,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
 			{mintError && !compact && <div className="text-xs text-red-500 pl-1">{mintError}</div>}
+			{!canFund && !mintError && !compact && selectedMint && (
+				<div className="text-xs text-red-500 pl-1">
+					Selected mint cannot cover the {Math.max(0, (Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0) - previousBidAmount)} sat delta. Choose another mint or add funds.
+				</div>
+			)}
 		</div>
 	)
 }

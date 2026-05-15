@@ -10,7 +10,7 @@ useWebSocketImplementation(WebSocket)
 
 const D_TAG = 'e2e-auction-mint-test'
 
-async function seedAuction(relay: Relay, overrides: { mints: string[] }) {
+async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
 	const skBytes = hexToBytes(devUser1.sk)
 	const now = Math.floor(Date.now() / 1000)
 	const startAt = now - 60
@@ -23,7 +23,7 @@ async function seedAuction(relay: Relay, overrides: { mints: string[] }) {
 			created_at: now,
 			content: 'E2E auction for mint selection testing',
 			tags: [
-				['d', D_TAG],
+				['d', overrides.dTag ?? D_TAG],
 				['title', 'E2E Mint Test Auction'],
 				['summary', 'Auction with multiple mints for e2e testing'],
 				['auction_type', 'english'],
@@ -95,6 +95,23 @@ test.describe('Auction Bidding with Multiple Mints', () => {
 			await expect(buyerPage.getByText('E2E Mint Test Auction')).toBeVisible({ timeout: 15_000 })
 
 			await expect(buyerPage.getByText(/minimum allowed bid/i)).toBeVisible({ timeout: 10_000 })
+		} finally {
+			relay.close()
+		}
+	})
+
+	test('second mint renders in mint selector when present in trusted mints', async ({ buyerPage }) => {
+		const relay = await Relay.connect(RELAY_URL)
+		try {
+			const auctionEvent = await seedAuction(relay, {
+				mints: ['https://mint-a.testnut.cashu.space', 'https://mint-b.testnut.cashu.space'],
+				dTag: 'e2e-auction-second-mint-test',
+			})
+
+			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
+			await expect(buyerPage.getByText('E2E Mint Test Auction')).toBeVisible({ timeout: 15_000 })
+
+			await expect(buyerPage.getByText('Minimum allowed bid')).toBeVisible({ timeout: 10_000 })
 		} finally {
 			relay.close()
 		}

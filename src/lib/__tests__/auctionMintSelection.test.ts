@@ -150,7 +150,7 @@ describe('resolveAuctionMintSelection', () => {
 		)
 		expect(result.selectedMint).toBe(MINT_A)
 		expect(result.error).toBeNull()
-		expect(result.showMintSelector).toBeUndefined()
+		expect(result.availableMints).toHaveLength(1)
 	})
 
 	test('all eligible mints are correctly marked', () => {
@@ -165,5 +165,59 @@ describe('resolveAuctionMintSelection', () => {
 		expect(result.eligibleMints[0].mintUrl).toBe(MINT_A)
 		expect(result.insufficientBalanceMints).toHaveLength(1)
 		expect(result.insufficientBalanceMints[0].mintUrl).toBe(MINT_B)
+	})
+
+	test('with previousBidAmount, eligibility uses delta instead of full bid', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				mintBalances: { [MINT_A]: 150, [MINT_B]: 50 },
+				bidAmount: 500,
+				previousBidAmount: 400,
+			}),
+		)
+		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.error).toBeNull()
+		expect(result.eligibleMints).toHaveLength(1)
+		expect(result.eligibleMints[0].mintUrl).toBe(MINT_A)
+	})
+
+	test('with previousBidAmount, insufficient delta shows error with delta amount', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				mintBalances: { [MINT_A]: 30, [MINT_B]: 10 },
+				bidAmount: 500,
+				previousBidAmount: 400,
+			}),
+		)
+		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.error).toContain('100')
+		expect(result.error).toContain('delta')
+		expect(result.eligibleMints).toHaveLength(0)
+	})
+
+	test('previousBidAmount equals bidAmount means zero delta — all mints eligible', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				mintBalances: { [MINT_A]: 1, [MINT_B]: 1 },
+				bidAmount: 500,
+				previousBidAmount: 500,
+			}),
+		)
+		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.error).toBeNull()
+		expect(result.eligibleMints).toHaveLength(2)
+	})
+
+	test('previousBidAmount exceeding bidAmount is clamped to zero delta', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				mintBalances: { [MINT_A]: 1, [MINT_B]: 1 },
+				bidAmount: 100,
+				previousBidAmount: 200,
+			}),
+		)
+		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.error).toBeNull()
+		expect(result.eligibleMints).toHaveLength(2)
 	})
 })
