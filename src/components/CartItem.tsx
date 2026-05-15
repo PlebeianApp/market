@@ -25,9 +25,18 @@ interface CartItemProps {
 	onQuantityChange: (productId: string, newAmount: number) => void
 	onRemove: (productId: string) => void
 	hideShipping?: boolean
+	isEditable?: boolean
 }
 
-export default function CartItem({ productId, sellerPubkey, amount, onQuantityChange, onRemove, hideShipping = false }: CartItemProps) {
+export default function CartItem({
+	productId,
+	sellerPubkey,
+	amount,
+	onQuantityChange,
+	onRemove,
+	hideShipping = false,
+	isEditable = true,
+}: CartItemProps) {
 	const [quantity, setQuantity] = useState(amount)
 
 	// Fetch product data - pass sellerPubkey to support d-tag lookups
@@ -96,6 +105,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 
 	// Handle quantity input change
 	const handleQuantityChange = (value: string) => {
+		if (!isEditable) return
 		const newQuantity = parseInt(value)
 		if (!isNaN(newQuantity)) {
 			setQuantity(newQuantity)
@@ -104,6 +114,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 
 	// Handle quantity blur to update cart
 	const handleQuantityBlur = () => {
+		if (!isEditable) return
 		if (quantity !== amount) {
 			onQuantityChange(productId, quantity)
 		}
@@ -111,6 +122,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 
 	// Handle immediate button-based quantity changes
 	const handleIncrementClick = () => {
+		if (!isEditable) return
 		const newAmount = Math.min(amount + 1, stockQuantity)
 		if (newAmount !== amount) {
 			onQuantityChange(productId, newAmount)
@@ -118,6 +130,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 	}
 
 	const handleDecrementClick = () => {
+		if (!isEditable) return
 		const newAmount = Math.max(1, amount - 1)
 		if (newAmount !== amount) {
 			onQuantityChange(productId, newAmount)
@@ -223,7 +236,13 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 					{/* Quantity Controls */}
 					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleDecrementClick}
+								disabled={!isEditable || amount <= 1}
+							>
 								<Minus size={14} />
 							</Button>
 
@@ -235,9 +254,16 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 								onBlur={handleQuantityBlur}
 								min={1}
 								max={stockQuantity}
+								disabled={!isEditable}
 							/>
 
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleIncrementClick} disabled={amount >= stockQuantity}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleIncrementClick}
+								disabled={!isEditable || amount >= stockQuantity}
+							>
 								<Plus size={14} />
 							</Button>
 						</div>
@@ -247,7 +273,11 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 							variant="ghost"
 							size="icon"
 							className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 sm:self-center sm:ml-auto self-start"
-							onClick={() => onRemove(productId)}
+							onClick={() => {
+								if (!isEditable) return
+								onRemove(productId)
+							}}
+							disabled={!isEditable}
 						>
 							<Trash2 size={16} />
 						</Button>
