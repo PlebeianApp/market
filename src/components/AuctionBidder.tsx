@@ -235,6 +235,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				toast.error(mintError || 'No suitable mint available for bidding.')
 				return
 			}
+			if (!canFund) {
+				toast.error('Insufficient balance on selected mint to cover the required delta.')
+				return
+			}
 			await bidMutation.mutateAsync({
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
@@ -295,7 +299,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 									variant="outline"
 									size="sm"
 									tooltip={`${m.mintUrl} — ${m.balance.toLocaleString()} sats`}
-									disabled={isDisabledInput}
+									disabled={isDisabledInput || !m.hasSufficientBalance}
 									className={cn('cursor-pointer flex text-xs', !m.hasSufficientBalance && 'opacity-60')}
 								>
 									{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>

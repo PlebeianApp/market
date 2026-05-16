@@ -65,10 +65,11 @@ describe('resolveAuctionMintSelection', () => {
 				bidAmount: 100,
 			}),
 		)
-		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.selectedMint).toBeNull()
 		expect(result.error).toContain('Insufficient balance')
 		expect(result.eligibleMints).toHaveLength(0)
 		expect(result.insufficientBalanceMints).toHaveLength(2)
+		expect(result.availableMints).toHaveLength(2)
 	})
 
 	test('selects mint with sufficient balance even if it is not the first', () => {
@@ -189,10 +190,11 @@ describe('resolveAuctionMintSelection', () => {
 				previousBidAmount: 400,
 			}),
 		)
-		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.selectedMint).toBeNull()
 		expect(result.error).toContain('100')
 		expect(result.error).toContain('delta')
 		expect(result.eligibleMints).toHaveLength(0)
+		expect(result.availableMints).toHaveLength(2)
 	})
 
 	test('previousBidAmount equals bidAmount means zero delta — all mints eligible', () => {
@@ -219,5 +221,20 @@ describe('resolveAuctionMintSelection', () => {
 		expect(result.selectedMint).toBe(MINT_A)
 		expect(result.error).toBeNull()
 		expect(result.eligibleMints).toHaveLength(2)
+	})
+
+	test('insufficient balance returns null selectedMint but keeps availableMints for display', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				mintBalances: { [MINT_A]: 75, [MINT_B]: 25 },
+				bidAmount: 200,
+			}),
+		)
+		expect(result.selectedMint).toBeNull()
+		expect(result.error).toContain('Insufficient balance')
+		expect(result.availableMints).toHaveLength(2)
+		expect(result.insufficientBalanceMints).toHaveLength(2)
+		expect(result.availableMints[0].balance).toBe(75)
+		expect(result.availableMints[1].balance).toBe(25)
 	})
 })

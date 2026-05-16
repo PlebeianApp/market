@@ -144,9 +144,10 @@ describe('auctionMintSelection integration with nip60 store state', () => {
 			mintBalances: wallet.mintBalances,
 			bidAmount: 200,
 		})
-		expect(result.selectedMint).toBe(MINT_A)
+		expect(result.selectedMint).toBeNull()
 		expect(result.error).toContain('Insufficient balance')
 		expect(result.error).toContain('50')
+		expect(result.availableMints).toHaveLength(2)
 		expect(result.insufficientBalanceMints).toHaveLength(2)
 	})
 

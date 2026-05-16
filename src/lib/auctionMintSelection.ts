@@ -83,7 +83,7 @@ export function resolveAuctionMintSelection(input: MintSelectionInput): MintSele
 	if (!eligibleMints.length) {
 		const bestMint = insufficientBalanceMints[0]
 		return {
-			selectedMint: bestMint.mintUrl,
+			selectedMint: null,
 			availableMints,
 			eligibleMints: [],
 			insufficientBalanceMints,
