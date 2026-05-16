@@ -21,7 +21,6 @@ import {
 	CheckStateEnum,
 	getDecodedToken,
 	getEncodedToken,
-	getTokenMetadata,
 	type MintKeys,
 	type MintKeyset,
 	type Proof,
@@ -665,7 +664,7 @@ const receiveTokenIntoWallet = async (
 		privkey?: string
 	},
 ): Promise<{ amount: number; mintUrl: string }> => {
-	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
+	const mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
 	try {
