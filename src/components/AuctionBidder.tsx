@@ -21,7 +21,7 @@ import {
 import { computeAuctionBidFloor, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
 import { Pencil, Plus, Minus, X, CircleX, TheaterIcon } from 'lucide-react'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
@@ -76,7 +76,24 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// price is always accepted within the GRACE window. Recomputes
 	// every tick via `useAuctionCountdown.now`, so the bidder watches
 	// the floor rise in real time once the curve window opens.
-	const curveFloor = useMemo(() => computeAuctionBidFloor(auction, currentPrice, countdown.now), [auction, currentPrice, countdown.now])
+
+	// Ref to store the last computed curve floor value
+	const lastCurveFloorRef = useRef<number>(0)
+
+	const curveFloor = useMemo(() => {
+		// Only update the curve floor if the auction hasn't ended
+		// This prevents the minBid value from changing after the auction ends
+		if (ended) {
+			// Return the last computed value when auction is ended
+			return lastCurveFloorRef.current
+		}
+
+		const computedFloor = computeAuctionBidFloor(auction, currentPrice, countdown.now)
+		// Store the computed value for use when auction ends
+		lastCurveFloorRef.current = computedFloor
+		return computedFloor
+	}, [auction, currentPrice, countdown.now, ended])
+
 	const flatFloor = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const minBid = Math.max(flatFloor, curveFloor)
 	const inCurveWindow = countdown.now > endAt && countdown.now < (getAuctionMaxEndAt(auction) || endAt)
@@ -182,7 +199,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
 			    Tells the bidder why the floor is higher than they'd expect
 			    from the flat `currentPrice + bidIncrement`. AUCTIONS.md §6.1. */}
-			{inCurveWindow && auctionCurve.shape !== 'none' && (
+			{!ended && inCurveWindow && auctionCurve.shape !== 'none' && (
 				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
 					<p className="font-semibold">Anti-snipe window — minimum bid rising</p>
 					<p className="mt-0.5 text-amber-700">

@@ -65,6 +65,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -380,16 +381,20 @@ function AuctionDetailRoute() {
 								</div>
 							</div>
 							<AuctionCountdown auction={auction} className="w-full gap-3" />
-							{bidderStatus && (
-								<div
-									aria-live="polite"
-									className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${detailBidderStatusClassName(
-										bidderStatus.status,
-									)}`}
-								>
-									{bidderStatus.label}
-								</div>
-							)}
+
+							<div className="flex flex-row justify-between">
+								{bidderStatus && (
+									<div
+										aria-live="polite"
+										className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${detailBidderStatusClassName(
+											bidderStatus.status,
+										)}`}
+									>
+										{bidderStatus.label}
+									</div>
+								)}
+								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(effectiveEndAt, false)}</span>}
+							</div>
 							<AuctionBidder auction={auction} />
 						</div>
 					</div>

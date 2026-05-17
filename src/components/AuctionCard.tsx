@@ -115,35 +115,6 @@ export function AuctionCard({
 		setBidAmountInput(String(minBid))
 	}, [minBid])
 
-	const handleSubmitBid = async () => {
-		if (!auctionCoordinates || !auctionDTag || ended || notStarted || isOwnAuction) return
-
-		const parsedAmount = parseInt(bidAmountInput || '0', 10)
-		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) return
-
-		try {
-			await bidMutation.mutateAsync({
-				auctionEventId: auctionRootEventId || auction.id,
-				auctionCoordinates,
-				amount: parsedAmount,
-				auctionStartAt: startAt,
-				auctionEffectiveEndAt: effectiveEndAt,
-				auctionLocktimeAt: getAuctionMaxEndAt(auction),
-				settlementGraceSeconds: getAuctionSettlementGrace(auction),
-				sellerPubkey: auction.pubkey,
-				pathIssuerPubkey,
-				p2pkXpub,
-				// See AuctionBidder.tsx for why this is a list, not a single
-				// mint: `lockAuctionBidFunds` walks it in seller-declared
-				// order and picks the first mint where the bidder has the
-				// balance for the delta amount.
-				mintCandidates: acceptedMints,
-			})
-		} catch {
-			// Error toast is handled by mutation onError.
-		}
-	}
-
 	const className = props.className
 
 	return (
@@ -182,18 +153,17 @@ export function AuctionCard({
 					</Link>
 				</h2>
 
-				<div className="flex flex-wrap justify-between items-center gap-2">
+				<div className="flex justify-between items-center">
 					<div className="text-sm font-semibold">{currentPrice.toLocaleString()} sats</div>
-					<div className="flex items-center gap-2">
-						{bidderStatus && (
-							<div className={`border font-semibold px-3 py-1 rounded-full text-xs ${bidderStatusClassName(bidderStatus.status)}`}>
-								{bidderStatus.label}
-							</div>
-						)}
+					{bidderStatus ? (
+						<div className={`border font-semibold px-2 py-1 rounded-full text-xs ${bidderStatusClassName(bidderStatus.status)}`}>
+							{bidderStatus.label}
+						</div>
+					) : (
 						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">
 							{bidsCount} {bidsCount === 1 ? 'Bid' : 'Bids'}
 						</div>
-					</div>
+					)}
 				</div>
 
 				<div className="text-xs text-gray-600">

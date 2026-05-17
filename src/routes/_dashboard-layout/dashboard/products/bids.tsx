@@ -497,7 +497,7 @@ function BidsOverviewComponent() {
 													<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 														<span>Your bid: {latestBidAmount.toLocaleString()} sats</span>
 														<span>Mint: {mintLabel}</span>
-														{auction && <AuctionCountdown auction={auction} compact className="px-2 py-1 text-[10px]" />}
+														{auction && <AuctionCountdown auction={auction} />}
 													</div>
 												</div>
 												<div className="flex flex-wrap items-center gap-1.5 shrink-0">

@@ -25,6 +25,7 @@ export function formatAuctionTimeLeft(seconds: number): string {
 	if (days > 0) {
 		return `${days} day${days > 1 ? 's' : ''} left`
 	}
+
 	if (hours > 0) {
 		return `${hours} hour${hours > 1 ? 's' : ''} left`
 	}
@@ -52,14 +53,17 @@ export function formatAuctionCountdownDetailed(seconds: number): string {
 	const ss = Math.round(secs).toString().padStart(2, '0')
 	const coreTime = `${mm}:${ss}`
 
+	const daysPluralizer = days === 1 ? '' : 's'
+	const hoursPluralizer = hours === 1 ? '' : 's'
+
 	if (days > 0) {
-		const hh = hours.toString().padStart(2, '0')
-		return `${days}d ${hh}:${mm}:${ss}`
+		const hh = hours.toString()
+		return `${days} Day${daysPluralizer} ${hh} Hour${hoursPluralizer} ${coreTime}`
 	}
 
 	if (hours > 0) {
-		const hh = hours.toString().padStart(2, '0')
-		return `${hh}:${mm}:${ss}`
+		const hh = hours.toString()
+		return `${hh} Hour${hoursPluralizer} ${coreTime}`
 	}
 
 	return coreTime

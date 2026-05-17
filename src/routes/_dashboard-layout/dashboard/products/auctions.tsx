@@ -40,6 +40,7 @@ import {
 	useFilteredAuctions,
 	type AuctionSortOption,
 } from '@/lib/utils/auctions'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 function formatAuctionStatus(startAt: number, endAt: number, now: number): string {
 	if (endAt > 0 && now >= endAt) return 'Ended'
@@ -144,9 +145,6 @@ function AuctionListBody({
 					<p className="text-gray-600 col-span-2">
 						Ends: <span className="font-medium">{formatMaybeDate(effectiveEndAt)}</span>
 					</p>
-					<div className="col-span-2">
-						<AuctionCountdown auction={auction} className="max-w-full" />
-					</div>
 				</div>
 
 				<div className="rounded-md border bg-white px-3 py-3 space-y-2">
@@ -204,6 +202,8 @@ function AuctionListItem({
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 
+	const breakpoint = useBreakpoint()
+
 	const triggerContent = (
 		<div className="flex items-center gap-3">
 			{thumbnailUrl ? (
@@ -237,9 +237,11 @@ function AuctionListItem({
 
 	const actions = (
 		<>
-			<div className="w-52 md:w-56">
-				<AuctionCountdown auction={auction} compact className="w-full" />
-			</div>
+			{breakpoint !== 'sm' && (
+				<div className="min-w-64">
+					<AuctionCountdown auction={auction} />
+				</div>
+			)}
 			<Link
 				to="/dashboard/products/auctions/$auctionId"
 				params={{ auctionId: auction.id }}
