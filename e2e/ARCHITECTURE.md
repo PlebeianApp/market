@@ -175,7 +175,7 @@ export default defineConfig({
 			// Seed relay FIRST, then start dev server.
 			// Dev server caches appSettings at startup, so events must
 			// exist on the relay before it initializes.
-			command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
+			command: 'bun e2e/seed-relay.ts && NODE_ENV=test bun dev',
 			cwd: PROJECT_ROOT,
 			port: TEST_PORT,
 			reuseExistingServer: !process.env.CI,
@@ -1156,7 +1156,7 @@ For faster iteration, start the relay and dev server manually:
 nak serve --hostname 0.0.0.0
 
 # Terminal 2: Seed and start dev server on test port
-bun e2e-new/seed-relay.ts && NODE_ENV=test PORT=3333 LOCAL_RELAY_ONLY=true APP_RELAY_URL=ws://localhost:10547 APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001 bun dev
+bun e2e/seed-relay.ts && NODE_ENV=test PORT=3333 LOCAL_RELAY_ONLY=true APP_RELAY_URL=ws://localhost:10547 APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001 bun dev
 
 # Terminal 3: Run tests (reuses existing servers)
 bun test:e2e-new
@@ -1221,7 +1221,7 @@ A modal T&C dialog blocks all dashboard interaction until accepted. It checks `l
 
 ### Playwright webServer `cwd`
 
-Playwright runs webServer commands from the **config file's directory** (e.g., `e2e-new/`), not the project root. The command `bun e2e-new/seed-relay.ts` would resolve to `e2e-new/e2e-new/seed-relay.ts`. **Solution**: Set `cwd: PROJECT_ROOT` on the webServer entry.
+Playwright runs webServer commands from the **config file's directory** (e.g., `e2e-new/`), not the project root. The command `bun e2e/seed-relay.ts` would resolve to `e2e-new/e2e/seed-relay.ts`. **Solution**: Set `cwd: PROJECT_ROOT` on the webServer entry.
 
 ### ESM Module Compatibility
 

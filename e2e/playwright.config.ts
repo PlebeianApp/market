@@ -44,7 +44,7 @@ export default defineConfig({
 					// Seed the relay with app settings, then start the dev server.
 					// The dev server caches appSettings at startup, so events must
 					// exist on the relay before it initializes.
-					command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
+					command: 'bun e2e/seed-relay.ts && NODE_ENV=test bun dev',
 					cwd: PROJECT_ROOT,
 					port: TEST_PORT,
 					reuseExistingServer: true,
