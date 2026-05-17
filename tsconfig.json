@@ -9,10 +9,9 @@
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
-		"baseUrl": ".",
 		"paths": {
 			"@/*": ["./src/*"]
-		}
+		},
 	},
 	"include": ["**/*.ts", "**/*.tsx", "scripts/**/*.ts"]
 }

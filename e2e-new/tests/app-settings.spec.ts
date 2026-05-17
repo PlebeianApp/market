@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 import { nip19 } from 'nostr-tools'
-import { resetAppBlacklist, resetAppFeaturedList } from 'e2e-new/scenarios'
+import { resetAppBlacklist, resetAppFeaturedList } from '../scenarios'
 import { npubEncode } from 'nostr-tools/nip19'
 import type { Page } from '@playwright/test'
 
