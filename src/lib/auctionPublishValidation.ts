@@ -216,9 +216,9 @@ const normalizeAuctionPublishInput = (
 
 	let reserve
 	if (input.reserve) {
-		const reserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
+		reserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
 
-		if (startingBid && reserve && reserve < startingBid) {
+		if (startingBid !== undefined && reserve !== undefined && reserve < startingBid) {
 			issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
 		}
 	}

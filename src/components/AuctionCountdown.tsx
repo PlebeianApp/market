@@ -12,7 +12,7 @@ import {
 	useAuctionBids,
 } from '@/queries/auctions'
 
-type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'endingSoon' | 'finalBids' | 'ended'
+type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'finalBids' | 'ended'
 
 export interface AuctionCountdownState {
 	now: number
@@ -89,8 +89,6 @@ export function AuctionCountdown({
 	auction: NDKEvent
 	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
 	bids?: NDKEvent[]
-	className?: string
-	compact?: boolean
 }) {
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)

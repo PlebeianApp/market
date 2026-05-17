@@ -239,7 +239,7 @@ function AuctionListItem({
 		<>
 			{breakpoint !== 'sm' && (
 				<div className="min-w-64">
-					<AuctionCountdown auction={auction} compact />
+					<AuctionCountdown auction={auction} />
 				</div>
 			)}
 			<Link
