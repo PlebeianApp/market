@@ -1,5 +1,7 @@
-import { expect, test, describe } from 'bun:test'
+import { beforeEach, expect, test, describe } from 'bun:test'
+import { authStore } from '@/lib/stores/auth'
 import { looksLikeJSON, extractActualContent, isSafeImageUrl } from './message-content'
+import { getMessageSnippet } from '@/queries/messages'
 
 describe('Message Content Utilities', () => {
 	describe('looksLikeJSON', () => {
@@ -297,6 +299,106 @@ describe('Message Content Utilities', () => {
 			}).not.toThrow()
 
 			expect(extractActualContent(multipleObjects)).toBeNull()
+		})
+	})
+
+	describe('getMessageSnippet', () => {
+		beforeEach(() => {
+			authStore.setState((state) => ({ ...state, user: { pubkey: 'user' } }) as any)
+		})
+
+		test('returns own order placement copy for kind 16 type 1', () => {
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'user' } } as any)).toBe(
+				'You placed an order.',
+			)
+		})
+
+		test('returns received order placement copy for kind 16 type 1', () => {
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'other' } } as any)).toBe('Placed an order.')
+		})
+
+		test('returns own payment request copy for kind 16 type 2', () => {
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'user' } } as any)).toBe(
+				'You sent a payment request.',
+			)
+		})
+
+		test('returns received payment request copy for kind 16 type 2', () => {
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'other' } } as any)).toBe(
+				'Sent you a payment request.',
+			)
+		})
+
+		test('returns own status update copy for kind 16 type 3', () => {
+			expect(
+				getMessageSnippet({
+					kind: 16,
+					content: '',
+					tags: [
+						['type', '3'],
+						['status', 'shipped'],
+					],
+					author: { pubkey: 'user' },
+				} as any),
+			).toBe('You sent a status update: SHIPPED.')
+		})
+
+		test('returns received status update copy for kind 16 type 3', () => {
+			expect(
+				getMessageSnippet({
+					kind: 16,
+					content: '',
+					tags: [
+						['type', '3'],
+						['status', 'shipped'],
+					],
+					author: { pubkey: 'other' },
+				} as any),
+			).toBe('Updated their order status to: SHIPPED.')
+		})
+
+		test('returns own shipping update copy for kind 16 type 4', () => {
+			expect(
+				getMessageSnippet({
+					kind: 16,
+					content: '',
+					tags: [
+						['type', '4'],
+						['status', 'delivered'],
+					],
+					author: { pubkey: 'user' },
+				} as any),
+			).toBe('You sent a shipping update: DELIVERED.')
+		})
+
+		test('returns received shipping update copy for kind 16 type 4', () => {
+			expect(
+				getMessageSnippet({
+					kind: 16,
+					content: '',
+					tags: [
+						['type', '4'],
+						['status', 'delivered'],
+					],
+					author: { pubkey: 'other' },
+				} as any),
+			).toBe('Updated the shipping status to: DELIVERED.')
+		})
+
+		test('falls back to image marker for kind 16 with imeta tag', () => {
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['imeta', '1']], author: { pubkey: 'other' } } as any)).toBe('[image]')
+		})
+
+		test('falls back to plain content for kind 16 if content is non-JSON text', () => {
+			expect(getMessageSnippet({ kind: 16, content: 'Hello world', tags: [], author: { pubkey: 'other' } } as any)).toBe('Hello world')
+		})
+
+		test('returns own payment receipt copy for kind 17', () => {
+			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'user' } } as any)).toBe('You sent a payment receipt.')
+		})
+
+		test('returns received payment receipt copy for kind 17', () => {
+			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'other' } } as any)).toBe('Sent you a payment receipt.')
 		})
 	})
 })

@@ -46,12 +46,14 @@ const extractMetadataFromNestedEvent = (
 }
 
 /** Generate a user-friendly preview snippet from a message event */
-const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
+export const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 	const { kind, content } = event
 
 	const truncate = (text: string, len: number) => {
 		return text.length > len ? `${text.substring(0, len)}...` : text
 	}
+
+	const isOwnUser = event.author?.pubkey === authStore.state.user?.pubkey
 
 	if (kind === 14) {
 		// Use the same extraction logic as the bubble display for consistency
@@ -60,30 +62,51 @@ const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 		return contentToShow && contentToShow.trim() ? truncate(contentToShow.trim(), maxLength) : '(No content)'
 	}
 
-	if (kind === 16 || kind === 17) {
-		// Check if this is an image repost
+	if (kind === 16) {
+		const type = event.tags?.find((t) => t[0] === 'type')?.[1]
+		const statusTag = event.tags?.find((t) => t[0] === 'status')?.[1]?.toUpperCase()
+
+		switch (type) {
+			case '1':
+				return isOwnUser ? 'You placed an order.' : 'Placed an order.'
+			case '2':
+				return isOwnUser ? 'You sent a payment request.' : 'Sent you a payment request.'
+			case '3':
+				return isOwnUser
+					? `You sent a status update${statusTag ? `: ${statusTag}` : ''}.`
+					: `Updated their order status${statusTag ? ` to: ${statusTag}` : ''}.`
+			case '4':
+				return isOwnUser
+					? `You sent a shipping update${statusTag ? `: ${statusTag}` : ''}.`
+					: `Updated the shipping status${statusTag ? ` to: ${statusTag}` : ''}.`
+			default:
+				break
+		}
+
+		// Preserve existing fallback behavior for other structured Kind 16 content
 		const hasImeta = event.tags?.some((t) => t[0] === 'imeta')
 		if (hasImeta) return '[image]'
 
-		// Try to extract metadata from nested event in content
 		const metadata = extractMetadataFromNestedEvent(content)
 		if (metadata.altTag) return truncate(metadata.altTag, maxLength)
 		if (metadata.title) return truncate(metadata.title, maxLength)
 		if (metadata.description) return truncate(metadata.description, maxLength)
 		if (metadata.preview) return truncate(metadata.preview, maxLength)
 
-		// Check wrapper event tags for structured data
 		const amount = event.tags?.find((t) => t[0] === 'amount')?.[1]
 		const orderId = event.tags?.find((t) => t[0] === 'order')?.[1]
 		if (amount) return `Amount: ${amount} sats`
 		if (orderId) return `Order: ${orderId.substring(0, 12)}...`
 
-		// Fallback to plain content if it's not JSON
 		if (content && content.trim() && !looksLikeJSON(content)) {
 			return truncate(content.trim(), maxLength)
 		}
 
-		return '(Message)'
+		return isOwnUser ? 'You updated an order.' : 'Updated an order.'
+	}
+
+	if (kind === 17) {
+		return isOwnUser ? 'You sent a payment receipt.' : 'Sent you a payment receipt.'
 	}
 
 	// For unsupported kinds: try to extract metadata or alt tag
