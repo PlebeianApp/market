@@ -1574,6 +1574,24 @@ export function AuctionFormContent() {
 
 	const canSubmit = validationIssues.length === 0
 
+	const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
+	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
+
+	const tabValid: Record<AuctionTab, boolean> = {
+		name: hasValidName && hasValidDescription,
+		auction: hasValidBidding && hasValidMints,
+		category: true,
+		spec: true,
+		images: hasValidImages,
+		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+	}
+
+	const handleNext = () => {
+		const nextIndex = currentTabIndex + 1
+		if (nextIndex < TAB_ORDER.length) setActiveTab(TAB_ORDER[nextIndex])
+	}
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
@@ -1670,9 +1688,15 @@ export function AuctionFormContent() {
 			</div>
 
 			<div className="bg-white border-t pt-4 pb-2 mt-2">
-				<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
-					{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
-				</Button>
+				{isLastTab ? (
+					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
+						{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
+					</Button>
+				) : (
+					<Button type="button" variant="secondary" className="w-full uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
+						Next
+					</Button>
+				)}
 			</div>
 		</form>
 	)
