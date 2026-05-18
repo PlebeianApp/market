@@ -257,7 +257,7 @@ graph LR
 Uses `nostr-tools` (not NDK) for relay communication. NDK's WebSocket connections keep the Node.js event loop alive, causing Playwright to hang. `nostr-tools` has explicit `relay.close()` for clean lifecycle.
 
 ```ts
-// e2e-new/scenarios/index.ts
+// e2e/scenarios/index.ts
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import WebSocket from 'ws'
 
@@ -363,7 +363,7 @@ Instead of going through the login UI every time, we use a two-layer approach:
 This split is necessary because `addInitScript` runs in the browser (no access to `nostr-tools`), while `exposeFunction` runs in Node.js (can sign events).
 
 ```ts
-// e2e-new/fixtures/auth.ts (simplified)
+// e2e/fixtures/auth.ts (simplified)
 
 // 1. Node.js bridge for event signing
 await context.exposeFunction('__nostrSign', async (eventJSON: string) => {
@@ -758,7 +758,7 @@ Each test file:
 3. Uses descriptive names that read like user stories
 
 ```ts
-// e2e-new/tests/products.spec.ts
+// e2e/tests/products.spec.ts
 import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
@@ -937,7 +937,7 @@ Uses `nostr-tools/relay` (not NDK) with explicit `relay.close()` to prevent Node
 ## File Structure
 
 ```
-e2e-new/
+e2e/
   ARCHITECTURE.md            # This document
   test-config.ts             # Shared constants (keys, URLs)
   seed-relay.ts              # Pre-server relay seeding (app settings)
@@ -976,7 +976,7 @@ e2e-new/
 This shows how the actual product creation test works, including handling of V4V dialogs, image requirements, and multi-tab forms.
 
 ```ts
-// e2e-new/tests/products.spec.ts
+// e2e/tests/products.spec.ts
 import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
@@ -1127,25 +1127,25 @@ Key points:
 
 ```bash
 # Run all e2e tests (new suite)
-bun test:e2e-new
+bun test:e2e
 
 # Run with visible browser
-bun test:e2e-new:headed
+bun test:e2e:headed
 
 # Run with Playwright UI mode (interactive debugging)
-bun test:e2e-new:ui
+bun test:e2e:ui
 
 # Debug a specific test
-bun test:e2e-new:debug
+bun test:e2e:debug
 
 # Run a specific feature
-bun test:e2e-new -- --grep "Product Management"
+bun test:e2e -- --grep "Product Management"
 
 # Run a specific test file
-bun test:e2e-new -- e2e-new/tests/products.spec.ts
+bun test:e2e -- e2e/tests/products.spec.ts
 ```
 
-> **Note**: The `bun test:e2e-new` scripts include `NODE_OPTIONS='--dns-result-order=ipv4first'` to work around macOS IPv4/IPv6 resolution issues (see Pitfalls section).
+> **Note**: The `bun test:e2e` scripts include `NODE_OPTIONS='--dns-result-order=ipv4first'` to work around macOS IPv4/IPv6 resolution issues (see Pitfalls section).
 
 ### Local Development Workflow
 
@@ -1159,7 +1159,7 @@ nak serve --hostname 0.0.0.0
 bun e2e/seed-relay.ts && NODE_ENV=test PORT=3333 LOCAL_RELAY_ONLY=true APP_RELAY_URL=ws://localhost:10547 APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001 bun dev
 
 # Terminal 3: Run tests (reuses existing servers)
-bun test:e2e-new
+bun test:e2e
 ```
 
 With `reuseExistingServer: true` (the default for non-CI), Playwright will use the already-running servers instead of starting new ones.
@@ -1221,7 +1221,7 @@ A modal T&C dialog blocks all dashboard interaction until accepted. It checks `l
 
 ### Playwright webServer `cwd`
 
-Playwright runs webServer commands from the **config file's directory** (e.g., `e2e-new/`), not the project root. The command `bun e2e/seed-relay.ts` would resolve to `e2e-new/e2e/seed-relay.ts`. **Solution**: Set `cwd: PROJECT_ROOT` on the webServer entry.
+Playwright runs webServer commands from the **config file's directory** (e.g., `e2e/`), not the project root. The command `bun e2e/seed-relay.ts` would resolve to `e2e/e2e/seed-relay.ts`. **Solution**: Set `cwd: PROJECT_ROOT` on the webServer entry.
 
 ### ESM Module Compatibility
 

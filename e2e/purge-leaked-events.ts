@@ -6,8 +6,8 @@
  * but compliant relays will delete the events.
  *
  * Usage:
- *   bun e2e-new/purge-leaked-events.ts
- *   bun e2e-new/purge-leaked-events.ts --dry-run   # list events without deleting
+ *   bun e2e/purge-leaked-events.ts
+ *   bun e2e/purge-leaked-events.ts --dry-run   # list events without deleting
  */
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
