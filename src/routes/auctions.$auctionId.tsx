@@ -203,28 +203,32 @@ function AuctionDetailRoute() {
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const parsedShippingRefs = useMemo(() => getUniqueAuctionShippingRefs(shippingOptions), [shippingOptions])
-	const validShippingRefs = useMemo(() => parsedShippingRefs.filter((entry) => entry.status === 'valid'), [parsedShippingRefs])
 
 	const shippingQueryResults = useQueries({
-		queries: validShippingRefs.map(({ pubkey, dTag }) => ({
-			...shippingOptionByCoordinatesQueryOptions(pubkey, dTag),
-			enabled: true,
+		queries: parsedShippingRefs.map((entry) => ({
+			...shippingOptionByCoordinatesQueryOptions(entry.pubkey, entry.dTag),
+			enabled: entry.status === 'valid',
 		})),
 	})
 
-	const resolvedShippingOptions = useMemo(() => {
-		const shippingInfoByRef = new Map<string, ReturnType<typeof getShippingInfo> | null>()
-		validShippingRefs.forEach((entry, index) => {
-			const event = shippingQueryResults[index]?.data ?? null
-			const info = event ? getShippingInfo(event) : null
-			shippingInfoByRef.set(entry.shippingRef, info)
-		})
-
-		return parsedShippingRefs.map((entry) => ({
-			...entry,
-			info: entry.status === 'valid' ? (shippingInfoByRef.get(entry.shippingRef) ?? null) : null,
-		}))
-	}, [parsedShippingRefs, validShippingRefs, shippingQueryResults])
+	const resolvedShippingOptions = useMemo(
+		() =>
+			parsedShippingRefs.map((entry, index) => {
+				if (entry.status !== 'valid') {
+					return { ...entry, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
+				}
+				const queryResult = shippingQueryResults[index]
+				const event = queryResult?.data ?? null
+				const info = event ? getShippingInfo(event) : null
+				return {
+					...entry,
+					info,
+					isLoading: (queryResult?.isLoading ?? false) && !queryResult?.data,
+					isNotFound: !queryResult?.isLoading && !queryResult?.data,
+				}
+			}),
+		[parsedShippingRefs, shippingQueryResults],
+	)
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
@@ -624,6 +628,8 @@ function AuctionDetailRoute() {
 																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
 																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
 																</div>
+															) : option.isLoading ? (
+																<p className="text-sm text-zinc-400">Loading shipping details...</p>
 															) : option.info ? (
 																<div className="space-y-1">
 																	<p className="font-medium text-zinc-900">{option.info.title}</p>

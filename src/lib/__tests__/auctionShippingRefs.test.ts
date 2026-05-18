@@ -27,16 +27,33 @@ describe('auction shipping refs', () => {
 		])
 	})
 
-	test('dedupes duplicate refs with first occurrence winning', () => {
+	test('dedupes by shippingRef only, first occurrence wins', () => {
 		const refs = getUniqueAuctionShippingRefs([
-			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '5' },
-			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '10' },
+			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '0' },
+			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '500' },
 			{ shippingRef: `30406:${sellerB}:pickup`, extraCost: '' },
 		])
 
 		expect(refs).toEqual([
-			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '5', status: 'valid', pubkey: sellerA, dTag: 'standard' },
+			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '0', status: 'valid', pubkey: sellerA, dTag: 'standard' },
 			{ shippingRef: `30406:${sellerB}:pickup`, extraCost: '', status: 'valid', pubkey: sellerB, dTag: 'pickup' },
 		])
+	})
+
+	test('preserves first-occurrence order', () => {
+		const refs = getUniqueAuctionShippingRefs([
+			{ shippingRef: `30406:${sellerB}:express`, extraCost: '' },
+			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '5' },
+			{ shippingRef: `30406:${sellerB}:express`, extraCost: '' },
+		])
+
+		expect(refs).toEqual([
+			{ shippingRef: `30406:${sellerB}:express`, extraCost: '', status: 'valid', pubkey: sellerB, dTag: 'express' },
+			{ shippingRef: `30406:${sellerA}:standard`, extraCost: '5', status: 'valid', pubkey: sellerA, dTag: 'standard' },
+		])
+	})
+
+	test('returns empty array for empty input', () => {
+		expect(getUniqueAuctionShippingRefs([])).toEqual([])
 	})
 })
