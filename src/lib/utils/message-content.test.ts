@@ -314,7 +314,9 @@ describe('Message Content Utilities', () => {
 		})
 
 		test('returns received order placement copy for kind 16 type 1', () => {
-			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'other' } } as any)).toBe('Placed an order.')
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'other' } } as any)).toBe(
+				'Placed an order.',
+			)
 		})
 
 		test('returns own payment request copy for kind 16 type 2', () => {
