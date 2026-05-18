@@ -8,6 +8,11 @@ import { WalletSelector, type WalletOption } from '@/components/checkout/WalletS
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+	isValidDigitalDeliveryContact,
+	resolveCheckoutDeliveryRequirements,
+	type CheckoutDeliveryRequirements,
+} from '@/lib/checkout/deliveryRequirements'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
@@ -16,6 +21,7 @@ import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/uti
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
+import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { useGenerateInvoiceMutation, useAvailablePaymentOptions, type PaymentDetail } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
@@ -32,6 +38,11 @@ export const Route = createFileRoute('/checkout')({
 
 type CheckoutStep = 'shipping' | 'summary' | 'payment' | 'complete'
 
+const EMPTY_DELIVERY_REQUIREMENTS: CheckoutDeliveryRequirements = resolveCheckoutDeliveryRequirements({
+	products: [],
+	servicesByShippingRef: {},
+})
+
 function RouteComponent() {
 	const navigate = useNavigate()
 	const { cart, totalInSats, totalShippingInSats, productsBySeller, sellerData, v4vShares } = useStore(cartStore)
@@ -46,6 +57,9 @@ function RouteComponent() {
 	const [selectedWallets, setSelectedWallets] = useState<Record<string, string>>({}) // sellerPubkey -> paymentDetailId
 	const [availableWalletsBySeller, setAvailableWalletsBySeller] = useState<Record<string, PaymentDetail[]>>({})
 	const [isCreatingOrder, setIsCreatingOrder] = useState(false) // Loading state for order creation
+	const [deliveryRequirements, setDeliveryRequirements] = useState<CheckoutDeliveryRequirements>(EMPTY_DELIVERY_REQUIREMENTS)
+	const [isDeliveryRequirementsLoading, setIsDeliveryRequirementsLoading] = useState(false)
+	const [deliveryRequirementsError, setDeliveryRequirementsError] = useState<string | null>(null)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -131,6 +145,8 @@ function RouteComponent() {
 
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
+	const hasCheckoutArtifacts = specOrderIds.length > 0 || invoices.length > 0
+	const isCartEditable = currentStep === 'shipping' && !hasCheckoutArtifacts
 	// Use auto-animate with error handling to prevent DOM manipulation errors
 	const [animationParent] = (() => {
 		try {
@@ -142,13 +158,84 @@ function RouteComponent() {
 	})()
 	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoices } = useGenerateInvoiceMutation()
 
+	const cartProducts = useMemo(() => Object.values(cart.products), [cart.products])
+
 	const isCartEmpty = useMemo(() => {
-		return Object.keys(cart.products).length === 0
-	}, [cart.products])
+		return cartProducts.length === 0
+	}, [cartProducts])
 
 	const hasAllShippingMethods = useMemo(() => {
-		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
-	}, [cart.products])
+		return cartProducts.every((product) => !!product.shippingMethodId)
+	}, [cartProducts])
+
+	useEffect(() => {
+		let isCancelled = false
+
+		const resolveDeliveryRequirements = async () => {
+			if (cartProducts.length === 0) {
+				setDeliveryRequirements(EMPTY_DELIVERY_REQUIREMENTS)
+				setIsDeliveryRequirementsLoading(false)
+				setDeliveryRequirementsError(null)
+				return
+			}
+
+			if (!hasAllShippingMethods) {
+				setDeliveryRequirements(
+					resolveCheckoutDeliveryRequirements({
+						products: cartProducts,
+						servicesByShippingRef: {},
+					}),
+				)
+				setIsDeliveryRequirementsLoading(false)
+				setDeliveryRequirementsError(null)
+				return
+			}
+
+			const shippingRefs = Array.from(new Set(cartProducts.map((product) => product.shippingMethodId?.trim()).filter(Boolean) as string[]))
+
+			setIsDeliveryRequirementsLoading(true)
+			setDeliveryRequirementsError(null)
+
+			const servicesByShippingRef: Record<string, string | null> = {}
+
+			try {
+				await Promise.all(
+					shippingRefs.map(async (shippingRef) => {
+						const shippingEvent = await getShippingEvent(shippingRef)
+						servicesByShippingRef[shippingRef] = shippingEvent ? getShippingService(shippingEvent)?.[1] || null : null
+					}),
+				)
+
+				if (isCancelled) return
+
+				setDeliveryRequirements(
+					resolveCheckoutDeliveryRequirements({
+						products: cartProducts,
+						servicesByShippingRef,
+					}),
+				)
+				setIsDeliveryRequirementsLoading(false)
+			} catch (error) {
+				console.error('Failed to resolve checkout delivery requirements:', error)
+				if (isCancelled) return
+
+				setDeliveryRequirements(
+					resolveCheckoutDeliveryRequirements({
+						products: cartProducts,
+						servicesByShippingRef,
+					}),
+				)
+				setDeliveryRequirementsError('Delivery requirements could not be verified. Please retry before continuing to payment.')
+				setIsDeliveryRequirementsLoading(false)
+			}
+		}
+
+		resolveDeliveryRequirements()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [cartProducts, hasAllShippingMethods])
 
 	const sellers = useMemo(() => {
 		return Object.keys(productsBySeller)
@@ -421,6 +508,14 @@ function RouteComponent() {
 		} as CheckoutFormData,
 		onSubmit: async ({ value }) => {
 			if (!hasAllShippingMethods) return
+			if (isDeliveryRequirementsLoading || deliveryRequirementsError || !deliveryRequirements.isResolved) {
+				toast.error('Delivery requirements must be verified before checkout can continue.')
+				return
+			}
+			if (deliveryRequirements.needsDigitalDeliveryContact && !isValidDigitalDeliveryContact(value.email)) {
+				toast.error('Enter a valid digital delivery contact before checkout can continue.')
+				return
+			}
 
 			setShippingData(value)
 			setCurrentStep('summary')
@@ -670,6 +765,10 @@ function RouteComponent() {
 
 	const goBackToPreviousStep = () => {
 		if (currentStep === 'summary') {
+			if (hasCheckoutArtifacts) {
+				toast.info('Cart edits are locked after order creation.')
+				return
+			}
 			setCurrentStep('shipping')
 		} else if (currentStep === 'payment') {
 			if (currentInvoiceIndex > 0) {
@@ -691,7 +790,19 @@ function RouteComponent() {
 		}
 	}
 
+	const canContinueToPayment =
+		!!shippingData &&
+		deliveryRequirements.isResolved &&
+		!isDeliveryRequirementsLoading &&
+		!deliveryRequirementsError &&
+		(!deliveryRequirements.needsDigitalDeliveryContact || isValidDigitalDeliveryContact(shippingData.email))
+
 	const handleContinueToPayment = async () => {
+		if (!canContinueToPayment) {
+			toast.error('Delivery requirements must be completed before payment can be requested.')
+			return
+		}
+
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
 			setIsCreatingOrder(true)
 			try {
@@ -746,6 +857,7 @@ function RouteComponent() {
 					progress={progress}
 					stepDescription={stepDescription}
 					onBackClick={handleBackClick}
+					showBackButton={currentStep !== 'complete'}
 				/>
 			</div>
 
@@ -807,11 +919,7 @@ function RouteComponent() {
 									</>
 								) : (
 									<div className="max-h-[50vh] overflow-y-auto">
-										<CartSummary
-											allowQuantityChanges={currentStep === 'shipping'}
-											allowShippingChanges={currentStep === 'shipping'}
-											showExpandedDetails={false}
-										/>
+										<CartSummary allowQuantityChanges={isCartEditable} allowShippingChanges={isCartEditable} showExpandedDetails={false} />
 									</div>
 								)}
 							</CardContent>
@@ -853,7 +961,13 @@ function RouteComponent() {
 						<div ref={animationParent} className="lg:h-full lg:min-h-full">
 							{currentStep === 'shipping' && (
 								<div className="h-full">
-									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
+									<ShippingAddressForm
+										form={form}
+										hasAllShippingMethods={hasAllShippingMethods}
+										deliveryRequirements={deliveryRequirements}
+										isDeliveryRequirementsLoading={isDeliveryRequirementsLoading}
+										deliveryRequirementsError={deliveryRequirementsError}
+									/>
 								</div>
 							)}
 
@@ -865,11 +979,16 @@ function RouteComponent() {
 											invoices={[]} // No invoices yet in summary step
 											totalInSats={totalInSats}
 											onNewOrder={goBackToShopping}
+											deliveryRequirements={deliveryRequirements}
 											// Note: onContinueToPayment moved to footer
 										/>
 									</div>
 									<div className="flex-shrink-0 bg-white border-t pt-4">
-										<Button onClick={handleContinueToPayment} className="w-full btn-black" disabled={isCreatingOrder}>
+										<Button
+											onClick={handleContinueToPayment}
+											className="w-full btn-black"
+											disabled={isCreatingOrder || !canContinueToPayment}
+										>
 											{isCreatingOrder ? (
 												<>
 													<Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -964,6 +1083,7 @@ function RouteComponent() {
 									totalInSats={totalInSats}
 									onNewOrder={goBackToShopping}
 									onViewOrders={goToOrders}
+									deliveryRequirements={deliveryRequirements}
 								/>
 							)}
 						</div>
@@ -1022,8 +1142,8 @@ function RouteComponent() {
 							<ScrollArea className="h-full">
 								<CartSummary
 									className="pb-6"
-									allowQuantityChanges={currentStep === 'shipping'}
-									allowShippingChanges={currentStep === 'shipping'}
+									allowQuantityChanges={isCartEditable}
+									allowShippingChanges={isCartEditable}
 									showExpandedDetails={false}
 								/>
 							</ScrollArea>

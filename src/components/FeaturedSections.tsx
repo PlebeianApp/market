@@ -18,7 +18,7 @@ interface FeaturedSectionsProps {
 }
 
 // Component for displaying a featured product
-function FeaturedProductItem({ productCoords }: { productCoords: string }) {
+function FeaturedProductItem({ productCoords, ...props }: { productCoords: string } & React.HTMLAttributes<HTMLDivElement>) {
 	// Extract pubkey and dTag from coordinates (format: kind:pubkey:dtag)
 	const [, pubkey, dTag] = productCoords.split(':')
 
@@ -39,11 +39,11 @@ function FeaturedProductItem({ productCoords }: { productCoords: string }) {
 
 	if (!product) return null
 
-	return <ProductCard product={product} />
+	return <ProductCard product={product} {...props} />
 }
 
 // Component for displaying a featured collection
-function FeaturedCollectionItem({ collectionCoords }: { collectionCoords: string }) {
+function FeaturedCollectionItem({ collectionCoords, ...props }: { collectionCoords: string } & React.HTMLAttributes<'div'>) {
 	// Extract pubkey and dTag from coordinates (format: kind:pubkey:dtag)
 	const coordsParts = collectionCoords.split(':')
 	const pubkey = coordsParts[1] || ''
@@ -66,7 +66,7 @@ function FeaturedCollectionItem({ collectionCoords }: { collectionCoords: string
 
 	if (!collection) return null
 
-	return <CollectionCard collection={collection} />
+	return <CollectionCard collection={collection} {...props} />
 }
 
 // FeaturedUserItem has been replaced with FeaturedUserCard component
@@ -85,21 +85,23 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 	// Track section index for alternating backgrounds
 	let sectionIndex = 0
+	let classNameDark = 'bg-foreground text-background color-background'
+	let classNameLight = 'bg-background text-foreground color-foreground'
 
 	return (
 		<div className={cn('w-full max-w-full overflow-hidden', className)}>
 			{/* Featured Products */}
 			{displayProducts.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ /* Increment section index */)}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<Package className="w-6 h-6 text-primary shrink-0" />
+								<Package className="w-6 h-6 shrink-0" />
 								<h2 className="text-xl sm:text-2xl font-heading">Featured Products</h2>
 							</div>
 							{featuredProducts?.featuredProducts && featuredProducts.featuredProducts.length > maxItemsPerSection && (
 								<div className="w-full sm:w-auto flex justify-end">
-									<Link to="/products" className="flex items-center gap-2 text-primary hover:underline">
+									<Link to="/products" className="flex items-center gap-2 hover:underline">
 										<Button variant="ghost" size="sm" className="gap-2">
 											View All <ArrowRight className="w-4 h-4" />
 										</Button>
@@ -118,16 +120,16 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Collections */}
 			{displayCollections.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : classNameDark)}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<FolderOpen className="w-6 h-6 text-primary text-white shrink-0" />
-								<h2 className="text-xl sm:text-2xl font-heading text-white">Featured Collections</h2>
+								<FolderOpen className="w-6 h-6 shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading">Featured Collections</h2>
 							</div>
 							{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
 								<div className="w-full sm:w-auto flex justify-end">
-									<Link to="/collections" className="flex items-center gap-2 text-primary hover:underline">
+									<Link to="/collections" className="flex items-center gap-2 hover:underline">
 										<Button variant="ghost" size="sm" className="gap-2">
 											View All <ArrowRight className="w-4 h-4" />
 										</Button>
@@ -137,7 +139,7 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 						</div>
 						<ItemGrid className="gap-4 sm:gap-8">
 							{displayCollections.map((collectionCoords: string) => (
-								<FeaturedCollectionItem key={collectionCoords} collectionCoords={collectionCoords} />
+								<FeaturedCollectionItem key={collectionCoords} collectionCoords={collectionCoords} className={classNameLight} />
 							))}
 						</ItemGrid>
 					</div>
@@ -146,17 +148,17 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Users */}
 			{displayUsers.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : classNameDark)}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<Users className="w-6 h-6 text-primary shrink-0" />
+								<Users className="w-6 h-6 shrink-0" />
 								<h2 className="text-xl sm:text-2xl font-heading">Featured Sellers</h2>
 							</div>
 						</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 							{displayUsers.map((userPubkey: string) => (
-								<FeaturedUserCard key={userPubkey} userPubkey={userPubkey} />
+								<FeaturedUserCard key={userPubkey} userPubkey={userPubkey} className={classNameLight} />
 							))}
 						</div>
 					</div>

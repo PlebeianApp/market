@@ -1,4 +1,5 @@
 import {
+	MAX_COMMENT_THREAD_DEPTH,
 	transformCommentsMapIntoThreads as transformCommentsIntoThreads,
 	useComments,
 	type Comment,
@@ -29,6 +30,7 @@ interface CommentThreadProps {
 	eventRoot: NDKEvent
 	replyingTo?: Comment
 	setReplyingTo: (comment?: Comment) => void
+	depth?: number
 }
 
 interface AddCommentProps {
@@ -94,7 +96,7 @@ function CommentItem({ comment, onPressReply }: CommentItemProps) {
 	)
 }
 
-function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo }: CommentThreadProps) {
+function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo, depth = 0 }: CommentThreadProps) {
 	return (
 		<>
 			{comments.map((commentChild) => (
@@ -108,9 +110,15 @@ function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo }: Comme
 							onCancel={() => setReplyingTo()}
 						/>
 					) : null}
-					{commentChild.children && commentChild.children.length > 0 ? (
+					{commentChild.children && commentChild.children.length > 0 && depth < MAX_COMMENT_THREAD_DEPTH - 1 ? (
 						<div key={'comment-thread-' + commentChild.id} className="flex-col gap-2 pl-8 border-l border-gray-200">
-							<CommentThread comments={commentChild.children} replyingTo={replyingTo} eventRoot={eventRoot} setReplyingTo={setReplyingTo} />
+							<CommentThread
+								comments={commentChild.children}
+								replyingTo={replyingTo}
+								eventRoot={eventRoot}
+								setReplyingTo={setReplyingTo}
+								depth={depth + 1}
+							/>
 						</div>
 					) : null}
 				</>

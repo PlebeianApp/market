@@ -217,8 +217,8 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					<DialogHeader>
 						<DialogTitle>Loading Zap Information...</DialogTitle>
 					</DialogHeader>
-					<div className="flex items-center justify-center py-8">
-						<Loader2 className="h-8 w-8 animate-spin" />
+					<div className="flex justify-center items-center py-8">
+						<Loader2 className="w-8 h-8 animate-spin" />
 						<span className="ml-2">Fetching zap data...</span>
 					</div>
 					<DialogFooter>
@@ -249,12 +249,11 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						<div className="py-2">
 							<div className="space-y-2">
 								<Label className="font-bold">Amount</Label>
-								<div className="grid grid-cols-3 gap-2">
+								<div className="gap-2 grid grid-cols-3">
 									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
 										<Button
 											key={presetAmount}
-											variant={numericAmount === presetAmount ? 'focus' : 'outline'}
-											className={numericAmount === presetAmount ? 'border-2' : 'border-2 border-black'}
+											variant={numericAmount === presetAmount ? 'default' : 'outline'}
 											onClick={() => handleAmountButtonClick(presetAmount)}
 										>
 											{displayText}
@@ -295,7 +294,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 									{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
 								</div>
 
-								<div className="flex items-center justify-between gap-4">
+								<div className="flex justify-between items-center gap-4">
 									<Label htmlFor="isAnonymousZap" className="font-bold">
 										Anonymous zap
 									</Label>
@@ -309,16 +308,16 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							<div className="flex flex-col gap-2">
 								{hasNip60Wallet && recipientZapSupport.hasNip61 && (
 									<Button onClick={handleSendNutzap} className="w-full" variant="secondary" disabled={!canSendNutzap}>
-										{isSubmittingNutzap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+										{isSubmittingNutzap ? <Loader2 className="mr-2 w-4 h-4 animate-spin" /> : <Zap className="mr-2 w-4 h-4" />}
 										Zap with Nutzap (NIP-60)
 									</Button>
 								)}
-								<Button onClick={handleContinueToPayment} className="w-full" variant="focus" disabled={!canProceedToPayment}>
-									<Zap className="mr-2 h-4 w-4" />
+								<Button onClick={handleContinueToPayment} className="w-full" disabled={!canProceedToPayment}>
+									<Zap className="mr-2 w-4 h-4" />
 									Continue to payment
 								</Button>
 							</div>
-							<div className="text-xs text-muted-foreground mt-2">
+							<div className="mt-2 text-muted-foreground text-xs">
 								{!recipientZapSupport.canReceiveZaps
 									? 'This user does not advertise zap methods.'
 									: !recipientZapSupport.hasNip57
@@ -334,11 +333,11 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 				{step === 'generateInvoice' && (
 					<>
 						{/* Amount and Message Info */}
-						<div className="text-center mb-4">
-							<p className="text-sm font-medium">
+						<div className="mb-4 text-center">
+							<p className="font-medium text-sm">
 								Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
 							</p>
-							{effectiveZapMessage && <p className="text-sm text-muted-foreground mt-1">Message: "{effectiveZapMessage}"</p>}
+							{effectiveZapMessage && <p className="mt-1 text-muted-foreground text-sm">Message: "{effectiveZapMessage}"</p>}
 						</div>
 
 						{/* Payment Processor Section */}
@@ -353,7 +352,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 								/>
 							</div>
 						) : (
-							<div className="text-center py-8 text-muted-foreground">
+							<div className="py-8 text-muted-foreground text-center">
 								<p>Lightning zap method unavailable</p>
 								<p className="text-sm">This user does not advertise a NIP-57 zap endpoint.</p>
 							</div>

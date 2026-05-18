@@ -1,4 +1,3 @@
-import { Button, type ButtonProps, type ButtonVariant } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -8,10 +7,12 @@ import { useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { TooltipButton, type TooltipButtonProps } from '../shared/TooltipButton'
+import { Button } from '../ui/button'
 
-interface CommentButtonProps extends ButtonProps {
+interface CommentButtonProps extends TooltipButtonProps {
 	event: NDKEvent
-	variant?: ButtonVariant
+	icon: ReactNode
 }
 
 export function CommentButton({ event, className, onClick, onPointerDown, variant, ...props }: CommentButtonProps) {
@@ -49,26 +50,27 @@ export function CommentButton({ event, className, onClick, onPointerDown, varian
 	}
 
 	// Default values for props
-	const icon = props.icon ?? <MessageSquare className="w-6 h-6" />
+	const icon = props.icon ?? <MessageSquare className="size-6" strokeWidth={2} />
 	const tooltip = props.tooltip ?? 'Comment'
 
 	return (
 		<>
-			<Button
+			<TooltipButton
 				variant={variant ?? 'outline'}
 				size="icon"
-				className={'border-foreground border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
+				className={'border-foreground rounded border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
 				type="button"
 				{...props}
 				tooltip={tooltip}
-				icon={icon}
 				data-testid="comment-button"
 				onClick={(e) => {
 					handleButtonInteraction(e)
 				}}
 				onPointerDown={handleButtonPointerDown}
 				disabled={props.disabled || !event.ndk}
-			/>
+			>
+				{icon}
+			</TooltipButton>
 
 			{/* Comment Dialog */}
 			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

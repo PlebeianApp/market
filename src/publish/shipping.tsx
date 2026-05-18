@@ -1,7 +1,7 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { shippingKeys } from '@/queries/queryKeyFactory'
-import { markShippingAsDeleted } from '@/queries/shipping'
+import { createShippingReference, markShippingAsDeleted } from '@/queries/shipping'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -44,6 +44,18 @@ export interface ShippingFormData {
 		distance?: { value: string; unit: string }
 	}
 }
+
+export interface PublishedShippingOption {
+	eventId: string
+	shippingDTag: string
+	shippingRef: string
+}
+
+export const buildPublishedShippingOption = (eventId: string, pubkey: string, shippingDTag: string): PublishedShippingOption => ({
+	eventId,
+	shippingDTag,
+	shippingRef: createShippingReference(pubkey, shippingDTag),
+})
 
 /**
  * Creates a new shipping option event (kind 30406)
@@ -171,7 +183,7 @@ export const createShippingEvent = (
 /**
  * Publishes a new shipping option
  */
-export const publishShippingOption = async (formData: ShippingFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishShippingOption = async (formData: ShippingFormData, signer: NDKSigner, ndk: NDK): Promise<PublishedShippingOption> => {
 	// Validation
 	if (!formData.title.trim()) {
 		throw new Error('Shipping title is required')
@@ -227,7 +239,13 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
 
-	return event.id
+	const shippingDTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+	if (!shippingDTag) {
+		throw new Error('Published shipping option is missing d tag')
+	}
+
+	const user = await signer.user()
+	return buildPublishedShippingOption(event.id, user.pubkey, shippingDTag)
 }
 
 /**
@@ -337,7 +355,7 @@ export const usePublishShippingOptionMutation = () => {
 			if (!signer) throw new Error('No signer available')
 			return publishShippingOption(formData, signer, ndk)
 		},
-		onSuccess: async (eventId) => {
+		onSuccess: async () => {
 			// Invalidate and refetch shipping options queries
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
 

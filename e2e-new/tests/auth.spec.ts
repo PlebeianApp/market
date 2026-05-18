@@ -6,6 +6,7 @@ import { hexToBytes } from '@noble/hashes/utils'
 import { nip19 } from 'nostr-tools'
 import { Nip46Mock } from '../utils/nip46-mock'
 import { RELAY_URL } from '../test-config'
+import { encrypt } from 'nostr-tools/nip49'
 
 test.use({ scenario: 'base' })
 
@@ -156,7 +157,7 @@ test.describe('Authentication', () => {
 				// Verify localStorage has the encrypted key
 				const storedKey = await page.evaluate(() => localStorage.getItem('nostr_local_encrypted_signer_key'))
 				expect(storedKey).toBeTruthy()
-				expect(storedKey).toContain(':nsec1')
+				expect(storedKey).toContain(`:ncryptsec1`)
 			} finally {
 				await context.close()
 			}
@@ -199,17 +200,17 @@ test.describe('Authentication', () => {
 			}
 		})
 
-		test('stored key login with password', async ({ browser }) => {
+		test('stored key login with correct password succeeds', async ({ browser }) => {
 			const context = await browser.newContext()
-			const nsec = hexToNsec(devUser2.sk)
 
-			// Pre-seed localStorage with an "encrypted" key
+			// Pre-seed localStorage with an encrypted key
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
 			await context.addInitScript(
-				({ pk, nsec }: { pk: string; nsec: string }) => {
-					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${nsec}`)
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
 					localStorage.setItem('plebeian_terms_accepted', 'true')
 				},
-				{ pk: devUser2.pk, nsec },
+				{ pk: devUser2.pk, ncryptsec },
 			)
 
 			const page = await context.newPage()
@@ -226,12 +227,51 @@ test.describe('Authentication', () => {
 				await expect(page.getByText('Enter Password')).toBeVisible()
 				await expect(page.getByText(devUser2.pk.slice(0, 8))).toBeVisible()
 
-				// Enter password (any password works since "encryption" is just a UI gate)
-				await page.locator('[data-testid="stored-password-input"]').fill('anypassword')
+				// Enter password
+				await page.locator('[data-testid="stored-password-input"]').fill('testpassword123')
 				await page.locator('[data-testid="stored-key-login-button"]').click()
 
 				// Verify auth succeeds
 				await expectAuthenticated(page)
+			} finally {
+				await context.close()
+			}
+		})
+
+		test('stored key login with wrong password fails', async ({ browser }) => {
+			const context = await browser.newContext()
+
+			// Pre-seed localStorage with an encrypted key
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
+			await context.addInitScript(
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
+					localStorage.setItem('plebeian_terms_accepted', 'true')
+				},
+				{ pk: devUser2.pk, ncryptsec },
+			)
+
+			const page = await context.newPage()
+
+			try {
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+
+				// Switch to Private Key tab — should show stored key UI
+				await page.locator('[data-testid="private-key-tab"]').click()
+
+				// Verify stored key UI appears
+				await expect(page.getByText('Enter Password')).toBeVisible()
+				await expect(page.getByText(devUser2.pk.slice(0, 8))).toBeVisible()
+
+				// Enter password
+				await page.locator('[data-testid="stored-password-input"]').fill('wrongpassword')
+				await page.locator('[data-testid="stored-key-login-button"]').click()
+
+				// Verify auth fails
+				await expect(page.getByText('Failed to decrypt key. Please check your password')).toBeVisible()
+				await expect(page.getByRole('button').getByText('Login')).toBeVisible()
 			} finally {
 				await context.close()
 			}
@@ -434,18 +474,18 @@ test.describe('Authentication', () => {
 			}
 		})
 
-		test('decrypt dialog appears for stored private key after reload', async ({ browser }) => {
+		test('decrypt fails for wrong password with stored private key after reload', async ({ browser }) => {
 			const context = await browser.newContext()
-			const nsec = hexToNsec(devUser2.sk)
 
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
 			await context.addInitScript(
-				({ pk, nsec }: { pk: string; nsec: string }) => {
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
 					// Simulate a previously stored encrypted key with auto-login enabled
-					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${nsec}`)
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
 					localStorage.setItem('nostr_auto_login', 'true')
 					localStorage.setItem('plebeian_terms_accepted', 'true')
 				},
-				{ pk: devUser2.pk, nsec },
+				{ pk: devUser2.pk, ncryptsec },
 			)
 
 			const page = await context.newPage()
@@ -457,7 +497,41 @@ test.describe('Authentication', () => {
 				await expect(page.locator('[data-testid="decrypt-password-dialog"]')).toBeVisible({ timeout: 10_000 })
 
 				// Enter password and decrypt
-				await page.locator('[data-testid="decrypt-password-input"]').fill('anypassword')
+				await page.locator('[data-testid="decrypt-password-input"]').fill('wrongpassword')
+				await page.locator('[data-testid="decrypt-login-button"]').click()
+
+				// Verify auth fails
+				await expect(page.getByText('Failed to decrypt key. Please check your password')).toBeVisible()
+				await expect(page.getByRole('button').getByText('Login')).toBeVisible()
+			} finally {
+				await context.close()
+			}
+		})
+
+		test('decrypt dialog appears for stored private key after reload', async ({ browser }) => {
+			const context = await browser.newContext()
+
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
+			await context.addInitScript(
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					// Simulate a previously stored encrypted key with auto-login enabled
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
+					localStorage.setItem('nostr_auto_login', 'true')
+					localStorage.setItem('plebeian_terms_accepted', 'true')
+				},
+				{ pk: devUser2.pk, ncryptsec },
+			)
+
+			const page = await context.newPage()
+
+			try {
+				await page.goto('/')
+
+				// DecryptPasswordDialog should appear automatically
+				await expect(page.locator('[data-testid="decrypt-password-dialog"]')).toBeVisible({ timeout: 10_000 })
+
+				// Enter password and decrypt
+				await page.locator('[data-testid="decrypt-password-input"]').fill('testpassword123')
 				await page.locator('[data-testid="decrypt-login-button"]').click()
 
 				// Verify authenticated

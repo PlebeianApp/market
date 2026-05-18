@@ -3,8 +3,9 @@ import { getCollectionId, getCollectionImages, getCollectionSummary, getCollecti
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { UserCard } from './UserCard'
+import { cn } from '@/lib/utils'
 
-export function CollectionCard({ collection }: { collection: NDKEvent }) {
+export function CollectionCard({ collection, className }: { collection: NDKEvent } & React.HTMLAttributes<'div'>) {
 	const title = getCollectionTitle(collection)
 	const collectionId = getCollectionId(collection)
 	const pubkey = collection.pubkey
@@ -18,7 +19,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		uiActions.setCollectionSourcePath(location.pathname)
 	}
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
+		<div className={cn('border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col', className)} data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link
 				to={`/collection/${collectionId}`}

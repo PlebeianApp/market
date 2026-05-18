@@ -272,6 +272,7 @@ The VPS must have these installed:
 | ------------- | ---- | ---------------------------- | ------------------------------ |
 | `development` | 3000 | Local (ws://localhost:10547) | Local app or explicit dev host |
 | `staging`     | 3000 | Staging relay                | Pre-production testing         |
+| `auctionsdev` | 3002 | Staging relay                | Auctions feature staging       |
 | `production`  | 3001 | Production relay             | Live environment               |
 
 ## Environment Files
@@ -280,6 +281,7 @@ The VPS must have these installed:
 deploy-simple/
 ├── env/
 │   ├── .env.development.example   # Copy to .env.development
+│   ├── .env.auctionsdev.example   # Copy to .env.auctionsdev
 │   ├── .env.staging.example       # Copy to .env.staging
 │   └── .env.production.example    # Copy to .env.production
 ```
@@ -292,7 +294,8 @@ deploy-simple/
 | `NODE_ENV`        | `development`, `staging`, or `production`                |
 | `PORT`            | Application port (3000 for staging, 3001 for production) |
 | `APP_RELAY_URL`   | Nostr relay WebSocket URL                                |
-| `APP_PRIVATE_KEY` | Server's Nostr private key (hex format)                  |
+| `APP_PRIVATE_KEY` | Server's Nostr private key for the main app (hex format) |
+| `CVM_SERVER_KEY`  | Shared ContextVM server private key (hex format)         |
 
 ### Optional Variables
 
@@ -354,11 +357,12 @@ Browser → Caddy (port 80)
 
 ### What Gets Deployed
 
-| Directory | Purpose                                  |
-| --------- | ---------------------------------------- |
-| `dist/`   | Pre-built static files (served by Caddy) |
-| `src/`    | Server code for API (run by Bun/PM2)     |
-| `.env`    | Environment configuration                |
+| Directory    | Purpose                                       |
+| ------------ | --------------------------------------------- |
+| `dist/`      | Pre-built static files (served by Caddy)      |
+| `src/`       | Server code for the main app (run by Bun/PM2) |
+| `contextvm/` | ContextVM server code (run by Bun/PM2)        |
+| `.env`       | Environment configuration                     |
 
 ### Directory Structure on VPS
 
@@ -385,7 +389,7 @@ Browser → Caddy (port 80)
 4. **Configure** - Copies stage-specific `.env` file
 5. **Install** - Runs `bun install --production`
 6. **Swap** - Updates symlink to new release (blue-green)
-7. **Start** - Starts/reloads app via PM2
+7. **Start** - Starts/reloads the main app and ContextVM server via PM2
 8. **Caddy** - Generates and applies Caddyfile
 9. **Cleanup** - Removes old releases (keeps last 3 per stage)
 10. **Health Check** - Verifies app is responding

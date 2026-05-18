@@ -1,11 +1,22 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useProductTitle, useProductPrice, useProductImages, useProductStock } from '@/queries/products'
+import { useEffect, useMemo, useState } from 'react'
+import {
+	getProductShippingOptions,
+	productSmartQueryOptions,
+	useProductTitle,
+	useProductPrice,
+	useProductImages,
+	useProductStock,
+} from '@/queries/products'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ShippingSelector } from '@/components/ShippingSelector'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
+import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@/lib/utils/productShippingSelections'
+import { useQuery } from '@tanstack/react-query'
 
 interface CartItemProps {
 	productId: string
@@ -14,17 +25,27 @@ interface CartItemProps {
 	onQuantityChange: (productId: string, newAmount: number) => void
 	onRemove: (productId: string) => void
 	hideShipping?: boolean
+	isEditable?: boolean
 }
 
-export default function CartItem({ productId, sellerPubkey, amount, onQuantityChange, onRemove, hideShipping = false }: CartItemProps) {
+export default function CartItem({
+	productId,
+	sellerPubkey,
+	amount,
+	onQuantityChange,
+	onRemove,
+	hideShipping = false,
+	isEditable = true,
+}: CartItemProps) {
 	const [quantity, setQuantity] = useState(amount)
-	const [showShipping, setShowShipping] = useState(false)
 
 	// Fetch product data - pass sellerPubkey to support d-tag lookups
 	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId, sellerPubkey)
 	const { data: priceTag, isLoading: isPriceLoading } = useProductPrice(productId, sellerPubkey)
 	const { data: images, isLoading: isImagesLoading } = useProductImages(productId, sellerPubkey)
 	const { data: stockTag, isLoading: isStockLoading } = useProductStock(productId, sellerPubkey)
+	const productQuery = useQuery(productSmartQueryOptions(productId, sellerPubkey))
+	const sellerShippingOptionsQuery = useShippingOptionsByPubkey(sellerPubkey)
 
 	const isLoading = isTitleLoading || isPriceLoading || isImagesLoading || isStockLoading
 
@@ -38,8 +59,53 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 	const currentShippingId = cartActions.getShippingMethod(productId)
 	const hasShipping = Boolean(currentShippingId)
 
+	const sellerShippingOptions = useMemo<RichShippingInfo[]>(() => {
+		if (!sellerShippingOptionsQuery.data || !sellerPubkey) return []
+
+		return sellerShippingOptionsQuery.data.flatMap((event) => {
+			const info = getShippingInfo(event)
+			if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return []
+
+			return [
+				{
+					id: createShippingReference(sellerPubkey, info.id),
+					name: info.title,
+					cost: parseFloat(info.price.amount),
+					currency: info.price.currency,
+					countries: info.countries,
+					service: info.service,
+					carrier: info.carrier,
+				},
+			]
+		})
+	}, [sellerPubkey, sellerShippingOptionsQuery.data])
+
+	const productShippingSelections = useMemo(
+		() => normalizePublishedProductShippingTags(getProductShippingOptions(productQuery.data ?? null)),
+		[productQuery.data],
+	)
+
+	const productShippingOptions = useMemo(
+		() =>
+			resolvePublishedProductShippingOptions({
+				publishedSelections: productShippingSelections,
+				availableOptions: sellerShippingOptions,
+			}),
+		[productShippingSelections, sellerShippingOptions],
+	)
+
+	const selectedShippingOption = useMemo(() => {
+		if (!currentShippingId) return null
+		return productShippingOptions.find((option) => option.shippingRef === currentShippingId || option.id === currentShippingId) ?? null
+	}, [currentShippingId, productShippingOptions])
+
+	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
+	const isShippingOptionsLoading = productQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
+	const isShippingOptionsUnavailable = productQuery.isError || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
+
 	// Handle quantity input change
 	const handleQuantityChange = (value: string) => {
+		if (!isEditable) return
 		const newQuantity = parseInt(value)
 		if (!isNaN(newQuantity)) {
 			setQuantity(newQuantity)
@@ -48,6 +114,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 
 	// Handle quantity blur to update cart
 	const handleQuantityBlur = () => {
+		if (!isEditable) return
 		if (quantity !== amount) {
 			onQuantityChange(productId, quantity)
 		}
@@ -55,6 +122,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 
 	// Handle immediate button-based quantity changes
 	const handleIncrementClick = () => {
+		if (!isEditable) return
 		const newAmount = Math.min(amount + 1, stockQuantity)
 		if (newAmount !== amount) {
 			onQuantityChange(productId, newAmount)
@@ -62,6 +130,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 	}
 
 	const handleDecrementClick = () => {
+		if (!isEditable) return
 		const newAmount = Math.max(1, amount - 1)
 		if (newAmount !== amount) {
 			onQuantityChange(productId, newAmount)
@@ -73,12 +142,42 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 		setQuantity(amount)
 	}, [amount])
 
-	// Get shipping cost from the cart state
-	const getShippingCost = () => {
-		const cart = cartStore.state.cart
-		const product = cart.products[productId]
-		return product?.shippingCost || 0
+	const formatShippingCost = (cost: number | null | undefined): string => {
+		return typeof cost === 'number' && Number.isFinite(cost) ? cost.toLocaleString() : ''
 	}
+
+	const formatShippingAmount = (cost: number | null | undefined, shippingCurrency?: string | null): string => {
+		return [formatShippingCost(cost), shippingCurrency?.trim()].filter(Boolean).join(' ')
+	}
+
+	const cartSelectedShipping = (() => {
+		const product = cartStore.state.cart.products[productId]
+		if (!product || typeof product.shippingCost !== 'number' || !Number.isFinite(product.shippingCost)) return null
+		return {
+			cost: product.shippingCost,
+			currency: product.shippingCostCurrency,
+		}
+	})()
+
+	const selectedShippingCost = selectedShippingOption
+		? {
+				cost: selectedShippingOption.cost,
+				currency: selectedShippingOption.currency,
+			}
+		: cartSelectedShipping
+
+	const selectedShippingCostText = selectedShippingCost
+		? formatShippingAmount(selectedShippingCost.cost, selectedShippingCost.currency)
+		: ''
+	const hasAdditiveShippingMetadata =
+		selectedShippingOption && Number.isFinite(selectedShippingOption.baseCost) && Number.isFinite(selectedShippingOption.extraCostAmount)
+	const selectedShippingBreakdownText =
+		hasAdditiveShippingMetadata && selectedShippingOption.extraCostAmount !== 0
+			? `${formatShippingAmount(selectedShippingOption.baseCost, selectedShippingOption.currency)} base cost + ${formatShippingAmount(
+					selectedShippingOption.extraCostAmount,
+					selectedShippingOption.currency,
+				)} product cost`
+			: ''
 
 	if (isLoading) {
 		return (
@@ -137,7 +236,13 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 					{/* Quantity Controls */}
 					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleDecrementClick}
+								disabled={!isEditable || amount <= 1}
+							>
 								<Minus size={14} />
 							</Button>
 
@@ -149,9 +254,16 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 								onBlur={handleQuantityBlur}
 								min={1}
 								max={stockQuantity}
+								disabled={!isEditable}
 							/>
 
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleIncrementClick} disabled={amount >= stockQuantity}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleIncrementClick}
+								disabled={!isEditable || amount >= stockQuantity}
+							>
 								<Plus size={14} />
 							</Button>
 						</div>
@@ -161,7 +273,11 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 							variant="ghost"
 							size="icon"
 							className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 sm:self-center sm:ml-auto self-start"
-							onClick={() => onRemove(productId)}
+							onClick={() => {
+								if (!isEditable) return
+								onRemove(productId)
+							}}
+							disabled={!isEditable}
 						>
 							<Trash2 size={16} />
 						</Button>
@@ -174,37 +290,27 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 			{/* Shipping Section - only show if not hidden */}
 			{!hideShipping && (
 				<div className="sm:ml-24 ml-0 mt-3 flex flex-col gap-2">
-					<button
-						className={`text-sm ${
-							!hasShipping ? 'text-red-600 hover:text-red-800 font-medium' : 'text-blue-600 hover:text-blue-800'
-						} text-left w-fit flex items-center gap-2`}
-						onClick={() => setShowShipping(!showShipping)}
-					>
-						{!hasShipping && <span className="i-warning w-4 h-4" />}
-						{showShipping ? 'Hide shipping options' : hasShipping ? 'Change shipping' : 'Select shipping (required)'}
-					</button>
-
-					{showShipping && (
-						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-yellow-400 pl-2' : ''}`}>
-							<ShippingSelector
-								productId={productId}
-								className="w-full max-w-xs"
-								onSelect={() => {}} // No-op since we handle selection inside ShippingSelector
-							/>
-
-							{getShippingCost() > 0 && (
-								<div className="text-sm text-muted-foreground">
-									Shipping cost: {getShippingCost()} {currency}
-								</div>
-							)}
-						</div>
+					{isShippingOptionsLoading ? (
+						<div className="text-sm text-muted-foreground">Loading shipping options...</div>
+					) : isShippingOptionsUnavailable ? (
+						<div className="text-sm text-red-500">Shipping options unavailable</div>
+					) : (
+						<ShippingSelector
+							productId={productId}
+							options={productShippingOptions}
+							selectedId={currentShippingId ?? undefined}
+							className="w-full max-w-xs"
+							onSelect={() => {}} // No-op since ShippingSelector updates cart when productId is provided
+						/>
 					)}
 
-					{!showShipping && currentShippingId && getShippingCost() > 0 && (
-						<div className="text-sm text-muted-foreground">
-							Shipping: {getShippingCost()} {currency}
-						</div>
+					{!hasShipping && <div className="text-sm font-medium text-red-600">Select a shipping option before continuing.</div>}
+
+					{hasShipping && selectedShippingCostText && (
+						<div className="text-sm text-muted-foreground">Shipping cost: {selectedShippingCostText}</div>
 					)}
+
+					{selectedShippingBreakdownText && <div className="text-xs text-muted-foreground">{selectedShippingBreakdownText}</div>}
 				</div>
 			)}
 		</li>

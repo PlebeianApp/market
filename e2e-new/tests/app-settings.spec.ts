@@ -63,7 +63,7 @@ async function clickDestructiveButtonForText(page: Page, text: string) {
 	await expect(rowText).toBeVisible({ timeout: 15_000 })
 
 	const row = rowText.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"items-center")]')
-	const destructiveButton = row.locator('button[class*="destructive"]')
+	const destructiveButton = row.locator('button[data-variant="destructive"]')
 
 	await expect(destructiveButton).toBeVisible()
 	await destructiveButton.click({ timeout: 15_000 })

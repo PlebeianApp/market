@@ -7,6 +7,7 @@ interface ConfigState {
 		stage?: Stage
 		appSettings?: any
 		appPublicKey?: string
+		cvmServerPubkey?: string
 		needsSetup?: boolean
 		[key: string]: any
 	}

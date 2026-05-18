@@ -267,12 +267,12 @@ export interface FileRoutesByFullPath {
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/search/products': typeof SearchProductsRoute
-	'/community/': typeof CommunityIndexRoute
-	'/nostr/': typeof NostrIndexRoute
-	'/posts/': typeof PostsIndexRoute
-	'/products/': typeof ProductsIndexRoute
+	'/community': typeof CommunityIndexRoute
+	'/nostr': typeof NostrIndexRoute
+	'/posts': typeof PostsIndexRoute
+	'/products': typeof ProductsIndexRoute
 	'/dashboard/about': typeof DashboardLayoutDashboardAboutRoute
-	'/dashboard/': typeof DashboardLayoutDashboardIndexRoute
+	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/nostr-address': typeof DashboardLayoutDashboardAccountNostrAddressRoute
@@ -397,12 +397,12 @@ export interface FileRouteTypes {
 		| '/products/$productId'
 		| '/profile/$profileId'
 		| '/search/products'
-		| '/community/'
-		| '/nostr/'
-		| '/posts/'
-		| '/products/'
+		| '/community'
+		| '/nostr'
+		| '/posts'
+		| '/products'
 		| '/dashboard/about'
-		| '/dashboard/'
+		| '/dashboard'
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
 		| '/dashboard/account/nostr-address'
@@ -551,7 +551,7 @@ declare module '@tanstack/react-router' {
 		'/_dashboard-layout': {
 			id: '/_dashboard-layout'
 			path: ''
-			fullPath: '/'
+			fullPath: ''
 			preLoaderRoute: typeof DashboardLayoutRouteImport
 			parentRoute: typeof rootRouteImport
 		}
@@ -572,28 +572,28 @@ declare module '@tanstack/react-router' {
 		'/products/': {
 			id: '/products/'
 			path: '/products'
-			fullPath: '/products/'
+			fullPath: '/products'
 			preLoaderRoute: typeof ProductsIndexRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/posts/': {
 			id: '/posts/'
 			path: '/posts'
-			fullPath: '/posts/'
+			fullPath: '/posts'
 			preLoaderRoute: typeof PostsIndexRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/nostr/': {
 			id: '/nostr/'
 			path: '/nostr'
-			fullPath: '/nostr/'
+			fullPath: '/nostr'
 			preLoaderRoute: typeof NostrIndexRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/community/': {
 			id: '/community/'
 			path: '/community'
-			fullPath: '/community/'
+			fullPath: '/community'
 			preLoaderRoute: typeof CommunityIndexRouteImport
 			parentRoute: typeof rootRouteImport
 		}
@@ -635,7 +635,7 @@ declare module '@tanstack/react-router' {
 		'/_dashboard-layout/dashboard/': {
 			id: '/_dashboard-layout/dashboard/'
 			path: '/dashboard'
-			fullPath: '/dashboard/'
+			fullPath: '/dashboard'
 			preLoaderRoute: typeof DashboardLayoutDashboardIndexRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}

@@ -2,9 +2,6 @@ import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { EventSigner } from './EventSigner'
 
-/**
- * Pricing tier for a purchasable item.
- */
 export interface PricingTier {
 	sats: number
 	days: number
@@ -12,22 +9,13 @@ export interface PricingTier {
 	label: string
 }
 
-/**
- * Base interface for any zap-purchased registry entry.
- * All purchase types track the buyer's pubkey and expiration.
- */
 export interface ZapPurchaseEntry {
 	pubkey: string
-	validUntil: number // Unix timestamp
+	validUntil: number
 }
 
-/**
- * Request body for generating a zap purchase invoice.
- * Used by the generic `/api/<purchase>/` route handler.
- */
 export interface ZapPurchaseInvoiceRequestBody {
 	amountSats: number
-	/** Purchase-specific key (e.g. vanity name, badge tier, username) */
 	registryKey: string
 	zapRequest: {
 		pubkey: string
@@ -39,16 +27,10 @@ export interface ZapPurchaseInvoiceRequestBody {
 	}
 }
 
-/**
- * Successful invoice generation result.
- */
 export interface ZapInvoiceResult {
 	pr: string
 }
 
-/**
- * Response from a LNURL-pay endpoint (LUD-06/LUD-16).
- */
 export interface LnurlPayData {
 	callback?: string
 	maxSendable?: number
@@ -60,78 +42,22 @@ export interface LnurlPayData {
 	reason?: string
 }
 
-/**
- * Response from a LNURL-pay callback containing the BOLT11 invoice.
- */
 export interface LnurlInvoiceData {
 	pr?: string
 	status?: 'ERROR'
 	reason?: string
 }
 
-/**
- * Function that converts a Lightning identifier (lud16/lud06) to an LNURL-pay endpoint URL.
- */
 export type LnurlResolver = (lightningIdentifier: string) => string
 
-/**
- * Configuration for a zap purchase manager instance.
- *
- * @example
- * // Vanity URL purchase config
- * {
- *   zapLabel: 'vanity-register',
- *   registryEventKind: 30000,
- *   registryDTag: 'vanity-urls',
- *   pricing: {
- *     '6mo': { sats: 10000, days: 180, label: '6 Months' },
- *     '1yr': { sats: 18000, days: 365, label: '1 Year' },
- *   },
- * }
- */
 export interface ZapPurchaseConfig {
-	/** L tag to identifying this purchase type (like: "vanity-register") */
 	zapLabel: string
-	/** Nostr event kind for the registry (e.g. 30000) */
 	registryEventKind: number
-	/** d-tag value for the registry event (e.g. "vanity-urls") */
 	registryDTag: string
-	/** Available pricing tiers */
 	pricing: Record<string, PricingTier>
-	/** Max age in seconds for processing zap receipts (default: 300) */
 	maxReceiptAge?: number
 }
 
-/**
- *  Abstract base for all zap purchases:
- * - Subscribtion -> Payment Validation  -> Publishing the parameterized Nostr events
- *
- * Subclasses implement domain-specific logic:
- *  - extract the registry and specific validation rules and serialization Nostr event tags
- *
- * @example
- * // Create a supporter badge purchase manager
- * class BadgePurchaseManager extends ZapPurchaseManager<BadgeEntry> {
- *   constructor(eventSigner: EventSigner) {
- *     super({
- *       zapLabel: 'badge-purchase',
- *       registryEventKind: 30000,
- *       registryDTag: 'supporter-badges',
- *       pricing: BADGE_PRICING,
- *     }, eventSigner)
- *   }
- *
- *   protected extractRegistryKey(zapRequest: NostrEvent): string | null {
- *     return zapRequest.pubkey // Badge is keyed by pubkey
- *   }
- *
- *   protected validateRegistration(key: string, pubkey: string): string | null {
- *     return null // No special validation needed
- *   }
- *
- *   // ... other implementable abstract methods
- * }
- */
 export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	protected registry: Map<string, TEntry> = new Map()
 	private processedReceipts: Set<string> = new Set()
@@ -144,46 +70,25 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		this.config = config
 		this.eventSigner = eventSigner
 	}
-
 	// --- Abstract methods implemented in subclasses ---
-
-	/** Extract the registry key from a zap request (vanity name from tags, or pubkey for badges) */
 	protected abstract extractRegistryKey(zapRequest: NostrEvent): string | null
-
-	/** Validate whether a registration is allowed. Return null if valid, or an error message string. */
 	protected abstract validateRegistration(key: string, pubkey: string): string | null
-
-	/** Parse entries from a Nostr registry event's tags */
 	protected abstract extractEntriesFromEvent(event: NostrEvent): Array<{ key: string; entry: TEntry }>
-
-	/** Build Nostr event tags from the current registry entries */
 	protected abstract buildRegistryTags(entries: Map<string, TEntry>): string[][]
-
-	/** Create a new entry instance for the given key, pubkey, and validity timestamp */
 	protected abstract createEntry(key: string, pubkey: string, validUntil: number): TEntry
 
 	// --- Optional hooks (override in subclass) ---
-
-	/** Called after a new entry is registered. Use for secondary indexes (e.g. pubkey→key reverse lookup). */
 	protected onEntryRegistered?(key: string, entry: TEntry): void
-
-	/** Called after the registry is fully rebuilt from an event. Use to rebuild secondary indexes. */
 	protected onRegistryRebuilt?(): void
-
-	// --- Public API ---
-
 	public setNDK(ndk: NDK): void {
 		this.ndk = ndk
 	}
-
 	public setAppPubkey(pubkey: string): void {
 		this.appPubkey = pubkey
 	}
 
-	/**
-	 * Handle a registry event (rebuild in-memory state from a Nostr event).
-	 * Called when a registry kind(kind 30000)) event is received.
-	 */
+	// Handle a registry event (rebuild in-memory state from a Nostr event).
+	// Called when a registry kind(kind 30000)) event is received.
 	public async handleRegistryEvent(event: NostrEvent): Promise<void> {
 		console.log(`[${this.config.registryDTag}] Processing registry event: ${event.id}`)
 
@@ -202,11 +107,9 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		console.log(`[${this.config.registryDTag}] Registry updated: ${this.registry.size} active entries`)
 	}
 
-	/**
-	 * Handle a zap receipt (kind 9735) and register the purchase if valid.
-	 * Validates - duplicity, recency, label tag, payment amount, and domain-specific rules.
-	 * On success, creates/extends the registry entry and publishes the updated registry.
-	 */
+	// Handle a zap receipt (kind 9735) and register the purchase if valid.
+	// Validates - duplicity, recency, label tag, payment amount, and domain-specific rules.
+	// On success, creates/extends the registry entry and publishes the updated registry.
 	public async handleZapReceipt(event: NostrEvent): Promise<void> {
 		const eventId = event.id
 		if (!eventId) return
@@ -296,7 +199,6 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		this.registry.set(key, entry)
 		this.onEntryRegistered?.(key, entry)
 
-		// Publish updated registry to relays
 		await this.publishRegistry()
 
 		console.log(
@@ -304,9 +206,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		)
 	}
 
-	/**
-	 * Load existing registry state from the relay on startup.
-	 */
+	//Load existing registry state from the relay on startup.
 	public async loadExistingRegistry(appPubkey: string): Promise<void> {
 		if (!this.ndk) {
 			console.warn(`[${this.config.registryDTag}] NDK not available, cannot load existing registry`)
@@ -335,17 +235,13 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		}
 	}
 
-	/**
-	 * Get all active (non-expired) entries.
-	 */
+	// Get all active (non-expired) entries.
 	public getAllEntries(): TEntry[] {
 		const now = Math.floor(Date.now() / 1000)
 		return Array.from(this.registry.values()).filter((e) => e.validUntil > now)
 	}
 
-	/**
-	 * Get an entry by registry key, or null if not found or expired.
-	 */
+	// Get an entry by registry key, or null if not found or expired.
 	public getEntry(key: string): TEntry | null {
 		const entry = this.registry.get(key)
 		if (!entry) return null
@@ -353,9 +249,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		return entry
 	}
 
-	/**
-	 * Find the first active entry for a given pubkey.
-	 */
+	// Find the first active entry for a given pubkey.
 	public getEntryForPubkey(pubkey: string): TEntry | null {
 		const now = Math.floor(Date.now() / 1000)
 		for (const entry of Array.from(this.registry.values())) {
@@ -367,30 +261,10 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	}
 
 	// --- Protected helpers ---
-
-	/**
-	 * Comment included in the LNURL callback when generating an invoice.
-	 * Override for domain-specific comments (e.g. "Vanity URL: my-shop").
-	 */
 	protected getInvoiceComment(registryKey: string): string {
 		return `${this.config.zapLabel}: ${registryKey}`
 	}
 
-	// --- Invoice generation (server-side LNURL proxy) ---
-
-	/**
-	 * Validate a zap request and generate a Lightning invoice via LNURL-pay.
-	 *
-	 * This runs server-side to avoid CORS issues when the browser needs to resolve
-	 * a Lightning address and obtain a BOLT11 invoice. It validates the zap request
-	 * against this manager's config (correct label, amount, registry key) and runs
-	 * domain-specific validation before proxying the LNURL-pay flow.
-	 *
-	 * @param request - The invoice request containing amount, registry key, and signed zap request
-	 * @param appPubkey - The app's public key (zap request must target this)
-	 * @param lightningIdentifier - The app's Lightning address (lud16) or LNURL (lud06)
-	 * @param toLnurlpEndpoint - Resolves a Lightning identifier to an LNURL-pay endpoint URL
-	 */
 	public async generateInvoice(
 		request: ZapPurchaseInvoiceRequestBody,
 		appPubkey: string,
@@ -413,7 +287,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 			throw new ZapInvoiceError('zapRequest must be signed', 400)
 		}
 
-		// --- Validate zap request tags ---
+		// Validate zap request tags
 		const hasTag = (k: string, v?: string) => zapRequest.tags.some((t) => t[0] === k && (v === undefined ? true : t[1] === v))
 
 		if (!hasTag('L', this.config.zapLabel)) {
@@ -498,14 +372,9 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	/**
 	 * Match a payment amount to the best (highest) qualifying pricing tier.
 	 * Returns validity in seconds, or null if no tier matches.
-	 *
-	 * Tiers are sorted by sats descending so the highest qualifying tier wins.
-	 * Tiers with `seconds` (dev/test tiers) use that value directly;
-	 * tiers with `days` are converted to seconds.
 	 */
 	protected matchPricingTier(amountSats: number): number | null {
 		const entries = Object.entries(this.config.pricing)
-		// Sort descending by sats so we match the highest qualifying tier first
 		entries.sort(([, a], [, b]) => b.sats - a.sats)
 
 		for (const [, tier] of entries) {
@@ -520,9 +389,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		return null
 	}
 
-	/**
-	 * Publish the current registry as a signed Nostr event to connected relays.
-	 */
+	//Publish the current registry as a signed Nostr event to connected relays.
 	protected async publishRegistry(): Promise<void> {
 		if (!this.ndk) {
 			console.error(`[${this.config.registryDTag}] NDK not available, cannot publish registry`)
@@ -551,10 +418,7 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 	}
 }
 
-/**
- * Error thrown during invoice generation with an HTTP status code.
- * The generic route handler uses `status` to set the response code.
- */
+//Error thrown during invoice generation
 export class ZapInvoiceError extends Error {
 	public readonly status: number
 	constructor(message: string, status: number) {

@@ -40,24 +40,23 @@ export const ZapsList = ({ event, asChildren = false }: ZapsListProps) => {
 		return (
 			<Button
 				key={zap.id}
-				variant="primary"
 				size="sm"
-				className="rounded-full py-1 pl-1 pr-4 flex items-center gap-2 h-auto min-h-[32px] border-light-gray transition-colors"
+				className="flex items-center gap-2 py-1 pr-4 pl-1 border-light-gray rounded-full h-auto min-h-[32px] transition-colors"
 				// Optional: Add click handler to view details or send a reply
 				// onClick={() => handleZapClick(zap)}
 			>
 				{/* Avatar */}
-				<AvatarUser pubkey={zap.senderPubkey} className="w-1.1 h-1.1 shrink-0 border-white" />
+				<AvatarUser pubkey={zap.senderPubkey} className="border-white w-1.1 h-1.1 shrink-0" />
 
 				{/* Amount & Icon */}
 				<div className="flex items-center gap-1 shrink-0">
 					<Zap className={'w-4 h-4'} />
-					<span className="font-medium text-xs tabular-nums">{formatAmount(zap.amountMillisats, 'lightning')}</span>
+					<span className="font-medium tabular-nums text-xs">{formatAmount(zap.amountMillisats, 'lightning')}</span>
 				</div>
 
 				{/* Message (if any) */}
 				{displayMessage && (
-					<div className="flex items-center gap-1 text-xs max-w-[150px] truncate">
+					<div className="flex items-center gap-1 max-w-[150px] text-xs truncate">
 						<span className="truncate">{displayMessage}</span>
 					</div>
 				)}

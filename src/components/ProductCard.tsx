@@ -19,12 +19,13 @@ import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { authStore, useAuth } from '@/lib/stores/auth'
 import { ZapButton } from './social/ZapButton'
+import { cn } from '@/lib/utils'
 
-export interface ProductCardProps {
+export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, className }: ProductCardProps) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
@@ -83,7 +84,10 @@ export function ProductCard({ product }: ProductCardProps) {
 		<Link
 			to={`/products/${product.id}`}
 			onClick={handleProductClick}
-			className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer"
+			className={cn(
+				'border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer',
+				className,
+			)}
 			data-testid="product-card"
 		>
 			{/* Square aspect ratio container for image */}

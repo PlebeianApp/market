@@ -74,12 +74,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const sellerPubkey = getSellerPubkey(orderEvent)
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
+	const canViewBuyerContact = isBuyer || isOrderSeller
 
 	const totalAmount = getTotalAmount(orderEvent)
 
 	// Extract shipping information
 	const shippingRef = getShippingRef(orderEvent)
 	const shippingAddress = orderEvent.tags.find((tag) => tag[0] === 'address')?.[1]
+	const deliveryContact = orderEvent.tags.find((tag) => tag[0] === 'email')?.[1]
 
 	// Get status styles for coloring the header
 	const { headerBgColor } = getStatusStyles(order)
@@ -291,6 +293,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</CardContent>
 				</Card>
 
+				{canViewBuyerContact && deliveryContact && (
+					<Card>
+						<CardHeader>
+							<CardTitle>Buyer Contact</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-gray-700">
+								<strong>Delivery contact:</strong> {deliveryContact}
+							</p>
+							<p className="text-xs text-gray-500 mt-2">The seller can use this contact for order coordination after payment settles.</p>
+						</CardContent>
+					</Card>
+				)}
+
 				{/* Products */}
 				{products.length > 0 && (
 					<Card>
@@ -347,7 +363,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 											<div>
 												<p className="font-medium text-purple-900">Digital Delivery</p>
 												<p className="text-sm text-purple-800 mt-1">
-													This item will be delivered digitally. Check your messages for delivery details.
+													The seller will use the buyer-provided delivery contact after payment settles.
 												</p>
 											</div>
 										</div>

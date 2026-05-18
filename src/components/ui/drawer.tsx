@@ -1,175 +1,133 @@
-import * as React from 'react'
-import { cva, type VariantProps } from 'class-variance-authority'
-import { X } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useStore } from '@tanstack/react-store'
-import { uiActions, uiStore, type DrawerType } from '@/lib/stores/ui'
+import * as React from "react"
+import { Drawer as DrawerPrimitive } from "vaul"
 
-const drawerVariants = cva('fixed h-full bg-white shadow-xl transform transition-transform duration-300 ease-in-out z-50', {
-	variants: {
-		side: {
-			right: 'top-0 right-0 w-full sm:w-96 translate-x-full data-[state=open]:translate-x-0',
-			left: 'top-0 left-0 w-full sm:w-96 -translate-x-full data-[state=open]:translate-x-0',
-			top: 'top-0 left-0 w-full h-96 -translate-y-full data-[state=open]:translate-y-0',
-			bottom: 'bottom-0 left-0 w-full h-96 translate-y-full data-[state=open]:translate-y-0',
-		},
-	},
-	defaultVariants: {
-		side: 'right',
-	},
-})
+import { cn } from "@/lib/utils"
 
-const backdropVariants = cva('fixed inset-0 bg-black/50 z-40 transition-opacity duration-300', {
-	variants: {
-		state: {
-			open: 'opacity-100',
-			closed: 'opacity-0 pointer-events-none',
-		},
-	},
-	defaultVariants: {
-		state: 'closed',
-	},
-})
-
-export interface DrawerProps extends VariantProps<typeof drawerVariants> {
-	type: DrawerType
-	children: React.ReactNode
-	className?: string
+function Drawer({
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+  return <DrawerPrimitive.Root data-slot="drawer" {...props} />
 }
 
-export function Drawer({ type, children, side, className }: DrawerProps) {
-	const { drawers } = useStore(uiStore)
-	const isOpen = drawers[type]
-
-	// Handle Escape key to close drawer
-	React.useEffect(() => {
-		const handleEscape = (e: KeyboardEvent) => {
-			if (e.key === 'Escape' && isOpen) {
-				uiActions.closeDrawer(type)
-			}
-		}
-
-		document.addEventListener('keydown', handleEscape)
-
-		// Prevent body scroll when drawer is open
-		if (isOpen) {
-			document.body.style.overflow = 'hidden'
-		} else {
-			document.body.style.overflow = ''
-		}
-
-		return () => {
-			document.removeEventListener('keydown', handleEscape)
-			document.body.style.overflow = ''
-		}
-	}, [isOpen, type])
-
-	return (
-		<>
-			{/* Backdrop - always rendered for smooth transitions */}
-			<div
-				className={cn(backdropVariants({ state: isOpen ? 'open' : 'closed' }))}
-				onClick={() => uiActions.closeDrawer(type)}
-				aria-hidden="true"
-			/>
-
-			{/* Drawer */}
-			<div
-				className={cn(drawerVariants({ side }), className)}
-				data-state={isOpen ? 'open' : 'closed'}
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby={`drawer-${type}-title`}
-			>
-				{children}
-			</div>
-		</>
-	)
+function DrawerTrigger({
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Trigger>) {
+  return <DrawerPrimitive.Trigger data-slot="drawer-trigger" {...props} />
 }
 
-// Additional drawer components for shadcn/ui compatibility
-interface DrawerContentProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function DrawerContent({ className, children, ...props }: DrawerContentProps) {
-	return (
-		<div className={cn("flex flex-col h-full", className)} {...props}>
-			{children}
-		</div>
-	)
+function DrawerPortal({
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Portal>) {
+  return <DrawerPrimitive.Portal data-slot="drawer-portal" {...props} />
 }
 
-interface DrawerHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function DrawerHeader({ className, ...props }: DrawerHeaderProps) {
-	return (
-		<div className={cn("flex flex-col space-y-1.5 p-4 border-b", className)} {...props} />
-	)
+function DrawerClose({
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Close>) {
+  return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />
 }
 
-interface DrawerFooterProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function DrawerFooter({ className, ...props }: DrawerFooterProps) {
-	return (
-		<div className={cn("mt-auto", className)} {...props} />
-	)
+function DrawerOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
+  return (
+    <DrawerPrimitive.Overlay
+      data-slot="drawer-overlay"
+      className={cn(
+        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-interface DrawerTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
-
-export function DrawerTitle({ className, ...props }: DrawerTitleProps) {
-	return (
-		<h2 className={cn("text-xl font-semibold", className)} {...props} />
-	)
+function DrawerContent({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Content>) {
+  return (
+    <DrawerPortal data-slot="drawer-portal">
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        data-slot="drawer-content"
+        className={cn(
+          "group/drawer-content fixed z-50 flex h-auto flex-col bg-background",
+          "data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[80vh] data-[vaul-drawer-direction=top]:rounded-b-lg data-[vaul-drawer-direction=top]:border-b",
+          "data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[80vh] data-[vaul-drawer-direction=bottom]:rounded-t-lg data-[vaul-drawer-direction=bottom]:border-t",
+          "data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=right]:border-l data-[vaul-drawer-direction=right]:sm:max-w-sm",
+          "data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=left]:border-r data-[vaul-drawer-direction=left]:sm:max-w-sm",
+          className
+        )}
+        {...props}
+      >
+        <div className="mx-auto mt-4 hidden h-2 w-[100px] shrink-0 rounded-full bg-muted group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
+        {children}
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  )
 }
 
-interface DrawerDescriptionProps extends React.HTMLAttributes<HTMLParagraphElement> {}
-
-export function DrawerDescription({ className, ...props }: DrawerDescriptionProps) {
-	return (
-		<p className={cn("text-sm text-muted-foreground", className)} {...props} />
-	)
+function DrawerHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="drawer-header"
+      className={cn(
+        "flex flex-col gap-0.5 p-4 group-data-[vaul-drawer-direction=bottom]/drawer-content:text-center group-data-[vaul-drawer-direction=top]/drawer-content:text-center md:gap-1.5 md:text-left",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-interface DrawerCloseProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	asChild?: boolean
+function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="drawer-footer"
+      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      {...props}
+    />
+  )
 }
 
-export function DrawerClose({ className, onClick, asChild, children, ...props }: DrawerCloseProps) {
-	const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-		// Get the drawer type from the closest drawer element
-		const drawer = (e.target as HTMLElement).closest('[role="dialog"]');
-		const type = drawer?.getAttribute('aria-labelledby')?.replace('drawer-', '').replace('-title', '') as DrawerType;
-		
-		if (type) {
-			uiActions.closeDrawer(type);
-		}
-		
-		if (onClick) {
-			onClick(e);
-		}
-	};
+function DrawerTitle({
+  className,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Title>) {
+  return (
+    <DrawerPrimitive.Title
+      data-slot="drawer-title"
+      className={cn("font-semibold text-foreground", className)}
+      {...props}
+    />
+  )
+}
 
-	if (asChild && React.isValidElement(children)) {
-		return React.cloneElement(children as React.ReactElement<any>, {
-			...props,
-			className: cn(className, (children as React.ReactElement<any>).props.className),
-			onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
-				handleClick(e);
-				if ((children as React.ReactElement<any>).props.onClick) {
-					(children as React.ReactElement<any>).props.onClick(e);
-				}
-			},
-		});
-	}
+function DrawerDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof DrawerPrimitive.Description>) {
+  return (
+    <DrawerPrimitive.Description
+      data-slot="drawer-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
 
-	return (
-		<button 
-			className={cn("p-2 rounded-full hover:bg-gray-100", className)} 
-			onClick={handleClick}
-			aria-label="Close drawer"
-			{...props}
-		>
-			{children || <X size={24} />}
-		</button>
-	);
+export {
+  Drawer,
+  DrawerPortal,
+  DrawerOverlay,
+  DrawerTrigger,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerFooter,
+  DrawerTitle,
+  DrawerDescription,
 }

@@ -244,9 +244,9 @@ export function ImageUploader({
           style={localSrc ? {} : { backgroundImage: 'url("images/checker.png")', backgroundRepeat: 'repeat' }}
         >
           {/* Floating server selector */}
-          <div className="absolute top-2 left-2 z-10">
+          <div className="top-2 left-2 z-10 absolute">
             <Select value={selectedServer} onValueChange={setSelectedServer}>
-              <SelectTrigger className="w-[280px] bg-white border-2 border-black shadow-sm">
+              <SelectTrigger className="bg-white shadow-sm border-2 border-black w-[280px]">
                 <SelectValue placeholder="Select server" />
               </SelectTrigger>
               <SelectContent>
@@ -266,7 +266,7 @@ export function ImageUploader({
                 <div className="absolute inset-0 bg-gradient-to-l from-gray-300 to-white" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
               </div>
 
-              <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundImage: 'url("images/image-bg-pattern.png")', backgroundRepeat: 'repeat' }}>
+              <div className="absolute inset-0 flex justify-center items-center" style={{ backgroundImage: 'url("images/image-bg-pattern.png")', backgroundRepeat: 'repeat' }}>
                 {getMediaType(localSrc) === 'video' ? (
                   <video src={localSrc} controls className="max-w-full max-h-full object-contain">
                     <track kind="captions" />
@@ -277,19 +277,19 @@ export function ImageUploader({
                 )}
               </div>
 
-              <div className="absolute bottom-2 right-2 flex gap-2">
+              <div className="right-2 bottom-2 absolute flex gap-2">
                 {inputEditable && (
                   <Button type="button" variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
-                    <span className="i-upload w-6 h-6" />
+                    <span className="w-6 h-6 i-upload" />
                   </Button>
                 )}
                 <Button type="button" variant="outline" size="icon" className="bg-white" onClick={() => onDelete(index)}>
-                  <span className="i-delete w-4 h-4" />
+                  <span className="w-4 h-4 i-delete" />
                 </Button>
               </div>
 
               {index !== -1 && (
-                <div className="absolute left-2 bottom-2 flex flex-row gap-2">
+                <div className="bottom-2 left-2 absolute flex flex-row gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -298,7 +298,7 @@ export function ImageUploader({
                     disabled={index === 0}
                     onClick={() => onPromote && onPromote(index)}
                   >
-                    <span className="i-up w-4 h-4" />
+                    <span className="w-4 h-4 i-up" />
                   </Button>
                   <Button
                     type="button"
@@ -308,7 +308,7 @@ export function ImageUploader({
                     disabled={index === imagesLength - 1}
                     onClick={() => onDemote && onDemote(index)}
                   >
-                    <span className="i-down w-4 h-4" />
+                    <span className="w-4 h-4 i-down" />
                   </Button>
                 </div>
               )}
@@ -325,9 +325,9 @@ export function ImageUploader({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <span className="i-upload w-10 h-10" />
+              <span className="w-10 h-10 i-upload" />
               <strong>{isDragging ? 'Drop media here' : 'Click or drag image here'}</strong>
-              <strong className="text-xs text-gray-500">{imageDimensionText}</strong>
+              <strong className="text-gray-500 text-xs">{imageDimensionText}</strong>
             </button>
           )}
         </div>
@@ -338,7 +338,7 @@ export function ImageUploader({
             disabled={!inputEditable && Boolean(localSrc)}
             value={inputValue}
             type="text"
-            className="border-2 border-black pr-12 h-12 rounded-none"
+            className="pr-12 border-2 border-black rounded-none h-12"
             placeholder="Set a remote image URL"
             id="userImageRemote"
             name="imageRemoteInput"
@@ -350,8 +350,7 @@ export function ImageUploader({
             inputEditable ? (
               <Button
                 type="button"
-                variant="primary"
-                className="absolute right-1 top-1 bottom-1 h-10"
+                className="top-1 right-1 bottom-1 absolute h-10"
                 onClick={handleSaveImage}
                 data-testid="image-save-button"
               >
@@ -361,7 +360,7 @@ export function ImageUploader({
               <Button
                 type="button"
                 variant="outline"
-                className="absolute right-1 top-1 bottom-1 h-10 bg-white"
+                className="top-1 right-1 bottom-1 absolute bg-white h-10"
                 onClick={() => setInputEditable(true)}
                 data-testid="image-edit-button"
               >
@@ -371,8 +370,7 @@ export function ImageUploader({
           ) : (
             <Button
               type="button"
-              variant="primary"
-              className="absolute right-1 top-1 bottom-1 h-10"
+              className="top-1 right-1 bottom-1 absolute h-10"
               onClick={handleSaveImage}
               data-testid="image-save-button"
             >
@@ -386,8 +384,8 @@ export function ImageUploader({
         )}
 
         {isLoading && (
-          <div className="flex flex-row gap-2 items-center">
-            <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+          <div className="flex flex-row items-center gap-2">
+            <div className="border-2 border-primary border-t-transparent rounded-full w-4 h-4 animate-spin"></div>
             <p className="text-sm">Uploading...</p>
           </div>
         )}
