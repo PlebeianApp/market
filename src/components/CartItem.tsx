@@ -17,6 +17,7 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@/lib/utils/productShippingSelections'
 import { useQuery } from '@tanstack/react-query'
+import { PriceDisplay } from '@/components/PriceDisplay'
 
 interface CartItemProps {
 	productId: string
@@ -226,11 +227,9 @@ export default function CartItem({
 				<div className="flex flex-1 flex-col justify-between">
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
-						<p className="mt-1 text-sm text-muted-foreground">
-							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat'
-								? `${Math.round(price).toLocaleString()} sats`
-								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`}
-						</p>
+						<div className="mt-1">
+							<PriceDisplay priceValue={price} originalCurrency={currency} showOriginalPrice={true} showSatsPrice={true} />
+						</div>
 					</div>
 
 					{/* Quantity Controls */}
