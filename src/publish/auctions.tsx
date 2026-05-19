@@ -1,3 +1,4 @@
+import { preflightAuctionSettlementP2pk } from '@/lib/auctionSettlementP2pk'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
@@ -784,9 +785,15 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			throw new Error('Settlement plan did not provide a valid winning bid')
 		}
 		for (const release of settlementPlan.releases) {
-			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
+			const p2pkPreflight = preflightAuctionSettlementP2pk({
+				auctionP2pkXpub,
 				derivationPath: release.derivationPath,
-				expectedPubkey: release.childPubkey || undefined,
+				settlementPlanChildPubkey: release.childPubkey,
+				token: release.token,
+			})
+			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
+				derivationPath: p2pkPreflight.derivationPath,
+				expectedPubkey: p2pkPreflight.derivedChildPubkey,
 			})
 			try {
 				await nip60Actions.receiveLockedEcash(release.token, childPrivkey)
