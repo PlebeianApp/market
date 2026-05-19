@@ -47,7 +47,7 @@ For manual test environment control:
 
 ```bash
 ./scripts/start-test-env.sh    # Start relay + app
-bun run test:e2e:manual        # Run tests (assumes services running)
+bun run test:e2e -- --headed   # Run tests with visible browser
 ```
 
 ## Architecture
