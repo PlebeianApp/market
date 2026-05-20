@@ -47,10 +47,16 @@ describe('auction publish validation', () => {
 		)
 	})
 
-	test('duration under 30 minutes is rejected when a minimum duration is set', () => {
-		expect(() => validate({ startAt: '', endAt: at(NOW_SECONDS + AUCTION_MIN_DURATION_SECONDS - 1) })).toThrow(
-			'Auction duration must be at least 30 minutes',
-		)
+	test('duration under the configured minimum is rejected', () => {
+		// Asserts against the message the validator builds from
+		// `AUCTION_MIN_DURATION_SECONDS` rather than a hard-coded "30
+		// minutes" string — the constant was lowered from 30 min to 1
+		// min in commit a15f7934, and the test silently flipped from
+		// "passes" to "fails on stale message". Tracking the constant
+		// here keeps this test in sync with future tweaks too.
+		const minMinutes = AUCTION_MIN_DURATION_SECONDS / 60
+		const expectedMessage = `Auction duration must be at least ${minMinutes} minute${minMinutes === 1 ? '' : 's'}`
+		expect(() => validate({ startAt: '', endAt: at(NOW_SECONDS + AUCTION_MIN_DURATION_SECONDS - 1) })).toThrow(expectedMessage)
 	})
 
 	test('negative shipping extra cost is rejected', () => {
