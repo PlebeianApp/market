@@ -77,13 +77,11 @@ export const useAdminSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(
-			adminListFilter,
-			{
-				closeOnEose: false, // Keep subscription open
-			},
-			getAppRelaySet(),
-		)
+		const subscription = ndk.subscribe(adminListFilter, {
+			closeOnEose: false, // Keep subscription open
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
+		})
 
 		// Event handler for admin list updates - only react to newer events after EOSE
 		subscription.on('event', (newEvent) => {
@@ -228,13 +226,11 @@ export const useEditorSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(
-			editorListFilter,
-			{
-				closeOnEose: false, // Keep subscription open
-			},
-			getAppRelaySet(),
-		)
+		const subscription = ndk.subscribe(editorListFilter, {
+			closeOnEose: false, // Keep subscription open
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
+		})
 
 		// Event handler for editor list updates - only react to newer events after EOSE
 		subscription.on('event', (newEvent) => {
