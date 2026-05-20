@@ -3,6 +3,10 @@ import { HDKey } from '@scure/bip32'
 const P2PK_XONLY_HEX_LENGTH = 64
 const P2PK_COMPRESSED_HEX_LENGTH = 66
 
+type CashuP2pkSecretPayload = {
+	data?: unknown
+}
+
 const toHex = (bytes: Uint8Array): string =>
 	Array.from(bytes)
 		.map((byte) => byte.toString(16).padStart(2, '0'))
@@ -58,6 +62,26 @@ export const toCompressedAuctionP2pkPubkey = (pubkey: string): string => {
 
 export const auctionP2pkPubkeysMatch = (left: string, right: string): boolean =>
 	normalizeAuctionP2pkPubkey(left) === normalizeAuctionP2pkPubkey(right)
+
+export const getAuctionP2pkLockPubkeyFromSecret = (secret: string): string => {
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(secret)
+	} catch {
+		throw new Error('Cashu proof secret is not a valid P2PK secret')
+	}
+
+	if (!Array.isArray(parsed) || parsed[0] !== 'P2PK' || typeof parsed[1] !== 'object' || parsed[1] === null) {
+		throw new Error('Cashu proof secret is not a valid P2PK secret')
+	}
+
+	const payload = parsed[1] as CashuP2pkSecretPayload
+	if (typeof payload.data !== 'string' || !payload.data.trim()) {
+		throw new Error('Cashu P2PK proof secret is missing a lock pubkey')
+	}
+
+	return payload.data
+}
 
 export const deriveAuctionChildP2pkPubkeyFromXpub = (xpub: string, path: string): string => {
 	const hdRoot = HDKey.fromExtendedKey(xpub.trim())
