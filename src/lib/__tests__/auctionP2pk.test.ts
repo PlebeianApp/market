@@ -3,6 +3,7 @@ import { HDKey } from '@scure/bip32'
 import {
 	auctionP2pkPubkeysMatch,
 	deriveAuctionChildP2pkPubkeyFromXpub,
+	getAuctionP2pkLockPubkeyFromSecret,
 	normalizeAuctionDerivationPath,
 	normalizeAuctionP2pkPubkey,
 	toCompressedAuctionP2pkPubkey,
@@ -120,5 +121,21 @@ describe('auctionP2pk', () => {
 		expect(() => toCompressedAuctionP2pkPubkey('')).toThrow('Missing')
 		expect(() => toCompressedAuctionP2pkPubkey('zz')).toThrow('hex encoded')
 		expect(() => toCompressedAuctionP2pkPubkey('04' + xOnly + 'ff'.repeat(32))).toThrow('compressed')
+	})
+
+	test('getAuctionP2pkLockPubkeyFromSecret extracts NUT-11 lock pubkey', () => {
+		const compressed = '02b72fc0f74836f2066957875bc0e48c6fe734f537117c8fc80d4a365a84f31712'
+		const secret = JSON.stringify([
+			'P2PK',
+			{
+				nonce: '00'.repeat(32),
+				data: compressed,
+				tags: [['locktime', '2000000000']],
+			},
+		])
+
+		expect(getAuctionP2pkLockPubkeyFromSecret(secret)).toBe(compressed)
+		expect(() => getAuctionP2pkLockPubkeyFromSecret('not-json')).toThrow('valid P2PK')
+		expect(() => getAuctionP2pkLockPubkeyFromSecret(JSON.stringify(['P2PK', { tags: [] }]))).toThrow('missing a lock pubkey')
 	})
 })

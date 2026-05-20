@@ -10,6 +10,7 @@ import {
 import {
 	auctionP2pkPubkeysMatch,
 	deriveAuctionChildP2pkPubkeyFromXpub,
+	getAuctionP2pkLockPubkeyFromSecret,
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
@@ -711,6 +712,50 @@ function selectProofs(proofs: Proof[], amount: number): { selected: Proof[]; tot
 	}
 
 	return { selected, total }
+}
+
+const getProofsTotal = (proofs: Proof[]): number => proofs.reduce((sum, proof) => sum + proof.amount, 0)
+
+const lockAuctionBidProofs = async (
+	cashuWallet: CashuWallet,
+	amount: number,
+	proofs: Proof[],
+	params: {
+		includeDleq: boolean
+		lockPubkey: string
+		locktime: number
+		refundPubkey: string
+	},
+) => {
+	const spendableProofs = params.includeDleq ? proofs.filter((proof) => proof.dleq != null) : proofs
+	if (getProofsTotal(spendableProofs) < amount) {
+		throw new Error('Not enough funds available to send')
+	}
+
+	// cashu-ts 2.9 `send()` ignores `p2pk` when existing proofs exactly
+	// satisfy the amount. Use `swap()` so every auction bid always receives
+	// freshly minted NUT-11 P2PK proofs.
+	return cashuWallet.swap(amount, spendableProofs, {
+		p2pk: {
+			pubkey: params.lockPubkey,
+			locktime: params.locktime,
+			refundKeys: [params.refundPubkey],
+		},
+	})
+}
+
+const assertAuctionBidProofsLockedToP2pk = (proofs: Proof[], expectedLockPubkey: string): void => {
+	for (const proof of proofs) {
+		let proofLockPubkey: string
+		try {
+			proofLockPubkey = toCompressedAuctionP2pkPubkey(getAuctionP2pkLockPubkeyFromSecret(proof.secret))
+		} catch (error) {
+			throw new Error(`Mint returned an unlocked auction bid proof: ${error instanceof Error ? error.message : String(error)}`)
+		}
+		if (proofLockPubkey !== expectedLockPubkey) {
+			throw new Error('Mint returned an auction bid proof locked to the wrong P2PK pubkey')
+		}
+	}
 }
 
 /**
@@ -1543,20 +1588,18 @@ export const nip60Actions = {
 			// 1-of-1 P2PK lock. The seller alone cannot spend pre-locktime because
 			// the derivation path that produced `lockPubkey` is held secret by the
 			// auction's path oracle — see AUCTIONS.md §5.2.
-			const buildSendOptions = (includeDleq: boolean) => ({
+			const buildLockOptions = (includeDleq: boolean) => ({
 				includeDleq,
-				p2pk: {
-					pubkey: lockPubkey,
-					locktime,
-					refundKeys: [refundPubkey],
-				},
+				lockPubkey,
+				locktime,
+				refundPubkey,
 			})
 
 			let lockedProofs: Proof[] = []
 			let changeProofs: Proof[] = []
 
 			try {
-				const result = await cashuWallet.send(amount, selectedProofs, buildSendOptions(true))
+				const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, buildLockOptions(true))
 				lockedProofs = result.send
 				changeProofs = result.keep
 			} catch (primaryErr) {
@@ -1569,7 +1612,7 @@ export const nip60Actions = {
 				try {
 					// Some wallet states contain proofs without DLEQ metadata.
 					// Retry without DLEQ requirement using full mint proofs for demo reliability.
-					const retry = await cashuWallet.send(amount, mintProofs, buildSendOptions(false))
+					const retry = await lockAuctionBidProofs(cashuWallet, amount, mintProofs, buildLockOptions(false))
 					lockedProofs = retry.send
 					changeProofs = retry.keep
 				} catch (secondaryErr) {
@@ -1587,7 +1630,7 @@ export const nip60Actions = {
 					}
 
 					const refreshedProofs = getProofsForMint(wallet, targetMint)
-					const retryAfterConsolidate = await cashuWallet.send(amount, refreshedProofs, buildSendOptions(false))
+					const retryAfterConsolidate = await lockAuctionBidProofs(cashuWallet, amount, refreshedProofs, buildLockOptions(false))
 					lockedProofs = retryAfterConsolidate.send
 					changeProofs = retryAfterConsolidate.keep
 				}
@@ -1596,6 +1639,7 @@ export const nip60Actions = {
 			if (!lockedProofs.length) {
 				throw new Error('Mint returned no locked proofs for bid')
 			}
+			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
 
 			const token = getEncodedToken({
 				mint: targetMint,

@@ -1,4 +1,9 @@
-import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
+import {
+	auctionP2pkPubkeysMatch,
+	deriveAuctionChildP2pkPubkeyFromXpub,
+	getAuctionP2pkLockPubkeyFromSecret,
+	toCompressedAuctionP2pkPubkey,
+} from '@/lib/auctionP2pk'
 import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
 
 export interface AuctionSettlementP2pkPreflightInput {
@@ -26,30 +31,17 @@ export interface AuctionSettlementP2pkPreflightResult {
 	tokenLockPubkey: string
 }
 
-type CashuP2pkSecretPayload = {
-	data?: unknown
-}
-
 const X_ONLY_HEX_RE = /^[0-9a-f]{64}$/i
 
 const extractP2pkLockPubkeyFromSecret = (secret: string): string => {
-	let parsed: unknown
 	try {
-		parsed = JSON.parse(secret)
-	} catch {
+		return getAuctionP2pkLockPubkeyFromSecret(secret)
+	} catch (error) {
+		if (error instanceof Error && error.message === 'Cashu P2PK proof secret is missing a lock pubkey') {
+			throw new Error('Winner token proof secret is missing a P2PK lock pubkey')
+		}
 		throw new Error('Winner token proof secret is not a valid P2PK secret')
 	}
-
-	if (!Array.isArray(parsed) || parsed[0] !== 'P2PK' || typeof parsed[1] !== 'object' || parsed[1] === null) {
-		throw new Error('Winner token proof secret is not a valid P2PK secret')
-	}
-
-	const payload = parsed[1] as CashuP2pkSecretPayload
-	if (typeof payload.data !== 'string' || !payload.data.trim()) {
-		throw new Error('Winner token proof secret is missing a P2PK lock pubkey')
-	}
-
-	return payload.data
 }
 
 const requireCompressedTokenLockPubkey = (pubkey: string): string => {
