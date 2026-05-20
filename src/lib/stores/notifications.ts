@@ -287,7 +287,7 @@ export const notificationActions = {
 	 */
 	reset: () => {
 		const newState = createInitialState()
-		notificationStore.setState(newState)
+		notificationStore.setState(() => newState)
 		localStorage.removeItem(STORAGE_KEY)
 	},
 

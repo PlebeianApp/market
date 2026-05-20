@@ -784,12 +784,24 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		if (!winningBidEventId || !winnerPubkey || finalAmount <= 0) {
 			throw new Error('Settlement plan did not provide a valid winning bid')
 		}
+		// Cache mint keysets by URL — a multi-leg winning chain on the
+		// same mint shouldn't pay N round-trips. cashu-ts ≥2.x writes
+		// NUT-2 v2 short keyset IDs into the token, so `getDecodedToken`
+		// throws "A short keyset ID v2 was encountered, but got no
+		// keysets to map it to" without these. The wallet load also
+		// warms the cashu-ts mint cache for the subsequent
+		// `receiveLockedEcash` call below.
+		const mintKeysetsByUrl = new Map<string, import('@cashu/cashu-ts').MintKeyset[]>()
 		for (const release of settlementPlan.releases) {
+			if (!mintKeysetsByUrl.has(release.mintUrl)) {
+				mintKeysetsByUrl.set(release.mintUrl, await nip60Actions.loadAuctionMintKeysets(release.mintUrl))
+			}
 			const p2pkPreflight = preflightAuctionSettlementP2pk({
 				auctionP2pkXpub,
 				derivationPath: release.derivationPath,
 				settlementPlanChildPubkey: release.childPubkey,
 				token: release.token,
+				mintKeysets: mintKeysetsByUrl.get(release.mintUrl),
 			})
 			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
 				derivationPath: p2pkPreflight.derivationPath,
