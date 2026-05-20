@@ -186,9 +186,30 @@ export async function buildAuctionSettlementPlan(
 		.sort(compareAuctionBidChainPriority)
 
 	const reserve = getAuctionReserveAmount(auctionEvent)
+	const publicEligibleChains = buildActiveAuctionBidChains(allWindowBids)
+		.filter((group) =>
+			group.chain.every((bid) => {
+				if (!getAuctionTagValue(bid, 'child_pubkey')) return false
+				if (getAuctionTagValue(bid, 'derivation_path')) return false
+				const bidMint = getAuctionTagValue(bid, 'mint')
+				if (!bidMint || !trustedMints.has(bidMint)) return false
+				if (expectedLocktime > 0) {
+					const bidLocktime = parseInt(getAuctionTagValue(bid, 'locktime') || '0', 10)
+					if (!Number.isFinite(bidLocktime) || bidLocktime !== expectedLocktime) return false
+				}
+				return getAuctionBidAmount(bid) >= computeBidFloorAtCreated(bid)
+			}),
+		)
+		.sort(compareAuctionBidChainPriority)
+	const publicWinnerChain = publicEligibleChains[0]
+	const publicWinnerAmount = publicWinnerChain ? getAuctionBidAmount(publicWinnerChain.latestBid) : 0
 	const winnerChain = eligibleChains[0]
 	const winnerAmount = winnerChain ? getAuctionBidAmount(winnerChain.latestBid) : 0
 	const resolvedStatus: AuctionSettlementPublishStatus = winnerChain && winnerAmount >= reserve ? 'settled' : 'reserve_not_met'
+
+	if (resolvedStatus === 'reserve_not_met' && publicWinnerChain && publicWinnerAmount >= reserve) {
+		throw new Error('A reserve-meeting bid exists, but its locked Cashu token was not accepted by the path oracle')
+	}
 
 	if (params.status && resolvedStatus !== params.status) {
 		if (params.status === 'settled') {

@@ -1,10 +1,13 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { getDecodedToken } from '@cashu/cashu-ts'
 import { AUCTION_BID_TOKEN_TOPIC, type AuctionBidTokenEnvelope } from '../../../src/lib/auctionTransfers'
+import { auctionP2pkPubkeysMatch, getAuctionP2pkLockPubkeyFromSecret, toCompressedAuctionP2pkPubkey } from '../../../src/lib/auctionP2pk'
 import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, upsertAuctionPathEntry } from '../../../src/lib/auctionPathOracle'
 import { getAuctionMaxEndAt, getAuctionSettlementGrace, getAuctionTagValue } from '../../../src/lib/auctionSettlement'
 import type { AuctionContext } from '../../../src/server/auction/context'
 import { loadAuctionEvent } from '../../../src/server/auction/loadAuction'
 import { fetchAuctionPathRegistry, publishAuctionPathRegistry } from '../../../src/server/auction/registry'
+import { getMintKeysets } from '../../../src/server/util/cashu'
 import { sha256Hex } from '../../../src/server/util/sha256'
 import { getClientPubkeyOrThrow, structuredErrorResult, type ToolHandlerExtra } from './shared'
 
@@ -22,6 +25,38 @@ interface SubmitBidTokenArgs {
 	bidNonce: string
 	locktime: number
 	token: string
+}
+
+async function validateSubmittedBidTokenP2pk(envelope: AuctionBidTokenEnvelope): Promise<string | null> {
+	let decodedToken: ReturnType<typeof getDecodedToken>
+	try {
+		decodedToken = getDecodedToken(envelope.token, await getMintKeysets(envelope.mintUrl))
+	} catch (error) {
+		return `token could not be decoded: ${error instanceof Error ? error.message : String(error)}`
+	}
+
+	if (!decodedToken.proofs.length) {
+		return 'token contains no proofs'
+	}
+
+	const tokenAmount = decodedToken.proofs.reduce((sum, proof) => sum + proof.amount, 0)
+	if (tokenAmount !== envelope.amount) {
+		return `token amount mismatch (got ${tokenAmount}, want ${envelope.amount})`
+	}
+
+	for (const proof of decodedToken.proofs) {
+		let proofLockPubkey: string
+		try {
+			proofLockPubkey = toCompressedAuctionP2pkPubkey(getAuctionP2pkLockPubkeyFromSecret(proof.secret))
+		} catch {
+			return 'token proof is not locked with a compressed P2PK secret'
+		}
+		if (!auctionP2pkPubkeysMatch(proofLockPubkey, envelope.lockPubkey)) {
+			return 'token proof P2PK lock pubkey does not match granted lockPubkey'
+		}
+	}
+
+	return null
 }
 
 /**
@@ -105,6 +140,9 @@ async function validateAndLockBidToken(
 
 	const trustedMints = new Set(auctionEvent.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1]))
 	if (!trustedMints.has(envelope.mintUrl)) return { locked: false, reason: 'mint not in seller allowlist' }
+
+	const tokenP2pkRejectReason = await validateSubmittedBidTokenP2pk(envelope)
+	if (tokenP2pkRejectReason) return { locked: false, reason: tokenP2pkRejectReason }
 
 	const settlementGrace = getAuctionSettlementGrace(auctionEvent)
 	const expectedLocktime = maxEndAt && settlementGrace ? maxEndAt + settlementGrace : 0
