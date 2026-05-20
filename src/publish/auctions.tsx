@@ -312,7 +312,10 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const id = auctionId || `auction_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 	const startingBid = String(validated.startingBid)
 	const bidIncrement = String(validated.bidIncrement)
-	const reserve = String(validated.reserve)
+	// Defensive `?? 0` even though `validated.reserve` is now non-optional.
+	// `String(undefined)` produced `"undefined"` on the wire for auction
+	// `1618640c…0881` on staging (kind-30408 tag). Belt-and-braces.
+	const reserve = String(validated.reserve ?? 0)
 	// AUCTIONS.md §6.0 — the three timestamps:
 	//   end_at      → nominal close. Floor stays flat in [start_at, end_at].
 	//   max_end_at  → hard bidding cutoff. Equals end_at + window_seconds

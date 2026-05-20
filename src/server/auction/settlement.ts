@@ -139,8 +139,20 @@ export async function buildAuctionSettlementPlan(
 				// lockPayload is the issuer's record of the actual Cashu
 				// token. Without it there's nothing to release, so the
 				// chain is ineligible regardless of how the kind 1023 looks.
+				//
+				// `'released'` is accepted alongside `'locked'` so that
+				// `request_settlement` is idempotent: if the seller's
+				// previous attempt marked the registry released but then
+				// failed to redeem (cashu decode error, mint outage,
+				// network drop, etc.), re-calling settlement returns the
+				// same plan with the same tokens. Otherwise the registry
+				// gets stuck in 'released' and every subsequent attempt
+				// reports `reserve_not_met` — which is what produced the
+				// "settlement event already exists for this auction" dead
+				// end on staging (see `auctionsdev` repro at
+				// 1618640c35ce…0881).
 				const lockPayload = entry.lockPayload
-				if (!lockPayload || entry.status !== 'locked') return false
+				if (!lockPayload || (entry.status !== 'locked' && entry.status !== 'released')) return false
 				if (entry.bidEventId !== bid.id) return false
 				if (getAuctionTagValue(bid, 'commitment') !== lockPayload.commitment) return false
 				// §4.2 forbidden tag: a path-oracle bid MUST NOT carry a
