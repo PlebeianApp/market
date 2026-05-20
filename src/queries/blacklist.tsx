@@ -79,13 +79,11 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(
-			blacklistFilter,
-			{
-				closeOnEose: false, // Keep subscription open
-			},
-			getAppRelaySet(),
-		)
+		const subscription = ndk.subscribe(blacklistFilter, {
+			closeOnEose: false, // Keep subscription open
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
+		})
 
 		// Event handler for blacklist updates - only react to newer events after EOSE
 		subscription.on('event', (newEvent) => {

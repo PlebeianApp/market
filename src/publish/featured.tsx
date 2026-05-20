@@ -1,5 +1,5 @@
 import { submitAppSettings } from '@/lib/appSettings'
-import { ndkActions } from '@/lib/stores/ndk'
+import { fetchLatestAppEvent, ndkActions } from '@/lib/stores/ndk'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { FEATURED_ITEMS_CONFIG, validateCoordinates, validatePubkey } from '@/lib/schemas/featured'
 import NDK, { NDKEvent, NDKKind, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -157,16 +157,12 @@ export const addToFeaturedProducts = async (productCoords: string, signer: NDKSi
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured products directly from NDK
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind as NDKKind],
+	// Fetch latest featured products from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentProducts = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
 
 	// Check if product is already featured
@@ -198,16 +194,12 @@ export const removeFromFeaturedProducts = async (
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured products directly from NDK
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind as NDKKind],
+	// Fetch latest featured products from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentProducts = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
 
 	// Check if product is actually featured
@@ -244,16 +236,12 @@ export const addToFeaturedCollections = async (
 
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured collections directly from NDK
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind as NDKKind],
+	// Fetch latest featured collections from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentCollections = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
 
 	if (currentCollections.includes(collectionCoords)) {
@@ -277,16 +265,12 @@ export const removeFromFeaturedCollections = async (
 
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured collections directly from NDK
-	const filter = {
+	// Fetch latest featured collections from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
 		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentCollections = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
 
 	if (!currentCollections.includes(collectionCoords)) {
@@ -312,16 +296,12 @@ export const addToFeaturedUsers = async (userPubkey: string, signer: NDKSigner, 
 
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured users directly from NDK
-	const filter = {
-		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind as NDKKind],
+	// Fetch latest featured users from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentUsers = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'p').map((tag: string[]) => tag[1]) || []
 
 	if (currentUsers.includes(userPubkey)) {
@@ -340,16 +320,12 @@ export const removeFromFeaturedUsers = async (userPubkey: string, signer: NDKSig
 
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current featured users directly from NDK
-	const filter = {
+	// Fetch latest featured users from the app relay only (avoid stale copies on other relays)
+	const currentEvent = await fetchLatestAppEvent({
 		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
 		authors: [targetAppPubkey],
 		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const currentEvent = Array.from(events)[0]
+	})
 	const currentUsers = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'p').map((tag: string[]) => tag[1]) || []
 
 	if (!currentUsers.includes(userPubkey)) {

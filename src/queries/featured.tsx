@@ -100,8 +100,9 @@ const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly u
 			},
 			{
 				closeOnEose: false,
+				relaySet: getAppRelaySet(),
+				exclusiveRelay: true, // Reject stale copies from other relays in the pool
 			},
-			getAppRelaySet(),
 		)
 
 		subscription.on('event', (event) => {
