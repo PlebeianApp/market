@@ -63,7 +63,14 @@ export type ValidatedAuctionPublishData = {
 	description: string
 	startingBid: number
 	bidIncrement: number
-	reserve?: number
+	/**
+	 * Reserve in sats. Always populated (defaults to 0 when the seller
+	 * left the field empty) — see AUCTIONS.md §4.1: the tag is required,
+	 * `0` means "no reserve". Keeping this non-optional means the
+	 * publish path can safely emit `String(reserve)` without producing
+	 * `"undefined"` on the wire.
+	 */
+	reserve: number
 	startAt: number
 	endAt: number
 	durationSeconds: number
@@ -229,11 +236,20 @@ const normalizeAuctionPublishInput = (
 	const startingBid = parseNonNegativeInteger(input.startingBid, 'startingBid', 'Starting bid', issues)
 	const bidIncrement = parsePositiveInteger(input.bidIncrement, 'bidIncrement', 'Bid increment', issues)
 
-	let reserve
-	if (input.reserve) {
-		reserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
-
-		if (startingBid !== undefined && reserve !== undefined && reserve < startingBid) {
+	// AUCTIONS.md §4.1: the `reserve` tag is required, with `0` meaning
+	// "no reserve". Default missing/empty input to 0 so the published
+	// kind-30408 always carries a numeric reserve. Without this default
+	// the publish path stringified `undefined` straight into the tag —
+	// auction `1618640c…0881` on the staging relay shows up with
+	// `["reserve","undefined"]`. Parsers tolerate it (`parseInt` → NaN
+	// → fallback 0) but it's an embarrassing data-quality bug.
+	let reserve = 0
+	if (input.reserve !== undefined && input.reserve !== null && toTrimmedString(input.reserve) !== '') {
+		const parsedReserve = parseNonNegativeInteger(input.reserve, 'reserve', 'Reserve', issues)
+		if (parsedReserve !== undefined) {
+			reserve = parsedReserve
+		}
+		if (startingBid !== undefined && parsedReserve !== undefined && parsedReserve < startingBid) {
 			issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
 		}
 	}
