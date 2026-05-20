@@ -1,4 +1,4 @@
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import { parseArgs } from 'node:util'
 import { nip19, SimplePool, type Event, type Filter } from 'nostr-tools'
 

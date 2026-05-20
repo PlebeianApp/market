@@ -8,14 +8,11 @@
  * The encrypted data is saved to scripts/encrypted_test_wallet.json
  */
 
-import { config } from 'dotenv'
 import { nip04 } from 'nostr-tools'
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import fs from 'fs'
 import path from 'path'
-
-config()
 
 const TEST_WALLET = process.env.TEST_WALLET
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY

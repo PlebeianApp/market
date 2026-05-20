@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import { waitForLatestCartSnapshotToBeEmpty } from '../utils/relay-query'
-import { resetRemoteCartForUser } from 'e2e-new/scenarios'
+import { resetRemoteCartForUser } from '../scenarios'
 
 test.use({ scenario: 'marketplace' })
 

@@ -1,0 +1,19 @@
+ignores:
+  # Bun built-in modules are not npm packages, so depcheck flags them as missing
+  - 'bun'
+  - 'bun:test'
+
+  # TanStack Router devtools are conditionally imported only in development mode
+  # Depcheck scans static imports and misses these dynamic/dev-only branches
+  - '@tanstack/react-router-devtools'
+
+  # The router plugin is referenced in build configuration (build.ts or tsr config)
+  # rather than standard source code imports
+  - '@tanstack/router-plugin'
+
+  # Tailwind v4 is consumed via CSS directives (@import "tailwindcss") and the
+  # bun-plugin-tailwind build plugin, not via JavaScript imports
+  - 'tailwindcss'
+
+  # Tailwind animate is a plugin referenced via CSS, not a direct JS import
+  - 'tailwindcss-animate'

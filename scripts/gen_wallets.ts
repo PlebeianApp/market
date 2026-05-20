@@ -4,7 +4,7 @@ import { saveUserNwcWallets } from '@/publish/wallet'
 import type { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { nip04 } from 'nostr-tools'
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import fs from 'fs'
 import path from 'path'
 

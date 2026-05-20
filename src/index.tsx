@@ -1,5 +1,4 @@
 import { serve } from 'bun'
-import { config } from 'dotenv'
 import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import NDK from '@nostr-dev-kit/ndk'
@@ -14,8 +13,6 @@ import { join } from 'path'
 import { file } from 'bun'
 
 import.meta.hot.accept()
-
-config()
 
 const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'

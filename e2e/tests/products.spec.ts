@@ -2,7 +2,7 @@ import type { Browser, Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { setupAuthContext } from '../fixtures/auth'
 import { ensureScenario } from '../scenarios'
-import { bytesToHex } from '@noble/hashes/utils'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 test.use({ scenario: 'merchant' })
