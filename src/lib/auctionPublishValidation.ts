@@ -93,7 +93,12 @@ export class AuctionPublishValidationError extends Error {
 	}
 }
 
-const INTEGER_PATTERN = /^\d+$/
+// Accept an optional leading `-` so we can distinguish "the user typed a
+// signed integer" (→ specific "must be ≥ 0" / "must be > 0" message) from
+// "the user typed something that isn't a number at all" (→ "Please enter
+// a valid number"). Without the optional sign the regex rejected `-1`
+// outright as a non-number, which masked the real validation rule.
+const SIGNED_INTEGER_PATTERN = /^-?\d+$/
 
 const toTrimmedString = (value: string | number | null | undefined): string =>
 	value === null || value === undefined ? '' : String(value).trim()
@@ -105,7 +110,7 @@ const parseNonNegativeInteger = (
 	issues: AuctionPublishValidationIssue[],
 ): number | undefined => {
 	const text = toTrimmedString(value)
-	if (!INTEGER_PATTERN.test(text)) {
+	if (!SIGNED_INTEGER_PATTERN.test(text)) {
 		issues.push({ field, message: 'Please enter a valid number.' })
 		return
 	}
@@ -113,6 +118,11 @@ const parseNonNegativeInteger = (
 	const parsed = Number(text)
 	if (!Number.isSafeInteger(parsed)) {
 		issues.push({ field, message: 'Please enter a valid number.' })
+		return
+	}
+
+	if (parsed < 0) {
+		issues.push({ field, message: `${label} must be an integer greater than or equal to 0` })
 		return
 	}
 
@@ -126,7 +136,12 @@ const parsePositiveInteger = (
 	issues: AuctionPublishValidationIssue[],
 ): number | undefined => {
 	const parsed = parseNonNegativeInteger(value, field, label, issues)
-	if (!parsed) return
+	// `if (!parsed) return` was the prior bug: falsy on 0 means the
+	// "must be > 0" check below was never reached for `bidIncrement: '0'`
+	// (the validator returned undefined silently, the form thought it
+	// was valid, and 0-sat increments slipped through). Distinguish
+	// "couldn't parse" (undefined) from "parsed as 0" explicitly.
+	if (parsed === undefined) return
 
 	if (parsed <= 0) {
 		issues.push({ field, message: `${label} must be greater than 0` })
@@ -238,7 +253,16 @@ const normalizeAuctionPublishInput = (
 
 	const durationSeconds = parsedEndAt ? parsedEndAt - effectiveStartBoundary : 0
 	if (parsedEndAt && options.minDurationSeconds && durationSeconds < options.minDurationSeconds) {
-		issues.push({ field: 'duration', message: 'Auction duration must be at least 1 minute' })
+		// Compute the human label from the configured minimum so the message
+		// reflects the actual rule the form is enforcing, not a hard-coded
+		// "1 minute". Prefer minute granularity above 60 s so we don't say
+		// "1800 seconds" for the default 30-minute floor.
+		const minSeconds = options.minDurationSeconds
+		const message =
+			minSeconds >= 60 && minSeconds % 60 === 0
+				? `Auction duration must be at least ${minSeconds / 60} minute${minSeconds === 60 ? '' : 's'}`
+				: `Auction duration must be at least ${minSeconds} second${minSeconds === 1 ? '' : 's'}`
+		issues.push({ field: 'duration', message })
 	}
 
 	// Anti-snipe window in minutes → seconds. `0` means no window
