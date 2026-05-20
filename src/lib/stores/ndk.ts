@@ -134,6 +134,43 @@ export function getWriteRelaySet(): NDKRelaySet | undefined {
 }
 
 /**
+ * Get an NDKRelaySet pinned to ONLY the app's main relay.
+ * Use for reads of app-config events (kind 31990 handler info, kind 30000 d=admins/editors,
+ * kind 10000 mute list, NIP-51 featured lists). Prevents stale copies on user-added
+ * NIP-65 relays or public relays from racing the canonical answer.
+ *
+ * Returns undefined if NDK or the app relay isn't ready yet — callers should treat
+ * that as "config not available yet" rather than falling back to all relays.
+ */
+export function getAppRelaySet(): NDKRelaySet | undefined {
+	const ndk = ndkStore.state.ndk
+	const mainRelay = getMainRelay()
+	if (!ndk || !mainRelay) return undefined
+	return NDKRelaySet.fromRelayUrls([mainRelay], ndk)
+}
+
+/**
+ * Filter shape accepted by fetchLatestAppEvent. Kinds is widened to plain number[]
+ * so call sites can use literal kinds (e.g. NIP-99 30402, featured-products 30405)
+ * that aren't members of NDK's NDKKind enum.
+ */
+export type AppEventFilter = Omit<NDKFilter, 'kinds'> & { kinds?: number[] }
+
+/**
+ * Fetch the latest event (highest created_at) matching the filter from the app relay only.
+ * Returns null if NDK isn't ready, the app relay isn't known yet, or no event was found.
+ */
+export async function fetchLatestAppEvent(filter: AppEventFilter): Promise<NDKEvent | null> {
+	const ndk = ndkStore.state.ndk
+	const relaySet = getAppRelaySet()
+	if (!ndk || !relaySet) return null
+	const events = await ndk.fetchEvents(filter as NDKFilter, undefined, relaySet)
+	const arr = Array.from(events)
+	if (arr.length === 0) return null
+	return arr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+}
+
+/**
  * Determine which relays to use based on config and environment
  */
 function getRelayUrls(overrideRelays?: string[]): string[] {
@@ -243,7 +280,7 @@ export const ndkActions = {
 
 		if (!configRelaySyncInitialized) {
 			configRelaySyncInitialized = true
-			configStore.subscribe(({ currentVal }) => {
+			configStore.subscribe((currentVal) => {
 				const appRelay = currentVal.config.appRelay
 				if (!appRelay) return
 				if (lastSyncedAppRelay === appRelay) return

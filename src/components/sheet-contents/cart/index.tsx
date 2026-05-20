@@ -4,6 +4,9 @@ import { useStore } from '@tanstack/react-store'
 import { CartContent } from './CartContent'
 import { EmptyCartScreen } from './EmptyCartScreen'
 
+const cartSheetContentClassName =
+	'flex h-dvh max-h-dvh w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:w-[85vw] sm:max-w-none md:w-[55vw] xl:w-[35vw]'
+
 export default function CartSheetContent({
 	title = 'YOUR CART',
 	description = 'Review and manage your cart items',
@@ -16,15 +19,15 @@ export default function CartSheetContent({
 
 	if (isCartEmpty) {
 		return (
-			<SheetContent side="right" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]">
+			<SheetContent side="right" className={cartSheetContentClassName}>
 				<EmptyCartScreen />
 			</SheetContent>
 		)
 	}
 
 	return (
-		<SheetContent side="right" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]">
-			<SheetHeader>
+		<SheetContent side="right" className={cartSheetContentClassName}>
+			<SheetHeader className="shrink-0 pr-12">
 				<SheetTitle>{title}</SheetTitle>
 				<SheetDescription className="hidden">{description}</SheetDescription>
 			</SheetHeader>

@@ -10,14 +10,14 @@ The following Playwright tests were temporarily skipped so CI can move forward w
 
 Create this issue after the test-fix branch exists so the issue can reference the transplanted branch and its scope:
 
-- `e2e-new/tests/checkout.spec.ts`
-- `e2e-new/tests/marketplace.spec.ts`
-- `e2e-new/tests/order-lifecycle.spec.ts`
-- `e2e-new/tests/order-messaging.spec.ts`
-- `e2e-new/tests/payments.spec.ts`
-- `e2e-new/tests/product-page.spec.ts`
-- `e2e-new/tests/shipping-special.spec.ts`
-- `e2e-new/test-config.ts` (test env override support used during the investigation)
+- `e2e/tests/checkout.spec.ts`
+- `e2e/tests/marketplace.spec.ts`
+- `e2e/tests/order-lifecycle.spec.ts`
+- `e2e/tests/order-messaging.spec.ts`
+- `e2e/tests/payments.spec.ts`
+- `e2e/tests/product-page.spec.ts`
+- `e2e/tests/shipping-special.spec.ts`
+- `e2e/test-config.ts` (test env override support used during the investigation)
 
 ## Why these tests were skipped
 

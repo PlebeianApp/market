@@ -3,7 +3,8 @@ import { cartActions } from '@/lib/stores/cart'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
 import { useShippingOptionsByPubkey, getShippingInfo, createShippingReference } from '@/queries/shipping'
-import { useProductPubkey } from '@/queries/products'
+import { getProductPubkey, productQueryOptions } from '@/queries/products'
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, useEffect } from 'react'
 
 interface ShippingSelectorProps {
@@ -35,6 +36,15 @@ const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string
 	return limitedOptions
 }
 
+const formatShippingCost = (cost: number | undefined): string => {
+	if (!Number.isFinite(cost)) return '0'
+	return Number(cost).toLocaleString()
+}
+
+const formatShippingAmount = (cost: number | undefined, currency?: string): string => {
+	return [formatShippingCost(cost), currency?.trim()].filter(Boolean).join(' ')
+}
+
 export function ShippingSelector({
 	productId,
 	options: propOptions,
@@ -43,6 +53,7 @@ export function ShippingSelector({
 	className,
 }: ShippingSelectorProps) {
 	const [selectedId, setSelectedId] = useState<string | undefined>(propSelectedId)
+	const hasProvidedOptions = propOptions !== undefined
 
 	useEffect(() => {
 		if (propSelectedId) {
@@ -50,7 +61,11 @@ export function ShippingSelector({
 		}
 	}, [propSelectedId])
 
-	const { data: sellerPubkey = '' } = useProductPubkey(productId || '') || { data: '' }
+	const { data: sellerPubkey = '' } = useQuery({
+		...productQueryOptions(productId || ''),
+		select: getProductPubkey,
+		enabled: !hasProvidedOptions && !!productId,
+	})
 	const { data: shippingEvents = [], isLoading, error } = useShippingOptionsByPubkey(sellerPubkey)
 
 	const hookOptions = useMemo(() => {
@@ -79,8 +94,9 @@ export function ShippingSelector({
 	const rawOptions = propOptions || hookOptions
 
 	const options = useMemo(() => {
+		if (hasProvidedOptions) return rawOptions
 		return getBestShippingOptions(rawOptions, selectedId)
-	}, [rawOptions, selectedId])
+	}, [hasProvidedOptions, rawOptions, selectedId])
 
 	const hasValidOptions = useMemo(() => {
 		return options && options.length > 0
@@ -133,8 +149,8 @@ export function ShippingSelector({
 					<SelectGroup>
 						<SelectLabel>Shipping Options</SelectLabel>
 						{options.map((option: RichShippingInfo) => (
-							<SelectItem key={option.id} value={option.id} className="break-all">
-								{option.name} - {option.cost} {option.currency}
+							<SelectItem key={option.id} value={option.id} className="whitespace-normal">
+								{option.name} - {formatShippingAmount(option.cost, option.currency)}
 							</SelectItem>
 						))}
 					</SelectGroup>

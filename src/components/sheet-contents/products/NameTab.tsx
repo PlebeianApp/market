@@ -65,9 +65,7 @@ export function NameTab() {
 			</div>
 
 			<div className="grid w-full gap-1.5">
-				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Product Type</span>
-				</Label>
+				<Label>Product Type</Label>
 				<Select
 					value={productType}
 					onValueChange={(value) => productFormActions.updateValues({ productType: value as 'single' | 'variable' })}

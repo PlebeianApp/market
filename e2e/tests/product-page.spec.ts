@@ -1,10 +1,10 @@
 import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
-import { RELAY_URL } from 'e2e-new/test-config'
+import { RELAY_URL } from '../test-config'
 import { devUser1, devUser2, devUser3 } from '@/lib/fixtures'
 import { kinds, type VerifiedEvent } from 'nostr-tools'
 import type { Locator, Page } from '@playwright/test'
-import { seedComment, seedProduct, seedReaction } from 'e2e-new/scenarios'
+import { seedComment, seedProduct, seedReaction } from '../scenarios'
 
 // ==========================================
 // == GLOBAL STATE & SEEDING               ==

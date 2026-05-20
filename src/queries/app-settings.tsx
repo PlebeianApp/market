@@ -1,5 +1,4 @@
-import { ndkActions } from '@/lib/stores/ndk'
-import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
@@ -32,8 +31,11 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 		throw new Error('App pubkey is required')
 	}
 
-	const naddr = naddrFromAddress(30000, targetPubkey, 'admins')
-	const latestEvent = await ndk.fetchEvent(naddr)
+	const latestEvent = await fetchLatestAppEvent({
+		kinds: [30000],
+		authors: [targetPubkey],
+		'#d': ['admins'],
+	})
 
 	if (!latestEvent) {
 		console.log(`No admin settings found for app pubkey: ${targetPubkey}`)
@@ -77,6 +79,8 @@ export const useAdminSettings = (appPubkey?: string) => {
 
 		const subscription = ndk.subscribe(adminListFilter, {
 			closeOnEose: false, // Keep subscription open
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
 		})
 
 		// Event handler for admin list updates - only react to newer events after EOSE
@@ -175,8 +179,11 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 		throw new Error('App pubkey is required')
 	}
 
-	const naddr = naddrFromAddress(30000, targetPubkey, 'editors')
-	const latestEvent = await ndk.fetchEvent(naddr)
+	const latestEvent = await fetchLatestAppEvent({
+		kinds: [30000],
+		authors: [targetPubkey],
+		'#d': ['editors'],
+	})
 
 	if (!latestEvent) {
 		console.log(`No editor settings found for app pubkey: ${targetPubkey}`)
@@ -221,6 +228,8 @@ export const useEditorSettings = (appPubkey?: string) => {
 
 		const subscription = ndk.subscribe(editorListFilter, {
 			closeOnEose: false, // Keep subscription open
+			relaySet: getAppRelaySet(),
+			exclusiveRelay: true, // Reject stale copies from other relays in the pool
 		})
 
 		// Event handler for editor list updates - only react to newer events after EOSE

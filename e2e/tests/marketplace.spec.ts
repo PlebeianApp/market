@@ -144,6 +144,9 @@ async function proceedToPaymentStep(page: Page): Promise<void> {
 		const nameInput = page.getByRole('textbox', { name: /full name/i })
 		await nameInput.fill('E2E Test Buyer')
 
+		const digitalDeliveryContact = page.getByLabel(/digital delivery contact/i)
+		await digitalDeliveryContact.fill('buyer@example.com')
+
 		// Click the form submit button (has form="shipping-form" attribute)
 		const submitButton = page.locator('button[form="shipping-form"]')
 		await expect(submitButton).toBeEnabled({ timeout: 5_000 })

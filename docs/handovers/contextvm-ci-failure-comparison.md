@@ -51,23 +51,23 @@ The authenticated product-comment reaction test fails to find the expected react
 
 The following tests were marked with `test.skip(...)` because they are part of the failing CI bucket:
 
-- `e2e-new/tests/checkout.spec.ts`
+- `e2e/tests/checkout.spec.ts`
   - `buyer can complete a full purchase with shipping`
-- `e2e-new/tests/marketplace.spec.ts`
+- `e2e/tests/marketplace.spec.ts`
   - `multi-seller checkout generates correct invoice count`
   - `can complete multi-seller checkout with all invoices`
-- `e2e-new/tests/order-lifecycle.spec.ts`
+- `e2e/tests/order-lifecycle.spec.ts`
   - `partial payment: pay merchant, skip V4V, then complete from order detail`
   - `full order lifecycle: pending → confirmed → shipped → completed`
-- `e2e-new/tests/order-messaging.spec.ts`
+- `e2e/tests/order-messaging.spec.ts`
   - `after checkout, buyer and merchant can exchange messages`
-- `e2e-new/tests/payments.spec.ts`
+- `e2e/tests/payments.spec.ts`
   - `full checkout flow with mocked Lightning invoices`
   - `checkout publishes order events to relay`
   - `allows buyer to defer an invoice and continue checkout`
-- `e2e-new/tests/product-page.spec.ts`
+- `e2e/tests/product-page.spec.ts`
   - `should allow adding reaction to a comment`
-- `e2e-new/tests/shipping-special.spec.ts`
+- `e2e/tests/shipping-special.spec.ts`
   - `digital delivery checkout completes without shipping cost`
   - `local pickup checkout shows pickup address and hides shipping form`
 
@@ -75,10 +75,10 @@ The following tests were marked with `test.skip(...)` because they are part of t
 
 These were flaky in the CI output, but not part of the primary failure bucket:
 
-- `e2e-new/tests/collections.spec.ts`
+- `e2e/tests/collections.spec.ts`
   - `can edit a collection`
   - this is a separate collection-management regression and appears out of scope for the ContextVM pricing change
-- `e2e-new/tests/marketplace.spec.ts`
+- `e2e/tests/marketplace.spec.ts`
   - `multi-seller checkout generates correct invoice count` was reported as flaky in the summary, but it is still related to the checkout path and may need follow-up.
 
 ## Recommended issue title

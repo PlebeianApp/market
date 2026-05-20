@@ -17,26 +17,11 @@ test.describe('V4V Product Creation Flow', () => {
 
 		await newUserPage.goto('/dashboard/products/products/new')
 
-		// Wait for the product form's shipping query to complete before interacting.
-		// Without this, the form briefly shows the Name tab (default) while the shipping
-		// query is loading, then redirects to the Shipping tab once it confirms no
-		// shipping options exist. This race condition causes flaky failures on CI.
-		const productForm = newUserPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		// Wait for the product form before interacting.
+		const productForm = newUserPage.locator('[data-testid="product-form"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		const titleInput = newUserPage.getByTestId('product-name-input')
-		const digitalDeliveryButton = newUserPage.getByRole('button', { name: /Digital Delivery/i })
-
-		// Now that shipping data is loaded, the form is in its final tab state:
-		// - Shipping tab (no shipping options) → need to quick-create
-		// - Name tab (has shipping from a previous run) → proceed directly
-		if (await digitalDeliveryButton.isVisible().catch(() => false)) {
-			// No shipping options — create Digital Delivery via quick-create template
-			await digitalDeliveryButton.click()
-			// After quick-create, the form auto-adds the shipping option and
-			// navigates to the Name tab. Wait for the name input.
-			await expect(titleInput).toBeVisible({ timeout: 15_000 })
-		}
 
 		// --- Name Tab ---
 		const descriptionInput = newUserPage.getByTestId('product-description-input')
@@ -79,11 +64,26 @@ test.describe('V4V Product Creation Flow', () => {
 
 		// --- Shipping Tab ---
 		// Either shipping options already exist (from relay data / previous runs) or we just
-		// created one via quick-create. We need at least one shipping option added to the product.
+		// create one via quick-create. We need at least one shipping option added to the product.
 		const addButton = newUserPage.getByRole('button', { name: /^add$/i }).first()
-		const hasAddButton = await addButton.isVisible({ timeout: 5_000 }).catch(() => false)
-		if (hasAddButton) {
+		const digitalDeliveryButton = newUserPage.getByRole('button', { name: /Digital Delivery/i })
+		await expect
+			.poll(
+				async () => {
+					if (await addButton.isVisible().catch(() => false)) return 'add'
+					if (await digitalDeliveryButton.isVisible().catch(() => false)) return 'quick-create'
+					return 'loading'
+				},
+				{ timeout: 15_000 },
+			)
+			.not.toBe('loading')
+
+		if (await addButton.isVisible().catch(() => false)) {
 			await addButton.click()
+		} else if (await digitalDeliveryButton.isVisible().catch(() => false)) {
+			await digitalDeliveryButton.click()
+			await expect(newUserPage.getByRole('button', { name: /^add$/i }).first()).toBeVisible({ timeout: 5_000 })
+			await newUserPage.getByRole('button', { name: /^add$/i }).first().click()
 		}
 
 		// --- Publish Without V4V Blocker ---
@@ -95,6 +95,7 @@ test.describe('V4V Product Creation Flow', () => {
 		await expect(newUserPage.getByTestId('product-next-button')).not.toBeVisible()
 		await expect(v4vButton).not.toBeVisible()
 		await expect(publishButton).toBeVisible({ timeout: 20_000 })
+		await expect(publishButton).toBeEnabled()
 		await publishButton.click()
 
 		// --- Product Published ---

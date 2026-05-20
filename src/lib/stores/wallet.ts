@@ -355,10 +355,10 @@ export const useWallets = () => {
 	const [state, setState] = useState(walletStore.state)
 
 	useEffect(() => {
-		const unsubscribe = walletStore.subscribe(() => {
+		const subscription = walletStore.subscribe(() => {
 			setState(walletStore.state)
 		})
-		return unsubscribe
+		return subscription.unsubscribe
 	}, [])
 
 	return {

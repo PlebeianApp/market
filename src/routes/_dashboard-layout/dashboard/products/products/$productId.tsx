@@ -43,7 +43,6 @@ function EditProductComponent() {
 	const workflow = resolveProductWorkflow({
 		mode: 'edit',
 		editingProductId: productDTag,
-		shippingState: 'unknown',
 		v4vConfigurationState: 'unknown',
 	})
 

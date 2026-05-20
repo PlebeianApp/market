@@ -18,6 +18,85 @@ export type ResolvedProductShippingSelection = ProductShippingSelection & {
 	isResolved: boolean
 }
 
+export type ResolvedProductPageShippingOption = RichShippingInfo & {
+	shippingRef: string
+	baseCost: number
+	extraCost: string
+	extraCostAmount: number
+	isResolved: true
+}
+
+export type ReusableShippingSelectionCandidate = {
+	id: string
+	sellerPubkey?: string | null
+	shippingMethodId?: string | null
+}
+
+export type ReusableResolvedShippingOption = {
+	id: string
+	shippingRef?: string | null
+	name?: string | null
+	cost?: number | null
+	currency?: string | null
+}
+
+export type ReusablePublishedShippingSelection = {
+	shippingMethodId: string
+	shippingMethodName: string | null
+	shippingCost: number
+	shippingCostCurrency: string
+}
+
+const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0
+
+export const findReusablePublishedShippingSelection = ({
+	currentProductId,
+	sellerPubkey,
+	products,
+	resolvedShippingOptions,
+}: {
+	currentProductId: string
+	sellerPubkey: string
+	products: ReusableShippingSelectionCandidate[]
+	resolvedShippingOptions: ReusableResolvedShippingOption[]
+}): ReusablePublishedShippingSelection | null => {
+	const resolvedOptionsByRef = new Map(
+		resolvedShippingOptions
+			.map((option) => {
+				const shippingRef = nonEmptyString(option.shippingRef)
+					? option.shippingRef.trim()
+					: nonEmptyString(option.id)
+						? option.id.trim()
+						: ''
+				return [shippingRef, option] as const
+			})
+			.filter(([shippingRef]) => shippingRef.length > 0),
+	)
+	if (resolvedOptionsByRef.size === 0) return null
+
+	for (const product of products) {
+		if (product.id === currentProductId) continue
+		if (product.sellerPubkey !== sellerPubkey) continue
+
+		const shippingMethodId = nonEmptyString(product.shippingMethodId) ? product.shippingMethodId.trim() : ''
+		const matchingOption = shippingMethodId ? resolvedOptionsByRef.get(shippingMethodId) : null
+		if (!matchingOption) continue
+		if (typeof matchingOption.cost !== 'number' || !Number.isFinite(matchingOption.cost)) continue
+
+		const shippingCostCurrency = nonEmptyString(matchingOption.currency) ? matchingOption.currency.trim() : ''
+		if (!shippingCostCurrency) continue
+
+		return {
+			shippingMethodId,
+			shippingMethodName: nonEmptyString(matchingOption.name) ? matchingOption.name : null,
+			shippingCost: matchingOption.cost,
+			shippingCostCurrency,
+		}
+	}
+
+	return null
+}
+
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
@@ -42,6 +121,19 @@ export const normalizeProductShippingSelections = (
 		.filter((input): input is ProductShippingSelection => input !== null)
 }
 
+export const normalizePublishedProductShippingTags = (tags: string[][] | null | undefined): ProductShippingSelection[] => {
+	if (!tags || tags.length === 0) return []
+
+	return normalizeProductShippingSelections(
+		tags
+			.filter((tag) => tag[0] === 'shipping_option')
+			.map((tag) => ({
+				shippingRef: tag[1] ?? '',
+				extraCost: tag[2] ?? '',
+			})),
+	)
+}
+
 export const resolveProductShippingSelections = (
 	selections: ProductShippingSelection[],
 	availableOptions: RichShippingInfo[],
@@ -55,4 +147,38 @@ export const resolveProductShippingSelections = (
 			isResolved: option !== null,
 		}
 	})
+}
+
+const parseShippingCost = (cost: unknown): number => {
+	const parsedCost = typeof cost === 'number' ? cost : Number(cost || 0)
+	return Number.isFinite(parsedCost) ? parsedCost : 0
+}
+
+export const resolvePublishedProductShippingOptions = ({
+	publishedSelections,
+	availableOptions,
+}: {
+	publishedSelections: ProductShippingSelection[]
+	availableOptions: RichShippingInfo[]
+}): ResolvedProductPageShippingOption[] => {
+	return resolveProductShippingSelections(publishedSelections, availableOptions)
+		.filter(
+			(selection): selection is ResolvedProductShippingSelection & { option: RichShippingInfo } =>
+				selection.isResolved && selection.option !== null,
+		)
+		.map((selection) => {
+			const extraCost = parseShippingCost(selection.extraCost)
+			const baseCost = parseShippingCost(selection.option.cost)
+
+			return {
+				...selection.option,
+				id: selection.option.id,
+				cost: baseCost + extraCost,
+				shippingRef: selection.shippingRef,
+				baseCost,
+				extraCost: selection.extraCost,
+				extraCostAmount: extraCost,
+				isResolved: true,
+			}
+		})
 }

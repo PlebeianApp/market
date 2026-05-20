@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import type { CheckoutDeliveryRequirements } from '@/lib/checkout/deliveryRequirements'
 import { cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'
@@ -15,27 +16,42 @@ interface OrderFinalizeComponentProps {
 	totalInSats: number
 	onNewOrder: () => void
 	onViewOrders?: () => void
+	deliveryRequirements: CheckoutDeliveryRequirements
 }
 
-export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, onNewOrder, onViewOrders }: OrderFinalizeComponentProps) {
+export function OrderFinalizeComponent({
+	shippingData,
+	invoices,
+	totalInSats,
+	onNewOrder,
+	onViewOrders,
+	deliveryRequirements,
+}: OrderFinalizeComponentProps) {
 	const { cart } = useStore(cartStore)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
-	const [isAllPickup, setIsAllPickup] = useState(false)
-	const [isAllDigital, setIsAllDigital] = useState(false)
-	const [noAddressRequired, setNoAddressRequired] = useState(false)
+
+	const isAllPickup =
+		deliveryRequirements.isResolved &&
+		deliveryRequirements.hasPickupDelivery &&
+		!deliveryRequirements.hasDigitalDelivery &&
+		!deliveryRequirements.hasPhysicalDelivery
+	const isAllDigital =
+		deliveryRequirements.isResolved &&
+		deliveryRequirements.hasDigitalDelivery &&
+		!deliveryRequirements.hasPickupDelivery &&
+		!deliveryRequirements.hasPhysicalDelivery
+	const noAddressRequired = deliveryRequirements.isResolved && !deliveryRequirements.needsPhysicalAddress
+	const hasDigitalDelivery = deliveryRequirements.hasDigitalDelivery
 
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
 	}
 
-	// Check for pickup/digital orders and collect pickup addresses
+	// Collect pickup addresses for display only; delivery requirements are resolved by checkout state.
 	useEffect(() => {
 		const checkShippingOrders = async () => {
 			const products = Object.values(cart.products)
-			if (products.length === 0) {
-				setIsAllPickup(false)
-				setIsAllDigital(false)
-				setNoAddressRequired(false)
+			if (products.length === 0 || !deliveryRequirements.isResolved || !deliveryRequirements.hasPickupDelivery) {
 				setPickupAddresses([])
 				return
 			}
@@ -61,16 +77,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 							}
 						}
 
-						if (serviceType === 'digital') {
-							return {
-								isPickup: false,
-								isDigital: true,
-								sellerName: product.sellerPubkey || 'Unknown Seller',
-								address: '',
-							}
-						}
-
-						return { isPickup: false, isDigital: false, sellerName: product.sellerPubkey || 'Unknown Seller', address: '' }
+						return null
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
 						return null
@@ -78,15 +85,8 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 				}),
 			)
 
-			const validData = serviceData.filter(Boolean)
-			const allPickup = validData.every((data) => data?.isPickup)
-			const allDigital = validData.every((data) => data?.isDigital)
-			const allNoAddress = validData.every((data) => data?.isPickup || data?.isDigital)
-			const pickupItems = validData.filter((data) => data?.isPickup)
+			const pickupItems = serviceData.filter((data) => data?.isPickup)
 
-			setIsAllPickup(allPickup)
-			setIsAllDigital(allDigital)
-			setNoAddressRequired(allNoAddress)
 			setPickupAddresses(
 				pickupItems.map((item) => ({
 					sellerName: item?.sellerName || 'Unknown Seller',
@@ -96,7 +96,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 		}
 
 		checkShippingOrders()
-	}, [cart.products])
+	}, [cart.products, deliveryRequirements.hasPickupDelivery, deliveryRequirements.isResolved])
 
 	const allInvoicesPaid = invoices.every((invoice) => invoice.status === 'paid')
 	const allInvoicesCompleted = invoices.every((invoice) => invoice.status === 'paid' || invoice.status === 'skipped')
@@ -218,13 +218,18 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 						<Download className="h-5 w-5 text-purple-600" />
 						<h3 className="font-medium text-purple-800">Digital Delivery</h3>
 					</div>
-					<p className="text-sm text-purple-700">Items will be delivered digitally. Check your messages for delivery details.</p>
-					{shippingData?.email && <p className="text-sm text-purple-600 mt-2">Email: {shippingData.email}</p>}
+					<p className="text-sm text-purple-700">The seller will use your delivery contact after payment settles.</p>
+					{shippingData?.email && <p className="text-sm text-purple-600 mt-2">Digital delivery contact: {shippingData.email}</p>}
 				</div>
 			) : noAddressRequired ? (
 				<div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
 					<h3 className="font-medium text-indigo-800 mb-2">No Shipping Required</h3>
-					<p className="text-sm text-indigo-700">Items are for pickup or digital delivery.</p>
+					<p className="text-sm text-indigo-700">
+						Items are for pickup or digital delivery. Sellers will use any digital delivery contact after payment settles.
+					</p>
+					{hasDigitalDelivery && shippingData?.email && (
+						<p className="text-sm text-indigo-600 mt-2">Digital delivery contact: {shippingData.email}</p>
+					)}
 				</div>
 			) : (
 				shippingData && (
@@ -232,7 +237,11 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 						<h3 className="font-medium text-gray-900 mb-3">Shipping Address</h3>
 						<div className="text-sm text-gray-600 space-y-1">
 							<p className="font-medium text-gray-900">{shippingData.name}</p>
-							{shippingData.email && <p>Email: {shippingData.email}</p>}
+							{shippingData.email && (
+								<p>
+									{hasDigitalDelivery ? 'Digital delivery contact' : 'Email'}: {shippingData.email}
+								</p>
+							)}
 							<p>{shippingData.firstLineOfAddress}</p>
 							<p>
 								{shippingData.city}, {shippingData.zipPostcode}

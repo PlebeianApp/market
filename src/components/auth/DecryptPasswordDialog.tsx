@@ -1,4 +1,3 @@
-// components/dialogs/DecryptPasswordDialog.tsx
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -36,7 +35,7 @@ export function DecryptPasswordDialog() {
 			setIsLoggingOut(true)
 			setError('')
 			// This clears localStorage keys and resets the auth store state
-			await authActions.logout()
+			authActions.logout()
 			// The dialog will close automatically because needsDecryptionPassword becomes false
 		} catch (error) {
 			setError('Failed to clear stored key.')

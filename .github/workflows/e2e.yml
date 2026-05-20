@@ -84,7 +84,7 @@ jobs:
 
       - name: Seed relay and start dev server
         run: |
-          bun e2e-new/seed-relay.ts
+          bun e2e/seed-relay.ts
           nohup bun dev > /tmp/devserver.log 2>&1 &
           echo "Waiting for dev server on port 34567..."
           for i in $(seq 1 30); do
@@ -105,7 +105,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run pricing E2E tests
-        run: bun run test:e2e-new -- --grep 'Product Page - View Only'
+        run: bun run test:e2e -- --grep 'Product Page - View Only'
 
       - name: Show server logs on failure
         if: failure()
@@ -201,7 +201,7 @@ jobs:
 
       - name: Seed relay and start dev server
         run: |
-          bun e2e-new/seed-relay.ts
+          bun e2e/seed-relay.ts
           nohup bun dev > /tmp/devserver.log 2>&1 &
           echo "Waiting for dev server on port 34567..."
           for i in $(seq 1 30); do
@@ -222,7 +222,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
-        run: bun run test:e2e-new -- --grep-invert 'Product Page - View Only|Collection Management'
+        run: bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
 
       - name: Show server logs on failure
         if: failure()

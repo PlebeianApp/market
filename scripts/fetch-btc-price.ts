@@ -1,9 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { NostrClientTransport, PrivateKeySigner, ApplesauceRelayPool } from '@contextvm/sdk'
-import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
-
-config({ path: ['.env.local', '.env'] })
 
 const RELAY_URL = process.argv[2] || 'ws://100.90.22.201:10547'
 const DEFAULT_CVM_SERVER_KEY = '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
