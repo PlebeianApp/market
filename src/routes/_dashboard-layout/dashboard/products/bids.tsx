@@ -5,6 +5,7 @@ import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 import { formatReclaimWaitSeconds, getAuctionReclaimReadyAt, nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
 import { getMintHostname } from '@/lib/wallet'
 import {
@@ -236,6 +237,12 @@ function BidsOverviewComponent() {
 	const [animationParent] = useAutoAnimate()
 
 	const { data: myBids, isLoading, error } = useAuctionBidsByBidder(user?.pubkey ?? '', 500)
+
+	useEffect(() => {
+		if (isAuthenticated && user?.pubkey) {
+			notificationActions.markBidUpdatesSeen()
+		}
+	}, [isAuthenticated, user?.pubkey])
 
 	// Pending tokens are kept in localStorage scoped to the bidder's pubkey, so
 	// they survive relay resets. When a lock succeeds at the mint but the
