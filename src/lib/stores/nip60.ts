@@ -2220,6 +2220,28 @@ export const nip60Actions = {
 	},
 
 	/**
+	 * Fetch a mint's current keysets — required to pass into
+	 * `getDecodedToken` for tokens that carry NUT-2 v2 short keyset
+	 * IDs (cashu-ts ≥2.x emits these by default). Used by the
+	 * auction settlement preflight before `getDecodedToken`.
+	 *
+	 * Returns an empty array on failure — callers should treat this
+	 * as "decode without keysets and hope the token uses long IDs",
+	 * which is fine for older tokens but will surface the original
+	 * "short keyset ID" error for new ones, giving the seller a
+	 * useful actionable message instead of a silent hang.
+	 */
+	loadAuctionMintKeysets: async (mintUrl: string): Promise<import('@cashu/cashu-ts').MintKeyset[]> => {
+		try {
+			const { cashuWallet } = await createCashuWalletForMint(mintUrl)
+			return cashuWallet.keysets
+		} catch (err) {
+			console.warn(`[nip60] loadAuctionMintKeysets failed for ${getMintHostname(mintUrl)}:`, err)
+			return []
+		}
+	},
+
+	/**
 	 * Auction transfer sweep — under the path-oracle profile this is just
 	 * the locktime-refund auto-sweep (AUCTIONS.md §8.1). The legacy
 	 * `auction_refund_v1` DM ingestion has been removed: refund delivery

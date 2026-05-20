@@ -1,11 +1,22 @@
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
-import { getDecodedToken } from '@cashu/cashu-ts'
+import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
 
 export interface AuctionSettlementP2pkPreflightInput {
 	auctionP2pkXpub: string
 	derivationPath?: string
 	settlementPlanChildPubkey?: string
 	token: string
+	/**
+	 * Optional mint keysets used to expand NUT-2 v2 short keyset IDs
+	 * embedded in the token. cashu-ts ≥2.x rejects decode of a token
+	 * with short IDs unless it can map them to full IDs from the mint;
+	 * the caller is expected to fetch these once per unique mint
+	 * (e.g. via `nip60Actions.loadAuctionMintKeysets`) and pass them
+	 * in. Omitting them works for older tokens whose `proof.id` is
+	 * already a long-form hex keyset id — including the unit-test
+	 * fixtures — so existing tests don't need to change.
+	 */
+	mintKeysets?: MintKeyset[]
 }
 
 export interface AuctionSettlementP2pkPreflightResult {
@@ -77,9 +88,18 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 
 	let decodedToken: ReturnType<typeof getDecodedToken>
 	try {
-		decodedToken = getDecodedToken(input.token)
-	} catch {
-		throw new Error('Winner token could not be decoded')
+		decodedToken = getDecodedToken(input.token, input.mintKeysets)
+	} catch (cause) {
+		// Surface diagnostic info — when this fires in production the
+		// raw cashu-ts error is the only signal that tells us whether
+		// the token round-tripped empty (storage / wire issue), arrived
+		// with the wrong prefix (cashu-ts version drift), or just lost
+		// bytes somewhere. Without this the user (and we) only see
+		// "Winner token could not be decoded" with zero context.
+		const token = input.token ?? ''
+		const head = typeof token === 'string' ? token.slice(0, 32) : `[${typeof token}]`
+		const reason = cause instanceof Error ? cause.message : String(cause)
+		throw new Error(`Winner token could not be decoded (length=${token.length ?? 0}, head="${head}", cashu-ts: ${reason})`)
 	}
 
 	if (!decodedToken.proofs.length) {
