@@ -641,16 +641,10 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		}
 
 		await event.sign(signer)
-		// AUCTIONS.md §7 — publish the public commitment first, THEN deliver
-		// the locked Cashu token to the issuer via `submit_bid_token`. The
-		// MCP tool runs the §7 envelope-side checks (mint allowlist, locktime
-		// invariant, grant binding) and advances the registry entry from
-		// `issued` to `locked`. No more kind-14 envelopes.
-		try {
-			await ndkActions.publishEvent(event)
-		} catch (publishError) {
-			throw tagBidError('Failed to publish bid commitment event', publishError)
-		}
+		// Submit the private token before making the public bid visible. The
+		// oracle does not need the bid event on-relay to validate the grant
+		// binding, and this avoids orphan public bids that say `status=locked`
+		// even though the registry entry stayed `issued`.
 		const submitClient = openAuctionPathOracleClient({
 			pathIssuerPubkey: grant.pathIssuerPubkey,
 			relays: getAuctionClientRelays(),
@@ -679,6 +673,11 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		} finally {
 			await submitClient.disconnect()
 		}
+		try {
+			await ndkActions.publishEvent(event)
+		} catch (publishError) {
+			throw tagBidError('Failed to publish bid commitment event after oracle accepted token', publishError)
+		}
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',
 			auctionEventId: formData.auctionEventId,
@@ -696,7 +695,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		return event.id
 	} catch (error) {
 		throw new Error(
-			`Bid event publish failed after locking funds. Reclaim pending token ${lockedBid.tokenId} from wallet. ${
+			`Bid submission failed after locking funds. Reclaim pending token ${lockedBid.tokenId} from wallet. ${
 				error instanceof Error ? error.message : String(error)
 			}`,
 		)
@@ -811,7 +810,10 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 				expectedPubkey: p2pkPreflight.derivedChildPubkey,
 			})
 			try {
-				await nip60Actions.receiveLockedEcash(release.token, childPrivkey)
+				const received = await nip60Actions.receiveLockedEcash(release.token, childPrivkey)
+				if (!received) {
+					throw new Error('Seller wallet did not receive the locked Cashu payout')
+				}
 			} catch (error) {
 				if (!isSpentTokenError(error)) throw error
 			}
