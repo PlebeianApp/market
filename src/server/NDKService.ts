@@ -1,4 +1,4 @@
-import NDK from '@nostr-dev-kit/ndk'
+import NDK, { type NDKSubscription } from '@nostr-dev-kit/ndk'
 import { naddrFromAddress } from '../lib/nostr/naddr'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
@@ -8,6 +8,10 @@ export class NDKService {
 	private adminManager: AdminManager
 	private editorManager: EditorManager
 	private bootstrapManager: BootstrapManager
+	private adminSubscription: NDKSubscription | null = null
+	private editorSubscription: NDKSubscription | null = null
+	private latestAdminEventTime = 0
+	private latestEditorEventTime = 0
 
 	constructor(appPubkey: string, adminManager: AdminManager, editorManager: EditorManager, bootstrapManager: BootstrapManager) {
 		this.appPubkey = appPubkey
@@ -71,6 +75,7 @@ export class NDKService {
 			if (latestAdminEvent) {
 				console.log('Found existing admin list, updating internal list')
 				this.adminManager.updateFromEvent(latestAdminEvent)
+				this.latestAdminEventTime = latestAdminEvent.created_at ?? 0
 			}
 		} catch (e) {
 			console.error('Failed to load existing admin list', e)
@@ -86,13 +91,46 @@ export class NDKService {
 			if (latestEditorEvent) {
 				console.log('Found existing editor list, updating internal list')
 				this.editorManager.updateFromEvent(latestEditorEvent)
+				this.latestEditorEventTime = latestEditorEvent.created_at ?? 0
 			}
 		} catch (e) {
 			console.error('Failed to load existing editor list', e)
 		}
 	}
 
+	/**
+	 * Open long-lived subscriptions on the app relay for admin and editor list updates.
+	 * Without this, the in-memory admin/editor caches only refresh when the bun proxy
+	 * itself processes a publish for these kinds — direct relay publishes (via nak or
+	 * other clients) wouldn't propagate, and the authorization gate stays stale.
+	 */
+	public startSubscriptions(): void {
+		if (!this.ndk) return
+
+		this.adminSubscription = this.ndk.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['admins'] }, { closeOnEose: false })
+		this.adminSubscription.on('event', (event) => {
+			const ts = event.created_at ?? 0
+			if (ts <= this.latestAdminEventTime) return
+			this.latestAdminEventTime = ts
+			console.log(`Live admin list update received (created_at=${ts})`)
+			this.adminManager.updateFromEvent(event)
+		})
+
+		this.editorSubscription = this.ndk.subscribe({ kinds: [30000], authors: [this.appPubkey], '#d': ['editors'] }, { closeOnEose: false })
+		this.editorSubscription.on('event', (event) => {
+			const ts = event.created_at ?? 0
+			if (ts <= this.latestEditorEventTime) return
+			this.latestEditorEventTime = ts
+			console.log(`Live editor list update received (created_at=${ts})`)
+			this.editorManager.updateFromEvent(event)
+		})
+	}
+
 	public shutdown(): void {
+		this.adminSubscription?.stop()
+		this.editorSubscription?.stop()
+		this.adminSubscription = null
+		this.editorSubscription = null
 		if (this.ndk) {
 			this.ndk = null
 		}

@@ -93,6 +93,12 @@ export class EventHandler {
 			console.warn('⚠️ Load existing data failed, continuing anyway:', e)
 		}
 
+		try {
+			this.ndkService.startSubscriptions()
+		} catch (e) {
+			console.warn('⚠️ Starting NDK service subscriptions failed, continuing anyway:', e)
+		}
+
 		// Set up NDK for blacklist and vanity managers
 		if (config.relayUrl) {
 			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })

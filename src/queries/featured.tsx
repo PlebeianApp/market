@@ -1,7 +1,6 @@
-import { ndkActions } from '@/lib/stores/ndk'
+import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib/schemas/featured'
-import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
@@ -15,11 +14,11 @@ import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filt
  * @returns Featured products data or null
  */
 export const fetchFeaturedProducts = async (appPubkey: string): Promise<FeaturedProducts | null> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.PRODUCTS.kind, appPubkey, FEATURED_ITEMS_CONFIG.PRODUCTS.dTag)
-	const event = await ndk.fetchEvent(naddr)
+	const event = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind],
+		authors: [appPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
+	})
 
 	if (!event) return null
 
@@ -39,11 +38,11 @@ export const fetchFeaturedProducts = async (appPubkey: string): Promise<Featured
  * @returns Featured collections data or null
  */
 export const fetchFeaturedCollections = async (appPubkey: string): Promise<FeaturedCollections | null> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.COLLECTIONS.kind, appPubkey, FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag)
-	const event = await ndk.fetchEvent(naddr)
+	const event = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind],
+		authors: [appPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
+	})
 
 	if (!event) return null
 
@@ -63,11 +62,11 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
  * @returns Featured users data or null
  */
 export const fetchFeaturedUsers = async (appPubkey: string): Promise<FeaturedUsers | null> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.USERS.kind, appPubkey, FEATURED_ITEMS_CONFIG.USERS.dTag)
-	const event = await ndk.fetchEvent(naddr)
+	const event = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind],
+		authors: [appPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
+	})
 
 	if (!event) return null
 
@@ -90,21 +89,33 @@ const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly u
 	useEffect(() => {
 		if (!appPubkey || !ndk) return
 
+		let latestEventTime = 0
+		let receivedEose = false
+
 		const subscription = ndk.subscribe(
 			{
 				kinds: [expectedKind],
 				authors: [appPubkey],
+				'#d': [expectedDTag],
 			},
 			{
 				closeOnEose: false,
 			},
+			getAppRelaySet(),
 		)
 
 		subscription.on('event', (event) => {
-			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
-			if (dTag !== expectedDTag) return
+			const eventTime = event.created_at ?? 0
+			if (receivedEose && eventTime > latestEventTime) {
+				void queryClient.invalidateQueries({ queryKey })
+			}
+			if (eventTime > latestEventTime) {
+				latestEventTime = eventTime
+			}
+		})
 
-			void queryClient.invalidateQueries({ queryKey })
+		subscription.on('eose', () => {
+			receivedEose = true
 		})
 
 		return () => {
