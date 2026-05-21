@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { ndkActions } from '@/lib/stores/ndk'
+import { useWallets, walletActions } from '@/lib/stores/wallet'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,10 +16,30 @@ interface DepositLightningModalProps {
 
 export function DepositLightningModal({ open, onClose }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
+	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [copied, setCopied] = useState(false)
+	const [selectedNwcWalletId, setSelectedNwcWalletId] = useState('')
+	const [isPayingWithNwc, setIsPayingWithNwc] = useState(false)
+	const [nwcPaymentAttempted, setNwcPaymentAttempted] = useState(false)
+	const [nwcPaymentSent, setNwcPaymentSent] = useState(false)
+	const nwcPaymentAttemptedRef = useRef(false)
+
+	const savedNwcWallets = useMemo(() => wallets.filter((wallet) => !!wallet.nwcUri), [wallets])
+
+	const resetNwcPaymentState = useCallback(() => {
+		nwcPaymentAttemptedRef.current = false
+		setNwcPaymentAttempted(false)
+		setNwcPaymentSent(false)
+		setIsPayingWithNwc(false)
+	}, [])
+
+	const markNwcPaymentAttempted = useCallback(() => {
+		nwcPaymentAttemptedRef.current = true
+		setNwcPaymentAttempted(true)
+	}, [])
 
 	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
 	useEffect(() => {
@@ -25,6 +47,30 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 			setSelectedMint(defaultMint ?? mints[0] ?? '')
 		}
 	}, [open, defaultMint, mints])
+
+	useEffect(() => {
+		if (open && !walletsInitialized && !walletsLoading) {
+			void initializeWallets()
+		}
+	}, [open, walletsInitialized, walletsLoading, initializeWallets])
+
+	useEffect(() => {
+		if (!depositInvoice || savedNwcWallets.length === 0) {
+			setSelectedNwcWalletId('')
+			return
+		}
+
+		const selectedWalletStillAvailable = savedNwcWallets.some((wallet) => wallet.id === selectedNwcWalletId)
+		if (!selectedWalletStillAvailable) {
+			setSelectedNwcWalletId(savedNwcWallets[0].id)
+		}
+	}, [depositInvoice, savedNwcWallets, selectedNwcWalletId])
+
+	useEffect(() => {
+		if (depositStatus === 'success' || depositStatus === 'error' || (!depositInvoice && depositStatus !== 'pending')) {
+			resetNwcPaymentState()
+		}
+	}, [depositInvoice, depositStatus, resetNwcPaymentState])
 
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)
@@ -39,6 +85,7 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 		}
 
 		setIsGenerating(true)
+		resetNwcPaymentState()
 		try {
 			await nip60Actions.startDeposit(amountNum, selectedMint)
 		} finally {
@@ -58,12 +105,45 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 		}
 	}
 
+	const handlePayWithNwc = async () => {
+		if (!depositInvoice || nwcPaymentAttempted) return
+
+		const selectedWallet = savedNwcWallets.find((wallet) => wallet.id === selectedNwcWalletId)
+		if (!selectedWallet?.nwcUri) {
+			toast.error('Could not pay invoice with connected wallet')
+			return
+		}
+
+		const signer = ndkActions.getSigner()
+		if (!signer) {
+			toast.error('Connected wallet is not authorized')
+			return
+		}
+
+		markNwcPaymentAttempted()
+		setIsPayingWithNwc(true)
+		try {
+			await walletActions.payInvoiceWithNwc(selectedWallet.nwcUri, depositInvoice, signer)
+			setNwcPaymentSent(true)
+			toast.success('Payment sent. Waiting for mint confirmation...')
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Could not pay invoice with connected wallet')
+		} finally {
+			setIsPayingWithNwc(false)
+		}
+	}
+
 	const handleClose = () => {
-		if (depositStatus === 'pending') {
+		const hasNwcPaymentAttempt = nwcPaymentAttemptedRef.current
+		if (depositStatus === 'pending' && !hasNwcPaymentAttempt) {
 			nip60Actions.cancelDeposit()
 		}
 		setAmount('')
 		setCopied(false)
+		setIsPayingWithNwc(false)
+		if (!(depositStatus === 'pending' && hasNwcPaymentAttempt)) {
+			resetNwcPaymentState()
+		}
 		onClose()
 	}
 
@@ -110,13 +190,44 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 								</Button>
 							</div>
 						</div>
-						<p className="text-sm text-muted-foreground text-center">Waiting for payment...</p>
+						{savedNwcWallets.length > 0 && (
+							<div className="space-y-2 rounded-md border p-3">
+								<label className="text-sm font-medium" htmlFor="deposit-nwc-wallet">
+									Pay with connected wallet
+								</label>
+								<select
+									id="deposit-nwc-wallet"
+									value={selectedNwcWalletId}
+									onChange={(e) => setSelectedNwcWalletId(e.target.value)}
+									disabled={isPayingWithNwc || nwcPaymentAttempted}
+									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								>
+									{savedNwcWallets.map((wallet) => (
+										<option key={wallet.id} value={wallet.id}>
+											{wallet.name}
+										</option>
+									))}
+								</select>
+								<Button
+									type="button"
+									className="w-full"
+									onClick={handlePayWithNwc}
+									disabled={isPayingWithNwc || nwcPaymentAttempted || !selectedNwcWalletId}
+								>
+									{isPayingWithNwc ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+									Pay invoice with NWC
+								</Button>
+							</div>
+						)}
+						<p className="text-sm text-muted-foreground text-center">
+							{nwcPaymentSent ? 'Payment sent. Waiting for mint confirmation...' : 'Waiting for payment...'}
+						</p>
 						<div className="flex justify-center">
 							<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
 						</div>
 						<div className="flex justify-end gap-2">
 							<Button variant="outline" onClick={handleClose}>
-								Cancel
+								{nwcPaymentAttempted ? 'Close' : 'Cancel'}
 							</Button>
 						</div>
 					</div>
