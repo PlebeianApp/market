@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -37,6 +38,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, Trash2, X } from 'lucide-react'
 import { useMemo, useState, useEffect, useRef, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { Slider } from '@/components/ui/slider'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
@@ -163,8 +165,6 @@ function NameTab({ formData, setFormData }: TabProps) {
 type StartMode = 'immediate' | 'scheduled'
 type EndMode = 'duration' | 'absolute'
 
-const AUCTION_DRAFT_KEY = 'auction-form-draft'
-
 interface AuctionFormDraft {
 	formData: AuctionFormData
 	images: AuctionImage[]
@@ -175,24 +175,34 @@ interface AuctionFormDraft {
 	activeTab: AuctionTab
 }
 
-function saveDraft(draft: AuctionFormDraft): void {
+function getAuctionDraftKey(pubkey: string | undefined): string | null {
+	return pubkey ? `auction-form-draft:v1:${pubkey}` : null
+}
+
+function saveDraft(pubkey: string | undefined, draft: AuctionFormDraft): void {
+	const key = getAuctionDraftKey(pubkey)
+	if (!key) return
 	try {
-		localStorage.setItem(AUCTION_DRAFT_KEY, JSON.stringify(draft))
+		localStorage.setItem(key, JSON.stringify(draft))
 	} catch {}
 }
 
-function loadDraft(): AuctionFormDraft | null {
+function loadDraft(pubkey: string | undefined): AuctionFormDraft | null {
+	const key = getAuctionDraftKey(pubkey)
+	if (!key) return null
 	try {
-		const raw = localStorage.getItem(AUCTION_DRAFT_KEY)
+		const raw = localStorage.getItem(key)
 		return raw ? (JSON.parse(raw) as AuctionFormDraft) : null
 	} catch {
 		return null
 	}
 }
 
-function clearDraft(): void {
+function clearDraft(pubkey: string | undefined): void {
+	const key = getAuctionDraftKey(pubkey)
+	if (!key) return
 	try {
-		localStorage.removeItem(AUCTION_DRAFT_KEY)
+		localStorage.removeItem(key)
 	} catch {}
 }
 
@@ -1552,7 +1562,7 @@ export function AuctionFormContent() {
 		[walletDevMode],
 	)
 
-	const draft = useMemo(() => loadDraft(), [])
+	const draft = useMemo(() => loadDraft(userPubkey), [])
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => draft?.formData ?? { ...INITIAL_FORM, trustedMints: [...availableMints] })
 	const [images, setImages] = useState<AuctionImage[]>(() => draft?.images ?? [])
@@ -1569,12 +1579,12 @@ export function AuctionFormContent() {
 			isMounted.current = true
 			return
 		}
-		saveDraft({ formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab })
+		saveDraft(userPubkey, { formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab })
 		setHasDraft(true)
 	}, [formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab])
 
 	const handleClearDraft = () => {
-		clearDraft()
+		clearDraft(userPubkey)
 		isMounted.current = false
 		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
 		setImages([])
@@ -1646,7 +1656,7 @@ export function AuctionFormContent() {
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
 			if (!publishedEventId) return
 
-			clearDraft()
+			clearDraft(userPubkey)
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 			navigate({ to: '/auctions/$auctionId', params: { auctionId: publishedEventId } })
 		} catch (error) {
