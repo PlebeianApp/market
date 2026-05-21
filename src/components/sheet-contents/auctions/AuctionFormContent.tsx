@@ -216,6 +216,16 @@ const auctionDraftEnvelopeSchema = z.object({
 
 type AuctionDraftEnvelope = z.infer<typeof auctionDraftEnvelopeSchema>
 
+function isDraftMeaningful({ formData, images, subCategoryInput }: AuctionFormDraft): boolean {
+	const { summary, description, startingBid, reserve, startAt, endAt, mainCategory, categories, imageUrls, specs, shippings } = formData
+	return (
+		[summary, description, startingBid, reserve ?? '', startAt ?? '', endAt, mainCategory, subCategoryInput].some(
+			(s) => s.trim().length > 0,
+		) ||
+		[categories, imageUrls, specs, shippings, images].some((a) => a.length > 0)
+	)
+}
+
 function getAuctionDraftKey(pubkey: string | undefined): string | null {
 	return pubkey ? `auction-form-draft:v1:${pubkey}` : null
 }
@@ -1631,7 +1641,9 @@ export function AuctionFormContent() {
 			isMounted.current = true
 			return
 		}
-		saveDraft(userPubkey, { formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab })
+		const candidate = { formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab }
+		if (!isDraftMeaningful(candidate)) return
+		saveDraft(userPubkey, candidate)
 		setHasDraft(true)
 	}, [formData, images, subCategoryInput, startMode, endMode, durationSeconds, activeTab])
 
