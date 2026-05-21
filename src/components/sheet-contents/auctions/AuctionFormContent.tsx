@@ -1485,6 +1485,8 @@ function ShippingTab({
 	)
 }
 
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+
 export function AuctionFormContent() {
 	const navigate = useNavigate()
 	const publishMutation = usePublishAuctionMutation()
@@ -1574,7 +1576,6 @@ export function AuctionFormContent() {
 
 	const canSubmit = validationIssues.length === 0
 
-	const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
 	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
 	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
 
@@ -1688,12 +1689,18 @@ export function AuctionFormContent() {
 			</div>
 
 			<div className="bg-white border-t pt-4 pb-2 mt-2">
-				{isLastTab ? (
-					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
+				{canSubmit ? (
+					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={publishMutation.isPending}>
 						{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
 					</Button>
 				) : (
-					<Button type="button" variant="secondary" className="w-full uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
+					<Button
+						type="button"
+						variant="secondary"
+						className="w-full uppercase"
+						onClick={handleNext}
+						disabled={isLastTab || !tabValid[activeTab]}
+					>
 						Next
 					</Button>
 				)}
