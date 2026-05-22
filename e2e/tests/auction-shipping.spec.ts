@@ -1,9 +1,9 @@
 import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { useWebSocketImplementation } from 'nostr-tools/relay'
-import { RELAY_URL } from 'e2e-new/test-config'
+import { RELAY_URL } from '../test-config'
 import { devUser1 } from '@/lib/fixtures'
-import { seedAuction } from 'e2e-new/scenarios'
+import { seedAuction } from '../scenarios'
 import WebSocket from 'ws'
 
 useWebSocketImplementation(WebSocket)
