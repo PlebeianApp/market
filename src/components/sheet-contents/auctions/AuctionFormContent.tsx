@@ -15,6 +15,7 @@ import {
 	type AuctionPublishValidationField,
 	type AuctionPublishValidationIssue,
 } from '@/lib/auctionPublishValidation'
+import { syncMintSelection } from '@/lib/auctionMintSync'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
@@ -50,6 +51,8 @@ import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, Trash2, X } from 'lucide-react'
 import { useMemo, useState, useEffect, useRef, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { Slider } from '@/components/ui/slider'
+import { CalendarIcon, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 
 type ValidationMessages = Partial<Record<AuctionPublishValidationField, string>>
 
@@ -59,7 +62,7 @@ const INITIAL_FORM: AuctionFormData = {
 	description: '',
 	startingBid: '',
 	bidIncrement: '1',
-	reserve: undefined,
+	reserve: '0',
 	startAt: '',
 	endAt: '',
 	// Anti-snipe defaults: no window, no curve, 1h settlement grace.
@@ -171,49 +174,24 @@ function NameTab({ formData, setFormData }: TabProps) {
 }
 
 const DURATION_PRESETS: { label: string; seconds: number }[] = [
-	{ label: '1m', seconds: 1 * 60 },
-	{ label: '2m', seconds: 2 * 60 },
-	{ label: '3m', seconds: 3 * 60 },
-	{ label: '4m', seconds: 4 * 60 },
-	{ label: '5m', seconds: 5 * 60 },
-	{ label: '10m', seconds: 10 * 60 },
-	{ label: '15m', seconds: 15 * 60 },
-	{ label: '30m', seconds: 30 * 60 },
-	{ label: '45m', seconds: 45 * 60 },
 	{ label: '1h', seconds: 3600 },
-	{ label: '2h', seconds: 2 * 3600 },
-	{ label: '3h', seconds: 3 * 3600 },
-	{ label: '4h', seconds: 4 * 3600 },
-	{ label: '5h', seconds: 5 * 3600 },
 	{ label: '6h', seconds: 6 * 3600 },
-	{ label: '12h', seconds: 12 * 3600 },
-	{ label: '18h', seconds: 18 * 3600 },
 	{ label: '1d', seconds: 86400 },
-	{ label: '2d', seconds: 2 * 86400 },
 	{ label: '3d', seconds: 3 * 86400 },
-	{ label: '4d', seconds: 4 * 86400 },
-	{ label: '5d', seconds: 5 * 86400 },
-	{ label: '6d', seconds: 6 * 86400 },
 	{ label: '7d', seconds: 7 * 86400 },
-	{ label: '8d', seconds: 8 * 86400 },
-	{ label: '9d', seconds: 9 * 86400 },
-	{ label: '10d', seconds: 10 * 86400 },
-	{ label: '11d', seconds: 11 * 86400 },
-	{ label: '12d', seconds: 12 * 86400 },
-	{ label: '13d', seconds: 13 * 86400 },
 	{ label: '14d', seconds: 14 * 86400 },
-	{ label: '15d', seconds: 15 * 86400 },
-	{ label: '20d', seconds: 20 * 86400 },
-	{ label: '25d', seconds: 25 * 86400 },
 	{ label: '30d', seconds: 30 * 86400 },
 ]
+
+const MIN_DURATION_HOURS = 1
+const MAX_DURATION_HOURS = 30 * 24
 
 function pad2(n: number): string {
 	return n.toString().padStart(2, '0')
 }
 
 function toDatetimeLocal(date: Date): string {
-	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 }
 
 function parseDatetimeLocalSeconds(value: string): number | null {
@@ -838,6 +816,8 @@ function AuctionTabContent({
 	durationSeconds,
 	setDurationSeconds,
 	validationMessages,
+	userRemovedMints,
+	onUserRemovedMintsChange,
 }: TabProps & {
 	availableMints: readonly string[]
 	startMode: StartMode
@@ -847,10 +827,9 @@ function AuctionTabContent({
 	durationSeconds: number
 	setDurationSeconds: Dispatch<SetStateAction<number>>
 	validationMessages: ValidationMessages
+	userRemovedMints: Set<string>
+	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
-	const [useReserve, setUseReserve] = useState(false)
-	const [inputSliderValue, setInputSliderValue] = useState<number>(16) // Default value: 1 day (24 hours)
-
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -858,16 +837,22 @@ function AuctionTabContent({
 	const removeMint = (mint: string) => {
 		if (!canRemoveMint) return
 		setFormData((prev) => ({ ...prev, trustedMints: prev.trustedMints.filter((m) => m !== mint) }))
+		onUserRemovedMintsChange(new Set(userRemovedMints).add(mint))
 	}
 
 	const addMint = (mint: string) => {
 		if (selectedMints.includes(mint)) return
 		setFormData((prev) => ({ ...prev, trustedMints: [...prev.trustedMints, mint] }))
+		if (userRemovedMints.has(mint)) {
+			const next = new Set(userRemovedMints)
+			next.delete(mint)
+			onUserRemovedMintsChange(next)
+		}
 	}
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve ?? '', 10)
+	const reserveNum = parseInt(formData.reserve, 10)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -919,6 +904,8 @@ function AuctionTabContent({
 			return { ...prev, endAt: toDatetimeLocal(initial) }
 		})
 	}
+
+	const durationHours = Math.max(MIN_DURATION_HOURS, Math.round(durationSeconds / 3600))
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -985,24 +972,38 @@ function AuctionTabContent({
 
 				{endMode === 'duration' ? (
 					<div className="space-y-3">
-						<div>
-							<Slider
-								min={1}
-								max={DURATION_PRESETS.length}
-								value={[inputSliderValue]}
-								onValueChange={(val) => {
-									const sliderValue = val?.at(0)
-									if (sliderValue) {
-										const value = DURATION_PRESETS[sliderValue - 1]
+						<div className="flex flex-wrap gap-1.5">
+							{DURATION_PRESETS.map((preset) => {
+								const isActive = durationSeconds === preset.seconds
+								return (
+									<button
+										key={preset.label}
+										type="button"
+										onClick={() => setDurationSeconds(preset.seconds)}
+										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+											isActive
+												? 'border-secondary bg-secondary text-white'
+												: 'border-zinc-300 bg-white text-zinc-700 hover:border-secondary'
+										}`}
+									>
+										{preset.label}
+									</button>
+								)
+							})}
+						</div>
 
-										setInputSliderValue(sliderValue)
-										setDurationSeconds(value.seconds)
-									}
-								}}
+						<div>
+							<input
+								type="range"
+								min={MIN_DURATION_HOURS}
+								max={MAX_DURATION_HOURS}
+								step={1}
+								value={durationHours}
+								onChange={(e) => setDurationSeconds(parseInt(e.target.value, 10) * 3600)}
 								className="w-full accent-secondary"
 							/>
 							<div className="flex items-center justify-between text-[10px] text-zinc-500">
-								<span>1m</span>
+								<span>1h</span>
 								<span>30d</span>
 							</div>
 						</div>
@@ -1032,7 +1033,7 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid sm:grid-cols-2 gap-4 items-start">
+			<div className="grid sm:grid-cols-2 gap-4">
 				<div className="grid w-full gap-1.5">
 					<Label htmlFor="auction-starting-bid">
 						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
@@ -1061,37 +1062,17 @@ function AuctionTabContent({
 				</div>
 			</div>
 
-			<div className="flex items-center space-x-2">
-				<Checkbox
-					id="use-reserve"
-					checked={!!formData.reserve || useReserve}
-					onCheckedChange={(checked) => {
-						if (checked === true) {
-							setUseReserve(true)
-							setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
-						} else {
-							setUseReserve(false)
-							setFormData((prev) => ({ ...prev, reserve: undefined }))
-						}
-					}}
+			<div className="grid w-full gap-1.5">
+				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+				<Input
+					id="auction-reserve"
+					type="number"
+					min="0"
+					value={formData.reserve}
+					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
 				/>
-				<Label htmlFor="use-reserve">Set Reserve Price</Label>
-				<InfoTooltip content="A reserve price sets a minimum bid amount that must be met for the auction to be successful. If the highest bid is below the reserve, the auction ends with no winner." />
+				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 			</div>
-
-			{(!!formData.reserve || useReserve) && (
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-					<Input
-						id="auction-reserve"
-						type="number"
-						min="0"
-						value={formData.reserve}
-						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
-					/>
-					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
-				</div>
-			)}
 
 			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
 
@@ -1526,6 +1507,25 @@ export function AuctionFormContent() {
 		[walletDevMode],
 	)
 
+	const prevAvailableMintsRef = useRef(availableMints)
+	const userRemovedMintsRef = useRef<Set<string>>(new Set())
+
+	const setUserRemovedMints = (next: Set<string>) => {
+		userRemovedMintsRef.current = next
+	}
+
+	useEffect(() => {
+		const prev = prevAvailableMintsRef.current
+		if (prev === availableMints) return
+
+		setFormData((prevForm) => ({
+			...prevForm,
+			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints, userRemovedMintsRef.current),
+		}))
+
+		prevAvailableMintsRef.current = availableMints
+	}, [availableMints])
+
 	const draft = useMemo(() => loadDraft(userPubkey), [])
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => draft?.formData ?? { ...INITIAL_FORM, trustedMints: [...availableMints] })
@@ -1598,6 +1598,7 @@ export function AuctionFormContent() {
 	const hasValidBidding =
 		!validationMessages.startingBid &&
 		!validationMessages.bidIncrement &&
+		!validationMessages.reserve &&
 		!validationMessages.startAt &&
 		!validationMessages.endAt &&
 		!validationMessages.duration &&
@@ -1624,7 +1625,7 @@ export function AuctionFormContent() {
 
 			clearDraft(userPubkey)
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-			navigate({ to: '/auctions/$auctionId', params: { auctionId: publishedEventId } })
+			navigate({ to: '/auctions' })
 		} catch (error) {
 			console.error('Failed to submit auction form:', error)
 		}
@@ -1676,6 +1677,8 @@ export function AuctionFormContent() {
 								durationSeconds={durationSeconds}
 								setDurationSeconds={setDurationSeconds}
 								validationMessages={validationMessages}
+								userRemovedMints={userRemovedMintsRef.current}
+								onUserRemovedMintsChange={setUserRemovedMints}
 							/>
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
