@@ -51,8 +51,3 @@ test-results
 __pycache__/
 
 .opencode/
-
-contextvm/
-PR.md
-Makefile
-src/routeTree.gen.ts
