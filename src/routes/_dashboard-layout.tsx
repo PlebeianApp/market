@@ -116,7 +116,14 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 }
 
 // Helper to get notification count for a navigation item
-function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number, unseenPurchases: number): number {
+function getNotificationCount(
+	path: string,
+	unseenOrders: number,
+	unseenMessages: number,
+	unseenPurchases: number,
+	unseenAuctionBids: number,
+	unseenBidUpdates: number,
+): number {
 	if (path === '/dashboard/sales/sales') {
 		return unseenOrders
 	}
@@ -125,6 +132,12 @@ function getNotificationCount(path: string, unseenOrders: number, unseenMessages
 	}
 	if (path === '/dashboard/account/your-purchases') {
 		return unseenPurchases
+	}
+	if (path === '/dashboard/products/auctions') {
+		return unseenAuctionBids
+	}
+	if (path === '/dashboard/products/bids') {
+		return unseenBidUpdates
 	}
 	return 0
 }
@@ -157,7 +170,7 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
+	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 	// Admin checking
@@ -319,7 +332,14 @@ function DashboardLayout() {
 										<nav className="space-y-2 p-4 lg:p-0 lg:text-base text-xl">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
-												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages, unseenPurchases)
+												const notificationCount = getNotificationCount(
+													item.path,
+													unseenOrders,
+													unseenMessages,
+													unseenPurchases,
+													unseenAuctionBids,
+													unseenBidUpdates,
+												)
 												return (
 													<Link
 														key={item.path}

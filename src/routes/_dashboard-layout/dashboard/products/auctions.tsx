@@ -4,6 +4,7 @@ import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 import { uiActions } from '@/lib/stores/ui'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
@@ -32,7 +33,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
 	auctionSortOptionValues,
 	defaultAuctionFilters,
@@ -295,6 +296,12 @@ function AuctionsOverviewComponent() {
 	})
 
 	useDashboardTitle(isOnChildRoute ? 'Auction Details' : 'Auctions')
+
+	useEffect(() => {
+		if (isAuthenticated && user?.pubkey) {
+			notificationActions.markAuctionBidsSeen()
+		}
+	}, [isAuthenticated, user?.pubkey])
 
 	const {
 		data: auctions,
