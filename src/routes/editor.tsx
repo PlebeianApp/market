@@ -1,35 +1,78 @@
-// src/routes/editor.tsx
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
-import { authStore } from '@/lib/stores/auth'
-import { useEffect } from 'react'
+import { Puck } from '@puckeditor/core'
+import type { Config, Data } from '@puckeditor/core'
+import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
+import '@puckeditor/core/puck.css'
+import { useEffect, useState } from 'react'
+import { saveDraft, loadDraft, clearDraft } from '@/lib/cms/storage'
+import { toast } from 'sonner' // Assuming you use Sonner for notifications based on package.json
+import config from '@/config/cms'
 
-// Define search params for the editor
-const editorSearchSchema = z.object({
-	templateId: z.string().optional(),
-})
+// Initial empty data
+const INITIAL_DATA: Data = {
+	root: {},
+	content: [],
+}
 
 export const Route = createFileRoute('/editor')({
-	validateSearch: editorSearchSchema,
 	component: EditorRouteComponent,
 })
 
 function EditorRouteComponent() {
-	const navigate = useNavigate()
-	const { templateId } = Route.useSearch()
-	const { isAuthenticated, user } = useStore(authStore)
+	const [data, setData] = useState<Data>(INITIAL_DATA)
+	const [isLoading, setIsLoading] = useState(true)
 
-	// Redirect if not authenticated
+	// 1. Load draft on mount
 	useEffect(() => {
-		if (!isAuthenticated) {
-			navigate({ to: '/login' })
+		const saved = loadDraft()
+		if (saved) {
+			setData(saved)
 		}
-	}, [isAuthenticated, navigate])
+		setIsLoading(false)
+	}, [])
 
-	if (!isAuthenticated) {
-		return null
+	// 2. Handle Publish (Save)
+	const handlePublish = (newData: Data) => {
+		try {
+			saveDraft(newData)
+			toast.success('Draft saved successfully!')
+
+			// TODO: Future step - Trigger Nostr publish here
+			// await publishToNostr(newData);
+		} catch (error) {
+			toast.error('Failed to save draft.')
+			console.error(error)
+		}
 	}
 
-	return <p>test</p>
+	// 3. Handle Clear Draft
+	const handleClear = () => {
+		if (confirm('Are you sure you want to clear your draft? This cannot be undone.')) {
+			clearDraft()
+			setData(INITIAL_DATA)
+			toast.info('Draft cleared.')
+		}
+	}
+
+	if (isLoading) {
+		return <div className="flex h-screen items-center justify-center">Loading editor...</div>
+	}
+
+	return (
+		<div className="flex flex-col h-screen">
+			{/* Optional Header for Controls */}
+			<header className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-900">
+				<h1 className="font-bold text-xl">Puck Editor (Local Draft)</h1>
+				<div className="space-x-2">
+					<button onClick={handleClear} className="px-4 py-2 text-sm text-red-600 hover:text-red-800 border border-red-200 rounded">
+						Clear Draft
+					</button>
+					<span className="text-xs text-gray-500">Auto-saves on publish</span>
+				</div>
+			</header>
+
+			{/* Puck Editor */}
+			<Puck config={config} data={data} onPublish={handlePublish} />
+		</div>
+	)
 }
