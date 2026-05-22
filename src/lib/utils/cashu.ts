@@ -1,4 +1,5 @@
-import { parseSecret, type Secret, type SecretData } from '@cashu/crypto/modules/common/NUT11'
+import type { Secret, SecretData } from '@cashu/crypto/modules/common'
+import { parseSecret } from '@cashu/crypto/modules/common/NUT11'
 
 interface P2PKSecretData extends SecretData {
 	tags?: Array<Array<string>>
