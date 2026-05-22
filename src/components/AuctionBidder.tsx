@@ -59,13 +59,9 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 		[trustedMints, nip60State.mints, nip60State.mintBalances, bidAmount, previousBidAmount],
 	)
 
-	const manualMintValid = manualMint
-		? result.availableMints.some((m) => m.mintUrl === manualMint)
-		: false
+	const manualMintValid = manualMint ? result.availableMints.some((m) => m.mintUrl === manualMint) : false
 
-	const manualMintCanFund = manualMint
-		? result.availableMints.find((m) => m.mintUrl === manualMint)?.balance ?? 0 >= deltaAmount
-		: false
+	const manualMintCanFund = manualMint ? (result.availableMints.find((m) => m.mintUrl === manualMint)?.balance ?? 0 >= deltaAmount) : false
 
 	const selectedMint = manualMintValid ? manualMint : result.selectedMint
 
@@ -250,9 +246,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,
-				mintCandidates: selectedMint
-					? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)]
-					: trustedMints,
+				mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
 			})
 			toast.success('Bid placed successfully')
 			setIsEditing(false)
@@ -411,7 +405,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			{mintError && !compact && <div className="text-xs text-red-500 pl-1">{mintError}</div>}
 			{!canFund && !mintError && !compact && selectedMint && (
 				<div className="text-xs text-red-500 pl-1">
-					Selected mint cannot cover the {Math.max(0, (Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0) - previousBidAmount)} sat delta. Choose another mint or add funds.
+					Selected mint cannot cover the {Math.max(0, (Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0) - previousBidAmount)} sat
+					delta. Choose another mint or add funds.
 				</div>
 			)}
 		</div>
