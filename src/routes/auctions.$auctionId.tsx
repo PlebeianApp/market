@@ -65,6 +65,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 
 function useHeroBackground(imageUrl: string, className: string) {
@@ -433,7 +434,8 @@ function AuctionDetailRoute() {
 				</div>
 			)}
 
-			<div className="mx-auto w-full max-w-7xl px-4 py-6">
+			<div className="mx-auto flex w-full max-w-7xl gap-0 px-4 py-6">
+				<div className="min-w-0 flex-1">
 				<Tabs defaultValue="overview" className="w-full">
 					<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
 						<TabsTrigger
@@ -746,6 +748,8 @@ function AuctionDetailRoute() {
 						</div>
 					</TabsContent>
 				</Tabs>
+				</div>
+				{auction && <div className="hidden w-80 shrink-0 lg:block"><LiveChatPanel auctionEvent={auction} /></div>}
 			</div>
 
 			{moreFromSeller.length > 0 && (

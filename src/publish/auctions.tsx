@@ -390,6 +390,12 @@ export const publishAuction = async (formData: AuctionFormData, signer: NDKSigne
 	const event = await createAuctionEvent(formData, signer, ndk, auctionId)
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
+
+	const { publishLiveActivity } = await import('@/publish/liveChat')
+	publishLiveActivity({ auctionEvent: event }).catch((err) => {
+		console.warn('[nip53] Failed to publish live activity:', err)
+	})
+
 	return event.id
 }
 
