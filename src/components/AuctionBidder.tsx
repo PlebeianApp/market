@@ -402,7 +402,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
-
 		</div>
 	)
 }
