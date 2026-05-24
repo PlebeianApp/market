@@ -395,7 +395,7 @@ function AuctionDetailRoute() {
 								)}
 								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(effectiveEndAt, false)}</span>}
 							</div>
-							<AuctionBidder auction={auction} />
+							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
 						</div>
 					</div>
 				</div>
