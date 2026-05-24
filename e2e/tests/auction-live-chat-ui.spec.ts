@@ -157,9 +157,7 @@ test.describe('Auction Live Chat UI Components', () => {
 			await messageInput.fill('Hello from E2E test!')
 			await messageInput.press('Enter')
 
-			await expect(
-				merchantPage.getByText('Hello from E2E test!')
-			).toBeVisible({ timeout: 10_000 })
+			await expect(merchantPage.getByText('Hello from E2E test!')).toBeVisible({ timeout: 10_000 })
 		}
 	})
 

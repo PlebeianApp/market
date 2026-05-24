@@ -27,12 +27,8 @@ export function LiveChatMessageBubble({ message }: LiveChatMessageProps) {
 			</div>
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline gap-2">
-					<span className="text-xs font-medium text-zinc-700">
-						{shortenHex(message.authorPubkey, 6, 4)}
-					</span>
-					<span className="text-[10px] text-zinc-400">
-						{formatRelativeTime(message.createdAt)}
-					</span>
+					<span className="text-xs font-medium text-zinc-700">{shortenHex(message.authorPubkey, 6, 4)}</span>
+					<span className="text-[10px] text-zinc-400">{formatRelativeTime(message.createdAt)}</span>
 				</div>
 				<p className="text-sm text-zinc-800 break-words">{message.content}</p>
 			</div>

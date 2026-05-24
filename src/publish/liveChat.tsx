@@ -11,13 +11,7 @@ import {
 	type LiveActivityStatus,
 } from '@/lib/nip53'
 import { liveActivityKeys } from '@/queries/queryKeyFactory'
-import {
-	getAuctionId,
-	getAuctionTitle,
-	getAuctionSummary,
-	getAuctionImages,
-	getAuctionCategories,
-} from '@/queries/auctions'
+import { getAuctionId, getAuctionTitle, getAuctionSummary, getAuctionImages, getAuctionCategories } from '@/queries/auctions'
 import { getAuctionStartAt, getAuctionMaxEndAt } from '@/lib/auctionSettlement'
 
 interface PublishLiveActivityParams {
@@ -72,10 +66,7 @@ interface PublishLiveChatMessageParams {
 	content: string
 }
 
-export const publishLiveChatMessage = async ({
-	liveActivityCoord,
-	content,
-}: PublishLiveChatMessageParams): Promise<NDKEvent> => {
+export const publishLiveChatMessage = async ({ liveActivityCoord, content }: PublishLiveChatMessageParams): Promise<NDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
@@ -110,10 +101,7 @@ interface UpdateLiveActivityStatusParams {
 	newStatus: LiveActivityStatus
 }
 
-export const updateLiveActivityStatus = async ({
-	existingEvent,
-	newStatus,
-}: UpdateLiveActivityStatusParams): Promise<NDKEvent> => {
+export const updateLiveActivityStatus = async ({ existingEvent, newStatus }: UpdateLiveActivityStatusParams): Promise<NDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')

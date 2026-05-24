@@ -18,23 +18,17 @@ describe('nip53', () => {
 	const dTag = 'auction_1700000000_abc12'
 
 	test('getLiveActivityCoord produces correct coordinate', () => {
-		expect(getLiveActivityCoord(sellerPubkey, dTag)).toBe(
-			`30311:${sellerPubkey}:${dTag}`,
-		)
+		expect(getLiveActivityCoord(sellerPubkey, dTag)).toBe(`30311:${sellerPubkey}:${dTag}`)
 	})
 
 	test('getAuctionCoordFromLiveActivity swaps kind', () => {
 		const liveCoord = `30311:${sellerPubkey}:${dTag}`
-		expect(getAuctionCoordFromLiveActivity(liveCoord)).toBe(
-			`30408:${sellerPubkey}:${dTag}`,
-		)
+		expect(getAuctionCoordFromLiveActivity(liveCoord)).toBe(`30408:${sellerPubkey}:${dTag}`)
 	})
 
 	test('getLiveActivityCoordFromAuction swaps kind', () => {
 		const auctionCoord = `30408:${sellerPubkey}:${dTag}`
-		expect(getLiveActivityCoordFromAuction(auctionCoord)).toBe(
-			`30311:${sellerPubkey}:${dTag}`,
-		)
+		expect(getLiveActivityCoordFromAuction(auctionCoord)).toBe(`30311:${sellerPubkey}:${dTag}`)
 	})
 
 	test('coordinate roundtrip preserves d tag and pubkey', () => {
