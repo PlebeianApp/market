@@ -927,18 +927,6 @@ export const nip60Actions = {
 			// Load pending tokens from localStorage
 			nip60Actions.loadPendingTokens()
 			void nip60Actions.syncAuctionTransfers()
-
-			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
-				;(window as any).__nip60 = {
-					mintTestEcash: nip60Actions.mintTestEcash,
-					getStatus: () => ({
-						status: nip60Store.state.status,
-						balance: nip60Store.state.balance,
-						mints: nip60Store.state.mints,
-						mintBalances: nip60Store.state.mintBalances,
-					}),
-				}
-			}
 		} catch (err) {
 			console.error('[nip60] Failed to initialize wallet:', err)
 			nip60Store.setState((s) => ({
@@ -1890,7 +1878,7 @@ export const nip60Actions = {
 		}
 
 		const wallet = nip60Store.state.wallet
-		if (!wallet || (nip60Store.state.status !== 'ready' && nip60Store.state.status !== 'no_wallet')) {
+		if (!wallet || nip60Store.state.status !== 'ready') {
 			throw new Error('NIP-60 wallet not ready')
 		}
 
@@ -1930,10 +1918,6 @@ export const nip60Actions = {
 				}
 
 				await nip60Actions.refresh()
-
-				if (nip60Store.state.status !== 'ready') {
-					nip60Store.setState((s) => ({ ...s, status: 'ready' }))
-				}
 
 				return {
 					mintUrl: targetMint,
