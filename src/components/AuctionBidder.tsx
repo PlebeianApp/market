@@ -179,7 +179,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	// Disable logic
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
-	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid || !canFund
+	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
 	// Determine which toggle is active based on current input
 	const getSelectedValue = () => {
@@ -402,13 +402,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
-			{mintError && !compact && <div className="text-xs text-red-500 pl-1">{mintError}</div>}
-			{!canFund && !mintError && !compact && selectedMint && (
-				<div className="text-xs text-red-500 pl-1">
-					Selected mint cannot cover the {Math.max(0, (Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0) - previousBidAmount)} sat
-					delta. Choose another mint or add funds.
-				</div>
-			)}
+
 		</div>
 	)
 }
