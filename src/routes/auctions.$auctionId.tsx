@@ -1,7 +1,6 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
-import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { ImageCarousel } from '@/components/ImageCarousel'
@@ -130,181 +129,6 @@ function TechnicalDataRow({ label, value }: { label: string; value: ReactNode })
 	)
 }
 
-type ShippingInfo = NonNullable<ReturnType<typeof getShippingInfo>>
-
-type ShippingTagSource = {
-	tags: string[][]
-}
-
-type AuctionShippingOptionDisplay = {
-	shippingRef: string
-	extraCost: string
-	status: 'valid' | 'invalid'
-	info: ShippingInfo | null
-	event: ShippingTagSource | null
-	isLoading: boolean
-	isNotFound: boolean
-}
-
-function AuctionEmptyState({ title, description }: { title: string; description?: string }) {
-	return (
-		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
-			<p className="text-sm font-medium text-zinc-900">{title}</p>
-			{description && <p className="mt-1 text-sm leading-6 text-zinc-500">{description}</p>}
-		</div>
-	)
-}
-
-function getShippingTagValues(event: ShippingTagSource | null, tagName: string): string[] {
-	return (
-		event?.tags
-			.find((tag) => tag[0] === tagName)
-			?.slice(1)
-			.filter(Boolean) ?? []
-	)
-}
-
-function getShippingTagValue(event: ShippingTagSource | null, tagName: string): string {
-	return getShippingTagValues(event, tagName)[0] || ''
-}
-
-function getShippingCurrency(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
-	const priceTagValues = getShippingTagValues(event, 'price')
-	return info?.price.currency || priceTagValues[1] || fallbackCurrency
-}
-
-function formatShippingPrice(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
-	const priceTagValues = getShippingTagValues(event, 'price')
-	const amount = info?.price.amount || priceTagValues[0] || ''
-	const currency = getShippingCurrency(info, event, fallbackCurrency)
-
-	if (!amount) return 'Price unavailable'
-	return currency ? `${amount} ${currency}` : amount
-}
-
-function formatShippingExtraCost(extraCost: string, currency: string): string | null {
-	const extraCostNumber = extraCost ? Number(extraCost) : 0
-	if (Number.isNaN(extraCostNumber) || extraCostNumber <= 0) return null
-
-	return currency ? `${extraCostNumber} ${currency}` : `${extraCostNumber}`
-}
-
-function formatShippingDestination(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
-	const countries = info?.countries.length ? info.countries : getShippingTagValues(event, 'country')
-	const regions = getShippingTagValues(event, 'region')
-	const destinationParts = [
-		countries.length > 0 ? `Countries: ${countries.join(', ')}` : '',
-		regions.length > 0 ? `Regions: ${regions.join(', ')}` : '',
-	].filter(Boolean)
-
-	return destinationParts.length > 0 ? destinationParts.join(' · ') : null
-}
-
-function formatShippingDuration(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
-	const durationTagValues = getShippingTagValues(event, 'duration')
-	const min = info?.duration?.min || durationTagValues[0] || ''
-	const max = info?.duration?.max || durationTagValues[1] || ''
-	const unit = info?.duration?.unit || durationTagValues[2] || ''
-	const unitSuffix = unit ? ` ${unit}` : ''
-
-	if (min && max) return `${min}-${max}${unitSuffix}`
-	if (min) return `${min}${unitSuffix}`
-	if (max) return `Up to ${max}${unitSuffix}`
-	return null
-}
-
-function formatShippingPickup(event: ShippingTagSource | null): string | null {
-	const structuredAddress = [
-		getShippingTagValue(event, 'pickup-street'),
-		getShippingTagValue(event, 'pickup-city'),
-		getShippingTagValue(event, 'pickup-state'),
-		getShippingTagValue(event, 'pickup-postal-code'),
-		getShippingTagValue(event, 'pickup-country'),
-	].filter(Boolean)
-
-	if (structuredAddress.length > 0) return structuredAddress.join(', ')
-	return getShippingTagValue(event, 'pickup-address') || null
-}
-
-function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode }) {
-	if (value === null || value === undefined || value === '') return null
-
-	return (
-		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</dt>
-			<dd className="mt-1 break-words text-sm font-medium text-zinc-900">{value}</dd>
-		</div>
-	)
-}
-
-function AuctionShippingOptionCard({ option, auctionCurrency }: { option: AuctionShippingOptionDisplay; auctionCurrency: string }) {
-	if (option.status === 'invalid') {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-zinc-950">Invalid shipping reference</h3>
-				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
-			</li>
-		)
-	}
-
-	if (option.isLoading) {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<p className="text-sm text-zinc-500">Loading shipping details...</p>
-			</li>
-		)
-	}
-
-	if (!option.event && !option.info) {
-		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-zinc-950">Shipping option unavailable</h3>
-				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
-			</li>
-		)
-	}
-
-	const title = option.info?.title || getShippingTagValue(option.event, 'title') || 'Untitled shipping option'
-	const shippingCurrency = getShippingCurrency(option.info, option.event, auctionCurrency)
-	const extraCost = formatShippingExtraCost(option.extraCost, shippingCurrency)
-	const service = option.info?.service || getShippingTagValue(option.event, 'service')
-	const carrier = option.info?.carrier || getShippingTagValue(option.event, 'carrier')
-	const location = option.info?.location || getShippingTagValue(option.event, 'location')
-	const pickup = formatShippingPickup(option.event)
-	const hasPartialShippingInfo = !!option.event && !option.info
-
-	return (
-		<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-			<div className="flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<h3 className="text-base font-semibold text-zinc-950">{title}</h3>
-					<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
-				</div>
-				<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-					{formatShippingPrice(option.info, option.event, auctionCurrency)}
-				</Badge>
-			</div>
-
-			{hasPartialShippingInfo && (
-				<div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-600">
-					Some shipping details are missing or malformed.
-				</div>
-			)}
-
-			<dl className="mt-4 grid gap-3 sm:grid-cols-2">
-				<ShippingDetailRow label="Base price" value={formatShippingPrice(option.info, option.event, auctionCurrency)} />
-				<ShippingDetailRow label="Service" value={service} />
-				<ShippingDetailRow label="Carrier" value={carrier} />
-				<ShippingDetailRow label="Destination" value={formatShippingDestination(option.info, option.event)} />
-				<ShippingDetailRow label="Duration" value={formatShippingDuration(option.info, option.event)} />
-				<ShippingDetailRow label="Location" value={location} />
-				<ShippingDetailRow label="Pickup" value={pickup} />
-				<ShippingDetailRow label="Auction extra cost" value={extraCost} />
-			</dl>
-		</li>
-	)
-}
-
 const detailBidderStatusClassName = (status: AuctionBidderStatusKind): string => {
 	switch (status) {
 		case 'winning':
@@ -392,14 +216,13 @@ function AuctionDetailRoute() {
 		() =>
 			parsedShippingRefs.map((entry, index) => {
 				if (entry.status !== 'valid') {
-					return { ...entry, event: null, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
+					return { ...entry, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
 				}
 				const queryResult = shippingQueryResults[index]
 				const event = queryResult?.data ?? null
 				const info = event ? getShippingInfo(event) : null
 				return {
 					...entry,
-					event,
 					info,
 					isLoading: (queryResult?.isLoading ?? false) && !queryResult?.data,
 					isNotFound: !queryResult?.isLoading && !queryResult?.data,
@@ -613,330 +436,362 @@ function AuctionDetailRoute() {
 
 			<div className="mx-auto flex w-full max-w-7xl gap-0 px-4 py-6">
 				<div className="min-w-0 flex-1">
-				<Tabs defaultValue="overview" className="w-full">
-					<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
-						<TabsTrigger
-							value="overview"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Overview
-						</TabsTrigger>
-						<TabsTrigger
-							value="description"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Description
-						</TabsTrigger>
-						<TabsTrigger
-							value="shipping"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Shipping
-						</TabsTrigger>
-						<TabsTrigger
-							value="bids"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Bids
-						</TabsTrigger>
-						<TabsTrigger
-							value="comments"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Comments
-						</TabsTrigger>
-						<TabsTrigger
-							value="seller"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Seller
-						</TabsTrigger>
-					</TabsList>
+					<Tabs defaultValue="overview" className="w-full">
+						<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
+							<TabsTrigger
+								value="overview"
+								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+							>
+								Overview
+							</TabsTrigger>
+							<TabsTrigger
+								value="description"
+								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+							>
+								Description
+							</TabsTrigger>
+							<TabsTrigger
+								value="bids"
+								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+							>
+								Bids
+							</TabsTrigger>
+							<TabsTrigger
+								value="seller"
+								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+							>
+								Seller
+							</TabsTrigger>
+						</TabsList>
 
-					<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
-							<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
+						<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+								<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
+									<div className="space-y-4">
+										<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+											<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
+											<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
+											<div className="mt-4 flex flex-wrap gap-2">
+												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+													{auctionType}
+												</Badge>
+												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+													{currency}
+												</Badge>
+												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+													{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
+												</Badge>
+											</div>
+										</div>
+
+										<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+											<ShopperStat
+												label={ended ? 'Final price' : 'Current price'}
+												value={formatSats(currentPrice)}
+												helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
+											/>
+											<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
+											<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
+											<ShopperStat
+												label="Reserve"
+												value={formatSats(reserve)}
+												helper="Seller threshold that decides whether the winner can settle."
+											/>
+											<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
+											<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
+										</div>
+									</div>
+
+									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+											<UserRound className="h-4 w-4" />
+											Seller & fulfilment
+										</div>
+										<div className="mt-4 space-y-1">
+											<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
+											<ShopperInfoRow
+												label="Categories"
+												value={
+													categories.length > 0 ? (
+														<span className="inline-flex flex-wrap justify-end gap-1.5">
+															{categories.slice(0, 3).map((category) => (
+																<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
+																	{category}
+																</span>
+															))}
+														</span>
+													) : (
+														'None listed'
+													)
+												}
+											/>
+											<ShopperInfoRow
+												label="Shipping options"
+												value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
+											/>
+										</div>
+
+										<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
+											<AccordionItem value="settlement" className="border-none">
+												<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+													Settlement & technical details
+												</AccordionTrigger>
+												<AccordionContent className="space-y-3 pb-4">
+													<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
+													<TechnicalDataRow label="Key scheme" value={keyScheme} />
+													{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
+													<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
+													<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
+													<TechnicalDataRow
+														label="Trusted mints"
+														value={
+															trustedMints.length > 0 ? (
+																<ul className="space-y-1">
+																	{trustedMints.map((mint) => (
+																		<li key={mint}>{mint}</li>
+																	))}
+																</ul>
+															) : (
+																'No mints declared'
+															)
+														}
+													/>
+												</AccordionContent>
+											</AccordionItem>
+										</Accordion>
+									</div>
+								</div>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
 								<div className="space-y-4">
-									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
-										<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
-										<div className="mt-4 flex flex-wrap gap-2">
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{auctionType}
-											</Badge>
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{currency}
-											</Badge>
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
-											</Badge>
-										</div>
-									</div>
-
-									<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-										<ShopperStat
-											label={ended ? 'Final price' : 'Current price'}
-											value={formatSats(currentPrice)}
-											helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
-										/>
-										<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
-										<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
-										<ShopperStat
-											label="Reserve"
-											value={formatSats(reserve)}
-											helper="Seller threshold that decides whether the winner can settle."
-										/>
-										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
-										<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
-									</div>
-								</div>
-
-								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<UserRound className="h-4 w-4" />
-										Seller & fulfilment
-									</div>
-									<div className="mt-4 space-y-1">
-										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
-										<ShopperInfoRow
-											label="Categories"
-											value={
-												categories.length > 0 ? (
-													<span className="inline-flex flex-wrap justify-end gap-1.5">
-														{categories.slice(0, 3).map((category) => (
-															<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
-																{category}
-															</span>
-														))}
-													</span>
-												) : (
-													'None listed'
-												)
-											}
-										/>
-										<ShopperInfoRow
-											label="Shipping options"
-											value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
-										/>
-									</div>
-
-									<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
-										<AccordionItem value="settlement" className="border-none">
-											<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-												Settlement & technical details
-											</AccordionTrigger>
-											<AccordionContent className="space-y-3 pb-4">
-												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
-												<TechnicalDataRow label="Key scheme" value={keyScheme} />
-												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
-												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
-												<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
-												<TechnicalDataRow
-													label="Trusted mints"
-													value={
-														trustedMints.length > 0 ? (
-															<ul className="space-y-1">
-																{trustedMints.map((mint) => (
-																	<li key={mint}>{mint}</li>
-																))}
-															</ul>
-														) : (
-															'No mints declared'
-														)
-													}
-												/>
-											</AccordionContent>
-										</AccordionItem>
-									</Accordion>
-								</div>
-							</div>
-						</div>
-					</TabsContent>
-
-					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
-							<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-								<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</h2>
-								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-								{description ? (
-									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">{description}</p>
-								) : (
-									<div className="mt-4">
-										<AuctionEmptyState
-											title="No description provided."
-											description="The seller has not added a full description for this auction."
-										/>
-									</div>
-								)}
-							</section>
-
-							<div className="grid gap-4 lg:grid-cols-2">
-								<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</h2>
-									{specs.length > 0 ? (
-										<dl className="mt-4 divide-y divide-zinc-200">
-											{specs.map((spec, index) => (
-												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
-													<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
-													<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
-												</div>
-											))}
-										</dl>
-									) : (
-										<div className="mt-4">
-											<AuctionEmptyState title="No specifications listed." />
-										</div>
-									)}
-								</section>
-
-								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<Gavel className="h-4 w-4" />
-										<h2>Categories</h2>
-									</div>
-									<div className="mt-4 flex flex-wrap gap-2">
-										{categories.length > 0 ? (
-											categories.map((category) => (
-												<span
-													key={category}
-													className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
-												>
-													{category}
-												</span>
-											))
-										) : (
-											<p className="text-sm text-zinc-500">No categories listed.</p>
-										)}
-									</div>
-								</section>
-							</div>
-						</div>
-					</TabsContent>
-
-					<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
-							<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-								<div className="flex items-start gap-3">
-									<Truck className="mt-0.5 h-5 w-5 text-zinc-700" />
-									<div>
-										<h2 className="text-lg font-semibold text-zinc-950">Shipping options</h2>
-										<p className="mt-1 text-sm leading-6 text-zinc-500">
-											Seller-provided shipping options attached to this auction. Availability is shown as listed by the seller.
+									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
+										{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+										<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
+											{description || 'No description provided.'}
 										</p>
 									</div>
-								</div>
-							</section>
 
-							{resolvedShippingOptions.length > 0 ? (
-								<ul className="space-y-4">
-									{resolvedShippingOptions.map((option, index) => (
-										<AuctionShippingOptionCard key={`${option.shippingRef}-${index}`} option={option} auctionCurrency={currency} />
-									))}
-								</ul>
-							) : (
-								<AuctionEmptyState
-									title="No shipping options listed."
-									description="The seller has not attached any shipping options to this auction."
-								/>
-							)}
-						</div>
-					</TabsContent>
-
-					<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
-							<div className="flex flex-wrap items-center justify-between gap-3">
-								<div>
-									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
-									<p className="mt-1 text-sm text-zinc-500">
-										Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
-									</p>
-								</div>
-								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-									{newestBids.length} recorded
-								</Badge>
-							</div>
-
-							{newestBids.length === 0 ? (
-								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
-									No bids yet.
-								</div>
-							) : (
-								<div className="space-y-4">
-									{newestBids.map((bidEvent) => {
-										const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
-										return (
-											<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
-												<div className="flex flex-wrap items-start justify-between gap-3">
-													<div>
-														<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
-														<p className="mt-1 text-sm text-zinc-500">
-															Recorded {bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
-														</p>
+									{specs.length > 0 && (
+										<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+											<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+											<dl className="mt-4 divide-y divide-zinc-200">
+												{specs.map((spec, index) => (
+													<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
+														<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
+														<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
 													</div>
-													<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-														{getBidStatus(bidEvent)}
-													</Badge>
-												</div>
-
-												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-													<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
-													<span className="text-zinc-400">•</span>
-													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
-												</div>
-
-												<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
-													<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
-														<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-															Bid event details
-														</AccordionTrigger>
-														<AccordionContent className="space-y-3 pb-4">
-															<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
-															<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
-															<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
-															<TechnicalDataRow
-																label="Locktime"
-																value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
-															/>
-															<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
-														</AccordionContent>
-													</AccordionItem>
-												</Accordion>
-											</div>
-										)
-									})}
+												))}
+											</dl>
+										</div>
+									)}
 								</div>
-							)}
-						</div>
-					</TabsContent>
 
-					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
-						</div>
-					</TabsContent>
+								<div className="space-y-4">
+									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+											<Gavel className="h-4 w-4" />
+											Categories
+										</div>
+										<div className="mt-4 flex flex-wrap gap-2">
+											{categories.length > 0 ? (
+												categories.map((category) => (
+													<span
+														key={category}
+														className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+													>
+														{category}
+													</span>
+												))
+											) : (
+												<p className="text-sm text-zinc-500">No categories listed.</p>
+											)}
+										</div>
+									</div>
 
-					<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-								<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-									<UserRound className="h-4 w-4" />
-									Seller
-								</div>
-								<div className="mt-4">
-									<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
-								</div>
-								<div className="mt-5 space-y-1">
-									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
-									<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
-									<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
+									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+											<Truck className="h-4 w-4" />
+											Shipping options
+										</div>
+										<div className="mt-4">
+											{resolvedShippingOptions.length > 0 ? (
+												<ul className="space-y-2 text-sm text-zinc-700">
+													{resolvedShippingOptions.map((option, index) => {
+														const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
+														const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
+														return (
+															<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+																{option.status === 'invalid' ? (
+																	<div className="space-y-1">
+																		<p className="font-medium text-zinc-900">Invalid shipping reference</p>
+																		<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																	</div>
+																) : option.info ? (
+																	<div className="space-y-1">
+																		<p className="font-medium text-zinc-900">{option.info.title}</p>
+																		<p className="text-xs text-zinc-600">
+																			Base: {option.info.price.amount} {option.info.price.currency}
+																			{option.info.service ? ` · ${option.info.service}` : ''}
+																			{option.info.carrier ? ` · ${option.info.carrier}` : ''}
+																		</p>
+																		{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
+																	</div>
+																) : (
+																	<div className="space-y-1">
+																		<p className="font-medium text-zinc-900">Shipping option unavailable</p>
+																		<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																	</div>
+																)}
+															</li>
+														)
+													})}
+												</ul>
+											) : (
+												<p className="text-sm text-zinc-500">No shipping options listed.</p>
+											)}
+										</div>
+									</div>
 								</div>
 							</div>
-						</div>
-					</TabsContent>
-				</Tabs>
+						</TabsContent>
+
+						<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<div>
+										<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
+										<p className="mt-1 text-sm text-zinc-500">
+											Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
+										</p>
+									</div>
+									<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+										{newestBids.length} recorded
+									</Badge>
+								</div>
+
+								{newestBids.length === 0 ? (
+									<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
+										No bids yet.
+									</div>
+								) : (
+									<div className="space-y-4">
+										{newestBids.map((bidEvent) => {
+											const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
+											const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
+											return (
+												<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
+													<div className="flex flex-wrap items-start justify-between gap-3">
+														<div>
+															<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
+															<p className="mt-1 text-sm text-zinc-500">
+																Recorded{' '}
+																{bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
+															</p>
+														</div>
+														<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+															{getBidStatus(bidEvent)}
+														</Badge>
+													</div>
+
+													<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
+														<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
+														<span className="text-zinc-400">•</span>
+														<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
+													</div>
+
+													<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
+														<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
+															<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+																Bid event details
+															</AccordionTrigger>
+															<AccordionContent className="space-y-3 pb-4">
+																<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
+																<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
+																<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
+																<TechnicalDataRow
+																	label="Locktime"
+																	value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
+																/>
+																<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
+															</AccordionContent>
+														</AccordionItem>
+													</Accordion>
+												</div>
+											)
+										})}
+									</div>
+								)}
+							</div>
+						</TabsContent>
+
+						<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<UserRound className="h-4 w-4" />
+										Seller
+									</div>
+									<div className="mt-4">
+										<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
+									</div>
+									<div className="mt-5 space-y-1">
+										<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
+										<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
+										<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
+									</div>
+									{resolvedShippingOptions.length > 0 && (
+										<div className="mt-4">
+											<div className="text-xs font-semibold text-zinc-500 uppercase mb-2">Shipping</div>
+											<ul className="space-y-2 text-sm text-zinc-700">
+												{resolvedShippingOptions.map((option, index) => {
+													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
+													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
+													return (
+														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+															{option.status === 'invalid' ? (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
+																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																</div>
+															) : option.isLoading ? (
+																<p className="text-sm text-zinc-400">Loading shipping details...</p>
+															) : option.info ? (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">{option.info.title}</p>
+																	<p className="text-xs text-zinc-600">
+																		Base: {option.info.price.amount} {option.info.price.currency}
+																		{option.info.service ? ` · ${option.info.service}` : ''}
+																		{option.info.carrier ? ` · ${option.info.carrier}` : ''}
+																	</p>
+																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
+																</div>
+															) : (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">Shipping option unavailable</p>
+																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																</div>
+															)}
+														</li>
+													)
+												})}
+											</ul>
+										</div>
+									)}
+									</div>
+								</div>
+							</div>
+						</TabsContent>
+					</Tabs>
 				</div>
-				{auction && <div className="hidden w-80 shrink-0 lg:block"><LiveChatPanel auctionEvent={auction} /></div>}
+				{auction && (
+					<div className="hidden w-80 shrink-0 lg:block">
+						<LiveChatPanel auctionEvent={auction} />
+					</div>
+				)}
 			</div>
 
 			{moreFromSeller.length > 0 && (

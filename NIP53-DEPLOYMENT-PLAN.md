@@ -1,11 +1,13 @@
 # NIP-53 Deployment & Testing Plan
 
 ## Branch: `feat/nip53-auction-live-chat`
+
 ## Target: `auctions/p2pk-path-oracle-via-cvm-v1`
 
 ## Overview
 
 Three deliverables across two repos:
+
 1. **Market repo** (`~/plebeian-testing-15.05.2026/market`) — UI component tests via Playwright
 2. **Tollgate repo** (`~/tollgate-infrastructure-kit`) — Playwright smoke tests against live VPS
 3. **Tollgate repo** — Ansible playbook to deploy test market instance + run E2E on VPS
@@ -41,6 +43,7 @@ NOT in setup-all.yml (optional, run separately).
 ## Checklist
 
 ### Part 1: Market Repo — UI Component Tests
+
 - [x] Create `e2e/tests/auction-live-chat-ui.spec.ts`
   - [x] Test: Empty state message "No messages yet. Be the first!"
   - [x] Test: Message count displays "0 messages" initially
@@ -52,6 +55,7 @@ NOT in setup-all.yml (optional, run separately).
   - [x] Test: Chat messages display with relative timestamp
 
 ### Part 2: Tollgate Repo — Playwright Smoke Tests
+
 - [x] Create `tests/e2e/tests/plebeian-market.spec.ts`
   - [x] Test: Health check — GET returns < 500
   - [x] Test: SPA loads — page title, body visible
@@ -63,6 +67,7 @@ NOT in setup-all.yml (optional, run separately).
   - [x] Test: Test relay WebSocket upgrade succeeds
 
 ### Part 3: Tollgate Repo — Ansible Role
+
 - [x] Create `ansible/playbooks/26-plebeian-market-test.yml` (thin playbook)
 - [x] Create `ansible/roles/plebeian_market_test/tasks/main.yml`
   - [x] Create directory
@@ -77,6 +82,7 @@ NOT in setup-all.yml (optional, run separately).
 - [x] Create `ansible/roles/plebeian_market_test/handlers/main.yml`
 
 ### Part 4: Tollgate Repo — Integration Test
+
 - [x] Create `tests/integration/test_plebeian_market.sh`
   - [x] Check Docker containers running
   - [x] Check ports 34568 + 10548 listening
@@ -85,6 +91,7 @@ NOT in setup-all.yml (optional, run separately).
   - [x] Check compose file + caddy snippet exist
 
 ### Part 5: Tollgate Repo — Convenience Script
+
 - [x] Create `scripts/test-plebeian.sh`
   - [x] deploy: run playbook
   - [x] test: run integration + E2E
@@ -92,9 +99,11 @@ NOT in setup-all.yml (optional, run separately).
   - [x] full: deploy → test → teardown
 
 ### Part 6: Documentation
+
 - [x] Update `NIP53-TESTING.md` with deployment checkboxes
 - [x] Create `NIP53-DEPLOYMENT-PLAN.md`
 
 ### Part 7: Commit
+
 - [ ] Commit market repo changes
 - [ ] Commit tollgate repo changes

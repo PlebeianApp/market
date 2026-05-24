@@ -51,10 +51,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const handleSend = () => {
 		const trimmed = input.trim()
 		if (!trimmed || sendMessageMutation.isPending) return
-		sendMessageMutation.mutate(
-			{ liveActivityCoord, content: trimmed },
-			{ onSuccess: () => setInput('') },
-		)
+		sendMessageMutation.mutate({ liveActivityCoord, content: trimmed }, { onSuccess: () => setInput('') })
 	}
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -101,11 +98,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 							disabled={sendMessageMutation.isPending}
 							className="flex-1 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-50"
 						/>
-						<Button
-							size="sm"
-							onClick={handleSend}
-							disabled={!input.trim() || sendMessageMutation.isPending}
-						>
+						<Button size="sm" onClick={handleSend} disabled={!input.trim() || sendMessageMutation.isPending}>
 							<Send className="h-4 w-4" />
 						</Button>
 					</div>

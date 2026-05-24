@@ -75,11 +75,7 @@ mock.module('@/lib/auctionSettlement', () => ({
 	},
 }))
 
-import {
-	publishLiveActivity,
-	publishLiveChatMessage,
-	updateLiveActivityStatus,
-} from '@/publish/liveChat'
+import { publishLiveActivity, publishLiveChatMessage, updateLiveActivityStatus } from '@/publish/liveChat'
 import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND, AUCTION_KIND } from '@/lib/nip53'
 
 function makeAuctionEvent(overrides: Record<string, any> = {}) {
@@ -141,7 +137,12 @@ describe('publishLiveActivity', () => {
 	})
 
 	test('omits image tag when auction has no images', async () => {
-		const auctionEvent = makeAuctionEvent({ tags: [['d', dTag], ['title', 'No Image']] })
+		const auctionEvent = makeAuctionEvent({
+			tags: [
+				['d', dTag],
+				['title', 'No Image'],
+			],
+		})
 
 		await publishLiveActivity({ auctionEvent })
 
