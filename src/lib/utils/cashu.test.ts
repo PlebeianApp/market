@@ -46,16 +46,20 @@ describe('getP2PKLocktime', () => {
 	test('handles multiple tags, finds locktime', () => {
 		const secret = JSON.stringify([
 			'P2PK',
-			{ nonce: 'abc', data: 'def', tags: [['sigflag', 'SIG_ALL'], ['locktime', '1700000001']] },
+			{
+				nonce: 'abc',
+				data: 'def',
+				tags: [
+					['sigflag', 'SIG_ALL'],
+					['locktime', '1700000001'],
+				],
+			},
 		])
 		expect(getP2PKLocktime(secret)).toBe(1700000001)
 	})
 
 	test('handles SecretData with additional unknown fields', () => {
-		const secret = JSON.stringify([
-			'P2PK',
-			{ nonce: 'abc', data: 'def', tags: [['locktime', '1700000002']], custom: 'field' },
-		])
+		const secret = JSON.stringify(['P2PK', { nonce: 'abc', data: 'def', tags: [['locktime', '1700000002']], custom: 'field' }])
 		expect(getP2PKLocktime(secret)).toBe(1700000002)
 	})
 })

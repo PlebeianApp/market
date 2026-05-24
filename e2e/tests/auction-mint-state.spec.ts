@@ -4,11 +4,7 @@ import { test, expect } from '../fixtures'
 test.use({ scenario: 'merchant' })
 
 function selectedMintLocator(page: import('@playwright/test').Page, mintUrl: string) {
-	return page
-		.locator('span[title]')
-		.filter({ hasText: mintUrl })
-		.locator('..')
-		.locator('button[title="Remove mint"]')
+	return page.locator('span[title]').filter({ hasText: mintUrl }).locator('..').locator('button[title="Remove mint"]')
 }
 
 function unselectedMintLocator(page: import('@playwright/test').Page, mintUrl: string) {
@@ -51,9 +47,7 @@ test.describe('Auction Mint State', () => {
 		const afterCount = await removeButtons.count()
 		expect(afterCount).toBe(initialCount - 1)
 
-		await expect(
-			merchantPage.getByTitle('At least one mint is required').or(merchantPage.getByTitle('Remove mint')).first(),
-		).toBeVisible()
+		await expect(merchantPage.getByTitle('At least one mint is required').or(merchantPage.getByTitle('Remove mint')).first()).toBeVisible()
 	})
 
 	test('user can re-add a previously removed mint via unselected list', async ({ merchantPage }) => {
