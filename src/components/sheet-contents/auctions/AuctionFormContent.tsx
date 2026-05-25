@@ -1486,6 +1486,24 @@ function ShippingTab({
 	)
 }
 
+function isMeaningfulDraft(formData: AuctionFormData, images: AuctionImage[], subCategoryInput: string): boolean {
+	return (
+		formData.title.trim().length > 0 ||
+		formData.summary.trim().length > 0 ||
+		formData.description.trim().length > 0 ||
+		formData.startingBid.trim().length > 0 ||
+		(formData.startAt ?? '').trim().length > 0 ||
+		formData.endAt.trim().length > 0 ||
+		formData.mainCategory.trim().length > 0 ||
+		formData.pathIssuerPubkey.trim().length > 0 ||
+		formData.isNSFW ||
+		formData.specs.length > 0 ||
+		formData.shippings.length > 0 ||
+		subCategoryInput.trim().length > 0 ||
+		images.length > 0
+	)
+}
+
 export function AuctionFormContent() {
 	const navigate = useNavigate()
 	const publishMutation = usePublishAuctionMutation()
@@ -1556,6 +1574,7 @@ export function AuctionFormContent() {
 
 		saveTimerRef.current = setTimeout(() => {
 			if (draftGenerationRef.current !== gen) return
+			if (!isMeaningfulDraft(formData, images, subCategoryInput)) return
 			saveAuctionFormDraft(userPubkey, { formData, images, startMode, endMode, durationSeconds, subCategoryInput })
 			if (draftGenerationRef.current === gen) setDraftSavedAt(Date.now())
 		}, 1500)
