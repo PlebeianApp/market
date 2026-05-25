@@ -58,9 +58,10 @@ export const auctionDraftEnvelopeSchema = z.object({
 export type AuctionDraftEnvelope = z.infer<typeof auctionDraftEnvelopeSchema>
 
 export function isDraftMeaningful({ formData, images, subCategoryInput }: AuctionFormDraft): boolean {
-	const { summary, description, startingBid, reserve, startAt, endAt, mainCategory, categories, imageUrls, specs, shippings } = formData
+	const { title, summary, description, startingBid, reserve, startAt, endAt, mainCategory, categories, imageUrls, specs, shippings } =
+		formData
 	return (
-		[summary, description, startingBid, reserve ?? '', startAt ?? '', endAt, mainCategory, subCategoryInput].some(
+		[title, summary, description, startingBid, reserve ?? '', startAt ?? '', endAt, mainCategory, subCategoryInput].some(
 			(s) => s.trim().length > 0,
 		) || [categories, imageUrls, specs, shippings, images].some((a) => a.length > 0)
 	)

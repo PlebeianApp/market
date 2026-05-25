@@ -188,6 +188,19 @@ describe('empty form not persisted', () => {
 		expect(isDraftMeaningful(candidate)).toBe(false)
 	})
 
+	test('isDraftMeaningful returns true when only title is filled in', () => {
+		const candidate: AuctionFormDraft = {
+			formData: { ...emptyFormData, title: 'My auction' },
+			images: [],
+			subCategoryInput: '',
+			startMode: 'immediate',
+			endMode: 'duration',
+			durationSeconds: 86400,
+			activeTab: 'name',
+		}
+		expect(isDraftMeaningful(candidate)).toBe(true)
+	})
+
 	test('isDraftMeaningful returns true once a field is filled in', () => {
 		const candidate: AuctionFormDraft = {
 			formData: { ...emptyFormData, description: 'something' },
