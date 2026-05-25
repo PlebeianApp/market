@@ -170,7 +170,7 @@ export function AuctionCard({
 					<AuctionCountdown auction={auction} bids={bids} className="w-full justify-between" compact />
 				</div>
 
-				<AuctionBidder auction={auction} bids={bids} compact />
+				<AuctionBidder auction={auction} currentUserPubkey={currentUser?.pubkey} bids={bids} compact />
 			</div>
 		</div>
 	)
