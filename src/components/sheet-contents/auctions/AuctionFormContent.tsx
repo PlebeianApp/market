@@ -33,9 +33,10 @@ import {
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, CalendarIcon, Plus, X } from 'lucide-react'
+import { ArrowLeft, CalendarIcon, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Slider } from '@/components/ui/slider'
@@ -1623,6 +1624,45 @@ export function AuctionFormContent() {
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
+	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
+	const draftLoadedRef = useRef(false)
+	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const draftGenerationRef = useRef(0)
+
+	const hasDraft = draftSavedAt !== null
+
+	useEffect(() => {
+		if (!userPubkey || draftLoadedRef.current) return
+
+		draftLoadedRef.current = true
+		const draft = getAuctionFormDraft(userPubkey)
+		if (!draft) return
+		setDraftSavedAt(draft.savedAt)
+		setFormData(draft.formData)
+		setImages(draft.images)
+		setStartMode(draft.startMode)
+		setEndMode(draft.endMode)
+		setDurationSeconds(draft.durationSeconds)
+		setSubCategoryInput(draft.subCategoryInput)
+	}, [userPubkey])
+
+	useEffect(() => {
+		if (!userPubkey || !draftLoadedRef.current) return
+
+		const gen = draftGenerationRef.current
+		if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+
+		saveTimerRef.current = setTimeout(() => {
+			if (draftGenerationRef.current !== gen) return
+			saveAuctionFormDraft(userPubkey, { formData, images, startMode, endMode, durationSeconds, subCategoryInput })
+			if (draftGenerationRef.current === gen) setDraftSavedAt(Date.now())
+		}, 1500)
+
+		return () => {
+			if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+		}
+	}, [formData, images, startMode, endMode, durationSeconds, subCategoryInput, userPubkey])
+
 	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
 		let effectiveEndAt = formData.endAt
@@ -1738,6 +1778,19 @@ export function AuctionFormContent() {
 		}
 	})()
 
+	const handleClearDraft = () => {
+		draftGenerationRef.current++
+		draftLoadedRef.current = true
+		clearAuctionFormDraft(userPubkey)
+		setDraftSavedAt(null)
+		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
+		setImages([])
+		setStartMode('immediate')
+		setEndMode('duration')
+		setDurationSeconds(24 * 60 * 60)
+		setSubCategoryInput('')
+	}
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
@@ -1749,6 +1802,10 @@ export function AuctionFormContent() {
 			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
 			if (!publishedEventId) return
+
+			draftGenerationRef.current++
+			clearAuctionFormDraft(userPubkey)
+			setDraftSavedAt(null)
 
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 			navigate({ to: '/auctions' })
@@ -1837,7 +1894,22 @@ export function AuctionFormContent() {
 				</Tabs>
 			</div>
 
-			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2">
+			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2 flex flex-col gap-2">
+				{hasDraft && (
+					<div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5">
+						<p className="text-xs font-medium text-amber-700">Draft saved</p>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-red-600 px-2"
+							onClick={handleClearDraft}
+						>
+							<Trash2 className="w-3 h-3" />
+							Clear draft
+						</Button>
+					</div>
+				)}
 				{currentTabErrors.length > 0 && (
 					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
 						{currentTabErrors.map((err, i) => (
