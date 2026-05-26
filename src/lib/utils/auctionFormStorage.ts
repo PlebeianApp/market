@@ -30,7 +30,13 @@ export type AuctionFormDraft = {
 
 const storageKey = (pubkey: string) => `auction_form_draft_${pubkey}`
 
-const isBrowser = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+function getLocalStorage(): Storage | null {
+	try {
+		return typeof window !== 'undefined' ? window.localStorage : null
+	} catch {
+		return null
+	}
+}
 
 function str(v: unknown, fallback = ''): string {
 	return typeof v === 'string' ? v : fallback
@@ -137,19 +143,23 @@ function validateDraft(raw: unknown, expectedPubkey: string): AuctionFormDraft |
 }
 
 export const saveAuctionFormDraft = (pubkey: string, draft: Omit<AuctionFormDraft, 'pubkey' | 'savedAt'>): void => {
-	if (!isBrowser() || !pubkey) return
+	if (!pubkey) return
+	const storage = getLocalStorage()
+	if (!storage) return
 	try {
 		const record: AuctionFormDraft = { ...draft, pubkey, savedAt: Date.now() }
-		localStorage.setItem(storageKey(pubkey), JSON.stringify(record))
+		storage.setItem(storageKey(pubkey), JSON.stringify(record))
 	} catch (error) {
 		console.error('Failed to save auction form draft:', error)
 	}
 }
 
 export const getAuctionFormDraft = (pubkey: string): AuctionFormDraft | null => {
-	if (!isBrowser() || !pubkey) return null
+	if (!pubkey) return null
+	const storage = getLocalStorage()
+	if (!storage) return null
 	try {
-		const raw = localStorage.getItem(storageKey(pubkey))
+		const raw = storage.getItem(storageKey(pubkey))
 		if (!raw) return null
 		return validateDraft(JSON.parse(raw), pubkey)
 	} catch (error) {
@@ -159,9 +169,11 @@ export const getAuctionFormDraft = (pubkey: string): AuctionFormDraft | null => 
 }
 
 export const clearAuctionFormDraft = (pubkey: string): void => {
-	if (!isBrowser() || !pubkey) return
+	if (!pubkey) return
+	const storage = getLocalStorage()
+	if (!storage) return
 	try {
-		localStorage.removeItem(storageKey(pubkey))
+		storage.removeItem(storageKey(pubkey))
 	} catch (error) {
 		console.error('Failed to clear auction form draft:', error)
 	}
