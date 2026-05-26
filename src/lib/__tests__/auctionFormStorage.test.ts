@@ -239,6 +239,46 @@ describe('cross-user safety', () => {
 		saveAuctionFormDraft('', baseDraft)
 		expect(getAuctionFormDraft('')).toBeNull()
 	})
+
+	test('returns null when stored pubkey does not match the requested pubkey', () => {
+		// simulate a tampered or misplaced draft: PUBKEY_B's data written under PUBKEY_A's key
+		const tampered = { ...baseDraft, pubkey: PUBKEY_B, savedAt: Date.now() }
+		store[`auction_form_draft_${PUBKEY_A}`] = JSON.stringify(tampered)
+		expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Storage access hardening
+// ---------------------------------------------------------------------------
+
+const throwingWindow = Object.defineProperty({}, 'localStorage', {
+	get() {
+		throw new Error('Storage access denied')
+	},
+})
+
+describe('storage access hardening', () => {
+	test('save is a no-op when window.localStorage access throws', () => {
+		const original = (globalThis as Record<string, unknown>).window
+		;(globalThis as Record<string, unknown>).window = throwingWindow
+		try {
+			expect(() => saveAuctionFormDraft(PUBKEY_A, baseDraft)).not.toThrow()
+		} finally {
+			;(globalThis as Record<string, unknown>).window = original
+		}
+		expect(store[`auction_form_draft_${PUBKEY_A}`]).toBeUndefined()
+	})
+
+	test('get returns null when window.localStorage access throws', () => {
+		const original = (globalThis as Record<string, unknown>).window
+		;(globalThis as Record<string, unknown>).window = throwingWindow
+		try {
+			expect(getAuctionFormDraft(PUBKEY_A)).toBeNull()
+		} finally {
+			;(globalThis as Record<string, unknown>).window = original
+		}
+	})
 })
 
 // ---------------------------------------------------------------------------
