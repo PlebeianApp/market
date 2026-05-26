@@ -166,7 +166,9 @@ function NameTab({ formData, setFormData }: TabProps) {
 type StartMode = 'immediate' | 'scheduled'
 type EndMode = 'duration' | 'absolute'
 
-const DURATION_PRESETS: { label: string; seconds: number }[] = [
+type AuctionDurationPreset = { label: string; seconds: number }
+
+const DURATION_PRESETS: AuctionDurationPreset[] = [
 	{ label: '1m', seconds: 1 * 60 },
 	{ label: '2m', seconds: 2 * 60 },
 	{ label: '3m', seconds: 3 * 60 },
@@ -182,8 +184,16 @@ const DURATION_PRESETS: { label: string; seconds: number }[] = [
 	{ label: '4h', seconds: 4 * 3600 },
 	{ label: '5h', seconds: 5 * 3600 },
 	{ label: '6h', seconds: 6 * 3600 },
+	{ label: '7h', seconds: 7 * 3600 },
+	{ label: '8h', seconds: 8 * 3600 },
+	{ label: '9h', seconds: 9 * 3600 },
+	{ label: '10h', seconds: 10 * 3600 },
 	{ label: '12h', seconds: 12 * 3600 },
+	{ label: '14h', seconds: 14 * 3600 },
+	{ label: '16h', seconds: 16 * 3600 },
 	{ label: '18h', seconds: 18 * 3600 },
+	{ label: '20h', seconds: 20 * 3600 },
+	{ label: '22h', seconds: 22 * 3600 },
 	{ label: '1d', seconds: 86400 },
 	{ label: '2d', seconds: 2 * 86400 },
 	{ label: '3d', seconds: 3 * 86400 },
@@ -202,6 +212,17 @@ const DURATION_PRESETS: { label: string; seconds: number }[] = [
 	{ label: '20d', seconds: 20 * 86400 },
 	{ label: '25d', seconds: 25 * 86400 },
 	{ label: '30d', seconds: 30 * 86400 },
+]
+
+const DURATION_PRESET_DEFAULT_INDEX = 25 // Index for 1 Day
+
+const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
+	DURATION_PRESETS[9], // 1 Hour
+	DURATION_PRESETS[19], // 12 Hours
+	DURATION_PRESETS[25], // 1 Day
+	DURATION_PRESETS[31], // 7 Days
+	DURATION_PRESETS[38], // 14 Days
+	DURATION_PRESETS[42], // 30 Days
 ]
 
 function pad2(n: number): string {
@@ -849,7 +870,7 @@ function AuctionTabContent({
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
 	const [useReserve, setUseReserve] = useState(false)
-	const [inputSliderValue, setInputSliderValue] = useState<number>(16) // Default value: 1 day (24 hours)
+	const [inputSliderValue, setInputSliderValue] = useState<number>(DURATION_PRESET_DEFAULT_INDEX)
 
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
@@ -991,6 +1012,30 @@ function AuctionTabContent({
 
 				{endMode === 'duration' ? (
 					<div className="space-y-3">
+						<div className="flex flex-wrap gap-1.5">
+							{DURATION_PRESETS_SHORTCUT.map((preset) => {
+								const isActive = durationSeconds === preset.seconds
+								return (
+									<button
+										key={preset.label}
+										type="button"
+										onClick={() => {
+											const indexSlider = DURATION_PRESETS.findIndex((v) => v.seconds === preset.seconds)
+											setInputSliderValue(indexSlider + 1)
+											setDurationSeconds(preset.seconds)
+										}}
+										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+											isActive
+												? 'border-secondary bg-secondary text-white'
+												: 'border-zinc-300 bg-white text-zinc-700 hover:border-secondary'
+										}`}
+									>
+										{preset.label}
+									</button>
+								)
+							})}
+						</div>
+
 						<div>
 							<Slider
 								min={1}
@@ -999,9 +1044,9 @@ function AuctionTabContent({
 								onValueChange={(val) => {
 									const sliderValue = val?.at(0)
 									if (sliderValue) {
-										const value = DURATION_PRESETS[sliderValue - 1]
-
 										setInputSliderValue(sliderValue)
+
+										const value = DURATION_PRESETS[sliderValue - 1]
 										setDurationSeconds(value.seconds)
 									}
 								}}
@@ -1595,6 +1640,7 @@ export function AuctionFormContent() {
 	const hasValidBidding =
 		!validationMessages.startingBid &&
 		!validationMessages.bidIncrement &&
+		!validationMessages.reserve &&
 		!validationMessages.startAt &&
 		!validationMessages.endAt &&
 		!validationMessages.duration &&
