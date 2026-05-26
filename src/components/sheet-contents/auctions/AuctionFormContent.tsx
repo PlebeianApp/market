@@ -1679,8 +1679,8 @@ export function AuctionFormContent() {
 	]
 
 	return (
-		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4">
-			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
+		<form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 mt-4">
+			<div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 				<Tabs
 					value={activeTab}
 					onValueChange={(value) => setActiveTab(value as AuctionTab)}
