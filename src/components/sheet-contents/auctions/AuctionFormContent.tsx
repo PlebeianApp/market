@@ -1556,7 +1556,16 @@ export function AuctionFormContent() {
 
 		draftLoadedRef.current = userPubkey
 		const draft = getAuctionFormDraft(userPubkey)
-		if (!draft) return
+		if (!draft) {
+			setDraftSavedAt(null)
+			setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
+			setImages([])
+			setStartMode(DEFAULT_AUCTION_START_MODE)
+			setEndMode(DEFAULT_AUCTION_END_MODE)
+			setDurationSeconds(24 * 60 * 60)
+			setSubCategoryInput('')
+			return
+		}
 		setDraftSavedAt(draft.savedAt)
 		setFormData(draft.formData)
 		setImages(draft.images)
@@ -1564,7 +1573,7 @@ export function AuctionFormContent() {
 		setEndMode(draft.endMode)
 		setDurationSeconds(draft.durationSeconds)
 		setSubCategoryInput(draft.subCategoryInput)
-	}, [userPubkey])
+	}, [userPubkey, availableMints])
 
 	useEffect(() => {
 		if (!userPubkey || draftLoadedRef.current !== userPubkey) return
