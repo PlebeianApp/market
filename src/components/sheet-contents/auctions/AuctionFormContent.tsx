@@ -1545,16 +1545,16 @@ export function AuctionFormContent() {
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
 	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
-	const draftLoadedRef = useRef(false)
+	const draftLoadedRef = useRef('')
 	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const draftGenerationRef = useRef(0)
 
 	const hasDraft = draftSavedAt !== null
 
 	useEffect(() => {
-		if (!userPubkey || draftLoadedRef.current) return
+		if (!userPubkey || draftLoadedRef.current === userPubkey) return
 
-		draftLoadedRef.current = true
+		draftLoadedRef.current = userPubkey
 		const draft = getAuctionFormDraft(userPubkey)
 		if (!draft) return
 		setDraftSavedAt(draft.savedAt)
@@ -1567,7 +1567,7 @@ export function AuctionFormContent() {
 	}, [userPubkey])
 
 	useEffect(() => {
-		if (!userPubkey || !draftLoadedRef.current) return
+		if (!userPubkey || draftLoadedRef.current !== userPubkey) return
 
 		const gen = draftGenerationRef.current
 		if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -1635,7 +1635,7 @@ export function AuctionFormContent() {
 
 	const handleClearDraft = () => {
 		draftGenerationRef.current++
-		draftLoadedRef.current = true
+		draftLoadedRef.current = userPubkey
 		clearAuctionFormDraft(userPubkey)
 		setDraftSavedAt(null)
 		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
