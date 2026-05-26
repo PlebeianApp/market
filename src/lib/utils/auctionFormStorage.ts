@@ -45,12 +45,12 @@ function strArray(v: unknown): string[] {
 	return v.filter((x): x is string => typeof x === 'string')
 }
 
-function validateDraft(raw: unknown): AuctionFormDraft | null {
+function validateDraft(raw: unknown, expectedPubkey: string): AuctionFormDraft | null {
 	if (!raw || typeof raw !== 'object') return null
 	const d = raw as Record<string, unknown>
 
 	const pubkey = str(d.pubkey)
-	if (!pubkey) return null
+	if (!pubkey || pubkey !== expectedPubkey) return null
 
 	const savedAt = num(d.savedAt, 0)
 	if (!savedAt) return null
@@ -151,7 +151,7 @@ export const getAuctionFormDraft = (pubkey: string): AuctionFormDraft | null => 
 	try {
 		const raw = localStorage.getItem(storageKey(pubkey))
 		if (!raw) return null
-		return validateDraft(JSON.parse(raw))
+		return validateDraft(JSON.parse(raw), pubkey)
 	} catch (error) {
 		console.error('Failed to get auction form draft:', error)
 		return null
