@@ -1,4 +1,5 @@
 import { ndkActions } from '@/lib/stores/ndk'
+import { isValidUserProfile } from '@/lib/utils/userValidation'
 import NDK, { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { useState, useEffect } from 'react'
 
@@ -19,7 +20,7 @@ interface CMSGridItem {
 	content: string
 }
 
-export interface CMSItemGridProps {
+export interface CMSProductGridProps {
 	kind?: number // Default: 30402 for classified ads
 	tags?: string[][] // Additional tag filters
 	limit?: number
@@ -27,19 +28,18 @@ export interface CMSItemGridProps {
 	relayUrl?: string
 }
 
-export const CMSItemGrid = ({ kind = 30402, tags = [], limit = 5, relayUrl, author }: CMSItemGridProps) => {
+export const CMSProductGrid = ({ kind = 30402, tags = [], limit = 5, relayUrl, author }: CMSProductGridProps) => {
 	const [items, setItems] = useState<CMSGridItem[]>([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
-	console.log('Render')
-
 	useEffect(() => {
 		const fetchItems = async () => {
-			console.log('Start')
+			setItems([])
+			setLoading(true)
+			setError(null)
 
 			try {
-				console.log('NDK')
 				const ndk = ndkActions.getNDK()!
 
 				const filter: any = {
@@ -47,8 +47,12 @@ export const CMSItemGrid = ({ kind = 30402, tags = [], limit = 5, relayUrl, auth
 					limit,
 				}
 
-				if (author && author.length > 0) {
-					filter.authors = [author]
+				if (author && isValidUserProfile(author)) {
+					try {
+						// Normalize identifier to pubkey
+						const authorPubkey = await ndk.fetchUser(author).then((user) => user?.pubkey)
+						filter.authors = [authorPubkey]
+					} catch {}
 				}
 
 				// Add tag filters
@@ -60,10 +64,7 @@ export const CMSItemGrid = ({ kind = 30402, tags = [], limit = 5, relayUrl, auth
 					}
 				})
 
-				console.log('Filter:', filter)
 				const events = await ndk.fetchEvents(filter)
-
-				console.log('Events: ', events)
 
 				const parsedItems: CMSGridItem[] = Array.from(events).map((event) => {
 					const titleTag = event.tags.find((t) => t[0] === 'title')
@@ -97,7 +98,7 @@ export const CMSItemGrid = ({ kind = 30402, tags = [], limit = 5, relayUrl, auth
 		}
 
 		fetchItems()
-	}, [kind, JSON.stringify(tags), limit, relayUrl])
+	}, [kind, JSON.stringify(tags), limit, author, relayUrl])
 
 	if (loading) return <div>Loading items...</div>
 	if (error) return <div>Error: {error}</div>

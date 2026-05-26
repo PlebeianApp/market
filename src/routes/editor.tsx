@@ -3,10 +3,11 @@ import type { Config, Data } from '@puckeditor/core'
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
 import '@puckeditor/core/puck.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/cms/storage'
 import { toast } from 'sonner' // Assuming you use Sonner for notifications based on package.json
-import config from '@/config/cms'
+import { getCMSConfig } from '@/config/cms'
+import { useAuth } from '@/lib/stores/auth'
 
 // Initial empty data
 const INITIAL_DATA: Data = {
@@ -21,6 +22,11 @@ export const Route = createFileRoute('/editor')({
 function EditorRouteComponent() {
 	const [data, setData] = useState<Data>(INITIAL_DATA)
 	const [isLoading, setIsLoading] = useState(true)
+	const { user } = useAuth()
+
+	const config = useMemo(() => {
+		return getCMSConfig(user ?? undefined)
+	}, [user?.pubkey])
 
 	// 1. Load draft on mount
 	useEffect(() => {

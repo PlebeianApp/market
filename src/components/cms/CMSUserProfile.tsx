@@ -1,24 +1,28 @@
 // src/components/puck/NostrProfile.tsx
 import { ndkActions } from '@/lib/stores/ndk'
+import { isValidUserProfile } from '@/lib/utils/userValidation'
 import NDK, { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useState, useEffect } from 'react'
 
 export interface CMSUserProfileProps {
-	pubkey: string
+	identifier: string
 	relayUrl?: string
 }
 
-export const CMSUserProfile = ({ pubkey, relayUrl }: CMSUserProfileProps) => {
+export const CMSUserProfile = ({ identifier, relayUrl }: CMSUserProfileProps) => {
 	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
 		const fetchProfile = async () => {
+			setError(null)
+			setLoading(true)
+
 			try {
 				const ndk = ndkActions.getNDK()!
 
-				const userProfile = await ndk.fetchUser(pubkey)?.then((user) => user?.fetchProfile())
+				const userProfile = await ndk.fetchUser(identifier)?.then((user) => user?.fetchProfile())
 				setProfile(userProfile ?? null)
 			} catch (err) {
 				setError(err instanceof Error ? err.message : 'Failed to fetch profile')
@@ -27,10 +31,14 @@ export const CMSUserProfile = ({ pubkey, relayUrl }: CMSUserProfileProps) => {
 			}
 		}
 
-		if (pubkey) {
+		if (isValidUserProfile(identifier)) {
+			console.log('Fetch profile:')
 			fetchProfile()
+		} else {
+			setLoading(false)
+			setError('Invalid user identifer.')
 		}
-	}, [pubkey, relayUrl])
+	}, [identifier, relayUrl])
 
 	if (loading) return <div>Loading profile...</div>
 	if (error) return <div>Error: {error}</div>

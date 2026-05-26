@@ -1,13 +1,12 @@
 import { CMSUserProfile, type CMSUserProfileProps } from '../components/cms/CMSUserProfile'
-import { CMSItemGrid, type CMSItemGridProps } from '../components/cms/CMSItemGrid'
 import type { Config } from '@puckeditor/core'
-import { CustomTextField } from '@/components/editor/CustomTextField'
-
-console.log('CMSItemGrid loaded?', CMSItemGrid)
+import { CustomFilterField } from '@/components/editor/CustomFilterField'
+import { CMSProductGrid, type CMSProductGridProps } from '@/components/cms/CMSProductGrid'
+import type { NDKUser } from '@nostr-dev-kit/ndk'
 
 type Components = {
 	CMSUserProfile: CMSUserProfileProps
-	CMSItemGrid: CMSItemGridProps
+	CMSProductGrid: CMSProductGridProps
 	HeadingBlock: {
 		title: string
 	}
@@ -16,11 +15,11 @@ type Components = {
 	}
 }
 
-const config: Config<Components> = {
+export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 	components: {
 		CMSUserProfile: {
 			fields: {
-				pubkey: {
+				identifier: {
 					type: 'text',
 					label: 'Public Key (hex)',
 				},
@@ -29,9 +28,12 @@ const config: Config<Components> = {
 					label: 'Relay URL (optional)',
 				},
 			},
-			render: ({ pubkey }: CMSUserProfileProps) => <CMSUserProfile pubkey={pubkey} />,
+			defaultProps: {
+				identifier: ownUser?.npub ?? '',
+			},
+			render: ({ identifier }: CMSUserProfileProps) => <CMSUserProfile identifier={identifier} />,
 		},
-		CMSItemGrid: {
+		CMSProductGrid: {
 			fields: {
 				kind: {
 					type: 'number',
@@ -45,24 +47,27 @@ const config: Config<Components> = {
 					type: 'text',
 					label: 'Pubkey of author',
 				},
+				tags: {
+					type: 'custom',
+					label: 'Nostr Filter Tags',
+					metadata: {
+						description: 'Add filters to narrow down the Nostr feed (e.g., Category: electronics)',
+					},
+					render: ({ name, onChange, value, field }) => <CustomFilterField field={field} value={value ?? []} onChange={onChange} />,
+				},
 				relayUrl: {
 					type: 'text',
 					label: 'Relay URL (optional)',
-				},
-				tags: {
-					type: 'custom',
-					label: 'Tag filters for nostr fetch query',
-					render: ({ name, onChange, value, field }) => <CustomTextField field={field} value={value ?? []} onChange={onChange} />,
 				},
 			},
 			defaultProps: {
 				kind: 30402,
 				limit: 5,
-				author: '',
+				author: ownUser?.npub ?? '',
 				tags: [], // Default to empty array
 			},
-			render: ({ kind, tags, limit, relayUrl, author }: CMSItemGridProps) => (
-				<CMSItemGrid kind={kind} tags={tags} author={author} limit={limit} relayUrl={relayUrl} />
+			render: ({ kind, tags, limit, relayUrl, author }: CMSProductGridProps) => (
+				<CMSProductGrid kind={kind} tags={tags} author={author} limit={limit} relayUrl={relayUrl} />
 			),
 		},
 		HeadingBlock: {
@@ -92,6 +97,4 @@ const config: Config<Components> = {
 			),
 		},
 	},
-}
-
-export default config
+})
