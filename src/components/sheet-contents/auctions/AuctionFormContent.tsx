@@ -24,13 +24,17 @@ import {
 	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
 	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
 	AUCTION_SETTLEMENT_GRACE_PRESETS,
+	DEFAULT_AUCTION_END_MODE,
+	DEFAULT_AUCTION_START_MODE,
 	usePublishAuctionMutation,
 	type AuctionAntiSnipeWindowMinutesPreset,
+	type AuctionEndMode,
 	type AuctionFormData,
 	type AuctionMinBidCurvePeakPreset,
 	type AuctionMinBidCurveShape,
 	type AuctionSettlementGracePreset,
 	type AuctionSpecEntry,
+	type AuctionStartMode,
 } from '@/publish/auctions'
 import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
@@ -161,9 +165,6 @@ function NameTab({ formData, setFormData }: TabProps) {
 		</div>
 	)
 }
-
-type StartMode = 'immediate' | 'scheduled'
-type EndMode = 'duration' | 'absolute'
 
 const DURATION_PRESETS: { label: string; seconds: number }[] = [
 	{ label: '1h', seconds: 3600 },
@@ -812,10 +813,10 @@ function AuctionTabContent({
 	onUserRemovedMintsChange,
 }: TabProps & {
 	availableMints: readonly string[]
-	startMode: StartMode
-	setStartMode: Dispatch<SetStateAction<StartMode>>
-	endMode: EndMode
-	setEndMode: Dispatch<SetStateAction<EndMode>>
+	startMode: AuctionStartMode
+	setStartMode: Dispatch<SetStateAction<AuctionStartMode>>
+	endMode: AuctionEndMode
+	setEndMode: Dispatch<SetStateAction<AuctionEndMode>>
 	durationSeconds: number
 	setDurationSeconds: Dispatch<SetStateAction<number>>
 	validationMessages: ValidationMessages
@@ -1539,8 +1540,8 @@ export function AuctionFormContent() {
 	const [images, setImages] = useState<AuctionImage[]>([])
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [subCategoryInput, setSubCategoryInput] = useState('')
-	const [startMode, setStartMode] = useState<StartMode>('immediate')
-	const [endMode, setEndMode] = useState<EndMode>('duration')
+	const [startMode, setStartMode] = useState<AuctionStartMode>(DEFAULT_AUCTION_START_MODE)
+	const [endMode, setEndMode] = useState<AuctionEndMode>(DEFAULT_AUCTION_END_MODE)
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
 	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
@@ -1639,8 +1640,8 @@ export function AuctionFormContent() {
 		setDraftSavedAt(null)
 		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
 		setImages([])
-		setStartMode('immediate')
-		setEndMode('duration')
+		setStartMode(DEFAULT_AUCTION_START_MODE)
+		setEndMode(DEFAULT_AUCTION_END_MODE)
 		setDurationSeconds(24 * 60 * 60)
 		setSubCategoryInput('')
 	}

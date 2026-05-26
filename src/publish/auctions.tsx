@@ -23,6 +23,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 
+export type AuctionStartMode = 'immediate' | 'scheduled'
+export type AuctionEndMode = 'duration' | 'absolute'
+export const DEFAULT_AUCTION_START_MODE: AuctionStartMode = 'immediate'
+export const DEFAULT_AUCTION_END_MODE: AuctionEndMode = 'duration'
+
 export interface AuctionSpecEntry {
 	key: string
 	value: string

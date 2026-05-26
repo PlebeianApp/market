@@ -1,26 +1,28 @@
 import type {
 	AuctionAntiSnipeWindowMinutesPreset,
+	AuctionEndMode,
 	AuctionFormData,
 	AuctionMinBidCurvePeakPreset,
 	AuctionMinBidCurveShape,
 	AuctionSettlementGracePreset,
+	AuctionStartMode,
 } from '@/publish/auctions'
 import {
 	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
 	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
 	AUCTION_SETTLEMENT_GRACE_PRESETS,
+	DEFAULT_AUCTION_END_MODE,
+	DEFAULT_AUCTION_START_MODE,
 } from '@/publish/auctions'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
-type StartMode = 'immediate' | 'scheduled'
-type EndMode = 'duration' | 'absolute'
 
 export type AuctionFormDraft = {
 	pubkey: string
 	formData: AuctionFormData
 	images: AuctionImage[]
-	startMode: StartMode
-	endMode: EndMode
+	startMode: AuctionStartMode
+	endMode: AuctionEndMode
 	durationSeconds: number
 	subCategoryInput: string
 	savedAt: number
@@ -94,10 +96,10 @@ function validateDraft(raw: unknown): AuctionFormDraft | null {
 		.filter((i) => i.imageUrl.length > 0)
 
 	const startModeRaw = str(d.startMode)
-	const startMode: StartMode = startModeRaw === 'scheduled' ? 'scheduled' : 'immediate'
+	const startMode: AuctionStartMode = startModeRaw === 'scheduled' ? 'scheduled' : DEFAULT_AUCTION_START_MODE
 
 	const endModeRaw = str(d.endMode)
-	const endMode: EndMode = endModeRaw === 'absolute' ? 'absolute' : 'duration'
+	const endMode: AuctionEndMode = endModeRaw === 'absolute' ? 'absolute' : DEFAULT_AUCTION_END_MODE
 
 	const formData: AuctionFormData = {
 		title: str(fd.title),
