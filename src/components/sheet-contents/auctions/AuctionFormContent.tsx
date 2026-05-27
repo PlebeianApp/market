@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,7 +37,7 @@ import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CalendarIcon, Plus, X } from 'lucide-react'
+import { CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Slider } from '@/components/ui/slider'
@@ -844,6 +845,28 @@ function SettlementGraceSettings({
 	)
 }
 
+function useOpenOnVisible(onVisible: () => void) {
+	const callbackRef = useRef(onVisible)
+	callbackRef.current = onVisible
+	const ref = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		const el = ref.current
+		if (!el) return
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) {
+					callbackRef.current()
+					observer.disconnect()
+				}
+			},
+			{ threshold: 0.15 },
+		)
+		observer.observe(el)
+		return () => observer.disconnect()
+	}, [])
+	return ref
+}
+
 function AuctionTabContent({
 	formData,
 	setFormData,
@@ -892,9 +915,20 @@ function AuctionTabContent({
 		}
 	}
 
+	type Section = 'bidLadder' | 'antiSnipe' | 'settlementGrace' | 'trustedMints' | 'oracle'
+	const [openSection, setOpenSection] = useState<Section | null>(null)
+	const open = (s: Section) => setOpenSection(s)
+	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
+
+	const bidLadderRef = useOpenOnVisible(() => open('bidLadder'))
+	const antiSnipeRef = useOpenOnVisible(() => open('antiSnipe'))
+	const settlementGraceRef = useOpenOnVisible(() => open('settlementGrace'))
+	const trustedMintsRef = useOpenOnVisible(() => open('trustedMints'))
+	const oracleRef = useOpenOnVisible(() => open('oracle'))
+
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve ?? '', 10)
+	const reserveNum = parseInt(formData.reserve ?? '0', 10)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -1112,102 +1146,152 @@ function AuctionTabContent({
 				</div>
 			</div>
 
-			<div className="flex items-center space-x-2">
-				<Checkbox
-					id="use-reserve"
-					checked={!!formData.reserve || useReserve}
-					onCheckedChange={(checked) => {
-						if (checked === true) {
-							setUseReserve(true)
-							setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
-						} else {
-							setUseReserve(false)
-							setFormData((prev) => ({ ...prev, reserve: undefined }))
-						}
-					}}
-				/>
-				<Label htmlFor="use-reserve">Set Reserve Price</Label>
-				<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve." />
-			</div>
-
-			{(!!formData.reserve || useReserve) && (
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-					<Input
-						id="auction-reserve"
-						type="number"
-						min="0"
-						value={formData.reserve}
-						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
-					/>
-					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
-				</div>
-			)}
-
-			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
-
-			<AntiSnipeCurveSettings
-				formData={formData}
-				setFormData={setFormData}
-				startAtSeconds={effectiveStartSeconds}
-				endAtSeconds={virtualEndSeconds}
-				maxEndAtSeconds={curveMaxEndSeconds}
-				settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
-				startingBid={startingBidNum}
-				bidIncrement={bidIncrementNum}
-				reserve={reserveNum}
-			/>
-			<SettlementGraceSettings formData={formData} setFormData={setFormData} />
-
 			<div className="grid w-full gap-1.5">
-				<Label>Trusted Mints</Label>
-				<p className="text-xs text-zinc-500">
-					Bids will be rejected unless the token is minted by one of these mints. At least one is required.
-				</p>
-				{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
-
-				<div className="space-y-2 mt-1">
-					{selectedMints.map((mint) => (
-						<div key={mint} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
-							<span className="truncate text-sm text-zinc-900" title={mint}>
-								{mint}
-							</span>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => removeMint(mint)}
-								disabled={!canRemoveMint}
-								className="text-red-600 hover:text-red-700 disabled:opacity-40"
-								title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
-							>
-								<X className="w-4 h-4" />
-							</Button>
-						</div>
-					))}
-				</div>
-
-				{unselectedMints.length > 0 && (
-					<div className="space-y-2 mt-3">
-						<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
-						{unselectedMints.map((mint) => (
-							<button
-								key={mint}
-								type="button"
-								onClick={() => addMint(mint)}
-								className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
-							>
-								<span className="truncate" title={mint}>
-									{mint}
-								</span>
-								<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
-							</button>
-						))}
-					</div>
-				)}
+				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+				<Input
+					id="auction-reserve"
+					type="number"
+					min="0"
+					value={formData.reserve}
+					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+				/>
+				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 			</div>
 
-			<AuctionOracleSelector formData={formData} setFormData={setFormData} />
+			<div ref={bidLadderRef}>
+				<Collapsible open={openSection === 'bidLadder'} onOpenChange={toggle('bidLadder')}>
+					<CollapsibleTrigger
+						onFocus={() => open('bidLadder')}
+						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+					>
+						Bid Ladder
+						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'bidLadder' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
+
+			<div ref={antiSnipeRef}>
+				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
+					<CollapsibleTrigger
+						onFocus={() => open('antiSnipe')}
+						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+					>
+						Anti-snipe &amp; Curve Settings
+						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<AntiSnipeCurveSettings
+							formData={formData}
+							setFormData={setFormData}
+							startAtSeconds={effectiveStartSeconds}
+							endAtSeconds={virtualEndSeconds}
+							maxEndAtSeconds={curveMaxEndSeconds}
+							settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
+							startingBid={startingBidNum}
+							bidIncrement={bidIncrementNum}
+							reserve={reserveNum}
+						/>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
+
+			<div ref={settlementGraceRef}>
+				<Collapsible open={openSection === 'settlementGrace'} onOpenChange={toggle('settlementGrace')}>
+					<CollapsibleTrigger
+						onFocus={() => open('settlementGrace')}
+						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+					>
+						Settlement Grace
+						<ChevronDown
+							className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
+						/>
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<SettlementGraceSettings formData={formData} setFormData={setFormData} />
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
+
+			<div ref={trustedMintsRef}>
+				<Collapsible open={openSection === 'trustedMints'} onOpenChange={toggle('trustedMints')}>
+					<CollapsibleTrigger
+						onFocus={() => open('trustedMints')}
+						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+					>
+						Trusted Mints
+						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+							<p className="text-xs text-zinc-500">
+								Bids will be rejected unless the token is minted by one of these mints. At least one is required.
+							</p>
+							{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
+
+							<div className="space-y-2 mt-1">
+								{selectedMints.map((mint) => (
+									<div
+										key={mint}
+										className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+									>
+										<span className="truncate text-sm text-zinc-900" title={mint}>
+											{mint}
+										</span>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => removeMint(mint)}
+											disabled={!canRemoveMint}
+											className="text-red-600 hover:text-red-700 disabled:opacity-40"
+											title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
+										>
+											<X className="w-4 h-4" />
+										</Button>
+									</div>
+								))}
+							</div>
+
+							{unselectedMints.length > 0 && (
+								<div className="space-y-2 mt-3">
+									<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
+									{unselectedMints.map((mint) => (
+										<button
+											key={mint}
+											type="button"
+											onClick={() => addMint(mint)}
+											className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
+										>
+											<span className="truncate" title={mint}>
+												{mint}
+											</span>
+											<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
+
+			<div ref={oracleRef}>
+				<Collapsible open={openSection === 'oracle'} onOpenChange={toggle('oracle')}>
+					<CollapsibleTrigger
+						onFocus={() => open('oracle')}
+						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+					>
+						Auction Oracle
+						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'oracle' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<AuctionOracleSelector formData={formData} setFormData={setFormData} />
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 		</div>
 	)
 }
