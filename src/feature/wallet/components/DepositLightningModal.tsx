@@ -135,8 +135,13 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 
 	const handleClose = () => {
 		const hasNwcPaymentAttempt = nwcPaymentAttemptedRef.current
+		const isTerminalDepositState = depositStatus === 'success' || depositStatus === 'error'
+
 		if (depositStatus === 'pending' && !hasNwcPaymentAttempt) {
 			nip60Actions.cancelDeposit()
+		}
+		if (isTerminalDepositState) {
+			nip60Actions.clearDepositResult()
 		}
 		setAmount('')
 		setCopied(false)
