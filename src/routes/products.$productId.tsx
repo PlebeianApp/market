@@ -146,6 +146,7 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
 
 	const summary = getProductSummary(eventProduct)
+	const categories = getProductCategories(eventProduct)
 	const description = getProductDescription(eventProduct)
 	const weightTag = getProductWeight(eventProduct)
 	const location = getProductLocation(eventProduct)
@@ -158,6 +159,11 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 				<>
 					{summary && <p className="mb-4 pb-4 border-gray-200 border-b text-gray-600 italic">{summary}</p>}
 					<p className="text-gray-700 break-words whitespace-pre-wrap">{description}</p>
+					{categories.map((category) => (
+						<Badge variant="outline" className="mt-4 mr-2 py-1 px-2">
+							{category[1]}
+						</Badge>
+					))}
 				</>,
 			)
 		case TabProductPage.spec:
