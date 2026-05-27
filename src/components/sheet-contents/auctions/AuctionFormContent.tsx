@@ -1142,7 +1142,8 @@ function AuctionTabContent({
 						type="number"
 						min="1"
 						value={formData.bidIncrement}
-						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value }))}
+						onFocus={(e) => e.target.select()}
+						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
 					/>
 					{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
 				</div>
@@ -1155,7 +1156,8 @@ function AuctionTabContent({
 					type="number"
 					min="0"
 					value={formData.reserve}
-					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+					onFocus={(e) => e.target.select()}
+					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value.replace(/^0+(\d)/, '$1') }))}
 				/>
 				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 			</div>
