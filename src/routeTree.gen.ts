@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as EditorPreviewRouteImport } from './routes/editor-preview'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DashboardLayoutRouteImport } from './routes/_dashboard-layout'
@@ -55,6 +56,11 @@ import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdRouteIm
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorPreviewRoute = EditorPreviewRouteImport.update({
+  id: '/editor-preview',
+  path: '/editor-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditorRoute = EditorRouteImport.update({
@@ -294,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/$vanityName': typeof VanityNameRoute
   '/checkout': typeof CheckoutRoute
   '/editor': typeof EditorRoute
+  '/editor-preview': typeof EditorPreviewRoute
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
   '/posts/$postId': typeof PostsPostIdRoute
@@ -337,6 +344,7 @@ export interface FileRoutesByTo {
   '/$vanityName': typeof VanityNameRoute
   '/checkout': typeof CheckoutRoute
   '/editor': typeof EditorRoute
+  '/editor-preview': typeof EditorPreviewRoute
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
   '/posts/$postId': typeof PostsPostIdRoute
@@ -382,6 +390,7 @@ export interface FileRoutesById {
   '/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
   '/checkout': typeof CheckoutRoute
   '/editor': typeof EditorRoute
+  '/editor-preview': typeof EditorPreviewRoute
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
   '/posts/$postId': typeof PostsPostIdRoute
@@ -427,6 +436,7 @@ export interface FileRouteTypes {
     | '/$vanityName'
     | '/checkout'
     | '/editor'
+    | '/editor-preview'
     | '/setup'
     | '/collection/$collectionId'
     | '/posts/$postId'
@@ -470,6 +480,7 @@ export interface FileRouteTypes {
     | '/$vanityName'
     | '/checkout'
     | '/editor'
+    | '/editor-preview'
     | '/setup'
     | '/collection/$collectionId'
     | '/posts/$postId'
@@ -514,6 +525,7 @@ export interface FileRouteTypes {
     | '/_dashboard-layout'
     | '/checkout'
     | '/editor'
+    | '/editor-preview'
     | '/setup'
     | '/collection/$collectionId'
     | '/posts/$postId'
@@ -559,6 +571,7 @@ export interface RootRouteChildren {
   DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
   CheckoutRoute: typeof CheckoutRoute
   EditorRoute: typeof EditorRoute
+  EditorPreviewRoute: typeof EditorPreviewRoute
   SetupRoute: typeof SetupRoute
   CollectionCollectionIdRoute: typeof CollectionCollectionIdRoute
   PostsPostIdRoute: typeof PostsPostIdRoute
@@ -578,6 +591,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor-preview': {
+      id: '/editor-preview'
+      path: '/editor-preview'
+      fullPath: '/editor-preview'
+      preLoaderRoute: typeof EditorPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/editor': {
@@ -1001,6 +1021,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
   CheckoutRoute: CheckoutRoute,
   EditorRoute: EditorRoute,
+  EditorPreviewRoute: EditorPreviewRoute,
   SetupRoute: SetupRoute,
   CollectionCollectionIdRoute: CollectionCollectionIdRoute,
   PostsPostIdRoute: PostsPostIdRoute,
