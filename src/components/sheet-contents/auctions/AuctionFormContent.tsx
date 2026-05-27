@@ -1593,6 +1593,11 @@ export function AuctionFormContent() {
 		if (nextIndex < TAB_ORDER.length) setActiveTab(TAB_ORDER[nextIndex])
 	}
 
+	const handleBack = () => {
+		const prevIndex = currentTabIndex - 1
+		if (prevIndex >= 0) setActiveTab(TAB_ORDER[prevIndex])
+	}
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
@@ -1688,13 +1693,18 @@ export function AuctionFormContent() {
 				</Tabs>
 			</div>
 
-			<div className="bg-white border-t pt-4 pb-2 mt-2">
+			<div className="bg-white border-t pt-4 pb-2 mt-2 flex gap-2">
+				{currentTabIndex > 0 && (
+					<Button type="button" variant="outline" className="flex-1 uppercase" onClick={handleBack}>
+						Back
+					</Button>
+				)}
 				{isLastTab ? (
-					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
+					<Button type="submit" variant="secondary" className="flex-1 uppercase" disabled={!canSubmit || publishMutation.isPending}>
 						{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
 					</Button>
 				) : (
-					<Button type="button" variant="secondary" className="w-full uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
+					<Button type="button" variant="secondary" className="flex-1 uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
 						Next
 					</Button>
 				)}
