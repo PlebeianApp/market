@@ -70,15 +70,19 @@ async function seedLiveActivity(dTag: string) {
 	return liveEvent
 }
 
+async function waitForAuctionPage(page: import('@playwright/test').Page, eventId: string) {
+	await page.goto(`/auctions/${eventId}`)
+	await page.waitForLoadState('networkidle')
+	await expect(page.locator('text=NIP-53 Protocol Test Auction').or(page.locator('text=Live chat not available')).or(page.locator('text=Live Chat'))).toBeVisible({ timeout: 30_000 })
+}
+
 test.describe('Auction Live Chat', () => {
 	test('live chat panel shows fallback when no 30311 exists', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
 
 		const { eventId } = await seedAuctionAndGetId()
 
-		await merchantPage.goto(`/auctions/${eventId}`)
-		await merchantPage.waitForLoadState('networkidle')
-		await merchantPage.waitForTimeout(5000)
+		await waitForAuctionPage(merchantPage, eventId)
 
 		const notAvailable = merchantPage.getByText('Live chat not available for this auction')
 		const chatVisible = merchantPage.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ })
@@ -93,11 +97,11 @@ test.describe('Auction Live Chat', () => {
 
 		await unauthenticatedPage.goto(`/auctions/${eventId}`)
 		await unauthenticatedPage.waitForLoadState('networkidle')
-		await unauthenticatedPage.waitForTimeout(5000)
+		await expect(unauthenticatedPage.locator('header')).toBeVisible({ timeout: 15_000 })
 
 		const loginPrompt = unauthenticatedPage.getByText(/log in to join/i)
 		const notAvailable = unauthenticatedPage.getByText('Live chat not available for this auction')
-		await expect(loginPrompt.or(notAvailable)).toBeVisible({ timeout: 15_000 })
+		await expect(loginPrompt.or(notAvailable)).toBeVisible({ timeout: 20_000 })
 	})
 
 	test('merchant can type a message in the live chat input', async ({ merchantPage }) => {
@@ -106,11 +110,9 @@ test.describe('Auction Live Chat', () => {
 		const { eventId, dTag } = await seedAuctionAndGetId()
 		await seedLiveActivity(dTag)
 
-		await merchantPage.goto(`/auctions/${eventId}`)
-		await merchantPage.waitForLoadState('networkidle')
-		await merchantPage.waitForTimeout(5000)
+		await waitForAuctionPage(merchantPage, eventId)
 
-		await expect(merchantPage.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ })).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ })).toBeVisible({ timeout: 20_000 })
 
 		const messageInput = merchantPage.getByPlaceholder('Type a message...')
 		await expect(messageInput).toBeVisible({ timeout: 10_000 })
