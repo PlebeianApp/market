@@ -1163,10 +1163,7 @@ function AuctionTabContent({
 			{showBidLadder && (
 				<div ref={bidLadderRef}>
 					<Collapsible open={openSection === 'bidLadder'} onOpenChange={toggle('bidLadder')}>
-						<CollapsibleTrigger
-							onFocus={() => open('bidLadder')}
-							className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-						>
+						<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 							Bid Ladder
 							<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'bidLadder' ? 'rotate-180' : ''}`} />
 						</CollapsibleTrigger>
@@ -1179,10 +1176,7 @@ function AuctionTabContent({
 
 			<div ref={antiSnipeRef}>
 				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
-					<CollapsibleTrigger
-						onFocus={() => open('antiSnipe')}
-						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-					>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Anti-snipe &amp; Curve Settings
 						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
@@ -1204,10 +1198,7 @@ function AuctionTabContent({
 
 			<div ref={settlementGraceRef}>
 				<Collapsible open={openSection === 'settlementGrace'} onOpenChange={toggle('settlementGrace')}>
-					<CollapsibleTrigger
-						onFocus={() => open('settlementGrace')}
-						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-					>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Settlement Grace
 						<ChevronDown
 							className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
@@ -1221,10 +1212,7 @@ function AuctionTabContent({
 
 			<div ref={trustedMintsRef}>
 				<Collapsible open={openSection === 'trustedMints'} onOpenChange={toggle('trustedMints')}>
-					<CollapsibleTrigger
-						onFocus={() => open('trustedMints')}
-						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-					>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Trusted Mints
 						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
@@ -1284,10 +1272,7 @@ function AuctionTabContent({
 
 			<div ref={oracleRef}>
 				<Collapsible open={openSection === 'oracle'} onOpenChange={toggle('oracle')}>
-					<CollapsibleTrigger
-						onFocus={() => open('oracle')}
-						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-					>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Auction Oracle
 						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'oracle' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
