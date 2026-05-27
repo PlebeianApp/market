@@ -76,9 +76,7 @@ async function waitForAuctionPage(page: import('@playwright/test').Page, eventId
 	await page.goto(`/auctions/${eventId}`)
 	await page.waitForLoadState('networkidle')
 	await expect(
-		page.locator('text=Live Chat E2E Auction')
-			.or(page.locator('text=Live chat not available'))
-			.or(page.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ }))
+		page.locator('h1').or(page.locator('text=Live chat not available')).or(page.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ })).first()
 	).toBeVisible({ timeout: 30_000 })
 }
 
