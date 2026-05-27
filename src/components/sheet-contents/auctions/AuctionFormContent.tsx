@@ -850,19 +850,23 @@ function useOpenOnVisible(onVisible: () => void) {
 	callbackRef.current = onVisible
 	const ref = useRef<HTMLDivElement>(null)
 	useEffect(() => {
-		const el = ref.current
-		if (!el) return
-		const observer = new IntersectionObserver(
-			([entry]) => {
-				if (entry.isIntersecting) {
-					callbackRef.current()
-					observer.disconnect()
-				}
-			},
-			{ threshold: 0.15 },
-		)
-		observer.observe(el)
-		return () => observer.disconnect()
+		// Delay observer attachment so elements visible during the sheet's
+		// open animation don't auto-expand immediately.
+		const timer = setTimeout(() => {
+			const el = ref.current
+			if (!el) return
+			const observer = new IntersectionObserver(
+				([entry]) => {
+					if (entry.isIntersecting) {
+						callbackRef.current()
+						observer.disconnect()
+					}
+				},
+				{ threshold: 0.15 },
+			)
+			observer.observe(el)
+		}, 600)
+		return () => clearTimeout(timer)
 	}, [])
 	return ref
 }
