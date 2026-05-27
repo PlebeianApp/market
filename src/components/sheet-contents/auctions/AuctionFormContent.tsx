@@ -1639,9 +1639,17 @@ export function AuctionFormContent() {
 				return missingLabels(['title', 'description'])
 			case 'auction':
 				return missingLabels([
-					'startingBid', 'bidIncrement', 'reserve', 'startAt', 'endAt',
-					'duration', 'antiSnipeWindowMinutes', 'minBidCurveShape',
-					'minBidCurvePeakMultiplier', 'settlementGracePreset', 'trustedMints',
+					'startingBid',
+					'bidIncrement',
+					'reserve',
+					'startAt',
+					'endAt',
+					'duration',
+					'antiSnipeWindowMinutes',
+					'minBidCurveShape',
+					'minBidCurvePeakMultiplier',
+					'settlementGracePreset',
+					'trustedMints',
 				])
 			case 'images':
 				return missingLabels(['imageUrls'])
@@ -1764,17 +1772,35 @@ export function AuctionFormContent() {
 				)}
 				<div className="flex gap-2">
 					{currentTabIndex > 0 && (
-						<Button type="button" variant="ghost" className="flex-1 uppercase border border-input bg-white hover:bg-white" onClick={handleBack}>
+						<Button
+							type="button"
+							variant="ghost"
+							className="flex-1 uppercase border border-input bg-white hover:bg-white"
+							onClick={handleBack}
+						>
 							<ArrowLeft className="w-4 h-4" />
 							Back
 						</Button>
 					)}
 					{isLastTab ? (
-						<Button type="submit" variant="secondary" className="flex-1 uppercase" disabled={!canSubmit || publishMutation.isPending}>
+						<Button
+							key="publish"
+							type="submit"
+							variant="secondary"
+							className="flex-1 uppercase"
+							disabled={!canSubmit || publishMutation.isPending}
+						>
 							{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
 						</Button>
 					) : (
-						<Button type="button" variant="secondary" className="flex-1 uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
+						<Button
+							key="next"
+							type="button"
+							variant="secondary"
+							className="flex-1 uppercase"
+							onClick={handleNext}
+							disabled={!tabValid[activeTab]}
+						>
 							Next
 						</Button>
 					)}
