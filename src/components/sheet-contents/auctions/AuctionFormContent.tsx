@@ -929,6 +929,8 @@ function AuctionTabContent({
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
 	const reserveNum = parseInt(formData.reserve ?? '0', 10)
+	const showBidLadder =
+		formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0 && !isNaN(reserveNum)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -1158,20 +1160,22 @@ function AuctionTabContent({
 				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 			</div>
 
-			<div ref={bidLadderRef}>
-				<Collapsible open={openSection === 'bidLadder'} onOpenChange={toggle('bidLadder')}>
-					<CollapsibleTrigger
-						onFocus={() => open('bidLadder')}
-						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-					>
-						Bid Ladder
-						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'bidLadder' ? 'rotate-180' : ''}`} />
-					</CollapsibleTrigger>
-					<CollapsibleContent className="mt-2">
-						<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
-					</CollapsibleContent>
-				</Collapsible>
-			</div>
+			{showBidLadder && (
+				<div ref={bidLadderRef}>
+					<Collapsible open={openSection === 'bidLadder'} onOpenChange={toggle('bidLadder')}>
+						<CollapsibleTrigger
+							onFocus={() => open('bidLadder')}
+							className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+						>
+							Bid Ladder
+							<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'bidLadder' ? 'rotate-180' : ''}`} />
+						</CollapsibleTrigger>
+						<CollapsibleContent className="mt-2">
+							<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
+						</CollapsibleContent>
+					</Collapsible>
+				</div>
+			)}
 
 			<div ref={antiSnipeRef}>
 				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
@@ -1180,7 +1184,7 @@ function AuctionTabContent({
 						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
 					>
 						Anti-snipe &amp; Curve Settings
-						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
 					<CollapsibleContent className="mt-2">
 						<AntiSnipeCurveSettings
@@ -1206,7 +1210,7 @@ function AuctionTabContent({
 					>
 						Settlement Grace
 						<ChevronDown
-							className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
+							className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
 						/>
 					</CollapsibleTrigger>
 					<CollapsibleContent className="mt-2">
@@ -1222,7 +1226,7 @@ function AuctionTabContent({
 						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
 					>
 						Trusted Mints
-						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
 					<CollapsibleContent className="mt-2">
 						<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
@@ -1285,7 +1289,7 @@ function AuctionTabContent({
 						className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
 					>
 						Auction Oracle
-						<ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${openSection === 'oracle' ? 'rotate-180' : ''}`} />
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'oracle' ? 'rotate-180' : ''}`} />
 					</CollapsibleTrigger>
 					<CollapsibleContent className="mt-2">
 						<AuctionOracleSelector formData={formData} setFormData={setFormData} />
