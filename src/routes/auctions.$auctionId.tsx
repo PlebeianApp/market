@@ -781,7 +781,6 @@ function AuctionDetailRoute() {
 											</ul>
 										</div>
 									)}
-									</div>
 								</div>
 							</div>
 						</TabsContent>

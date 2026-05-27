@@ -73,7 +73,9 @@ async function seedLiveActivity(dTag: string) {
 async function waitForAuctionPage(page: import('@playwright/test').Page, eventId: string) {
 	await page.goto(`/auctions/${eventId}`)
 	await page.waitForLoadState('networkidle')
-	await expect(page.locator('text=NIP-53 Protocol Test Auction').or(page.locator('text=Live chat not available')).or(page.locator('text=Live Chat'))).toBeVisible({ timeout: 30_000 })
+	await expect(
+		page.locator('h1').or(page.locator('text=Live chat not available')).or(page.locator('span.text-sm.font-medium', { hasText: /^Live Chat$/ })).first()
+	).toBeVisible({ timeout: 30_000 })
 }
 
 test.describe('Auction Live Chat', () => {
