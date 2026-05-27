@@ -349,6 +349,17 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 	}
 }
 
+const primeDevTestMintDepositWalletCache = async (wallet: NDKCashuWallet, targetMint: string): Promise<void> => {
+	const normalizedTargetMint = normalizeMintUrl(targetMint)
+
+	if (!isNip60WalletDevModeEnabled()) return
+	if (!NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint)) return
+	if (wallet.cashuWallets.has(normalizedTargetMint)) return
+
+	const { cashuWallet } = await createCashuWalletForMint(normalizedTargetMint)
+	wallet.cashuWallets.set(normalizedTargetMint, cashuWallet)
+}
+
 const consolidateMintProofs = async (wallet: NDKCashuWallet, mint: string): Promise<void> => {
 	const allProofs = wallet.state.getProofs({ mint, includeDeleted: true, onlyAvailable: false })
 	if (allProofs.length === 0) return
@@ -1330,7 +1341,7 @@ export const nip60Actions = {
 			return null
 		}
 
-		const targetMint = mint ?? state.defaultMint
+		const targetMint = mint ? normalizeMintUrl(mint) : state.defaultMint ? normalizeMintUrl(state.defaultMint) : null
 		if (!targetMint) {
 			console.warn('[nip60] No mint specified and no default mint set')
 			nip60Store.setState((s) => ({
@@ -1352,6 +1363,8 @@ export const nip60Actions = {
 				depositStatus: 'pending',
 				error: null,
 			}))
+
+			await primeDevTestMintDepositWalletCache(wallet, targetMint)
 
 			const deposit = wallet.deposit(amount, targetMint)
 			const invoice = await deposit.start()
