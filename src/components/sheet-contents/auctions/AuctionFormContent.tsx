@@ -1689,18 +1689,12 @@ export function AuctionFormContent() {
 			</div>
 
 			<div className="bg-white border-t pt-4 pb-2 mt-2">
-				{canSubmit ? (
-					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={publishMutation.isPending}>
+				{isLastTab ? (
+					<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
 						{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
 					</Button>
 				) : (
-					<Button
-						type="button"
-						variant="secondary"
-						className="w-full uppercase"
-						onClick={handleNext}
-						disabled={isLastTab || !tabValid[activeTab]}
-					>
+					<Button type="button" variant="secondary" className="w-full uppercase" onClick={handleNext} disabled={!tabValid[activeTab]}>
 						Next
 					</Button>
 				)}
