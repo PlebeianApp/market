@@ -34,7 +34,7 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({ field, value = fal
 				/>
 			</div>
 			<div className="flex-1">
-				<FieldLabel label={field.label} htmlFor={inputId} />
+				<FieldLabel label={field.label ?? ''} />
 				{field.description && <p className="text-sm text-gray-500 mt-1">{field.description}</p>}
 			</div>
 		</div>

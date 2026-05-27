@@ -1,8 +1,10 @@
 import React from 'react'
 import type { CMSProductGridItem } from './CMSProductGridOld'
 
-export interface ProductGridProps {
-	productIds: string[]
+export interface ProductGridBaseProps {
+	items: CMSProductGridItem[]
+	loading: boolean
+	error?: string
 	columnsDesktop?: number
 	columnsTablet?: number
 	columnsMobile?: number
@@ -10,15 +12,27 @@ export interface ProductGridProps {
 	showVendor?: boolean
 }
 
-export const ProductGrid: React.FC<ProductGridProps> = ({
-	productIds,
+export const ProductGridBase: React.FC<ProductGridBaseProps> = ({
+	items,
+	loading = false,
+	error = undefined,
 	columnsDesktop = 3,
 	columnsTablet = 2,
 	columnsMobile = 1,
 	showQuickAdd = true,
 	showVendor = true,
 }) => {
-	const products: CMSProductGridItem[] = []
+	if (loading) {
+		return <div className="py-12 text-center">Loading products...</div>
+	}
+
+	if (error) {
+		return <div className="py-12 text-center">{error}</div>
+	}
+
+	if (items.length === 0) {
+		return <div className="py-12 text-center text-gray-500">No products found matching your criteria.</div>
+	}
 
 	const gridCols = `
     grid-cols-${columnsMobile} 
@@ -29,7 +43,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 	return (
 		<div className="py-12 px-6 max-w-7xl mx-auto">
 			<div className={`grid gap-8 ${gridCols}`}>
-				{products.map((product) => (
+				{items.map((product) => (
 					<div
 						key={product.id}
 						className="group relative bg-white rounded-lg shadow-sm hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-100"
@@ -37,13 +51,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 						{/* Badge */}
 
 						{/*product.badge && (
-							<div
-								className="absolute top-3 left-3 z-10 px-3 py-1 text-xs font-bold text-white rounded-full"
-								style={{ backgroundColor: product.badgeColor || '#ef4444' }}
-							>
-								{product.badge}
-							</div>
-						)*/}
+                            <div
+                                className="absolute top-3 left-3 z-10 px-3 py-1 text-xs font-bold text-white rounded-full"
+                                style={{ backgroundColor: product.badgeColor || '#ef4444' }}
+                            >
+                                {product.badge}
+                            </div>
+                        )*/}
 
 						{/* Image */}
 						<div className="relative aspect-square overflow-hidden bg-gray-100">
