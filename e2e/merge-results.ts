@@ -26,8 +26,8 @@ interface Spec {
 
 interface Suite {
 	title: string
-	specs: Spec[]
-	suites: Suite[]
+	specs?: Spec[]
+	suites?: Suite[]
 }
 
 interface Results {
@@ -39,16 +39,16 @@ function specKey(spec: Spec): string {
 }
 
 function buildRerunMap(suite: Suite, map: Map<string, Spec>): void {
-	for (const spec of suite.specs) {
+	for (const spec of suite.specs || []) {
 		map.set(specKey(spec), spec)
 	}
-	for (const child of suite.suites) {
+	for (const child of suite.suites || []) {
 		buildRerunMap(child, map)
 	}
 }
 
 function mergeSuite(suite: Suite, rerunMap: Map<string, Spec>): Suite {
-	const mergedSpecs = suite.specs.map((spec) => {
+	const mergedSpecs = (suite.specs || []).map((spec) => {
 		const rerunSpec = rerunMap.get(specKey(spec))
 		if (rerunSpec) {
 			return rerunSpec
@@ -56,7 +56,7 @@ function mergeSuite(suite: Suite, rerunMap: Map<string, Spec>): Suite {
 		return spec
 	})
 
-	const mergedSuites = suite.suites.map((child) => mergeSuite(child, rerunMap))
+	const mergedSuites = (suite.suites || []).map((child) => mergeSuite(child, rerunMap))
 
 	return { ...suite, specs: mergedSpecs, suites: mergedSuites }
 }
