@@ -90,11 +90,17 @@ Merges first-pass (`test-results/results.json`) + re-run (`test-results/rerun-re
 
 ## Checklist
 
-- [ ] 1. Checkout `feat/nip53-auction-live-chat` branch and verify sync
-- [ ] 2. Update `e2e/playwright.config.ts` with env var overrides
-- [ ] 3. Create `e2e/extract-failures.ts`
-- [ ] 4. Create `e2e/merge-results.ts`
-- [ ] 5. Rewrite `.github/workflows/e2e.yml` with sharding + conditional re-run
-- [ ] 6. Run Prettier / formatting on all changed files
-- [ ] 7. Commit and push to fork
-- [ ] 8. Trigger workflow and verify
+- [x] 1. Checkout `feat/nip53-auction-live-chat` branch and verify sync
+- [x] 2. Update `e2e/playwright.config.ts` with env var overrides
+- [x] 3. Create `e2e/extract-failures.ts`
+- [x] 4. Create `e2e/merge-results.ts`
+- [x] 5. Rewrite `.github/workflows/e2e.yml` with sharding + conditional re-run
+- [x] 6. Run Prettier / formatting on all changed files
+- [x] 7. Commit and push to fork
+- [ ] 8. Trigger workflow and verify (run 26580092779 in progress)
+
+## Bug Fixes (found during CI validation)
+
+- [x] Fix `e2e-report` running when `e2e-shard` was skipped (added `needs.e2e-shard.result != 'skipped'`)
+- [x] Fix `extract-failures.ts` crash on merged JSON — arrays can be undefined in merged results
+- [x] Fix `merge-results.ts` — Playwright clears `outputDir` on startup, destroying first-pass results. Backup to `/tmp/` before re-run
