@@ -11,13 +11,16 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	workers: 1,
-	reporter: process.env.CI ? 'github' : 'list',
+	reporter: process.env.CI
+		? [['json', { outputFile: path.join(PROJECT_ROOT, 'test-results', 'results.json') }], ['github']]
+		: 'list',
 	testMatch: /.*\.spec\.ts$/,
+	outputDir: path.join(PROJECT_ROOT, 'test-results'),
 
 	use: {
 		baseURL: BASE_URL,
 		trace: 'on-first-retry',
-		screenshot: 'only-on-failure',
+		screenshot: 'on',
 		video: 'retain-on-failure',
 	},
 
