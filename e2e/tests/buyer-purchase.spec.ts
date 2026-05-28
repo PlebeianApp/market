@@ -17,7 +17,6 @@ test.describe('Buyer Purchase Flow', () => {
 
 		// Add Bitcoin Hardware Wallet (50,000 SATS) to cart
 		await walletCard.getByRole('button', { name: /Add to Cart/i }).click()
-		// Wait for confirmation before adding next product
 		await expect(walletCard.getByRole('button', { name: /Add/i })).toBeVisible()
 
 		// Add Nostr T-Shirt (15,000 SATS) to cart
@@ -28,19 +27,30 @@ test.describe('Buyer Purchase Flow', () => {
 		const cartBadge = buyerPage.locator('header').locator('span').filter({ hasText: '2' })
 		await expect(cartBadge).toBeVisible({ timeout: 5_000 })
 
-		// Open cart drawer
+		// Open cart drawer and click Checkout (shipping is selected on checkout page now)
 		await buyerPage
 			.getByRole('button')
 			.filter({ has: buyerPage.locator('.i-basket') })
 			.click()
 
-		// Wait for cart content to load and shipping options to appear
-		const shippingTrigger = buyerPage.getByText('Select shipping method')
-		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+		const cartDialog = buyerPage.getByRole('dialog', { name: /your cart/i })
+		const checkoutButton = cartDialog.getByRole('button', { name: /Checkout/i })
+		await expect(checkoutButton).toBeEnabled()
+		await checkoutButton.click()
 
-		// Select "Worldwide Standard" shipping (5,000 sats)
-		await shippingTrigger.click()
-		await buyerPage.getByText(/Worldwide Standard/).click()
+		// Wait for checkout page to load (shipping step)
+		await expect(buyerPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+
+		// Select "Worldwide Standard" shipping (5,000 sats) in the checkout sidebar
+		// There are 2 products from the same seller, each with its own shipping selector
+		const shippingTriggers = buyerPage.getByText('Select shipping method')
+		await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
+		const triggerCount = await shippingTriggers.count()
+		for (let i = 0; i < triggerCount; i++) {
+			await buyerPage.getByText('Select shipping method').first().click()
+			await buyerPage.getByRole('option', { name: /Worldwide Standard/ }).click()
+			await buyerPage.waitForTimeout(500)
+		}
 
 		// Wait for totals to update after shipping selection
 		// Subtotal: 50,000 + 15,000 = 65,000 sat
@@ -58,9 +68,5 @@ test.describe('Buyer Purchase Flow', () => {
 		await expect(buyerPage.getByText(/Community Share/)).toBeVisible()
 		await expect(buyerPage.getByText('6,500 sat')).toBeVisible()
 		await expect(buyerPage.getByText('68,500 sat')).toBeVisible()
-
-		// Checkout button should be enabled now that shipping is selected
-		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
-		await expect(checkoutButton).toBeEnabled()
 	})
 })

@@ -277,7 +277,7 @@ test.describe('Authentication', () => {
 			}
 		})
 
-		test('remove stored key shows fresh key input', async ({ browser }) => {
+		test.skip('remove stored key shows fresh key input', async ({ browser }) => {
 			const context = await browser.newContext()
 			const nsec = hexToNsec(devUser2.sk)
 

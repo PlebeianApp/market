@@ -7,29 +7,20 @@ import type { Page } from '@playwright/test'
 
 test.use({ scenario: 'merchant' })
 
-/**
- * Helper: find a specific product by name, add to cart, and open the cart.
- */
 async function addProductAndOpenCart(page: Page, productName: string) {
 	await page.goto('/products')
 
-	// Find the specific product card by name
 	const productCard = page.locator('[data-testid="product-card"]').filter({ hasText: productName })
 	await expect(productCard).toBeVisible({ timeout: 15_000 })
 	await productCard.getByRole('button', { name: /Add to Cart/i }).click()
 	await expect(productCard.getByRole('button', { name: /Add/i })).toBeVisible()
 
-	// Open cart
 	await page
 		.getByRole('button')
 		.filter({ has: page.locator('.i-basket') })
 		.click()
 }
 
-/**
- * Helper: dismiss persistent Sonner toast notifications that may overlay buttons.
- * The "Could not load wallets" error toast appears because the test buyer has no NWC wallet.
- */
 async function dismissToasts(page: Page) {
 	await page.evaluate(() => {
 		document.querySelectorAll('[data-sonner-toast]').forEach((el) => el.remove())
@@ -46,13 +37,20 @@ test.describe('Shipping Special Cases', () => {
 		// ─── 1. Add digital-only product to cart ──────────────────────
 		await addProductAndOpenCart(buyerPage, 'Bitcoin E-Book')
 
-		// Shipping should auto-select "Digital Delivery" (only option)
-		await expect(buyerPage.getByText(/Digital Delivery/)).toBeVisible({ timeout: 10_000 })
+		// Cart shows "Select shipping at checkout" per item (shipping deferred to checkout page)
+		await expect(buyerPage.getByText('Select shipping at checkout', { exact: true })).toBeVisible({ timeout: 10_000 })
 
 		// Proceed to checkout
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()
+
+		// Wait for checkout page to load
+		await expect(buyerPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+
+		// Auto-selection happens in checkout sidebar (single "Digital Delivery" option)
+		// Verify the shipping selector shows Digital Delivery in the sidebar
+		await expect(buyerPage.getByRole('combobox')).toContainText('Digital Delivery', { timeout: 10_000 })
 
 		// ─── 2. Verify digital delivery notification shown ────────────
 		const digitalNotification = buyerPage.locator('.bg-purple-50')
@@ -92,7 +90,6 @@ test.describe('Shipping Special Cases', () => {
 		await expect(buyerPage.getByText('5000 sats')).toBeVisible({ timeout: 10_000 })
 		await expect(buyerPage.getByText('Bitcoin E-Book')).toBeVisible()
 
-		// Verify "Digital Delivery" heading appears on order detail (scoped to card title)
 		await expect(buyerPage.locator('[data-slot="card-title"]', { hasText: 'Digital Delivery' })).toBeVisible({ timeout: 10_000 })
 
 		// ─── 9. Relay verification ───────────────────────────────────
@@ -104,17 +101,14 @@ test.describe('Shipping Special Cases', () => {
 		const orderCreations = filterByTag(allKind16, 'type', '1')
 		expect(orderCreations.length).toBeGreaterThanOrEqual(1)
 
-		// Verify at least one order has an item referencing the e-book product
 		const ebookOrder = orderCreations.find((e) => e.tags.some((t: string[]) => t[0] === 'item' && t[1]?.includes('bitcoin-e-book')))
 		expect(ebookOrder).toBeTruthy()
 
-		// Verify the order has a shipping tag referencing the digital-delivery option
 		if (ebookOrder) {
 			const shippingTag = ebookOrder.tags.find((t: string[]) => t[0] === 'shipping')
 			expect(shippingTag).toBeTruthy()
 			expect(shippingTag?.[1]).toContain('digital-delivery')
 
-			// Digital orders should NOT have an address tag
 			const addressTag = ebookOrder.tags.find((t: string[]) => t[0] === 'address')
 			expect(addressTag).toBeFalsy()
 		}
@@ -127,20 +121,24 @@ test.describe('Shipping Special Cases', () => {
 		// ─── 1. Add pickup-only product to cart ──────────────────────
 		await addProductAndOpenCart(buyerPage, 'Bitcoin Conference Ticket')
 
-		// Shipping should auto-select "Local Pickup - Bitcoin Store" (only option)
-		await expect(buyerPage.getByText(/Local Pickup/)).toBeVisible({ timeout: 10_000 })
+		// Cart shows "Select shipping at checkout" per item (shipping deferred)
+		await expect(buyerPage.getByText('Select shipping at checkout', { exact: true })).toBeVisible({ timeout: 10_000 })
 
 		// Proceed to checkout
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()
 
+		// Wait for checkout page to load
+		await expect(buyerPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+
+		// Auto-selection happens in checkout sidebar (single "Local Pickup" option)
+		await expect(buyerPage.getByRole('combobox')).toContainText('Local Pickup', { timeout: 10_000 })
+
 		// ─── 2. Verify pickup notification shown ─────────────────────
 		await expect(buyerPage.getByText('Pickup Order')).toBeVisible({ timeout: 15_000 })
 		await expect(buyerPage.getByText('All items in your order are for pickup. No shipping address is required.')).toBeVisible()
 
-		// Verify pickup address is displayed in the notification
-		// (text also appears in the shipping selector, so scope to the notification container)
 		const pickupNotification = buyerPage.locator('.bg-blue-50')
 		await expect(pickupNotification.getByText('Local Pickup - Bitcoin Store')).toBeVisible()
 		await expect(pickupNotification.getByText('456 Satoshi Lane, Austin, TX, 78701, US')).toBeVisible()
@@ -178,10 +176,7 @@ test.describe('Shipping Special Cases', () => {
 		await expect(buyerPage.getByText('10000 sats')).toBeVisible({ timeout: 10_000 })
 		await expect(buyerPage.getByText('Bitcoin Conference Ticket')).toBeVisible()
 
-		// Verify "Pickup Information" heading appears on order detail
 		await expect(buyerPage.getByText('Pickup Information')).toBeVisible({ timeout: 10_000 })
-
-		// Verify no delivery address is shown (pickup orders don't send address)
 		await expect(buyerPage.getByText('Delivery Address')).not.toBeVisible()
 
 		// ─── 9. Relay verification ───────────────────────────────────
@@ -193,19 +188,16 @@ test.describe('Shipping Special Cases', () => {
 		const orderCreations = filterByTag(allKind16, 'type', '1')
 		expect(orderCreations.length).toBeGreaterThanOrEqual(1)
 
-		// Verify at least one order references the conference ticket product
 		const ticketOrder = orderCreations.find((e) =>
 			e.tags.some((t: string[]) => t[0] === 'item' && t[1]?.includes('bitcoin-conference-ticket')),
 		)
 		expect(ticketOrder).toBeTruthy()
 
 		if (ticketOrder) {
-			// Verify the order has a shipping tag referencing the pickup option
 			const shippingTag = ticketOrder.tags.find((t: string[]) => t[0] === 'shipping')
 			expect(shippingTag).toBeTruthy()
 			expect(shippingTag?.[1]).toContain('local-pickup---bitcoin-store')
 
-			// Verify pickup order does NOT have an address tag
 			const addressTag = ticketOrder.tags.find((t: string[]) => t[0] === 'address')
 			expect(addressTag).toBeFalsy()
 		}

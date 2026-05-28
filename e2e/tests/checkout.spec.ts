@@ -27,24 +27,23 @@ test.describe('Checkout', () => {
 		// Wait for cart confirmation (button text changes)
 		await expect(productCard.getByRole('button', { name: /Add/i })).toBeVisible()
 
-		// ─── 3. Open cart, select shipping, proceed to checkout ─────
+		// ─── 3. Open cart and proceed to checkout ──────────────────
 		await buyerPage
 			.getByRole('button')
 			.filter({ has: buyerPage.locator('.i-basket') })
 			.click()
 
-		const shippingTrigger = buyerPage.getByText('Select shipping method')
-		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
-		await shippingTrigger.click()
-		await buyerPage.getByText(/Worldwide Standard/).click()
-
-		// Wait for checkout button to be enabled (shipping selected)
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()
 
-		// ─── 4. Fill shipping form (step: shipping) ─────────────────
+		// ─── 3b. Select shipping on checkout page sidebar ──────────
 		await expect(buyerPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+
+		const shippingTrigger = buyerPage.getByText('Select shipping method')
+		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+		await shippingTrigger.click()
+		await buyerPage.getByRole('option', { name: /Worldwide Standard/ }).click()
 
 		// Required fields
 		await buyerPage.locator('#name').fill('E2E Test Buyer')
