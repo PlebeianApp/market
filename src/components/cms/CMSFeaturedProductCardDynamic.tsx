@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { CMSProductGridItem } from './CMSProductGridOld'
+import type { CMSProductGridItem } from './CMSProductGridItem'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { FeaturedProductCardBase } from './CMSFeaturedProductCardBase'
 

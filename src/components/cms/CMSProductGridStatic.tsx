@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
-import { ProductGrid } from './CMSProductGrid'
 import { ProductGridBase } from './CMSProductGridBase'
-import { CMSProductGridItem } from './CMSProductGridOld'
+import { CMSProductGridItem } from './CMSProductGridItem'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 // Define the simplified props for the dynamic grid

@@ -3,7 +3,6 @@ import { CustomFilterField } from '@/components/editor/CustomFilterField'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
 
 // Import the components we generated
-import { CMSProductGridOld } from '@/components/cms/CMSProductGridOld'
 import { CMSUserProfile } from '@/components/cms/CMSUserProfile'
 import { HeroBanner, type HeroBannerProps } from '@/components/cms/CMSHeroBanner'
 import { SplitFeature, type SplitFeatureProps } from '@/components/cms/CMSSplitFeature'
@@ -13,7 +12,6 @@ import { VideoEmbed, type VideoEmbedProps } from '@/components/cms/CMSVideoEmbed
 import { CheckboxField } from '@/components/editor/CheckboxField'
 import { ImageUploadField } from '@/components/editor/ImageUploadField'
 import { ProductGridDynamic, type ProductGridDynamicProps } from '@/components/cms/CMSProductGridDynamic'
-import { ProductGrid, type ProductGridProps } from '@/components/cms/CMSProductGrid'
 import { ProductGallery, type ProductGalleryProps } from '@/components/cms/CMSProductGallery'
 import { ArtistBio, type ArtistBioProps } from '@/components/cms/CMSArtistBio'
 import { FeaturedProductCardDynamic, type FeaturedProductCardDynamicProps } from '@/components/cms/CMSFeaturedProductCardDynamic'
@@ -189,6 +187,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 
 		ProductGridStatic: {
 			fields: {
+				title: { type: 'text', label: 'Section Title (Optional)' },
 				productIds: {
 					type: 'custom',
 					label: 'Product IDs',

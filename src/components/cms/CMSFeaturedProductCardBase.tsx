@@ -1,4 +1,4 @@
-import type { CMSProductGridItem } from './CMSProductGridOld'
+import type { CMSProductGridItem } from './CMSProductGridItem'
 
 export interface FeaturedProductCardBaseProps {
 	loading: boolean

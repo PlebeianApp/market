@@ -47,7 +47,7 @@ export const StringArrayField: React.FC<StringArrayFieldProps> = ({ field, value
 	}
 
 	return (
-		<FieldLabel label={field.label} description={field.description}>
+		<FieldLabel label={field.label ?? ''}>
 			<div className="space-y-3">
 				<div className="flex gap-2">
 					<Input

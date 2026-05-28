@@ -62,8 +62,7 @@ function EditorRouteComponent() {
 	}
 
 	return (
-		// CHANGED: Added 'overflow-hidden' to prevent double scrolling
-		<div className="flex flex-col h-screen overflow-hidden">
+		<div className="flex flex-col h-screen">
 			{/* Optional Header for Controls */}
 			<header className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-900 flex-shrink-0">
 				<div className="flex items-center gap-4">
@@ -106,7 +105,7 @@ function EditorRouteComponent() {
 			</header>
 
 			{/* Puck Editor - Takes remaining height */}
-			<div className="flex-1 overflow-hidden">
+			<div className="flex-1">
 				<Puck config={config} data={data} onPublish={handlePublish} />
 			</div>
 		</div>

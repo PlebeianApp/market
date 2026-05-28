@@ -31,7 +31,9 @@ export const ArtistBio: React.FC<ArtistBioProps> = ({ identifier, alignment = 'l
 	if (!profile) return <div>Artist not found.</div>
 
 	return (
-		<div className={`flex flex-col md:flex-row gap-6 ${alignment === 'center' ? 'items-center text-center' : 'items-start text-left'}`}>
+		<div
+			className={`flex flex-col md:flex-row mv-3 gap-6 ${alignment === 'center' ? 'items-center text-center' : 'items-start text-left'}`}
+		>
 			{profile.picture && (
 				<img src={profile.picture} alt={profile.name} className="w-32 h-32 rounded-full object-cover border-4 border-orange-500" />
 			)}

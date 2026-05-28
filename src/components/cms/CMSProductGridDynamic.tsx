@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
 import { ProductGridBase } from './CMSProductGridBase'
-import { CMSProductGridItem } from './CMSProductGridOld'
+import { CMSProductGridItem } from './CMSProductGridItem'
 
 // Define the simplified props for the dynamic grid
 export interface ProductGridDynamicProps {
