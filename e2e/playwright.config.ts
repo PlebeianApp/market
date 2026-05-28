@@ -5,22 +5,30 @@ import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-con
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+const reporterMode = process.env.PLAYWRIGHT_REPORTER || 'auto'
+const reporter: any =
+	reporterMode === 'blob'
+		? [['blob'], ['github']]
+		: reporterMode === 'json'
+			? [['json', { outputFile: path.join(PROJECT_ROOT, 'test-results', 'results.json') }], ['github']]
+			: process.env.CI
+				? 'github'
+				: 'list'
+
 export default defineConfig({
 	testDir: './tests',
 	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 2 : 0,
+	retries: process.env.PLAYWRIGHT_RETRIES !== undefined ? Number(process.env.PLAYWRIGHT_RETRIES) : process.env.CI ? 2 : 0,
 	workers: 1,
-	reporter: process.env.CI
-		? [['json', { outputFile: path.join(PROJECT_ROOT, 'test-results', 'results.json') }], ['github']]
-		: 'list',
+	reporter,
 	testMatch: /.*\.spec\.ts$/,
 	outputDir: path.join(PROJECT_ROOT, 'test-results'),
 
 	use: {
 		baseURL: BASE_URL,
 		trace: 'on-first-retry',
-		screenshot: 'on',
+		screenshot: (process.env.PLAYWRIGHT_SCREENSHOT || 'only-on-failure') as 'on' | 'only-on-failure' | 'off',
 		video: 'retain-on-failure',
 	},
 
