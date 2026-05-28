@@ -14,7 +14,7 @@ interface TestResult {
 
 interface TestEntry {
 	projectName: string
-	results: TestResult[]
+	results?: TestResult[]
 }
 
 interface Spec {
@@ -22,13 +22,13 @@ interface Spec {
 	file: string
 	line?: number
 	column?: number
-	tests: TestEntry[]
+	tests?: TestEntry[]
 }
 
 interface Suite {
 	title: string
-	specs: Spec[]
-	suites: Suite[]
+	specs?: Spec[]
+	suites?: Suite[]
 }
 
 interface Results {
@@ -39,15 +39,17 @@ function collectFailedTests(suite: Suite, ancestors: string[] = []): string[] {
 	const lines: string[] = []
 	const suitePath = [...ancestors, suite.title].filter(Boolean)
 
-	for (const spec of suite.specs) {
-		const hasFailure = spec.tests.some((t) => t.results.some((r) => ['failed', 'timedOut', 'interrupted'].includes(r.status)))
+	for (const spec of suite.specs || []) {
+		const hasFailure = (spec.tests || []).some((t) =>
+			(t.results || []).some((r) => ['failed', 'timedOut', 'interrupted'].includes(r.status)),
+		)
 		if (hasFailure) {
 			const parts = [spec.file, ...suitePath, spec.title].filter(Boolean)
 			lines.push(parts.join(' › '))
 		}
 	}
 
-	for (const child of suite.suites) {
+	for (const child of suite.suites || []) {
 		lines.push(...collectFailedTests(child, suitePath))
 	}
 
@@ -59,9 +61,9 @@ function collectStats(suite: Suite): { passed: number; failed: number; duration:
 	let failed = 0
 	let duration = 0
 
-	for (const spec of suite.specs) {
-		for (const test of spec.tests) {
-			for (const result of test.results) {
+	for (const spec of suite.specs || []) {
+		for (const test of spec.tests || []) {
+			for (const result of test.results || []) {
 				if (result.status === 'passed') passed++
 				else if (['failed', 'timedOut', 'interrupted'].includes(result.status)) failed++
 				duration += result.duration || 0
@@ -69,7 +71,7 @@ function collectStats(suite: Suite): { passed: number; failed: number; duration:
 		}
 	}
 
-	for (const child of suite.suites) {
+	for (const child of suite.suites || []) {
 		const childStats = collectStats(child)
 		passed += childStats.passed
 		failed += childStats.failed
