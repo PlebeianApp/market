@@ -111,6 +111,9 @@ jobs:
       - name: Run pricing E2E tests
         id: tests
         run: bun run test:e2e -- --grep 'Product Page - View Only'
+        env:
+          PLAYWRIGHT_SCREENSHOT: 'on'
+          PLAYWRIGHT_REPORTER: json
 
       - name: Show server logs on failure
         if: failure()
@@ -120,6 +123,11 @@ jobs:
           echo ""
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
+
+      - name: Extract test stats
+        if: ${{ !cancelled() }}
+        id: stats
+        run: bun e2e/extract-failures.ts
 
       - name: Render E2E dashboard
         if: ${{ !cancelled() }}
@@ -142,6 +150,9 @@ jobs:
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
           test-status: ${{ steps.tests.outcome }}
+          passed: ${{ steps.stats.outputs.passed }}
+          failed: ${{ steps.stats.outputs.failed }}
+          duration-ms: ${{ steps.stats.outputs.duration }}
 
       - name: Upload pricing test results
         uses: actions/upload-artifact@v4
@@ -151,13 +162,14 @@ jobs:
           path: test-results/
           retention-days: 7
 
-  e2e-full:
-    # Keep the broader inherited-flaky suite off the pricing PR path.
-    # It remains available for scheduled/manual comparison runs while the
-    # separate test-fix branch carries the inherited failure work.
+  e2e-shard:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout code
@@ -248,9 +260,14 @@ jobs:
           APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
           LOCAL_RELAY_ONLY: 'true'
 
-      - name: Run remaining E2E tests
-        id: tests
-        run: bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
+      - name: Run E2E tests (shard ${{ matrix.shard }}/3)
+        run: >
+          bun run test:e2e --
+          --grep-invert 'Product Page - View Only|Collection Management'
+          --shard ${{ matrix.shard }}/3
+        env:
+          PLAYWRIGHT_SCREENSHOT: only-on-failure
+          PLAYWRIGHT_REPORTER: blob
 
       - name: Show server logs on failure
         if: failure()
@@ -261,9 +278,75 @@ jobs:
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
 
-      - name: Render E2E dashboard
+      - name: Upload blob report
         if: ${{ !cancelled() }}
-        id: dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-shard-${{ matrix.shard }}
+          path: blob-report/
+          retention-days: 1
+
+  e2e-report:
+    needs: e2e-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      - name: Download shard reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-shard-*
+          merge-multiple: true
+
+      - name: Merge blob reports
+        run: |
+          mkdir -p test-results
+          PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/results.json \
+            npx playwright merge-reports --reporter json,list ./all-blob-reports
+
+      - name: Extract failed tests
+        id: failures
+        run: bun e2e/extract-failures.ts
+
+      - name: Render dashboard (green)
+        if: steps.failures.outputs.has_failures != 'true'
+        id: dashboard-green
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
         with:
           results-dir: test-results
@@ -271,21 +354,126 @@ jobs:
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
 
-      - name: Publish dashboard to nsite
-        if: ${{ !cancelled() }}
-        id: nsite
+      - name: Publish dashboard to nsite (green)
+        if: steps.failures.outputs.has_failures != 'true'
+        id: nsite-green
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/publish-nsite@main
         with:
-          dashboard-dir: ${{ steps.dashboard.outputs.dashboard-dir }}
+          dashboard-dir: ${{ steps.dashboard-green.outputs.dashboard-dir }}
           announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
           pr-number: ${{ github.event.pull_request.number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
-          test-status: ${{ steps.tests.outcome }}
+          test-status: passed
+          passed: ${{ steps.failures.outputs.passed }}
+          failed: ${{ steps.failures.outputs.failed }}
+          duration-ms: ${{ steps.failures.outputs.duration }}
 
-      - name: Upload full test results
+      - name: Upload merged results (green)
+        if: steps.failures.outputs.has_failures != 'true'
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        with:
+          name: test-results-full
+          path: test-results/
+          retention-days: 7
+
+      - name: Generate routes
+        if: steps.failures.outputs.has_failures == 'true'
+        run: bun run generate-routes
+
+      - name: Setup Go
+        if: steps.failures.outputs.has_failures == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22'
+
+      - name: Install nak
+        if: steps.failures.outputs.has_failures == 'true'
+        run: |
+          git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
+          cd /tmp/nak
+          GOBIN="$(go env GOPATH)/bin"
+          mkdir -p "$GOBIN"
+          go build -o "$GOBIN/nak" .
+
+      - name: Start relay
+        if: steps.failures.outputs.has_failures == 'true'
+        run: |
+          nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+          for i in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
+              echo "Relay is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Relay failed to start"
+          cat /tmp/relay.log
+          exit 1
+
+      - name: Seed relay and start dev server
+        if: steps.failures.outputs.has_failures == 'true'
+        run: |
+          bun e2e/seed-relay.ts
+          nohup bun dev > /tmp/devserver.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:34567/api/config > /dev/null 2>&1; then
+              echo "Dev server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Dev server failed to start"
+          cat /tmp/devserver.log
+          exit 1
+        env:
+          NODE_ENV: test
+          PORT: '34567'
+          APP_RELAY_URL: ws://localhost:10547
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+          LOCAL_RELAY_ONLY: 'true'
+
+      - name: Re-run failed tests with screenshots
+        if: steps.failures.outputs.has_failures == 'true'
+        run: bun run test:e2e -- --test-list failed-tests.txt
+        env:
+          PLAYWRIGHT_SCREENSHOT: 'on'
+          PLAYWRIGHT_REPORTER: json
+          PLAYWRIGHT_RETRIES: 0
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/rerun-results.json
+
+      - name: Merge first-pass and re-run results
+        if: steps.failures.outputs.has_failures == 'true'
+        run: bun e2e/merge-results.ts
+
+      - name: Render dashboard (red)
+        if: steps.failures.outputs.has_failures == 'true'
+        id: dashboard-red
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
+        with:
+          results-dir: test-results
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+
+      - name: Publish dashboard to nsite (red)
+        if: steps.failures.outputs.has_failures == 'true'
+        id: nsite-red
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/publish-nsite@main
+        with:
+          dashboard-dir: ${{ steps.dashboard-red.outputs.dashboard-dir }}
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+          test-status: failed
+          passed: ${{ steps.failures.outputs.passed }}
+          failed: ${{ steps.failures.outputs.failed }}
+          duration-ms: ${{ steps.failures.outputs.duration }}
+
+      - name: Upload merged results (red)
+        if: steps.failures.outputs.has_failures == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-full
           path: test-results/
