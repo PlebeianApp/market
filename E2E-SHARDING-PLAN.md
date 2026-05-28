@@ -97,10 +97,18 @@ Merges first-pass (`test-results/results.json`) + re-run (`test-results/rerun-re
 - [x] 5. Rewrite `.github/workflows/e2e.yml` with sharding + conditional re-run
 - [x] 6. Run Prettier / formatting on all changed files
 - [x] 7. Commit and push to fork
-- [ ] 8. Trigger workflow and verify (run 26580092779 in progress)
+- [x] 8. Trigger workflow and verify (run 26583551369 — full pipeline validated)
 
 ## Bug Fixes (found during CI validation)
 
 - [x] Fix `e2e-report` running when `e2e-shard` was skipped (added `needs.e2e-shard.result != 'skipped'`)
 - [x] Fix `extract-failures.ts` crash on merged JSON — arrays can be undefined in merged results
 - [x] Fix `merge-results.ts` — Playwright clears `outputDir` on startup, destroying first-pass results. Backup to `/tmp/` before re-run
+- [x] Fix `merge-results.ts` — same defensive array handling as extract-failures
+
+## CI Validation Results (run 26583551369)
+
+- 3 shards completed in parallel (shard 3: 3m39s, shard 1: 6m27s, shard 2: 10m14s)
+- e2e-report job: merge ✓, extract failures ✓, re-run ✓, merge results ✓, render dashboard ✓
+- nsite publish failed (expected — Blossom/relay unreachable from GitHub Actions)
+- Pre-existing test failures: auth.spec.ts, cart.spec.ts, products.spec.ts, marketplace.spec.ts, buyer-purchase.spec.ts (not related to sharding)
