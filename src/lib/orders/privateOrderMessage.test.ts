@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getPublicKey, verifyEvent } from 'nostr-tools'
+import { getEventHash, getPublicKey, verifyEvent } from 'nostr-tools'
 import {
 	createEncryptedPrivateOrderMessage,
 	createPrivateOrderDetailsRumor,
@@ -75,6 +75,16 @@ function expectNoPii(value: unknown): void {
 	}
 }
 
+function canonicalRumorId(rumor: { pubkey: string; created_at: number; kind: number; tags: string[][]; content: string }): string {
+	return getEventHash({
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags,
+		content: rumor.content,
+	})
+}
+
 describe('private order message helper', () => {
 	test('creates valid Gamma-compatible unsigned kind 16/type=1 order details rumor', () => {
 		const buyer = keyPair()
@@ -87,6 +97,7 @@ describe('private order message helper', () => {
 		expect(rumor.pubkey).toBe(buyer.pubkey)
 		expect(rumor.created_at).toBe(CREATED_AT)
 		expect('sig' in rumor).toBe(false)
+		expect(rumor.id).toBe(canonicalRumorId(rumor))
 		expect(rumor.tags).toContainEqual(['p', seller.pubkey])
 		expect(rumor.tags).toContainEqual(['subject', 'order-info'])
 		expect(rumor.tags).toContainEqual(['type', '1'])
@@ -177,6 +188,15 @@ describe('private order message helper', () => {
 		const rumor = { ...createPrivateOrderDetailsRumor({ details, createdAt: CREATED_AT }), sig: '0'.repeat(128) }
 
 		expect(() => parsePrivateOrderDetailsRumor(rumor)).toThrow('Private order rumor must be unsigned')
+	})
+
+	test('private order parser rejects a rumor with an incorrect id', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const details = privateOrderDetails(buyer.pubkey, seller.pubkey)
+		const rumor = { ...createPrivateOrderDetailsRumor({ details, createdAt: CREATED_AT }), id: '0'.repeat(64) }
+
+		expect(() => parsePrivateOrderDetailsRumor(rumor)).toThrow('NIP-59 rumor id is invalid')
 	})
 
 	test('rejects mismatched seller pubkey', () => {

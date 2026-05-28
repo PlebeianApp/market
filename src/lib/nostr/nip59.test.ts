@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { finalizeEvent, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
+import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
-import { createNip59GiftWrap, NIP59_GIFT_WRAP_KIND, NIP59_SEAL_KIND, unwrapNip59GiftWrap, type UnsignedRumor } from './nip59'
+import {
+	createNip59GiftWrap,
+	NIP59_GIFT_WRAP_KIND,
+	NIP59_SEAL_KIND,
+	normalizeUnsignedRumorId,
+	unwrapNip59GiftWrap,
+	type UnsignedRumor,
+} from './nip59'
 
 const CREATED_AT = 1_700_000_000
 const PII_SENTINELS = [
@@ -36,6 +43,16 @@ function rumorFor(buyerPubkey: string): UnsignedRumor {
 		],
 		content: 'Satoshi Nakamoto buyer@example.com 123 Main Street Apt Secret Notes',
 	}
+}
+
+function canonicalRumorId(rumor: UnsignedRumor): string {
+	return getEventHash({
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags,
+		content: rumor.content,
+	})
 }
 
 function encryptForRecipient(plaintext: string, senderPrivateKey: Uint8Array, recipientPubkey: string): string {
@@ -81,7 +98,11 @@ describe('NIP-59 helper', () => {
 		const wrapper = keyPair()
 		const rumor = rumorFor(buyer.pubkey)
 
-		const { seal, giftWrap } = createNip59GiftWrap({
+		const {
+			rumor: normalizedRumor,
+			seal,
+			giftWrap,
+		} = createNip59GiftWrap({
 			rumor,
 			senderPrivateKey: buyer.privateKey,
 			recipientPubkey: seller.pubkey,
@@ -90,6 +111,8 @@ describe('NIP-59 helper', () => {
 		})
 
 		expect('sig' in rumor).toBe(false)
+		expect(rumor.id).toBeUndefined()
+		expect(normalizedRumor.id).toBe(canonicalRumorId(rumor))
 		expect(seal.kind).toBe(NIP59_SEAL_KIND)
 		expect(seal.tags).toEqual([])
 		expect(seal.pubkey).toBe(buyer.pubkey)
@@ -110,8 +133,92 @@ describe('NIP-59 helper', () => {
 		})
 
 		expect(unwrapped.seal.id).toBe(seal.id)
-		expect(unwrapped.rumor).toEqual(rumor)
+		expect(unwrapped.rumor).toEqual(normalizedRumor)
 		expect(unwrapped.seal.pubkey).toBe(unwrapped.rumor.pubkey)
+	})
+
+	test('accepts a rumor with a correct id', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const rumor = rumorFor(buyer.pubkey)
+		const rumorWithId = { ...rumor, id: canonicalRumorId(rumor) }
+
+		const { rumor: normalizedRumor } = createNip59GiftWrap({
+			rumor: rumorWithId,
+			senderPrivateKey: buyer.privateKey,
+			recipientPubkey: seller.pubkey,
+			createdAt: CREATED_AT,
+		})
+
+		expect(normalizedRumor).toEqual(rumorWithId)
+	})
+
+	test('normalizes a missing rumor id before encrypting the seal', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const rawRumor = rumorFor(buyer.pubkey)
+
+		const { rumor: normalizedRumor, giftWrap } = createNip59GiftWrap({
+			rumor: rawRumor,
+			senderPrivateKey: buyer.privateKey,
+			recipientPubkey: seller.pubkey,
+			createdAt: CREATED_AT,
+		})
+		const unwrapped = unwrapNip59GiftWrap({
+			giftWrap,
+			recipientPrivateKey: seller.privateKey,
+			expectedRecipientPubkey: seller.pubkey,
+			expectedSenderPubkey: buyer.pubkey,
+		})
+
+		expect(rawRumor.id).toBeUndefined()
+		expect(normalizedRumor.id).toBe(canonicalRumorId(rawRumor))
+		expect(unwrapped.rumor).toEqual(normalizedRumor)
+		expect(unwrapped.rumor).not.toEqual(rawRumor)
+	})
+
+	test('rejects a rumor with an incorrect id', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const invalidRumor = { ...rumorFor(buyer.pubkey), id: '0'.repeat(64) }
+
+		expect(() =>
+			createNip59GiftWrap({
+				rumor: invalidRumor,
+				senderPrivateKey: buyer.privateKey,
+				recipientPubkey: seller.pubkey,
+				createdAt: CREATED_AT,
+			}),
+		).toThrow('NIP-59 rumor id is invalid')
+	})
+
+	test('rejects decrypted rumor with an incorrect id', () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const wrapper = keyPair()
+		const invalidRumor = { ...rumorFor(buyer.pubkey), id: '0'.repeat(64) }
+		const seal = sealForRumor(invalidRumor, buyer.privateKey, seller.pubkey)
+		const giftWrap = giftWrapForSeal(seal, wrapper.privateKey, seller.pubkey)
+
+		expect(() =>
+			unwrapNip59GiftWrap({
+				giftWrap,
+				recipientPrivateKey: seller.privateKey,
+				expectedRecipientPubkey: seller.pubkey,
+				expectedSenderPubkey: buyer.pubkey,
+			}),
+		).toThrow('NIP-59 rumor id is invalid')
+	})
+
+	test('normalizes without mutating caller-owned rumor objects', () => {
+		const buyer = keyPair()
+		const rumor = rumorFor(buyer.pubkey)
+		const normalizedRumor = normalizeUnsignedRumorId(rumor)
+
+		expect(rumor.id).toBeUndefined()
+		expect(normalizedRumor.id).toBe(canonicalRumorId(rumor))
+		expect(normalizedRumor).not.toBe(rumor)
+		expect(normalizedRumor.tags).not.toBe(rumor.tags)
 	})
 
 	test('non-recipient cannot decrypt', () => {

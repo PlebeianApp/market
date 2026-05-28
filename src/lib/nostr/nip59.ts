@@ -1,4 +1,4 @@
-import { finalizeEvent, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
+import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
 
 export const NIP59_SEAL_KIND = 13
@@ -44,17 +44,17 @@ export type UnwrappedNip59GiftWrap = {
 export function createNip59GiftWrap(params: CreateNip59GiftWrapParams): Nip59GiftWrap {
 	const { rumor, senderPrivateKey, recipientPubkey, createdAt = unixNow() } = params
 	assertHexPubkey(recipientPubkey, 'recipient pubkey')
-	assertUnsignedRumor(rumor)
+	const normalizedRumor = normalizeUnsignedRumorId(rumor)
 
 	const senderPubkey = getPublicKey(senderPrivateKey)
-	if (rumor.pubkey !== senderPubkey) {
+	if (normalizedRumor.pubkey !== senderPubkey) {
 		throw new Error('NIP-59 rumor pubkey must match the sender key')
 	}
 
 	const seal = finalizeEvent(
 		{
 			kind: NIP59_SEAL_KIND,
-			content: encryptForRecipient(JSON.stringify(rumor), senderPrivateKey, recipientPubkey),
+			content: encryptForRecipient(JSON.stringify(normalizedRumor), senderPrivateKey, recipientPubkey),
 			created_at: createdAt,
 			tags: [],
 		},
@@ -72,7 +72,7 @@ export function createNip59GiftWrap(params: CreateNip59GiftWrapParams): Nip59Gif
 		wrapperPrivateKey,
 	)
 
-	return { rumor, seal, giftWrap }
+	return { rumor: normalizedRumor, seal, giftWrap }
 }
 
 export function unwrapNip59GiftWrap(params: UnwrapNip59GiftWrapParams): UnwrappedNip59GiftWrap {
@@ -102,6 +102,30 @@ export function unwrapNip59GiftWrap(params: UnwrapNip59GiftWrapParams): Unwrappe
 	}
 
 	return { seal, rumor }
+}
+
+export function normalizeUnsignedRumorId(rumor: unknown): UnsignedRumor {
+	assertUnsignedRumor(rumor)
+	const canonicalId = getEventHash({
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags,
+		content: rumor.content,
+	})
+
+	if (rumor.id && rumor.id !== canonicalId) {
+		throw new Error('NIP-59 rumor id is invalid')
+	}
+
+	return {
+		pubkey: rumor.pubkey,
+		created_at: rumor.created_at,
+		kind: rumor.kind,
+		tags: rumor.tags.map((tag) => [...tag]),
+		content: rumor.content,
+		id: canonicalId,
+	}
 }
 
 function unixNow(): number {
@@ -136,8 +160,7 @@ function parseEventJson(json: string, label: string): Event {
 
 function parseUnsignedRumorJson(json: string, label: string): UnsignedRumor {
 	const parsed = parseRecordJson(json, label)
-	assertUnsignedRumor(parsed)
-	return parsed
+	return normalizeUnsignedRumorId(parsed)
 }
 
 function parseRecordJson(json: string, label: string): Record<string, unknown> {

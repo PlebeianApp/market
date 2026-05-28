@@ -1,6 +1,6 @@
 import { getPublicKey } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
-import { createNip59GiftWrap, unwrapNip59GiftWrap, type UnsignedRumor } from '../nostr/nip59'
+import { createNip59GiftWrap, normalizeUnsignedRumorId, unwrapNip59GiftWrap, type UnsignedRumor } from '../nostr/nip59'
 
 const GAMMA_ORDER_KIND = 16
 const GAMMA_ORDER_CREATION_TYPE = '1'
@@ -86,13 +86,13 @@ export function createPrivateOrderDetailsRumor(params: CreatePrivateOrderDetails
 	const buyerPhone = normalizeOptionalText(details.delivery.phone)
 	if (buyerPhone) tags.push(['phone', buyerPhone])
 
-	return {
+	return normalizeUnsignedRumorId({
 		kind: GAMMA_ORDER_KIND,
 		pubkey: details.buyerPubkey,
 		created_at: createdAt,
 		tags,
 		content: details.orderNotes ?? '',
-	}
+	})
 }
 
 export function createEncryptedPrivateOrderMessage(
@@ -140,29 +140,31 @@ export function parsePrivateOrderDetailsRumor(
 	expected?: { expectedSellerPubkey?: string; expectedBuyerPubkey?: string },
 ): PrivateOrderDeliveryDetails {
 	assertUnsignedPrivateOrderRumor(rumor)
-	const buyerPubkey = rumor.pubkey
+	const normalizedRumor = normalizeUnsignedRumorId(rumor)
+	assertUnsignedPrivateOrderRumor(normalizedRumor)
+	const buyerPubkey = normalizedRumor.pubkey
 	if (expected?.expectedBuyerPubkey && buyerPubkey !== expected.expectedBuyerPubkey) {
 		throw new Error('Private order buyer pubkey mismatch')
 	}
 
-	const sellerPubkey = getSingleTagValue(rumor.tags, 'p')
+	const sellerPubkey = getSingleTagValue(normalizedRumor.tags, 'p')
 	if (!sellerPubkey || !isHexPubkey(sellerPubkey)) throw new Error('Private order seller pubkey is invalid')
 	if (expected?.expectedSellerPubkey && sellerPubkey !== expected.expectedSellerPubkey) {
 		throw new Error('Private order seller pubkey mismatch')
 	}
 
-	if (getSingleTagValue(rumor.tags, 'subject') !== GAMMA_ORDER_SUBJECT) throw new Error('Private order subject is invalid')
-	if (getSingleTagValue(rumor.tags, 'type') !== GAMMA_ORDER_CREATION_TYPE) throw new Error('Private order type is invalid')
+	if (getSingleTagValue(normalizedRumor.tags, 'subject') !== GAMMA_ORDER_SUBJECT) throw new Error('Private order subject is invalid')
+	if (getSingleTagValue(normalizedRumor.tags, 'type') !== GAMMA_ORDER_CREATION_TYPE) throw new Error('Private order type is invalid')
 
-	const orderId = getSingleTagValue(rumor.tags, 'order')
+	const orderId = getSingleTagValue(normalizedRumor.tags, 'order')
 	if (!orderId) throw new Error('Private order id is required')
 
-	const amount = getSingleTagValue(rumor.tags, 'amount')
+	const amount = getSingleTagValue(normalizedRumor.tags, 'amount')
 	if (!amount || !/^\d+$/.test(amount)) throw new Error('Private order amount is invalid')
 	const totalAmountSats = Number(amount)
 	if (!Number.isSafeInteger(totalAmountSats) || totalAmountSats <= 0) throw new Error('Private order amount is invalid')
 
-	const itemTags = rumor.tags.filter((tag) => tag[0] === 'item')
+	const itemTags = normalizedRumor.tags.filter((tag) => tag[0] === 'item')
 	if (itemTags.length === 0) throw new Error('Private order item is required')
 	const items = itemTags.map((tag) => {
 		const productRef = tag[1]
@@ -174,16 +176,16 @@ export function parsePrivateOrderDetailsRumor(
 		return { productRef, quantity }
 	})
 
-	const shippingRef = getSingleTagValue(rumor.tags, 'shipping')
+	const shippingRef = getSingleTagValue(normalizedRumor.tags, 'shipping')
 	if (shippingRef && !isAddressableRef(shippingRef, SHIPPING_REF_KIND, sellerPubkey)) {
 		throw new Error('Private order shipping ref is invalid')
 	}
 
 	const delivery = {
-		name: getSingleTagValue(rumor.tags, 'name'),
-		address: parseBuyerAddress(getSingleTagValue(rumor.tags, 'address')),
-		email: getSingleTagValue(rumor.tags, 'email'),
-		phone: getSingleTagValue(rumor.tags, 'phone'),
+		name: getSingleTagValue(normalizedRumor.tags, 'name'),
+		address: parseBuyerAddress(getSingleTagValue(normalizedRumor.tags, 'address')),
+		email: getSingleTagValue(normalizedRumor.tags, 'email'),
+		phone: getSingleTagValue(normalizedRumor.tags, 'phone'),
 	}
 
 	return {
@@ -194,7 +196,7 @@ export function parsePrivateOrderDetailsRumor(
 		shippingRef,
 		items,
 		delivery,
-		orderNotes: rumor.content,
+		orderNotes: normalizedRumor.content,
 	}
 }
 
