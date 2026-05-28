@@ -437,7 +437,9 @@ jobs:
 
       - name: Re-run failed tests with screenshots
         if: steps.failures.outputs.has_failures == 'true'
-        run: bun run test:e2e -- --test-list failed-tests.txt
+        run: |
+          cp test-results/results.json test-results/first-pass-results.json
+          bun run test:e2e -- --test-list failed-tests.txt
         env:
           PLAYWRIGHT_SCREENSHOT: 'on'
           PLAYWRIGHT_REPORTER: json
