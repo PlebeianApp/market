@@ -1,14 +1,16 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure'
 import { devUser1 } from './lib/fixtures'
-import { getEventHandler } from './server'
-import { serverPromise, type NostrMessage } from './index.tsx'
 
-describe('WebSocket Server', () => {
+const skipWsTests = !process.env.APP_RELAY_URL || !process.env.APP_PRIVATE_KEY
+
+describe.skipIf(skipWsTests)('WebSocket Server', () => {
 	const WS_URL = 'ws://localhost:3000'
 	const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 	let ws: any
+	let getEventHandler: typeof import('./server').getEventHandler
+	let serverPromise: Promise<any>
 
 	const waitForMessage = () => {
 		return new Promise<any>((resolve) => {
@@ -19,6 +21,10 @@ describe('WebSocket Server', () => {
 	}
 
 	beforeEach(async () => {
+		const serverMod = await import('./index.tsx')
+		const eventMod = await import('./server')
+		getEventHandler = eventMod.getEventHandler
+		serverPromise = serverMod.serverPromise
 		const server = await serverPromise
 		ws = new globalThis.WebSocket(WS_URL)
 		await new Promise((resolve) => ws.once('open', resolve))
@@ -42,7 +48,7 @@ describe('WebSocket Server', () => {
 			generateSecretKey(),
 		)
 
-		const testEvent: NostrMessage = ['EVENT', event]
+		const testEvent: [string, any] = ['EVENT', event]
 
 		const messagePromise = waitForMessage()
 		ws.send(JSON.stringify(testEvent))
@@ -73,7 +79,7 @@ describe('WebSocket Server', () => {
 			adminPrivateBytes,
 		)
 
-		const testEvent: NostrMessage = ['EVENT', event]
+		const testEvent: [string, any] = ['EVENT', event]
 
 		ws.send(JSON.stringify(testEvent))
 		const okResponse = await waitForMessage()

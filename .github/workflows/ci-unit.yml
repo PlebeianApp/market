@@ -6,8 +6,9 @@ on:
       - main
       - master
       - 'feature/**'
+      - 'auctions/**'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'auctions/**']
   workflow_dispatch:
 
 jobs:
