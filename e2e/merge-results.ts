@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const RESULTS_DIR = path.resolve(import.meta.dirname, '..', 'test-results')
-const FIRST_PASS = path.join(RESULTS_DIR, 'first-pass-results.json')
+const FIRST_PASS = '/tmp/first-pass-results.json'
 const RERUN = path.join(RESULTS_DIR, 'rerun-results.json')
 const OUTPUT = path.join(RESULTS_DIR, 'results.json')
 
