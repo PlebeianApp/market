@@ -9,6 +9,7 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
@@ -56,15 +57,17 @@ import {
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
+import { useProfileName } from '@/queries/profiles'
 import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Gavel, Trophy, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Check, Gavel, Landmark, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { UserCard } from '@/components/UserCard'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 
 function useHeroBackground(imageUrl: string, className: string) {
@@ -251,6 +254,8 @@ function AuctionDetailRoute() {
 		[activeUserPubkey, auction, bids, ended],
 	)
 
+	const { data: oracleName } = useProfileName(pathIssuerPubkey || '')
+
 	const sellerAuctionsQuery = useQuery({
 		...auctionsByPubkeyQueryOptions(auction?.pubkey || '', 20),
 		enabled: !!auction?.pubkey,
@@ -367,10 +372,62 @@ function AuctionDetailRoute() {
 						<div className="flex flex-col gap-2 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
 							<div className="flex items-center justify-between gap-4">
 								<h1 className="text-3xl font-semibold">{title}</h1>
-								<div className={`text-xs font-bold px-2 py-1 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
-									{ended ? 'ENDED' : 'LIVE'}
+								<div className="flex items-center gap-2 flex-shrink-0">
+									<div className={`flex items-center text-xs font-bold px-2 h-6 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
+										{ended ? 'ENDED' : 'LIVE'}
+									</div>
+									{trustedMints.length > 0 && (
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<div className="relative flex items-center text-white/80 bg-black/30 border border-white/20 rounded px-2 h-6 cursor-default">
+														<Landmark className="h-3 w-3 text-pink-400" />
+														<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-pink-500 text-[9px] font-bold leading-none text-white">
+															{trustedMints.length}
+														</span>
+													</div>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<p className="font-semibold mb-1">
+														{trustedMints.length} trusted {trustedMints.length === 1 ? 'mint' : 'mints'}
+													</p>
+													<ul className="list-disc pl-4 space-y-0.5">
+														{trustedMints.map((mint) => (
+															<li key={mint} className="text-xs opacity-80 break-all">
+																{mint}
+															</li>
+														))}
+													</ul>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
+									{pathIssuerPubkey && (
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<div className="relative cursor-default">
+														<div className="w-6 h-6 rounded-full overflow-hidden bg-white ring-1 ring-white/20">
+															<img src="/images/logo.svg" alt="Plebeian oracle" className="w-full h-full object-cover" />
+														</div>
+														<span className="absolute -bottom-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500">
+															<Check className="h-2 w-2 text-white stroke-[3]" />
+														</span>
+													</div>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">Oracle</p>
+													{oracleName && <p className="font-semibold">{oracleName}</p>}
+													<p className="text-xs opacity-70 font-mono break-all">{shortenHex(pathIssuerPubkey, 10, 8)}</p>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
 								</div>
 							</div>
+
+							<span>Posted by</span>
+							<UserCard pubkey={auction.pubkey} size="md" />
 
 							<div className="text-lg">{summary || 'No summary provided.'}</div>
 
