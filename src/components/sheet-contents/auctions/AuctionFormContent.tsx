@@ -1127,7 +1127,7 @@ function AuctionTabContent({
 					}}
 				/>
 				<Label htmlFor="use-reserve">Set Reserve Price</Label>
-				<InfoTooltip content="A reserve price sets a minimum bid amount that must be met for the auction to be successful. If the highest bid is below the reserve, the auction ends with no winner." />
+				<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve." />
 			</div>
 
 			{(!!formData.reserve || useReserve) && (
