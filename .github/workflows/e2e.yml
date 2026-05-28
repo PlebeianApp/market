@@ -9,6 +9,10 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   e2e-pricing:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
@@ -105,6 +109,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run pricing E2E tests
+        id: tests
         run: bun run test:e2e -- --grep 'Product Page - View Only'
 
       - name: Show server logs on failure
@@ -115,6 +120,28 @@ jobs:
           echo ""
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
+
+      - name: Render E2E dashboard
+        if: ${{ !cancelled() }}
+        id: dashboard
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
+        with:
+          results-dir: test-results
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+
+      - name: Publish dashboard to nsite
+        if: ${{ !cancelled() }}
+        id: nsite
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/publish-nsite@main
+        with:
+          dashboard-dir: ${{ steps.dashboard.outputs.dashboard-dir }}
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+          test-status: ${{ steps.tests.outcome }}
 
       - name: Upload pricing test results
         uses: actions/upload-artifact@v4
@@ -222,6 +249,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
+        id: tests
         run: bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
 
       - name: Show server logs on failure
@@ -232,6 +260,28 @@ jobs:
           echo ""
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
+
+      - name: Render E2E dashboard
+        if: ${{ !cancelled() }}
+        id: dashboard
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
+        with:
+          results-dir: test-results
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+
+      - name: Publish dashboard to nsite
+        if: ${{ !cancelled() }}
+        id: nsite
+        uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/publish-nsite@main
+        with:
+          dashboard-dir: ${{ steps.dashboard.outputs.dashboard-dir }}
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          commit: ${{ github.sha }}
+          test-status: ${{ steps.tests.outcome }}
 
       - name: Upload full test results
         uses: actions/upload-artifact@v4
