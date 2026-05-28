@@ -5,10 +5,8 @@ import { devUser1 } from '@/lib/fixtures'
 import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
 import { fetchProduct, getProductTitle, getProductDescription, getProductPrice, getProductImages } from '@/queries/products'
 
-const RELAY_URL = process.env.APP_RELAY_URL
-if (!RELAY_URL) {
-	throw new Error('APP_RELAY_URL is not set')
-}
+const RELAY_URL = process.env.APP_RELAY_URL || ''
+const skipIntegration = !RELAY_URL
 
 // Test product data
 const TEST_PRODUCT = {
@@ -25,7 +23,7 @@ const TEST_PRODUCT = {
 	categories: [{ key: 'cat1', name: 'Bitcoin Miners', checked: true }],
 }
 
-describe('Product Publishing', () => {
+describe.skipIf(skipIntegration)('Product Publishing', () => {
 	// Set up test environment
 	beforeEach(async () => {
 		// Initialize NDK with test relay
