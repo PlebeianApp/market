@@ -200,3 +200,220 @@ describe('publishOrderWithDependencies delivery contact guard', () => {
 		expect(order.tags.some((tag) => tag[0] === 'address' && tag[1].includes('123 Main Street'))).toBe(true)
 	})
 })
+
+describe('getPublicSellerShippingRef edge cases (tested through createOrder)', () => {
+	beforeEach(() => {
+		shippingServices = {}
+		publishedEvents.length = 0
+	})
+
+	test('rejects shipping ref with newline injection', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30406:seller:pickup\naddress:buyer@evil.com',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'injected notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping')).toBe(false)
+		expect(order.tags.some((tag) => tag[0] === 'address')).toBe(false)
+		expect(order.tags.some((tag) => tag[0] === 'email')).toBe(false)
+		expect(order.tags.some((tag) => tag[0] === 'phone')).toBe(false)
+	})
+
+	test('rejects shipping ref with carriage return injection', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30406:seller:pickup\r\nemail:leaked@example.com',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'injected notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping')).toBe(false)
+	})
+
+	test('rejects non-30406 kind in shipping ref', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30402:seller:product',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'leaked notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping' && tag[1] === '30402:seller:product')).toBe(false)
+	})
+
+	test('rejects shipping ref missing d-tag segment', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30406:seller',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'leaked notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping')).toBe(false)
+	})
+
+	test('rejects empty shipping ref', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'leaked notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping')).toBe(false)
+	})
+
+	test('accepts shipping ref with multi-colon d-tag', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30406:seller:standard:us:insured',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'leaked notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags).toContainEqual(['shipping', '30406:seller:standard:us:insured'])
+	})
+
+	test('rejects whitespace-only shipping ref', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '   ',
+			shippingAddress: 'leaked',
+			email: 'leaked@example.com',
+			phone: '+1555LEAK',
+			notes: 'leaked notes',
+		})
+
+		const order = orderEvents()[0]
+		expect(order.tags.some((tag) => tag[0] === 'shipping')).toBe(false)
+	})
+})
+
+describe('requiresPrivateBuyerDeliveryDetails (tested through publishOrderWithDependencies)', () => {
+	beforeEach(() => {
+		shippingServices = {}
+		publishedEvents.length = 0
+	})
+
+	test('multi-seller: pickup succeeds while physical fails closed', async () => {
+		shippingServices = {
+			'30406:seller-a:pickup': 'pickup',
+			'30406:seller-b:standard': 'standard',
+		}
+
+		await expect(
+			publishOrderWithDependencies(
+				paramsFor({
+					sellers: ['seller-a', 'seller-b'],
+					productsBySeller: {
+						'seller-a': [{ id: 'pickup-product', amount: 1, shippingMethodId: '30406:seller-a:pickup' }],
+						'seller-b': [{ id: 'physical-product', amount: 1, shippingMethodId: '30406:seller-b:standard' }],
+					},
+				}),
+			),
+		).rejects.toThrow('Encrypted seller delivery is required before creating this order')
+
+		expect(publishedEvents).toHaveLength(0)
+	})
+
+	test('multi-seller: all pickup orders publish successfully', async () => {
+		shippingServices = {
+			'30406:seller-a:pickup': 'pickup',
+			'30406:seller-b:pickup': 'pickup',
+		}
+
+		await publishOrderWithDependencies(
+			paramsFor({
+				sellers: ['seller-a', 'seller-b'],
+				productsBySeller: {
+					'seller-a': [{ id: 'pickup-a', amount: 1, shippingMethodId: '30406:seller-a:pickup' }],
+					'seller-b': [{ id: 'pickup-b', amount: 1, shippingMethodId: '30406:seller-b:pickup' }],
+				},
+			}),
+		)
+
+		expect(orderEvents()).toHaveLength(2)
+		for (const order of orderEvents()) {
+			expectPublicOrderEventsWithoutBuyerPii([order])
+		}
+	})
+})
+
+describe('createOrderCreationEvent content field privacy', () => {
+	test('content does not contain buyer PII even when notes are provided', async () => {
+		const order = await createOrderCreationEvent({
+			merchantPubkey: 'seller',
+			buyerPubkey: 'buyer-pubkey',
+			orderItems: [{ productRef: '30402:seller:product', quantity: 1 }],
+			totalAmountSats: 1000,
+			shippingRef: '30406:seller:pickup',
+			shippingAddress: baseShippingData,
+			email: baseShippingData.email,
+			phone: baseShippingData.phone,
+			notes: 'Secret delivery instructions with buyer name Satoshi Nakamoto and email buyer@example.com',
+		})
+
+		expect(order.content).not.toContain('Satoshi')
+		expect(order.content).not.toContain('buyer@example.com')
+		expect(order.content).not.toContain('Secret')
+		expect(order.content).toMatch(/^Order for \d+ item\(s\)$/)
+	})
+
+	test('content does not contain address from shippingAddress object', async () => {
+		const order = await createOrderCreationEvent({
+			merchantPubkey: 'seller',
+			buyerPubkey: 'buyer-pubkey',
+			orderItems: [{ productRef: '30402:seller:product', quantity: 2 }],
+			totalAmountSats: 2000,
+			shippingRef: '30406:seller:pickup',
+			shippingAddress: baseShippingData,
+			email: baseShippingData.email,
+			phone: baseShippingData.phone,
+			notes: 'Deliver to 123 Main Street',
+		})
+
+		expect(order.content).not.toContain('123 Main Street')
+		expect(order.tags.some((tag) => tag[0] === 'address')).toBe(false)
+	})
+})
