@@ -2,8 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const RESULTS_DIR = path.resolve(import.meta.dirname, '..', 'test-results')
-const FIRST_PASS = path.join(RESULTS_DIR, 'results.json')
+const FIRST_PASS = path.join(RESULTS_DIR, 'first-pass-results.json')
 const RERUN = path.join(RESULTS_DIR, 'rerun-results.json')
+const OUTPUT = path.join(RESULTS_DIR, 'results.json')
 
 interface TestResult {
 	status: string
@@ -84,5 +85,5 @@ const merged: Results = {
 	suites: firstPass.suites.map((suite) => mergeSuite(suite, rerunMap)),
 }
 
-fs.writeFileSync(FIRST_PASS, JSON.stringify(merged, null, 2))
-console.log(`Merged results written to ${FIRST_PASS}`)
+fs.writeFileSync(OUTPUT, JSON.stringify(merged, null, 2))
+console.log(`Merged results written to ${OUTPUT}`)
