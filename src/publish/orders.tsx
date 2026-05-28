@@ -50,6 +50,28 @@ function hasRequiredPhysicalAddress(shippingData: CheckoutFormData): boolean {
 	)
 }
 
+function getPublicSellerShippingRef(shippingRef: string | null | undefined): string | undefined {
+	const trimmed = shippingRef?.trim()
+	if (!trimmed || trimmed.includes('\n') || trimmed.includes('\r')) return undefined
+
+	const [kind, sellerPubkey, ...dTagParts] = trimmed.split(':')
+	const dTag = dTagParts.join(':')
+	if (kind !== '30406' || !sellerPubkey || !dTag) return undefined
+
+	return trimmed
+}
+
+function requiresPrivateBuyerDeliveryDetails(requirements: CheckoutDeliveryRequirements): boolean {
+	return requirements.needsPhysicalAddress || requirements.needsDigitalDeliveryContact
+}
+
+function canPrepareSellerReadableEncryptedDeliveryPayload(): boolean {
+	// TODO(#904): replace fail-closed behavior with PM-specific encrypted seller
+	// delivery transport using NIP-59 wrapping and NIP-44 encryption once the
+	// seller-side read/decrypt/query path is implemented and tested.
+	return false
+}
+
 // Temporary type definitions - ideally these should be imported from a central types file
 interface CartProduct {
 	id: string
@@ -102,7 +124,7 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	// Create the order event according to Gamma Market Spec (NIP-17)
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND // Kind 16 for order processing
-	event.content = params.notes || ''
+	event.content = `Order for ${params.quantity} item(s)`
 	event.tags = [
 		// Required tags per spec
 		['p', params.sellerPubkey], // Merchant's pubkey
@@ -116,24 +138,9 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	]
 
 	// Add optional tags
-	if (params.shippingRef) {
-		event.tags.push(['shipping', params.shippingRef])
-	}
-
-	if (params.shippingAddress) {
-		event.tags.push(['address', params.shippingAddress])
-	}
-
-	if (params.email) {
-		event.tags.push(['email', params.email])
-	}
-
-	if (params.phone) {
-		event.tags.push(['phone', params.phone])
-	}
-
-	if (params.notes) {
-		event.tags.push(['notes', params.notes])
+	const shippingRef = getPublicSellerShippingRef(params.shippingRef)
+	if (shippingRef) {
+		event.tags.push(['shipping', shippingRef])
 	}
 
 	// Sign and publish the event
@@ -452,38 +459,16 @@ export async function createOrderCreationEvent(data: OrderCreationData): Promise
 	})
 
 	// Optional tags
-	if (data.shippingRef) {
-		tags.push(['shipping', data.shippingRef])
-	}
-
-	if (data.shippingAddress) {
-		// Create a newline-separated address for better parsing and readability
-		const addressParts = [
-			data.shippingAddress.name,
-			data.shippingAddress.firstLineOfAddress,
-			data.shippingAddress.additionalInformation, // Include additional info if present
-			data.shippingAddress.city,
-			data.shippingAddress.zipPostcode,
-			data.shippingAddress.country,
-		].filter(Boolean) // Remove empty values
-
-		const addressString = addressParts.join('\n')
-		tags.push(['address', addressString])
-	}
-
-	if (data.email) {
-		tags.push(['email', data.email])
-	}
-
-	if (data.phone) {
-		tags.push(['phone', data.phone])
+	const shippingRef = getPublicSellerShippingRef(data.shippingRef)
+	if (shippingRef) {
+		tags.push(['shipping', shippingRef])
 	}
 
 	// Create the event
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
 	event.created_at = now
-	event.content = data.notes || `Order for ${data.orderItems.length} items`
+	event.content = `Order for ${data.orderItems.length} item(s)`
 	event.tags = tags
 
 	// Sign the event
@@ -765,18 +750,22 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			throw new Error('Shipping address is required before creating the order')
 		}
 
+		if (requiresPrivateBuyerDeliveryDetails(requirements) && !canPrepareSellerReadableEncryptedDeliveryPayload()) {
+			throw new Error('Encrypted seller delivery is required before creating this order')
+		}
+
 		preflight.push({
 			sellerPubkey,
 			sellerProducts,
 			data,
 			requirements,
-			shippingRef: sellerProducts.find((p) => p.shippingMethodId)?.shippingMethodId || undefined,
+			shippingRef: getPublicSellerShippingRef(sellerProducts.find((p) => p.shippingMethodId)?.shippingMethodId),
 		})
 	}
 
 	const newOrderIds: string[] = []
 
-	for (const { sellerPubkey, sellerProducts, data, requirements, shippingRef } of preflight) {
+	for (const { sellerPubkey, sellerProducts, data, shippingRef } of preflight) {
 		const orderData: OrderCreationData = {
 			merchantPubkey: sellerPubkey,
 			buyerPubkey: buyerPubkey,
@@ -786,11 +775,6 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			})),
 			totalAmountSats: data.satsTotal,
 			shippingRef: shippingRef || undefined,
-			shippingAddress: requirements.needsPhysicalAddress ? shippingData : undefined,
-			// Current app order metadata uses the existing email tag for v1 digital delivery contact.
-			// This is not a NIP-99 listing change.
-			email: buyerEmail || undefined,
-			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
 		}
 
 		// 1. Create the main order event

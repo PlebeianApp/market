@@ -50,18 +50,29 @@ mock.module('@nostr-dev-kit/ndk', () => ({
 	},
 }))
 
-import { publishOrderWithDependencies } from '@/publish/orders'
+import { createOrder, createOrderCreationEvent, publishOrderWithDependencies } from '@/publish/orders'
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
+
+const PII_SENTINELS = [
+	'buyer@example.com',
+	'123 Main Street',
+	'Satoshi Nakamoto',
+	'+15551234567',
+	'Los Angeles',
+	'90210',
+	'United States',
+	'Apt Secret Notes',
+]
 
 const baseShippingData: CheckoutFormData = {
 	name: 'Satoshi Nakamoto',
-	email: '',
-	phone: '',
+	email: 'buyer@example.com',
+	phone: '+15551234567',
 	firstLineOfAddress: '123 Main Street',
 	zipPostcode: '90210',
 	city: 'Los Angeles',
 	country: 'United States',
-	additionalInformation: '',
+	additionalInformation: 'Apt Secret Notes',
 }
 
 function paramsFor(overrides: {
@@ -91,10 +102,62 @@ function orderEvents() {
 	return publishedEvents.filter((event) => event.kind === 16 && event.tags.some((tag) => tag[0] === 'type' && tag[1] === '1'))
 }
 
-describe('publishOrderWithDependencies delivery contact guard', () => {
+function expectPublicOrderEventsWithoutBuyerPii(publicOrderEvents: Array<{ tags: string[][]; content: string }>) {
+	const serializedPublicOrderEvents = JSON.stringify(publicOrderEvents)
+
+	for (const sentinel of PII_SENTINELS) {
+		expect(serializedPublicOrderEvents).not.toContain(sentinel)
+	}
+
+	for (const order of publicOrderEvents) {
+		expect(order.tags.some((tag) => tag[0] === 'address')).toBe(false)
+		expect(order.tags.some((tag) => tag[0] === 'email')).toBe(false)
+		expect(order.tags.some((tag) => tag[0] === 'phone')).toBe(false)
+		expect(order.content).not.toContain('buyer@example.com')
+		expect(order.content).not.toContain('123 Main Street')
+		expect(order.content).not.toContain('Apt Secret Notes')
+	}
+}
+
+describe('public order privacy guard', () => {
 	beforeEach(() => {
 		shippingServices = {}
 		publishedEvents.length = 0
+	})
+
+	test('sanitizes the spec order creation constructor', async () => {
+		const order = await createOrderCreationEvent({
+			merchantPubkey: 'seller',
+			buyerPubkey: 'buyer-pubkey',
+			orderItems: [{ productRef: '30402:seller:product', quantity: 1 }],
+			totalAmountSats: 1000,
+			shippingRef: '30406:seller:pickup',
+			shippingAddress: baseShippingData,
+			email: baseShippingData.email,
+			phone: baseShippingData.phone,
+			notes: baseShippingData.additionalInformation,
+		})
+
+		expectPublicOrderEventsWithoutBuyerPii([order])
+		expect(order.tags).toContainEqual(['shipping', '30406:seller:pickup'])
+	})
+
+	test('sanitizes the legacy createOrder helper', async () => {
+		await createOrder({
+			productRef: '30402:seller:product',
+			sellerPubkey: 'seller',
+			quantity: 1,
+			price: 1000,
+			shippingRef: '30406:seller:pickup',
+			shippingAddress: baseShippingData.firstLineOfAddress,
+			email: baseShippingData.email,
+			phone: baseShippingData.phone,
+			notes: baseShippingData.additionalInformation,
+		})
+
+		const order = orderEvents()[0]
+		expectPublicOrderEventsWithoutBuyerPii([order])
+		expect(order.tags).toContainEqual(['shipping', '30406:seller:pickup'])
 	})
 
 	test('rejects digital order without contact before publishing', async () => {
@@ -135,29 +198,65 @@ describe('publishOrderWithDependencies delivery contact guard', () => {
 		expect(publishedEvents).toHaveLength(0)
 	})
 
+	test('physical delivery requiring private details fails before publishing when encrypted delivery is unavailable', async () => {
+		shippingServices = {
+			'30406:seller:standard': 'standard',
+		}
+
+		await expect(
+			publishOrderWithDependencies(
+				paramsFor({
+					productsBySeller: {
+						seller: [{ id: 'physical-product', amount: 1, shippingMethodId: '30406:seller:standard' }],
+					},
+				}),
+			),
+		).rejects.toThrow('Encrypted seller delivery is required before creating this order')
+
+		expect(publishedEvents).toHaveLength(0)
+	})
+
+	test('digital delivery requiring contact fails before publishing when encrypted delivery is unavailable', async () => {
+		shippingServices = {
+			'30406:seller:digital': 'digital',
+		}
+
+		await expect(
+			publishOrderWithDependencies(
+				paramsFor({
+					shippingData: { email: 'buyer@example.com' },
+					productsBySeller: {
+						seller: [{ id: 'digital-product', amount: 1, shippingMethodId: '30406:seller:digital' }],
+					},
+				}),
+			),
+		).rejects.toThrow('Encrypted seller delivery is required before creating this order')
+
+		expect(publishedEvents).toHaveLength(0)
+	})
+
 	test('preflights every seller group before publishing any order', async () => {
 		shippingServices = {
-			'30406:seller-a:standard': 'standard',
+			'30406:seller-a:pickup': 'pickup',
 			'30406:seller-b:digital': 'digital',
 		}
 
 		await expect(
 			publishOrderWithDependencies(
 				paramsFor({
-					shippingData: { email: '' },
 					sellers: ['seller-a', 'seller-b'],
 					productsBySeller: {
-						'seller-a': [{ id: 'physical-product', amount: 1, shippingMethodId: '30406:seller-a:standard' }],
+						'seller-a': [{ id: 'pickup-product', amount: 1, shippingMethodId: '30406:seller-a:pickup' }],
 						'seller-b': [{ id: 'digital-product', amount: 1, shippingMethodId: '30406:seller-b:digital' }],
 					},
 				}),
 			),
-		).rejects.toThrow('Digital delivery contact is required')
+		).rejects.toThrow('Encrypted seller delivery is required before creating this order')
 
 		expect(publishedEvents).toHaveLength(0)
 	})
 
-	test('does not emit fake fallback contact when no email is provided', async () => {
+	test('pickup order can publish a sanitized public order event', async () => {
 		shippingServices = {
 			'30406:seller:pickup': 'pickup',
 		}
@@ -172,31 +271,23 @@ describe('publishOrderWithDependencies delivery contact guard', () => {
 		)
 
 		const order = orderEvents()[0]
-		expect(order.tags.some((tag) => tag[0] === 'email')).toBe(false)
-		expect(order.tags.some((tag) => tag.includes('customer@example.com'))).toBe(false)
-		expect(order.tags.some((tag) => tag[0] === 'address')).toBe(false)
+		expectPublicOrderEventsWithoutBuyerPii([order])
+		expect(order.tags).toContainEqual(['shipping', '30406:seller:pickup'])
 	})
 
-	test('emits buyer-provided digital delivery contact and preserves physical address behavior', async () => {
+	test('pickup order keeps optional buyer contact out of every public order event', async () => {
 		shippingServices = {
-			'30406:seller:digital': 'digital',
-			'30406:seller:standard': 'standard',
+			'30406:seller:pickup': 'pickup',
 		}
 
 		await publishOrderWithDependencies(
 			paramsFor({
-				shippingData: { email: 'buyer@example.com' },
 				productsBySeller: {
-					seller: [
-						{ id: 'digital-product', amount: 1, shippingMethodId: '30406:seller:digital' },
-						{ id: 'physical-product', amount: 1, shippingMethodId: '30406:seller:standard' },
-					],
+					seller: [{ id: 'pickup-product', amount: 1, shippingMethodId: '30406:seller:pickup' }],
 				},
 			}),
 		)
 
-		const order = orderEvents()[0]
-		expect(order.tags).toContainEqual(['email', 'buyer@example.com'])
-		expect(order.tags.some((tag) => tag[0] === 'address' && tag[1].includes('123 Main Street'))).toBe(true)
+		expectPublicOrderEventsWithoutBuyerPii(orderEvents())
 	})
 })
