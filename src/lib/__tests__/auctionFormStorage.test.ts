@@ -3,9 +3,11 @@ import {
 	clearAuctionFormDraft,
 	getAuctionFormDraft,
 	hasAuctionFormDraft,
+	isMeaningfulDraft,
 	saveAuctionFormDraft,
 	type AuctionFormDraft,
 } from '@/lib/utils/auctionFormStorage'
+import type { AuctionFormData } from '@/publish/auctions'
 
 // ---------------------------------------------------------------------------
 // localStorage mock
@@ -363,5 +365,103 @@ describe('empty form not persisted', () => {
 		const loaded = getAuctionFormDraft(PUBKEY_A)
 		expect(loaded!.formData.title).toBe('')
 		expect(loaded!.images).toEqual([])
+	})
+})
+
+// ---------------------------------------------------------------------------
+// isMeaningfulDraft
+// ---------------------------------------------------------------------------
+
+const EMPTY_FORM: AuctionFormData = {
+	title: '',
+	summary: '',
+	description: '',
+	startingBid: '',
+	bidIncrement: '1',
+	reserve: '0',
+	startAt: '',
+	endAt: '',
+	antiSnipeWindowMinutes: 0,
+	minBidCurveShape: 'none',
+	minBidCurvePeakMultiplier: 2,
+	settlementGracePreset: '1h',
+	mainCategory: '',
+	categories: [],
+	imageUrls: [],
+	specs: [],
+	shippings: [],
+	trustedMints: [],
+	isNSFW: false,
+	pathIssuerPubkey: '',
+}
+
+describe('isMeaningfulDraft', () => {
+	test('returns false for completely empty form', () => {
+		expect(isMeaningfulDraft(EMPTY_FORM)).toBe(false)
+	})
+
+	test('returns false when all fields are whitespace-only', () => {
+		expect(
+			isMeaningfulDraft({
+				...EMPTY_FORM,
+				title: '   ',
+				summary: '\t',
+				description: '\n',
+				startingBid: ' ',
+				mainCategory: '  ',
+			}),
+		).toBe(false)
+	})
+
+	test('returns true when title is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, title: 'Vintage Camera' })).toBe(true)
+	})
+
+	test('returns true when summary is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, summary: 'Rare find' })).toBe(true)
+	})
+
+	test('returns true when description is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, description: 'Detailed description' })).toBe(true)
+	})
+
+	test('returns true when startingBid is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, startingBid: '5000' })).toBe(true)
+	})
+
+	test('returns true when startAt is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, startAt: '2099-01-01T12:00' })).toBe(true)
+	})
+
+	test('returns true when endAt is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, endAt: '2099-06-01T12:00' })).toBe(true)
+	})
+
+	test('returns true when mainCategory is set', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, mainCategory: 'Electronics' })).toBe(true)
+	})
+
+	test('returns true when categories has entries', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, categories: ['Photography'] })).toBe(true)
+	})
+
+	test('returns true when imageUrls has entries', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, imageUrls: ['https://example.com/img.jpg'] })).toBe(true)
+	})
+
+	test('returns true when specs has entries', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, specs: [{ key: 'Brand', value: 'Leica' }] })).toBe(true)
+	})
+
+	test('returns true when shippings has entries', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, shippings: [{ shippingRef: '30406:seller:standard', extraCost: '200' }] })).toBe(true)
+	})
+
+	test('returns true when isNSFW is toggled', () => {
+		expect(isMeaningfulDraft({ ...EMPTY_FORM, isNSFW: true })).toBe(true)
+	})
+
+	test('returns true when all fields are populated', () => {
+		expect(isMeaningfulDraft(baseDraft.formData)).toBe(true)
 	})
 })

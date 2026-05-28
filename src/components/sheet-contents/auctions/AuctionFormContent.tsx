@@ -38,7 +38,7 @@ import {
 } from '@/publish/auctions'
 import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
-import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
+import { clearAuctionFormDraft, getAuctionFormDraft, isMeaningfulDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, Trash2, X } from 'lucide-react'
@@ -1484,23 +1484,6 @@ function ShippingTab({
 				)}
 			</div>
 		</div>
-	)
-}
-
-function isMeaningfulDraft(formData: AuctionFormData): boolean {
-	return (
-		formData.title.trim().length > 0 ||
-		formData.summary.trim().length > 0 ||
-		formData.description.trim().length > 0 ||
-		formData.startingBid.trim().length > 0 ||
-		(formData.startAt?.trim().length ?? 0) > 0 ||
-		formData.endAt.trim().length > 0 ||
-		formData.mainCategory.trim().length > 0 ||
-		formData.categories.length > 0 ||
-		formData.imageUrls.length > 0 ||
-		formData.specs.length > 0 ||
-		formData.shippings.length > 0 ||
-		formData.isNSFW
 	)
 }
 

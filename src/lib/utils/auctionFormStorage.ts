@@ -180,3 +180,20 @@ export const clearAuctionFormDraft = (pubkey: string): void => {
 }
 
 export const hasAuctionFormDraft = (pubkey: string): boolean => getAuctionFormDraft(pubkey) !== null
+
+export function isMeaningfulDraft(formData: AuctionFormData): boolean {
+	return (
+		formData.title.trim().length > 0 ||
+		formData.summary.trim().length > 0 ||
+		formData.description.trim().length > 0 ||
+		formData.startingBid.trim().length > 0 ||
+		(formData.startAt?.trim().length ?? 0) > 0 ||
+		formData.endAt.trim().length > 0 ||
+		formData.mainCategory.trim().length > 0 ||
+		formData.categories.length > 0 ||
+		formData.imageUrls.length > 0 ||
+		formData.specs.length > 0 ||
+		formData.shippings.length > 0 ||
+		formData.isNSFW
+	)
+}
