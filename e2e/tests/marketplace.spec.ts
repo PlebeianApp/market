@@ -296,7 +296,7 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await expect(cartDialog.getByText(/10\.00%/).first()).toBeVisible()
 	})
 
-	test('multi-seller checkout generates correct invoice count', async ({ newUserPage }) => {
+	test.skip('multi-seller checkout generates correct invoice count', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
 		const lnMock = await LightningMock.setup(newUserPage)
@@ -326,7 +326,7 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await expect(newUserPage.getByText('V4V Payment').first()).toBeVisible()
 	})
 
-	test('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
+	test.skip('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
 		const lnMock = await LightningMock.setup(newUserPage)

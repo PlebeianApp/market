@@ -324,8 +324,10 @@ test.describe('Cart - Persistence', () => {
 		await addWalletToCart(newUserPage)
 		await addGuideToCart(newUserPage)
 
+		await newUserPage.waitForTimeout(1_500)
 		await newUserPage.reload()
 		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForTimeout(2_000)
 
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
@@ -369,8 +371,10 @@ test.describe('Cart - Persistence', () => {
 		await waitForProducts(newUserPage)
 		await addWalletToCart(newUserPage)
 
+		await newUserPage.waitForTimeout(1_500)
 		await safeGoto(newUserPage, '/')
 		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForTimeout(2_000)
 
 		await safeGoto(newUserPage, '/products')
 		await newUserPage.waitForLoadState('networkidle')
