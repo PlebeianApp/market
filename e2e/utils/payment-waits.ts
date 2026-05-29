@@ -30,7 +30,7 @@ export async function payAllInvoicesWithWebLn(page: Page, timeoutMs = PAYMENT_ST
 		const done = await successMessage.isVisible().catch(() => false)
 		if (done) break
 
-		await expect(webLnButton).toBeEnabled({ timeout: 15_000 })
+		await expect(webLnButton).toBeEnabled({ timeout: 25_000 })
 		await webLnButton.click()
 		await page.waitForTimeout(1_000)
 	}

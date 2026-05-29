@@ -56,7 +56,7 @@ async function completeCheckout(page: Page) {
 }
 
 test.describe('Order Messaging', () => {
-	test.skip('after checkout, buyer and merchant can exchange messages', async ({ buyerPage, merchantPage }) => {
+	test('after checkout, buyer and merchant can exchange messages', async ({ buyerPage, merchantPage }) => {
 		test.setTimeout(120_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
