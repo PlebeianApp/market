@@ -30,11 +30,9 @@ export interface LnurlMockOptions {
 /**
  * Sets up Playwright route mocks to intercept LNURL-pay HTTP calls.
  *
- * The app uses @getalby/lightning-tools LightningAddress class, which:
- * 1. Fetches LNURL-pay metadata from `https://<domain>/.well-known/lnurlp/<username>`
- * 2. Requests an invoice from the callback URL with `?amount=<milliSats>`
- *
- * This mock intercepts both requests so no real HTTP calls leave the browser.
+ * The app uses @getalby/lightning-tools LightningAddress class with
+ * proxy: false, so it makes direct requests to the LNURL domain.
+ * This mock intercepts those requests so no real HTTP calls leave the browser.
  */
 export async function setupLnurlMock(page: Page, options?: LnurlMockOptions): Promise<void> {
 	const domain = options?.domain ?? 'coinos.io'

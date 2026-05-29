@@ -128,7 +128,7 @@ async function seedMerchant(relay: Relay) {
 	})
 
 	await seedPaymentDetail(relay, devUser1.sk, TEST_APP_PUBLIC_KEY, {
-		method: 'LIGHTNING_NETWORK',
+		method: 'ln',
 		detail: WALLETED_USER_LUD16,
 	})
 

@@ -30,7 +30,7 @@ async function dismissToasts(page: Page) {
 test.describe('Shipping Special Cases', () => {
 	test.describe.configure({ timeout: 120_000 })
 
-	test.skip('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
+	test('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
@@ -63,7 +63,8 @@ test.describe('Shipping Special Cases', () => {
 		await expect(buyerPage.locator('#country')).not.toBeVisible()
 		await expect(buyerPage.locator('#city')).not.toBeVisible()
 
-		// ─── 4. Submit form (no required fields for digital delivery) ─
+		// ─── 4. Fill digital delivery contact and submit ─────────────
+		await buyerPage.locator('#email').fill('buyer@e2e.test')
 		await dismissToasts(buyerPage)
 		await buyerPage.locator('button[form="shipping-form"]').click()
 
@@ -114,7 +115,7 @@ test.describe('Shipping Special Cases', () => {
 		}
 	})
 
-	test.skip('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
+	test('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
