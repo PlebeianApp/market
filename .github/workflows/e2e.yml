@@ -172,6 +172,7 @@ jobs:
 
       - name: Publish dashboard to nsite
         id: nsite
+        continue-on-error: true
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/publish-nsite@main
         with:
           dashboard-dir: ${{ steps.dashboard.outputs.dashboard-dir }}
