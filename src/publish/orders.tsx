@@ -12,8 +12,10 @@ import {
 	resolveCheckoutDeliveryRequirements,
 	type CheckoutDeliveryRequirements,
 } from '@/lib/checkout/deliveryRequirements'
+import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
+import type { Event } from 'nostr-tools'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
 
 async function resolveDeliveryRequirementsForProducts(
@@ -63,13 +65,6 @@ function getPublicSellerShippingRef(shippingRef: string | null | undefined): str
 
 function requiresPrivateBuyerDeliveryDetails(requirements: CheckoutDeliveryRequirements): boolean {
 	return requirements.needsPhysicalAddress || requirements.needsDigitalDeliveryContact
-}
-
-function canPrepareSellerReadableEncryptedDeliveryPayload(): boolean {
-	// TODO(#904): replace fail-closed behavior with PM-specific encrypted seller
-	// delivery transport using NIP-59 wrapping and NIP-44 encryption once the
-	// seller-side read/decrypt/query path is implemented and tested.
-	return false
 }
 
 // Temporary type definitions - ideally these should be imported from a central types file
@@ -124,11 +119,11 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 	// Create the order event according to Gamma Market Spec (NIP-17)
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND // Kind 16 for order processing
-	event.content = `Order for ${params.quantity} item(s)`
+	event.content = 'Order created'
 	event.tags = [
 		// Required tags per spec
 		['p', params.sellerPubkey], // Merchant's pubkey
-		['subject', `Order for ${params.productRef.split(':').pop() || 'product'}`],
+		['subject', 'order-info'],
 		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION], // Type 1 for order creation
 		['order', orderId],
 		['amount', total],
@@ -437,17 +432,20 @@ export interface PaymentReceiptData {
  * Following gamma_spec.md section 4.1
  */
 export async function createOrderCreationEvent(data: OrderCreationData): Promise<NDKEvent> {
+	return createOrderCreationEventWithOrderId(data, uuidv4())
+}
+
+async function createOrderCreationEventWithOrderId(data: OrderCreationData, orderId: string): Promise<NDKEvent> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const orderId = uuidv4()
 	const now = Math.floor(Date.now() / 1000)
 
 	// Build tags according to spec
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', data.merchantPubkey],
-		['subject', `Order ${orderId.substring(0, 8)}`],
+		['subject', 'order-info'],
 		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		['order', orderId],
 		['amount', data.totalAmountSats.toString()],
@@ -468,7 +466,7 @@ export async function createOrderCreationEvent(data: OrderCreationData): Promise
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
 	event.created_at = now
-	event.content = `Order for ${data.orderItems.length} item(s)`
+	event.content = 'Order created'
 	event.tags = tags
 
 	// Sign the event
@@ -706,6 +704,103 @@ type SellerOrderPreflight = {
 	shippingRef?: string
 }
 
+type PreparedSellerOrderData = SellerOrderPreflight & {
+	orderData: OrderCreationData
+	orderId: string
+	privateGiftWrapEvent?: NDKEvent
+}
+
+type PreparedSellerOrderPublishWork = PreparedSellerOrderData & {
+	orderEvent: NDKEvent
+}
+
+function trimOptional(value: string | undefined): string | undefined {
+	const trimmed = value?.trim()
+	return trimmed || undefined
+}
+
+function createPrivateOrderDeliveryDetails(params: {
+	sellerPubkey: string
+	buyerPubkey: string
+	orderId: string
+	sellerProducts: CartProduct[]
+	data: SellerData
+	shippingRef?: string
+	shippingData: CheckoutFormData
+	requirements: CheckoutDeliveryRequirements
+}): PrivateOrderDeliveryDetails {
+	const { sellerPubkey, buyerPubkey, orderId, sellerProducts, data, shippingRef, shippingData, requirements } = params
+	const delivery: PrivateOrderDeliveryDetails['delivery'] = {}
+
+	if (requirements.needsPhysicalAddress) {
+		delivery.name = trimOptional(shippingData.name)
+		delivery.address = {
+			firstLineOfAddress: trimOptional(shippingData.firstLineOfAddress),
+			additionalInformation: trimOptional(shippingData.additionalInformation),
+			city: trimOptional(shippingData.city),
+			zipPostcode: trimOptional(shippingData.zipPostcode),
+			country: trimOptional(shippingData.country),
+		}
+	}
+
+	const buyerEmail = trimOptional(shippingData.email)
+	if (buyerEmail && isValidDigitalDeliveryContact(buyerEmail)) {
+		delivery.email = buyerEmail
+	}
+
+	if (requirements.needsPhysicalAddress) {
+		delivery.phone = trimOptional(shippingData.phone)
+	}
+
+	return {
+		orderId,
+		buyerPubkey,
+		sellerPubkey,
+		totalAmountSats: data.satsTotal,
+		shippingRef,
+		items: sellerProducts.map((product) => ({
+			productRef: `30402:${sellerPubkey}:${product.id}`,
+			quantity: product.amount,
+		})),
+		delivery,
+		orderNotes: '',
+	}
+}
+
+function createNdkEventFromRawEvent(event: Event): NDKEvent {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	return new NDKEvent(ndk, {
+		id: event.id,
+		pubkey: event.pubkey,
+		created_at: event.created_at,
+		kind: event.kind,
+		tags: event.tags.map((tag) => [...tag]),
+		content: event.content,
+		sig: event.sig,
+	})
+}
+
+function publishResultHasRelayDetails(result: unknown): boolean {
+	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
+}
+
+function publishResultHasRelaySuccess(result: unknown): boolean {
+	if (result instanceof Set) return result.size > 0
+	if (Array.isArray(result)) return result.length > 0
+	if (typeof result === 'object' && result !== null && 'size' in result && typeof (result as { size?: unknown }).size === 'number') {
+		return (result as { size: number }).size > 0
+	}
+	return true
+}
+
+async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<void> {
+	const result = await ndkActions.publishEvent(event)
+	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
+		throw new Error('Encrypted seller delivery could not be published')
+	}
+}
+
 /**
  * Creates and publishes a spec-compliant order for each seller,
  * then creates and publishes all necessary payment requests (merchant + V4V).
@@ -750,10 +845,6 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			throw new Error('Shipping address is required before creating the order')
 		}
 
-		if (requiresPrivateBuyerDeliveryDetails(requirements) && !canPrepareSellerReadableEncryptedDeliveryPayload()) {
-			throw new Error('Encrypted seller delivery is required before creating this order')
-		}
-
 		preflight.push({
 			sellerPubkey,
 			sellerProducts,
@@ -763,9 +854,17 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		})
 	}
 
-	const newOrderIds: string[] = []
+	const signerRequired = preflight.some(({ requirements }) => requiresPrivateBuyerDeliveryDetails(requirements))
+	const signer = signerRequired ? ndkActions.getSigner() : undefined
+	if (signerRequired && !signer) {
+		throw new Error('Encrypted seller delivery could not be prepared')
+	}
 
-	for (const { sellerPubkey, sellerProducts, data, shippingRef } of preflight) {
+	const preparedOrderData: PreparedSellerOrderData[] = []
+
+	for (const preflightItem of preflight) {
+		const { sellerPubkey, sellerProducts, data, requirements, shippingRef } = preflightItem
+		const orderId = uuidv4()
 		const orderData: OrderCreationData = {
 			merchantPubkey: sellerPubkey,
 			buyerPubkey: buyerPubkey,
@@ -777,11 +876,62 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			shippingRef: shippingRef || undefined,
 		}
 
-		// 1. Create the main order event
-		const { orderId, success } = await createAndPublishOrder(orderData)
-		if (!success || !orderId) {
-			console.warn(`Failed to create order for seller ${sellerPubkey}. Skipping...`)
-			continue
+		let privateGiftWrapEvent: NDKEvent | undefined
+		if (requiresPrivateBuyerDeliveryDetails(requirements)) {
+			try {
+				const privateDetails = createPrivateOrderDeliveryDetails({
+					sellerPubkey,
+					buyerPubkey,
+					orderId,
+					sellerProducts,
+					data,
+					shippingRef: shippingRef || undefined,
+					shippingData,
+					requirements,
+				})
+				const { giftWrap } = await createEncryptedPrivateOrderMessageWithSigner({
+					details: privateDetails,
+					signer,
+				})
+				privateGiftWrapEvent = createNdkEventFromRawEvent(giftWrap)
+			} catch {
+				throw new Error('Encrypted seller delivery could not be prepared')
+			}
+		}
+
+		preparedOrderData.push({
+			...preflightItem,
+			orderData,
+			orderId,
+			privateGiftWrapEvent,
+		})
+	}
+
+	const preparedOrders: PreparedSellerOrderPublishWork[] = []
+	for (const preparedOrder of preparedOrderData) {
+		const orderEvent = await createOrderCreationEventWithOrderId(preparedOrder.orderData, preparedOrder.orderId)
+		preparedOrders.push({
+			...preparedOrder,
+			orderEvent,
+		})
+	}
+
+	for (const preparedOrder of preparedOrders) {
+		if (!preparedOrder.privateGiftWrapEvent) continue
+		try {
+			await publishRequiredPrivateGiftWrap(preparedOrder.privateGiftWrapEvent)
+		} catch {
+			throw new Error('Encrypted seller delivery could not be published')
+		}
+	}
+
+	const newOrderIds: string[] = []
+
+	for (const { sellerPubkey, data, orderEvent, orderId } of preparedOrders) {
+		// 1. Publish the sanitized public order marker only after required private details are published.
+		const orderPublishResult = await ndkActions.publishEvent(orderEvent)
+		if (publishResultHasRelayDetails(orderPublishResult) && !publishResultHasRelaySuccess(orderPublishResult)) {
+			throw new Error('Order could not be published')
 		}
 		newOrderIds.push(orderId)
 		console.log(`✅ Spec-compliant order created for seller ${sellerPubkey.substring(0, 8)}...:`, orderId)
