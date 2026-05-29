@@ -1,9 +1,12 @@
+import { NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'
-import { getEventHash, getPublicKey, verifyEvent } from 'nostr-tools'
+import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import {
 	createEncryptedPrivateOrderMessage,
+	createEncryptedPrivateOrderMessageWithSigner,
 	createPrivateOrderDetailsRumor,
 	decryptPrivateOrderMessage,
+	decryptPrivateOrderMessageWithSigner,
 	parsePrivateOrderDetailsRumor,
 	serializeBuyerAddress,
 	type PrivateOrderDeliveryDetails,
@@ -26,9 +29,47 @@ type KeyPair = {
 	pubkey: string
 }
 
+type MockSignerOptions = {
+	supportsNip44?: boolean
+	canEncrypt?: boolean
+	canDecrypt?: boolean
+}
+
 function keyPair(): KeyPair {
 	const privateKey = crypto.getRandomValues(new Uint8Array(32))
 	return { privateKey, pubkey: getPublicKey(privateKey) }
+}
+
+function signerFor(privateKey: Uint8Array, options: MockSignerOptions = {}): NDKSigner {
+	const pubkey = getPublicKey(privateKey)
+	const user = new NDKUser({ pubkey })
+	return {
+		get pubkey() {
+			return pubkey
+		},
+		blockUntilReady: async () => user,
+		user: async () => user,
+		get userSync() {
+			return user
+		},
+		encryptionEnabled: async (scheme?: NDKEncryptionScheme) => {
+			if (options.supportsNip44 === false) return []
+			if (!scheme || scheme === 'nip44') return ['nip44']
+			return []
+		},
+		encrypt: async (recipient, value, scheme) => {
+			if (options.supportsNip44 === false || options.canEncrypt === false || scheme !== 'nip44') throw new Error('NIP-44 unavailable')
+			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipient.pubkey)
+			return nip44.v2.encrypt(value, conversationKey)
+		},
+		decrypt: async (sender, value, scheme) => {
+			if (options.supportsNip44 === false || options.canDecrypt === false || scheme !== 'nip44') throw new Error('NIP-44 unavailable')
+			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, sender.pubkey)
+			return nip44.v2.decrypt(value, conversationKey)
+		},
+		sign: async (event) => finalizeEvent(event as unknown as Parameters<typeof finalizeEvent>[0], privateKey).sig,
+		toPayload: () => JSON.stringify({ type: 'mock' }),
+	}
 }
 
 function privateOrderDetails(
@@ -138,6 +179,32 @@ describe('private order message helper', () => {
 		expect(JSON.stringify(giftWrap)).not.toContain('Satoshi Nakamoto')
 	})
 
+	test('signer-backed helper wraps private order details without exposing buyer PII in kind 1059', async () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const wrapper = keyPair()
+		const details = privateOrderDetails(buyer.pubkey, seller.pubkey)
+
+		const { rumor, seal, giftWrap } = await createEncryptedPrivateOrderMessageWithSigner({
+			details,
+			signer: signerFor(buyer.privateKey),
+			wrapperPrivateKey: wrapper.privateKey,
+			createdAt: CREATED_AT,
+		})
+
+		expect(rumor.kind).toBe(16)
+		expect('sig' in rumor).toBe(false)
+		expect(seal.kind).toBe(13)
+		expect(seal.tags).toEqual([])
+		expect(seal.pubkey).toBe(buyer.pubkey)
+		expect(verifyEvent(seal)).toBe(true)
+		expect(giftWrap.kind).toBe(1059)
+		expect(giftWrap.tags).toEqual([['p', seller.pubkey]])
+		expect(verifyEvent(giftWrap)).toBe(true)
+		expectNoPii(giftWrap)
+		expect(JSON.stringify(giftWrap)).not.toContain('Satoshi Nakamoto')
+	})
+
 	test('seller decrypts gift wrap to seal to rumor to order details', () => {
 		const buyer = keyPair()
 		const seller = keyPair()
@@ -158,6 +225,57 @@ describe('private order message helper', () => {
 		expect(decrypted.rumor).toEqual(rumor)
 		expect(decrypted.seal.pubkey).toBe(buyer.pubkey)
 		expect(decrypted.details).toEqual(details)
+	})
+
+	test('seller signer decrypts gift wrap to seal to rumor to order details', async () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const details = privateOrderDetails(buyer.pubkey, seller.pubkey)
+		const { giftWrap, rumor } = await createEncryptedPrivateOrderMessageWithSigner({
+			details,
+			signer: signerFor(buyer.privateKey),
+			createdAt: CREATED_AT,
+		})
+
+		const decrypted = await decryptPrivateOrderMessageWithSigner({
+			giftWrap,
+			signer: signerFor(seller.privateKey),
+			expectedSellerPubkey: seller.pubkey,
+			expectedBuyerPubkey: buyer.pubkey,
+		})
+
+		expect(decrypted.rumor).toEqual(rumor)
+		expect(decrypted.seal.pubkey).toBe(buyer.pubkey)
+		expect(decrypted.details).toEqual(details)
+	})
+
+	test('signer-backed private order helpers fail closed without NIP-44 capability', async () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+		const details = privateOrderDetails(buyer.pubkey, seller.pubkey)
+
+		await expect(
+			createEncryptedPrivateOrderMessageWithSigner({
+				details,
+				signer: signerFor(buyer.privateKey, { supportsNip44: false }),
+				createdAt: CREATED_AT,
+			}),
+		).rejects.toThrow('Signer does not support NIP-44 encrypt')
+
+		const { giftWrap } = createEncryptedPrivateOrderMessage({
+			details,
+			buyerPrivateKey: buyer.privateKey,
+			createdAt: CREATED_AT,
+		})
+
+		await expect(
+			decryptPrivateOrderMessageWithSigner({
+				giftWrap,
+				signer: signerFor(seller.privateKey, { supportsNip44: false }),
+				expectedSellerPubkey: seller.pubkey,
+				expectedBuyerPubkey: buyer.pubkey,
+			}),
+		).rejects.toThrow('Signer does not support NIP-44 decrypt')
 	})
 
 	test('non-recipient cannot decrypt private order details', () => {

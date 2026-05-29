@@ -1,3 +1,4 @@
+import { NDKUser, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
 
@@ -23,9 +24,24 @@ export type CreateNip59GiftWrapParams = {
 	createdAt?: number
 }
 
+export type CreateNip59GiftWrapWithSignerParams = {
+	rumor: UnsignedRumor
+	signer: NDKSigner | null | undefined
+	recipientPubkey: string
+	wrapperPrivateKey?: Uint8Array
+	createdAt?: number
+}
+
 export type UnwrapNip59GiftWrapParams = {
 	giftWrap: Event
 	recipientPrivateKey: Uint8Array
+	expectedRecipientPubkey?: string
+	expectedSenderPubkey?: string
+}
+
+export type UnwrapNip59GiftWrapWithSignerParams = {
+	giftWrap: Event
+	signer: NDKSigner | null | undefined
 	expectedRecipientPubkey?: string
 	expectedSenderPubkey?: string
 }
@@ -40,6 +56,8 @@ export type UnwrappedNip59GiftWrap = {
 	seal: Event
 	rumor: UnsignedRumor
 }
+
+export type Nip44SignerOperation = 'encrypt' | 'decrypt'
 
 export function createNip59GiftWrap(params: CreateNip59GiftWrapParams): Nip59GiftWrap {
 	const { rumor, senderPrivateKey, recipientPubkey, createdAt = unixNow() } = params
@@ -60,6 +78,45 @@ export function createNip59GiftWrap(params: CreateNip59GiftWrapParams): Nip59Gif
 		},
 		senderPrivateKey,
 	)
+
+	const wrapperPrivateKey = params.wrapperPrivateKey ?? randomPrivateKey()
+	const giftWrap = finalizeEvent(
+		{
+			kind: NIP59_GIFT_WRAP_KIND,
+			content: encryptForRecipient(JSON.stringify(seal), wrapperPrivateKey, recipientPubkey),
+			created_at: createdAt,
+			tags: [['p', recipientPubkey]],
+		},
+		wrapperPrivateKey,
+	)
+
+	return { rumor: normalizedRumor, seal, giftWrap }
+}
+
+export async function createNip59GiftWrapWithSigner(params: CreateNip59GiftWrapWithSignerParams): Promise<Nip59GiftWrap> {
+	const { rumor, recipientPubkey, createdAt = unixNow() } = params
+	assertHexPubkey(recipientPubkey, 'recipient pubkey')
+	const signer = await assertSignerSupportsNip44(params.signer, 'encrypt')
+	const normalizedRumor = normalizeUnsignedRumorId(rumor)
+	const signerPubkey = await signerPubkeyFor(signer)
+
+	if (normalizedRumor.pubkey !== signerPubkey) {
+		throw new Error('NIP-59 rumor pubkey must match the signer pubkey')
+	}
+
+	const sealContent = await encryptForRecipientWithSigner(JSON.stringify(normalizedRumor), signer, recipientPubkey, 'NIP-59 seal')
+	const seal = await signEventWithSigner(
+		{
+			kind: NIP59_SEAL_KIND,
+			content: sealContent,
+			created_at: createdAt,
+			tags: [],
+			pubkey: signerPubkey,
+		},
+		signer,
+		'NIP-59 seal',
+	)
+	assertSeal(seal)
 
 	const wrapperPrivateKey = params.wrapperPrivateKey ?? randomPrivateKey()
 	const giftWrap = finalizeEvent(
@@ -104,6 +161,35 @@ export function unwrapNip59GiftWrap(params: UnwrapNip59GiftWrapParams): Unwrappe
 	return { seal, rumor }
 }
 
+export async function unwrapNip59GiftWrapWithSigner(params: UnwrapNip59GiftWrapWithSignerParams): Promise<UnwrappedNip59GiftWrap> {
+	const signer = await assertSignerSupportsNip44(params.signer, 'decrypt')
+	const signerPubkey = await signerPubkeyFor(signer)
+	const recipientPubkey = params.expectedRecipientPubkey ?? signerPubkey
+	assertHexPubkey(recipientPubkey, 'recipient pubkey')
+	if (signerPubkey !== recipientPubkey) throw new Error('NIP-59 recipient signer mismatch')
+	if (params.expectedSenderPubkey) assertHexPubkey(params.expectedSenderPubkey, 'sender pubkey')
+
+	assertGiftWrap(params.giftWrap, recipientPubkey)
+
+	const seal = parseEventJson(
+		await decryptFromSenderWithSigner(params.giftWrap.content, signer, params.giftWrap.pubkey, 'NIP-59 gift wrap'),
+		'NIP-59 seal',
+	)
+	assertSeal(seal)
+
+	if (params.expectedSenderPubkey && seal.pubkey !== params.expectedSenderPubkey) {
+		throw new Error('NIP-59 seal sender mismatch')
+	}
+
+	const rumor = parseUnsignedRumorJson(await decryptFromSenderWithSigner(seal.content, signer, seal.pubkey, 'NIP-59 seal'), 'NIP-59 rumor')
+
+	if (seal.pubkey !== rumor.pubkey) {
+		throw new Error('NIP-59 seal pubkey does not match rumor pubkey')
+	}
+
+	return { seal, rumor }
+}
+
 export function normalizeUnsignedRumorId(rumor: unknown): UnsignedRumor {
 	assertUnsignedRumor(rumor)
 	const canonicalId = getEventHash({
@@ -125,6 +211,20 @@ export function normalizeUnsignedRumorId(rumor: unknown): UnsignedRumor {
 		tags: rumor.tags.map((tag) => [...tag]),
 		content: rumor.content,
 		id: canonicalId,
+	}
+}
+
+export async function signerSupportsNip44(signer: NDKSigner | null | undefined, operation: Nip44SignerOperation): Promise<boolean> {
+	if (!signer) return false
+	if (typeof signer.encryptionEnabled !== 'function') return false
+	if (operation === 'encrypt' && typeof signer.encrypt !== 'function') return false
+	if (operation === 'decrypt' && typeof signer.decrypt !== 'function') return false
+
+	try {
+		const enabled = await signer.encryptionEnabled('nip44')
+		return enabled.includes('nip44')
+	} catch {
+		return false
 	}
 }
 
@@ -150,6 +250,74 @@ function decryptFromSender(ciphertext: string, recipientPrivateKey: Uint8Array, 
 	} catch {
 		throw new Error(`Malformed ${label}`)
 	}
+}
+
+async function assertSignerSupportsNip44(signer: NDKSigner | null | undefined, operation: Nip44SignerOperation): Promise<NDKSigner> {
+	if (!signer) {
+		throw new Error(`Signer does not support NIP-44 ${operation}`)
+	}
+	if (!(await signerSupportsNip44(signer, operation))) {
+		throw new Error(`Signer does not support NIP-44 ${operation}`)
+	}
+	return signer
+}
+
+async function signerPubkeyFor(signer: NDKSigner): Promise<string> {
+	const user = await signer.user()
+	const pubkey = user.pubkey
+	assertHexPubkey(pubkey, 'signer pubkey')
+	return pubkey
+}
+
+async function encryptForRecipientWithSigner(
+	plaintext: string,
+	signer: NDKSigner,
+	recipientPubkey: string,
+	label: string,
+): Promise<string> {
+	try {
+		return await signer.encrypt(new NDKUser({ pubkey: recipientPubkey }), plaintext, 'nip44')
+	} catch {
+		throw new Error(`NIP-44 encryption failed for ${label}`)
+	}
+}
+
+async function decryptFromSenderWithSigner(ciphertext: string, signer: NDKSigner, senderPubkey: string, label: string): Promise<string> {
+	try {
+		return await signer.decrypt(new NDKUser({ pubkey: senderPubkey }), ciphertext, 'nip44')
+	} catch {
+		throw new Error(`NIP-44 decryption failed for ${label}`)
+	}
+}
+
+type SignableEvent = {
+	kind: number
+	content: string
+	created_at: number
+	tags: string[][]
+	pubkey: string
+}
+
+async function signEventWithSigner(signableEvent: SignableEvent, signer: NDKSigner, label: string): Promise<Event> {
+	if (typeof signer.sign !== 'function') {
+		throw new Error(`Signer does not support signing ${label}`)
+	}
+
+	let sig: string
+	try {
+		sig = await signer.sign(signableEvent as Parameters<NDKSigner['sign']>[0])
+	} catch {
+		throw new Error(`Failed to sign ${label}`)
+	}
+
+	const event = {
+		...signableEvent,
+		id: getEventHash(signableEvent),
+		sig,
+	}
+	assertEvent(event, label)
+	if (!verifyEventSignature(event)) throw new Error(`Invalid ${label} signature`)
+	return event
 }
 
 function parseEventJson(json: string, label: string): Event {

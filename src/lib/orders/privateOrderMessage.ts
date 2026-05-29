@@ -1,6 +1,14 @@
+import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
-import { createNip59GiftWrap, normalizeUnsignedRumorId, unwrapNip59GiftWrap, type UnsignedRumor } from '../nostr/nip59'
+import {
+	createNip59GiftWrap,
+	createNip59GiftWrapWithSigner,
+	normalizeUnsignedRumorId,
+	unwrapNip59GiftWrap,
+	unwrapNip59GiftWrapWithSigner,
+	type UnsignedRumor,
+} from '../nostr/nip59'
 
 const GAMMA_ORDER_KIND = 16
 const GAMMA_ORDER_CREATION_TYPE = '1'
@@ -43,9 +51,21 @@ export type CreateEncryptedPrivateOrderMessageParams = CreatePrivateOrderDetails
 	wrapperPrivateKey?: Uint8Array
 }
 
+export type CreateEncryptedPrivateOrderMessageWithSignerParams = CreatePrivateOrderDetailsRumorParams & {
+	signer: NDKSigner | null | undefined
+	wrapperPrivateKey?: Uint8Array
+}
+
 export type DecryptPrivateOrderMessageParams = {
 	giftWrap: Event
 	sellerPrivateKey: Uint8Array
+	expectedSellerPubkey?: string
+	expectedBuyerPubkey?: string
+}
+
+export type DecryptPrivateOrderMessageWithSignerParams = {
+	giftWrap: Event
+	signer: NDKSigner | null | undefined
 	expectedSellerPubkey?: string
 	expectedBuyerPubkey?: string
 }
@@ -118,6 +138,24 @@ export function createEncryptedPrivateOrderMessage(
 	}
 }
 
+export async function createEncryptedPrivateOrderMessageWithSigner(
+	params: CreateEncryptedPrivateOrderMessageWithSignerParams,
+): Promise<DecryptedPrivateOrderMessage & { giftWrap: Event }> {
+	const rumor = createPrivateOrderDetailsRumor({ details: params.details, createdAt: params.createdAt })
+	const wrapped = await createNip59GiftWrapWithSigner({
+		rumor,
+		signer: params.signer,
+		recipientPubkey: params.details.sellerPubkey,
+		wrapperPrivateKey: params.wrapperPrivateKey,
+		createdAt: params.createdAt,
+	})
+
+	return {
+		...wrapped,
+		details: params.details,
+	}
+}
+
 export function decryptPrivateOrderMessage(params: DecryptPrivateOrderMessageParams): DecryptedPrivateOrderMessage {
 	const sellerPubkey = params.expectedSellerPubkey ?? getPublicKey(params.sellerPrivateKey)
 	const unwrapped = unwrapNip59GiftWrap({
@@ -129,6 +167,24 @@ export function decryptPrivateOrderMessage(params: DecryptPrivateOrderMessagePar
 
 	const details = parsePrivateOrderDetailsRumor(unwrapped.rumor, {
 		expectedSellerPubkey: sellerPubkey,
+		expectedBuyerPubkey: params.expectedBuyerPubkey,
+	})
+
+	return { ...unwrapped, details }
+}
+
+export async function decryptPrivateOrderMessageWithSigner(
+	params: DecryptPrivateOrderMessageWithSignerParams,
+): Promise<DecryptedPrivateOrderMessage> {
+	const unwrapped = await unwrapNip59GiftWrapWithSigner({
+		giftWrap: params.giftWrap,
+		signer: params.signer,
+		expectedRecipientPubkey: params.expectedSellerPubkey,
+		expectedSenderPubkey: params.expectedBuyerPubkey,
+	})
+
+	const details = parsePrivateOrderDetailsRumor(unwrapped.rumor, {
+		expectedSellerPubkey: params.expectedSellerPubkey,
 		expectedBuyerPubkey: params.expectedBuyerPubkey,
 	})
 
