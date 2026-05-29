@@ -66,11 +66,10 @@ export const CVM_ORACLE_DEFAULT_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5
  *
  * @returns The resolved pubkey and whether a self-detection warning was emitted.
  */
-export function resolveCvmServerPubkey(options: {
-	explicitPubkey?: string
-	serverKey?: string
-	appPrivateKey?: string
-}): { pubkey: string; selfDetected: boolean } {
+export function resolveCvmServerPubkey(options: { explicitPubkey?: string; serverKey?: string; appPrivateKey?: string }): {
+	pubkey: string
+	selfDetected: boolean
+} {
 	// Priority 1: explicit pubkey override (CVM_SERVER_PUBKEY env var).
 	// If the operator explicitly sets this, we trust it — even if it matches
 	// the app's own pubkey. They may be running a local CVM oracle under the

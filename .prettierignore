@@ -2,3 +2,6 @@ node_modules
 dist
 src/components/ui
 build
+*-PLAN.md
+docs/auctions-*.md
+docs/nostr-publications.md
