@@ -7,13 +7,14 @@ console.error = () => {}
 
 mock.module('@/lib/ctxcn-client', () => ({
 	PlebianCurrencyClient: class {
-		constructor() {
-			throw new Error('mocked: no real relay connections in tests')
+		async callTool() {
+			return null
 		}
+		close() {}
 	},
 }))
 
-import { convertCurrencyToSats, fetchBtcExchangeRates } from '../external'
+import { convertCurrencyToSats, fetchBtcExchangeRates, resetCurrencyClient } from '../external'
 
 const ORIGINAL_FETCH = globalThis.fetch
 
@@ -49,9 +50,10 @@ function jsonOk(body: unknown): Response {
 describe('external.tsx - fetchBtcExchangeRates', () => {
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
+		resetCurrencyClient()
 	})
 
-	test.skip('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
+	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
 		})
@@ -63,7 +65,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 		expect(result.GBP).toBe(80000)
 	})
 
-	test.skip('throws when both ContextVM and Yadio fail', async () => {
+	test('throws when both ContextVM and Yadio fail', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => new Response('error', { status: 500 }),
 		})
@@ -71,7 +73,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 		await expect(fetchBtcExchangeRates()).rejects.toThrow('Failed to fetch BTC exchange rates')
 	})
 
-	test.skip('throws when Yadio returns non-JSON error', async () => {
+	test('throws when Yadio returns non-JSON error', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => new Response('Service Unavailable', { status: 503 }),
 		})
@@ -79,7 +81,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 		await expect(fetchBtcExchangeRates()).rejects.toThrow('Failed to fetch BTC exchange rates')
 	})
 
-	test.skip('does not cache rates in localStorage', async () => {
+	test('does not cache rates in localStorage', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 103000 } }),
 		})
@@ -90,7 +92,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 		expect(stored).toBeUndefined()
 	})
 
-	test.skip('always fetches fresh rates on every call', async () => {
+	test('always fetches fresh rates on every call', async () => {
 		let callCount = 0
 		mockGlobalFetch({
 			'api.yadio.io': () => {
@@ -112,6 +114,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 describe('external.tsx - convertCurrencyToSats', () => {
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
+		resetCurrencyClient()
 	})
 
 	test('returns amount directly for sats currency', async () => {
@@ -154,7 +157,7 @@ describe('external.tsx - convertCurrencyToSats', () => {
 		expect(result).toBeNull()
 	})
 
-	test.skip('converts USD to sats correctly', async () => {
+	test('converts USD to sats correctly', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
 		})
@@ -167,7 +170,7 @@ describe('external.tsx - convertCurrencyToSats', () => {
 		expect(sats).toBe(expectedSats)
 	})
 
-	test.skip('converts EUR to sats correctly', async () => {
+	test('converts EUR to sats correctly', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
 		})
@@ -180,7 +183,7 @@ describe('external.tsx - convertCurrencyToSats', () => {
 		expect(sats).toBe(expectedSats)
 	})
 
-	test.skip('handles currency case insensitively', async () => {
+	test('handles currency case insensitively', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
 		})
@@ -193,7 +196,7 @@ describe('external.tsx - convertCurrencyToSats', () => {
 		expect(sats).toBe(expectedSats)
 	})
 
-	test.skip('returns null when exchange rate fetch fails', async () => {
+	test('returns null when exchange rate fetch fails', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => new Response('error', { status: 500 }),
 		})

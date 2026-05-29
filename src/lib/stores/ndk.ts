@@ -306,10 +306,8 @@ export const ndkActions = {
 			},
 		})
 
-		// Always monitor zap receipts on public ZAP_RELAYS (plus the app relay).
-		// LSPs publish zap receipts to their own public relays, not the local/app relay,
-		// so we must subscribe there to detect paid invoices.
-		const zapNdk = new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] })
+		const zapRelayUrls = localRelayOnly ? explicitRelays : [...new Set([...ZAP_RELAYS, ...explicitRelays])]
+		const zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
