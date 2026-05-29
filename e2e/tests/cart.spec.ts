@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 import { waitForLatestCartSnapshotToBeEmpty } from '../utils/relay-query'
 import { resetRemoteCartForUser } from '../scenarios'
 
@@ -91,8 +91,7 @@ async function waitForProducts(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.beforeEach(async () => {
-	// Clear cart for active user
-	await resetRemoteCartForUser(devUser1.sk)
+	await resetRemoteCartForUser(devUser3.sk)
 })
 
 test.describe('Cart - Remove Items', () => {
@@ -145,8 +144,7 @@ test.describe('Cart - Remove Items', () => {
 // ---------------------------------------------------------------------------
 
 test.beforeEach(async () => {
-	// Clear cart for active user
-	await resetRemoteCartForUser(devUser1.sk)
+	await resetRemoteCartForUser(devUser3.sk)
 })
 
 test.describe('Cart - Change Quantity', () => {
@@ -319,21 +317,16 @@ test.describe('Cart - Multiple Merchants', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Cart - Persistence', () => {
-	test.skip('cart items persist after page reload', async ({ newUserPage }) => {
+	test('cart items persist after page reload', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
-		// Add a product
 		await addWalletToCart(newUserPage)
-
-		// Add another product from a different seller
 		await addGuideToCart(newUserPage)
 
-		// Reload the page
 		await newUserPage.reload()
 		await newUserPage.waitForLoadState('networkidle')
 
-		// Open the cart and verify both items survived the reload
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
@@ -371,20 +364,17 @@ test.describe('Cart - Persistence', () => {
 		await expect(quantityAfter).toHaveValue('3', { timeout: 10_000 })
 	})
 
-	test.skip('cart persists after navigating to another page and back', async ({ newUserPage }) => {
+	test('cart persists after navigating to another page and back', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 		await addWalletToCart(newUserPage)
 
-		// Navigate away to a different page
 		await safeGoto(newUserPage, '/')
 		await newUserPage.waitForLoadState('networkidle')
 
-		// Navigate back to products
 		await safeGoto(newUserPage, '/products')
 		await newUserPage.waitForLoadState('networkidle')
 
-		// Cart should still have the item
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
