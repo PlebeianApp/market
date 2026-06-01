@@ -5,7 +5,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Event } from 'nostr-tools'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 
 export type OrderWithRelatedEvents = {
@@ -29,6 +29,19 @@ export type OrderWithRelatedEvents = {
 type FetchOrdersBySellerOptions = {
 	includePrivateOrderDetails?: boolean
 	signer?: NDKSigner | null
+}
+
+type UseOrdersBySellerOptions = {
+	includePrivateOrderDetails?: boolean
+}
+
+type FetchOrderByIdOptions = {
+	includePrivateOrderDetails?: boolean
+	signer?: NDKSigner | null
+}
+
+type UseOrderByIdOptions = {
+	includePrivateOrderDetails?: boolean
 }
 
 type PublicOrderCorrelationFields = {
@@ -763,10 +776,20 @@ export const fetchOrdersBySeller = async (
 /**
  * Hook to fetch orders where the specified user is the seller
  */
-export const useOrdersBySeller = (sellerPubkey: string) => {
+export const useOrdersBySeller = (sellerPubkey: string, options: UseOrdersBySellerOptions = {}) => {
+	const includePrivateOrderDetails = options.includePrivateOrderDetails === true
 	return useQuery({
-		queryKey: orderKeys.bySeller(sellerPubkey),
-		queryFn: () => fetchOrdersBySeller(sellerPubkey),
+		queryKey: includePrivateOrderDetails ? orderKeys.bySellerWithPrivate(sellerPubkey) : orderKeys.bySeller(sellerPubkey),
+		queryFn: () =>
+			fetchOrdersBySeller(
+				sellerPubkey,
+				includePrivateOrderDetails
+					? {
+							includePrivateOrderDetails: true,
+							signer: ndkActions.getSigner(),
+						}
+					: undefined,
+			),
 		enabled: !!sellerPubkey,
 	})
 }
@@ -774,7 +797,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 /**
  * Fetches a specific order by its ID
  */
-export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedEvents | null> => {
+export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOptions = {}): Promise<OrderWithRelatedEvents | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -901,7 +924,7 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 	paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	return {
+	const publicOrder = {
 		order: orderEvent,
 		paymentRequests,
 		statusUpdates,
@@ -914,17 +937,45 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 		latestPaymentReceipt: paymentReceipts[0],
 		latestMessage: generalMessages[0],
 	}
+
+	if (!options.includePrivateOrderDetails) return publicOrder
+
+	try {
+		const giftWrapEvents = await fetchSellerPrivateOrderGiftWraps(seller)
+		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
+			giftWrapEvents,
+			sellerPubkey: seller,
+			signer: options.signer ?? ndkActions.getSigner(),
+		})
+		return attachPrivateOrderDetailsToOrders([publicOrder], decryptedDetails)[0] ?? publicOrder
+	} catch {
+		return publicOrder
+	}
 }
 
 /**
  * Hook to fetch a specific order by its ID
  */
-export const useOrderById = (orderId: string) => {
+export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {}) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	const includePrivateOrderDetails = options.includePrivateOrderDetails === true
+	const queryKey = useMemo(
+		() => (includePrivateOrderDetails ? orderKeys.detailsWithPrivate(orderId) : orderKeys.details(orderId)),
+		[includePrivateOrderDetails, orderId],
+	)
 	const orderQuery = useQuery({
-		queryKey: orderKeys.details(orderId),
-		queryFn: () => fetchOrderById(orderId),
+		queryKey,
+		queryFn: () =>
+			fetchOrderById(
+				orderId,
+				includePrivateOrderDetails
+					? {
+							includePrivateOrderDetails: true,
+							signer: ndkActions.getSigner(),
+						}
+					: undefined,
+			),
 		enabled: !!orderId,
 		staleTime: Infinity,
 		refetchOnMount: true,
@@ -949,8 +1000,8 @@ export const useOrderById = (orderId: string) => {
 		})
 
 		const refreshOrderDetails = () => {
-			void queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
-			void queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
+			void queryClient.invalidateQueries({ queryKey })
+			void queryClient.refetchQueries({ queryKey })
 		}
 
 		// Event handler for all events related to this order
@@ -969,7 +1020,7 @@ export const useOrderById = (orderId: string) => {
 		return () => {
 			subscription.stop()
 		}
-	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient])
+	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient, queryKey])
 
 	return orderQuery
 }
