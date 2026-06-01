@@ -919,12 +919,12 @@ function AuctionTabContent({
 		}
 	}
 
-	type Section = 'bidLadder' | 'antiSnipe' | 'settlementGrace' | 'trustedMints' | 'oracle'
+	type Section = 'bidding' | 'antiSnipe' | 'settlementGrace' | 'trustedMints' | 'oracle'
 	const [openSection, setOpenSection] = useState<Section | null>(null)
 	const open = (s: Section) => setOpenSection(s)
 	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
 
-	const bidLadderRef = useOpenOnVisible(() => open('bidLadder'))
+	const biddingRef = useOpenOnVisible(() => open('bidding'))
 	const antiSnipeRef = useOpenOnVisible(() => open('antiSnipe'))
 	const settlementGraceRef = useOpenOnVisible(() => open('settlementGrace'))
 	const trustedMintsRef = useOpenOnVisible(() => open('trustedMints'))
@@ -1123,62 +1123,65 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid sm:grid-cols-2 gap-4 items-start">
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-starting-bid">
-						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
-					</Label>
-					<Input
-						id="auction-starting-bid"
-						type="number"
-						min="0"
-						value={formData.startingBid}
-						onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
-					/>
-					{validationMessages.startingBid && <p className="text-xs text-red-600">{validationMessages.startingBid}</p>}
-				</div>
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-bid-increment">
-						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Bid Increment (sats)</span>
-					</Label>
-					<Input
-						id="auction-bid-increment"
-						type="number"
-						min="1"
-						value={formData.bidIncrement}
-						onFocus={(e) => e.target.select()}
-						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
-					/>
-					{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
-				</div>
-			</div>
+			<div ref={biddingRef}>
+				<Collapsible open={openSection === 'bidding'} onOpenChange={toggle('bidding')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Bidding price
+						{(validationMessages.startingBid || validationMessages.bidIncrement || validationMessages.reserve) && (
+							<span className="ml-1 text-red-500">*</span>
+						)}
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'bidding' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<div className="rounded-lg border border-zinc-200 bg-white px-4 py-4 flex flex-col gap-4">
+							<div className="grid sm:grid-cols-2 gap-4 items-start">
+								<div className="grid w-full gap-1.5">
+									<Label htmlFor="auction-starting-bid">
+										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
+									</Label>
+									<Input
+										id="auction-starting-bid"
+										type="number"
+										min="0"
+										value={formData.startingBid}
+										onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
+									/>
+									{validationMessages.startingBid && <p className="text-xs text-red-600">{validationMessages.startingBid}</p>}
+								</div>
+								<div className="grid w-full gap-1.5">
+									<Label htmlFor="auction-bid-increment">
+										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Bid Increment (sats)</span>
+									</Label>
+									<Input
+										id="auction-bid-increment"
+										type="number"
+										min="1"
+										value={formData.bidIncrement}
+										onFocus={(e) => e.target.select()}
+										onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
+									/>
+									{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
+								</div>
+							</div>
 
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-				<Input
-					id="auction-reserve"
-					type="number"
-					min="0"
-					value={formData.reserve}
-					onFocus={(e) => e.target.select()}
-					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value.replace(/^0+(\d)/, '$1') }))}
-				/>
-				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
-			</div>
+							<div className="grid w-full gap-1.5">
+								<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+								<Input
+									id="auction-reserve"
+									type="number"
+									min="0"
+									value={formData.reserve}
+									onFocus={(e) => e.target.select()}
+									onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value.replace(/^0+(\d)/, '$1') }))}
+								/>
+								{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+							</div>
 
-			{showBidLadder && (
-				<div ref={bidLadderRef}>
-					<Collapsible open={openSection === 'bidLadder'} onOpenChange={toggle('bidLadder')}>
-						<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
-							Bid Ladder
-							<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'bidLadder' ? 'rotate-180' : ''}`} />
-						</CollapsibleTrigger>
-						<CollapsibleContent className="mt-2">
-							<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
-						</CollapsibleContent>
-					</Collapsible>
-				</div>
-			)}
+							{showBidLadder && <BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
+						</div>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 
 			<div ref={antiSnipeRef}>
 				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
