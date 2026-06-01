@@ -34,21 +34,15 @@ test.describe('Buyer Purchase Flow', () => {
 			.filter({ has: buyerPage.locator('.i-basket') })
 			.click()
 
-		// Wait for cart content to load and shipping options to appear
-		const shippingTrigger = buyerPage.getByText('Select shipping method')
-		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+		// Shipping is deferred to checkout for all items.
+		await expect(buyerPage.getByText('Select shipping at checkout for 2 items.', { exact: true })).toBeVisible({
+			timeout: 10_000,
+		})
 
-		// Select "Worldwide Standard" shipping (5,000 sats)
-		await shippingTrigger.click()
-		await buyerPage.getByText(/Worldwide Standard/).click()
-
-		// Wait for totals to update after shipping selection
-		// Subtotal: 50,000 + 15,000 = 65,000 sat
-		// Shipping: 5,000 × 2 products = 10,000 sat (shipping cost applies per product)
-		// Total: 75,000 sat
+		// Cart totals should show the product subtotal while shipping is selected at checkout.
 		await expect(buyerPage.getByText('65,000 sat').first()).toBeVisible({ timeout: 10_000 })
-		await expect(buyerPage.getByText('10,000 sat').first()).toBeVisible()
-		await expect(buyerPage.getByText('75,000 sat').first()).toBeVisible()
+		await expect(buyerPage.getByText('0 sat').first()).toBeVisible()
+		await expect(buyerPage.getByText('65,000 sat').nth(1)).toBeVisible()
 
 		// Verify V4V payment breakdown (merchant seeded with 10% V4V)
 		// V4V applies to product subtotal only (65,000 sats), not shipping
