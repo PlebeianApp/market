@@ -45,13 +45,13 @@ test.describe('Buyer Purchase Flow', () => {
 		await expect(buyerPage.getByText('65,000 sat').nth(1)).toBeVisible()
 
 		// Verify V4V payment breakdown (merchant seeded with 10% V4V)
-		// V4V applies to product subtotal only (65,000 sats), not shipping
+		// V4V applies to product subtotal only (65,000 sats), and shipping is still deferred.
 		// Community Share: 10% of 65,000 = 6,500 sat
-		// Merchant: 90% of 65,000 + 10,000 shipping = 68,500 sat
+		// Merchant: 90% of 65,000 = 58,500 sat
 		await expect(buyerPage.getByText('Payment Breakdown')).toBeVisible()
 		await expect(buyerPage.getByText(/Community Share/)).toBeVisible()
 		await expect(buyerPage.getByText('6,500 sat')).toBeVisible()
-		await expect(buyerPage.getByText('68,500 sat')).toBeVisible()
+		await expect(buyerPage.getByText('58,500 sat')).toBeVisible()
 
 		// Checkout button should be enabled now that shipping is selected
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
