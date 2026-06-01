@@ -262,10 +262,10 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// Each seller group gets its own shipping selector,
-		// so there should be 2 "Select shipping method" triggers
-		const shippingTriggers = dialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(2, { timeout: 10_000 })
+		// Shipping is deferred to checkout for all items.
+		await expect(dialog.getByText('Select shipping at checkout for 2 items.', { exact: true })).toBeVisible({
+			timeout: 10_000,
+		})
 	})
 
 	test('can add multiple products from same seller', async ({ newUserPage }) => {
@@ -283,9 +283,10 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 		await expect(dialog.getByText('Nostr T-Shirt')).toBeVisible()
 
-		// They're grouped under the same seller, so only 1 shipping selector
-		const shippingTriggers = dialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })
+		// Shipping is deferred to checkout and the cart shows a single checkout notice.
+		await expect(dialog.getByText('Select shipping at checkout for 2 items.', { exact: true })).toBeVisible({
+			timeout: 10_000,
+		})
 	})
 
 	test('removing all items from one seller keeps other seller items', async ({ newUserPage }) => {
@@ -308,11 +309,9 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 5_000 })
 		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// Only 1 live shipping selector control should remain for the remaining seller.
-		// Count the actual select triggers rather than raw text so exiting animated nodes
-		// don't get mistaken for an active seller section.
-		const shippingSelectors = dialog.locator('[data-slot="select-trigger"]:visible')
-		await expect(shippingSelectors).toHaveCount(1, { timeout: 10_000 })
+		await expect(dialog.getByText('Select shipping at checkout for 1 item.', { exact: true })).toBeVisible({
+			timeout: 10_000,
+		})
 	})
 })
 
