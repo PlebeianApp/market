@@ -288,14 +288,14 @@ test.describe('Authentication', () => {
 
 		test('remove stored key shows fresh key input', async ({ browser }) => {
 			const context = await browser.newContext()
-			const nsec = hexToNsec(devUser2.sk)
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
 
 			await context.addInitScript(
-				({ pk, nsec }: { pk: string; nsec: string }) => {
-					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${nsec}`)
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
 					localStorage.setItem('plebeian_terms_accepted', 'true')
 				},
-				{ pk: devUser2.pk, nsec },
+				{ pk: devUser2.pk, ncryptsec },
 			)
 
 			const page = await context.newPage()
