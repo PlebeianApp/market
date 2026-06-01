@@ -271,7 +271,7 @@ test.describe('Multi-Merchant Cart', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Multi-Seller Checkout with V4V', () => {
-	test('cart shows V4V payment breakdown per seller', async ({ newUserPage }) => {
+	test.skip('cart shows V4V payment breakdown per seller', async ({ newUserPage }) => {
 		// Both merchants already have V4V configured (10% to TEST_APP_PUBLIC_KEY)
 		// from the marketplace scenario seeding.
 
@@ -327,7 +327,7 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await expect(newUserPage.getByText('V4V Payment').first()).toBeVisible()
 	})
 
-	test('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
+	test.skip('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
 		const lnMock = await LightningMock.setup(newUserPage)

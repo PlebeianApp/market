@@ -8,7 +8,7 @@ console.error = () => {}
 mock.module('@/lib/ctxcn-client', () => ({
 	PlebianCurrencyClient: class {
 		async callTool() {
-			return null
+			return { rates: null, error: 'test stub' }
 		}
 		close() {}
 	},
