@@ -78,30 +78,36 @@ async function openCart(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function selectShippingForAllSellers(page: Page): Promise<void> {
-	// Each seller group has its own ShippingSelector (Radix Select).
-	// Wait for shipping selectors to be visible.
+	// Shipping is selected on the checkout page now.
 	const cartDialog = page.getByRole('dialog', { name: /your cart/i })
-	const shippingTriggers = cartDialog.getByText('Select shipping method')
+	await expect(cartDialog.getByText(/Select shipping at checkout for \d+ items\./)).toBeVisible({ timeout: 10_000 })
 
-	// Wait for at least one shipping trigger to appear
+	const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
+	await expect(checkoutButton).toBeEnabled({ timeout: 10_000 })
+	await checkoutButton.click()
+
+	// Wait for checkout shipping step and then select shipping for each seller.
+	// Select triggers are rendered as SelectTrigger (button) elements with the
+	// placeholder text "Select shipping method". Use a filtered button locator
+	// to be more robust than getByText alone.
+	const shippingTriggers = page.locator('button').filter({ hasText: 'Select shipping method' })
 	await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
 
-	// Count how many need selecting
 	const count = await shippingTriggers.count()
-
 	for (let i = 0; i < count; i++) {
-		// Click the first remaining unselected trigger
-		const trigger = cartDialog.getByText('Select shipping method').first()
+		const trigger = shippingTriggers.nth(i)
 		await trigger.click()
 
-		// Select Digital Delivery (free, available for both sellers)
 		const option = page.getByRole('option', { name: /digital delivery/i })
 		await expect(option).toBeVisible({ timeout: 5_000 })
 		await option.click()
 
-		// Wait for the select to close before clicking the next one
 		await page.waitForTimeout(500)
 	}
+
+	// Submit the shipping form to proceed to order summary.
+	await page.locator('button[form="shipping-form"]').click()
+	await expect(page.getByText('Order Summary').or(page.getByText('Invoices', { exact: true }))).toBeVisible({ timeout: 30_000 })
 }
 
 // ---------------------------------------------------------------------------
@@ -228,10 +234,10 @@ test.describe('Multi-Merchant Cart', () => {
 		await expect(cartDialog.getByText('Bitcoin Hardware Wallet')).toBeVisible()
 		await expect(cartDialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// There should be seller group containers (border + shadow cards)
-		// with separate shipping selectors for each seller
-		const shippingTriggers = cartDialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(2, { timeout: 10_000 })
+		// Shipping is deferred to checkout for all items.
+		await expect(cartDialog.getByText('Select shipping at checkout for 2 items.', { exact: true })).toBeVisible({
+			timeout: 10_000,
+		})
 	})
 
 	test('cart requires shipping per seller before checkout', async ({ newUserPage }) => {
@@ -240,29 +246,15 @@ test.describe('Multi-Merchant Cart', () => {
 
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
 
-		// Warning should show that shipping is missing
-		await expect(newUserPage.getByText(/please select shipping options for/i)).toBeVisible({ timeout: 10_000 })
+		// Warning should show that shipping is missing from the cart view.
+		await expect(newUserPage.getByText('Select shipping at checkout for 2 items.', { exact: true })).toBeVisible({ timeout: 10_000 })
 
-		// Checkout button should be disabled
+		// Checkout remains available from cart and shipping selection happens on checkout.
 		const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
-		await expect(checkoutButton).toBeDisabled()
+		await expect(checkoutButton).toBeEnabled()
+		await checkoutButton.click()
 
-		// Select shipping for first seller only
-		const firstTrigger = cartDialog.getByText('Select shipping method').first()
-		await firstTrigger.click()
-		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
-		await newUserPage.waitForTimeout(500)
-
-		// Checkout should still be disabled (second seller missing)
-		await expect(checkoutButton).toBeDisabled()
-
-		// Select shipping for second seller
-		const secondTrigger = cartDialog.getByText('Select shipping method').first()
-		await secondTrigger.click()
-		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
-
-		// Now checkout should be enabled
-		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
+		await expect(newUserPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
 	})
 })
 
