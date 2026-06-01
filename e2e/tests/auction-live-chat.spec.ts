@@ -57,7 +57,7 @@ async function seedLiveActivity(dTag: string) {
 				['a', `30408:${devUser1.pk}:${dTag}`],
 				['title', 'NIP-53 Protocol Test Auction'],
 				['status', 'live'],
-				['marketplace', 'plebeian'],
+				['client', 'plebeian.market'],
 				['p', devUser1.pk, '', 'Host'],
 				['relays', RELAY_URL],
 			],
@@ -136,6 +136,6 @@ test.describe('Auction Live Chat', () => {
 		expect(liveEvent.tags.some((t) => t[0] === 'a' && t[1].startsWith('30408:'))).toBe(true)
 		expect(liveEvent.tags.some((t) => t[0] === 'title')).toBe(true)
 		expect(liveEvent.tags.some((t) => t[0] === 'status')).toBe(true)
-		expect(liveEvent.tags.some((t) => t[0] === 'marketplace' && t[1] === 'plebeian')).toBe(true)
+		expect(liveEvent.tags.some((t) => t[0] === 'client' && t[1] === 'plebeian.market')).toBe(true)
 	})
 })

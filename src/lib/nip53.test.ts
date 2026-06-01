@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import {
 	LIVE_ACTIVITY_KIND,
 	AUCTION_KIND,
-	MARKETPLACE_TAG,
 	getLiveActivityCoord,
 	getAuctionCoordFromLiveActivity,
 	getLiveActivityCoordFromAuction,
@@ -76,7 +75,7 @@ describe('nip53', () => {
 		expect(tags.find((t) => t[0] === 'a')?.[1]).toBe(`30408:${sellerPubkey}:${dTag}`)
 		expect(tags.find((t) => t[0] === 'title')?.[1]).toBe('Test Auction')
 		expect(tags.find((t) => t[0] === 'status')?.[1]).toBe('planned')
-		expect(tags.find((t) => t[0] === 'marketplace')?.[1]).toBe(MARKETPLACE_TAG)
+		expect(tags.find((t) => t[0] === 'client')?.[1]).toBe('plebeian.market')
 		expect(tags.find((t) => t[0] === 'p')?.[1]).toBe(sellerPubkey)
 		expect(tags.find((t) => t[0] === 'p')?.[3]).toBe('Host')
 		expect(tags.find((t) => t[0] === 'summary')?.[1]).toBe('A test')
