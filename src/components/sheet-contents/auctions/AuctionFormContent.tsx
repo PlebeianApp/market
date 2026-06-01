@@ -845,32 +845,6 @@ function SettlementGraceSettings({
 	)
 }
 
-function useOpenOnVisible(onVisible: () => void) {
-	const callbackRef = useRef(onVisible)
-	callbackRef.current = onVisible
-	const ref = useRef<HTMLDivElement>(null)
-	useEffect(() => {
-		// Delay observer attachment so elements visible during the sheet's
-		// open animation don't auto-expand immediately.
-		const timer = setTimeout(() => {
-			const el = ref.current
-			if (!el) return
-			const observer = new IntersectionObserver(
-				([entry]) => {
-					if (entry.isIntersecting) {
-						callbackRef.current()
-						observer.disconnect()
-					}
-				},
-				{ threshold: 0.15 },
-			)
-			observer.observe(el)
-		}, 600)
-		return () => clearTimeout(timer)
-	}, [])
-	return ref
-}
-
 function AuctionTabContent({
 	formData,
 	setFormData,
@@ -921,14 +895,7 @@ function AuctionTabContent({
 
 	type Section = 'bidding' | 'antiSnipe' | 'settlementGrace' | 'trustedMints' | 'oracle'
 	const [openSection, setOpenSection] = useState<Section | null>(null)
-	const open = (s: Section) => setOpenSection(s)
 	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
-
-	const biddingRef = useOpenOnVisible(() => open('bidding'))
-	const antiSnipeRef = useOpenOnVisible(() => open('antiSnipe'))
-	const settlementGraceRef = useOpenOnVisible(() => open('settlementGrace'))
-	const trustedMintsRef = useOpenOnVisible(() => open('trustedMints'))
-	const oracleRef = useOpenOnVisible(() => open('oracle'))
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
@@ -1123,7 +1090,7 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div ref={biddingRef}>
+			<div>
 				<Collapsible open={openSection === 'bidding'} onOpenChange={toggle('bidding')}>
 					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Bidding price
@@ -1183,7 +1150,7 @@ function AuctionTabContent({
 				</Collapsible>
 			</div>
 
-			<div ref={antiSnipeRef}>
+			<div>
 				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
 					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Anti-snipe &amp; Curve Settings
@@ -1205,7 +1172,7 @@ function AuctionTabContent({
 				</Collapsible>
 			</div>
 
-			<div ref={settlementGraceRef}>
+			<div>
 				<Collapsible open={openSection === 'settlementGrace'} onOpenChange={toggle('settlementGrace')}>
 					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Settlement Grace
@@ -1219,7 +1186,7 @@ function AuctionTabContent({
 				</Collapsible>
 			</div>
 
-			<div ref={trustedMintsRef}>
+			<div>
 				<Collapsible open={openSection === 'trustedMints'} onOpenChange={toggle('trustedMints')}>
 					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Trusted Mints
@@ -1279,7 +1246,7 @@ function AuctionTabContent({
 				</Collapsible>
 			</div>
 
-			<div ref={oracleRef}>
+			<div>
 				<Collapsible open={openSection === 'oracle'} onOpenChange={toggle('oracle')}>
 					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
 						Auction Oracle
