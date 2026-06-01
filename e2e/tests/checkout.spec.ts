@@ -124,9 +124,14 @@ test.describe('Checkout', () => {
 	test('DIAG: capture UI state after Continue to Payment (#962)', async ({ buyerPage }) => {
 		test.setTimeout(60_000)
 
-		const consoleErrors: string[] = []
+		const consoleMessages: { type: string; text: string }[] = []
 		buyerPage.on('console', (msg) => {
-			if (msg.type() === 'error') consoleErrors.push(msg.text())
+			consoleMessages.push({ type: msg.type(), text: msg.text() })
+		})
+
+		const pageErrors: string[] = []
+		buyerPage.on('pageerror', (error) => {
+			pageErrors.push(error.message)
 		})
 
 		const lnMock = await LightningMock.setup(buyerPage)
@@ -166,30 +171,51 @@ test.describe('Checkout', () => {
 		await expect(continueToPayment).toBeEnabled()
 		await continueToPayment.click()
 
-		await buyerPage.waitForTimeout(5_000)
+		await buyerPage.waitForTimeout(8_000)
 
 		await buyerPage.screenshot({ path: 'test-results/diag-after-continue-to-payment.png', fullPage: true })
 
-		const stepText = await buyerPage.evaluate(() => {
+		const diagInfo = await buyerPage.evaluate(() => {
 			const stepIndicator = document.querySelector('[data-step]')
 			const errorToasts = Array.from(document.querySelectorAll('[data-sonner-toast]')).map((t) => t.textContent)
+			const buttons = Array.from(document.querySelectorAll('button')).map((b) => b.textContent?.trim()).filter(Boolean)
+			const headings = Array.from(document.querySelectorAll('h1,h2,h3')).map((h) => h.textContent?.trim()).filter(Boolean)
+			const cartState = (() => {
+				try {
+					const raw = localStorage.getItem('cart-storage')
+					return raw ? JSON.parse(raw) : null
+				} catch {
+					return null
+				}
+			})()
+			const bodyText = document.body.innerText.slice(0, 3000)
+			const mainHTML = document.querySelector('main')?.innerHTML?.slice(0, 2000) ?? 'no <main>'
 			return {
 				url: window.location.href,
+				title: document.title,
 				step: stepIndicator?.getAttribute('data-step') ?? 'not found',
-				bodySnippet: document.body.innerText.slice(0, 2000),
+				headings,
+				buttons: buttons.slice(0, 20),
 				errorToasts,
+				cartProducts: cartState?.state?.cart?.products ? Object.keys(cartState.state.cart.products).length : 'no cart',
+				bodyText,
+				mainHTML,
 			}
 		})
 
-		console.log('DIAG step:', stepText.step)
-		console.log('DIAG url:', stepText.url)
-		console.log('DIAG toasts:', JSON.stringify(stepText.errorToasts))
-		console.log('DIAG console errors (last 10):', JSON.stringify(consoleErrors.slice(-10)))
+		console.log('DIAG url:', diagInfo.url)
+		console.log('DIAG title:', diagInfo.title)
+		console.log('DIAG step:', diagInfo.step)
+		console.log('DIAG headings:', JSON.stringify(diagInfo.headings))
+		console.log('DIAG buttons:', JSON.stringify(diagInfo.buttons))
+		console.log('DIAG toasts:', JSON.stringify(diagInfo.errorToasts))
+		console.log('DIAG cart products count:', diagInfo.cartProducts)
+		console.log('DIAG page errors:', JSON.stringify(pageErrors.slice(-10)))
+		console.log('DIAG console errors:', JSON.stringify(consoleMessages.filter((m) => m.type === 'error').map((m) => m.text).slice(-10)))
+		console.log('DIAG console warns:', JSON.stringify(consoleMessages.filter((m) => m.type === 'warning').map((m) => m.text).slice(-10)))
+		console.log('DIAG body text:', diagInfo.bodyText)
+		console.log('DIAG main HTML (first 2000):', diagInfo.mainHTML)
 
-		if (stepText.step !== 'payment') {
-			console.log('DIAG body snippet:', stepText.bodySnippet)
-		}
-
-		expect(stepText.step).toBe('payment')
+		expect(diagInfo.step).toBe('payment')
 	})
 })
