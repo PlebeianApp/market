@@ -112,7 +112,7 @@ describe('publishLiveActivity', () => {
 		expect(event.tags.find((t: string[]) => t[0] === 'a')?.[1]).toBe(`${AUCTION_KIND}:${sellerPubkey}:${dTag}`)
 		expect(event.tags.find((t: string[]) => t[0] === 'title')?.[1]).toBe('Test Auction')
 		expect(event.tags.find((t: string[]) => t[0] === 'status')?.[1]).toBe('ended')
-		expect(event.tags.find((t: string[]) => t[0] === 'marketplace')?.[1]).toBe('plebeian')
+		expect(event.tags.find((t: string[]) => t[0] === 'client')?.[1]).toBe('plebeian.market')
 		expect(event.tags.find((t: string[]) => t[0] === 'image')?.[1]).toBe('https://example.com/auction.png')
 		expect(event.tags.find((t: string[]) => t[0] === 'starts')?.[1]).toBe('1000')
 		expect(event.tags.find((t: string[]) => t[0] === 'ends')?.[1]).toBe('2000')
@@ -202,7 +202,7 @@ describe('updateLiveActivityStatus', () => {
 				['d', dTag],
 				['status', 'planned'],
 				['title', 'My Auction'],
-				['marketplace', 'plebeian'],
+				['client', 'plebeian.market'],
 			],
 		} as any
 
@@ -220,7 +220,7 @@ describe('updateLiveActivityStatus', () => {
 		expect(event.tags.find((t: string[]) => t[0] === 'status')?.[1]).toBe('live')
 		expect(event.tags.find((t: string[]) => t[0] === 'd')?.[1]).toBe(dTag)
 		expect(event.tags.find((t: string[]) => t[0] === 'title')?.[1]).toBe('My Auction')
-		expect(event.tags.find((t: string[]) => t[0] === 'marketplace')?.[1]).toBe('plebeian')
+		expect(event.tags.find((t: string[]) => t[0] === 'client')?.[1]).toBe('plebeian.market')
 	})
 
 	test('replaces only status tag when multiple status tags exist', async () => {

@@ -1,8 +1,6 @@
 export const LIVE_ACTIVITY_KIND = 30311
 export const LIVE_CHAT_KIND = 1311
 export const AUCTION_KIND = 30408
-export const MARKETPLACE_TAG = 'plebeian'
-
 export type LiveActivityStatus = 'planned' | 'live' | 'ended'
 
 export interface LiveActivity {
@@ -62,7 +60,7 @@ export function buildLiveActivityTags(params: {
 		['a', `${AUCTION_KIND}:${params.sellerPubkey}:${params.dTag}`],
 		['title', params.title],
 		['status', params.status],
-		['marketplace', MARKETPLACE_TAG],
+		['client', 'plebeian.market'],
 		['p', params.sellerPubkey, '', 'Host'],
 	]
 

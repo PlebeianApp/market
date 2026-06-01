@@ -57,7 +57,7 @@ async function seedLiveActivity(dTag: string) {
 				['a', `30408:${devUser1.pk}:${dTag}`],
 				['title', 'Live Chat E2E Auction'],
 				['status', 'live'],
-				['marketplace', 'plebeian'],
+				['client', 'plebeian.market'],
 				['p', devUser1.pk, '', 'Host'],
 				['starts', String(now)],
 				['ends', String(now + 86400)],
