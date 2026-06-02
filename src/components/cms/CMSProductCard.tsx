@@ -12,6 +12,7 @@ import {
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { UserCard } from '@/components/UserCard'
 import { cartActions } from '@/lib/stores/cart'
+import { Button } from '@/components/ui/button'
 import React from 'react'
 import { ShoppingBasketIcon } from 'lucide-react'
 
@@ -126,15 +127,11 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 				<div className="flex items-center justify-between mt-auto pt-2">
 					{showPrice && price && <div>{renderPrice()}</div>}
 
-					{/* Add to Cart Icon Button */}
-					<button
-						className="p-1 rounded-full border border-input hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-						onClick={handleAddToCart}
-						disabled={!isInStock}
-						aria-label="Add to cart"
-					>
+					{/* Add to Cart Button - Using shadcn UI Button */}
+					<Button variant="outline" size="sm" onClick={handleAddToCart} disabled={!isInStock}>
 						<ShoppingBasketIcon className="h-5 w-5" />
-					</button>
+						Add to Cart
+					</Button>
 				</div>
 			</div>
 		</div>
