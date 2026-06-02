@@ -1,5 +1,5 @@
 import type { Config } from '@puckeditor/core'
-import { CustomFilterField } from '@/components/editor/CustomFilterField'
+import { DataSourceField, STATIC_DATA_SOURCE_EMPTY } from '@/components/editor/DataSourceField'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
 
 // Import the components we generated
@@ -10,31 +10,20 @@ import { HeroCarousel, type HeroCarouselProps } from '@/components/cms/CMSHeroCa
 import { RichTextBlock, type RichTextBlockProps } from '@/components/cms/CMSRichTextBlock'
 import { VideoEmbed, type VideoEmbedProps } from '@/components/cms/CMSVideoEmbed'
 import { CheckboxField } from '@/components/editor/CheckboxField'
-import { ImageUploadField } from '@/components/editor/ImageUploadField'
-import { ProductGridDynamic, type ProductGridDynamicProps } from '@/components/cms/CMSProductGridDynamic'
-import { ProductGallery, type ProductGalleryProps } from '@/components/cms/CMSProductGallery'
-import { ArtistBio, type ArtistBioProps } from '@/components/cms/CMSArtistBio'
-import { FeaturedProductCardDynamic, type FeaturedProductCardDynamicProps } from '@/components/cms/CMSFeaturedProductCardDynamic'
-import { FeaturedProductCardStatic, type FeaturedProductCardStaticProps } from '@/components/cms/CMSFeaturedProductCardStatic'
-import { ProductGridStatic, type ProductGridStaticProps } from '@/components/cms/CMSProductGridStatic'
-import { StringArrayField } from '@/components/editor/StringArrayField'
+import { CMSProductGrid, type CMSProductGridProps } from '@/components/cms/CMSProductGrid'
+import { CMSFeaturedProductCard, type CMSFeaturedProductCardProps } from '@/components/cms/CMSFeaturedProductCard'
 
 // Define the component map for TypeScript inference
 type Components = {
 	HeroBanner: HeroBannerProps
 	SplitFeature: SplitFeatureProps
 	HeroCarousel: HeroCarouselProps
-	ProductGridStatic: ProductGridStaticProps
-	ProductGridDynamic: ProductGridDynamicProps
-	FeaturedProductCardDynamic: FeaturedProductCardDynamicProps
-	FeaturedProductCardStatic: FeaturedProductCardStaticProps
-	ProductGallery: ProductGalleryProps
-	ArtistBio: ArtistBioProps
+	CMSProductGrid: CMSProductGridProps
+	CMSFeaturedProductCard: CMSFeaturedProductCardProps
 	RichTextBlock: RichTextBlockProps
 	VideoEmbed: VideoEmbedProps
 	// Keep existing CMS components if needed
 	CMSUserProfile: { identifier: string; relayUrl?: string }
-	CMSProductGrid: { kind: number; limit: number; author: string; tags: any[]; relayUrl?: string }
 	HeadingBlock: { title: string }
 	Paragraph: { text: string }
 }
@@ -185,13 +174,14 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 
 		// --- Category 3: Product Display ---
 
-		ProductGridStatic: {
+		CMSProductGrid: {
 			fields: {
-				title: { type: 'text', label: 'Section Title (Optional)' },
-				productIds: {
+				dataSource: {
 					type: 'custom',
-					label: 'Product IDs',
-					render: ({ field, value, name, onChange }) => <StringArrayField field={field} value={value} onChange={onChange} name={name} />,
+					label: 'Data Source',
+					render: ({ field, value, name, onChange }) => (
+						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} />
+					),
 				},
 				columnsDesktop: { type: 'number', label: 'Columns (Desktop)' },
 				columnsTablet: { type: 'number', label: 'Columns (Tablet)' },
@@ -208,70 +198,33 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				},
 			},
 			defaultProps: {
-				productIds: [],
+				dataSource: { type: 'static', ids: [] },
 				columnsDesktop: 3,
 				columnsTablet: 2,
 				columnsMobile: 1,
 				showQuickAdd: true,
 				showVendor: true,
 			},
-			render: (props) => <ProductGridStatic {...props} />,
+			render: (props) => <CMSProductGrid {...props} />,
 		},
 
-		ProductGridDynamic: {
+		CMSFeaturedProductCard: {
 			fields: {
-				kind: { type: 'number', label: 'Event Kind' },
-				limit: { type: 'number', label: 'Max Items' },
-				author: { type: 'text', label: 'Author Pubkey (optional)' },
-				tags: {
+				dataSource: {
 					type: 'custom',
-					label: 'Nostr Filter Tags',
-					render: ({ name, onChange, value, field }: any) => <CustomFilterField field={field} value={value ?? []} onChange={onChange} />,
-				},
-				relayUrl: { type: 'text', label: 'Relay URL (optional)' },
-				columnsDesktop: { type: 'number', label: 'Columns (Desktop)' },
-				columnsTablet: { type: 'number', label: 'Columns (Tablet)' },
-				columnsMobile: { type: 'number', label: 'Columns (Mobile)' },
-				showQuickAdd: {
-					type: 'custom',
-					label: 'Show Quick Add',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-				showVendor: {
-					type: 'custom',
-					label: 'Show Vendor',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-			},
-			defaultProps: {
-				kind: 30402,
-				limit: 12,
-				author: '',
-				tags: [],
-				columnsDesktop: 3,
-				columnsTablet: 2,
-				columnsMobile: 1,
-				showQuickAdd: true,
-				showVendor: true,
-			},
-			render: (props) => <ProductGridDynamic {...props} />,
-		},
-
-		FeaturedProductCardStatic: {
-			fields: {
-				productIds: {
-					type: 'custom',
-					label: 'Product IDs',
-					render: ({ field, value, name, onChange }) => <StringArrayField field={field} value={value} onChange={onChange} name={name} />,
+					label: 'Data Source',
+					render: ({ field, value, name, onChange }) => (
+						<DataSourceField
+							field={field}
+							value={value ?? STATIC_DATA_SOURCE_EMPTY}
+							onChange={onChange}
+							allowedTypes={['static', 'dynamic']}
+						/>
+					),
 				},
 				showPrice: {
 					type: 'custom',
 					label: 'Show Price',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-				showDimensions: {
-					type: 'custom',
-					label: 'Show Dimensions',
 					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
 				},
 				showDescriptionSnippet: {
@@ -281,136 +234,14 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				},
 			},
 			defaultProps: {
-				productIds: [],
+				dataSource: { type: 'static', ids: [] },
 				showPrice: true,
-				showDimensions: true,
 				showDescriptionSnippet: true,
 			},
-			render: (props) => <FeaturedProductCardStatic {...props} />,
-		},
-
-		FeaturedProductCardDynamic: {
-			fields: {
-				filters: {
-					type: 'object',
-					objectFields: {
-						authors: {
-							type: 'array',
-							arrayFields: { type: 'text', label: 'Author' },
-						},
-						kind: { type: 'number', label: 'Kind' },
-						limit: { type: 'number', label: 'Limit' },
-						tags: {
-							type: 'custom',
-							label: 'Filter Tags',
-							render: ({ name, onChange, value, field }: any) => (
-								<CustomFilterField field={field} value={value ?? []} onChange={onChange} />
-							),
-						},
-					},
-				},
-				showPrice: {
-					type: 'custom',
-					label: 'Show Price',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-				showDimensions: {
-					type: 'custom',
-					label: 'Show Dimensions',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-				showDescriptionSnippet: {
-					type: 'custom',
-					label: 'Show Description',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-			},
-			defaultProps: {
-				showPrice: true,
-				showDimensions: true,
-				showDescriptionSnippet: true,
-			},
-			render: (props) => <FeaturedProductCardDynamic {...props} />,
-		},
-
-		ProductGallery: {
-			fields: {
-				images: {
-					type: 'array',
-					label: 'Manual Images (if not using Product ID)',
-					arrayFields: {
-						src: {
-							type: 'custom',
-							label: 'Image Source',
-							render: ({ field, value, name, onChange }) => (
-								<ImageUploadField field={field} value={value} onChange={onChange} name={name} />
-							),
-						},
-						alt: { type: 'text', label: 'Alt Text' },
-						isVideo: {
-							type: 'custom',
-							label: 'Is Video?',
-							render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-						},
-						videoUrl: { type: 'text', label: 'Video URL' },
-					},
-					defaultItemProps: {
-						src: '',
-						alt: '',
-						isVideo: false,
-						videoUrl: '',
-					},
-				},
-				layout: {
-					type: 'select',
-					label: 'Thumbnail Layout',
-					options: [
-						{ label: 'Vertical', value: 'vertical' },
-						{ label: 'Horizontal', value: 'horizontal' },
-					],
-				},
-				enableZoom: {
-					type: 'custom',
-					label: 'Enable Zoom',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-				zoomType: {
-					type: 'select',
-					label: 'Zoom Type',
-					options: [
-						{ label: 'Lens', value: 'lens' },
-						{ label: 'Inner', value: 'inner' },
-					],
-				},
-			},
-			defaultProps: {
-				images: [],
-				layout: 'vertical',
-				enableZoom: true,
-			},
-			render: (props) => <ProductGallery {...props} />,
+			render: (props) => <CMSFeaturedProductCard {...props} />,
 		},
 
 		// --- Category 5: Content & Storytelling ---
-
-		ArtistBio: {
-			fields: {
-				identifier: { type: 'text', label: 'User Identifier (npub, nip-05, or hex pubkey)' },
-				alignment: {
-					type: 'select',
-					label: 'Alignment',
-					options: [
-						{ label: 'Left', value: 'left' },
-						{ label: 'Center', value: 'center' },
-					],
-				},
-			},
-			defaultProps: {
-				identifier: '',
-				alignment: 'left',
-			},
-			render: (props) => <ArtistBio {...props} />,
-		},
 
 		RichTextBlock: {
 			fields: {
@@ -514,31 +345,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				identifier: ownUser?.npub ?? '',
 			},
 			render: ({ identifier }: { identifier: string }) => <CMSUserProfile identifier={identifier} />,
-		},
-		CMSProductGrid: {
-			fields: {
-				kind: { type: 'number', label: 'Event Kind' },
-				limit: { type: 'number', label: 'Max Items' },
-				author: { type: 'text', label: 'Pubkey of author' },
-				tags: {
-					type: 'custom',
-					label: 'Nostr Filter Tags',
-					metadata: {
-						description: 'Add filters to narrow down the Nostr feed',
-					},
-					render: ({ name, onChange, value, field }: any) => <CustomFilterField field={field} value={value ?? []} onChange={onChange} />,
-				},
-				relayUrl: { type: 'text', label: 'Relay URL (optional)' },
-			},
-			defaultProps: {
-				kind: 30402,
-				limit: 5,
-				author: ownUser?.npub ?? '',
-				tags: [],
-			},
-			render: ({ kind, tags, limit, relayUrl, author }: any) => (
-				<CMSProductGridOld kind={kind} tags={tags} author={author} limit={limit} relayUrl={relayUrl} />
-			),
 		},
 		HeadingBlock: {
 			fields: {
