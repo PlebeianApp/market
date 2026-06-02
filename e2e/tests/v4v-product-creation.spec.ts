@@ -82,8 +82,7 @@ test.describe('V4V Product Creation Flow', () => {
 			await addButton.click()
 		} else if (await digitalDeliveryButton.isVisible().catch(() => false)) {
 			await digitalDeliveryButton.click()
-			await expect(newUserPage.getByRole('button', { name: /^add$/i }).first()).toBeVisible({ timeout: 5_000 })
-			await newUserPage.getByRole('button', { name: /^add$/i }).first().click()
+			await expect(newUserPage.getByRole('heading', { name: /Selected Shipping Options/i })).toBeVisible({ timeout: 15_000 })
 		}
 
 		// --- Publish Without V4V Blocker ---
