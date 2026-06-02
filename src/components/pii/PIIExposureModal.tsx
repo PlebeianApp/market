@@ -141,9 +141,12 @@ export function PIIExposureModal({ isOpen, onClose, scanResult }: PIIExposureMod
 								</p>
 								<ul className="mt-1 list-disc list-inside text-sm text-yellow-700 space-y-1">
 									<li>
-										<strong>Please avoid public posts about this leak to protect exposed community members</strong> and allow them to delete
-										data before the official announcement. Do not share on Plebeian telegram or Nostr. A public announcement will follow
-										once all affected users have deleted their data.
+										<strong className="text-base text-yellow-800">
+											⚠️ Please avoid public posts about this leak to protect exposed community members
+										</strong>{' '}
+										and allow them to delete data before the official announcement.{' '}
+										<strong className="text-yellow-800">Do not share on Plebeian telegram or Nostr.</strong> A public announcement will
+										follow once all affected users have deleted their data.
 									</li>
 									<li>
 										<strong>On Nostr, users control their data.</strong> The Plebeian team cannot delete events for users, so this feature
