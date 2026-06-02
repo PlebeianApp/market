@@ -176,6 +176,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 
 		CMSProductGrid: {
 			fields: {
+				title: { type: 'text', label: 'Section Title' },
 				dataSource: {
 					type: 'custom',
 					label: 'Data Source',
@@ -193,6 +194,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				},
 			},
 			defaultProps: {
+				title: 'Featured Products',
 				dataSource: { type: 'static', ids: [] },
 				columnsDesktop: 3,
 				columnsTablet: 2,
@@ -204,6 +206,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 
 		CMSFeaturedProductCard: {
 			fields: {
+				title: { type: 'text', label: 'Section Title' },
 				dataSource: {
 					type: 'custom',
 					label: 'Data Source',
@@ -228,6 +231,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				},
 			},
 			defaultProps: {
+				title: 'Featured Product',
 				dataSource: { type: 'static', ids: [] },
 				showPrice: true,
 				showDescriptionSnippet: true,

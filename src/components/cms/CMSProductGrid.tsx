@@ -16,6 +16,7 @@ const COLUMN_MAP: Record<number, string> = {
 
 export interface CMSProductGridProps {
 	dataSource?: DataSource
+	title?: string
 	columnsDesktop?: number
 	columnsTablet?: number
 	columnsMobile?: number
@@ -24,6 +25,7 @@ export interface CMSProductGridProps {
 
 export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 	dataSource,
+	title = '',
 	columnsDesktop = 3,
 	columnsTablet = 2,
 	columnsMobile = 1,
@@ -51,6 +53,13 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 
 	return (
 		<div className="py-12 px-6 max-w-7xl mx-auto">
+			{/* Title Header */}
+			{title && (
+				<div className="mb-8">
+					<h2 className="text-2xl font-heading tracking-wider">{title}</h2>
+				</div>
+			)}
+
 			<div className={`grid gap-8 ${mobileClass} md:${tabletClass} lg:${desktopClass}`}>
 				{events.map((product) => (
 					<CMSProductCard key={product.id} product={product} showVendor={showVendor} />
