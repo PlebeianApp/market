@@ -1,10 +1,7 @@
 // Unified CMS Components Export
 export * from './CMSProductGrid'
 export * from './CMSFeaturedProductCard'
-
-// Base Components
-export * from './CMSProductGridBase'
-export * from './CMSFeaturedProductCardBase'
+export * from './CMSProductCard'
 
 // Other CMS Components
 export * from './CMSUserProfile'
