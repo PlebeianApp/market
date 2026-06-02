@@ -1,8 +1,11 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
+import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
+import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import type { Event } from 'nostr-tools'
+import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 
 export type OrderWithRelatedEvents = {
@@ -19,6 +22,163 @@ export type OrderWithRelatedEvents = {
 	latestPaymentRequest?: NDKEvent
 	latestPaymentReceipt?: NDKEvent
 	latestMessage?: NDKEvent
+	privateOrderDetails?: PrivateOrderDeliveryDetails
+	privateOrderDetailsEvent?: NDKEvent
+}
+
+type FetchOrdersBySellerOptions = {
+	includePrivateOrderDetails?: boolean
+	signer?: NDKSigner | null
+}
+
+type UseOrdersBySellerOptions = {
+	includePrivateOrderDetails?: boolean
+}
+
+type FetchOrderByIdOptions = {
+	includePrivateOrderDetails?: boolean
+	signer?: NDKSigner | null
+}
+
+type UseOrderByIdOptions = {
+	includePrivateOrderDetails?: boolean
+}
+
+type PublicOrderCorrelationFields = {
+	orderId: string
+	buyerPubkey: string
+	sellerPubkey: string
+	totalAmountSats: number
+	items: Map<string, number>
+	shippingRef?: string
+}
+
+export type SellerPrivateOrderDetailsCandidate = {
+	details: PrivateOrderDeliveryDetails
+	event: NDKEvent
+}
+
+const PRODUCT_REF_KIND = '30402'
+const SHIPPING_REF_KIND = '30406'
+const ORDER_CREATION_SUBJECT = 'order-info'
+const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
+
+export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Promise<NDKEvent[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const giftWrapFilter: NDKFilter = {
+		kinds: [NIP59_GIFT_WRAP_KIND],
+		'#p': [sellerPubkey],
+		limit: 500,
+	}
+
+	return Array.from(await ndk.fetchEvents(giftWrapFilter))
+}
+
+export const decryptSellerPrivateOrderGiftWraps = async (params: {
+	giftWrapEvents: NDKEvent[]
+	sellerPubkey: string
+	signer?: NDKSigner | null
+}): Promise<SellerPrivateOrderDetailsCandidate[]> => {
+	const { giftWrapEvents, sellerPubkey, signer } = params
+	if (!isHexPubkey(sellerPubkey)) return []
+	if (!signer) return []
+
+	const signerPubkey = await getSignerPubkey(signer)
+	if (signerPubkey !== sellerPubkey) return []
+	if (!(await signerSupportsNip44(signer, 'decrypt'))) return []
+
+	const decryptedCandidates: SellerPrivateOrderDetailsCandidate[] = []
+	for (const giftWrapEvent of giftWrapEvents) {
+		try {
+			const giftWrap = ndkEventToRawEvent(giftWrapEvent)
+			const decrypted = await decryptPrivateOrderMessageWithSigner({
+				giftWrap,
+				signer,
+				expectedSellerPubkey: sellerPubkey,
+			})
+			decryptedCandidates.push({ details: decrypted.details, event: giftWrapEvent })
+		} catch {
+			// Private delivery details are best-effort seller enrichment. Keep public orders usable.
+		}
+	}
+
+	return decryptedCandidates
+}
+
+export const getPublicOrderCorrelationFields = (order: NDKEvent): PublicOrderCorrelationFields | null => {
+	if (order.kind !== ORDER_PROCESS_KIND) return null
+
+	const type = getRequiredSingleTagValue(order.tags, 'type')
+	if (type !== ORDER_MESSAGE_TYPE.ORDER_CREATION) return null
+
+	const subject = getRequiredSingleTagValue(order.tags, 'subject')
+	if (subject !== ORDER_CREATION_SUBJECT) return null
+
+	const sellerPubkey = getRequiredSingleTagValue(order.tags, 'p')
+	if (!sellerPubkey || !isHexPubkey(sellerPubkey)) return null
+	if (!isHexPubkey(order.pubkey)) return null
+
+	const orderId = getRequiredSingleTagValue(order.tags, 'order')
+	if (!orderId) return null
+
+	const amount = getRequiredSingleTagValue(order.tags, 'amount')
+	if (!amount || !/^\d+$/.test(amount)) return null
+	const totalAmountSats = Number(amount)
+	if (!Number.isSafeInteger(totalAmountSats) || totalAmountSats <= 0) return null
+
+	const items = canonicalizeItemTags(order.tags, sellerPubkey)
+	if (!items) return null
+
+	const shippingRef = getOptionalSingleTagValue(order.tags, 'shipping')
+	if (shippingRef === null) return null
+	if (shippingRef && !isAddressableRef(shippingRef, SHIPPING_REF_KIND, sellerPubkey)) return null
+
+	return {
+		orderId,
+		buyerPubkey: order.pubkey,
+		sellerPubkey,
+		totalAmountSats,
+		items,
+		shippingRef,
+	}
+}
+
+export const privateDetailsMatchPublicOrder = (details: PrivateOrderDeliveryDetails, order: NDKEvent): boolean => {
+	const publicFields = getPublicOrderCorrelationFields(order)
+	if (!publicFields) return false
+
+	if (details.orderId !== publicFields.orderId) return false
+	if (details.buyerPubkey !== publicFields.buyerPubkey) return false
+	if (details.sellerPubkey !== publicFields.sellerPubkey) return false
+	if (details.totalAmountSats !== publicFields.totalAmountSats) return false
+
+	const privateItems = canonicalizeItems(details.items)
+	if (!privateItems) return false
+	if (!itemMapsEqual(publicFields.items, privateItems)) return false
+
+	const privateShippingRef = details.shippingRef
+	if (publicFields.shippingRef !== privateShippingRef) return false
+
+	return true
+}
+
+export const attachPrivateOrderDetailsToOrders = (
+	orders: OrderWithRelatedEvents[],
+	decryptedDetails: SellerPrivateOrderDetailsCandidate[],
+): OrderWithRelatedEvents[] => {
+	const sortedDetails = [...decryptedDetails].sort(comparePrivateOrderDetailsCandidates)
+
+	return orders.map((orderWithEvents) => {
+		const match = sortedDetails.find((candidate) => privateDetailsMatchPublicOrder(candidate.details, orderWithEvents.order))
+		if (!match) return orderWithEvents
+		return {
+			...orderWithEvents,
+			privateOrderDetails: match.details,
+			privateOrderDetailsEvent: match.event,
+		}
+	})
 }
 
 /**
@@ -427,7 +587,10 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 /**
  * Fetches orders where the specified user is the seller (recipient of order messages)
  */
-export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWithRelatedEvents[]> => {
+export const fetchOrdersBySeller = async (
+	sellerPubkey: string,
+	options: FetchOrdersBySellerOptions = {},
+): Promise<OrderWithRelatedEvents[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -551,7 +714,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 	}
 
 	// Create the combined order objects
-	return Array.from(orders).map((order) => {
+	const publicOrders = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		if (!orderTag?.[1]) {
 			return {
@@ -594,15 +757,39 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 			latestMessage: related.generalMessages[0],
 		}
 	})
+
+	if (!options.includePrivateOrderDetails) return publicOrders
+
+	try {
+		const giftWrapEvents = await fetchSellerPrivateOrderGiftWraps(sellerPubkey)
+		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
+			giftWrapEvents,
+			sellerPubkey,
+			signer: options.signer ?? ndkActions.getSigner(),
+		})
+		return attachPrivateOrderDetailsToOrders(publicOrders, decryptedDetails)
+	} catch {
+		return publicOrders
+	}
 }
 
 /**
  * Hook to fetch orders where the specified user is the seller
  */
-export const useOrdersBySeller = (sellerPubkey: string) => {
+export const useOrdersBySeller = (sellerPubkey: string, options: UseOrdersBySellerOptions = {}) => {
+	const includePrivateOrderDetails = options.includePrivateOrderDetails === true
 	return useQuery({
-		queryKey: orderKeys.bySeller(sellerPubkey),
-		queryFn: () => fetchOrdersBySeller(sellerPubkey),
+		queryKey: includePrivateOrderDetails ? orderKeys.bySellerWithPrivate(sellerPubkey) : orderKeys.bySeller(sellerPubkey),
+		queryFn: () =>
+			fetchOrdersBySeller(
+				sellerPubkey,
+				includePrivateOrderDetails
+					? {
+							includePrivateOrderDetails: true,
+							signer: ndkActions.getSigner(),
+						}
+					: undefined,
+			),
 		enabled: !!sellerPubkey,
 	})
 }
@@ -610,7 +797,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 /**
  * Fetches a specific order by its ID
  */
-export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedEvents | null> => {
+export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOptions = {}): Promise<OrderWithRelatedEvents | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -737,7 +924,7 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 	paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	return {
+	const publicOrder = {
 		order: orderEvent,
 		paymentRequests,
 		statusUpdates,
@@ -750,17 +937,45 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 		latestPaymentReceipt: paymentReceipts[0],
 		latestMessage: generalMessages[0],
 	}
+
+	if (!options.includePrivateOrderDetails) return publicOrder
+
+	try {
+		const giftWrapEvents = await fetchSellerPrivateOrderGiftWraps(seller)
+		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
+			giftWrapEvents,
+			sellerPubkey: seller,
+			signer: options.signer ?? ndkActions.getSigner(),
+		})
+		return attachPrivateOrderDetailsToOrders([publicOrder], decryptedDetails)[0] ?? publicOrder
+	} catch {
+		return publicOrder
+	}
 }
 
 /**
  * Hook to fetch a specific order by its ID
  */
-export const useOrderById = (orderId: string) => {
+export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {}) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	const includePrivateOrderDetails = options.includePrivateOrderDetails === true
+	const queryKey = useMemo(
+		() => (includePrivateOrderDetails ? orderKeys.detailsWithPrivate(orderId) : orderKeys.details(orderId)),
+		[includePrivateOrderDetails, orderId],
+	)
 	const orderQuery = useQuery({
-		queryKey: orderKeys.details(orderId),
-		queryFn: () => fetchOrderById(orderId),
+		queryKey,
+		queryFn: () =>
+			fetchOrderById(
+				orderId,
+				includePrivateOrderDetails
+					? {
+							includePrivateOrderDetails: true,
+							signer: ndkActions.getSigner(),
+						}
+					: undefined,
+			),
 		enabled: !!orderId,
 		staleTime: Infinity,
 		refetchOnMount: true,
@@ -785,8 +1000,8 @@ export const useOrderById = (orderId: string) => {
 		})
 
 		const refreshOrderDetails = () => {
-			void queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
-			void queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
+			void queryClient.invalidateQueries({ queryKey })
+			void queryClient.refetchQueries({ queryKey })
 		}
 
 		// Event handler for all events related to this order
@@ -805,7 +1020,7 @@ export const useOrderById = (orderId: string) => {
 		return () => {
 			subscription.stop()
 		}
-	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient])
+	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient, queryKey])
 
 	return orderQuery
 }
@@ -882,6 +1097,119 @@ export const getOrderId = (order: NDKEvent): string | undefined => {
 export const getOrderAmount = (order: NDKEvent): string | undefined => {
 	const amountTag = order.tags.find((tag) => tag[0] === 'amount')
 	return amountTag?.[1]
+}
+
+function comparePrivateOrderDetailsCandidates(a: SellerPrivateOrderDetailsCandidate, b: SellerPrivateOrderDetailsCandidate): number {
+	const createdAtDiff = (b.event.created_at || 0) - (a.event.created_at || 0)
+	if (createdAtDiff !== 0) return createdAtDiff
+	return (b.event.id || '').localeCompare(a.event.id || '')
+}
+
+async function getSignerPubkey(signer: NDKSigner): Promise<string | null> {
+	try {
+		const user = await signer.user()
+		return user.pubkey
+	} catch {
+		return null
+	}
+}
+
+function ndkEventToRawEvent(event: NDKEvent): Event {
+	const rawEvent =
+		typeof event.rawEvent === 'function'
+			? event.rawEvent()
+			: {
+					id: event.id,
+					pubkey: event.pubkey,
+					created_at: event.created_at,
+					kind: event.kind,
+					tags: event.tags,
+					content: event.content,
+					sig: event.sig,
+				}
+
+	if (typeof rawEvent.kind !== 'number') throw new Error('Malformed private order gift wrap')
+	if (typeof rawEvent.content !== 'string') throw new Error('Malformed private order gift wrap')
+	if (typeof rawEvent.created_at !== 'number') throw new Error('Malformed private order gift wrap')
+	if (typeof rawEvent.pubkey !== 'string' || !isHexPubkey(rawEvent.pubkey)) throw new Error('Malformed private order gift wrap')
+	if (typeof rawEvent.id !== 'string') throw new Error('Malformed private order gift wrap')
+	if (typeof rawEvent.sig !== 'string') throw new Error('Malformed private order gift wrap')
+	if (
+		!Array.isArray(rawEvent.tags) ||
+		!rawEvent.tags.every((tag) => Array.isArray(tag) && tag.every((value) => typeof value === 'string'))
+	) {
+		throw new Error('Malformed private order gift wrap')
+	}
+
+	return rawEvent as Event
+}
+
+function getRequiredSingleTagValue(tags: string[][], tagName: string): string | undefined {
+	const matches = tags.filter((tag) => tag[0] === tagName)
+	if (matches.length !== 1) return undefined
+	return matches[0]?.[1]
+}
+
+function getOptionalSingleTagValue(tags: string[][], tagName: string): string | undefined | null {
+	const matches = tags.filter((tag) => tag[0] === tagName)
+	if (matches.length === 0) return undefined
+	if (matches.length > 1) return null
+	const value = matches[0]?.[1]
+	if (!value) return null
+	return value
+}
+
+function canonicalizeItemTags(tags: string[][], sellerPubkey: string): Map<string, number> | null {
+	const itemTags = tags.filter((tag) => tag[0] === 'item')
+	if (itemTags.length === 0) return null
+
+	const items = itemTags.map((tag) => {
+		const productRef = tag[1]
+		const quantityText = tag[2]
+		if (!productRef || !isAddressableRef(productRef, PRODUCT_REF_KIND, sellerPubkey)) return null
+		if (!quantityText || !/^\d+$/.test(quantityText)) return null
+		const quantity = Number(quantityText)
+		if (!Number.isSafeInteger(quantity) || quantity <= 0) return null
+		return { productRef, quantity }
+	})
+
+	if (items.some((item) => item === null)) return null
+	return canonicalizeItems(items as Array<{ productRef: string; quantity: number }>)
+}
+
+function canonicalizeItems(items: Array<{ productRef: string; quantity: number }>): Map<string, number> | null {
+	if (items.length === 0) return null
+	const canonicalItems = new Map<string, number>()
+
+	for (const item of items) {
+		if (!item.productRef) return null
+		if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) return null
+		const currentQuantity = canonicalItems.get(item.productRef) ?? 0
+		const nextQuantity = currentQuantity + item.quantity
+		if (!Number.isSafeInteger(nextQuantity)) return null
+		canonicalItems.set(item.productRef, nextQuantity)
+	}
+
+	return canonicalItems
+}
+
+function itemMapsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
+	if (a.size !== b.size) return false
+	for (const [productRef, quantity] of a) {
+		if (b.get(productRef) !== quantity) return false
+	}
+	return true
+}
+
+function isAddressableRef(value: string, expectedKind: string, expectedPubkey: string): boolean {
+	if (value.includes('\n') || value.includes('\r')) return false
+	const [kind, pubkey, ...dTagParts] = value.split(':')
+	const dTag = dTagParts.join(':')
+	return kind === expectedKind && pubkey === expectedPubkey && dTag.length > 0
+}
+
+function isHexPubkey(value: string): boolean {
+	return HEX_PUBKEY_RE.test(value)
 }
 
 /**

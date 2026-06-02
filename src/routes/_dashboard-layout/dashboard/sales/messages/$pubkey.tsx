@@ -1,17 +1,22 @@
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
+import { PrivateOrderDetailsCard } from '@/components/orders/PrivateOrderDetailsCard'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
+import { isValidHexKey, isValidNpub } from '@/lib/utils'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
+import { useOrdersBySeller } from '@/queries/orders'
 import { messageKeys } from '@/queries/queryKeyFactory'
+import { getSellerPubkey } from '@/components/orders/orderDetailHelpers'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { decode } from 'nostr-tools/nip19'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
@@ -24,6 +29,7 @@ function ConversationDetailComponent() {
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
+	const normalizedBuyerPubkey = useMemo(() => normalizePubkeyParam(otherUserPubkey), [otherUserPubkey])
 
 	// Get the user's profile name for the title
 	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
@@ -32,6 +38,21 @@ function ConversationDetailComponent() {
 	useDashboardTitle(displayTitle)
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
+	const { data: sellerOrders } = useOrdersBySeller(currentUser?.pubkey || '', { includePrivateOrderDetails: true })
+
+	const matchingBuyerOrders = useMemo(() => {
+		if (!sellerOrders || !currentUser?.pubkey || !normalizedBuyerPubkey) return []
+		return sellerOrders
+			.filter((order) => {
+				return order.order.pubkey === normalizedBuyerPubkey && getSellerPubkey(order.order) === currentUser.pubkey
+			})
+			.sort((a, b) => (b.order.created_at || 0) - (a.order.created_at || 0))
+	}, [currentUser?.pubkey, normalizedBuyerPubkey, sellerOrders])
+
+	const privateDetailOrders = useMemo(
+		() => matchingBuyerOrders.filter((order) => order.privateOrderDetails).slice(0, 3),
+		[matchingBuyerOrders],
+	)
 
 	const scrollToBottom = () => {
 		setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0) // Use auto for instant scroll on load
@@ -100,6 +121,13 @@ function ConversationDetailComponent() {
 						<p>No messages yet. Start the conversation!</p>
 					</div>
 				)}
+				{privateDetailOrders.length > 0 && (
+					<div className="space-y-3">
+						{privateDetailOrders.map((order) => (
+							<PrivateOrderDetailsCard key={order.order.id} order={order} currentUserPubkey={currentUser?.pubkey} compact />
+						))}
+					</div>
+				)}
 				{!isLoading &&
 					!error &&
 					messages?.map((event) => <ChatMessageBubble key={event.id} event={event} isCurrentUser={event.pubkey === currentUser?.pubkey} />)}
@@ -114,4 +142,13 @@ function ConversationDetailComponent() {
 			)}
 		</div>
 	)
+}
+
+function normalizePubkeyParam(value: string): string | null {
+	if (isValidHexKey(value)) return value
+	if (!isValidNpub(value)) return null
+
+	const { type, data } = decode(value)
+	if (type !== 'npub' || typeof data !== 'string') return null
+	return data
 }

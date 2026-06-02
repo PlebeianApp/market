@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { Separator } from '../ui/separator'
 import { OrderActions } from './OrderActions'
+import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
 import { TimelineEventCard } from './TimelineEventCard'
 
 // Imported helpers and components
@@ -74,14 +75,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const sellerPubkey = getSellerPubkey(orderEvent)
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
-	const canViewBuyerContact = isBuyer || isOrderSeller
+	const canViewLegacyBuyerContact = isBuyer
 
 	const totalAmount = getTotalAmount(orderEvent)
 
 	// Extract shipping information
 	const shippingRef = getShippingRef(orderEvent)
-	const shippingAddress = orderEvent.tags.find((tag) => tag[0] === 'address')?.[1]
-	const deliveryContact = orderEvent.tags.find((tag) => tag[0] === 'email')?.[1]
+	const shippingAddress = isBuyer ? orderEvent.tags.find((tag) => tag[0] === 'address')?.[1] : undefined
+	const deliveryContact = isBuyer ? orderEvent.tags.find((tag) => tag[0] === 'email')?.[1] : undefined
 
 	// Get status styles for coloring the header
 	const { headerBgColor } = getStatusStyles(order)
@@ -192,6 +193,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isPickupService = shippingOption ? getShippingService(shippingOption)?.[1] === 'pickup' : false
 	const isDigitalService = shippingOption ? getShippingService(shippingOption)?.[1] === 'digital' : false
 	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
+	const shouldShowPrivateDetailsUnavailable = isOrderSeller && Boolean(shippingOption) && !isPickupService && !order.privateOrderDetails
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
 
@@ -293,7 +295,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</CardContent>
 				</Card>
 
-				{canViewBuyerContact && deliveryContact && (
+				{canViewLegacyBuyerContact && deliveryContact && (
 					<Card>
 						<CardHeader>
 							<CardTitle>Buyer Contact</CardTitle>
@@ -306,6 +308,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardContent>
 					</Card>
 				)}
+
+				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
 
 				{/* Products */}
 				{products.length > 0 && (

@@ -18,7 +18,7 @@ function SalesComponent() {
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const [orderBy, setOrderBy] = useState<string>('newest')
-	const { data: sales, isLoading } = useOrdersBySeller(currentUser?.pubkey || '')
+	const { data: sales, isLoading } = useOrdersBySeller(currentUser?.pubkey || '', { includePrivateOrderDetails: true })
 
 	// Mark all orders as seen when the page is viewed
 	useEffect(() => {
