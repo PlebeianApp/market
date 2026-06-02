@@ -3,6 +3,7 @@ import {
 	getProductImages,
 	getProductPrice,
 	getProductStock,
+	getProductSummary,
 	getProductTitle,
 	getProductVisibility,
 	isNSFWProduct,
@@ -10,7 +11,9 @@ import {
 } from '@/queries/products'
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { UserCard } from '@/components/UserCard'
+import { cartActions } from '@/lib/stores/cart'
 import React from 'react'
+import { ShoppingBasketIcon } from 'lucide-react'
 
 export interface CMSProductCardProps {
 	product: NDKEvent
@@ -18,7 +21,6 @@ export interface CMSProductCardProps {
 	showVendor?: boolean
 	showDescriptionSnippet?: boolean
 	className?: string
-	onAddToCart?: (product: NDKEvent) => void
 }
 
 export const CMSProductCard: React.FC<CMSProductCardProps> = ({
@@ -27,10 +29,10 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 	showVendor = true,
 	showDescriptionSnippet = true,
 	className = '',
-	onAddToCart,
 }) => {
 	// Extract product data using the same helper functions as ProductCard
 	const title = getProductTitle(product)
+	const summary = getProductSummary(product) ?? product.content
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stockTag = getProductStock(product)
@@ -48,6 +50,19 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 	const renderPrice = () => {
 		if (!price) return null
 		return <PriceDisplay priceValue={parseFloat(price[1])} originalCurrency={price[2] || 'SATS'} />
+	}
+
+	// Handle add to cart functionality
+	const handleAddToCart = async (e: React.MouseEvent) => {
+		e.preventDefault()
+		e.stopPropagation()
+
+		try {
+			// Convert NDKEvent to CartProduct and add to cart
+			await cartActions.addProduct(product)
+		} catch (error) {
+			console.error('Failed to add product to cart:', error)
+		}
 	}
 
 	return (
@@ -91,7 +106,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 				{/* Vendor - using UserCard component */}
 				{showVendor && (
 					<div className="mb-2">
-						<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" />
+						<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" hideNip05Badge />
 					</div>
 				)}
 
@@ -103,8 +118,8 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 				</h3>
 
 				{/* Short Description */}
-				{showDescriptionSnippet && product.content && (
-					<p className="text-sm text-muted-foreground mb-3 line-clamp-3">{product.content.substring(0, 100)}...</p>
+				{showDescriptionSnippet && summary && (
+					<p className="text-sm text-muted-foreground mb-3 line-clamp-2">{summary.substring(0, 100)}...</p>
 				)}
 
 				{/* Pricing section with Add to Cart button */}
@@ -112,26 +127,14 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 					{showPrice && price && <div>{renderPrice()}</div>}
 
 					{/* Add to Cart Icon Button */}
-					{onAddToCart && (
-						<button
-							className="p-1 rounded-full border border-input hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-							onClick={(e) => {
-								e.preventDefault()
-								e.stopPropagation()
-								onAddToCart(product)
-							}}
-							disabled={!isInStock}
-							aria-label="Add to cart"
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-								<path
-									fillRule="evenodd"
-									d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-									clipRule="evenodd"
-								/>
-							</svg>
-						</button>
-					)}
+					<button
+						className="p-1 rounded-full border border-input hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+						onClick={handleAddToCart}
+						disabled={!isInStock}
+						aria-label="Add to cart"
+					>
+						<ShoppingBasketIcon className="h-5 w-5" />
+					</button>
 				</div>
 			</div>
 		</div>

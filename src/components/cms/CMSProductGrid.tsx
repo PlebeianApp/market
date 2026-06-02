@@ -19,7 +19,6 @@ export interface CMSProductGridProps {
 	columnsDesktop?: number
 	columnsTablet?: number
 	columnsMobile?: number
-	showQuickAdd?: boolean
 	showVendor?: boolean
 }
 
@@ -28,7 +27,6 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 	columnsDesktop = 3,
 	columnsTablet = 2,
 	columnsMobile = 1,
-	showQuickAdd = true,
 	showVendor = true,
 }) => {
 	const { events, loading, error } = useProductData(dataSource)
@@ -42,7 +40,7 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 	}
 
 	if (events.length === 0) {
-		return <div className="py-12 text-center text-gray-500">No products found matching your criteria.</div>
+		return <div className="py-12 text-center text-muted-foreground">No products found matching your criteria.</div>
 	}
 
 	// Safely resolve class names using the map

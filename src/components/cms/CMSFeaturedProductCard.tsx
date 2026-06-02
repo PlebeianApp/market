@@ -17,11 +17,15 @@ export const CMSFeaturedProductCard: React.FC<CMSFeaturedProductCardProps> = ({
 }) => {
 	const { events, loading, error } = useProductData(dataSource)
 
-	if (loading) return <div>Loading...</div>
-	if (error) return <div>{error}</div>
-	if (!events || events.length === 0) return <div>No products found.</div>
+	if (loading) return <div className="text-center">Loading...</div>
+	if (error) return <div className="text-center text-destructive">{error}</div>
+	if (!events || events.length === 0) return <div className="text-center text-muted-foreground">No products found.</div>
 
 	const product = events[0]
 
-	return <CMSProductCard product={product} showPrice={showPrice} showDescriptionSnippet={showDescriptionSnippet} />
+	return (
+		<div className="max-w-md mx-auto">
+			<CMSProductCard product={product} showPrice={showPrice} showDescriptionSnippet={showDescriptionSnippet} />
+		</div>
+	)
 }

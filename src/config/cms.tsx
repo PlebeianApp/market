@@ -186,11 +186,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				columnsDesktop: { type: 'number', label: 'Columns (Desktop)' },
 				columnsTablet: { type: 'number', label: 'Columns (Tablet)' },
 				columnsMobile: { type: 'number', label: 'Columns (Mobile)' },
-				showQuickAdd: {
-					type: 'custom',
-					label: 'Show Quick Add',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
 				showVendor: {
 					type: 'custom',
 					label: 'Show Vendor',
@@ -202,7 +197,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				columnsDesktop: 3,
 				columnsTablet: 2,
 				columnsMobile: 1,
-				showQuickAdd: true,
 				showVendor: true,
 			},
 			render: (props) => <CMSProductGrid {...props} />,

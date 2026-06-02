@@ -13,9 +13,17 @@ interface UserCardProps {
 	size?: 'xs' | 'sm' | 'md' | 'lg'
 	subtitle?: 'npub' | 'nip-05' | 'none'
 	onPress?: 'profile' | 'copy-npub' | 'none'
+	hideNip05Badge?: boolean
 }
 
-export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
+export function UserCard({
+	pubkey,
+	className = '',
+	size = 'md',
+	subtitle = 'nip-05',
+	onPress = 'profile',
+	hideNip05Badge = false,
+}: UserCardProps) {
 	const { data: profileData } = useProfile(pubkey)
 	const { user } = profileData || {}
 
@@ -133,7 +141,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 					) : (
 						<h2 className={classSizeName + ' truncate min-w-0 ' + className}>{textTitle}</h2>
 					)}
-					{user?.pubkey && (
+					{user?.pubkey && !hideNip05Badge && (
 						<Nip05Badge pubkey={user.pubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
 					)}
 				</div>
