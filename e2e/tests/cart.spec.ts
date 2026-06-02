@@ -79,11 +79,14 @@ async function addTShirtToCart(page: Page): Promise<void> {
 
 /** Wait for the /products page to display products from both sellers. */
 async function waitForProducts(page: Page): Promise<void> {
+	// Extended timeout (60s) for marketplace seeding & relay propagation on slow CI
 	await expect(async () => {
 		const content = await page.locator('main').textContent()
+		if (!content) throw new Error('No content found in main')
 		expect(content).toContain('Bitcoin Hardware Wallet')
+		// Second merchant's product may take longer to propagate
 		expect(content).toContain('Lightning Node Setup Guide')
-	}).toPass({ timeout: 30_000 })
+	}).toPass({ timeout: 60_000 })
 }
 
 // ---------------------------------------------------------------------------

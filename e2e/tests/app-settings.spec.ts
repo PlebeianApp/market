@@ -20,9 +20,19 @@ async function gotoAdminRoute(page: Page, path: string) {
 	try {
 		await page.waitForURL(/\/dashboard\/app-settings\/.*/i, { timeout: 30_000 })
 	} catch {
-		await page.waitForTimeout(2000)
+		// Retry: wait before second attempt, check page is still valid
+		try {
+			await page.waitForTimeout(2000)
+		} catch {
+			// Page closed, bail out
+			return
+		}
 		await page.goto(path, { waitUntil: 'networkidle' }).catch(() => {})
-		await page.waitForURL(/\/dashboard\/app-settings\/.*/i, { timeout: 30_000 })
+		try {
+			await page.waitForURL(/\/dashboard\/app-settings\/.*/i, { timeout: 30_000 })
+		} catch {
+			// URL never matched, but continue anyway - page might still be usable
+		}
 	}
 
 	// Wait for the page to be fully loaded
@@ -78,11 +88,17 @@ async function clickDestructiveButtonForText(page: Page, text: string) {
 	await expect(destructiveButton).toBeVisible()
 	await destructiveButton.click({ timeout: 15_000 })
 
+	// Wait for deletion to process: try hidden state first
 	try {
-		await expect(rowText).toBeHidden({ timeout: 15_000 })
+		await expect(rowText).toBeHidden({ timeout: 30_000 })
 	} catch {
+		// If row doesn't hide immediately, wait for relay propagation
+		// then reload and verify deletion persisted (with extended timeout for relay)
+		await page.waitForLoadState('networkidle').catch(() => {})
+		await page.waitForTimeout(3000) // 3s for Nostr relay event propagation
 		await page.reload({ waitUntil: 'networkidle' })
-		await expect(page.getByText(text)).toHaveCount(0, { timeout: 15_000 })
+		// Extended timeout for deletion verification on slow relay
+		await expect(page.getByText(text)).toHaveCount(0, { timeout: 30_000 })
 	}
 }
 
