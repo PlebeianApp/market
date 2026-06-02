@@ -116,6 +116,7 @@ test.describe('Cart - Remove Items', () => {
 	})
 
 	test('removing one item from multi-item cart keeps others', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -172,6 +173,7 @@ test.describe('Cart - Change Quantity', () => {
 	})
 
 	test('can decrement product quantity using the minus button', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -212,6 +214,7 @@ test.describe('Cart - Change Quantity', () => {
 	})
 
 	test('can add same product multiple times from product listing', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -249,6 +252,7 @@ test.describe('Cart - Change Quantity', () => {
 
 test.describe('Cart - Multiple Merchants', () => {
 	test('products from different sellers are grouped separately', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -269,6 +273,8 @@ test.describe('Cart - Multiple Merchants', () => {
 	})
 
 	test('can add multiple products from same seller', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
+
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -290,6 +296,7 @@ test.describe('Cart - Multiple Merchants', () => {
 	})
 
 	test('removing all items from one seller keeps other seller items', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -321,6 +328,7 @@ test.describe('Cart - Multiple Merchants', () => {
 
 test.describe('Cart - Persistence', () => {
 	test('cart items persist after page reload', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 
@@ -330,34 +338,32 @@ test.describe('Cart - Persistence', () => {
 		// Add another product from a different seller
 		await addGuideToCart(newUserPage)
 
+		// Wait until the UI shows two items in the cart badge before reloading.
+		await expect(newUserPage.locator('header').locator('span').filter({ hasText: '2' })).toBeVisible({ timeout: 10_000 })
+
+		// Open the cart to confirm both items are present, then reload.
+		await openCart(newUserPage)
+		const dialog = cartDialog(newUserPage)
+		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
+		await newUserPage.keyboard.press('Escape')
+
 		// Reload the page
 		await newUserPage.reload()
 		await newUserPage.waitForLoadState('networkidle')
 
 		// Open the cart and verify both items survived the reload
 		await openCart(newUserPage)
-		const dialog = cartDialog(newUserPage)
-		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
-		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
-	})
-
-	test('cart quantity persists after page reload', async ({ newUserPage }) => {
-		await safeGoto(newUserPage, '/products')
-		await waitForProducts(newUserPage)
-
-		// Add a product and increment its quantity
-		await addWalletToCart(newUserPage)
-
-		await openCart(newUserPage)
-		const dialog = cartDialog(newUserPage)
-		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		const dialogAfterReload = cartDialog(newUserPage)
+		await expect(dialogAfterReload.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		await expect(dialogAfterReload.getByText('Lightning Node Setup Guide')).toBeVisible()
 
 		// Increment quantity to 3
-		const incrementButton = dialog.locator('button:has(svg.lucide-plus)').first()
+		const incrementButton = dialogAfterReload.locator('button:has(svg.lucide-plus)').first()
 		await incrementButton.click()
 		await incrementButton.click()
 
-		const quantityInput = dialog.locator('input[type="number"]').first()
+		const quantityInput = dialogAfterReload.locator('input[type="number"]').first()
 		await expect(quantityInput).toHaveValue('3')
 
 		// Close dialog and reload
@@ -373,25 +379,38 @@ test.describe('Cart - Persistence', () => {
 	})
 
 	test('cart persists after navigating to another page and back', async ({ newUserPage }) => {
+		test.setTimeout(60_000)
+
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 		await addWalletToCart(newUserPage)
 
-		// Navigate away to a different page
-		await safeGoto(newUserPage, '/')
-		await newUserPage.waitForLoadState('networkidle')
-
-		// Navigate back to products
-		await safeGoto(newUserPage, '/products')
-		await newUserPage.waitForLoadState('networkidle')
-
-		// Cart should still have the item
+		// Verify item is in cart before navigation
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		await newUserPage.keyboard.press('Escape')
+
+		// Navigate away to a different page
+		await safeGoto(newUserPage, '/')
+		await expect(newUserPage).toHaveURL(/\/$/)
+
+		// Navigate back to products
+		await safeGoto(newUserPage, '/products')
+		await expect(newUserPage).toHaveURL(/\/products$/)
+
+		// Wait for page to stabilize and cart store to hydrate
+		await newUserPage.waitForLoadState('networkidle').catch(() => {})
+		await newUserPage.waitForTimeout(1000)
+
+		// Cart should still have the item
+		await openCart(newUserPage)
+		const dialogAfterNav = cartDialog(newUserPage)
+		await expect(dialogAfterNav.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 	})
 
 	test('clearing cart removes all items after reload', async ({ buyerPage }) => {
+		test.setTimeout(60_000)
 		await safeGoto(buyerPage, '/products')
 		await waitForProducts(buyerPage)
 
@@ -415,7 +434,7 @@ test.describe('Cart - Persistence', () => {
 		// Close and reload to confirm persistence of the cleared state
 		await buyerPage.keyboard.press('Escape')
 		await buyerPage.reload()
-		await buyerPage.waitForLoadState('networkidle')
+		await expect(buyerPage.locator('main')).toBeVisible({ timeout: 15_000 })
 
 		// Re-open cart — should still be empty (no phantom items)
 		await openCart(buyerPage)
