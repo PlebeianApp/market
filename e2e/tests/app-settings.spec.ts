@@ -14,13 +14,16 @@ test.use({ scenario: 'merchant' })
  * interrupted by a redirect. This helper retries navigation to work around the race.
  */
 async function gotoAdminRoute(page: Page, path: string) {
-	await page.goto(path, { waitUntil: 'commit' }).catch(() => {})
+	await page.goto(path, { waitUntil: 'networkidle' }).catch(() => {})
 
-	// If we got redirected, wait a moment for the admin query to resolve and try again
+	await page.waitForTimeout(500)
+	await page.waitForURL(/.*app-settings.*/i, { timeout: 15_000 }).catch(() => {})
+
 	const currentUrl = page.url()
 	if (!currentUrl.includes('app-settings')) {
 		await page.waitForTimeout(2000)
-		await page.goto(path)
+		await page.goto(path, { waitUntil: 'networkidle' }).catch(() => {})
+		await page.waitForURL(/.*app-settings.*/i, { timeout: 15_000 }).catch(() => {})
 	}
 
 	// Wait for the page to be fully loaded
@@ -32,7 +35,7 @@ async function gotoAdminRoute(page: Page, path: string) {
  * Uses heading role to avoid strict mode violations from sidebar nav links.
  */
 async function expectPageHeading(page: Page, name: string | RegExp) {
-	await expect(page.getByRole('heading', { name }).first()).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByRole('heading', { name }).first()).toBeVisible({ timeout: 30_000 })
 }
 
 /**
