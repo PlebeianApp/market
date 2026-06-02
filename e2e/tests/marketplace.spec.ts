@@ -91,7 +91,7 @@ async function selectShippingForAllSellers(page: Page): Promise<void> {
 	// placeholder text "Select shipping method". Use a filtered button locator
 	// to be more robust than getByText alone.
 	const shippingTriggers = page.locator('button').filter({ hasText: 'Select shipping method' })
-	await expect(page.getByRole('heading', { name: /shipping address/i })).toBeVisible({ timeout: 30_000 })
+	await expect(page.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 30_000 })
 	await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
 
 	while ((await shippingTriggers.count()) > 0) {
@@ -103,12 +103,15 @@ async function selectShippingForAllSellers(page: Page): Promise<void> {
 		await option.click()
 
 		// Wait for the selection UI to settle before clicking the next selector.
-		await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 }).catch(() => {})
+		await expect(shippingTriggers.first())
+			.toBeVisible({ timeout: 10_000 })
+			.catch(() => {})
 	}
 
-	// Submit the shipping form to proceed to order summary.
-	await page.locator('button[form="shipping-form"]').click()
-	await expect(page.getByText('Order Summary').or(page.getByText('Invoices', { exact: true }))).toBeVisible({ timeout: 30_000 })
+	// Wait for the shipping form submit button to become available.
+	const continueToReviewButton = page.getByRole('button', { name: /continue to review/i })
+	await expect(continueToReviewButton).toBeVisible({ timeout: 30_000 })
+	await expect(continueToReviewButton).toBeEnabled({ timeout: 30_000 })
 }
 
 // ---------------------------------------------------------------------------
