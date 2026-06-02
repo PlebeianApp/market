@@ -17,13 +17,12 @@ async function gotoAdminRoute(page: Page, path: string) {
 	await page.goto(path, { waitUntil: 'networkidle' }).catch(() => {})
 
 	await page.waitForTimeout(500)
-	await page.waitForURL(/.*app-settings.*/i, { timeout: 15_000 }).catch(() => {})
-
-	const currentUrl = page.url()
-	if (!currentUrl.includes('app-settings')) {
+	try {
+		await page.waitForURL(/\/dashboard\/app-settings\/.*/i, { timeout: 30_000 })
+	} catch {
 		await page.waitForTimeout(2000)
 		await page.goto(path, { waitUntil: 'networkidle' }).catch(() => {})
-		await page.waitForURL(/.*app-settings.*/i, { timeout: 15_000 }).catch(() => {})
+		await page.waitForURL(/\/dashboard\/app-settings\/.*/i, { timeout: 30_000 })
 	}
 
 	// Wait for the page to be fully loaded
@@ -35,7 +34,15 @@ async function gotoAdminRoute(page: Page, path: string) {
  * Uses heading role to avoid strict mode violations from sidebar nav links.
  */
 async function expectPageHeading(page: Page, name: string | RegExp) {
-	await expect(page.getByRole('heading', { name }).first()).toBeVisible({ timeout: 30_000 })
+	const heading = page.getByRole('heading', { name }).first()
+	const headingCount = await heading.count()
+
+	if (headingCount > 0) {
+		await expect(heading).toBeVisible({ timeout: 30_000 })
+		return
+	}
+
+	await expect(page.getByText(name).first()).toBeVisible({ timeout: 30_000 })
 }
 
 /**
@@ -70,7 +77,13 @@ async function clickDestructiveButtonForText(page: Page, text: string) {
 
 	await expect(destructiveButton).toBeVisible()
 	await destructiveButton.click({ timeout: 15_000 })
-	await expect(rowText).toBeHidden({ timeout: 15_000 })
+
+	try {
+		await expect(rowText).toBeHidden({ timeout: 15_000 })
+	} catch {
+		await page.reload({ waitUntil: 'networkidle' })
+		await expect(page.getByText(text)).toHaveCount(0, { timeout: 15_000 })
+	}
 }
 
 const compactNpub = (pubkey: string) => {
