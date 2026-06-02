@@ -284,26 +284,32 @@ test.describe('Product Management', () => {
 		await merchantPage.getByTestId('product-next-button').click()
 
 		// --- Shipping Tab ---
-		await expect(merchantPage.getByText('Shipping Options')).toBeVisible({ timeout: 10_000 })
+		await expect(merchantPage.getByRole('heading', { name: /Available Shipping Options/i })).toBeVisible({ timeout: 15_000 })
 
-		// If shipping options are available from seeding, add one
 		const addButton = merchantPage.getByRole('button', { name: /^add$/i }).first()
-		const hasShippingOptions = await addButton.isVisible().catch(() => false)
-		if (hasShippingOptions) {
+		const quickCreateButton = merchantPage.getByRole('button', { name: /Digital Delivery/i })
+
+		await expect
+			.poll(
+				async () => {
+					if (await addButton.isVisible().catch(() => false)) return 'add'
+					if (await quickCreateButton.isVisible().catch(() => false)) return 'quick-create'
+					return 'loading'
+				},
+				{ timeout: 15_000 },
+			)
+			.not.toBe('loading')
+
+		if (await addButton.isVisible().catch(() => false)) {
 			await expect(addButton).toBeEnabled({ timeout: 5_000 })
 			await addButton.click()
 		} else {
-			// Create a quick shipping option via template
-			const digitalDelivery = merchantPage.getByText('Digital Delivery')
-			const hasTemplate = await digitalDelivery.isVisible().catch(() => false)
-			if (hasTemplate) {
-				await digitalDelivery.click()
-				// Wait for the shipping option to be created and added.
-				await expect(merchantPage.getByText('Selected Shipping Options')).toBeVisible({ timeout: 10_000 })
-			}
+			await quickCreateButton.click()
+			await expect(addButton).toBeVisible({ timeout: 10_000 })
+			await addButton.click()
 		}
 
-		await expect(merchantPage.getByText('Selected Shipping Options')).toBeVisible({ timeout: 10_000 })
+		await expect(merchantPage.getByRole('heading', { name: /Selected Shipping Options/i })).toBeVisible({ timeout: 15_000 })
 
 		// --- Publish ---
 		// The app may show "Publish Product" or "Setup V4V First" depending on V4V state.
