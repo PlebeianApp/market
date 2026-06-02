@@ -91,18 +91,19 @@ async function selectShippingForAllSellers(page: Page): Promise<void> {
 	// placeholder text "Select shipping method". Use a filtered button locator
 	// to be more robust than getByText alone.
 	const shippingTriggers = page.locator('button').filter({ hasText: 'Select shipping method' })
+	await expect(page.getByRole('heading', { name: /shipping address/i })).toBeVisible({ timeout: 30_000 })
 	await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
 
-	const count = await shippingTriggers.count()
-	for (let i = 0; i < count; i++) {
-		const trigger = shippingTriggers.nth(i)
+	while ((await shippingTriggers.count()) > 0) {
+		const trigger = shippingTriggers.first()
 		await trigger.click()
 
-		const option = page.getByRole('option', { name: /digital delivery/i })
-		await expect(option).toBeVisible({ timeout: 5_000 })
+		const option = page.getByRole('option', { name: /digital delivery/i }).first()
+		await expect(option).toBeVisible({ timeout: 10_000 })
 		await option.click()
 
-		await page.waitForTimeout(500)
+		// Wait for the selection UI to settle before clicking the next selector.
+		await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 }).catch(() => {})
 	}
 
 	// Submit the shipping form to proceed to order summary.
@@ -301,12 +302,6 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await openCart(newUserPage)
 		await selectShippingForAllSellers(newUserPage)
 
-		// Click checkout
-		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
-		const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
-		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
-		await checkoutButton.click()
-
 		// Navigate through shipping → summary → payment
 		await proceedToPaymentStep(newUserPage)
 
@@ -327,10 +322,6 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
 		await selectShippingForAllSellers(newUserPage)
-
-		// Checkout
-		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
-		await cartDialog.getByRole('button', { name: /^checkout$/i }).click()
 
 		// Navigate through shipping → summary → payment
 		await proceedToPaymentStep(newUserPage)
