@@ -284,10 +284,13 @@ test.describe('Product Management', () => {
 		await merchantPage.getByTestId('product-next-button').click()
 
 		// --- Shipping Tab ---
+		await expect(merchantPage.getByText('Shipping Options')).toBeVisible({ timeout: 10_000 })
+
 		// If shipping options are available from seeding, add one
 		const addButton = merchantPage.getByRole('button', { name: /^add$/i }).first()
 		const hasShippingOptions = await addButton.isVisible().catch(() => false)
 		if (hasShippingOptions) {
+			await expect(addButton).toBeEnabled({ timeout: 5_000 })
 			await addButton.click()
 		} else {
 			// Create a quick shipping option via template
@@ -295,23 +298,25 @@ test.describe('Product Management', () => {
 			const hasTemplate = await digitalDelivery.isVisible().catch(() => false)
 			if (hasTemplate) {
 				await digitalDelivery.click()
-				// Wait for it to be created and then add it
-				await expect(merchantPage.getByRole('button', { name: /^add$/i }).first()).toBeVisible({ timeout: 5_000 })
-				await merchantPage.getByRole('button', { name: /^add$/i }).first().click()
+				// Wait for the shipping option to be created and added.
+				await expect(merchantPage.getByText('Selected Shipping Options')).toBeVisible({ timeout: 10_000 })
 			}
 		}
+
+		await expect(merchantPage.getByText('Selected Shipping Options')).toBeVisible({ timeout: 10_000 })
 
 		// --- Publish ---
 		// The app may show "Publish Product" or "Setup V4V First" depending on V4V state.
 		const v4vButton = merchantPage.getByTestId('product-setup-v4v-button')
 		const publishButton = merchantPage.getByTestId('product-publish-button')
 
-		if (await v4vButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
+		if (await v4vButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
 			await v4vButton.click()
 			// V4V dialog: confirm with defaults (0% V4V = user keeps 100%)
 			// This also triggers product publish via callback
 			await merchantPage.getByTestId('confirm-v4v-setup-button').click({ timeout: 5_000 })
 		} else {
+			await expect(publishButton).toBeEnabled({ timeout: 15_000 })
 			await publishButton.click()
 		}
 
