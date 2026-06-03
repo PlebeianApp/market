@@ -7,13 +7,14 @@ console.error = () => {}
 
 mock.module('@/lib/ctxcn-client', () => ({
 	PlebianCurrencyClient: class {
-		constructor() {
-			throw new Error('mocked: no real relay connections in tests')
+		async callTool() {
+			return { rates: null, error: 'test stub' }
 		}
+		close() {}
 	},
 }))
 
-import { convertCurrencyToSats, fetchBtcExchangeRates } from '../external'
+import { convertCurrencyToSats, fetchBtcExchangeRates, resetCurrencyClient } from '../external'
 
 const ORIGINAL_FETCH = globalThis.fetch
 
@@ -49,6 +50,7 @@ function jsonOk(body: unknown): Response {
 describe('external.tsx - fetchBtcExchangeRates', () => {
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
+		resetCurrencyClient()
 	})
 
 	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
@@ -113,6 +115,7 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 describe('external.tsx - convertCurrencyToSats', () => {
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
+		resetCurrencyClient()
 	})
 
 	test('returns amount directly for sats currency', async () => {
