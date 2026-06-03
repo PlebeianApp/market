@@ -85,11 +85,12 @@ export function parseLiveActivity(event: any): LiveActivity {
 	const starts = parseInt(event.tags.find((t: string[]) => t[0] === 'starts')?.[1] ?? '0', 10) || 0
 	const ends = parseInt(event.tags.find((t: string[]) => t[0] === 'ends')?.[1] ?? '0', 10) || 0
 	const relays = event.tags.find((t: string[]) => t[0] === 'relays')?.slice(1) ?? []
+	const sellerPubkey = event.tags.find((t: string[]) => t[0] === 'p' && t[3] === 'Host')?.[1] ?? event.pubkey
 
 	return {
 		coord: getLiveActivityCoord(event.pubkey, dTag),
 		dTag,
-		sellerPubkey: event.pubkey,
+		sellerPubkey,
 		title,
 		summary,
 		image,

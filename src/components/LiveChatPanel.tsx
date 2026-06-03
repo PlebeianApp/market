@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Send, MessageCircle } from 'lucide-react'
 import { useLiveChatMessages, useLiveActivity } from '@/queries/liveChat'
 import { usePublishLiveChatMessageMutation } from '@/publish/liveChat'
-import { getLiveActivityCoord, deriveLiveActivityStatus } from '@/lib/nip53'
+import { deriveLiveActivityStatus } from '@/lib/nip53'
 import { getAuctionId } from '@/queries/auctions'
 import { getAuctionStartAt, getAuctionMaxEndAt } from '@/lib/auctionSettlement'
 import { LiveChatMessageBubble } from './LiveChatMessage'
@@ -18,10 +18,10 @@ interface LiveChatPanelProps {
 export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const { user } = useStore(authStore)
 	const dTag = getAuctionId(auctionEvent)
-	const liveActivityCoord = dTag ? getLiveActivityCoord(auctionEvent.pubkey, dTag) : ''
 
 	const liveActivityQuery = useLiveActivity(auctionEvent)
 	const liveActivity = liveActivityQuery.data
+	const liveActivityCoord = liveActivity?.coord ?? ''
 
 	const startsAt = getAuctionStartAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
@@ -50,7 +50,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 
 	const handleSend = () => {
 		const trimmed = input.trim()
-		if (!trimmed || sendMessageMutation.isPending) return
+		if (!trimmed || sendMessageMutation.isPending || !liveActivityCoord) return
 		sendMessageMutation.mutate({ liveActivityCoord, content: trimmed }, { onSuccess: () => setInput('') })
 	}
 
