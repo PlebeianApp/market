@@ -59,60 +59,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				overlayOpacity: 0.4,
 			},
 			render: (props) => <CMSSimpleHero {...props} />,
-		},
-
-		CMSProductGrid: {
-			fields: {
-				title: { type: 'text', label: 'Section Title' },
-				dataSource: {
-					type: 'custom',
-					label: 'Data Source',
-					render: ({ field, value, name, onChange }) => (
-						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} />
-					),
-				},
-				columnsDesktop: { type: 'number', label: 'Columns (Desktop)' },
-				columnsTablet: { type: 'number', label: 'Columns (Tablet)' },
-				columnsMobile: { type: 'number', label: 'Columns (Mobile)' },
-				showVendor: {
-					type: 'custom',
-					label: 'Show Vendor',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-			},
-			defaultProps: {
-				title: 'Featured Products',
-				dataSource: { type: 'static', ids: [] },
-				columnsDesktop: 3,
-				columnsTablet: 2,
-				columnsMobile: 1,
-				showVendor: true,
-			},
-			render: (props) => <CMSProductGrid {...props} />,
-		},
-
-		CMSProductRow: {
-			fields: {
-				title: { type: 'text', label: 'Section Title' },
-				dataSource: {
-					type: 'custom',
-					label: 'Data Source',
-					render: ({ field, value, name, onChange }) => (
-						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} />
-					),
-				},
-				showVendor: {
-					type: 'custom',
-					label: 'Show Vendor',
-					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
-				},
-			},
-			defaultProps: {
-				title: 'Featured Products',
-				dataSource: { type: 'static', ids: [] },
-				showVendor: true,
-			},
-			render: (props) => <CMSProductRow {...props} />,
+			label: 'Hero Banner',
 		},
 
 		CMSFeatureBanner: {
@@ -170,12 +117,32 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				overlayOpacity: 0.4,
 			},
 			render: (props) => <CMSFeatureBanner {...props} />,
+			label: 'Feature Highlight',
 		},
 
-		CMSDivider: {
-			fields: {},
-			defaultProps: {},
-			render: (props) => <CMSDivider {...props} />,
+		CMSProductRow: {
+			fields: {
+				title: { type: 'text', label: 'Section Title' },
+				dataSource: {
+					type: 'custom',
+					label: 'Data Source',
+					render: ({ field, value, name, onChange }) => (
+						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} />
+					),
+				},
+				showVendor: {
+					type: 'custom',
+					label: 'Show Vendor',
+					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
+				},
+			},
+			defaultProps: {
+				title: 'Featured Products',
+				dataSource: { type: 'static', ids: [] },
+				showVendor: true,
+			},
+			render: (props) => <CMSProductRow {...props} />,
+			label: 'Product Row',
 		},
 
 		CMSProductFeature: {
@@ -204,6 +171,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				height: '400px',
 			},
 			render: (props) => <CMSProductFeature {...props} />,
+			label: 'Single Product Spotlight',
 		},
 
 		CMSUserProfile: {
@@ -231,6 +199,45 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				ctaLink: '#',
 			},
 			render: (props) => <CMSUserProfile {...props} />,
+			label: 'Creator Profile',
+		},
+
+		CMSProductGrid: {
+			fields: {
+				title: { type: 'text', label: 'Section Title' },
+				dataSource: {
+					type: 'custom',
+					label: 'Data Source',
+					render: ({ field, value, name, onChange }) => (
+						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} />
+					),
+				},
+				columnsDesktop: { type: 'number', label: 'Columns (Desktop)' },
+				columnsTablet: { type: 'number', label: 'Columns (Tablet)' },
+				columnsMobile: { type: 'number', label: 'Columns (Mobile)' },
+				showVendor: {
+					type: 'custom',
+					label: 'Show Vendor',
+					render: ({ field, value, name, onChange }) => <CheckboxField field={field} value={value} onChange={onChange} name={name} />,
+				},
+			},
+			defaultProps: {
+				title: 'Featured Products',
+				dataSource: { type: 'static', ids: [] },
+				columnsDesktop: 3,
+				columnsTablet: 2,
+				columnsMobile: 1,
+				showVendor: true,
+			},
+			render: (props) => <CMSProductGrid {...props} />,
+			label: 'Product Grid',
+		},
+
+		CMSDivider: {
+			fields: {},
+			defaultProps: {},
+			render: (props) => <CMSDivider {...props} />,
+			label: 'Section Divider',
 		},
 	},
 })
