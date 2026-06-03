@@ -13,9 +13,17 @@ interface UserCardProps {
 	size?: 'xs' | 'sm' | 'md' | 'lg'
 	subtitle?: 'npub' | 'nip-05' | 'none'
 	onPress?: 'profile' | 'copy-npub' | 'none'
+	hideNip05Badge?: boolean
 }
 
-export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
+export function UserCard({
+	pubkey,
+	className = '',
+	size = 'md',
+	subtitle = 'nip-05',
+	onPress = 'profile',
+	hideNip05Badge = false,
+}: UserCardProps) {
 	const { data: profileData } = useProfile(pubkey)
 	const { user } = profileData || {}
 
@@ -123,7 +131,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 		<div className={'flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap ' + classGapHorizontal}>
 			<AvatarUser pubkey={user?.pubkey} className={classSizeAvatar + ' min-w-0 ' + className} />
 			<div className={'flex flex-col min-w-0 ' + classGapVertical + ' ' + className}>
-				<div className={'flex items-center gap-1 min-w-0 overflow-hidden ' + className}>
+				<div className={'flex items-center gap-1 min-w-0 overflow-hidden text-foreground ' + className}>
 					{showNpubAsTitle ? (
 						copyNpubWrapper(
 							<h2 className={classSizeName + ' truncate lowercase min-w-0 ' + classNpub + ' ' + className} onClick={onClickNpub}>
@@ -133,7 +141,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 					) : (
 						<h2 className={classSizeName + ' truncate min-w-0 ' + className}>{textTitle}</h2>
 					)}
-					{user?.pubkey && (
+					{user?.pubkey && !hideNip05Badge && (
 						<Nip05Badge pubkey={user.pubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
 					)}
 				</div>

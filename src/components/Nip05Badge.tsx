@@ -43,9 +43,9 @@ export function Nip05Badge({ pubkey, className = '', showAddress = true }: Nip05
 			) : isVerified ? (
 				<BadgeCheck style={{ fill: 'var(--secondary)', color: 'var(--primary)' }} className={`w-6 h-6 ${className}`} />
 			) : (
-				<BadgeAlert style={{ fill: 'var(--destructive)', color: 'var(--primary)' }} className={`w-6 h-6 ${className}`} />
+				<BadgeAlert style={{ fill: 'var(--destructive)', color: 'black' }} className={`w-6 h-6 ${className}`} />
 			)}
-			{showAddress && nip05 && <span className={'text-gray-400 ' + className}>{elideNip05Address(nip05)}</span>}
+			{showAddress && nip05 && <span className={'text-muted-foreground ' + className}>{elideNip05Address(nip05)}</span>}
 		</div>
 	)
 }

@@ -76,8 +76,8 @@ export function PriceDisplay({
 	if (isLoading) {
 		return (
 			<div className={`flex flex-col gap-1 ${className}`}>
-				<div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>
-				<div className="animate-pulse bg-gray-200 h-3 w-12 rounded"></div>
+				<div className="animate-pulse bg-muted h-4 w-16 rounded"></div>
+				<div className="animate-pulse bg-muted h-3 w-12 rounded"></div>
 			</div>
 		)
 	}
@@ -86,19 +86,17 @@ export function PriceDisplay({
 		<div className={`flex flex-col gap-1 ${className}`}>
 			{/* Root currency indicator */}
 			{showRootCurrency && (
-				<div className="flex items-center gap-2 mb-1">
-					<span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Listed in {originalCurrency}</span>
-					<div className="h-1 w-1 bg-gray-400 rounded-full"></div>
-					<span className="text-xs text-gray-400">{isBitcoinCurrency ? 'Bitcoin' : `Fiat currency: ${selectedCurrency}`}</span>
+				<div className="flex items-center gap-2 mb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+					<span>Listed in {originalCurrency}</span>
 				</div>
 			)}
 
 			{/* Sats price - more prominent */}
-			{showSatsPrice && satsValue && <p className="text-md font-bold">{Math.round(satsValue).toLocaleString()} sats</p>}
+			{showSatsPrice && satsValue && <p className="text-md text-foreground font-bold">{Math.round(satsValue).toLocaleString()} sats</p>}
 
 			{/* Secondary price (fiat when root is Bitcoin, or original when root is fiat) */}
 			{showOriginalPrice && (
-				<p className="text-sm text-gray-400">
+				<p className="text-sm text-muted-foreground">
 					{isBitcoinCurrency
 						? // Root is Bitcoin, show converted fiat
 							fiatValue

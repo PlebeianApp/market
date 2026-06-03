@@ -146,6 +146,7 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
 
 	const summary = getProductSummary(eventProduct)
+	const categories = getProductCategories(eventProduct)
 	const description = getProductDescription(eventProduct)
 	const weightTag = getProductWeight(eventProduct)
 	const location = getProductLocation(eventProduct)
@@ -158,6 +159,11 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 				<>
 					{summary && <p className="mb-4 pb-4 border-gray-200 border-b text-gray-600 italic">{summary}</p>}
 					<p className="text-gray-700 break-words whitespace-pre-wrap">{description}</p>
+					{categories.map((category) => (
+						<Badge variant="outline" className="mt-4 mr-2 py-1 px-2">
+							{category[1]}
+						</Badge>
+					))}
 				</>,
 			)
 		case TabProductPage.spec:
@@ -577,7 +583,7 @@ function RouteComponent() {
 						<div className="absolute inset-0 bg-dots-overlay opacity-30" />
 					</div>
 
-					<div className="hero-content-product">
+					<div className="hero-content-product dark">
 						{!mobileMenuOpen && (
 							<button onClick={handleBackClick} className="col-span-full back-button">
 								<ArrowLeft className="w-6 h-4" />
@@ -589,7 +595,7 @@ function RouteComponent() {
 							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
-						<div className="flex flex-col gap-2 mx-auto w-full max-w-[600px] lg:max-w-none text-white">
+						<div className="flex flex-col gap-2 mx-auto w-full max-w-[600px] lg:max-w-none text-foreground">
 							<div className="flex justify-between items-center">
 								<h1 className="lg:pl-0 font-semibold text-3xl">{title}</h1>
 								<div className="flex items-center gap-2">
@@ -622,7 +628,7 @@ function RouteComponent() {
 							{visibility === 'pre-order' ? (
 								<Badge className="bg-blue-500">Pre-order</Badge>
 							) : (
-								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+								<Badge variant="secondary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 							)}
 
 							{(() => {
@@ -653,8 +659,7 @@ function RouteComponent() {
 										<div className="flex flex-wrap items-center gap-2">
 											<div className="flex flex-shrink-0 items-center gap-2">
 												<Button
-													variant="outline"
-													className="text-foreground"
+													variant="secondary"
 													size="icon"
 													onClick={() => setQuantity(Math.max(1, quantity - 1))}
 													disabled={quantity <= 1}
@@ -662,7 +667,7 @@ function RouteComponent() {
 													<Minus className="w-6 h-6" />
 												</Button>
 												<Input
-													className="bg-white w-12 font-medium text-black text-center"
+													className="bg-foreground text-background w-12 font-medium text-center"
 													value={quantity}
 													onChange={(e) => {
 														const value = parseInt(e.target.value)
@@ -675,8 +680,7 @@ function RouteComponent() {
 													type="number"
 												/>
 												<Button
-													variant="outline"
-													className="text-foreground"
+													variant="secondary"
 													size="icon"
 													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
 													disabled={quantity >= (stock || quantity)}
@@ -684,7 +688,7 @@ function RouteComponent() {
 													<Plus className="w-6 h-6" />
 												</Button>
 											</div>
-											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
+											<Button variant="default" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
 												{visibility === 'hidden'
 													? 'Not Available'
 													: isOutOfStock

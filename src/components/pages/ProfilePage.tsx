@@ -25,11 +25,13 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-react'
+import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer, LayoutTemplate } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '../UserCard'
 import { TooltipButton } from '../shared/TooltipButton'
+import { useStore } from '@tanstack/react-store'
+import { authStore } from '@/lib/stores/auth'
 
 interface ProfilePageProps {
 	profileId: string
@@ -38,6 +40,7 @@ interface ProfilePageProps {
 export function ProfilePage({ profileId }: ProfilePageProps) {
 	const navigate = useNavigate()
 	const [animationParent] = useAutoAnimate()
+	const { isAuthenticated, user: currentUser } = useStore(authStore)
 
 	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(profileId))
 	const { profile, user } = profileData || {}
@@ -104,6 +107,21 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 		return locations
 	}, [shippingOptions])
+
+	const isOwnProfile = isAuthenticated && currentUser?.pubkey === user?.pubkey
+
+	// Mock function to check if user has an existing storefront template
+	// In a real app, this would be a query to find a Kind 30999 event by the user
+	const hasExistingStorefront = false
+	const storefrontTemplateId = 'mock-template-id-123'
+
+	const handleCreateStorefront = () => {
+		if (hasExistingStorefront) {
+			navigate({ to: '/editor', search: { templateId: storefrontTemplateId } })
+		} else {
+			navigate({ to: '/editor' })
+		}
+	}
 
 	// Handle edit profile
 	const handleEdit = () => {
@@ -234,13 +252,22 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 							<TooltipButton variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="size-5" />
 							</TooltipButton>
-							{/* Edit button for profile owner */}
+
+							{isOwnProfile && (
+								<Button variant="secondary" onClick={handleCreateStorefront} className="flex items-center gap-2">
+									<LayoutTemplate className="size-5" />
+									<span className="hidden md:inline">{hasExistingStorefront ? 'Edit Storefront' : 'Create Storefront'}</span>
+								</Button>
+							)}
+
+							{/* Edit button for profile owner (existing) */}
 							{permissions.canEdit && (
 								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
 									<Edit className="size-5" />
 									<span className="hidden md:inline">Edit Profile</span>
 								</Button>
 							)}
+
 							{/* Entity Actions Menu for admins/editors (blacklist and featured functionality) */}
 							<EntityActionsMenu
 								permissions={permissions}
