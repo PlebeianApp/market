@@ -1,5 +1,6 @@
 // src/components/cms/CMSFeatureBanner.tsx
 import React from 'react'
+import { Button } from '@/components/ui/button'
 
 export interface CMSFeatureBannerProps {
 	backgroundImage?: string
@@ -8,7 +9,7 @@ export interface CMSFeatureBannerProps {
 	description: string
 	ctaText?: string
 	ctaLink?: string
-	ctaVariant?: 'primary' | 'secondary' | 'outline'
+	ctaVariant?: 'default' | 'secondary' | 'outline'
 	height?: string
 	overlayOpacity?: number
 	className?: string
@@ -21,21 +22,19 @@ export const CMSFeatureBanner: React.FC<CMSFeatureBannerProps> = ({
 	description = '',
 	ctaText = '',
 	ctaLink = '#',
-	ctaVariant = 'primary',
+	ctaVariant = 'default',
 	height = '400px',
 	overlayOpacity = 0.4,
 	className = '',
 }) => {
-	const getCtaButtonClass = () => {
+	const getVariant = () => {
 		switch (ctaVariant) {
-			case 'primary':
-				return 'bg-primary text-primary-foreground hover:bg-primary/90'
 			case 'secondary':
-				return 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+				return 'secondary'
 			case 'outline':
-				return 'bg-transparent border border-input hover:bg-accent text-accent-foreground'
+				return 'outline'
 			default:
-				return 'bg-primary text-primary-foreground hover:bg-primary/90'
+				return 'default'
 		}
 	}
 
@@ -64,7 +63,7 @@ export const CMSFeatureBanner: React.FC<CMSFeatureBannerProps> = ({
 					<div className="flex items-center gap-8">
 						{imageSrc && (
 							<div className="flex-shrink-0 flex items-center h-full p-4">
-								<img src={imageSrc} alt={title} className="h-full max-h-full w-auto object-contain rounded-lg shadow-lg" />
+								<img src={imageSrc} alt={title} className="h-full max-h-full w-auto object-contain rounded-lg shadow-lg border" />
 							</div>
 						)}
 
@@ -73,14 +72,11 @@ export const CMSFeatureBanner: React.FC<CMSFeatureBannerProps> = ({
 							<h2 className="text-3xl md:text-4xl font-heading tracking-wider text-white mb-4">{title}</h2>
 							<p className="text-lg text-white/90 mb-8 max-w-2xl">{description}</p>
 
-							{/* CTA moved inline with content */}
+							{/* CTA using shadcn Button */}
 							{ctaText && (
-								<a
-									href={ctaLink}
-									className={`inline-flex items-center px-6 py-3 rounded-md font-medium transition-colors ${getCtaButtonClass()}`}
-								>
-									{ctaText}
-								</a>
+								<Button asChild variant={getVariant()}>
+									<a href={ctaLink}>{ctaText}</a>
+								</Button>
 							)}
 						</div>
 					</div>

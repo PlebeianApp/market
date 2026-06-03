@@ -1,4 +1,4 @@
-// src/components/puck/NostrProfile.tsx
+// src/components/cms/CMSUserProfile.tsx
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidUserProfile } from '@/lib/utils/userValidation'
 import NDK, { type NDKUserProfile } from '@nostr-dev-kit/ndk'
@@ -40,16 +40,18 @@ export const CMSUserProfile = ({ identifier, relayUrl }: CMSUserProfileProps) =>
 		}
 	}, [identifier, relayUrl])
 
-	if (loading) return <div>Loading profile...</div>
-	if (error) return <div>Error: {error}</div>
-	if (!profile) return <div>No profile found</div>
+	if (loading) return <div className="py-4 text-center text-muted-foreground">Loading profile...</div>
+	if (error) return <div className="py-4 text-center text-destructive">Error: {error}</div>
+	if (!profile) return <div className="py-4 text-center text-muted-foreground">No profile found</div>
 
 	return (
-		<div className="flex items-center gap-4 p-4 border rounded-lg">
-			{profile.picture && <img src={profile.picture} alt={profile.name || 'Profile'} className="w-16 h-16 rounded-full object-cover" />}
+		<div className="flex items-center gap-4 p-4 border rounded-lg bg-card">
+			{profile.picture && (
+				<img src={profile.picture} alt={profile.name || 'Profile'} className="w-16 h-16 rounded-full object-cover border" />
+			)}
 			<div>
-				<h3 className="font-semibold">{profile.name || 'Anonymous'}</h3>
-				{profile.about && <p className="text-sm text-gray-600">{profile.about}</p>}
+				<h3 className="font-semibold text-foreground">{profile.name || 'Anonymous'}</h3>
+				{profile.about && <p className="text-sm text-muted-foreground">{profile.about}</p>}
 			</div>
 		</div>
 	)

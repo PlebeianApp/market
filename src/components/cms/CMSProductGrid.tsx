@@ -34,11 +34,11 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 	const { events, loading, error } = useProductData(dataSource)
 
 	if (loading) {
-		return <div className="py-12 text-center">Loading products...</div>
+		return <div className="py-12 text-center text-muted-foreground">Loading products...</div>
 	}
 
 	if (error) {
-		return <div className="py-12 text-center">{error}</div>
+		return <div className="py-12 text-center text-destructive">{error}</div>
 	}
 
 	if (events.length === 0) {
@@ -56,7 +56,7 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 			{/* Title Header */}
 			{title && (
 				<div className="mb-8">
-					<h2 className="text-2xl font-heading tracking-wider">{title}</h2>
+					<h2 className="text-2xl font-heading tracking-wider text-foreground">{title}</h2>
 				</div>
 			)}
 

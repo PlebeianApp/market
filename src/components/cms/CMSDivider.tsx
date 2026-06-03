@@ -7,7 +7,7 @@ export interface CMSDividerProps {
 export const CMSDivider: React.FC<CMSDividerProps> = ({ className = '' }) => {
 	return (
 		<div className={`py-8 ${className}`}>
-			<div className="w-full h-px bg-muted"></div>
+			<div className="w-full h-px bg-border"></div>
 		</div>
 	)
 }
