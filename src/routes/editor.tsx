@@ -62,7 +62,7 @@ function EditorRouteComponent() {
 	}
 
 	return (
-		<div className="flex flex-col h-screen">
+		<div className="flex flex-col h-full">
 			{/* Optional Header for Controls */}
 			<header className="flex justify-between items-center p-4 border-b bg-gray-50 dark:bg-gray-900 flex-shrink-0">
 				<div className="flex items-center gap-4">

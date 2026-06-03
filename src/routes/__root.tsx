@@ -37,6 +37,7 @@ function RootLayout() {
 	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
 	const { isAuthenticated } = useStore(authStore)
 	const isSetupPage = location.pathname === '/setup'
+	const isEditorPage = location.pathname === '/editor'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isCheckoutPage = location.pathname.startsWith('/checkout')
 
@@ -88,7 +89,7 @@ function RootLayout() {
 					<Outlet />
 				</main>
 				<Pattern pattern="page" />
-				{!isDashboardPage && !isCheckoutPage && <Footer />}
+				{!isEditorPage && !isDashboardPage && !isCheckoutPage && <Footer />}
 				{/* Having some build error with this rn */}
 				{/* <TanStackRouterDevtools /> */}
 				<MigratePrivateKeyDialog />
