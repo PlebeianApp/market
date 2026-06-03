@@ -131,7 +131,7 @@ export function UserCard({
 		<div className={'flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap ' + classGapHorizontal}>
 			<AvatarUser pubkey={user?.pubkey} className={classSizeAvatar + ' min-w-0 ' + className} />
 			<div className={'flex flex-col min-w-0 ' + classGapVertical + ' ' + className}>
-				<div className={'flex items-center gap-1 min-w-0 overflow-hidden ' + className}>
+				<div className={'flex items-center gap-1 min-w-0 overflow-hidden text-foreground ' + className}>
 					{showNpubAsTitle ? (
 						copyNpubWrapper(
 							<h2 className={classSizeName + ' truncate lowercase min-w-0 ' + classNpub + ' ' + className} onClick={onClickNpub}>

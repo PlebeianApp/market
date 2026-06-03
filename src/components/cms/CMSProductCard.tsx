@@ -68,37 +68,45 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 		}
 	}
 
-	// Content-only mode - return just the content without card styling
-	if (contentOnly) {
-		return (
-			<div className={`flex flex-col ${className}`}>
-				{/* Vendor */}
-				{showVendor && (
-					<div className="mb-2">
-						<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" hideNip05Badge />
-					</div>
-				)}
+	const content = (
+		<div className={`flex flex-col ${contentOnly ? '' : 'm-3'} ${className}`}>
+			{/* Vendor - using UserCard component */}
+			{showVendor && (
+				<div className="mb-2">
+					<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" hideNip05Badge />
+				</div>
+			)}
 
-				{/* Product Title */}
-				<h3 className="font-semibold mb-2">
-					<a href={`/product/${product.id}`} className="hover:text-primary">
-						{title}
-					</a>
-				</h3>
+			{/* Product Title */}
+			<h3 className="font-semibold mb-2 text-foreground line-clamp-2">{title}</h3>
 
-				{/* Short Description */}
-				{showDescriptionSnippet && summary && <p className="text-sm text-muted-foreground mb-3">{summary.substring(0, 100)}...</p>}
+			{/* Short Description */}
+			{showDescriptionSnippet && summary && (
+				<p className="text-sm text-muted-foreground mb-3 line-clamp-2">{summary.substring(0, 100)}...</p>
+			)}
 
-				{/* Pricing */}
-				{showPrice && price && <div className="my-2">{renderPrice()}</div>}
+			{/* Pricing section with Add to Cart button */}
+			<div className={`flex ${contentOnly ? 'flex-col gap-2' : 'items-center justify-between'} mt-auto pt-2`}>
+				{showPrice && price && <div>{renderPrice()}</div>}
 
-				{/* Add to Cart Button */}
-				<Button variant="outline" size="sm" onClick={handleAddToCart} disabled={!isInStock} className="mt-2 w-fit">
-					<ShoppingBasketIcon className="h-4 w-4 mr-2" />
+				{/* Add to Cart Button - Using shadcn UI Button */}
+				<Button
+					variant={contentOnly ? 'secondary' : 'outline'}
+					className="max-w-min"
+					size="sm"
+					onClick={handleAddToCart}
+					disabled={!isInStock}
+				>
+					<ShoppingBasketIcon className="h-5 w-5" />
 					Add to Cart
 				</Button>
 			</div>
-		)
+		</div>
+	)
+
+	// Content-only mode - return just the content without card styling
+	if (contentOnly) {
+		return content
 	}
 
 	// Default card mode
@@ -139,37 +147,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 			</div>
 
 			{/* Content */}
-			<div className="p-3 flex flex-col flex-1">
-				{/* Vendor - using UserCard component */}
-				{showVendor && (
-					<div className="mb-2">
-						<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" hideNip05Badge />
-					</div>
-				)}
-
-				{/* Product Title */}
-				<h3 className="font-semibold mb-2 line-clamp-2">
-					<a href={`/product/${product.id}`} className="hover:text-primary">
-						{title}
-					</a>
-				</h3>
-
-				{/* Short Description */}
-				{showDescriptionSnippet && summary && (
-					<p className="text-sm text-muted-foreground mb-3 line-clamp-2">{summary.substring(0, 100)}...</p>
-				)}
-
-				{/* Pricing section with Add to Cart button */}
-				<div className="flex items-center justify-between mt-auto pt-2">
-					{showPrice && price && <div>{renderPrice()}</div>}
-
-					{/* Add to Cart Button - Using shadcn UI Button */}
-					<Button variant="outline" size="sm" onClick={handleAddToCart} disabled={!isInStock}>
-						<ShoppingBasketIcon className="h-5 w-5" />
-						Add to Cart
-					</Button>
-				</div>
-			</div>
+			{content}
 		</div>
 	)
 }
