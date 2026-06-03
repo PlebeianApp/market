@@ -253,16 +253,17 @@ async function addProductAndGoToCheckout(page: Page): Promise<void> {
 
 	await expect(page.getByRole('heading', { name: /your cart/i })).toBeVisible({ timeout: 10_000 })
 	const cartDialog = page.getByRole('dialog', { name: /your cart/i })
-	const shippingCombobox = cartDialog.getByRole('combobox')
-	await expect(shippingCombobox).toBeVisible({ timeout: 5_000 })
-	await shippingCombobox.click()
-	await page.getByRole('option', { name: /worldwide standard/i }).click()
 
-	const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
+	const checkoutButton = cartDialog.getByRole('button', { name: /checkout/i })
 	await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 	await checkoutButton.click()
 
 	await expect(page.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 15_000 })
+
+	const shippingTrigger = page.getByText('Select shipping method')
+	await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+	await shippingTrigger.click()
+	await page.getByRole('option', { name: /worldwide standard/i }).click()
 }
 
 /**

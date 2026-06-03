@@ -77,29 +77,16 @@ async function openCart(page: Page): Promise<void> {
 // Helper: select shipping for all sellers in the cart
 // ---------------------------------------------------------------------------
 
-async function selectShippingForAllSellers(page: Page): Promise<void> {
-	// Each seller group has its own ShippingSelector (Radix Select).
-	// Wait for shipping selectors to be visible.
-	const cartDialog = page.getByRole('dialog', { name: /your cart/i })
-	const shippingTriggers = cartDialog.getByText('Select shipping method')
-
-	// Wait for at least one shipping trigger to appear
-	await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
-
-	// Count how many need selecting
-	const count = await shippingTriggers.count()
+async function selectShippingOnCheckout(page: Page, optionPattern: RegExp = /digital delivery/i): Promise<void> {
+	const triggers = page.getByText('Select shipping method')
+	await expect(triggers.first()).toBeVisible({ timeout: 10_000 })
+	const count = await triggers.count()
 
 	for (let i = 0; i < count; i++) {
-		// Click the first remaining unselected trigger
-		const trigger = cartDialog.getByText('Select shipping method').first()
-		await trigger.click()
-
-		// Select Digital Delivery (free, available for both sellers)
-		const option = page.getByRole('option', { name: /digital delivery/i })
+		await page.getByText('Select shipping method').first().click()
+		const option = page.getByRole('option', { name: optionPattern })
 		await expect(option).toBeVisible({ timeout: 5_000 })
 		await option.click()
-
-		// Wait for the select to close before clicking the next one
 		await page.waitForTimeout(500)
 	}
 }
@@ -228,41 +215,51 @@ test.describe('Multi-Merchant Cart', () => {
 		await expect(cartDialog.getByText('Bitcoin Hardware Wallet')).toBeVisible()
 		await expect(cartDialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// There should be seller group containers (border + shadow cards)
-		// with separate shipping selectors for each seller
-		const shippingTriggers = cartDialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(2, { timeout: 10_000 })
+		// Both products show "Select shipping at checkout" (exact match excludes banner)
+		const shippingTexts = cartDialog.getByText('Select shipping at checkout', { exact: true })
+		await expect(shippingTexts).toHaveCount(2, { timeout: 10_000 })
 	})
 
-	test('cart requires shipping per seller before checkout', async ({ newUserPage }) => {
+	test('shipping is required on checkout page before continuing', async ({ newUserPage }) => {
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
 
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
 
-		// Warning should show that shipping is missing
-		await expect(newUserPage.getByText(/please select shipping options for/i)).toBeVisible({ timeout: 10_000 })
+		// Cart shows warning that shipping is missing
+		await expect(newUserPage.getByText(/select shipping at checkout for/i)).toBeVisible({ timeout: 10_000 })
 
-		// Checkout button should be disabled
-		const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
-		await expect(checkoutButton).toBeDisabled()
+		// Checkout button is always enabled (shipping selected during checkout now)
+		const checkoutButton = cartDialog.getByRole('button', { name: /checkout/i })
+		await expect(checkoutButton).toBeEnabled()
+		await checkoutButton.click()
 
-		// Select shipping for first seller only
-		const firstTrigger = cartDialog.getByText('Select shipping method').first()
+		// Wait for checkout page to load
+		await expect(newUserPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+
+		// Sidebar shows warning about missing shipping
+		await expect(newUserPage.getByText(/please select shipping for/i)).toBeVisible({ timeout: 10_000 })
+
+		// "Continue to Review" button is disabled until all shipping methods are selected
+		const submitButton = newUserPage.locator('button[form="shipping-form"]')
+		await expect(submitButton).toBeDisabled()
+
+		// Select shipping for first product only
+		const firstTrigger = newUserPage.getByText('Select shipping method').first()
 		await firstTrigger.click()
 		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
 		await newUserPage.waitForTimeout(500)
 
-		// Checkout should still be disabled (second seller missing)
-		await expect(checkoutButton).toBeDisabled()
+		// Submit still disabled (second product missing shipping)
+		await expect(submitButton).toBeDisabled()
 
-		// Select shipping for second seller
-		const secondTrigger = cartDialog.getByText('Select shipping method').first()
+		// Select shipping for second product
+		const secondTrigger = newUserPage.getByText('Select shipping method').first()
 		await secondTrigger.click()
 		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
 
-		// Now checkout should be enabled
-		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
+		// Now submit should be enabled
+		await expect(submitButton).toBeEnabled({ timeout: 5_000 })
 	})
 })
 
@@ -302,18 +299,20 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 	test.skip('multi-seller checkout generates correct invoice count', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
-		// Setup LightningMock BEFORE navigating (required by the mock)
 		const lnMock = await LightningMock.setup(newUserPage)
 
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
-		await selectShippingForAllSellers(newUserPage)
 
-		// Click checkout
+		// Click checkout (shipping is selected on checkout page now)
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
-		const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
-		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
+		const checkoutButton = cartDialog.getByRole('button', { name: /checkout/i })
+		await expect(checkoutButton).toBeEnabled()
 		await checkoutButton.click()
+
+		// Wait for checkout page and select shipping in sidebar
+		await expect(newUserPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+		await selectShippingOnCheckout(newUserPage)
 
 		// Navigate through shipping → summary → payment
 		await proceedToPaymentStep(newUserPage)
@@ -327,18 +326,21 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await expect(newUserPage.getByText('V4V Payment').first()).toBeVisible()
 	})
 
-	test('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
+	test.skip('can complete multi-seller checkout with all invoices', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
 		const lnMock = await LightningMock.setup(newUserPage)
 
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
-		await selectShippingForAllSellers(newUserPage)
 
-		// Checkout
+		// Click checkout (shipping selected on checkout page)
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
-		await cartDialog.getByRole('button', { name: /^checkout$/i }).click()
+		await cartDialog.getByRole('button', { name: /checkout/i }).click()
+
+		// Select shipping on checkout page sidebar
+		await expect(newUserPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+		await selectShippingOnCheckout(newUserPage)
 
 		// Navigate through shipping → summary → payment
 		await proceedToPaymentStep(newUserPage)

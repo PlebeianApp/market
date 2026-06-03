@@ -19,23 +19,24 @@ async function completeCheckout(page: Page) {
 	await productCard.getByRole('button', { name: /Add to Cart/i }).click()
 	await expect(productCard.getByRole('button', { name: /Add/i })).toBeVisible()
 
-	// Open cart, select shipping
+	// Open cart and proceed to checkout (shipping selected on checkout page)
 	await page
 		.getByRole('button')
 		.filter({ has: page.locator('.i-basket') })
 		.click()
-	const shippingTrigger = page.getByText('Select shipping method')
-	await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
-	await shippingTrigger.click()
-	await page.getByText(/Worldwide Standard/).click()
 
-	// Proceed to checkout
 	const checkoutButton = page.getByRole('button', { name: /Checkout/i })
 	await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 	await checkoutButton.click()
 
-	// Fill shipping form
+	// Wait for checkout page and select shipping in sidebar
 	await expect(page.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
+	const shippingTrigger = page.getByText('Select shipping method')
+	await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+	await shippingTrigger.click()
+	await page.getByRole('option', { name: /Worldwide Standard/ }).click()
+
+	// Fill shipping form
 	await page.locator('#name').fill('E2E Test Buyer')
 	await page.locator('#firstLineOfAddress').fill('123 Test Street, Apt 4B')
 	await page.locator('#zipPostcode').fill('SW1A 1AA')
