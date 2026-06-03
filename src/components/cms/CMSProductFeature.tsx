@@ -38,6 +38,10 @@ export const CMSProductFeature: React.FC<CMSProductFeatureProps> = ({
 
 	const product = events[0]
 
+	// Extract image and title safely
+	const imageUrl = product.tags.find((tag) => tag[0] === 'image')?.[1] || '/placeholder.jpg'
+	const title = product.tags.find((tag) => tag[0] === 'title')?.[1] || 'Product'
+
 	return (
 		<div
 			className={`relative w-full ${className}`}
@@ -60,18 +64,13 @@ export const CMSProductFeature: React.FC<CMSProductFeatureProps> = ({
 			></div>
 
 			<div className="absolute inset-0 overflow-hidden flex items-center">
-				<div className="max-w-7xl mx-auto px-6 w-full">
-					<div className="flex items-center gap-8">
-						{/* Product Image */}
-						<div className="flex-shrink-0 flex items-center h-full p-4">
-							<div className="bg-card border rounded-lg overflow-hidden shadow-lg">
-								<img
-									src={product.tags.find((tag) => tag[0] === 'image')?.[1] || '/placeholder.jpg'}
-									alt={product.tags.find((tag) => tag[0] === 'title')?.[1] || 'Product'}
-									className="h-full max-h-full w-auto object-contain"
-									style={{ maxHeight: '300px' }}
-								/>
-							</div>
+				<div className="max-w-7xl mx-auto px-6 py-6 w-full h-full">
+					<div className="flex h-full items-center gap-8">
+						{/* 
+							Product Image Container
+						*/}
+						<div className="flex-shrink-0 h-full aspect-square overflow-hidden rounded-lg shadow-lg bg-card border">
+							<img src={imageUrl} alt={title} className="w-full h-full object-cover object-center" />
 						</div>
 
 						{/* Product Content */}
