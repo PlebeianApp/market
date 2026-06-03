@@ -17,6 +17,12 @@ export const CURRENCY_CACHE_CONFIG = {
 let currencyClient: PlebianCurrencyClient | null = null
 let currencyClientInitPromise: Promise<any> | null = null
 
+export function resetCurrencyClient() {
+	currencyClient?.close()
+	currencyClient = null
+	currencyClientInitPromise = null
+}
+
 async function getCurrencyClient(): Promise<PlebianCurrencyClient> {
 	if (currencyClient) return currencyClient
 	if (currencyClientInitPromise) return currencyClientInitPromise
