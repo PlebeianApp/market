@@ -4,13 +4,13 @@ import { DataSourceField, STATIC_DATA_SOURCE_EMPTY } from '@/components/editor/D
 import type { NDKUser } from '@nostr-dev-kit/ndk'
 
 // Import the components we generated
-import { CMSUserProfile } from '@/components/cms/CMSUserProfile'
 import { CheckboxField } from '@/components/editor/CheckboxField'
 import { CMSProductGrid, type CMSProductGridProps } from '@/components/cms/CMSProductGrid'
 import { CMSDivider, type CMSDividerProps } from '@/components/cms/CMSDivider'
 import { CMSProductRow, type CMSProductRowProps } from '@/components/cms/CMSProductRow'
 import { CMSFeatureBanner, type CMSFeatureBannerProps } from '@/components/cms/CMSFeatureBanner'
 import { CMSProductFeature, type CMSProductFeatureProps } from '@/components/cms'
+import { CMSSimpleHero, type CMSSimpleHeroProps } from '@/components/cms/CMSSimpleHero'
 
 // Define the component map for TypeScript inference
 type Components = {
@@ -19,11 +19,47 @@ type Components = {
 	CMSProductRow: CMSProductRowProps
 	CMSFeatureBanner: CMSFeatureBannerProps
 	CMSProductFeature: CMSProductFeatureProps
+	CMSSimpleHero: CMSSimpleHeroProps
 }
 
 export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 	components: {
-		// --- Category 3: Product Display ---
+		CMSSimpleHero: {
+			fields: {
+				backgroundImage: { type: 'text', label: 'Background Image URL' },
+				title: { type: 'text', label: 'Title' },
+				subtitle: { type: 'textarea', label: 'Subtitle (optional)' },
+				ctaText: { type: 'text', label: 'CTA Button Text' },
+				ctaLink: { type: 'text', label: 'CTA Link URL' },
+				textAlignment: {
+					type: 'select',
+					label: 'Text Alignment',
+					options: [
+						{ label: 'Left', value: 'left' },
+						{ label: 'Center', value: 'center' },
+						{ label: 'Right', value: 'right' },
+					],
+				},
+				height: { type: 'text', label: 'Banner Height (e.g., 400px, 50vh)' },
+				overlayOpacity: {
+					type: 'number',
+					label: 'Overlay Opacity (0-1)',
+					min: 0,
+					max: 1,
+					step: 0.1,
+				},
+			},
+			defaultProps: {
+				title: 'Welcome to Our Store',
+				subtitle: 'Discover amazing products from talented creators',
+				textAlignment: 'center',
+				ctaText: 'Shop Now',
+				ctaLink: '#',
+				height: '500px',
+				overlayOpacity: 0.4,
+			},
+			render: (props) => <CMSSimpleHero {...props} />,
+		},
 
 		CMSProductGrid: {
 			fields: {
