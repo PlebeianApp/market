@@ -312,6 +312,7 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		'/themes/:file': ({ params }) => serveStatic(`themes/${params.file}`),
 		'/.well-known/nostr.json': {
 			GET: (req) => {
 				const url = new URL(req.url)

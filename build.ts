@@ -172,24 +172,25 @@ const buildTime = (end - start).toFixed(2)
 const publicDir = path.join(process.cwd(), 'public')
 if (existsSync(publicDir)) {
 	const copyPublicFiles = async (dir: string, base: string = '') => {
-		const entries = (await Bun.file(dir).exists()) ? [] : Array.from(new Bun.Glob('**/*').scanSync(dir))
+		const entries = Array.from(new Bun.Glob('**/*').scanSync(dir))
 		for (const entry of entries) {
 			const srcPath = path.join(dir, entry)
 			const destPath = path.join(outdir, entry)
-			const destDir = path.dirname(destPath)
-
-			// Create destination directory if needed
-			if (!existsSync(destDir)) {
-				await Bun.write(path.join(destDir, '.keep'), '')
-				await rm(path.join(destDir, '.keep'))
-			}
 
 			// Copy file
 			const file = Bun.file(srcPath)
 			if (await file.exists()) {
 				const stats = await file.size
-				if (stats > 0 || entry.endsWith('.json') || entry.endsWith('.js')) {
-					await Bun.write(destPath, file)
+				if (
+					stats > 0 ||
+					entry.endsWith('.css') ||
+					entry.endsWith('.json') ||
+					entry.endsWith('.js') ||
+					entry.endsWith('.png') ||
+					entry.endsWith('.svg')
+				) {
+					// Creates destination directory if needed
+					await Bun.write(destPath, file, { createPath: true })
 					console.log(`📦 Copied: ${entry}`)
 				}
 			}
