@@ -89,13 +89,15 @@ export const CMSUserProfile = ({
 			}}
 		>
 			{/* Overlay */}
-			<div
-				className="absolute inset-0"
-				style={{
-					backgroundColor: 'black',
-					opacity: overlayOpacity,
-				}}
-			></div>
+			{!!backgroundImage && (
+				<div
+					className="absolute inset-0"
+					style={{
+						backgroundColor: 'black',
+						opacity: overlayOpacity,
+					}}
+				></div>
+			)}
 
 			<div className="absolute inset-0 overflow-hidden flex items-center">
 				<div className="max-w-7xl mx-auto px-6 w-full">
@@ -119,7 +121,7 @@ export const CMSUserProfile = ({
 						</div>
 
 						{/* Profile Content */}
-						<div className="flex-1 text-center lg:text-left min-w-0">
+						<div className={`flex-1 text-center lg:text-left min-w-0 ${!!backgroundImage ? 'dark' : ''}`}>
 							<div className="flex flex-col h-full justify-center">
 								{/* Profile Name */}
 								<h2 className="text-3xl md:text-4xl font-heading tracking-wider text-foreground mb-4">{profile.name || 'Anonymous'}</h2>

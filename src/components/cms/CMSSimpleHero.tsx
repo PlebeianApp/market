@@ -50,16 +50,18 @@ export const CMSSimpleHero: React.FC<CMSSimpleHeroProps> = ({
 			}}
 		>
 			{/* Overlay for better text readability */}
-			<div
-				className="absolute inset-0"
-				style={{
-					backgroundColor: 'black',
-					opacity: overlayOpacity,
-				}}
-			></div>
+			{!!backgroundImage && (
+				<div
+					className="absolute inset-0"
+					style={{
+						backgroundColor: 'black',
+						opacity: overlayOpacity,
+					}}
+				></div>
+			)}
 
 			{/* Content Container - using same padding as other components */}
-			<div className="absolute inset-0 flex items-center">
+			<div className={`absolute inset-0 flex items-center ${backgroundImage ? 'dark' : ''}`}>
 				<div className="w-full max-w-7xl mx-auto px-6">
 					<div className={`flex flex-col ${getTextAlignmentClass()}`}>
 						{/* Title */}

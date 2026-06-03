@@ -11,7 +11,6 @@ import { CMSProductRow, type CMSProductRowProps } from '@/components/cms/CMSProd
 import { CMSFeatureBanner, type CMSFeatureBannerProps } from '@/components/cms/CMSFeatureBanner'
 import { CMSProductFeature, CMSUserProfile, type CMSProductFeatureProps, type CMSUserProfileProps } from '@/components/cms'
 import { CMSSimpleHero, type CMSSimpleHeroProps } from '@/components/cms/CMSSimpleHero'
-import { CMSParagraph, type CMSParagraphProps } from '@/components/cms/CMSParagraph'
 
 // Define the component map for TypeScript inference
 type Components = {
@@ -22,7 +21,6 @@ type Components = {
 	CMSProductFeature: CMSProductFeatureProps
 	CMSSimpleHero: CMSSimpleHeroProps
 	CMSUserProfile: CMSUserProfileProps
-	CMSParagraph: CMSParagraphProps
 }
 
 export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
@@ -118,10 +116,11 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 			render: (props) => <CMSProductRow {...props} />,
 		},
 
+		// Updated CMSFeatureBanner configuration in src/config/cms.tsx
 		CMSFeatureBanner: {
 			fields: {
 				backgroundImage: { type: 'text', label: 'Background Image URL' },
-				imageSrc: { type: 'text', label: 'Left Image URL (optional)' },
+				imageSrc: { type: 'text', label: 'Feature Image URL (optional)' },
 				title: { type: 'text', label: 'Title' },
 				description: { type: 'textarea', label: 'Description' },
 				ctaText: { type: 'text', label: 'CTA Button Text' },
@@ -133,6 +132,23 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 						{ label: 'Primary', value: 'default' },
 						{ label: 'Secondary', value: 'secondary' },
 						{ label: 'Outline', value: 'outline' },
+					],
+				},
+				imagePosition: {
+					type: 'select',
+					label: 'Image Position',
+					options: [
+						{ label: 'Left', value: 'left' },
+						{ label: 'Right', value: 'right' },
+					],
+				},
+				textAlignment: {
+					type: 'select',
+					label: 'Text Alignment',
+					options: [
+						{ label: 'Left', value: 'left' },
+						{ label: 'Center', value: 'center' },
+						{ label: 'Right', value: 'right' },
 					],
 				},
 				height: { type: 'text', label: 'Banner Height (e.g., 400px, 50vh)' },
@@ -150,6 +166,8 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				ctaText: 'Learn More',
 				ctaLink: '#',
 				ctaVariant: 'default',
+				imagePosition: 'left',
+				textAlignment: 'left',
 				height: '400px',
 				overlayOpacity: 0.4,
 			},
@@ -215,33 +233,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				ctaLink: '#',
 			},
 			render: (props) => <CMSUserProfile {...props} />,
-		},
-
-		CMSParagraph: {
-			fields: {
-				title: { type: 'text', label: 'Section Title (optional)' },
-				content: { type: 'textarea', label: 'Content' },
-				imageSrc: { type: 'text', label: 'Image URL (optional)' },
-				ctaText: { type: 'text', label: 'CTA Button Text' },
-				ctaLink: { type: 'text', label: 'CTA Link URL' },
-				textAlignment: {
-					type: 'select',
-					label: 'Text Alignment',
-					options: [
-						{ label: 'Left', value: 'left' },
-						{ label: 'Center', value: 'center' },
-						{ label: 'Right', value: 'right' },
-					],
-				},
-			},
-			defaultProps: {
-				title: '',
-				content: 'Add your content here...',
-				textAlignment: 'left',
-				ctaText: '',
-				ctaLink: '#',
-			},
-			render: (props) => <CMSParagraph {...props} />,
 		},
 	},
 })
