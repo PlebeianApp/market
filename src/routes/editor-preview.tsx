@@ -4,8 +4,9 @@ import type { Data } from '@puckeditor/core'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { loadDraft } from '@/lib/cms/storage'
-import { getCMSConfig } from '@/config/cms'
+import { getCMSConfig, type CMSRootProps } from '@/config/cms'
 import { useAuth } from '@/lib/stores/auth'
+import { applyLocalTheme } from '@/lib/utils/theme'
 import '@puckeditor/core/puck.css'
 
 // Initial empty data fallback
@@ -18,6 +19,7 @@ export const Route = createFileRoute('/editor-preview')({
 function PreviewRouteComponent() {
 	const [data, setData] = useState<Data | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
+	const [themeElement, setThemeElement] = useState<HTMLDivElement | null>(null)
 	const { user } = useAuth()
 
 	const config = useMemo(() => {
@@ -36,6 +38,18 @@ function PreviewRouteComponent() {
 		setIsLoading(false)
 	}, [])
 
+	const rootProps = data?.root.props as CMSRootProps
+
+	// Apply theme when data changes
+	useEffect(() => {
+		if (themeElement && rootProps?.theme) {
+			applyLocalTheme(themeElement, rootProps.theme)
+		} else if (themeElement) {
+			// Clear theme if none is set
+			themeElement.style.cssText = ''
+		}
+	}, [themeElement, rootProps?.theme])
+
 	if (isLoading) {
 		return <div className="flex h-screen items-center justify-center">Loading preview...</div>
 	}
@@ -52,8 +66,11 @@ function PreviewRouteComponent() {
 		)
 	}
 
+	// Get the theme from root props
+	const pageTheme = rootProps?.theme || 'default'
+
 	return (
-		<div className="min-h-screen bg-white">
+		<div className="min-h-screen bg-white" ref={setThemeElement}>
 			{/* Optional: Back to Editor Button */}
 			<div className="fixed top-4 right-4 z-50">
 				<a

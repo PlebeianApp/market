@@ -1,13 +1,13 @@
+// src/routes/editor.tsx
 import { Puck, createUsePuck } from '@puckeditor/core'
-import type { Config, Data } from '@puckeditor/core'
+import type { Data } from '@puckeditor/core'
 import { createFileRoute } from '@tanstack/react-router'
-import { z } from 'zod'
-import '@puckeditor/core/puck.css'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { saveDraft, loadDraft, clearDraft } from '@/lib/cms/storage'
 import { toast } from 'sonner'
-import { getCMSConfig } from '@/config/cms'
+import { getCMSConfig, type CMSComponents, type CMSRootProps } from '@/config/cms'
 import { useAuth } from '@/lib/stores/auth'
+import { applyLocalTheme } from '@/lib/utils/theme'
 import { Button } from '@/components/ui/button'
 import { Eye, Trash2, Save, FileEdit, GlobeIcon } from 'lucide-react'
 
@@ -58,29 +58,6 @@ function ClearDraftButton({ onClear }: { onClear: () => void }) {
 	)
 }
 
-// Custom Save Draft Button Component
-function SaveDraftButton() {
-	const appState = usePuck((s) => s.appState)
-
-	const handleSave = () => {
-		try {
-			const currentData = appState.data
-			saveDraft(currentData)
-			toast.success('Draft saved successfully!')
-		} catch (error) {
-			toast.error('Failed to save draft.')
-			console.error(error)
-		}
-	}
-
-	return (
-		<Button variant="default" size="sm" onClick={handleSave} className="flex items-center gap-2">
-			<Save className="w-4 h-4" />
-			Save Draft
-		</Button>
-	)
-}
-
 // Custom Publish Button Component
 function PublishButton() {
 	const appState = usePuck((s) => s.appState)
@@ -111,7 +88,9 @@ function PublishButton() {
 
 function EditorRouteComponent() {
 	const [data, setData] = useState<Data>(INITIAL_DATA)
+
 	const [isLoading, setIsLoading] = useState(true)
+	const themeContainerRef = useRef<HTMLDivElement>(null)
 	const { user } = useAuth()
 
 	// Use this key to force a complete remount of the Puck editor
@@ -129,6 +108,18 @@ function EditorRouteComponent() {
 		}
 		setIsLoading(false)
 	}, [])
+
+	const rootProps = data?.root.props as CMSRootProps
+
+	// Apply theme when data changes
+	useEffect(() => {
+		if (themeContainerRef.current && rootProps?.theme) {
+			applyLocalTheme(themeContainerRef.current, rootProps.theme)
+		} else if (themeContainerRef.current) {
+			// Clear theme if none is set
+			themeContainerRef.current.style.cssText = ''
+		}
+	}, [rootProps?.theme])
 
 	// 2. Handle Publish (Save)
 	const handlePublish = (newData: Data) => {

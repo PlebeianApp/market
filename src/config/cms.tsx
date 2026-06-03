@@ -10,9 +10,10 @@ import { CMSProductRow, type CMSProductRowProps } from '@/components/cms/CMSProd
 import { CMSFeatureBanner, type CMSFeatureBannerProps } from '@/components/cms/CMSFeatureBanner'
 import { CMSProductFeature, CMSUserProfile, type CMSProductFeatureProps, type CMSUserProfileProps } from '@/components/cms'
 import { CMSSimpleHero, type CMSSimpleHeroProps } from '@/components/cms/CMSSimpleHero'
+import { CMSThemeSelector } from '@/components/cms/CMSThemeSelector'
 
 // Define the component map for TypeScript inference
-type Components = {
+export type CMSComponents = {
 	CMSProductGrid: CMSProductGridProps
 	CMSDivider: CMSDividerProps
 	CMSProductRow: CMSProductRowProps
@@ -22,7 +23,28 @@ type Components = {
 	CMSUserProfile: CMSUserProfileProps
 }
 
-export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
+export type CMSRootProps = {
+	title?: string | undefined
+	theme?: string
+}
+
+export const getCMSConfig = (ownUser?: NDKUser): Config<CMSComponents, CMSRootProps> => ({
+	root: {
+		fields: {
+			theme: {
+				type: 'custom',
+				label: 'Page Theme',
+				render: ({ field, value, name, onChange }) => (
+					<div className="py-2">
+						<CMSThemeSelector initialTheme={value || 'default'} onThemeChange={(themeId) => onChange(themeId)} />
+					</div>
+				),
+			},
+		},
+		defaultProps: {
+			theme: 'default',
+		},
+	},
 	components: {
 		CMSSimpleHero: {
 			fields: {
