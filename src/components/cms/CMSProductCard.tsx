@@ -21,6 +21,7 @@ export interface CMSProductCardProps {
 	showPrice?: boolean
 	showVendor?: boolean
 	showDescriptionSnippet?: boolean
+	contentOnly?: boolean
 	className?: string
 }
 
@@ -29,6 +30,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 	showPrice = true,
 	showVendor = true,
 	showDescriptionSnippet = true,
+	contentOnly = false,
 	className = '',
 }) => {
 	// Extract product data using the same helper functions as ProductCard
@@ -66,6 +68,40 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 		}
 	}
 
+	// Content-only mode - return just the content without card styling
+	if (contentOnly) {
+		return (
+			<div className={`flex flex-col ${className}`}>
+				{/* Vendor */}
+				{showVendor && (
+					<div className="mb-2">
+						<UserCard pubkey={product.pubkey} size="xs" subtitle="none" onPress="profile" hideNip05Badge />
+					</div>
+				)}
+
+				{/* Product Title */}
+				<h3 className="font-semibold mb-2">
+					<a href={`/product/${product.id}`} className="hover:text-primary">
+						{title}
+					</a>
+				</h3>
+
+				{/* Short Description */}
+				{showDescriptionSnippet && summary && <p className="text-sm text-muted-foreground mb-3">{summary.substring(0, 100)}...</p>}
+
+				{/* Pricing */}
+				{showPrice && price && <div className="my-2">{renderPrice()}</div>}
+
+				{/* Add to Cart Button */}
+				<Button variant="outline" size="sm" onClick={handleAddToCart} disabled={!isInStock} className="mt-2 w-fit">
+					<ShoppingBasketIcon className="h-4 w-4 mr-2" />
+					Add to Cart
+				</Button>
+			</div>
+		)
+	}
+
+	// Default card mode
 	return (
 		<div
 			className={`flex flex-col border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow ${className}`}

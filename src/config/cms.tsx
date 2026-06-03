@@ -10,6 +10,7 @@ import { CMSProductGrid, type CMSProductGridProps } from '@/components/cms/CMSPr
 import { CMSDivider, type CMSDividerProps } from '@/components/cms/CMSDivider'
 import { CMSProductRow, type CMSProductRowProps } from '@/components/cms/CMSProductRow'
 import { CMSFeatureBanner, type CMSFeatureBannerProps } from '@/components/cms/CMSFeatureBanner'
+import { CMSProductFeature, type CMSProductFeatureProps } from '@/components/cms'
 
 // Define the component map for TypeScript inference
 type Components = {
@@ -17,6 +18,7 @@ type Components = {
 	CMSDivider: CMSDividerProps
 	CMSProductRow: CMSProductRowProps
 	CMSFeatureBanner: CMSFeatureBannerProps
+	CMSProductFeature: CMSProductFeatureProps
 }
 
 export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
@@ -108,7 +110,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				description: 'Feature description text goes here.',
 				ctaText: 'Learn More',
 				ctaLink: '#',
-				ctaVariant: 'primary',
+				ctaVariant: 'default',
 				height: '400px',
 				overlayOpacity: 0.4,
 			},
@@ -119,6 +121,35 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 			fields: {},
 			defaultProps: {},
 			render: (props) => <CMSDivider {...props} />,
+		},
+
+		// Add to the components configuration in src/config/cms.tsx
+		CMSProductFeature: {
+			fields: {
+				dataSource: {
+					type: 'custom',
+					label: 'Data Source',
+					render: ({ field, value, name, onChange }) => (
+						<DataSourceField field={field} value={value ?? STATIC_DATA_SOURCE_EMPTY} onChange={onChange} allowedTypes={['static']} />
+					),
+				},
+				backgroundImage: { type: 'text', label: 'Background Image URL' },
+				backgroundColor: { type: 'text', label: 'Background Color (Tailwind class or hex)' },
+				overlayOpacity: {
+					type: 'number',
+					label: 'Overlay Opacity (0-1)',
+					min: 0,
+					max: 1,
+					step: 0.1,
+				},
+				height: { type: 'text', label: 'Banner Height (e.g., 400px, 50vh)' },
+			},
+			defaultProps: {
+				dataSource: { type: 'static', ids: [] },
+				overlayOpacity: 0.4,
+				height: '400px',
+			},
+			render: (props) => <CMSProductFeature {...props} />,
 		},
 	},
 })
