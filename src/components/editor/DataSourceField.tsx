@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Plus, Trash2 } from 'lucide-react'
+import { isValidHexKey } from '@/lib/utils'
+import { hexToNpub } from '@/routes/setup'
 
 // Define the types for our data source
 export type DataSourceType = 'static' | 'dynamic'

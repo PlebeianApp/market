@@ -1,5 +1,7 @@
 import { nip19 } from 'nostr-tools'
 import { BECH32_REGEX } from 'nostr-tools/nip19'
+import { isValidHexKey } from '../utils'
+import { npubToHex } from '@/routes/setup'
 
 /**
  * Validates if a string is a valid Nostr user identifier.
@@ -35,4 +37,36 @@ export function isValidUserProfile(input: string): boolean {
 	// Regex: (optional local-part)@domain.tld OR just domain.tld
 	const nip05Regex = /^([a-zA-Z0-9._-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$|^([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/
 	return nip05Regex.test(trimmed)
+}
+
+/**
+ * Convert an array of author identifiers to hex pubkeys
+ */
+export const convertAuthorsToHexKeys = async (authors: string[]): Promise<string[]> => {
+	const convertedAuthors: string[] = []
+
+	for (const author of authors) {
+		// Skip empty strings
+		if (!author.trim()) continue
+
+		// If it's already a valid hex key, use it as-is
+		if (isValidHexKey(author)) {
+			convertedAuthors.push(author)
+			continue
+		}
+
+		// Try to convert the identifier to a hex pubkey
+		try {
+			const hexPubkey = npubToHex(author)
+			if (hexPubkey) {
+				convertedAuthors.push(hexPubkey)
+			} else {
+				console.warn(`Could not convert author identifier to hex pubkey: ${author}`)
+			}
+		} catch (error) {
+			console.warn(`Error converting author identifier: ${author}`, error)
+		}
+	}
+
+	return convertedAuthors
 }

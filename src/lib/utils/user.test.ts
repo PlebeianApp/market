@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { isValidUserProfile } from './userValidation' // Adjust path as needed
+import { isValidUserProfile } from './user' // Adjust path as needed
 
 // Suppress console output for cleaner test runs (optional, mimicking your example)
 const originalWarn = console.warn

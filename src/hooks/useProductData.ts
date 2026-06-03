@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { DataSource } from '@/components/editor/DataSourceField'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { convertAuthorsToHexKeys } from '@/lib/utils/user'
 
 export const useProductData = (dataSource?: DataSource) => {
 	const [events, setEvents] = useState<NDKEvent[]>([])
@@ -40,8 +41,19 @@ export const useProductData = (dataSource?: DataSource) => {
 						limit: dataSource.limit || 12,
 					}
 
+					// Convert authors to hex keys if needed
 					if (dataSource.authors && dataSource.authors.length > 0) {
-						filter.authors = dataSource.authors
+						try {
+							const convertedAuthors = await convertAuthorsToHexKeys(dataSource.authors)
+							if (convertedAuthors.length > 0) {
+								console.log('Converted Authors: ', convertedAuthors)
+								filter.authors = convertedAuthors
+							}
+						} catch (conversionError) {
+							console.warn('Failed to convert authors to hex keys:', conversionError)
+							// Fallback to original authors if conversion fails
+							filter.authors = dataSource.authors
+						}
 					}
 
 					// Apply tag filters

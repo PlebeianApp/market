@@ -91,7 +91,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 
 				{/* Add to Cart Button - Using shadcn UI Button */}
 				<Button
-					variant={contentOnly ? 'secondary' : 'outline'}
+					variant={contentOnly ? 'default' : 'outline'}
 					className="max-w-min"
 					size="sm"
 					onClick={handleAddToCart}

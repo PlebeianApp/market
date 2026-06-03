@@ -1,7 +1,7 @@
 // src/components/cms/CMSUserProfile.tsx
 import { ndkActions } from '@/lib/stores/ndk'
-import { isValidUserProfile } from '@/lib/utils/userValidation'
-import NDK, { type NDKUserProfile } from '@nostr-dev-kit/ndk'
+import { isValidUserProfile } from '@/lib/utils/user'
+import NDK, { NDKUser, type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useState, useEffect } from 'react'
 
 export interface CMSUserProfileProps {
@@ -22,21 +22,35 @@ export const CMSUserProfile = ({ identifier, relayUrl }: CMSUserProfileProps) =>
 			try {
 				const ndk = ndkActions.getNDK()!
 
-				const userProfile = await ndk.fetchUser(identifier)?.then((user) => user?.fetchProfile())
-				setProfile(userProfile ?? null)
+				// Use ndk.fetchUser which handles hex pubkeys, npubs, nip-05s, etc.
+				const user = await ndk.fetchUser(identifier)
+
+				if (user) {
+					// Fetch the profile for the user
+					const userProfile = await user.fetchProfile()
+					setProfile(userProfile ?? null)
+				} else {
+					setProfile(null)
+				}
 			} catch (err) {
+				console.error('Failed to fetch user profile:', err)
 				setError(err instanceof Error ? err.message : 'Failed to fetch profile')
+				setProfile(null)
 			} finally {
 				setLoading(false)
 			}
 		}
 
-		if (isValidUserProfile(identifier)) {
-			console.log('Fetch profile:')
-			fetchProfile()
+		if (identifier && identifier.trim() !== '') {
+			if (isValidUserProfile(identifier)) {
+				fetchProfile()
+			} else {
+				setLoading(false)
+				setError('Invalid user identifier.')
+			}
 		} else {
 			setLoading(false)
-			setError('Invalid user identifer.')
+			setError('No user identifier provided.')
 		}
 	}, [identifier, relayUrl])
 
@@ -52,6 +66,7 @@ export const CMSUserProfile = ({ identifier, relayUrl }: CMSUserProfileProps) =>
 			<div>
 				<h3 className="font-semibold text-foreground">{profile.name || 'Anonymous'}</h3>
 				{profile.about && <p className="text-sm text-muted-foreground">{profile.about}</p>}
+				{profile.nip05 && <p className="text-xs text-muted-foreground mt-1">{profile.nip05}</p>}
 			</div>
 		</div>
 	)

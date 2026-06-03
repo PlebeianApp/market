@@ -3,6 +3,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useProductData } from '@/hooks/useProductData'
 import type { DataSource } from '@/components/editor/DataSourceField'
 import { CMSProductCard } from './CMSProductCard'
+import { getProductImages, getProductTitle } from '@/queries/products'
 import React from 'react'
 
 export interface CMSProductFeatureProps {
@@ -38,9 +39,10 @@ export const CMSProductFeature: React.FC<CMSProductFeatureProps> = ({
 
 	const product = events[0]
 
-	// Extract image and title safely
-	const imageUrl = product.tags.find((tag) => tag[0] === 'image')?.[1] || '/placeholder.jpg'
-	const title = product.tags.find((tag) => tag[0] === 'title')?.[1] || 'Product'
+	// Get product image using the same helper as CMSProductCard
+	const images = getProductImages(product)
+	const imageUrl = images?.at(0)?.[1] ?? '/placeholder.jpg'
+	const title = getProductTitle(product) ?? 'Product'
 
 	return (
 		<div
