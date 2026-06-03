@@ -128,6 +128,181 @@ function TechnicalDataRow({ label, value }: { label: string; value: ReactNode })
 	)
 }
 
+type ShippingInfo = NonNullable<ReturnType<typeof getShippingInfo>>
+
+type ShippingTagSource = {
+	tags: string[][]
+}
+
+type AuctionShippingOptionDisplay = {
+	shippingRef: string
+	extraCost: string
+	status: 'valid' | 'invalid'
+	info: ShippingInfo | null
+	event: ShippingTagSource | null
+	isLoading: boolean
+	isNotFound: boolean
+}
+
+function AuctionEmptyState({ title, description }: { title: string; description?: string }) {
+	return (
+		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
+			<p className="text-sm font-medium text-zinc-900">{title}</p>
+			{description && <p className="mt-1 text-sm leading-6 text-zinc-500">{description}</p>}
+		</div>
+	)
+}
+
+function getShippingTagValues(event: ShippingTagSource | null, tagName: string): string[] {
+	return (
+		event?.tags
+			.find((tag) => tag[0] === tagName)
+			?.slice(1)
+			.filter(Boolean) ?? []
+	)
+}
+
+function getShippingTagValue(event: ShippingTagSource | null, tagName: string): string {
+	return getShippingTagValues(event, tagName)[0] || ''
+}
+
+function getShippingCurrency(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
+	const priceTagValues = getShippingTagValues(event, 'price')
+	return info?.price.currency || priceTagValues[1] || fallbackCurrency
+}
+
+function formatShippingPrice(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
+	const priceTagValues = getShippingTagValues(event, 'price')
+	const amount = info?.price.amount || priceTagValues[0] || ''
+	const currency = getShippingCurrency(info, event, fallbackCurrency)
+
+	if (!amount) return 'Price unavailable'
+	return currency ? `${amount} ${currency}` : amount
+}
+
+function formatShippingExtraCost(extraCost: string, currency: string): string | null {
+	const extraCostNumber = extraCost ? Number(extraCost) : 0
+	if (Number.isNaN(extraCostNumber) || extraCostNumber <= 0) return null
+
+	return currency ? `${extraCostNumber} ${currency}` : `${extraCostNumber}`
+}
+
+function formatShippingDestination(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
+	const countries = info?.countries.length ? info.countries : getShippingTagValues(event, 'country')
+	const regions = getShippingTagValues(event, 'region')
+	const destinationParts = [
+		countries.length > 0 ? `Countries: ${countries.join(', ')}` : '',
+		regions.length > 0 ? `Regions: ${regions.join(', ')}` : '',
+	].filter(Boolean)
+
+	return destinationParts.length > 0 ? destinationParts.join(' · ') : null
+}
+
+function formatShippingDuration(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
+	const durationTagValues = getShippingTagValues(event, 'duration')
+	const min = info?.duration?.min || durationTagValues[0] || ''
+	const max = info?.duration?.max || durationTagValues[1] || ''
+	const unit = info?.duration?.unit || durationTagValues[2] || ''
+	const unitSuffix = unit ? ` ${unit}` : ''
+
+	if (min && max) return `${min}-${max}${unitSuffix}`
+	if (min) return `${min}${unitSuffix}`
+	if (max) return `Up to ${max}${unitSuffix}`
+	return null
+}
+
+function formatShippingPickup(event: ShippingTagSource | null): string | null {
+	const structuredAddress = [
+		getShippingTagValue(event, 'pickup-street'),
+		getShippingTagValue(event, 'pickup-city'),
+		getShippingTagValue(event, 'pickup-state'),
+		getShippingTagValue(event, 'pickup-postal-code'),
+		getShippingTagValue(event, 'pickup-country'),
+	].filter(Boolean)
+
+	if (structuredAddress.length > 0) return structuredAddress.join(', ')
+	return getShippingTagValue(event, 'pickup-address') || null
+}
+
+function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode }) {
+	if (value === null || value === undefined || value === '') return null
+
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</dt>
+			<dd className="mt-1 break-words text-sm font-medium text-zinc-900">{value}</dd>
+		</div>
+	)
+}
+
+function AuctionShippingOptionCard({ option, auctionCurrency }: { option: AuctionShippingOptionDisplay; auctionCurrency: string }) {
+	if (option.status === 'invalid') {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-zinc-950">Invalid shipping reference</h3>
+				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			</li>
+		)
+	}
+
+	if (option.isLoading) {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<p className="text-sm text-zinc-500">Loading shipping details...</p>
+			</li>
+		)
+	}
+
+	if (!option.event && !option.info) {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-zinc-950">Shipping option unavailable</h3>
+				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			</li>
+		)
+	}
+
+	const title = option.info?.title || getShippingTagValue(option.event, 'title') || 'Untitled shipping option'
+	const shippingCurrency = getShippingCurrency(option.info, option.event, auctionCurrency)
+	const extraCost = formatShippingExtraCost(option.extraCost, shippingCurrency)
+	const service = option.info?.service || getShippingTagValue(option.event, 'service')
+	const carrier = option.info?.carrier || getShippingTagValue(option.event, 'carrier')
+	const location = option.info?.location || getShippingTagValue(option.event, 'location')
+	const pickup = formatShippingPickup(option.event)
+	const hasPartialShippingInfo = !!option.event && !option.info
+
+	return (
+		<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h3 className="text-base font-semibold text-zinc-950">{title}</h3>
+					<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+				</div>
+				<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+					{formatShippingPrice(option.info, option.event, auctionCurrency)}
+				</Badge>
+			</div>
+
+			{hasPartialShippingInfo && (
+				<div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-600">
+					Some shipping details are missing or malformed.
+				</div>
+			)}
+
+			<dl className="mt-4 grid gap-3 sm:grid-cols-2">
+				<ShippingDetailRow label="Base price" value={formatShippingPrice(option.info, option.event, auctionCurrency)} />
+				<ShippingDetailRow label="Service" value={service} />
+				<ShippingDetailRow label="Carrier" value={carrier} />
+				<ShippingDetailRow label="Destination" value={formatShippingDestination(option.info, option.event)} />
+				<ShippingDetailRow label="Duration" value={formatShippingDuration(option.info, option.event)} />
+				<ShippingDetailRow label="Location" value={location} />
+				<ShippingDetailRow label="Pickup" value={pickup} />
+				<ShippingDetailRow label="Auction extra cost" value={extraCost} />
+			</dl>
+		</li>
+	)
+}
+
 const detailBidderStatusClassName = (status: AuctionBidderStatusKind): string => {
 	switch (status) {
 		case 'winning':
@@ -215,13 +390,14 @@ function AuctionDetailRoute() {
 		() =>
 			parsedShippingRefs.map((entry, index) => {
 				if (entry.status !== 'valid') {
-					return { ...entry, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
+					return { ...entry, event: null, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
 				}
 				const queryResult = shippingQueryResults[index]
 				const event = queryResult?.data ?? null
 				const info = event ? getShippingInfo(event) : null
 				return {
 					...entry,
+					event,
 					info,
 					isLoading: (queryResult?.isLoading ?? false) && !queryResult?.data,
 					isNotFound: !queryResult?.isLoading && !queryResult?.data,
@@ -449,6 +625,12 @@ function AuctionDetailRoute() {
 							Description
 						</TabsTrigger>
 						<TabsTrigger
+							value="shipping"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Shipping
+						</TabsTrigger>
+						<TabsTrigger
 							value="bids"
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
@@ -563,19 +745,26 @@ function AuctionDetailRoute() {
 					</TabsContent>
 
 					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
-							<div className="space-y-4">
-								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
-									{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
-										{description || 'No description provided.'}
-									</p>
-								</div>
+						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+							<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+								<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</h2>
+								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+								{description ? (
+									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">{description}</p>
+								) : (
+									<div className="mt-4">
+										<AuctionEmptyState
+											title="No description provided."
+											description="The seller has not added a full description for this auction."
+										/>
+									</div>
+								)}
+							</section>
 
-								{specs.length > 0 && (
-									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+							<div className="grid gap-4 lg:grid-cols-2">
+								<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</h2>
+									{specs.length > 0 ? (
 										<dl className="mt-4 divide-y divide-zinc-200">
 											{specs.map((spec, index) => (
 												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
@@ -584,15 +773,17 @@ function AuctionDetailRoute() {
 												</div>
 											))}
 										</dl>
-									</div>
-								)}
-							</div>
+									) : (
+										<div className="mt-4">
+											<AuctionEmptyState title="No specifications listed." />
+										</div>
+									)}
+								</section>
 
-							<div className="space-y-4">
-								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
 										<Gavel className="h-4 w-4" />
-										Categories
+										<h2>Categories</h2>
 									</div>
 									<div className="mt-4 flex flex-wrap gap-2">
 										{categories.length > 0 ? (
@@ -608,54 +799,37 @@ function AuctionDetailRoute() {
 											<p className="text-sm text-zinc-500">No categories listed.</p>
 										)}
 									</div>
-								</div>
-
-								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<Truck className="h-4 w-4" />
-										Shipping options
-									</div>
-									<div className="mt-4">
-										{resolvedShippingOptions.length > 0 ? (
-											<ul className="space-y-2 text-sm text-zinc-700">
-												{resolvedShippingOptions.map((option, index) => {
-													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
-													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
-													return (
-														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-															{option.status === 'invalid' ? (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
-																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																</div>
-															) : option.isLoading ? (
-																<p className="text-sm text-zinc-400">Loading shipping details...</p>
-															) : option.info ? (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">{option.info.title}</p>
-																	<p className="text-xs text-zinc-600">
-																		Base: {option.info.price.amount} {option.info.price.currency}
-																		{option.info.service ? ` · ${option.info.service}` : ''}
-																		{option.info.carrier ? ` · ${option.info.carrier}` : ''}
-																	</p>
-																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
-																</div>
-															) : (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">Shipping option unavailable</p>
-																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																</div>
-															)}
-														</li>
-													)
-												})}
-											</ul>
-										) : (
-											<p className="text-sm text-zinc-500">No shipping options listed.</p>
-										)}
-									</div>
-								</div>
+								</section>
 							</div>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<div className="flex items-start gap-3">
+									<Truck className="mt-0.5 h-5 w-5 text-zinc-700" />
+									<div>
+										<h2 className="text-lg font-semibold text-zinc-950">Shipping options</h2>
+										<p className="mt-1 text-sm leading-6 text-zinc-500">
+											Seller-provided shipping options attached to this auction. Availability is shown as listed by the seller.
+										</p>
+									</div>
+								</div>
+							</section>
+
+							{resolvedShippingOptions.length > 0 ? (
+								<ul className="space-y-4">
+									{resolvedShippingOptions.map((option, index) => (
+										<AuctionShippingOptionCard key={`${option.shippingRef}-${index}`} option={option} auctionCurrency={currency} />
+									))}
+								</ul>
+							) : (
+								<AuctionEmptyState
+									title="No shipping options listed."
+									description="The seller has not attached any shipping options to this auction."
+								/>
+							)}
 						</div>
 					</TabsContent>
 
