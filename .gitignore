@@ -21,10 +21,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
+.env.dev
+.env.*.local
 .env.local
+.env.deploy.*
 
 # caches
 .eslintcache
@@ -52,3 +52,19 @@ __pycache__/
 
 .opencode/
 contextvm/
+
+# Session planning documents
+*-PLAN.md
+
+# Published Nostr article drafts (local copies)
+docs/auctions-moving-bound-early-refund-gist.md
+docs/auctions-moving-bound-early-refund.md
+docs/auctions-seller-relay-early-refund-gist.md
+docs/auctions-seller-relay-early-refund.md
+docs/nostr-publications.md
+
+# Security audit documentation (local only)
+docs/SECURITY-*.md
+
+# Encrypted test wallet material
+scripts/encrypted_test_wallet.json

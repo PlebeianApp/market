@@ -4,7 +4,10 @@ import { PlebianCurrencyClient } from '../ctxcn-client'
 import { getCurrencyServerRelays } from '@/lib/constants'
 
 const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://localhost:10547'
-const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
+const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY
+if (!SERVER_PRIVATE_KEY) {
+	throw new Error('CVM_SERVER_KEY environment variable is required for integration tests')
+}
 const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRIVATE_KEY, 'hex')))
 const SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
 const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))

@@ -3,8 +3,6 @@ import { NostrClientTransport, PrivateKeySigner, ApplesauceRelayPool } from '@co
 import { getPublicKey } from 'nostr-tools/pure'
 
 const RELAY_URL = process.argv[2] || 'ws://100.90.22.201:10547'
-const DEFAULT_CVM_SERVER_KEY = '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
-const DEFAULT_CVM_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(DEFAULT_CVM_SERVER_KEY, 'hex')))
 
 function getCvmServerPubkey(): string {
 	const configuredServerPrivateKey = process.env.CVM_SERVER_KEY
@@ -12,7 +10,13 @@ function getCvmServerPubkey(): string {
 		return getPublicKey(new Uint8Array(Buffer.from(configuredServerPrivateKey, 'hex')))
 	}
 
-	return process.env.CVM_SERVER_PUBKEY || process.env.CURRENCY_SERVER_PUBKEY || DEFAULT_CVM_SERVER_PUBKEY
+	const explicitPubkey = process.env.CVM_SERVER_PUBKEY || process.env.CURRENCY_SERVER_PUBKEY
+	if (explicitPubkey) {
+		return explicitPubkey
+	}
+
+	console.error('CVM_SERVER_KEY or CVM_SERVER_PUBKEY is required. Set one in your environment.')
+	process.exit(1)
 }
 
 const CVM_SERVER_PUBKEY = getCvmServerPubkey()
