@@ -505,7 +505,7 @@ export const cartActions = {
 		await cartActions.fetchAndSetSellerShippingOptions()
 	},
 
-	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null) => {
+	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null, wasLoggedOut: boolean = false) => {
 		if (!pubkey || !signer || !ndk) return
 
 		clearRemotePublishTimeout()
@@ -516,6 +516,22 @@ export const cartActions = {
 		}))
 
 		try {
+			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
+
+			if (wasLoggedOut && localHasItems) {
+				// User was explicitly logged out (guest session): preserve the local cart exactly
+				// as-is and publish it under the user's pubkey. Remote is not fetched.
+				cartStore.setState((state) => ({
+					...state,
+					hasRemoteCartHydrated: true,
+					isReconcilingRemoteCart: false,
+					suppressRemotePublish: false,
+				}))
+				cartActions.scheduleRemotePublish()
+				return
+			}
+
+			// Auto-login or empty local cart: fetch remote and apply if it is newer
 			const remoteSnapshot = await cartSyncDependencies.fetchLatestCartSnapshot(pubkey)
 			if (!remoteSnapshot) {
 				cartStore.setState((state) => ({
@@ -529,16 +545,8 @@ export const cartActions = {
 
 			const normalizedRemote = normalizePersistedCart(remoteSnapshot)
 			const localUpdatedAt = cartStore.state.lastCartIntentUpdatedAt
-			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
 
-			let shouldAdoptRemote = false
-			if (!localHasItems) {
-				shouldAdoptRemote = true
-			} else if (localUpdatedAt && localUpdatedAt > 0) {
-				shouldAdoptRemote = normalizedRemote.updatedAt > localUpdatedAt
-			} else {
-				shouldAdoptRemote = false
-			}
+			const shouldAdoptRemote = !localHasItems || !localUpdatedAt || normalizedRemote.updatedAt > localUpdatedAt
 
 			if (shouldAdoptRemote) {
 				const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}
