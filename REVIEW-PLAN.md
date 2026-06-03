@@ -10,12 +10,18 @@
 
 ## E2E Regression Verification for #975
 
-Baseline: #981's e2e run (ID `26896257268`) against same master commit `bb9a306b`
-- 5/7 shards passed, auth (1 flaky timeout), commerce (7 shipping selector failures)
+**Run ID:** `26900247013` (fork: c03rad0r/market, branch: `security/critical-remediation`)
+**Started:** 2026-06-03T17:01:54Z
+**Check status:** `gh run view 26900247013 --repo c03rad0r/market`
+
+Note: No master e2e-full baseline exists (e2e-full only runs on workflow_dispatch/schedule, never triggered on master). Instead, compare failures against known issues:
+- Shipping selector failures (#985) — pre-existing on master
+- Auth timeout flakiness (#772) — pre-existing on master
+- Payment failures (#772) — pre-existing, tests are skipped
 
 - [x] Trigger e2e-full on #975 branch (`security/critical-remediation`)
 - [ ] Wait for run to complete (~120 min)
-- [ ] Compare per-shard results against baseline
+- [ ] Analyze failures — are they all pre-existing known issues?
 - [ ] Post regression check comment on #975
 - [ ] Confirm no regressions before asking Franchovy to review
 
