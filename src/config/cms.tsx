@@ -130,7 +130,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 					type: 'select',
 					label: 'CTA Button Variant',
 					options: [
-						{ label: 'Primary', value: 'primary' },
+						{ label: 'Primary', value: 'default' },
 						{ label: 'Secondary', value: 'secondary' },
 						{ label: 'Outline', value: 'outline' },
 					],
@@ -162,7 +162,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 			render: (props) => <CMSDivider {...props} />,
 		},
 
-		// Add to the components configuration in src/config/cms.tsx
 		CMSProductFeature: {
 			fields: {
 				dataSource: {
@@ -195,11 +194,27 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 			fields: {
 				identifier: { type: 'text', label: 'User Identifier (pubkey, npub, nip-05)' },
 				relayUrl: { type: 'text', label: 'Relay URL (optional)' },
+				backgroundImage: { type: 'text', label: 'Background Image URL' },
+				backgroundColor: { type: 'text', label: 'Background Color (Tailwind class or hex)' },
+				overlayOpacity: {
+					type: 'number',
+					label: 'Overlay Opacity (0-1)',
+					min: 0,
+					max: 1,
+					step: 0.1,
+				},
+				height: { type: 'text', label: 'Banner Height (e.g., 400px, 50vh)' },
+				ctaText: { type: 'text', label: 'CTA Button Text' },
+				ctaLink: { type: 'text', label: 'CTA Link URL' },
 			},
 			defaultProps: {
 				identifier: ownUser?.npub ?? '',
+				overlayOpacity: 0.4,
+				height: '400px',
+				ctaText: '',
+				ctaLink: '#',
 			},
-			render: ({ identifier }: { identifier: string }) => <CMSUserProfile identifier={identifier} />,
+			render: (props) => <CMSUserProfile {...props} />,
 		},
 
 		CMSParagraph: {
