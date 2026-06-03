@@ -66,11 +66,8 @@ function PreviewRouteComponent() {
 		)
 	}
 
-	// Get the theme from root props
-	const pageTheme = rootProps?.theme || 'default'
-
 	return (
-		<div className="min-h-screen bg-white" ref={setThemeElement}>
+		<div className="min-h-screen bg-background" ref={setThemeElement}>
 			{/* Optional: Back to Editor Button */}
 			<div className="fixed top-4 right-4 z-50">
 				<a

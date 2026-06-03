@@ -86,11 +86,33 @@ function PublishButton() {
 	)
 }
 
+// Theme Wrapper Component for Puck Preview
+function ThemeWrapper({ children, theme }: { children: React.ReactNode; theme?: string }) {
+	const wrapperRef = useRef<HTMLDivElement>(null)
+
+	console.log('Applying theme: ', theme)
+
+	useEffect(() => {
+		if (wrapperRef.current && theme) {
+			applyLocalTheme(wrapperRef.current, theme)
+			console.log('Applying theme: ', theme)
+		} else if (wrapperRef.current) {
+			// Clear theme if none is set
+			wrapperRef.current.style.cssText = ''
+		}
+	}, [theme])
+
+	return (
+		<div ref={wrapperRef} className="h-full">
+			{children}
+		</div>
+	)
+}
+
 function EditorRouteComponent() {
 	const [data, setData] = useState<Data>(INITIAL_DATA)
 
 	const [isLoading, setIsLoading] = useState(true)
-	const themeContainerRef = useRef<HTMLDivElement>(null)
 	const { user } = useAuth()
 
 	// Use this key to force a complete remount of the Puck editor
@@ -110,16 +132,6 @@ function EditorRouteComponent() {
 	}, [])
 
 	const rootProps = data?.root.props as CMSRootProps
-
-	// Apply theme when data changes
-	useEffect(() => {
-		if (themeContainerRef.current && rootProps?.theme) {
-			applyLocalTheme(themeContainerRef.current, rootProps.theme)
-		} else if (themeContainerRef.current) {
-			// Clear theme if none is set
-			themeContainerRef.current.style.cssText = ''
-		}
-	}, [rootProps?.theme])
 
 	// 2. Handle Publish (Save)
 	const handlePublish = (newData: Data) => {

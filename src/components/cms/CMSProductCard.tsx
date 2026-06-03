@@ -112,7 +112,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 	// Default card mode
 	return (
 		<div
-			className={`flex flex-col border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow ${className}`}
+			className={`flex flex-col border rounded-lg overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow ${className}`}
 			style={{ maxWidth: '320px', minWidth: '200px' }}
 		>
 			{/* Image Container */}
