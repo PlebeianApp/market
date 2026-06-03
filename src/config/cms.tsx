@@ -1,4 +1,3 @@
-// src/config/cms.tsx
 import type { Config } from '@puckeditor/core'
 import { DataSourceField, STATIC_DATA_SOURCE_EMPTY } from '@/components/editor/DataSourceField'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
@@ -116,7 +115,6 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 			render: (props) => <CMSProductRow {...props} />,
 		},
 
-		// Updated CMSFeatureBanner configuration in src/config/cms.tsx
 		CMSFeatureBanner: {
 			fields: {
 				backgroundImage: { type: 'text', label: 'Background Image URL' },

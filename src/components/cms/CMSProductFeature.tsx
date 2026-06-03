@@ -57,15 +57,17 @@ export const CMSProductFeature: React.FC<CMSProductFeatureProps> = ({
 			}}
 		>
 			{/* Overlay */}
-			<div
-				className="absolute inset-0"
-				style={{
-					backgroundColor: 'black',
-					opacity: overlayOpacity,
-				}}
-			></div>
+			{backgroundImage && (
+				<div
+					className="absolute inset-0"
+					style={{
+						backgroundColor: 'black',
+						opacity: overlayOpacity,
+					}}
+				></div>
+			)}
 
-			<div className="absolute inset-0 overflow-hidden flex items-center">
+			<div className={`absolute inset-0 overflow-hidden flex items-center ${backgroundImage ? 'dark' : ''}`}>
 				<div className="max-w-7xl mx-auto px-6 py-6 w-full h-full">
 					<div className="flex h-full items-center gap-8">
 						{/* 
@@ -77,14 +79,7 @@ export const CMSProductFeature: React.FC<CMSProductFeatureProps> = ({
 
 						{/* Product Content */}
 						<div className="flex-1 text-center lg:text-left min-w-0">
-							<CMSProductCard
-								product={product}
-								contentOnly={true}
-								showVendor={true}
-								showDescriptionSnippet={true}
-								showPrice={true}
-								className="dark"
-							/>
+							<CMSProductCard product={product} contentOnly={true} showVendor={true} showDescriptionSnippet={true} showPrice={true} />
 						</div>
 					</div>
 				</div>
