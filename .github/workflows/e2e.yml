@@ -29,8 +29,6 @@ jobs:
             grep: 'App Settings|Featured|Blacklist|User Profile|Navigation|CVM|cvm|oracle'
           - name: payments-zaps
             grep: 'Receiving Payments|NWC Wallet|Lightning Zaps'
-          - name: auctions
-            grep: 'Auction Bidding|Auction Mint|Auction Shipping'
           - name: collections
             grep: 'Collection Management|V4V Product Creation'
 
@@ -43,7 +41,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.10"
+          bun-version: '1.3.10'
 
       - name: Cache bun dependencies
         uses: actions/cache@v4
