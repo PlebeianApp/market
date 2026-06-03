@@ -25,6 +25,30 @@ Note: No master e2e-full baseline exists (e2e-full only runs on workflow_dispatc
 - [ ] Post regression check comment on #975
 - [ ] Confirm no regressions before asking Franchovy to review
 
+## VPS Deployments for Manual Testing
+
+### #975 (Security) — Deploy to VPS
+- [ ] Modify `deploy-pr.sh` to support `--repo` flag for fork branches
+- [ ] Deploy: `bash scripts/deploy-pr.sh --pr 975 --branch security/critical-remediation --repo https://github.com/c03rad0r/market.git`
+- [ ] Post deployment comment on #975 with URL and verification steps
+- [ ] Teardown after review: `make teardown-pr PR=975`
+
+### #947 (NIP-53 Live Chat) — Deploy to VPS
+- [ ] Deploy: `make deploy-pr PR=947 BRANCH=feat/nip53-auction-live-chat` (branch exists upstream)
+- [ ] Post deployment comment on #947 with URL and verification steps
+- [ ] Teardown after review: `make teardown-pr PR=947`
+
+## PR Descriptions — Strengthen for Review
+
+### #982 (ContextVM singleton) — No VPS deployment needed
+- [ ] Update PR body with clear testing/review instructions
+
+### #983 (Cart persistence) — No VPS deployment needed
+- [ ] Update PR body with clear testing/review instructions
+
+### #984 (Alby LNURL proxy) — No VPS deployment needed
+- [ ] Update PR body with clear testing/review instructions
+
 ## Wave 1 — After E2E Regression Check Passes (2 PRs per reviewer max)
 
 ### Franchovy
@@ -53,7 +77,7 @@ Note: No master e2e-full baseline exists (e2e-full only runs on workflow_dispatc
 ## Wave 3 — After Waves 1+2
 
 - [ ] **#987** — Nsite E2E dashboard (depends on #947 split)
-- [ ] **#956** — isMeaningfulDraft (CONFLICTING, needs rebase first)
+- [ ] **#956** — isMeanfulDraft (CONFLICTING, needs rebase first)
 
 ## Blocked / Deferred
 
