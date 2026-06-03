@@ -35,11 +35,12 @@ function PreviewButton() {
 }
 
 // Custom Clear Draft Button Component
-function ClearDraftButton() {
+function ClearDraftButton({ onClear }: { onClear: () => void }) {
 	const handleClear = () => {
 		if (confirm('Are you sure you want to clear your draft? This cannot be undone.')) {
 			clearDraft()
-
+			// Trigger the parent to increment the key, forcing a remount
+			onClear()
 			toast.info('Draft cleared.')
 		}
 	}
@@ -113,6 +114,9 @@ function EditorRouteComponent() {
 	const [isLoading, setIsLoading] = useState(true)
 	const { user } = useAuth()
 
+	// Use this key to force a complete remount of the Puck editor
+	const [editorKey, setEditorKey] = useState(0)
+
 	const config = useMemo(() => {
 		return getCMSConfig(user ?? undefined)
 	}, [user?.pubkey])
@@ -137,6 +141,12 @@ function EditorRouteComponent() {
 		}
 	}
 
+	// Handler to clear and refresh
+	const handleClearAndRefresh = () => {
+		setData(INITIAL_DATA) // Reset local state immediately
+		setEditorKey((prev) => prev + 1) // Increment key to force Puck remount
+	}
+
 	if (isLoading) {
 		return <div className="flex h-screen items-center justify-center">Loading editor...</div>
 	}
@@ -145,7 +155,14 @@ function EditorRouteComponent() {
 		<div className="flex flex-col h-screen">
 			{/* Puck Editor - Takes full height */}
 			<div className="flex-1 overflow-hidden">
+				{/* 
+					Key Prop Strategy:
+					By passing key={editorKey}, React will completely unmount the old Puck instance
+					and mount a new one whenever the key changes. This ensures internal state 
+					(resets, undo stacks, etc.) are fully cleared.
+				*/}
 				<Puck
+					key={editorKey}
 					config={config}
 					data={data}
 					onPublish={handlePublish}
@@ -154,7 +171,7 @@ function EditorRouteComponent() {
 							return (
 								<>
 									<div className="flex items-center gap-2">
-										<ClearDraftButton />
+										<ClearDraftButton onClear={handleClearAndRefresh} />
 										<PreviewButton />
 										<PublishButton />
 									</div>
