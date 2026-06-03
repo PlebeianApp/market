@@ -8,11 +8,23 @@
 | **maximotodev** | Cart internals, payment/wallet, orders, shipping |
 | **hkarani** | Auctions UI, CI workflows, frontend |
 
-## Wave 1 — Send Now (2 PRs per reviewer max)
+## E2E Regression Verification for #975
+
+Baseline: #981's e2e run (ID `26896257268`) against same master commit `bb9a306b`
+- 5/7 shards passed, auth (1 flaky timeout), commerce (7 shipping selector failures)
+
+- [x] Trigger e2e-full on #975 branch (`security/critical-remediation`)
+- [ ] Wait for run to complete (~120 min)
+- [ ] Compare per-shard results against baseline
+- [ ] Post regression check comment on #975
+- [ ] Confirm no regressions before asking Franchovy to review
+
+## Wave 1 — After E2E Regression Check Passes (2 PRs per reviewer max)
 
 ### Franchovy
 - [ ] **#975** — Security: secrets, `.gitignore`, CI, contextvm/server.ts (11 files)
-  - CI GREEN, MERGEABLE
+  - CI GREEN (prettier, unit-integration, e2e-pricing), MERGEABLE
+  - E2E regression check: pending
 - [ ] **#982** — ContextVM singleton test isolation (2 files, +12/-3)
   - CI GREEN, MERGEABLE, closes #963
 
