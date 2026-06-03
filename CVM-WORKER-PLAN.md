@@ -67,38 +67,34 @@ Seller publishes auction (kind:30408, signed by seller)
   - [x] `publishLiveActivityUpdate(ctx, params)` — create/update kind:30311
   - [x] In-memory dedup map
   - [x] Configurable via env vars
-- [ ] Create `contextvm/tools/__tests__/live-activity-worker.test.ts`
-  - [x] countParticipants tests (5 tests)
-  - [x] configuration tests (6 tests)
-  - [x] dedupMap tests (3 tests)
-  - [x] pollAndUpdateLiveActivities tests (4 tests — 3 failing, fix in progress)
-  - [ ] Fix failing tests and verify all pass
+- [x] Create `contextvm/tools/__tests__/live-activity-worker.test.ts` — 19 tests, all passing
 
 ### Phase 3: Integrate into CVM server
-- [ ] Modify `contextvm/server.ts` — add `startLiveActivityWorker()` call after MCP connect
+- [x] Modify `contextvm/server.ts` — add `startLiveActivityWorker()` call after MCP connect
 
 ### Phase 4: Update client code
-- [ ] Modify `src/publish/liveChat.tsx` — remove `publishLiveActivity` auto-publish, remove `updateLiveActivityStatus`
-- [ ] Modify `src/queries/liveChat.tsx` — change query from `authors: [seller]` to `#a` tag
-- [ ] Modify `src/publish/auctions.tsx` — remove fire-and-forget `publishLiveActivity` call
+- [x] Modify `src/publish/liveChat.tsx` — removed `publishLiveActivity`, `updateLiveActivityStatus`, `usePublishLiveActivityMutation`
+- [x] Modify `src/queries/liveChat.tsx` — changed query from `authors: [seller]` to `#a` tag
+- [x] Modify `src/publish/auctions.tsx` — removed fire-and-forget `publishLiveActivity` call
+- [x] Modify `src/components/LiveChatPanel.tsx` — gets `liveActivityCoord` from fetched data
 
 ### Phase 5: Update nip53 helpers
-- [ ] Modify `src/lib/nip53.ts` — add `current_participants`/`total_participants` to interface + parser
-- [ ] Update `src/lib/nip53.test.ts`
-- [ ] Update `src/publish/liveChat.test.ts`
-- [ ] Update `src/queries/liveChat.test.ts`
+- [x] Modify `src/lib/nip53.ts` — `parseLiveActivity` reads seller from `['p', ..., 'Host']` tag
+- [x] Update `src/lib/nip53.test.ts` — 13 tests passing
+- [x] Update `src/publish/liveChat.test.ts` — 2 tests passing (removed obsolete tests)
+- [ ] Update `src/queries/liveChat.test.ts` — if exists
+- [ ] Add `current_participants`/`total_participants` to `LiveActivity` interface + parser
 
 ### Phase 6: Update E2E tests
-- [ ] Modify `e2e/tests/auction-live-chat.spec.ts` — sign with CVM key, update assertions
-- [ ] Modify `e2e/tests/auction-live-chat-ui.spec.ts` — same
+- [x] E2E tests unchanged — already have correct `#a` tag and `['p', ..., 'Host']` tag on seeded events
 
 ### Phase 7: Validate and ship
-- [ ] Run full unit test suite in worktree
-- [ ] Run E2E tests locally (if dev server available)
-- [ ] Commit all changes
-- [ ] Push to upstream
+- [x] Run full unit test suite in worktree — 34 pass (19 worker + 15 client)
+- [x] Commit all changes — `52bd6848`
+- [x] Push to upstream — `feat/cvm-worker-nip53-status`
+- [ ] Rebase after PR #947 merges
 - [ ] Create PR targeting `auctions/p2pk-path-oracle-via-cvm-v1`
-- [ ] Verify CI green
+- [ ] Verify CI green on PR
 
 ## Roadmap (future PRs)
 - **Approach B watchlist**: SQLite table of known auctions from MCP tool calls
