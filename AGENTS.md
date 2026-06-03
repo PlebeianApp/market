@@ -38,3 +38,4 @@ bd sync               # Sync with git
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+- **NEVER request PR reviewers** — this is done manually by the project owner. Do not use `gh pr edit --add-reviewer` or any equivalent command.
