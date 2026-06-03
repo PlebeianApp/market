@@ -9,8 +9,9 @@ import { CMSProductGrid, type CMSProductGridProps } from '@/components/cms/CMSPr
 import { CMSDivider, type CMSDividerProps } from '@/components/cms/CMSDivider'
 import { CMSProductRow, type CMSProductRowProps } from '@/components/cms/CMSProductRow'
 import { CMSFeatureBanner, type CMSFeatureBannerProps } from '@/components/cms/CMSFeatureBanner'
-import { CMSProductFeature, type CMSProductFeatureProps } from '@/components/cms'
+import { CMSProductFeature, CMSUserProfile, type CMSProductFeatureProps, type CMSUserProfileProps } from '@/components/cms'
 import { CMSSimpleHero, type CMSSimpleHeroProps } from '@/components/cms/CMSSimpleHero'
+import { CMSParagraph, type CMSParagraphProps } from '@/components/cms/CMSParagraph'
 
 // Define the component map for TypeScript inference
 type Components = {
@@ -20,6 +21,8 @@ type Components = {
 	CMSFeatureBanner: CMSFeatureBannerProps
 	CMSProductFeature: CMSProductFeatureProps
 	CMSSimpleHero: CMSSimpleHeroProps
+	CMSUserProfile: CMSUserProfileProps
+	CMSParagraph: CMSParagraphProps
 }
 
 export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
@@ -186,6 +189,44 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<Components> => ({
 				height: '400px',
 			},
 			render: (props) => <CMSProductFeature {...props} />,
+		},
+
+		CMSUserProfile: {
+			fields: {
+				identifier: { type: 'text', label: 'User Identifier (pubkey, npub, nip-05)' },
+				relayUrl: { type: 'text', label: 'Relay URL (optional)' },
+			},
+			defaultProps: {
+				identifier: ownUser?.npub ?? '',
+			},
+			render: ({ identifier }: { identifier: string }) => <CMSUserProfile identifier={identifier} />,
+		},
+
+		CMSParagraph: {
+			fields: {
+				title: { type: 'text', label: 'Section Title (optional)' },
+				content: { type: 'textarea', label: 'Content' },
+				imageSrc: { type: 'text', label: 'Image URL (optional)' },
+				ctaText: { type: 'text', label: 'CTA Button Text' },
+				ctaLink: { type: 'text', label: 'CTA Link URL' },
+				textAlignment: {
+					type: 'select',
+					label: 'Text Alignment',
+					options: [
+						{ label: 'Left', value: 'left' },
+						{ label: 'Center', value: 'center' },
+						{ label: 'Right', value: 'right' },
+					],
+				},
+			},
+			defaultProps: {
+				title: '',
+				content: 'Add your content here...',
+				textAlignment: 'left',
+				ctaText: '',
+				ctaLink: '#',
+			},
+			render: (props) => <CMSParagraph {...props} />,
 		},
 	},
 })
