@@ -148,6 +148,7 @@ export const THEMES: Theme[] = [
 
 // Function to apply theme locally to a component by fetching CSS from public/themes
 export const applyLocalTheme = async (element: HTMLElement, themeId: string): Promise<void> => {
+	/*
 	const elementId = element.id
 	if (!element.id) {
 		element.id = elementId
@@ -163,6 +164,7 @@ export const applyLocalTheme = async (element: HTMLElement, themeId: string): Pr
 	if (element.classList.contains('dark')) {
 		element.classList.remove('dark')
 	}
+	*/
 
 	// Clear existing theme variables
 	const existingVars = Array.from(element.style)
@@ -171,6 +173,17 @@ export const applyLocalTheme = async (element: HTMLElement, themeId: string): Pr
 
 	// Clear any existing theme styles
 	element.style.cssText = ''
+
+	// Reset dark theme
+	const oldStyleId = `${element.id}-dark-theme`
+	const oldStyleElement = document.getElementById(oldStyleId)
+
+	if (oldStyleElement) {
+		if (themeId === 'default') {
+			oldStyleElement.remove()
+		} else {
+		}
+	}
 
 	// Apply the new theme if it's not default
 	if (themeId !== 'default') {

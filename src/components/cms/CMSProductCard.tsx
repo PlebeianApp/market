@@ -78,7 +78,7 @@ export const CMSProductCard: React.FC<CMSProductCardProps> = ({
 			)}
 
 			{/* Product Title */}
-			<h3 className="font-semibold mb-2 text-foreground line-clamp-2">{title}</h3>
+			<h3 className="font-semibold mb-2 text-foreground font-serif line-clamp-2">{title}</h3>
 
 			{/* Short Description */}
 			{showDescriptionSnippet && summary && (

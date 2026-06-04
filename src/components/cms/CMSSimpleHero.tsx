@@ -65,10 +65,10 @@ export const CMSSimpleHero: React.FC<CMSSimpleHeroProps> = ({
 				<div className="w-full max-w-7xl mx-auto px-6">
 					<div className={`flex flex-col ${getTextAlignmentClass()}`}>
 						{/* Title */}
-						{title && <h1 className="text-4xl md:text-5xl font-serif tracking-tight text-foreground mb-4">{title}</h1>}
+						{title && <h1 className="text-4xl md:text-5xl font-serif text-foreground mb-4">{title}</h1>}
 
 						{/* Subtitle */}
-						{subtitle && <p className="text-xl text-muted-foreground font-sans mb-8 max-w-2xl">{subtitle}</p>}
+						{subtitle && <p className="text-xl text-muted-foreground mb-8 max-w-2xl">{subtitle}</p>}
 
 						{/* CTA Button */}
 						{ctaText && (

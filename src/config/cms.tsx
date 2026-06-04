@@ -61,7 +61,7 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<CMSComponents, CMSRootPr
 			}, [props.theme])
 
 			return (
-				<div ref={rootRef} className="min-h-screen bg-background">
+				<div ref={rootRef} className="min-h-screen bg-background font-sans">
 					{children}
 				</div>
 			)

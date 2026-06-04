@@ -56,7 +56,7 @@ export const CMSProductGrid: React.FC<CMSProductGridProps> = ({
 			{/* Title Header */}
 			{title && (
 				<div className="mb-8">
-					<h2 className="text-2xl font-heading tracking-wider text-foreground">{title}</h2>
+					<h2 className="text-2xl font-serif text-foreground">{title}</h2>
 				</div>
 			)}
 

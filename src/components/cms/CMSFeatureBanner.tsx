@@ -95,7 +95,7 @@ export const CMSFeatureBanner: React.FC<CMSFeatureBannerProps> = ({
 						<div className={`flex-1 ${imageSrc ? '' : 'w-full'} ${backgroundImage ? 'dark' : ''}`}>
 							<div className={`flex flex-col ${getTextAlignmentClass()} h-full justify-center`}>
 								{/* Title */}
-								{title && <h2 className="text-3xl md:text-4xl font-heading tracking-wider text-foreground mb-4">{title}</h2>}
+								{title && <h2 className="text-3xl md:text-4xl font-serif text-foreground mb-4">{title}</h2>}
 
 								{/* Description */}
 								{description && <p className="text-lg text-muted-foreground mb-8 max-w-2xl">{description}</p>}

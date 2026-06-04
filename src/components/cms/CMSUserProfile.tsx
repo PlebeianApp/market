@@ -72,6 +72,8 @@ export const CMSUserProfile = ({
 		}
 	}, [identifier, relayUrl])
 
+	const displayName = profile?.displayName ?? profile?.name ?? 'Plebeian Seller'
+
 	if (loading) return <div className="py-12 text-center text-muted-foreground">Loading profile...</div>
 	if (error) return <div className="py-12 text-center text-destructive">Error: {error}</div>
 	if (!profile) return <div className="py-12 text-center text-muted-foreground">No profile found</div>
@@ -108,13 +110,13 @@ export const CMSUserProfile = ({
 								{profile.picture ? (
 									<img
 										src={profile.picture}
-										alt={profile.name || 'Profile'}
+										alt={displayName}
 										className="h-full max-h-full w-auto object-cover"
 										style={{ maxHeight: '300px', width: '300px', height: '300px' }}
 									/>
 								) : (
 									<div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground p-8">
-										<div className="text-4xl font-bold">{profile.name ? profile.name.charAt(0).toUpperCase() : '?'}</div>
+										<div className="text-4xl font-bold">{displayName.charAt(0).toUpperCase()}</div>
 									</div>
 								)}
 							</div>
@@ -124,7 +126,7 @@ export const CMSUserProfile = ({
 						<div className={`flex-1 text-center lg:text-left min-w-0 ${backgroundImage ? 'dark' : ''}`}>
 							<div className="flex flex-col h-full justify-center">
 								{/* Profile Name */}
-								<h2 className="text-3xl md:text-4xl font-heading tracking-wider text-foreground mb-4">{profile.name || 'Anonymous'}</h2>
+								<h2 className="text-3xl md:text-4xl font-serif text-foreground mb-4">{displayName}</h2>
 
 								{/* NIP-05 Badge */}
 								{profile.nip05 && (
