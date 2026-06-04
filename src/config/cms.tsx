@@ -1,6 +1,8 @@
 import type { Config } from '@puckeditor/core'
 import { DataSourceField, STATIC_DATA_SOURCE_EMPTY } from '@/components/editor/DataSourceField'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
+import { useEffect, useRef } from 'react'
+import { applyLocalTheme } from '@/lib/utils/theme'
 
 // Import the components we generated
 import { CheckboxField } from '@/components/editor/CheckboxField'
@@ -43,6 +45,26 @@ export const getCMSConfig = (ownUser?: NDKUser): Config<CMSComponents, CMSRootPr
 		},
 		defaultProps: {
 			theme: 'default',
+		},
+		render: ({ children, ...props }) => {
+			// Create a ref for the root element to apply themes
+			const rootRef = useRef<HTMLDivElement>(null)
+
+			// Apply theme when props change
+			useEffect(() => {
+				if (rootRef.current && props.theme) {
+					applyLocalTheme(rootRef.current, props.theme)
+				} else if (rootRef.current) {
+					// Clear theme if none is set
+					rootRef.current.style.cssText = ''
+				}
+			}, [props.theme])
+
+			return (
+				<div ref={rootRef} className="min-h-screen bg-background">
+					{children}
+				</div>
+			)
 		},
 	},
 	components: {
