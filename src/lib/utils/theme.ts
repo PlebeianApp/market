@@ -170,11 +170,18 @@ export const applyLocalTheme = async (element: HTMLElement, themeId: string): Pr
 
 			const cssContent = await response.text()
 			const variables = extractCssVariables(cssContent)
+			const darkVariables = extractDarkCssVariables(cssContent)
 
-			// Apply variables to the element
+			// Apply root variables to the element
 			Object.entries(variables).forEach(([key, value]) => {
 				element.style.setProperty(key, value)
 			})
+
+			// Apply dark variables to a .dark class on the element
+			if (Object.keys(darkVariables).length > 0) {
+				// Create or update the dark class styles
+				applyDarkClassStyles(element, darkVariables)
+			}
 		} catch (error) {
 			console.warn(`Network error loading theme: ${themeId}`, error)
 			// Fallback to predefined variables
@@ -183,7 +190,7 @@ export const applyLocalTheme = async (element: HTMLElement, themeId: string): Pr
 	}
 }
 
-// Function to extract CSS variables from a CSS file content
+// Function to extract CSS variables from a CSS file content (:root section)
 export const extractCssVariables = (cssContent: string): Record<string, string> => {
 	const variables: Record<string, string> = {}
 
@@ -210,6 +217,70 @@ export const extractCssVariables = (cssContent: string): Record<string, string> 
 	}
 
 	return variables
+}
+
+// Function to extract dark class CSS variables from a CSS file content (.dark section)
+export const extractDarkCssVariables = (cssContent: string): Record<string, string> => {
+	const variables: Record<string, string> = {}
+
+	// Match .dark class variables
+	const darkRegex = /\.dark\s*{([^}]+)}/g
+	let darkMatch
+	while ((darkMatch = darkRegex.exec(cssContent)) !== null) {
+		const darkContent = darkMatch[1]
+		const variableRegex = /--([\w-]+):\s*([^;]+);/g
+		let variableMatch
+		while ((variableMatch = variableRegex.exec(darkContent)) !== null) {
+			variables[`--${variableMatch[1]}`] = variableMatch[2].trim()
+		}
+	}
+
+	// Also match variables in dark variant selectors like &:is(.dark *)
+	const darkVariantRegex = /&:is\(\.dark \*\)\s*{([^}]+)}/g
+	let darkVariantMatch
+	while ((darkVariantMatch = darkVariantRegex.exec(cssContent)) !== null) {
+		const darkContent = darkVariantMatch[1]
+		const variableRegex = /--([\w-]+):\s*([^;]+);/g
+		let variableMatch
+		while ((variableMatch = variableRegex.exec(darkContent)) !== null) {
+			variables[`--${variableMatch[1]}`] = variableMatch[2].trim()
+		}
+	}
+
+	return variables
+}
+
+// Apply dark class styles to the element
+const applyDarkClassStyles = (element: HTMLElement, darkVariables: Record<string, string>): void => {
+	// Generate a unique class name for this element
+	const elementId = element.id || `theme-${Math.random().toString(36).substr(2, 9)}`
+	if (!element.id) {
+		element.id = elementId
+	}
+
+	// Create or update the style element for dark class
+	let styleElement = document.getElementById(`${elementId}-dark-theme`)
+	if (!styleElement) {
+		styleElement = document.createElement('style')
+		styleElement.id = `${elementId}-dark-theme`
+		document.head.appendChild(styleElement)
+	}
+
+	// Generate CSS for the dark class scoped to this element
+	let cssContent = `#${elementId}.dark {\n`
+	Object.entries(darkVariables).forEach(([key, value]) => {
+		cssContent += `  ${key}: ${value};\n`
+	})
+	cssContent += '}\n'
+
+	// Also add descendant selector for when dark class is applied to descendants
+	cssContent += `#${elementId} .dark {\n`
+	Object.entries(darkVariables).forEach(([key, value]) => {
+		cssContent += `  ${key}: ${value};\n`
+	})
+	cssContent += '}\n'
+
+	styleElement.textContent = cssContent
 }
 
 // Apply fallback CSS variables when theme loading fails
