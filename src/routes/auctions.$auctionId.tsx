@@ -1,6 +1,7 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { ImageCarousel } from '@/components/ImageCarousel'
@@ -455,6 +456,12 @@ function AuctionDetailRoute() {
 							Bids
 						</TabsTrigger>
 						<TabsTrigger
+							value="comments"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Comments
+						</TabsTrigger>
+						<TabsTrigger
 							value="seller"
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
@@ -724,6 +731,12 @@ function AuctionDetailRoute() {
 									})}
 								</div>
 							)}
+						</div>
+					</TabsContent>
+
+					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
 						</div>
 					</TabsContent>
 
