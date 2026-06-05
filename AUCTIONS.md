@@ -67,7 +67,7 @@ Goal for v1:
   edge.)
 - Sealed-bid / reveal-round auctions.
 - Partial-deposit modes (except as a forward-compatible field).
-- A canonical global reputation system. v1 ships the *event schema*
+- A canonical global reputation system. v1 ships the _event schema_
   for reputation; aggregation, weighting, and bootstrap policies are
   deferred to a follow-up.
 
@@ -91,11 +91,11 @@ Goal for v1:
 - **Mint trust is explicit and seller-controlled.** Same as before.
 - **Auction closing is deterministic from immutable root data.** The
   three-timestamp invariant (§6.0) still holds; `locktime =
-  max_end_at + settlement_grace` is computable from auction tags
+max_end_at + settlement_grace` is computable from auction tags
   alone.
 - **Bidder griefing is the new failure surface, not unilateral
   theft.** A winning bidder who refuses to release the path cannot
-  *take* anything they're not entitled to — they walk away with their
+  _take_ anything they're not entitled to — they walk away with their
   refunded ecash (at locktime) but no goods. The seller's recourse is
   (a) fallback to the second-highest valid bid and (b) a permanent
   griefing mark on the bidder's reputation. See §9 and §14.
@@ -184,7 +184,7 @@ There is intentionally no product reference (`a` tag) in v1.
   multiple auditors for redundancy and to resist a single auditor's
   bias or outage. Compliant clients filter bids by these auditors'
   reputation events (kind 30440); they MUST NOT use the opinions of
-  unlisted validators when deciding whether bids count for *this*
+  unlisted validators when deciding whether bids count for _this_
   auction. At least one `auditors` tag is REQUIRED.
 - `min_bid_curve`: anti-snipe floor curve applied in `(end_at, max_end_at]`.
   Format `<shape>:<peak_multiplier>` where `shape ∈ {none, linear,
@@ -224,6 +224,7 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   when this elapses.
 
 ### Removed from prior drafts (v0 / `cashu_p2pk_2of2_v1` and historical
+
 `cashu_p2pk_path_oracle_v1`)
 
 - `escrow_pubkey` — the bidder-path profile has no Cashu cosigner. Bid
@@ -406,7 +407,7 @@ proofs.
   re-audit any bid.
 - The lock secret reveals only the spending condition (who must
   sign), not how to sign. Pre-locktime, only `derive(seller_xpriv,
-  path)` can produce a valid signature, and neither the seller alone
+path)` can produce a valid signature, and neither the seller alone
   nor the bidder alone can compute that key (§5).
 
 ## 4.3 Auction Settlement Events
@@ -603,16 +604,16 @@ Content: JSON describing the policy. Suggested fields:
 ```ts
 interface ValidatorPolicy {
 	type: 'auction_validator_policy_v1'
-	relatrMinScore?: number              // e.g. 0.1
+	relatrMinScore?: number // e.g. 0.1
 	requireNip05?: boolean
 	minAccountAgeDays?: number
-	blacklist?: string[]                 // pubkeys
-	blacklistRefs?: string[]             // event ids of blacklist events
-	requiredAttestors?: string[]         // e.g. KYC issuer pubkeys
-	categoryAllowlist?: string[]         // category tags this validator covers
+	blacklist?: string[] // pubkeys
+	blacklistRefs?: string[] // event ids of blacklist events
+	requiredAttestors?: string[] // e.g. KYC issuer pubkeys
+	categoryAllowlist?: string[] // category tags this validator covers
 	categoryDenylist?: string[]
-	maxAcceptableSkewSec?: number        // overrides auction.max_skew_sec ceiling
-	griefingDecayDays?: number           // how long grief reputation persists
+	maxAcceptableSkewSec?: number // overrides auction.max_skew_sec ceiling
+	griefingDecayDays?: number // how long grief reputation persists
 	notes?: string
 }
 ```
@@ -693,14 +694,14 @@ than ignoring the verdict.
 
 ### 4.4.4 Aggregate validator output (optional)
 
-Validators MAY also publish a kind-30442 *aggregate reputation*
+Validators MAY also publish a kind-30442 _aggregate reputation_
 event keyed on `d=<bidder_pubkey>` (per-bidder, not per-auction) with
 running counts:
 
 ```ts
 interface BidderAggregateReputation {
 	type: 'auction_bidder_aggregate_v1'
-	windowDays: number            // e.g. 90
+	windowDays: number // e.g. 90
 	bids_valid: number
 	bids_invalid: number
 	wins_settled: number
@@ -762,11 +763,13 @@ This yields the central security property of the scheme:
 ### Differences from prior drafts
 
 vs. `cashu_p2pk_2of2_v1` (v0):
+
 - No `escrow_pubkey`. The NUT-11 `pubkeys` multisig slot is empty.
 - Settlement requires path reveal + sole seller signature, not a
   co-signed 2-of-2 spend.
 
 vs. `cashu_p2pk_path_oracle_v1` (superseded):
+
 - **The bidder chooses and holds the path**, not a path-oracle.
   There is no oracle anywhere in the protocol.
 - The lock structure itself is byte-for-byte identical between the
@@ -846,7 +849,7 @@ Roles:
 - **Seller** publishes `auction.p2pk_xpub`. Holds the matching
   `seller_xpriv`. Never sees any path until the bidder publishes a
   kind-1025. At settlement, derives `seller_child_privkey =
-  derive(seller_xpriv, path)`, signs the locked proof, redeems.
+derive(seller_xpriv, path)`, signs the locked proof, redeems.
 - **Bidder** generates a fresh high-entropy `path` locally,
   computes `seller_child = derive(auction.p2pk_xpub, path)`, locks
   ecash to that child key + their own refund key, publishes the
@@ -897,7 +900,7 @@ computation. The bidder MUST:
    levels of cryptographically random 31-bit indices). Lower-entropy
    paths are non-compliant.
 3. Compute `seller_child = HDKey.fromExtendedKey(p2pk_xpub)
-   .derive(path).publicKey`.
+.derive(path).publicKey`.
 4. Lock proofs to `seller_child` with the §5.3 NUT-11 layout.
 5. Publish the kind-1023 bid event including `lock_secret` and
    `proof_y` (§4.2) so validators can audit.
@@ -1059,7 +1062,7 @@ applies in the validator's floor computation:
   clicking "Bid" and the validator receiving the event. A bidder who
   delays publishing for > 5 s pays the curve at the actual `observed_at`.
 - Validators MAY also clamp `effective_t` to `min(bid.created_at,
-  observed_at) - GRACE` if the two are within `max_skew_sec` of each
+observed_at) - GRACE` if the two are within `max_skew_sec` of each
   other, so honest bidders don't get penalised by their own slightly-
   slow clock.
 
@@ -1203,7 +1206,7 @@ auction whose `auditors` list includes its pubkey:
 1. **Verify cryptographic well-formedness** — signature, references,
    tag completeness, lock secret structure (§4.2 required tags).
 2. **Verify auction rules** — `created_at` within auction window
-   *AND* `observed_at` within auction window *AND*
+   _AND_ `observed_at` within auction window _AND_
    `|created_at - observed_at| ≤ max_skew_sec`; amount ≥ current
    high + `bid_increment` (and ≥ `min_bid_curve` floor in the
    anti-snipe window); `mint` in the auction's allowlist; `locktime`
@@ -1326,7 +1329,7 @@ winner-selection rule against:
   policy) have marked `valid_bid_placed`, and
 - The auction's tie-break rules.
 
-The *seller*'s computation is the one that determines who they
+The _seller_'s computation is the one that determines who they
 attempt to settle with. Bidders should reach the same answer.
 Validators publish their answer as a `won_pending_settlement` /
 `lost_pending_refund` verdict, so passive observers can corroborate.
@@ -1401,7 +1404,7 @@ Workflow:
    of):
    - Direct NIP-44 DM from seller to bidder #2: "you can settle
      now if you want; here's the relevant kind-1023 bid id."
-   - A kind-1026 *fallback offer* event signed by the seller, `p`-
+   - A kind-1026 _fallback offer_ event signed by the seller, `p`-
      tagged to bidder #2, referencing the auction and bid event.
      (RECOMMENDED — auditable, doesn't require a private channel.)
 3. Bidder #2 has time `settlement_grace - fallback_delay_sec`
@@ -1437,7 +1440,7 @@ elapsed but bidder hasn't refunded):**
   the refund branch), the seller can derive the privkey and redeem.
   Pre-locktime the redemption uses the lock branch; post-locktime
   the lock branch is still valid (NUT-11 keeps it valid; the
-  refund branch is *added*, not substituted), so the seller can
+  refund branch is _added_, not substituted), so the seller can
   still spend.
 - Validators emit `settled_late`. The winner's reputation reflects
   late settlement: better than `griefed`, worse than
@@ -1883,21 +1886,21 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 
 ## 14. Security model summary
 
-| Threat | Mitigation | Residual risk |
-| --- | --- | --- |
-| Fake bid (unbacked) | Public `lock_secret` + `proof_y` in bid event; validators NUT-7 the proof every observation cycle | Mint downtime delays detection (bid marked `bid_pending_review`) |
-| Fake lock (bidder-controlled pubkey, spends behind lock) | NUT-7 catches the spend in real time → `fraudulent_bid` reputation event | Detection window equals validator polling interval (RECOMMENDED ≤60s) |
-| Fake lock (bidder-controlled pubkey, silent grief) | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid` | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost |
-| End-time tampering | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at` | Single dishonest validator's clock — mitigated by `auditor_quorum > 1` |
-| Sniping | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]` | None if curve enforced by all listed validators |
-| Double-spend (lock vs refund) | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund |
-| Seller fraud (early redeem) | Seller cannot derive child privkey without path; path is bidder-held secret | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`. |
-| Validator fraud (false verdicts) | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost | A single-validator auction with a dishonest validator is at the seller's risk by choice |
-| Validator rug-pull / offline | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode. | Liveness only: missing kind-30440 verdicts force the seller to make their own determination |
-| Bidder griefing (winner withholds path) | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit. |
-| Seller offline at settlement | Bidder eventually refunds at locktime; no funds lost; sale fails | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller |
-| Mint outage | Settlement retries with backoff; both seller and bidder may race once mint recovers | Race favors whoever acts first post-recovery; aligned with timing of locktime |
-| Bidder loses path (wallet destruction) | Bidder still has refund key → refunds at locktime | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup. |
+| Threat                                                   | Mitigation                                                                                                        | Residual risk                                                                                                                                                         |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fake bid (unbacked)                                      | Public `lock_secret` + `proof_y` in bid event; validators NUT-7 the proof every observation cycle                 | Mint downtime delays detection (bid marked `bid_pending_review`)                                                                                                      |
+| Fake lock (bidder-controlled pubkey, spends behind lock) | NUT-7 catches the spend in real time → `fraudulent_bid` reputation event                                          | Detection window equals validator polling interval (RECOMMENDED ≤60s)                                                                                                 |
+| Fake lock (bidder-controlled pubkey, silent grief)       | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid`                | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost    |
+| End-time tampering                                       | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at` | Single dishonest validator's clock — mitigated by `auditor_quorum > 1`                                                                                                |
+| Sniping                                                  | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]`                                          | None if curve enforced by all listed validators                                                                                                                       |
+| Double-spend (lock vs refund)                            | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal                         | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund                                        |
+| Seller fraud (early redeem)                              | Seller cannot derive child privkey without path; path is bidder-held secret                                       | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`.                                   |
+| Validator fraud (false verdicts)                         | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost                  | A single-validator auction with a dishonest validator is at the seller's risk by choice                                                                               |
+| Validator rug-pull / offline                             | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode.                                 | Liveness only: missing kind-30440 verdicts force the seller to make their own determination                                                                           |
+| Bidder griefing (winner withholds path)                  | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss                 | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit. |
+| Seller offline at settlement                             | Bidder eventually refunds at locktime; no funds lost; sale fails                                                  | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller                                                       |
+| Mint outage                                              | Settlement retries with backoff; both seller and bidder may race once mint recovers                               | Race favors whoever acts first post-recovery; aligned with timing of locktime                                                                                         |
+| Bidder loses path (wallet destruction)                   | Bidder still has refund key → refunds at locktime                                                                 | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup.                                                          |
 
 ### What this scheme guarantees, cryptographically
 
@@ -1937,19 +1940,21 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 ### Comparison to prior drafts
 
 vs. `cashu_p2pk_2of2_v1` (v0):
+
 - Closes the seller-pre-redeems-loser hole.
 - Avoids Cashu-level cosig (wider mint compatibility).
 - Trust model is simpler (no app Cashu key material anywhere).
 
 vs. `cashu_p2pk_path_oracle_v1` (superseded):
+
 - **Closes the coordinator+seller collusion edge.** In the oracle
   scheme, a colluding coordinator could reveal a losing bid's path
   to the seller, who would drain the loser pre-locktime. In this
   scheme the coordinator holds no path; only the bidder can release
   it; revealing it to anyone but the seller is harmless (no xpriv).
 - **Adds bidder-griefing as a new failure mode.** This is a
-  *fund-safety improvement* (no theft possible) traded for a
-  *liveness/UX cost* (winning bidder must come back to settle).
+  _fund-safety improvement_ (no theft possible) traded for a
+  _liveness/UX cost_ (winning bidder must come back to settle).
   Reputation + fallback mechanics manage the UX cost.
 - **Removes the entire oracle protocol surface.** No CVM tools, no
   registry encrypted-to-self, no per-auction issuer state. Validators
@@ -1967,7 +1972,7 @@ vs. `cashu_p2pk_path_oracle_v1` (superseded):
 > a `lockPubkey` from an oracle and sending the token to the oracle via
 > NIP-17. The bidder-held-path scheme replaces that flow entirely:
 > the bidder generates the path locally, computes `lockPubkey =
-> derive(auction.p2pk_xpub, path)`, and publishes `lock_secret` +
+derive(auction.p2pk_xpub, path)`, and publishes `lock_secret` +
 > `proof_y` on the public kind-1023 bid event (no NIP-17, no oracle).
 > The lock construction in §5.3/5.4 is otherwise unchanged. This
 > appendix will be rewritten alongside the implementation; treat it as

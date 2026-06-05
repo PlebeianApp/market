@@ -89,7 +89,13 @@ export interface ValidateBidInput {
 // Floor computation — pure
 // ============================================================================
 
-const computeFloorMultiplier = (atSeconds: number, endAt: number, maxEndAt: number, shape: 'none' | 'linear' | 'exponential', peakMultiplier: number): number => {
+const computeFloorMultiplier = (
+	atSeconds: number,
+	endAt: number,
+	maxEndAt: number,
+	shape: 'none' | 'linear' | 'exponential',
+	peakMultiplier: number,
+): number => {
 	if (shape === 'none' || peakMultiplier <= 1) return 1
 	if (maxEndAt <= endAt) return 1
 	if (atSeconds <= endAt) return 1
@@ -106,7 +112,13 @@ const computeFloorMultiplier = (atSeconds: number, endAt: number, maxEndAt: numb
 export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: number; atSeconds: number }): number => {
 	const { auction, topBid, atSeconds } = input
 	const baseline = topBid > 0 ? topBid + auction.bidIncrement : auction.startingBid
-	const multiplier = computeFloorMultiplier(atSeconds, auction.endAt, auction.maxEndAt, auction.minBidCurve.shape, auction.minBidCurve.peakMultiplier)
+	const multiplier = computeFloorMultiplier(
+		atSeconds,
+		auction.endAt,
+		auction.maxEndAt,
+		auction.minBidCurve.shape,
+		auction.minBidCurve.peakMultiplier,
+	)
 	return Math.max(0, Math.ceil(baseline * multiplier))
 }
 
@@ -125,10 +137,18 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// --- Step 1: cross-event reference integrity -----------------------------
 
 	if (bid.auctionRootEventId !== auction.rootEventId) {
-		return { claim: 'bid_invalid', reason: 'bad_lock', detail: `bid references root ${bid.auctionRootEventId}, auction root is ${auction.rootEventId}` }
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `bid references root ${bid.auctionRootEventId}, auction root is ${auction.rootEventId}`,
+		}
 	}
 	if (bid.auctionCoordinate !== auction.coordinate) {
-		return { claim: 'bid_invalid', reason: 'bad_lock', detail: `bid coordinate ${bid.auctionCoordinate} doesn't match auction ${auction.coordinate}` }
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `bid coordinate ${bid.auctionCoordinate} doesn't match auction ${auction.coordinate}`,
+		}
 	}
 	if (bid.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
 		return { claim: 'bid_invalid', reason: 'bad_lock', detail: 'bid `p` tag does not match auction seller pubkey' }

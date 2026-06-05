@@ -73,11 +73,7 @@ export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigCompute
 
 	const explicitRelayUrls = resolveExplicitRelays({ stage, mainRelay, overrideRelays, localRelayOnly })
 	const writeRelayUrls =
-		stage === 'staging' || stage === 'development' || localRelayOnly
-			? mainRelay
-				? [mainRelay]
-				: []
-			: explicitRelayUrls
+		stage === 'staging' || stage === 'development' || localRelayOnly ? (mainRelay ? [mainRelay] : []) : explicitRelayUrls
 
 	return { explicitRelayUrls, writeRelayUrls, enableOutbox }
 }

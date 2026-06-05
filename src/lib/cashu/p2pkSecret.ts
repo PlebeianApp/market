@@ -253,10 +253,7 @@ export interface AuctionLockConstraints {
  * `bid_invalid` verdict with `reason=bad_lock` (plus the `detail`
  * string for human-readable diagnostics in the verdict's `content`).
  */
-export const parseAuctionLockSecret = (
-	secret: string,
-	constraints: AuctionLockConstraints,
-): ParseResult<AuctionLockSecret> => {
+export const parseAuctionLockSecret = (secret: string, constraints: AuctionLockConstraints): ParseResult<AuctionLockSecret> => {
 	const loose = parseP2PKSecret(secret)
 	if (!loose.ok) return loose
 

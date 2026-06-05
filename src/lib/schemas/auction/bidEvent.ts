@@ -61,9 +61,7 @@ export type BidEventInput = z.infer<typeof BidEventSchema>
 // NDKEvent → ParsedBidEvent
 // ----------------------------------------------------------------------------
 
-export type ParseBidEventResult =
-	| { ok: true; value: ParsedBidEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+export type ParseBidEventResult = { ok: true; value: ParsedBidEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parseBidEvent = (event: NDKEvent): ParseBidEventResult => {
 	if (event.kind !== AUCTION_BID_KIND) {

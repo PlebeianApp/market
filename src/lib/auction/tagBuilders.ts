@@ -28,12 +28,7 @@ import {
 	type PathReleaseReason,
 	type ValidatorClaim,
 } from './constants'
-import type {
-	AuctionFallbackChainEntry,
-	MinBidCurve,
-	ValidatorPolicyDocument,
-	BidderAggregateReputationDocument,
-} from './events'
+import type { AuctionFallbackChainEntry, MinBidCurve, ValidatorPolicyDocument, BidderAggregateReputationDocument } from './events'
 import type { Nut7ProofState } from './constants'
 
 // =========================================================================

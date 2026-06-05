@@ -60,11 +60,7 @@ export interface CheckProofStateOptions {
  *
  * Callers MUST treat `'unknown'` as "no signal, retry" — not "safe".
  */
-export const checkProofState = async (
-	mintUrl: string,
-	proofY: string,
-	options: CheckProofStateOptions = {},
-): Promise<Nut7ProofState> => {
+export const checkProofState = async (mintUrl: string, proofY: string, options: CheckProofStateOptions = {}): Promise<Nut7ProofState> => {
 	const states = await checkProofStateBatch(mintUrl, [proofY], options)
 	return states.get(proofY.toLowerCase()) ?? 'unknown'
 }

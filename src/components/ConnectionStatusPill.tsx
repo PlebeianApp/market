@@ -18,7 +18,10 @@ import { cn } from '@/lib/utils'
 export function ConnectionStatusPill() {
 	const { health, connectedRelayCount, explicitRelayUrls } = useStore(ndkStore)
 
-	const meta = useMemo(() => describeHealth(health, connectedRelayCount, explicitRelayUrls.length), [health, connectedRelayCount, explicitRelayUrls.length])
+	const meta = useMemo(
+		() => describeHealth(health, connectedRelayCount, explicitRelayUrls.length),
+		[health, connectedRelayCount, explicitRelayUrls.length],
+	)
 
 	if (!meta) return null
 

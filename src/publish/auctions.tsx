@@ -1,22 +1,10 @@
-import { preflightAuctionSettlementP2pk } from '@/lib/auctionSettlementP2pk'
-import {
-	AUCTION_BID_KIND,
-	AUCTION_KIND,
-	AUCTION_SETTLEMENT_KIND,
-	AUCTION_SETTLEMENT_POLICY,
-	getAuctionTagValue,
-	type AuctionSettlementPublishStatus,
-} from '@/lib/auctionSettlement'
+import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_SETTLEMENT_POLICY, getAuctionTagValue } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { PlebeianAuctionClient, RequestPathOutput, RequestSettlementOutput } from '@/lib/ctxcn-clients/PlebeianAuctionClient'
-import { getAuctionClient, releaseAuctionClient } from '@/lib/ctxcn-clients/auctionClientPool'
 import { nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
-import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
-import { rememberAuctionPathGrant } from '@/lib/auctionPathOracle'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -147,96 +135,12 @@ export interface AuctionBidFormData {
 	mintCandidates: string[]
 }
 
-export interface AuctionPathGrantResponse {
-	grantId: string
-	requestId: string
-	auctionEventId: string
-	auctionCoordinates: string
-	bidderPubkey: string
-	pathIssuerPubkey: string
-	xpub: string
-	derivationPath: string
-	childPubkey: string
-	issuedAt: number
-	expiresAt: number
-}
-
-/**
- * Open the browser-safe ContextVM client for the auction path-oracle
- * tools. We can't use the ctxcn-generated `PlebeianServerClient` here
- * because `@contextvm/sdk`'s pino logger calls `pino.destination()` at
- * module init — Node-only. The seed scripts (Bun runtime) keep using the
- * generated client; the React app uses this hand-rolled equivalent.
- *
- * Wire format is identical (kind-1059 gift-wrap of kind-25910 inner with
- * NIP-44 to the facilitator pubkey). Delegates to the pooled cache in
- * `auctionClientPool` so the underlying WebSocket + subscription are
- * reused across calls instead of being torn down after every tool
- * call (which is what produced the "WebSocket is already in CLOSING
- * or CLOSED state" console spam on deployed envs).
- */
-const openAuctionPathOracleClient = (params: { pathIssuerPubkey: string; relays: string[] }): PlebeianAuctionClient => {
-	return getAuctionClient({ pathIssuerPubkey: params.pathIssuerPubkey, relays: params.relays })
-}
-
-const getAuctionClientRelays = (): string[] => {
-	const appRelay = configStore.state.config.appRelay
-	if (!appRelay) throw new Error('App relay URL is unavailable. Wait for app config to load and try again.')
-	return [appRelay]
-}
-
-export const requestAuctionPathGrant = async (params: {
-	auctionEventId: string
-	auctionCoordinates: string
-	bidderPubkey: string
-	bidderRefundPubkey: string
-	intendedAmount: number
-	expectedPathIssuer: string
-	expectedXpub: string
-}): Promise<AuctionPathGrantResponse> => {
-	const client = openAuctionPathOracleClient({
-		pathIssuerPubkey: params.expectedPathIssuer,
-		relays: getAuctionClientRelays(),
-	})
-	let grant: RequestPathOutput
-	try {
-		grant = await client.RequestPath(params.auctionEventId, params.auctionCoordinates, params.bidderRefundPubkey, params.intendedAmount)
-	} finally {
-		releaseAuctionClient(client)
-	}
-	if (grant.pathIssuerPubkey !== params.expectedPathIssuer) {
-		throw new Error('Path issuer pubkey mismatch — server identity does not match auction path_issuer')
-	}
-	verifyAuctionPathGrant({
-		xpub: grant.xpub,
-		derivationPath: grant.derivationPath,
-		childPubkey: grant.childPubkey,
-		expectedXpub: params.expectedXpub,
-		expectedIssuer: params.expectedPathIssuer,
-		grantIssuer: grant.pathIssuerPubkey,
-	})
-	const responseGrant: AuctionPathGrantResponse = {
-		grantId: grant.grantId,
-		// `requestId` was the HTTP-era field; the new transport doesn't
-		// echo it. Synthesise one for the local registry receipt so the
-		// `rememberAuctionPathGrant` shape stays unchanged.
-		requestId: grant.grantId,
-		auctionEventId: params.auctionEventId,
-		auctionCoordinates: params.auctionCoordinates,
-		bidderPubkey: params.bidderPubkey,
-		pathIssuerPubkey: grant.pathIssuerPubkey,
-		xpub: grant.xpub,
-		derivationPath: grant.derivationPath,
-		childPubkey: grant.childPubkey,
-		issuedAt: grant.issuedAt,
-		expiresAt: grant.expiresAt,
-	}
-	rememberAuctionPathGrant({
-		...responseGrant,
-		status: 'issued',
-	})
-	return responseGrant
-}
+// `AuctionPathGrantResponse`, `openAuctionPathOracleClient`,
+// `requestAuctionPathGrant` — all removed. They belonged to the v1
+// path-oracle scheme where a coordinator handed out paths over CVM.
+// Under `cashu_p2pk_bidder_path_v1` the bidder generates the path
+// locally; there's nothing to "request" from anyone. Phase 3 wires the
+// new bid-creation flow into `publishAuctionBid` below.
 
 export interface AuctionSettlementFormData {
 	auctionEventId: string
@@ -247,7 +151,7 @@ export interface AuctionSettlementFormData {
 	 * this only if the caller wants a safety assertion that their expectation
 	 * matches reality — mismatch causes the backend to reject.
 	 */
-	status?: AuctionSettlementPublishStatus
+	status?: 'settled' | 'reserve_not_met'
 	closeAt?: number
 	winningBidEventId?: string
 	winnerPubkey?: string
@@ -269,19 +173,26 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
  * pre-selected the default before submit, so reaching this branch
  * usually means the app's `/api/config` hasn't loaded yet.
  */
-const getAuctionPathIssuerPubkeyOrThrow = (formPathIssuerPubkey?: string): string => {
-	const explicit = formPathIssuerPubkey?.trim()
+const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string): string[] => {
+	// In the v1 path-oracle scheme this resolved a single `path_issuer`.
+	// Under `cashu_p2pk_bidder_path_v1` the auction lists `auditors`
+	// (validators whose verdicts the seller trusts). Until the form UI
+	// is updated to multi-select (Phase 7), we promote the
+	// single-pubkey field to a one-element auditors list. Falls back to
+	// the app's CVM server pubkey when the field is empty, so dev/seed
+	// flows that don't choose an auditor explicitly still get one.
+	const explicit = formAuditorPubkey?.trim()
 	if (explicit) {
 		if (!HEX_PUBKEY_RE.test(explicit)) {
-			throw new Error('Selected path-oracle pubkey is not a 32-byte hex Nostr pubkey.')
+			throw new Error('Selected auditor pubkey is not a 32-byte hex Nostr pubkey.')
 		}
-		return explicit
+		return [explicit]
 	}
-	const cvmPubkey = configStore.state.config.cvmServerPubkey?.trim()
-	if (!cvmPubkey) {
-		throw new Error('CVM server pubkey (path-issuer) is unavailable. Wait for app config to load and try again.')
+	const fallback = configStore.state.config.cvmServerPubkey?.trim()
+	if (!fallback) {
+		throw new Error('No auditor pubkey selected and no default auditor available. Wait for app config to load and try again.')
 	}
-	return cvmPubkey
+	return [fallback]
 }
 
 /**
@@ -326,7 +237,13 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
 	const settlementGraceSeconds = AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow(formData.pathIssuerPubkey)
+	// Validators auctions trust. Sourced from the same form field that used
+	// to carry `path_issuer` (kept as `pathIssuerPubkey` during the
+	// migration so UI components don't have to change in lockstep) plus
+	// the cvm server pubkey as a default until the form is updated to
+	// select multiple validators. Phase 7 (reputation UI) will replace
+	// the single field with a multi-select.
+	const auditorsList = getAuctionAuditorsOrThrow(formData.pathIssuerPubkey)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
@@ -361,7 +278,10 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['bid_increment', bidIncrement],
 		['reserve', reserve],
 		...validated.trustedMints.map((mint) => ['mint', mint] as NDKTag),
-		['path_issuer', pathIssuerPubkey],
+		// Bidder-held-path scheme: list one or more validator pubkeys whose
+		// kind-30440 verdicts compliant clients consult to gate bid validity
+		// for THIS auction. See AUCTIONS.md §4.1.
+		...auditorsList.map((auditor) => ['auditors', auditor] as NDKTag),
 		['max_end_at', String(validated.maxEndAt)],
 		['settlement_grace', String(settlementGraceSeconds)],
 		['min_bid_curve', minBidCurveTagValue],
@@ -489,212 +409,8 @@ const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string):
 }
 
 export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	if (!formData.auctionEventId) throw new Error('Auction event id is required')
-	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
-	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
-	if (!formData.pathIssuerPubkey) throw new Error('Auction path issuer pubkey is required')
-	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path verification')
-	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
-	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
-		throw new Error('Auction start time is required for bidding')
-	}
-	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
-		throw new Error('Auction effective end time is required for bidding')
-	}
-	if (!Number.isFinite(formData.auctionLocktimeAt) || formData.auctionLocktimeAt <= 0) {
-		throw new Error('Auction locktime base is required for bid locking')
-	}
-
-	const now = Math.floor(Date.now() / 1000)
-	// Lower bound: an auction is only open for bids once `start_at` has
-	// elapsed. Without this gate we publish bids whose created_at lands
-	// before the auction's start, which the settlement filter then rejects.
-	if (now < formData.auctionStartAt) {
-		throw new Error('Auction has not started yet')
-	}
-	if (now >= formData.auctionEffectiveEndAt) {
-		throw new Error('Auction already ended')
-	}
-	// Hard bidding cutoff. Even if effective_end_at is somehow further out
-	// (stale fetch, anti-sniping race), max_end_at is the final wall — no
-	// bids can be accepted past it because new bids would need a locktime
-	// past the existing chain's locktime, which we can't grant without
-	// breaking the uniform-locktime invariant.
-	if (now >= formData.auctionLocktimeAt) {
-		throw new Error('Auction has reached its hard bidding cutoff')
-	}
-
-	const bidderPubkey = (await signer.user()).pubkey
-	const ownBidFilters = [
-		{
-			kinds: [AUCTION_BID_KIND],
-			authors: [bidderPubkey],
-			'#e': [formData.auctionEventId],
-			limit: 200,
-		},
-		...(formData.auctionCoordinates
-			? [
-					{
-						kinds: [AUCTION_BID_KIND],
-						authors: [bidderPubkey],
-						'#a': [formData.auctionCoordinates],
-						limit: 200,
-					},
-				]
-			: []),
-	]
-	const existingBids = Array.from(
-		await ndkActions.fetchEventsWithTimeout(ownBidFilters.length === 1 ? ownBidFilters[0] : ownBidFilters, { timeoutMs: 2500 }),
-	)
-	const previousBid = resolveLatestActiveBidByBidder(existingBids, bidderPubkey)
-	const previousAmount = previousBid ? getBidAmount(previousBid) : 0
-	if (previousAmount > 0 && formData.amount <= previousAmount) {
-		throw new Error(`Rebid must exceed your current bid of ${previousAmount.toLocaleString()} sats`)
-	}
-
-	const deltaAmount = Math.max(0, formData.amount - previousAmount)
-	if (deltaAmount <= 0) {
-		throw new Error('No additional funds required for this rebid')
-	}
-
-	const bidderWalletP2pk = await nip60Actions.getWalletCashuP2pk()
-	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	if (!Number.isFinite(formData.settlementGraceSeconds) || formData.settlementGraceSeconds <= 0) {
-		throw new Error('Auction is missing settlement_grace — refusing to lock without an authoritative grace period')
-	}
-	const locktime = Math.max(formData.auctionLocktimeAt + formData.settlementGraceSeconds, now + 60)
-
-	// Path-oracle pre-bid step: request and verify a derivation path. The
-	// bidder-side verifyAuctionPathGrant inside requestAuctionPathGrant is the
-	// non-negotiable §5.6 check — skipping it would let a malicious issuer
-	// substitute a pubkey it controls.
-	const grant = await requestAuctionPathGrant({
-		auctionEventId: formData.auctionEventId,
-		auctionCoordinates: formData.auctionCoordinates,
-		bidderPubkey,
-		bidderRefundPubkey: bidderWalletP2pk,
-		intendedAmount: formData.amount,
-		expectedPathIssuer: formData.pathIssuerPubkey,
-		expectedXpub: formData.p2pkXpub,
-	})
-
-	const lockedBid = await nip60Actions.lockAuctionBidFunds({
-		amount: deltaAmount,
-		// Pass the auction's full trusted-mint list. `lockAuctionBidFunds`
-		// walks it in seller-declared order and picks the first mint
-		// where the bidder's wallet has enough balance for the delta —
-		// fixes the "wrong mint" failure when the bidder has funds at
-		// e.g. mint #4 but the seller listed minibits first.
-		preferredMints: formData.mintCandidates.length > 0 ? formData.mintCandidates : [DEFAULT_BID_MINT],
-		locktime,
-		refundPubkey: bidderWalletP2pk,
-		lockPubkey: grant.childPubkey,
-		auctionEventId: formData.auctionEventId,
-		auctionCoordinates: formData.auctionCoordinates,
-		sellerPubkey: formData.sellerPubkey,
-		pathIssuerPubkey: grant.pathIssuerPubkey,
-		derivationPath: grant.derivationPath,
-		childPubkey: grant.childPubkey,
-		grantId: grant.grantId,
-	})
-
-	try {
-		const event = new NDKEvent(ndk)
-		event.kind = AUCTION_BID_KIND
-		event.content = JSON.stringify({
-			type: 'cashu_bid_commitment',
-			amount: formData.amount,
-			delta_amount: deltaAmount,
-			prev_amount: previousAmount,
-			mint: lockedBid.mintUrl,
-			commitment: lockedBid.commitment,
-			key_scheme: lockedBid.keyScheme,
-		})
-		event.tags = [
-			['e', formData.auctionEventId],
-			['a', formData.auctionCoordinates],
-			['p', formData.sellerPubkey],
-			['amount', String(formData.amount), 'SAT'],
-			['delta_amount', String(deltaAmount), 'SAT'],
-			['currency', 'SAT'],
-			['mint', lockedBid.mintUrl],
-			['commitment', lockedBid.commitment],
-			['locktime', String(lockedBid.locktime)],
-			['refund_pubkey', lockedBid.refundPubkey],
-			['created_for_end_at', String(formData.auctionEffectiveEndAt)],
-			['bid_nonce', bidNonce],
-			['key_scheme', lockedBid.keyScheme],
-			['status', 'locked'],
-			['schema', 'auction_bid_v1'],
-			['child_pubkey', grant.childPubkey],
-			['path_issuer', grant.pathIssuerPubkey],
-			['path_grant_id', grant.grantId],
-		]
-		if (previousBid) {
-			event.tags.push(['prev_bid', previousBid.id])
-			event.tags.push(['prev_amount', String(previousAmount), 'SAT'])
-		}
-
-		await event.sign(signer)
-		// Submit the private token before making the public bid visible. The
-		// oracle does not need the bid event on-relay to validate the grant
-		// binding, and this avoids orphan public bids that say `status=locked`
-		// even though the registry entry stayed `issued`.
-		const submitClient = openAuctionPathOracleClient({
-			pathIssuerPubkey: grant.pathIssuerPubkey,
-			relays: getAuctionClientRelays(),
-		})
-		try {
-			const submission = await submitClient.SubmitBidToken(
-				formData.auctionEventId,
-				formData.auctionCoordinates,
-				event.id,
-				grant.grantId,
-				lockedBid.lockPubkey,
-				lockedBid.refundPubkey,
-				lockedBid.mintUrl,
-				lockedBid.amount,
-				formData.amount,
-				lockedBid.commitment,
-				bidNonce,
-				lockedBid.locktime,
-				lockedBid.token,
-			)
-			if (submission.registryStatus !== 'locked') {
-				throw new Error(submission.rejectReason || 'Issuer rejected the bid token')
-			}
-		} catch (submitError) {
-			throw tagBidError('Failed to deliver bid token to issuer', submitError)
-		} finally {
-			releaseAuctionClient(submitClient)
-		}
-		try {
-			await ndkActions.publishEvent(event)
-		} catch (publishError) {
-			throw tagBidError('Failed to publish bid commitment event after oracle accepted token', publishError)
-		}
-		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
-			kind: 'auction_bid',
-			auctionEventId: formData.auctionEventId,
-			auctionCoordinates: formData.auctionCoordinates,
-			bidEventId: event.id,
-			sellerPubkey: formData.sellerPubkey,
-			pathIssuerPubkey: grant.pathIssuerPubkey,
-			lockPubkey: lockedBid.lockPubkey,
-			refundPubkey: lockedBid.refundPubkey,
-			locktime: lockedBid.locktime,
-			derivationPath: grant.derivationPath,
-			childPubkey: grant.childPubkey,
-			grantId: grant.grantId,
-		})
-		return event.id
-	} catch (error) {
-		throw new Error(
-			`Bid submission failed after locking funds. Reclaim pending token ${lockedBid.tokenId} from wallet. ${
-				error instanceof Error ? error.message : String(error)
-			}`,
-		)
-	}
+	throw new Error("publishAuctionBid: not implemented — Phase 3 of the bidder-held-path migration will reimplement this. See AUCTIONS.md §4.2 and src/lib/auction/validation.ts.")
+	void formData; void signer; void ndk
 }
 
 export const usePublishAuctionBidMutation = () => {
@@ -722,141 +438,8 @@ export const usePublishAuctionBidMutation = () => {
 }
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	if (!formData.auctionEventId) throw new Error('Auction event id is required')
-
-	const sellerUser = await signer.user()
-	const sellerPubkey = sellerUser.pubkey
-	const auctionEvent = Array.from(
-		await ndkActions.fetchEventsWithTimeout(
-			{
-				kinds: [AUCTION_KIND],
-				ids: [formData.auctionEventId],
-				limit: 1,
-			},
-			{ timeoutMs: 4000 },
-		),
-	)[0]
-	if (!auctionEvent) throw new Error('Auction not found')
-	if (auctionEvent.pubkey !== sellerPubkey) {
-		throw new Error('Only the auction owner can settle this auction')
-	}
-
-	if (getFirstTagValue(auctionEvent, 'key_scheme') && getFirstTagValue(auctionEvent, 'key_scheme') !== 'hd_p2pk') {
-		throw new Error('Only hd_p2pk auction settlement is supported')
-	}
-
-	const auctionCoordinates =
-		formData.auctionCoordinates ||
-		(() => {
-			const dTag = getFirstTagValue(auctionEvent, 'd')
-			return dTag ? `30408:${auctionEvent.pubkey}:${dTag}` : ''
-		})()
-	const auctionP2pkXpub = getFirstTagValue(auctionEvent, 'p2pk_xpub').trim()
-	if (!auctionP2pkXpub) {
-		throw new Error('Auction is missing p2pk_xpub')
-	}
-	const walletAuctionXpub = await nip60Actions.getAuctionP2pkXpub()
-	if (walletAuctionXpub !== auctionP2pkXpub) {
-		throw new Error('Auction p2pk_xpub does not match the current wallet-derived auction HD root')
-	}
-	const pathIssuerPubkey = getFirstTagValue(auctionEvent, 'path_issuer') || auctionEvent.pubkey
-	const settlementClient = openAuctionPathOracleClient({
-		pathIssuerPubkey,
-		relays: getAuctionClientRelays(),
-	})
-	let settlementPlan: RequestSettlementOutput
-	try {
-		settlementPlan = await settlementClient.RequestSettlement(formData.auctionEventId, auctionCoordinates)
-	} finally {
-		releaseAuctionClient(settlementClient)
-	}
-	const closeAt = settlementPlan.closeAt || formData.closeAt || Math.floor(Date.now() / 1000)
-	const winningBidEventId = settlementPlan.winningBidEventId || ''
-	const winnerPubkey = settlementPlan.winnerPubkey || ''
-	const finalAmount = Math.max(0, Math.floor(settlementPlan.finalAmount ?? 0))
-	let winnerPayoutAmount = 0
-	const settlementTags: NDKTag[] = []
-
-	if (settlementPlan.status === 'settled') {
-		if (!winningBidEventId || !winnerPubkey || finalAmount <= 0) {
-			throw new Error('Settlement plan did not provide a valid winning bid')
-		}
-		// Cache mint keysets by URL — a multi-leg winning chain on the
-		// same mint shouldn't pay N round-trips. cashu-ts ≥2.x writes
-		// NUT-2 v2 short keyset IDs into the token, so `getDecodedToken`
-		// throws "A short keyset ID v2 was encountered, but got no
-		// keysets to map it to" without these. The wallet load also
-		// warms the cashu-ts mint cache for the subsequent
-		// `receiveLockedEcash` call below.
-		const mintKeysetsByUrl = new Map<string, import('@cashu/cashu-ts').MintKeyset[]>()
-		for (const release of settlementPlan.releases) {
-			if (!mintKeysetsByUrl.has(release.mintUrl)) {
-				mintKeysetsByUrl.set(release.mintUrl, await nip60Actions.loadAuctionMintKeysets(release.mintUrl))
-			}
-			const p2pkPreflight = preflightAuctionSettlementP2pk({
-				auctionP2pkXpub,
-				derivationPath: release.derivationPath,
-				settlementPlanChildPubkey: release.childPubkey,
-				token: release.token,
-				mintKeysets: mintKeysetsByUrl.get(release.mintUrl),
-			})
-			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
-				derivationPath: p2pkPreflight.derivationPath,
-				expectedPubkey: p2pkPreflight.derivedChildPubkey,
-			})
-			try {
-				const received = await nip60Actions.receiveLockedEcash(release.token, childPrivkey)
-				if (!received) {
-					throw new Error('Seller wallet did not receive the locked Cashu payout')
-				}
-			} catch (error) {
-				if (!isSpentTokenError(error)) throw error
-			}
-			winnerPayoutAmount += release.amount
-		}
-		if (winnerPayoutAmount !== finalAmount) {
-			throw new Error(`Winning bid proofs total ${winnerPayoutAmount} sats, expected ${finalAmount} sats`)
-		}
-		settlementTags.push(['payout', winningBidEventId, String(winnerPayoutAmount), 'redeemed'])
-	}
-
-	const event = new NDKEvent(ndk)
-	event.kind = AUCTION_SETTLEMENT_KIND
-	event.content = JSON.stringify({
-		type: 'auction_settlement',
-		status: settlementPlan.status,
-		winning_bid: winningBidEventId || null,
-		winner: winnerPubkey || null,
-		final_amount: finalAmount,
-		winner_payout_amount: winnerPayoutAmount || null,
-		reason: formData.reason || null,
-	})
-	event.tags = [
-		['e', formData.auctionEventId],
-		['status', settlementPlan.status],
-		['close_at', String(closeAt)],
-		['winning_bid', winningBidEventId],
-		['winner', winnerPubkey],
-		['final_amount', String(finalAmount), 'SAT'],
-		['schema', 'auction_settlement_v1'],
-		...settlementTags,
-	]
-	if (auctionCoordinates) {
-		event.tags.push(['a', auctionCoordinates])
-	}
-	if (winnerPubkey) {
-		event.tags.push(['p', winnerPubkey])
-	}
-	if (settlementPlan.releaseId) {
-		event.tags.push(['path_release_id', settlementPlan.releaseId])
-	}
-	if (formData.reason?.trim()) {
-		event.tags.push(['reason', formData.reason.trim()])
-	}
-
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-	return event.id
+	throw new Error("publishAuctionSettlement: not implemented — Phase 6 of the bidder-held-path migration will reimplement this. Seller settlement now reads a kind-1025 from the winner, derives via auctionP2pk, swaps on-mint, then publishes kind-1024. See AUCTIONS.md §8.")
+	void formData; void signer; void ndk
 }
 
 export const usePublishAuctionSettlementMutation = () => {

@@ -195,7 +195,7 @@ describe('validateBid — cross-event reference checks', () => {
 		}
 	})
 
-	test('bad_lock when bid coordinate doesn\'t match auction', () => {
+	test("bad_lock when bid coordinate doesn't match auction", () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, { auctionCoordinate: `30408:${BIDDER_PK}:other-auction` })
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
@@ -206,7 +206,7 @@ describe('validateBid — cross-event reference checks', () => {
 		}
 	})
 
-	test('bad_lock when bid `p` tag doesn\'t match seller pubkey', () => {
+	test("bad_lock when bid `p` tag doesn't match seller pubkey", () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, { sellerPubkey: BIDDER_PK })
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })

@@ -24,7 +24,15 @@ import {
 	type PathReleaseReason,
 } from '../../auction/constants'
 import type { AuctionFallbackChainEntry, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../auction/events'
-import { addressableCoordinate, bip32Path, compressedPubkeyHex, nostrEventIdHex, nostrPubkeyHex, nonNegativeInt, unixSeconds } from './common'
+import {
+	addressableCoordinate,
+	bip32Path,
+	compressedPubkeyHex,
+	nostrEventIdHex,
+	nostrPubkeyHex,
+	nonNegativeInt,
+	unixSeconds,
+} from './common'
 import { readMultiTag, readMultiTagTuples, readSingleTag } from './tagAccess'
 
 // =========================================================================

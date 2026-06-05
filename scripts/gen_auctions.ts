@@ -1,5 +1,4 @@
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
-import { PlebeianServerClient } from '@/lib/ctxcn-clients/PlebeianServerClient'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
@@ -107,10 +106,17 @@ export function generateAuctionData(params: {
 			['bid_increment', String(bidIncrement)],
 			['reserve', String(reserve)],
 			...trustedMints.map((mint) => ['mint', mint] as NDKTag),
-			['path_issuer', pathIssuerPubkey],
+			// Bidder-held-path scheme (AUCTIONS.md §4.1): seller lists
+			// validator pubkeys whose kind-30440 verdicts gate bid
+			// validity. For seeded auctions we route to the CVM server
+			// pubkey as the sole auditor until the validator daemon is
+			// added in Phase 4.
+			['auditors', pathIssuerPubkey],
+			['auditor_quorum', '1'],
+			['max_skew_sec', '120'],
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', p2pkXpub],
-			['settlement_policy', 'cashu_p2pk_path_oracle_v1'],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 			['schema', 'auction_v1'],
 			...images,
 			...categoryTags,
@@ -142,122 +148,7 @@ export async function createAuctionEvent(
 	}
 }
 
-/**
- * Seeds a kind-1023 bid event with a real path-oracle grant.
- *
- * Calls `request_path` on the running CVM server to allocate a derivation
- * path + child pubkey from the auction's `p2pk_xpub`. The returned values
- * are stamped onto the kind-1023 event so the registry has a real entry
- * for this bidder and the seller could (in principle) settle.
- *
- * Cashu lock is intentionally placeholder — seeded bidders don't have
- * pre-funded NIP-60 wallets, so the encoded `token` field would have no
- * real proofs to back it. `commitment` is therefore a placeholder hash
- * and `submit_bid_token` is NOT called. The registry entry stays at
- * status `issued` (not `locked`), and settlement will correctly skip
- * these bids — but every spec field is real except the token itself.
- */
-export async function createAuctionBidEvent(params: {
-	signer: NDKPrivateKeySigner
-	ndk: NDK
-	auctionEventId: string
-	auctionCoordinates: string
-	sellerPubkey: string
-	pathIssuerPubkey: string
-	cvmRelays: string[]
-	bidderPrivateKeyHex: string
-	amount: number
-	mint: string
-	endAt: number
-	settlementGraceSeconds: number
-	createdAt?: number
-}): Promise<boolean> {
-	const {
-		signer,
-		ndk,
-		auctionEventId,
-		auctionCoordinates,
-		sellerPubkey,
-		pathIssuerPubkey,
-		cvmRelays,
-		bidderPrivateKeyHex,
-		amount,
-		mint,
-		endAt,
-		settlementGraceSeconds,
-		createdAt,
-	} = params
-	const bidNonce = `seed-${faker.string.alphanumeric(16)}`
-	const placeholderRefundPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
-	const locktime = endAt + settlementGraceSeconds
-
-	// Real path issuance against the running CVM server — ensures the
-	// kind-30410 registry has a genuine entry for this bid and the
-	// child_pubkey on the event is derived from the auction's p2pk_xpub.
-	const auctionClient = new PlebeianServerClient({
-		privateKey: bidderPrivateKeyHex,
-		relays: cvmRelays,
-		serverPubkey: pathIssuerPubkey,
-	})
-	let grant
-	try {
-		grant = await auctionClient.RequestPath(auctionEventId, auctionCoordinates, placeholderRefundPubkey, amount)
-	} catch (error) {
-		console.error('[seed] request_path failed for bidder', error instanceof Error ? error.message : error)
-		await auctionClient.disconnect()
-		return false
-	} finally {
-		await auctionClient.disconnect()
-	}
-
-	// Placeholder commitment — real bids hash a private payload that
-	// includes the encoded Cashu token; seeded bidders have no funded
-	// NIP-60 wallet so we skip `submit_bid_token` entirely. The
-	// registry entry stays at status `issued`.
-	const placeholderCommitment = faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })
-
-	const event = new NDKEvent(ndk)
-	event.kind = 1023
-	event.content = JSON.stringify({
-		type: 'cashu_bid_commitment',
-		amount,
-		delta_amount: amount,
-		prev_amount: 0,
-		mint,
-		commitment: placeholderCommitment,
-		key_scheme: 'hd_p2pk',
-		seeded: true,
-	})
-	event.tags = [
-		['e', auctionEventId],
-		['a', auctionCoordinates],
-		['p', sellerPubkey],
-		['amount', String(amount), 'SAT'],
-		['delta_amount', String(amount), 'SAT'],
-		['currency', 'SAT'],
-		['mint', mint],
-		['commitment', placeholderCommitment],
-		['locktime', String(locktime)],
-		['refund_pubkey', placeholderRefundPubkey],
-		['created_for_end_at', String(endAt)],
-		['bid_nonce', bidNonce],
-		['key_scheme', 'hd_p2pk'],
-		['status', 'locked'],
-		['schema', 'auction_bid_v1'],
-		['child_pubkey', grant.childPubkey],
-		['path_issuer', grant.pathIssuerPubkey],
-		['path_grant_id', grant.grantId],
-	]
-	if (createdAt) {
-		event.created_at = createdAt
-	}
-
-	try {
-		await event.sign(signer)
-		await event.publish()
-		return true
-	} catch (error) {
-		console.error('Failed to publish auction bid', error)
-		return false
-	}
-}
+// `createAuctionBidEvent` removed in Phase 2 of the bidder-held-path
+// migration. The v1 implementation called `request_path` on a CVM server
+// which no longer exists; the new bid seeder (Phase 3) will be added
+// alongside the bidder kind-1023 publish flow.

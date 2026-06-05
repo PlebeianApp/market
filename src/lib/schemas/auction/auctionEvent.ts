@@ -46,8 +46,7 @@ const MIN_BID_CURVE_MAX_PEAK = 100
 const parseMinBidCurve = (raw: string | undefined): MinBidCurve => {
 	if (!raw) return { shape: 'none', peakMultiplier: 1, raw: '' }
 	const [shape, peakRaw] = raw.split(':')
-	const shapeNarrowed: MinBidCurveShape =
-		shape === 'linear' || shape === 'exponential' ? shape : 'none'
+	const shapeNarrowed: MinBidCurveShape = shape === 'linear' || shape === 'exponential' ? shape : 'none'
 	if (shapeNarrowed === 'none') return { shape: 'none', peakMultiplier: 1, raw }
 	const peakParsed = Number.parseFloat(peakRaw ?? '')
 	const peak = !Number.isFinite(peakParsed)
@@ -158,8 +157,7 @@ export const parseAuctionEvent = (event: NDKEvent): ParseAuctionEventResult => {
 	const auditorQuorum = readIntegerTag(event, 'auditor_quorum') ?? DEFAULT_AUDITOR_QUORUM
 	const maxSkewSec = readIntegerTag(event, 'max_skew_sec') ?? DEFAULT_MAX_SKEW_SECONDS
 	const fallbackDelaySec =
-		readIntegerTag(event, 'fallback_delay_sec') ??
-		Math.floor((settlementGrace * FALLBACK_DELAY_NUMERATOR) / FALLBACK_DELAY_DENOMINATOR)
+		readIntegerTag(event, 'fallback_delay_sec') ?? Math.floor((settlementGrace * FALLBACK_DELAY_NUMERATOR) / FALLBACK_DELAY_DENOMINATOR)
 	const vadiumRatioBps = readIntegerTag(event, 'vadium_ratio_bps') ?? 10_000
 
 	const title = readSingleTag(event, 'title') ?? ''

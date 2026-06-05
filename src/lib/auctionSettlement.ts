@@ -1,38 +1,27 @@
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_IMMUTABLE_MULTI_TAGS,
+	AUCTION_IMMUTABLE_SINGLE_TAGS,
+	AUCTION_KIND,
+	AUCTION_ROOT_EVENT_ID_TAG,
+	AUCTION_SETTLEMENT_KIND,
+	AUCTION_SETTLEMENT_POLICY,
+	ACTIVE_AUCTION_BID_STATUSES,
+} from './auction/constants'
 
-export const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
-export const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
-export const AUCTION_SETTLEMENT_KIND = 1024 as unknown as NonNullable<NDKFilter['kinds']>[number]
-export const ACTIVE_AUCTION_BID_STATUSES = new Set(['locked', 'accepted', 'active', 'unknown'])
-export const AUCTION_ROOT_EVENT_ID_TAG = 'auction_root_event_id'
+// Re-export the constants that used to live here so downstream callers
+// don't have to chase the move. The canonical definitions are in
+// `src/lib/auction/constants.ts` now (bidder-held-path scheme).
+export {
+	AUCTION_BID_KIND,
+	AUCTION_KIND,
+	AUCTION_ROOT_EVENT_ID_TAG,
+	AUCTION_SETTLEMENT_KIND,
+	AUCTION_SETTLEMENT_POLICY,
+	ACTIVE_AUCTION_BID_STATUSES,
+}
 
-export const AUCTION_SETTLEMENT_POLICY = 'cashu_p2pk_path_oracle_v1'
-
-const AUCTION_IMMUTABLE_SINGLE_TAGS = [
-	'auction_type',
-	'start_at',
-	'end_at',
-	'currency',
-	'price',
-	'starting_bid',
-	'bid_increment',
-	'reserve',
-	'path_issuer',
-	'key_scheme',
-	'p2pk_xpub',
-	// `extension_rule` is retired in v1 (AUCTIONS.md §6.1) but kept in the
-	// immutable list so that auctions which still emit it (legacy auctions
-	// or backwards-compatible publishers) can't switch its value post-publish.
-	'extension_rule',
-	'max_end_at',
-	'settlement_grace',
-	'min_bid_curve',
-	'settlement_policy',
-	'schema',
-]
-const AUCTION_IMMUTABLE_MULTI_TAGS = ['mint']
-
-export type AuctionSettlementPublishStatus = 'settled' | 'reserve_not_met'
 export type AuctionExtensionRule =
 	| { kind: 'none'; raw: string }
 	| { kind: 'anti_sniping'; raw: string; windowSeconds: number; extensionSeconds: number }
@@ -50,33 +39,10 @@ export interface ResolvedAuctionVersionSet {
 	rejectedEventIds: string[]
 }
 
-export interface AuctionSettlementWinnerToken {
-	bidEventId: string
-	bidderPubkey: string
-	derivationPath: string
-	childPubkey: string
-	mintUrl: string
-	amount: number
-	totalBidAmount: number
-	commitment: string
-	locktime: number
-	refundPubkey: string
-	token: string
-}
-
-export interface AuctionSettlementPlanResponse {
-	auctionEventId: string
-	auctionCoordinates?: string
-	status: AuctionSettlementPublishStatus
-	closeAt: number
-	reserve: number
-	winningBidEventId?: string
-	winnerPubkey?: string
-	finalAmount: number
-	winnerTokens: AuctionSettlementWinnerToken[]
-	/** Identifier echoed into the kind 1024 settlement event for issuer audit. */
-	releaseId?: string
-}
+// `AuctionSettlementWinnerToken` and `AuctionSettlementPlanResponse`
+// belonged to the v1 path-oracle settlement RPC and are gone. The
+// bidder-held-path scheme settles directly on-mint after the bidder
+// publishes kind-1025; there's no plan envelope to type.
 
 export const getAuctionTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
 export const getAuctionTagValues = (event: NDKEvent, tagName: string): string[] =>

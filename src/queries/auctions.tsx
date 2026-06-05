@@ -500,8 +500,20 @@ export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 
-/** Nostr pubkey of the auction's path issuer (the app running the path oracle). */
-export const getAuctionPathIssuer = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'path_issuer')?.[1] || ''
+/**
+ * Validator pubkeys the auction trusts to audit its bids. Auction events
+ * under `cashu_p2pk_bidder_path_v1` use repeated `auditors` tags (§4.1).
+ */
+export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
+	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
+
+/**
+ * Legacy single-pubkey accessor preserved for callers still phrased
+ * around "path_issuer." Returns the first listed auditor, or '' when
+ * none are listed. Phase 7 (reputation UI) will swap call sites to the
+ * proper multi-value {@link getAuctionAuditors}.
+ */
+export const getAuctionPathIssuer = (event: NDKEvent | null): string => getAuctionAuditors(event)[0] || ''
 
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''

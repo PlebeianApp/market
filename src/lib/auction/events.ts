@@ -11,13 +11,7 @@
  */
 
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type {
-	AuctionSettlementStatus,
-	Nut7ProofState,
-	PathReleaseReason,
-	ValidatorClaim,
-	ValidatorReason,
-} from './constants'
+import type { AuctionSettlementStatus, Nut7ProofState, PathReleaseReason, ValidatorClaim, ValidatorReason } from './constants'
 
 // =========================================================================
 // kind 30408 — Auction listing (seller-signed, addressable) — §4.1

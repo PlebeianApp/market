@@ -5,7 +5,6 @@ import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
-import { disposeAllAuctionClients } from '@/lib/ctxcn-clients/auctionClientPool'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
@@ -290,10 +289,6 @@ export const authActions = {
 		// Tear down per-user state (NWC selection, NIP-60 wallet).
 		// Mirrors `runSignerOnboarding` on the login side.
 		ndkActions.clearSignerOnboarding()
-		// Tear down cached auction clients — their gift-wrap subscriptions
-		// are pinned to the previous user's pubkey, so reusing them after
-		// a re-login as a different account would silently miss responses.
-		disposeAllAuctionClients()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
