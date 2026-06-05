@@ -62,3 +62,6 @@ docs/auctions-moving-bound-early-refund.md
 docs/auctions-seller-relay-early-refund-gist.md
 docs/auctions-seller-relay-early-refund.md
 docs/nostr-publications.md
+
+# Security audit documentation (local only)
+docs/SECURITY-*.md
