@@ -15,14 +15,21 @@
 Review these before requesting reviews on our own PRs. Builds goodwill with the same people we need reviews from.
 
 ### maximotodev requested review
-- [ ] **#988** — `feat(auctions): add comments tab to auction detail` (+35/-10, 2 files)
+- [x] **#988** — `feat(auctions): add comments tab to auction detail` (+35/-10, 2 files)
   - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
-- [ ] **#991** — `feat(auctions): improve description and shipping tabs` (+238/-64, 1 file)
+  - Approved. Should merge **before** #991 (both touch same file).
+- [x] **#991** — `feat(auctions): improve description and shipping tabs` (+238/-64, 1 file)
   - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
+  - Approved. Should merge **after** #988 (will need rebase).
 
-### hkarani requested review
-- [ ] **#951** — `feat(auctions): auctions form draft`
+### hkarani — NOT ready, changes requested
+- [ ] **#951** — `feat(auctions): auctions form draft` (16 commits, 5 files, +801/-22)
   - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
+  - **CHANGES_REQUESTED** from Franchovy and maximotodev (latest review)
+  - maximotodev's last review: `isMeaningfulDraft` should cover all persisted fields
+  - 15 inline review comments, author needs to address feedback first
+  - Our PR #956 (isMeaningfulDraft tests) is based on this branch — blocked until it stabilizes
+  - Wait for hkarani to update before reviewing
 
 ---
 
