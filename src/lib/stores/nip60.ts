@@ -1757,22 +1757,13 @@ export const nip60Actions = {
 				console.error('[nip60] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
 			}
 
-			// Best-effort follow-up consolidation + refresh. Async on purpose
-			// — the destroy: above is the authoritative correction; this is
-			// cleanup for any other drift (e.g. proofs that went stale
-			// during the swap). Bid publishing isn't blocked.
-			void (async () => {
-				try {
-					await nip60Actions.consolidateProofs()
-				} catch (consolidateErr) {
-					console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
-				}
-				try {
-					await nip60Actions.refresh()
-				} catch (refreshErr) {
-					console.error('[nip60] Bid lock refresh error (non-fatal):', refreshErr)
-				}
-			})()
+			// Note: we used to also kick off `consolidateProofs()` here
+			// in a void async block. That's no longer needed — `destroy:
+			// selectedProofs` above already removes the spent proofs
+			// locally, so we don't have to NUT-7-check them to discover
+			// they're spent. Removing the consolidate eliminates a per-
+			// bid mint round-trip (and the CORS / 429 noise it produced
+			// against testnut).
 
 			const commitment = await sha256Hex(token)
 

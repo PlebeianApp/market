@@ -4,7 +4,6 @@ import { configActions, configStore } from './stores/config'
 import { ndkActions, ndkStore } from './stores/ndk'
 import { authActions } from './stores/auth'
 import { walletActions } from './stores/wallet'
-import { installWalletPublishErrorSuppression } from './wallet/walletPublishErrorSuppression'
 import { configKeys } from '@/queries/queryKeyFactory'
 
 /**
@@ -59,11 +58,10 @@ export function bootApp(queryClient: QueryClient): Promise<void> {
 	bootPromise = (async () => {
 		bootStore.setState(() => ({ status: 'loading-config', error: null }))
 
-		// Install the wallet-publish unhandled-rejection suppressor BEFORE
-		// any wallet bootstrapping so the very first kind-7375 publish
-		// (which can fire under boot for restored wallets) doesn't pop
-		// the dev overlay. Idempotent — re-installs as a no-op.
-		installWalletPublishErrorSuppression()
+		// (The NDK-publish unhandled-rejection suppressor is now installed
+		// at module-load time via the side-effect import at the very top
+		// of `frontend.tsx`. That's earlier than this boot path, so any
+		// rejection fired during wallet rehydration is still caught.)
 
 		try {
 			const config = await fetchConfig()
