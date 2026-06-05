@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
+import { startAuctionValidator } from '../src/server/auction-validator'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -284,6 +285,24 @@ async function main() {
 
 	await mcpServer.connect(serverTransport)
 	console.log('Server is running and listening for requests on Nostr...')
+
+	// Auction validator (kind-30440 / 30441 publisher). Pure pub/sub
+	// daemon — no MCP transport, no CEP-15 announcement. Shares this
+	// process's signer + relay pool. See src/server/auction-validator.
+	const validatorHandle = await startAuctionValidator({
+		signer,
+		relayPool,
+		name: `Plebeian validator (${STAGE})`,
+	})
+
+	const shutdown = async (sig: NodeJS.Signals) => {
+		console.log(`\nReceived ${sig}, shutting down auction validator...`)
+		await validatorHandle.stop()
+		process.exit(0)
+	}
+	process.once('SIGINT', () => void shutdown('SIGINT'))
+	process.once('SIGTERM', () => void shutdown('SIGTERM'))
+
 	console.log('Press Ctrl+C to exit.')
 }
 
