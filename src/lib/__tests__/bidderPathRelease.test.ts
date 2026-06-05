@@ -84,8 +84,7 @@ const clearAuthUser = (): void => {
 // =============================================================================
 
 // A real xpub the project's auctionP2pk module is happy to derive from.
-const REAL_AUCTION_XPUB =
-	'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
+const REAL_AUCTION_XPUB = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
 
 const SELLER_PK = 'a'.repeat(64)
 const DEFAULT_REFUND_PK = '03' + 'e'.repeat(64)

@@ -73,16 +73,11 @@ export const AuctionVerdictPanel = ({ auctionRootEventId, auctionCoordinate }: P
 			</div>
 			<ul className="space-y-1.5">
 				{verdicts.map((v) => (
-					<li
-						key={v.id}
-						className={`rounded-lg border px-3 py-2 text-xs ${claimToneClass(v.claim)}`}
-					>
+					<li key={v.id} className={`rounded-lg border px-3 py-2 text-xs ${claimToneClass(v.claim)}`}>
 						<div className="flex flex-wrap items-center gap-2">
 							<span className="font-semibold uppercase tracking-wide">{v.claim}</span>
 							{v.reason && <span className="rounded bg-white/60 px-1.5 py-0.5 text-[10px] text-zinc-700">reason: {v.reason}</span>}
-							{v.nut7State && (
-								<span className="rounded bg-white/60 px-1.5 py-0.5 text-[10px] text-zinc-700">nut7: {v.nut7State}</span>
-							)}
+							{v.nut7State && <span className="rounded bg-white/60 px-1.5 py-0.5 text-[10px] text-zinc-700">nut7: {v.nut7State}</span>}
 						</div>
 						<div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] opacity-80">
 							<span className="inline-flex items-center gap-1">

@@ -27,8 +27,7 @@ import { buildPathReleaseTags, buildSettlementTags } from '../auction/tagBuilder
 import { parsePathReleaseEvent } from '../schemas/auction/settlementEvents'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
-const REAL_AUCTION_XPUB =
-	'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
+const REAL_AUCTION_XPUB = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
 
 const SELLER_PK = 'a'.repeat(64)
 const BIDDER_PK = 'b'.repeat(64)

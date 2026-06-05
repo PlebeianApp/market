@@ -731,7 +731,9 @@ export const publishBidderPathRelease = async (
 			}
 			cashuToken = getEncodedToken({ mint: leg.mintUrl, proofs: leg.proofs })
 		} catch (err) {
-			throw new Error(`Failed to encode Cashu token for leg ${leg.bidEventId.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`)
+			throw new Error(
+				`Failed to encode Cashu token for leg ${leg.bidEventId.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`,
+			)
 		}
 
 		const event = new NDKEvent(ndk)
@@ -828,13 +830,17 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 
 	// Lazy imports to avoid pulling settlement-only deps into the bid
 	// path's bundle.
-	const [{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, getBidAmount }, auctionSettlementMod, settlementEventsMod, constantsMod] =
-		await Promise.all([
-			import('@/queries/auctions'),
-			import('@/lib/auctionSettlement'),
-			import('@/lib/schemas/auction/settlementEvents'),
-			import('@/lib/auction/constants'),
-		])
+	const [
+		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, getBidAmount },
+		auctionSettlementMod,
+		settlementEventsMod,
+		constantsMod,
+	] = await Promise.all([
+		import('@/queries/auctions'),
+		import('@/lib/auctionSettlement'),
+		import('@/lib/schemas/auction/settlementEvents'),
+		import('@/lib/auction/constants'),
+	])
 	const { getAuctionTagValue: getTag, AUCTION_SETTLEMENT_KIND: kind1024 } = auctionSettlementMod
 	const { parsePathReleaseEvent } = settlementEventsMod
 	const { AUCTION_SETTLEMENT_POLICY: policyV1 } = constantsMod
@@ -847,8 +853,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (signerUser.pubkey !== sellerPubkey) {
 		throw new Error('Only the auction seller can publish a kind-1024 settlement event')
 	}
-	const auctionCoordinate =
-		formData.auctionCoordinates || `${30408}:${sellerPubkey}:${getTag(auctionEvent, 'd') ?? ''}`
+	const auctionCoordinate = formData.auctionCoordinates || `${30408}:${sellerPubkey}:${getTag(auctionEvent, 'd') ?? ''}`
 	const auctionRootEventId = auctionEvent.id
 	const p2pkXpub = getTag(auctionEvent, 'p2pk_xpub') ?? ''
 	const declaredPolicy = getTag(auctionEvent, 'settlement_policy')
@@ -970,9 +975,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			throw new Error(`Leg ${legBid.id.slice(0, 8)}… release was signed by a different pubkey than the bid`)
 		}
 		if (!release.cashuToken) {
-			throw new Error(
-				`Leg ${legBid.id.slice(0, 8)}… release carries no cashu_token — cannot redeem. Bidder must republish with proofs.`,
-			)
+			throw new Error(`Leg ${legBid.id.slice(0, 8)}… release carries no cashu_token — cannot redeem. Bidder must republish with proofs.`)
 		}
 		const legChildFromBid = (getTag(legBid, 'child_pubkey') ?? '').toLowerCase()
 		const derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(p2pkXpub, release.derivationPath).toLowerCase()
@@ -1025,7 +1028,9 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		})
 		let redeemed = false
 		try {
-			redeemed = await nip60Actions.receiveLockedEcash(leg.cashuToken, childPrivkey)
+			// Pass leg.mintUrl explicitly so receiveLockedEcash skips the
+			// `getDecodedToken(token)` step that fails on v2 short keyset IDs.
+			redeemed = await nip60Actions.receiveLockedEcash(leg.cashuToken, childPrivkey, leg.mintUrl)
 		} catch (err) {
 			throw tagBidError(`settlement-receive-leg-${leg.bid.id.slice(0, 8)}`, err)
 		}

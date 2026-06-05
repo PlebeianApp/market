@@ -681,9 +681,27 @@ const receiveTokenIntoWallet = async (
 	token: string,
 	options?: {
 		privkey?: string
+		/**
+		 * Caller-supplied mint URL. When provided we skip the top-level
+		 * `getDecodedToken(token)` call entirely. Necessary when the
+		 * token carries NUT-2 v2 short keyset IDs (cashu-ts ≥2.x default)
+		 * — without a keyset map cashu-ts cannot decode and the call
+		 * would throw "A short keyset ID v2 was encountered, but got no
+		 * keysets to map it to." The seller settlement path knows the
+		 * mint from the bid event, so it can pass it in.
+		 */
+		mintUrl?: string
 	},
 ): Promise<{ amount: number; mintUrl: string }> => {
-	const mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
+	// Resolve mint URL up front. Prefer the caller's explicit value to
+	// avoid the v2-short-ID decode trap (see the option doc above). Fall
+	// back to decoding the token only if no override was provided.
+	let mintUrl: string
+	if (options?.mintUrl) {
+		mintUrl = normalizeMintUrl(options.mintUrl)
+	} else {
+		mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
+	}
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
 	try {
@@ -711,7 +729,8 @@ const receiveTokenWithPrivkey = async (
 	wallet: NDKCashuWallet,
 	token: string,
 	privkey: string,
-): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey })
+	mintUrl?: string,
+): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey, mintUrl })
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -2153,7 +2172,19 @@ export const nip60Actions = {
 		}
 	},
 
-	receiveLockedEcash: async (token: string, privkey: string): Promise<boolean> => {
+	/**
+	 * Receive a P2PK-locked Cashu token and swap it into the wallet's
+	 * spendable proofs. The caller MUST pass the unlocking `privkey`
+	 * derived from `seller_xpriv + derivation_path`. `mintUrl` is
+	 * optional but strongly recommended: cashu-ts ≥2.x emits NUT-2 v2
+	 * short keyset IDs by default, and `getDecodedToken(token)`
+	 * without a keyset map cannot expand them — it throws "A short
+	 * keyset ID v2 was encountered, but got no keysets to map it to."
+	 * The seller settlement path knows the mint from the winning bid
+	 * event, so it can pass it in and skip the decode-to-find-mint
+	 * step entirely.
+	 */
+	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet) {
 			console.warn('[nip60] Cannot receive locked ecash without wallet')
@@ -2161,7 +2192,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			await receiveTokenWithPrivkey(wallet, token, privkey)
+			await receiveTokenWithPrivkey(wallet, token, privkey, mintUrl)
 			await nip60Actions.refresh()
 			return true
 		} catch (err) {

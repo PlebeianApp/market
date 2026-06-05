@@ -301,7 +301,7 @@ function DashboardAuctionDetailRoute() {
 		if (!user?.pubkey) return null
 		const mine = bids.filter((b) => b.pubkey === user.pubkey)
 		if (!mine.length) return null
-		return mine.reduce<typeof mine[0] | null>((best, bid) => {
+		return mine.reduce<(typeof mine)[0] | null>((best, bid) => {
 			if (!best) return bid
 			const delta = getBidAmount(bid) - getBidAmount(best)
 			if (delta > 0) return bid
@@ -316,14 +316,7 @@ function DashboardAuctionDetailRoute() {
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
 	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
-	const canBidderReleaseNow = !!(
-		isMyBidTop &&
-		ended &&
-		!myAlreadyReleased &&
-		!settlementWindowExpired &&
-		myTopBidEvent &&
-		myBidderRecord
-	)
+	const canBidderReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && !settlementWindowExpired && myTopBidEvent && myBidderRecord)
 
 	const releaseQueryClient = useQueryClient()
 	const [isReleasing, setIsReleasing] = useState(false)
@@ -683,18 +676,18 @@ function DashboardAuctionDetailRoute() {
 										<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
 											<p className="font-semibold">Settlement window expired</p>
 											<p className="mt-1 text-xs">
-												The locktime passed on {formatMaybeDate(settlementLocktimeAt)}. You can now reclaim your locked Cashu via
-												the refund branch from your wallet rather than completing the settlement here.
+												The locktime passed on {formatMaybeDate(settlementLocktimeAt)}. You can now reclaim your locked Cashu via the refund
+												branch from your wallet rather than completing the settlement here.
 											</p>
 										</div>
 									) : !myBidderRecord ? (
 										<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
 											<p className="font-semibold">Local bidder record missing</p>
 											<p className="mt-1 text-xs leading-relaxed">
-												This browser doesn't hold the derivation path or locked proofs for this bid, so it can't release. Reasons
-												this can happen: (1) the bid was placed in a different browser / profile, (2) localStorage was cleared, or
-												(3) this is a seeded fixture (the seed script publishes the bid event from a Node process and the proofs
-												never reach the browser). Real bids placed via the bidding UI on this device do not hit this state.
+												This browser doesn't hold the derivation path or locked proofs for this bid, so it can't release. Reasons this can
+												happen: (1) the bid was placed in a different browser / profile, (2) localStorage was cleared, or (3) this is a
+												seeded fixture (the seed script publishes the bid event from a Node process and the proofs never reach the browser).
+												Real bids placed via the bidding UI on this device do not hit this state.
 											</p>
 										</div>
 									) : (
@@ -704,16 +697,16 @@ function DashboardAuctionDetailRoute() {
 													You won this auction with {getBidAmount(myTopBidEvent!).toLocaleString()} sats.
 												</p>
 												<p className="mt-1 text-xs leading-relaxed text-sky-900">
-													Publishing your kind-1025 reveals the derivation path so the seller can derive their child privkey
-													and redeem the locked Cashu. After this, the seller publishes kind-1024 to close the auction.
+													Publishing your kind-1025 reveals the derivation path so the seller can derive their child privkey and redeem the
+													locked Cashu. After this, the seller publishes kind-1024 to close the auction.
 												</p>
 											</div>
 											<Button className="w-full" onClick={() => void releasePath()} disabled={isReleasing || !canBidderReleaseNow}>
 												{isReleasing ? 'Releasing…' : 'Release path & settle'}
 											</Button>
 											<p className="text-[11px] leading-relaxed text-zinc-500">
-												Release before {formatMaybeDate(settlementLocktimeAt)} (locktime). After that you can self-refund instead
-												of settling.
+												Release before {formatMaybeDate(settlementLocktimeAt)} (locktime). After that you can self-refund instead of
+												settling.
 											</p>
 										</>
 									)}
@@ -740,12 +733,7 @@ function DashboardAuctionDetailRoute() {
 											<Button
 												className="w-full"
 												disabled={
-													!isOwner ||
-													settlementLocked ||
-													!ended ||
-													settlementWindowExpired ||
-													settlementMutation.isPending ||
-													!canSettleNow
+													!isOwner || settlementLocked || !ended || settlementWindowExpired || settlementMutation.isPending || !canSettleNow
 												}
 												onClick={() => void submitSettlement()}
 											>

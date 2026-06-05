@@ -294,24 +294,30 @@ function AuctionDetailRoute() {
 		if (!activeUserPubkey) return null
 		const mine = bids.filter((b) => b.pubkey === activeUserPubkey)
 		if (!mine.length) return null
-		return mine.reduce((best, bid) => {
-			if (!best) return bid
-			const delta = getBidAmount(bid) - getBidAmount(best)
-			if (delta > 0) return bid
-			if (delta < 0) return best
-			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
-		}, mine[0] as typeof mine[0] | null)
+		return mine.reduce(
+			(best, bid) => {
+				if (!best) return bid
+				const delta = getBidAmount(bid) - getBidAmount(best)
+				if (delta > 0) return bid
+				if (delta < 0) return best
+				return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+			},
+			mine[0] as (typeof mine)[0] | null,
+		)
 	}, [bids, activeUserPubkey])
 
 	const topBidOverall = useMemo(() => {
 		if (!bids.length) return null
-		return bids.reduce((best, bid) => {
-			if (!best) return bid
-			const delta = getBidAmount(bid) - getBidAmount(best)
-			if (delta > 0) return bid
-			if (delta < 0) return best
-			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
-		}, bids[0] as typeof bids[0] | null)
+		return bids.reduce(
+			(best, bid) => {
+				if (!best) return bid
+				const delta = getBidAmount(bid) - getBidAmount(best)
+				if (delta > 0) return bid
+				if (delta < 0) return best
+				return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+			},
+			bids[0] as (typeof bids)[0] | null,
+		)
 	}, [bids])
 
 	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
@@ -773,10 +779,7 @@ function AuctionDetailRoute() {
 								</Badge>
 							</div>
 
-							<AuctionVerdictPanel
-								auctionRootEventId={auctionRootEventId || auctionId}
-								auctionCoordinate={auctionCoordinates}
-							/>
+							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
 
 							{newestBids.length === 0 ? (
 								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
