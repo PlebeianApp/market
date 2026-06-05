@@ -1,4 +1,7 @@
-# PR Review Plan — Landing PRs in Order
+# PR Review Plan — Streamlined to NIP-53 Focus
+
+> Supersedes previous plan. See #997 for upstream tracking.
+> Deferred PRs moved to fork (`c03rad0r/market`) — see STREAMLINE-PLAN.md.
 
 ## Reviewer Expertise
 
@@ -12,84 +15,66 @@
 
 ## Priority 1: Review PRs Others Asked Us To Review
 
-Review these before requesting reviews on our own PRs. Builds goodwill with the same people we need reviews from.
-
-### maximotodev requested review
-- [x] **#988** — `feat(auctions): add comments tab to auction detail` (+35/-10, 2 files)
-  - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
-  - Approved. Should merge **before** #991 (both touch same file).
-- [x] **#991** — `feat(auctions): improve description and shipping tabs` (+238/-64, 1 file)
-  - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
-  - Approved. Should merge **after** #988 (will need rebase).
-
-### hkarani — NOT ready, changes requested
-- [ ] **#951** — `feat(auctions): auctions form draft` (16 commits, 5 files, +801/-22)
-  - Base: `auctions/p2pk-path-oracle-via-cvm-v1`
-  - **CHANGES_REQUESTED** from Franchovy and maximotodev (latest review)
-  - maximotodev's last review: `isMeaningfulDraft` should cover all persisted fields
-  - 15 inline review comments, author needs to address feedback first
-  - Our PR #956 (isMeaningfulDraft tests) is based on this branch — blocked until it stabilizes
-  - Wait for hkarani to update before reviewing
+- [x] **#988** — Comments tab — Approved
+- [x] **#991** — Description/shipping tabs — Approved
+- [x] **#951** — Auctions form draft — Approved (with reserve='0' UX note)
 
 ---
 
-## Priority 2: Request Reviews on Our PRs
+## Priority 2: Request Reviews on Upstream PRs
 
-After completing Priority 1 reviews, ask for reciprocal reviews.
+Only 2 PRs remain on upstream:
 
 ### Franchovy
-- [ ] **#975** — Security: secrets, `.gitignore`, CI, contextvm/server.ts (11 files)
+- [ ] **#975** — Security: secrets, `.gitignore`, CI, contextvm/server.ts (8 files)
   - CI GREEN, MERGEABLE, e2e regression check passed, VPS deployed
   - **https://pr975.test-market.orangesync.tech**
-- [ ] **#982** — ContextVM singleton test isolation (2 files, +12/-3)
-  - CI GREEN, MERGEABLE, closes #963
+  - Docs removed, inline C1/C2/C3 summaries in PR description
+  - Related: #986 (key rotation), #996 (HIGH findings)
 
-### maximotodev
-- [ ] **#983** — Cart persistence fix (1 file, +12 lines)
-  - CI GREEN, MERGEABLE, closes #964
-- [ ] **#984** — Alby LNURL proxy + NDK relay isolation (2 files, +3/-5)
-  - CI GREEN, MERGEABLE, addresses #703
-
-### hkarani
-- [ ] **#981** — CI infra: bun pin, 8-shard e2e, unit test glob (6 files)
-  - CI: prettier + unit GREEN, 2 e2e shards RED (pre-existing on master)
-
----
-
-## Priority 3: Wave 2 — After Wave 1 Merges
-
-- [ ] **#985** → hkarani — Shipping selectors for auctions branch (9 files, CI GREEN)
-- [ ] **#957** → maximotodev — Order privacy tests (authored #955, same domain)
-- [ ] **#947** — NIP-53 already in Franchovy's queue (CHANGES_REQUESTED, awaiting re-review)
+### Franchovy (NIP-53)
+- [ ] **#947** — NIP-53 auction live chat — CHANGES_REQUESTED, awaiting re-review
+  - All 6 review fixes applied, CI green
   - VPS deployed at **https://pr947.test-market.orangesync.tech**
+  - Targets `auctions/p2pk-path-oracle-via-cvm-v1`
 
 ---
 
-## Priority 4: Wave 3 — After Waves 1+2
+## Priority 3: After #947 Merges
 
-- [ ] **#987** — Nsite E2E dashboard (depends on #947 split)
-- [ ] **#956** — isMeaningfulDraft (CONFLICTING, needs rebase first)
+- [ ] **#967** — CVM worker for NIP-53 live activity status
+  - Branch `feat/cvm-worker-nip53-status` pushed, 34 tests passing
+  - Must rebase after #947 merges, then create PR
+  - Targets `auctions/p2pk-path-oracle-via-cvm-v1`
 
 ---
 
-## Completed
+## Deferred to Fork (c03rad0r/market)
 
-### E2E Regression Check for #975
-- [x] Triggered e2e-full (run `26900247013`): 82 passed, 11 failed — all pre-existing
-- [x] Comment posted: https://github.com/PlebeianApp/market/pull/975#issuecomment-4615257284
+| Original | Fork PR | Description |
+|----------|---------|-------------|
+| #981 | c03rad0r/market#7 | CI + unit test infrastructure |
+| #982 | c03rad0r/market#8 | ContextVM singleton test fix |
+| #983 | c03rad0r/market#5 | Cart persistence re-read guard |
+| #984 | c03rad0r/market#4 | Alby LNURL proxy bypass |
+| #985 | c03rad0r/market#3 | Shipping selector e2e updates |
+| #957 | c03rad0r/market#6 | Order edge-case tests |
 
-### VPS Deployments
+Re-open on upstream as reviewer bandwidth frees up.
+
+---
+
+## VPS Deployments
+
 - [x] **#975** live at https://pr975.test-market.orangesync.tech
 - [x] **#947** live at https://pr947.test-market.orangesync.tech
-- [ ] Teardown #975 after review: `make teardown-pr PR=975`
-- [ ] Teardown #947 after review: `make teardown-pr PR=947`
-
-### PR Descriptions Strengthened
-- [x] #982, #983, #984 — problem/solution, CI verification, diff walkthrough
+- [ ] Teardown #975 after merge
+- [ ] Teardown #947 after merge
 
 ---
 
 ## Blocked / Deferred
 
-- **#986** — Key rotation (manual, needs coordination)
+- **#986** — Key rotation (manual, needs coordination after #975 merges)
+- **#996** — HIGH severity findings (H1-H8, not urgent)
 - **#772** — NDK subscription flakiness (architectural, deferred)
