@@ -19,12 +19,15 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [copied, setCopied] = useState(false)
 
-	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
+	// Reset state when modal opens
 	useEffect(() => {
 		if (open) {
 			setSelectedMint(defaultMint ?? mints[0] ?? '')
+			setAmount('')
+			setCopied(false)
+			nip60Actions.cancelDeposit()
 		}
-	}, [open, defaultMint, mints])
+	}, [open])
 
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)
