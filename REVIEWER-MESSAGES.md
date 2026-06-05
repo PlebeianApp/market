@@ -24,10 +24,12 @@ Hey Maxime, apologies for the PR flood earlier — I've cleaned up. I moved all 
 
 Hey! I just approved #951 from hkarani (with a note about the reserve='0' UX issue). I also moved all my test cleanup PRs to my fork to reduce noise — the only ones left on upstream are security (#975) and NIP-53 (#947).
 
-No reciprocal review asks for now — I'll re-open the smaller PRs on upstream later when bandwidth frees up.
+If you have a moment, I'd appreciate your eyes on #975 too — the security fix. It touches payment/wallet code you know well (removes hardcoded CVM key, fixes .env.dev leak).
+
+I'll re-open the smaller PRs on upstream later when bandwidth frees up.
 
 ---
 
 ## To hkarani
 
-Hey! I approved #951 (with a note about the reserve='0' UX issue Franchovy flagged). Also, I moved all my test cleanup PRs to my fork to reduce noise on the upstream repo. The only ones left are security (#975) and NIP-53 (#947).
+Hey! I approved #951 (with a note about the reserve='0' UX issue Franchovy flagged). I moved all my test cleanup PRs to my fork to reduce noise on the upstream repo — the only ones left upstream are security (#975) and NIP-53 (#947). No asks from me right now, just wanted to give you a heads-up.
