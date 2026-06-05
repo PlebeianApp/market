@@ -10,19 +10,21 @@ Keep only security + NIP-53 + CVM worker on the upstream repo. Move all test cle
 
 ## Phase 1: Create replacement tracking issue on upstream
 
-- [ ] Create new issue on `PlebeianApp/market` — title: `tracking: security remediation + NIP-53 live chat + CVM worker`
-- [ ] Close #979 with comment pointing to new issue
+- [x] Create new issue on `PlebeianApp/market` — **#997**
+- [x] Close #979 with comment pointing to #997
 
 ## Phase 2: Close upstream PRs
 
-Each closed with: "Moved to fork to reduce reviewer noise during NIP-53 push. Will re-open here as bandwidth frees up. Tracked in #<new_issue>."
+Each closed with: "Moved to fork to reduce reviewer noise during NIP-53 push. Will re-open here as bandwidth frees up. Tracked in #997."
 
-- [ ] Close #981 (CI + Unit Test Infrastructure)
-- [ ] Close #982 (ContextVM Singleton Fix)
-- [ ] Close #983 (Cart Persistence Fix)
-- [ ] Close #984 (Alby LNURL Proxy Bypass)
-- [ ] Close #985 (Shipping Selector Updates)
-- [ ] Close #957 (Order edge-case tests)
+- [x] Close #981 (CI + Unit Test Infrastructure)
+- [x] Close #982 (ContextVM Singleton Fix)
+- [x] Close #983 (Cart Persistence Fix)
+- [x] Close #984 (Alby LNURL Proxy Bypass)
+- [x] Close #985 (Shipping Selector Updates)
+- [x] Close #957 (Order edge-case tests)
+- [x] Close #956 (isMeaningfulDraft — superseded by #951's version but covers fewer fields)
+- [x] Close #987 (Nsite E2E dashboard — premature, re-open after #947 merges)
 
 ## Phase 3: Re-open PRs on fork
 
@@ -36,23 +38,27 @@ Each PR on `c03rad0r/market` includes original PR body + `Originally opened as P
 | `fix/alby-lnurl-proxy-bypass` | #984 | Alby LNURL Proxy Bypass | `master` |
 | `fix/shipping-selectors-cart-redesign` | #985 | Shipping Selector Updates | `auctions/p2pk-path-oracle-via-cvm-v1` |
 | `fix/test-cleanup-green-suite` | #957 | Order edge-case tests for public order privacy guard | `master` |
+| `test/951-auction-draft-meaningful-check` | #956 | isMeaningfulDraft full field coverage | `master` |
+| `feat/nsite-e2e-dashboard` | #987 | Nsite E2E dashboard + 3-way sharding | `master` |
 
-- [ ] Open fork PR for #981 equivalent
-- [ ] Open fork PR for #982 equivalent
-- [ ] Open fork PR for #983 equivalent
-- [ ] Open fork PR for #984 equivalent
-- [ ] Open fork PR for #985 equivalent
-- [ ] Open fork PR for #957 equivalent
+- [x] Open fork PR for #981 equivalent (c03rad0r/market#7)
+- [x] Open fork PR for #982 equivalent (c03rad0r/market#8)
+- [x] Open fork PR for #983 equivalent (c03rad0r/market#5)
+- [x] Open fork PR for #984 equivalent (c03rad0r/market#4)
+- [x] Open fork PR for #985 equivalent (c03rad0r/market#3)
+- [x] Open fork PR for #957 equivalent (c03rad0r/market#6)
+- [x] Open fork PR for #956 equivalent (c03rad0r/market#9)
+- [x] Open fork PR for #987 equivalent (c03rad0r/market#10)
 
 ## Phase 4: Update cross-references
 
-- [ ] Update #986 — replace #979 reference with new issue number
-- [ ] Update #996 — replace #979 reference with new issue number
+- [x] Update #986 — replace #979 reference with #997
+- [x] Update #996 — replace #979 reference with #997
 
 ## Phase 5: Update local tracking docs
 
-- [ ] Update REVIEW-PLAN.md to reflect new scope
-- [ ] Update REVIEWER-MESSAGES.md to focus on #975 and #947 only
+- [x] Update REVIEW-PLAN.md to reflect new scope
+- [x] Update REVIEWER-MESSAGES.md to focus on #975 and #947 only
 
 ---
 
@@ -74,3 +80,5 @@ Each PR on `c03rad0r/market` includes original PR body + `Originally opened as P
 | #984 | `fix/alby-lnurl-proxy-bypass` | Alby LNURL proxy bypass |
 | #985 | `fix/shipping-selectors-cart-redesign` | Shipping selector e2e updates |
 | #957 | `fix/test-cleanup-green-suite` | Order edge-case tests |
+| #956 | `test/951-auction-draft-meaningful-check` | isMeaningfulDraft full field coverage (re-open after #951 merges) |
+| #987 | `feat/nsite-e2e-dashboard` | Nsite E2E dashboard + 3-way sharding (re-open after #947 merges) |
