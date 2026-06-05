@@ -180,6 +180,18 @@ export interface ParsedPathReleaseEvent {
 	auditorRefs: string[]
 	/** Optional kind-1026 fallback offer id, present for fallback settlements. */
 	fallbackOfferId?: string
+	/**
+	 * Optional encoded Cashu token (`cashuA…`) carrying the bid's locked
+	 * proofs (`{amount, secret, C, id}` per proof). Pragmatic transport
+	 * for the seller's redemption: the proofs are P2PK-locked to
+	 * `derive(p2pk_xpub, derivation_path)`, so publishing them publicly
+	 * doesn't grant spend authority to anyone but the seller. Absent on
+	 * release events that don't carry redeemable value (e.g. seeded /
+	 * synthetic releases) — those produce `settled_promptly` verdicts
+	 * only after the seller successfully spends, so absence is
+	 * self-defeating for the bidder.
+	 */
+	cashuToken?: string
 	content: string
 }
 

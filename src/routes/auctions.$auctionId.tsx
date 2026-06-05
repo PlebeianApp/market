@@ -13,8 +13,12 @@ import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auct
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
+import { findBidderRecord } from '@/lib/auction/bidderRecords'
+import { useQueryClient } from '@tanstack/react-query'
+import { auctionKeys } from '@/queries/queryKeyFactory'
 import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,
@@ -53,6 +57,7 @@ import {
 	isNSFWAuction,
 	useAuctionBids,
 	useAuctionClaimOrders,
+	useAuctionPathReleases,
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
@@ -65,6 +70,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 
 function useHeroBackground(imageUrl: string, className: string) {
@@ -274,6 +280,66 @@ function AuctionDetailRoute() {
 	const claimOrders = claimOrdersQuery.data ?? []
 	const hasClaimOrder = claimOrders.some((order) => order.pubkey === currentUserPubkey)
 
+	// -- Bidder-held-path settlement state -------------------------------
+	// Under cashu_p2pk_bidder_path_v1 the bidder publishes a kind-1025
+	// path release to enable the seller's redemption. We surface a
+	// "Release path / Settle" button when the current user is the top
+	// bidder, the auction has ended, and they haven't already released
+	// (no kind-1025 from them on this auction yet).
+	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
+	const pathReleases = pathReleasesQuery.data ?? []
+	const queryClient = useQueryClient()
+
+	const myTopBidEvent = useMemo(() => {
+		if (!activeUserPubkey) return null
+		const mine = bids.filter((b) => b.pubkey === activeUserPubkey)
+		if (!mine.length) return null
+		return mine.reduce((best, bid) => {
+			if (!best) return bid
+			const delta = getBidAmount(bid) - getBidAmount(best)
+			if (delta > 0) return bid
+			if (delta < 0) return best
+			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+		}, mine[0] as typeof mine[0] | null)
+	}, [bids, activeUserPubkey])
+
+	const topBidOverall = useMemo(() => {
+		if (!bids.length) return null
+		return bids.reduce((best, bid) => {
+			if (!best) return bid
+			const delta = getBidAmount(bid) - getBidAmount(best)
+			if (delta > 0) return bid
+			if (delta < 0) return best
+			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+		}, bids[0] as typeof bids[0] | null)
+	}, [bids])
+
+	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
+	const myAlreadyReleased = useMemo(() => {
+		if (!myTopBidEvent) return false
+		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
+	}, [pathReleases, myTopBidEvent])
+	const canReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
+	const [isReleasing, setIsReleasing] = useState(false)
+
+	const handleReleasePath = async () => {
+		if (!myTopBidEvent) return
+		setIsReleasing(true)
+		try {
+			const result = await nip60Actions.settleAuctionAsWinner({
+				bidEventId: myTopBidEvent.id,
+				releaseReason: 'settlement',
+			})
+			toast.success('Path release published — seller can now redeem')
+			void result.pathReleaseEventId
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId || auctionId) })
+		} catch (err) {
+			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
+		} finally {
+			setIsReleasing(false)
+		}
+	}
+
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
 	}, [minBid])
@@ -404,6 +470,40 @@ function AuctionDetailRoute() {
 					</div>
 				</div>
 			</div>
+
+			{/* Bidder settle action — shown to the top bidder once the auction ends
+			    so they can publish their kind-1025 path release. The seller can't
+			    redeem (and therefore can't publish kind-1024) until this lands. */}
+			{canReleaseNow && (
+				<div className="mx-auto w-full max-w-7xl px-4">
+					<div className="rounded-xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
+						<div className="flex flex-wrap items-center justify-between gap-4">
+							<div className="flex items-center gap-3">
+								<div className="rounded-full bg-sky-100 p-2">
+									<Gavel className="h-5 w-5 text-sky-700" />
+								</div>
+								<div>
+									<h3 className="text-lg font-semibold text-sky-950">You won — release your path to settle</h3>
+									<p className="text-sm text-sky-800">
+										Bid: <span className="font-semibold">{getBidAmount(myTopBidEvent!).toLocaleString()} sats</span>. Publishing your
+										kind-1025 reveals the derivation path so the seller can redeem your locked proofs.
+									</p>
+								</div>
+							</div>
+							<Button onClick={() => void handleReleasePath()} disabled={isReleasing}>
+								{isReleasing ? 'Releasing…' : 'Release path & settle'}
+							</Button>
+						</div>
+					</div>
+				</div>
+			)}
+			{isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled' && (
+				<div className="mx-auto w-full max-w-7xl px-4">
+					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+						Path release published — waiting for seller to redeem and publish settlement.
+					</div>
+				</div>
+			)}
 
 			{/* Winner banner — shown to the auction winner after settlement */}
 			{isWinner && settlementStatus === 'settled' && (
@@ -672,6 +772,11 @@ function AuctionDetailRoute() {
 									{newestBids.length} recorded
 								</Badge>
 							</div>
+
+							<AuctionVerdictPanel
+								auctionRootEventId={auctionRootEventId || auctionId}
+								auctionCoordinate={auctionCoordinates}
+							/>
 
 							{newestBids.length === 0 ? (
 								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">

@@ -203,6 +203,14 @@ export interface PathReleaseTagsInput {
 	releaseReason: PathReleaseReason
 	auditorRefs?: string[]
 	fallbackOfferId?: string
+	/**
+	 * Optional encoded Cashu token wrapping the bid's locked proofs.
+	 * Required in practice for the seller to redeem (the kind-1023 bid
+	 * event only publishes `lock_secret` + `proof_y`, not the proofs'
+	 * `C` value). Omit only for seed fixtures or non-redeemable
+	 * synthetic releases.
+	 */
+	cashuToken?: string
 }
 
 export const buildPathReleaseTags = (input: PathReleaseTagsInput): string[][] => {
@@ -221,6 +229,7 @@ export const buildPathReleaseTags = (input: PathReleaseTagsInput): string[][] =>
 
 	for (const ref of input.auditorRefs ?? []) tags.push(['auditor_ref', ref])
 	if (input.fallbackOfferId) tags.push(['fallback_offer', input.fallbackOfferId])
+	if (input.cashuToken) tags.push(['cashu_token', input.cashuToken])
 
 	return tags
 }

@@ -1,5 +1,6 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { AvatarUser } from '@/components/AvatarUser'
 import { ProfileName } from '@/components/ProfileName'
 import { OrderActions } from '@/components/orders/OrderActions'
@@ -9,7 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
+import { nip60Actions } from '@/lib/stores/nip60'
+import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
+import { auctionKeys } from '@/queries/queryKeyFactory'
+import { useQueryClient } from '@tanstack/react-query'
 import {
 	auctionQueryOptions,
 	getAuctionBidCountFromBids,
@@ -44,6 +49,7 @@ import {
 	getBidStatus,
 	useAuctionBids,
 	useAuctionClaimOrders,
+	useAuctionPathReleases,
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
@@ -244,7 +250,20 @@ function DashboardAuctionDetailRoute() {
 	const settlementGrace = auction ? getAuctionSettlementGrace(auction) : 0
 	const settlementLocktimeAt = maxEndAt > 0 && settlementGrace > 0 ? maxEndAt + settlementGrace : 0
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
-	const canSettleNow = ended && !settlementLocked && !settlementWindowExpired
+
+	// Bidder-held-path scheme: the seller can only publish kind-1024 after
+	// the winning bidder has published a kind-1025 path release. Without
+	// the path the seller can't derive `seller_child_privkey` and so
+	// can't redeem the locked Cashu — publishing a settlement at that
+	// point would be a no-op claim. We surface the gate state in the UI
+	// so sellers know what they're waiting on.
+	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
+	const pathReleases = pathReleasesQuery.data ?? []
+	const hasPathReleaseForTopBid = useMemo(() => {
+		if (!topBid) return false
+		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === topBid.id)
+	}, [pathReleases, topBid])
+	const canSettleNow = ended && !settlementLocked && !settlementWindowExpired && (hasPathReleaseForTopBid || !reserveMet)
 
 	// Settlement / claim ordering data — needed by both perspectives.
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
@@ -268,6 +287,63 @@ function DashboardAuctionDetailRoute() {
 	const winnerHasClaimed = !!winnerClaimOrder
 	const winnerNeedsAddress = isSettled && isWinner && !winnerHasClaimed
 
+	// -- Bidder-held-path settlement (bidder side) --------------------------
+	// The bidder publishes a kind-1025 path release to unblock the seller's
+	// redemption. We surface it here on the dashboard auction detail page
+	// for ergonomic access (the public auction page surfaces the same
+	// action). The local bidder record (path, refund key, full proofs) is
+	// only present if THIS browser placed the bid via `publishAuctionBid`
+	// — seeded bids don't show up here because the seed script publishes
+	// kind-1023 from a Node process and never writes to localStorage. We
+	// distinguish those two states so the user knows why the button isn't
+	// available.
+	const myTopBidEvent = useMemo(() => {
+		if (!user?.pubkey) return null
+		const mine = bids.filter((b) => b.pubkey === user.pubkey)
+		if (!mine.length) return null
+		return mine.reduce<typeof mine[0] | null>((best, bid) => {
+			if (!best) return bid
+			const delta = getBidAmount(bid) - getBidAmount(best)
+			if (delta > 0) return bid
+			if (delta < 0) return best
+			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+		}, mine[0])
+	}, [bids, user?.pubkey])
+
+	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
+	const myAlreadyReleased = useMemo(() => {
+		if (!myTopBidEvent) return false
+		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
+	}, [pathReleases, myTopBidEvent])
+	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
+	const canBidderReleaseNow = !!(
+		isMyBidTop &&
+		ended &&
+		!myAlreadyReleased &&
+		!settlementWindowExpired &&
+		myTopBidEvent &&
+		myBidderRecord
+	)
+
+	const releaseQueryClient = useQueryClient()
+	const [isReleasing, setIsReleasing] = useState(false)
+	const releasePath = async () => {
+		if (!myTopBidEvent) return
+		setIsReleasing(true)
+		try {
+			await nip60Actions.settleAuctionAsWinner({
+				bidEventId: myTopBidEvent.id,
+				releaseReason: 'settlement',
+			})
+			toast.success('Path release published — the seller can now redeem and publish the settlement.')
+			await releaseQueryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId || auctionId) })
+		} catch (err) {
+			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
+		} finally {
+			setIsReleasing(false)
+		}
+	}
+
 	const submitSettlement = async () => {
 		if (!auction) return
 		if (!isOwner) {
@@ -286,13 +362,20 @@ function DashboardAuctionDetailRoute() {
 		}
 
 		try {
-			// Don't pre-compute the status client-side: the backend derives it
-			// from bids + reserve and the settlement event reflects whatever
-			// the backend returns. This keeps the two outcomes (settled /
-			// reserve_not_met) behind a single action.
+			// Bidder-held-path scheme: the settlement publisher itself
+			// resolves the winning bid + reads the kind-1025 path release
+			// + redeems the locked Cashu. The only branch we still
+			// pre-decide client-side is `reserve_not_met` — without a
+			// reserve-meeting bid there's nothing to redeem and the
+			// publisher should write a status=reserve_not_met event
+			// straight away (rather than trying to look up a path
+			// release for a bid that can't actually win).
+			const desiredStatus: 'reserve_not_met' | undefined = topBid && reserveMet ? undefined : 'reserve_not_met'
 			await settlementMutation.mutateAsync({
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
+				status: desiredStatus,
+				winningBidEventId: desiredStatus ? undefined : topBid?.id,
 			})
 		} catch {
 			// Toast handled in mutation hook.
@@ -584,6 +667,59 @@ function DashboardAuctionDetailRoute() {
 								</div>
 							</div>
 
+							{/* Bidder-only path release action — only shown to the top
+							    bidder when they hold a valid local record. Surfaces
+							    explanatory states for the common failure modes so a
+							    stuck bidder knows what's wrong. */}
+							{!isOwner && isMyBidTop && ended && !settlementLocked && (
+								<div className="space-y-2">
+									<p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Your action</p>
+									{myAlreadyReleased ? (
+										<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+											<p className="font-semibold">Path release published</p>
+											<p className="mt-1 text-xs">Waiting for the seller to redeem at the mint and publish the kind-1024 settlement.</p>
+										</div>
+									) : settlementWindowExpired ? (
+										<div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+											<p className="font-semibold">Settlement window expired</p>
+											<p className="mt-1 text-xs">
+												The locktime passed on {formatMaybeDate(settlementLocktimeAt)}. You can now reclaim your locked Cashu via
+												the refund branch from your wallet rather than completing the settlement here.
+											</p>
+										</div>
+									) : !myBidderRecord ? (
+										<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+											<p className="font-semibold">Local bidder record missing</p>
+											<p className="mt-1 text-xs leading-relaxed">
+												This browser doesn't hold the derivation path or locked proofs for this bid, so it can't release. Reasons
+												this can happen: (1) the bid was placed in a different browser / profile, (2) localStorage was cleared, or
+												(3) this is a seeded fixture (the seed script publishes the bid event from a Node process and the proofs
+												never reach the browser). Real bids placed via the bidding UI on this device do not hit this state.
+											</p>
+										</div>
+									) : (
+										<>
+											<div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+												<p className="text-sm font-semibold text-sky-950">
+													You won this auction with {getBidAmount(myTopBidEvent!).toLocaleString()} sats.
+												</p>
+												<p className="mt-1 text-xs leading-relaxed text-sky-900">
+													Publishing your kind-1025 reveals the derivation path so the seller can derive their child privkey
+													and redeem the locked Cashu. After this, the seller publishes kind-1024 to close the auction.
+												</p>
+											</div>
+											<Button className="w-full" onClick={() => void releasePath()} disabled={isReleasing || !canBidderReleaseNow}>
+												{isReleasing ? 'Releasing…' : 'Release path & settle'}
+											</Button>
+											<p className="text-[11px] leading-relaxed text-zinc-500">
+												Release before {formatMaybeDate(settlementLocktimeAt)} (locktime). After that you can self-refund instead
+												of settling.
+											</p>
+										</>
+									)}
+								</div>
+							)}
+
 							{/* Seller-only settlement publish action */}
 							{isOwner && (
 								<div className="space-y-2">
@@ -603,21 +739,33 @@ function DashboardAuctionDetailRoute() {
 										<>
 											<Button
 												className="w-full"
-												disabled={!isOwner || settlementLocked || !ended || settlementWindowExpired || settlementMutation.isPending}
+												disabled={
+													!isOwner ||
+													settlementLocked ||
+													!ended ||
+													settlementWindowExpired ||
+													settlementMutation.isPending ||
+													!canSettleNow
+												}
 												onClick={() => void submitSettlement()}
 											>
 												{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
 											</Button>
 											<p className="text-[11px] leading-relaxed text-zinc-500">
 												{topBid && reserveMet
-													? `Will settle winner at ${getBidAmount(topBid).toLocaleString()} sats.`
+													? hasPathReleaseForTopBid
+														? `Winner published their path release — clicking settle will redeem ${getBidAmount(topBid).toLocaleString()} sats and publish kind-1024.`
+														: `Top bid: ${getBidAmount(topBid).toLocaleString()} sats. Waiting for the winning bidder to publish a kind-1025 path release.`
 													: topBid
 														? 'Top bid is below the reserve — settlement will record reserve_not_met.'
 														: 'No valid bids — settlement will record reserve_not_met.'}
 											</p>
 											<div className="rounded-xl border border-dashed border-zinc-300 bg-white/70 p-3 text-xs text-zinc-600">
-												{!ended && 'Settlement to a winner or reserve outcome unlocks after the auction ends.'}
+												{!ended && 'Settlement unlocks after the auction ends.'}
 												{ended && settlementLocked && 'A settlement event already exists for this auction.'}
+												{ended && !settlementLocked && topBid && reserveMet && !hasPathReleaseForTopBid && (
+													<>The winning bidder must publish a kind-1025 path release before you can settle.</>
+												)}
 												{canSettleNow &&
 													`Review the latest bid state, then publish the final auction outcome before ${formatMaybeDate(settlementLocktimeAt)} (locktime).`}
 											</div>
@@ -651,6 +799,8 @@ function DashboardAuctionDetailRoute() {
 									<p className="mt-1 text-xs">Your shipping address was delivered to the seller. Track fulfilment progress below.</p>
 								</div>
 							)}
+
+							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
 
 							{/* Tech accordion — visible to all but only really useful for seller / debugging */}
 							<Accordion type="multiple" className="rounded-2xl border border-zinc-200 bg-white px-4">

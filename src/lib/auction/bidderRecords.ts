@@ -53,8 +53,26 @@ export interface BidderBidRecord {
 
 	/** Mint URL the locked proofs belong to. */
 	mintUrl: string
-	/** Bid amount in sats (sum of locked proof amounts). */
+	/**
+	 * Cumulative bid value this leg commits to (sats). Matches the kind-
+	 * 1023 event's `amount` tag and what the validator uses for the
+	 * min-increment check. On a rebid this is the new total bid, NOT the
+	 * delta that this leg locks.
+	 */
 	amount: number
+	/**
+	 * Sats actually locked at the mint by THIS leg. Equals the sum of
+	 * `proofs[].amount`. On a chain's first leg this equals `amount`; on
+	 * subsequent legs it's the delta `amount - prev_leg.amount`. Settling
+	 * the chain redeems each leg's `legLockedAmount` independently — the
+	 * total redeemed equals the latest leg's `amount` (cumulative bid).
+	 */
+	legLockedAmount: number
+	/**
+	 * Previous leg's bid event id, when this is part of a rebid chain.
+	 * Mirrors the kind-1023 `prev_bid` tag. `null` on chain root.
+	 */
+	prevBidEventId: string | null
 	/** Cashu locktime in unix seconds. */
 	locktime: number
 
@@ -104,6 +122,43 @@ export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefine
 
 export const findBidderRecordsForAuction = (auctionRootEventId: string): BidderBidRecord[] => {
 	return loadBidderRecords().filter((r) => r.auctionRootEventId === auctionRootEventId)
+}
+
+/**
+ * Find the most recent leg (highest `amount` — the cumulative bid value)
+ * the current user has on this auction. Used by the bid flow to chain a
+ * rebid via the `prev_bid` tag and lock only the delta. Returns `null`
+ * when the user hasn't bid here yet.
+ */
+export const findLatestBidderRecordForAuction = (auctionRootEventId: string): BidderBidRecord | null => {
+	const records = findBidderRecordsForAuction(auctionRootEventId)
+	if (records.length === 0) return null
+	return records.reduce((best, r) => (r.amount > best.amount ? r : best), records[0])
+}
+
+/**
+ * Walk the rebid chain starting from a given leg, oldest → newest.
+ * Each entry is one leg from the local records. Stops at chain root
+ * (record with `prevBidEventId === null`) or when an ancestor is
+ * missing locally (returns whatever was traversable). Callers should
+ * check the final array length against expectations before assuming
+ * the chain is complete.
+ */
+export const walkBidderRecordChain = (latestBidEventId: string): BidderBidRecord[] => {
+	const allRecords = loadBidderRecords()
+	const byId = new Map(allRecords.map((r) => [r.bidEventId, r]))
+	const chain: BidderBidRecord[] = []
+	let cursor: string | null = latestBidEventId
+	const seen = new Set<string>()
+	while (cursor) {
+		if (seen.has(cursor)) break // cycle guard
+		seen.add(cursor)
+		const record = byId.get(cursor)
+		if (!record) break
+		chain.unshift(record)
+		cursor = record.prevBidEventId
+	}
+	return chain
 }
 
 export const updateBidderRecordStatus = (bidEventId: string, status: BidderRecordStatus): BidderBidRecord | null => {

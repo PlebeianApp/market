@@ -4,7 +4,8 @@ import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
-import { buildBidEventTags } from '@/lib/auction/tagBuilders'
+import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
 import { getPublicKey } from '@noble/secp256k1'
 
 type AuctionStatus = 'live' | 'ended'
@@ -184,6 +185,19 @@ export async function createAuctionEvent(
 // What we DON'T produce: a token that the seller could actually redeem
 // at the mint. Settlement of seeded bids is impossible by construction.
 
+/**
+ * Return shape from a successful seed bid. The caller (seed.ts) uses
+ * this to find the highest bid per auction and then publish a matching
+ * kind-1025 path release from the same bidder.
+ */
+export type SeededBidResult = {
+	bidEventId: string
+	bidderPubkey: string
+	amount: number
+	derivationPath: string
+	childPubkey: string
+}
+
 export async function createAuctionBidEvent(params: {
 	signer: NDKPrivateKeySigner
 	ndk: NDK
@@ -199,7 +213,7 @@ export async function createAuctionBidEvent(params: {
 	maxEndAt: number
 	settlementGraceSeconds: number
 	createdAt?: number
-}): Promise<boolean> {
+}): Promise<SeededBidResult | null> {
 	void params.cvmRelays
 	void params.bidderPrivateKeyHex
 
@@ -263,10 +277,77 @@ export async function createAuctionBidEvent(params: {
 		console.log(
 			`  ✓ Bid published: ${params.amount} sats by ${bidEvent.pubkey.slice(0, 8)}... (${denominations.length} synthetic proof(s))`,
 		)
-		return true
+		return {
+			bidEventId: bidEvent.id,
+			bidderPubkey: bidEvent.pubkey,
+			amount: params.amount,
+			derivationPath,
+			childPubkey,
+		}
 	} catch (error) {
 		console.error('[seed] createAuctionBidEvent failed:', error instanceof Error ? error.message : error)
-		return false
+		return null
+	}
+}
+
+// =============================================================================
+// Path-release seeding (Phase 5)
+// =============================================================================
+//
+// Publishes a kind-1025 from the seeded bidder for the highest bid on
+// each auction. In production a kind-1025 is the bidder's response to a
+// kind-1024 from the seller (settlement) — they release the derivation
+// path so the seller can claim the locked Cashu. For seed fixtures we
+// publish it immediately after the bid because:
+//
+//   1. The dev UI needs at least one kind-1025 to exercise the
+//      "auction settled" view + the validator's `settled_promptly` /
+//      `settled_late` claim emission.
+//   2. The synthetic seeded proofs are unspendable anyway, so the
+//      production semantics ("path enables redemption") don't apply.
+//
+// The validator's lifecycle will only react to these once the auction
+// closes; for live seeded auctions the kind-1025 will sit on the relay
+// as a pre-close release and the close lifecycle will fold it in when
+// `max_end_at` elapses.
+
+export async function createAuctionPathReleaseEvent(params: {
+	signer: NDKPrivateKeySigner
+	ndk: NDK
+	bidEventId: string
+	auctionCoordinate: string
+	sellerPubkey: string
+	derivationPath: string
+	childPubkey: string
+	releaseReason?: PathReleaseReason
+	createdAt?: number
+}): Promise<string | null> {
+	try {
+		// Sanity: the seed produces (derivationPath, childPubkey) from
+		// the same xpub it stored on the auction, so this should never
+		// trip — but if it does we've got a bigger bug than a missing
+		// seed event.
+		// (No xpub passed in here; the caller already vouched for it.)
+		const event = new NDKEvent(params.ndk)
+		event.kind = AUCTION_PATH_RELEASE_KIND as unknown as number
+		event.created_at = params.createdAt ?? Math.floor(Date.now() / 1000)
+		event.content = ''
+		event.tags = buildPathReleaseTags({
+			bidEventId: params.bidEventId,
+			auctionCoordinate: params.auctionCoordinate,
+			sellerPubkey: params.sellerPubkey,
+			derivationPath: params.derivationPath,
+			childPubkey: params.childPubkey,
+			releaseReason: params.releaseReason ?? 'voluntary_late',
+		}) as NDKTag[]
+
+		await event.sign(params.signer)
+		await event.publish()
+		console.log(`  ✓ Path release published for bid ${params.bidEventId.slice(0, 8)}…`)
+		return event.id
+	} catch (error) {
+		console.error('[seed] createAuctionPathReleaseEvent failed:', error instanceof Error ? error.message : error)
+		return null
 	}
 }
 

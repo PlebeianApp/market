@@ -30,7 +30,14 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createAuctionBidEvent, createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
+import {
+	createAuctionBidEvent,
+	createAuctionEvent,
+	createAuctionPathReleaseEvent,
+	DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS,
+	generateAuctionData,
+	type SeededBidResult,
+} from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -446,6 +453,14 @@ async function seedData() {
 	}
 
 	console.log(`\nCreating auction bids for ${seededBidAuctionEvents.length} live auctions...`)
+	// Track each auction's highest accepted bid so we can publish a
+	// matching kind-1025 path release after the bid loop. The bid loop
+	// monotonically increments the amount, so the last successful bid
+	// is by definition the highest.
+	const highestSeededBids = new Map<
+		string,
+		{ auction: (typeof seededBidAuctionEvents)[number]; bidderUserIndex: number; bid: SeededBidResult }
+	>()
 	for (const auction of seededBidAuctionEvents) {
 		if (!auction.p2pkXpub) {
 			console.warn(`  ⚠ skipping ${auction.eventId.slice(0, 8)} — no p2pk_xpub`)
@@ -462,7 +477,7 @@ async function seedData() {
 
 			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
 
-			await createAuctionBidEvent({
+			const result = await createAuctionBidEvent({
 				signer: bidderSigner,
 				ndk,
 				auctionEventId: auction.eventId,
@@ -476,6 +491,35 @@ async function seedData() {
 				endAt: auction.endAt,
 				maxEndAt: auction.maxEndAt,
 				settlementGraceSeconds: auction.settlementGraceSeconds,
+			})
+
+			if (result) {
+				const existing = highestSeededBids.get(auction.eventId)
+				if (!existing || result.amount > existing.bid.amount) {
+					highestSeededBids.set(auction.eventId, {
+						auction,
+						bidderUserIndex: bidder.index,
+						bid: result,
+					})
+				}
+			}
+		}
+	}
+
+	if (highestSeededBids.size > 0) {
+		console.log(`\nPublishing kind-1025 path releases for ${highestSeededBids.size} top seeded bids...`)
+		for (const { auction, bidderUserIndex, bid } of Array.from(highestSeededBids.values())) {
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidderUserIndex].sk)
+			await bidderSigner.blockUntilReady()
+			await createAuctionPathReleaseEvent({
+				signer: bidderSigner,
+				ndk,
+				bidEventId: bid.bidEventId,
+				auctionCoordinate: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
+				derivationPath: bid.derivationPath,
+				childPubkey: bid.childPubkey,
+				releaseReason: 'voluntary_late',
 			})
 		}
 	}

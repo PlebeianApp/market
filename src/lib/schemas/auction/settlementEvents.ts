@@ -55,6 +55,11 @@ export const PathReleaseEventSchema = z.object({
 	releaseReason: pathReleaseReasonSchema,
 	auditorRefs: z.array(nostrEventIdHex).default([]),
 	fallbackOfferId: nostrEventIdHex.optional(),
+	// Cashu tokens encode as `cashuA<base64url>` / `cashuB<base64url>` —
+	// not constrained tightly here because cashu-ts ≥2.x added v2 short
+	// keyset IDs that change the encoding. We accept any non-empty string
+	// and let `getDecodedToken` enforce structure at settlement time.
+	cashuToken: z.string().min(1).optional(),
 	content: z.string().default(''),
 })
 
@@ -84,6 +89,7 @@ export const parsePathReleaseEvent = (event: NDKEvent): ParsePathReleaseEventRes
 		releaseReason: (readSingleTag(event, 'release_reason') ?? '') as PathReleaseReason,
 		auditorRefs: readMultiTag(event, 'auditor_ref'),
 		fallbackOfferId: readSingleTag(event, 'fallback_offer'),
+		cashuToken: readSingleTag(event, 'cashu_token'),
 		content: event.content ?? '',
 	}
 

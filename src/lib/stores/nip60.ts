@@ -1709,26 +1709,45 @@ export const nip60Actions = {
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
-			// Wallet state reconciliation is intentionally async so bid publishing
-			// is not blocked by local wallet maintenance operations.
-			void (async () => {
-				if (changeProofs.length > 0) {
-					try {
-						await wallet.state.update({
-							store: changeProofs,
-							mint: targetMint,
-						})
-					} catch (changeErr) {
-						console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
-					}
-				}
+			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
+			// the balance UI doesn't briefly double-count the consumed
+			// inputs. The mint already burned `selectedProofs` during the
+			// swap, so we MUST pass them as `destroy:` — otherwise local
+			// state retains them alongside the new `changeProofs` and the
+			// displayed balance over-reports by `selectedTotal - amount`.
+			// (The previous version offloaded this to a void-async block
+			// + NUT-7 consolidation, which races the UI: refresh before
+			// consolidation lands and you see the inflated number.)
+			try {
+				await wallet.state.update({
+					mint: targetMint,
+					store: changeProofs,
+					destroy: selectedProofs,
+				})
+				// Synchronously re-read balance from wallet.state into the
+				// store so the UI updates immediately (avoids a stale
+				// inflated display until the async consolidation lands).
+				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
+				nip60Store.setState((s) => ({
+					...s,
+					balance: totalBalance,
+					mintBalances,
+					mints: getAllMints(wallet),
+				}))
+			} catch (stateErr) {
+				console.error('[nip60] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
+			}
 
+			// Best-effort follow-up consolidation + refresh. Async on purpose
+			// — the destroy: above is the authoritative correction; this is
+			// cleanup for any other drift (e.g. proofs that went stale
+			// during the swap). Bid publishing isn't blocked.
+			void (async () => {
 				try {
 					await nip60Actions.consolidateProofs()
 				} catch (consolidateErr) {
 					console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
 				}
-
 				try {
 					await nip60Actions.refresh()
 				} catch (refreshErr) {
@@ -2084,6 +2103,31 @@ export const nip60Actions = {
 			minBid,
 			topUpAmount: Math.max(0, bidAmount - balanceAtMint),
 		}
+	},
+
+	/**
+	 * Dev/wallet helper: settle one of the user's bids by publishing
+	 * the kind-1025 path release. Thin wrapper over
+	 * `publishBidderPathRelease` for the wallet dev panel (so the
+	 * happy path is one click away from the existing
+	 * `placeDevBidOnSeededAuction` helper).
+	 */
+	settleAuctionAsWinner: async (params: {
+		bidEventId: string
+		releaseReason?: 'settlement' | 'fallback_settlement' | 'voluntary_late'
+		note?: string
+	}): Promise<{ pathReleaseEventId: string }> => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndkActions.getSigner()
+		if (!ndk) throw new Error('NDK not initialised')
+		if (!signer) throw new Error('No signer available')
+		const { publishBidderPathRelease } = await import('@/publish/auctions')
+		const result = await publishBidderPathRelease(
+			{ bidEventId: params.bidEventId, releaseReason: params.releaseReason, note: params.note },
+			signer,
+			ndk,
+		)
+		return { pathReleaseEventId: result.pathReleaseEventId }
 	},
 
 	/**
