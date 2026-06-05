@@ -122,14 +122,13 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 	const locktime = overrides.locktime ?? auction.maxEndAt + auction.settlementGrace
 	const childPubkey = overrides.childPubkey ?? COMPRESSED_PK
 	const refundPubkey = overrides.refundPubkey ?? REFUND_PK
-	const lockSecrets =
-		overrides.lockSecrets ?? [
-			buildLockSecret({
-				childPubkey,
-				locktime,
-				refundPubkey,
-			}),
-		]
+	const lockSecrets = overrides.lockSecrets ?? [
+		buildLockSecret({
+			childPubkey,
+			locktime,
+			refundPubkey,
+		}),
+	]
 	const proofYs = overrides.proofYs ?? Array.from({ length: lockSecrets.length }, () => PROOF_Y)
 	return {
 		rawEvent: stubRawEvent(1023, BIDDER_PK),

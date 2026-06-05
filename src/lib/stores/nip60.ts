@@ -2001,12 +2001,7 @@ export const nip60Actions = {
 		// filter to ones that (a) we're not the seller of and (b) still
 		// have time on the clock.
 		const now = Math.floor(Date.now() / 1000)
-		const auctions = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{ kinds: [AUCTION_KIND], limit: 100 },
-				{ timeoutMs: 5000 },
-			),
-		)
+		const auctions = Array.from(await ndkActions.fetchEventsWithTimeout({ kinds: [AUCTION_KIND], limit: 100 }, { timeoutMs: 5000 }))
 		const candidates = auctions.filter((auction) => {
 			if (auction.pubkey === bidder.pubkey) return false
 			const endAt = parseNonNegativeInt(getFirstTagValue(auction, 'end_at'), 0)
@@ -2037,10 +2032,7 @@ export const nip60Actions = {
 		// Decide the bid amount: caller's preference, or a minimum
 		// increment over the current top bid.
 		const existingBids = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{ kinds: [AUCTION_BID_KIND], '#e': [selected.id], limit: 200 },
-				{ timeoutMs: 5000 },
-			),
+			await ndkActions.fetchEventsWithTimeout({ kinds: [AUCTION_BID_KIND], '#e': [selected.id], limit: 200 }, { timeoutMs: 5000 }),
 		)
 		const currentTop = existingBids.reduce((max, bid) => {
 			const amount = parseNonNegativeInt(getFirstTagValue(bid, 'amount'), 0)

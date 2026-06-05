@@ -158,9 +158,7 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 	if (!input.childPubkey) throw new Error('buildBidEventTags: childPubkey required')
 	if (!input.lockSecrets.length) throw new Error('buildBidEventTags: at least one lockSecret required')
 	if (input.lockSecrets.length !== input.proofYs.length) {
-		throw new Error(
-			`buildBidEventTags: lockSecrets (${input.lockSecrets.length}) and proofYs (${input.proofYs.length}) must be 1-to-1`,
-		)
+		throw new Error(`buildBidEventTags: lockSecrets (${input.lockSecrets.length}) and proofYs (${input.proofYs.length}) must be 1-to-1`)
 	}
 
 	const tags: string[][] = [

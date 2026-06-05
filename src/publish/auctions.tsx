@@ -1,4 +1,10 @@
-import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_SETTLEMENT_POLICY, getAuctionTagValue } from '@/lib/auctionSettlement'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_KIND,
+	AUCTION_SETTLEMENT_KIND,
+	AUCTION_SETTLEMENT_POLICY,
+	getAuctionTagValue,
+} from '@/lib/auctionSettlement'
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
@@ -593,8 +599,12 @@ export const usePublishAuctionBidMutation = () => {
 }
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	throw new Error("publishAuctionSettlement: not implemented — Phase 6 of the bidder-held-path migration will reimplement this. Seller settlement now reads a kind-1025 from the winner, derives via auctionP2pk, swaps on-mint, then publishes kind-1024. See AUCTIONS.md §8.")
-	void formData; void signer; void ndk
+	throw new Error(
+		'publishAuctionSettlement: not implemented — Phase 6 of the bidder-held-path migration will reimplement this. Seller settlement now reads a kind-1025 from the winner, derives via auctionP2pk, swaps on-mint, then publishes kind-1024. See AUCTIONS.md §8.',
+	)
+	void formData
+	void signer
+	void ndk
 }
 
 export const usePublishAuctionSettlementMutation = () => {

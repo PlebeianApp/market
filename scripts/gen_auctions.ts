@@ -260,7 +260,9 @@ export async function createAuctionBidEvent(params: {
 
 		await bidEvent.sign(params.signer)
 		await bidEvent.publish()
-		console.log(`  ✓ Bid published: ${params.amount} sats by ${bidEvent.pubkey.slice(0, 8)}... (${denominations.length} synthetic proof(s))`)
+		console.log(
+			`  ✓ Bid published: ${params.amount} sats by ${bidEvent.pubkey.slice(0, 8)}... (${denominations.length} synthetic proof(s))`,
+		)
 		return true
 	} catch (error) {
 		console.error('[seed] createAuctionBidEvent failed:', error instanceof Error ? error.message : error)
