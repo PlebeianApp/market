@@ -26,34 +26,43 @@ import { z } from 'zod'
 import { AUCTION_BID_KIND, AUCTION_KEY_SCHEME } from '../../auction/constants'
 import type { ParsedBidEvent } from '../../auction/events'
 import { addressableCoordinate, compressedPubkeyHex, nostrEventIdHex, nostrPubkeyHex, positiveInt, unixSeconds } from './common'
-import { readSingleTag } from './tagAccess'
+import { readMultiTag, readSingleTag } from './tagAccess'
 
 // ----------------------------------------------------------------------------
 // Intermediate Zod schema
 // ----------------------------------------------------------------------------
 
-export const BidEventSchema = z.object({
-	id: nostrEventIdHex,
-	bidderPubkey: nostrPubkeyHex,
-	createdAt: unixSeconds,
-	auctionRootEventId: nostrEventIdHex,
-	auctionCoordinate: addressableCoordinate,
-	sellerPubkey: nostrPubkeyHex,
-	amount: positiveInt,
-	currency: z.literal('SAT', { message: 'currency must be SAT' }),
-	mint: z.string().url({ message: 'mint must be a URL' }),
-	locktime: positiveInt,
-	refundPubkey: compressedPubkeyHex,
-	childPubkey: compressedPubkeyHex,
-	lockSecret: z.string().min(1, 'lock_secret required'),
-	proofY: compressedPubkeyHex,
-	createdForEndAt: unixSeconds,
-	bidNonce: z.string().min(1, 'bid_nonce required'),
-	keyScheme: z.literal(AUCTION_KEY_SCHEME, { message: `key_scheme must equal "${AUCTION_KEY_SCHEME}"` }),
-	status: z.literal('locked', { message: 'status must be "locked" at publish time' }),
-	prevBidId: nostrEventIdHex.optional(),
-	note: z.string().optional(),
-})
+export const BidEventSchema = z
+	.object({
+		id: nostrEventIdHex,
+		bidderPubkey: nostrPubkeyHex,
+		createdAt: unixSeconds,
+		auctionRootEventId: nostrEventIdHex,
+		auctionCoordinate: addressableCoordinate,
+		sellerPubkey: nostrPubkeyHex,
+		amount: positiveInt,
+		currency: z.literal('SAT', { message: 'currency must be SAT' }),
+		mint: z.string().url({ message: 'mint must be a URL' }),
+		locktime: positiveInt,
+		refundPubkey: compressedPubkeyHex,
+		childPubkey: compressedPubkeyHex,
+		// One entry per locked proof making up the bid. Cashu wallets
+		// typically produce multi-proof locks because they preserve their
+		// power-of-2 denomination structure across the swap (a 100-sat
+		// bid against 64+32+4 in the wallet yields 3 locked proofs).
+		lockSecrets: z.array(z.string().min(1)).min(1, 'at least one lock_secret tag required'),
+		proofYs: z.array(compressedPubkeyHex).min(1, 'at least one proof_y tag required'),
+		createdForEndAt: unixSeconds,
+		bidNonce: z.string().min(1, 'bid_nonce required'),
+		keyScheme: z.literal(AUCTION_KEY_SCHEME, { message: `key_scheme must equal "${AUCTION_KEY_SCHEME}"` }),
+		status: z.literal('locked', { message: 'status must be "locked" at publish time' }),
+		prevBidId: nostrEventIdHex.optional(),
+		note: z.string().optional(),
+	})
+	.refine((value) => value.lockSecrets.length === value.proofYs.length, {
+		message: 'lock_secret and proof_y tags must be 1-to-1 paired (parallel arrays)',
+		path: ['proofYs'],
+	})
 
 export type BidEventInput = z.infer<typeof BidEventSchema>
 
@@ -95,8 +104,8 @@ export const parseBidEvent = (event: NDKEvent): ParseBidEventResult => {
 		locktime: parseIntegerOrZero(readSingleTag(event, 'locktime')),
 		refundPubkey: readSingleTag(event, 'refund_pubkey') ?? '',
 		childPubkey: readSingleTag(event, 'child_pubkey') ?? '',
-		lockSecret: readSingleTag(event, 'lock_secret') ?? '',
-		proofY: readSingleTag(event, 'proof_y') ?? '',
+		lockSecrets: readMultiTag(event, 'lock_secret'),
+		proofYs: readMultiTag(event, 'proof_y'),
 		createdForEndAt: parseIntegerOrZero(readSingleTag(event, 'created_for_end_at')),
 		bidNonce: readSingleTag(event, 'bid_nonce') ?? '',
 		keyScheme: readSingleTag(event, 'key_scheme') ?? '',

@@ -6,6 +6,13 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
+import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { buildBidEventTags } from '@/lib/auction/tagBuilders'
+import { upsertBidderRecord } from '@/lib/auction/bidderRecords'
+import type { Proof } from '@cashu/cashu-ts'
+import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -408,9 +415,157 @@ const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string):
 	})[0]
 }
 
+/**
+ * Publish a bidder-held-path bid (kind 1023) — AUCTIONS.md §4.2.
+ *
+ * Flow:
+ *   1. Sanity-check the form + window (the bidder shouldn't sign a bid
+ *      outside the auction window even though the validator would catch it).
+ *   2. Generate a fresh high-entropy derivation path locally (§5.5).
+ *   3. Compute `seller_child = derive(p2pk_xpub, path)`.
+ *   4. Generate a fresh refund keypair (per-bid for privacy + isolation).
+ *   5. Lock the Cashu bid via the NIP-60 wallet (1-of-1 P2PK to seller_child
+ *      with refund timelock).
+ *   6. Decode the locked token to extract each proof's `secret` (= lock_secret
+ *      for the bid event) and compute `proof_y = hash_to_curve(secret)`.
+ *   7. Publish kind-1023 with all (lock_secret, proof_y) pairs embedded.
+ *   8. Persist a {path, refundPrivKey, fullProofs} record locally so we can
+ *      (a) release the path at settlement, (b) refund via timelock if we
+ *      grief or the seller never settles.
+ *
+ * Returns the published bid event id.
+ */
 export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	throw new Error("publishAuctionBid: not implemented — Phase 3 of the bidder-held-path migration will reimplement this. See AUCTIONS.md §4.2 and src/lib/auction/validation.ts.")
-	void formData; void signer; void ndk
+	if (!formData.auctionEventId) throw new Error('Auction event id is required')
+	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
+	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
+	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path derivation')
+	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
+		throw new Error('Auction start time is required for bidding')
+	}
+	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
+		throw new Error('Auction effective end time is required for bidding')
+	}
+	if (!Number.isFinite(formData.auctionLocktimeAt) || formData.auctionLocktimeAt <= 0) {
+		throw new Error('Auction locktime base is required')
+	}
+	if (!Number.isFinite(formData.settlementGraceSeconds) || formData.settlementGraceSeconds <= 0) {
+		throw new Error('Auction is missing settlement_grace — refusing to lock without an authoritative grace period')
+	}
+
+	const now = Math.floor(Date.now() / 1000)
+	if (now < formData.auctionStartAt) throw new Error('Auction has not started yet')
+	if (now >= formData.auctionEffectiveEndAt) throw new Error('Auction already ended')
+	if (now >= formData.auctionLocktimeAt) throw new Error('Auction has reached its hard bidding cutoff')
+
+	const bidderUser = await signer.user()
+	const bidderPubkey = bidderUser.pubkey
+
+	// Step 2/3 — generate path + derive child pubkey locally.
+	const derivationPath = generateAuctionDerivationPath()
+	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(formData.p2pkXpub, derivationPath)
+
+	// Step 4 — fresh per-bid refund keypair. Privacy: refund branches
+	// don't cluster across the bidder's bids. Isolation: a leaked refund
+	// key only affects one bid.
+	const refundPrivateKeyBytes = crypto.getRandomValues(new Uint8Array(32))
+	const refundPubkeyBytes = getPublicKey(refundPrivateKeyBytes, true)
+	const refundPubkey = bytesToLowerHex(refundPubkeyBytes)
+	const refundPrivateKey = bytesToLowerHex(refundPrivateKeyBytes)
+
+	// Step 5 — lock at the mint. `lockAuctionBidFunds` does the mint
+	// swap + writes the locked proofs into the wallet's pending state.
+	// The auctionEventId / sellerPubkey arguments below are advisory
+	// (used for diagnostic context tagging in the wallet's pending-token
+	// record).
+	const locktime = formData.auctionLocktimeAt + formData.settlementGraceSeconds
+	const mintCandidates = formData.mintCandidates?.length ? formData.mintCandidates : []
+	const lockResult = await nip60Actions.lockAuctionBidFunds({
+		amount: formData.amount,
+		preferredMints: mintCandidates,
+		locktime,
+		refundPubkey,
+		lockPubkey: childPubkey,
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates: formData.auctionCoordinates,
+		sellerPubkey: formData.sellerPubkey,
+		// Bidder-held-path scheme: no path issuer to record; supply the
+		// path/child here so the wallet's pending-token diagnostics can
+		// surface them for the bidder.
+		derivationPath,
+		childPubkey,
+	})
+
+	// Step 6 — extract lock_secret + proof_y directly from the locked
+	// proofs. We pull `proofs` off the lock result rather than
+	// decoding the encoded `token` because token decode fails on v2
+	// short keyset IDs without a mint keyset map — see
+	// AUCTIONS.md §5 history and `LockAuctionBidFundsResult.proofs`.
+	const proofs = lockResult.proofs
+	if (!proofs.length) throw new Error('Lock result contained no proofs')
+	const lockSecrets = proofs.map((proof: Proof) => proof.secret)
+	const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
+
+	// Step 7 — publish kind-1023 with the new tag set (AUCTIONS.md §4.2).
+	const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
+	const bidEvent = new NDKEvent(ndk)
+	bidEvent.kind = AUCTION_BID_KIND
+	bidEvent.content = JSON.stringify({
+		type: 'auction_bid_v1',
+		amount: formData.amount,
+		mint: lockResult.mintUrl,
+	})
+	bidEvent.tags = buildBidEventTags({
+		auctionRootEventId: formData.auctionEventId,
+		auctionCoordinate: formData.auctionCoordinates,
+		sellerPubkey: formData.sellerPubkey,
+		amount: formData.amount,
+		mint: lockResult.mintUrl,
+		locktime,
+		refundPubkey,
+		childPubkey,
+		lockSecrets,
+		proofYs,
+		createdForEndAt: formData.auctionEffectiveEndAt,
+		bidNonce,
+	}) as NDKTag[]
+
+	await bidEvent.sign(signer)
+	await ndkActions.publishEvent(bidEvent)
+
+	// Step 8 — persist the bidder-side record. Loss of this record makes
+	// settlement (and timelock refund) impossible for this bid, so we
+	// write it after the lock succeeds but before returning so the
+	// caller can't observe a "bid event but no record" state.
+	upsertBidderRecord({
+		bidEventId: bidEvent.id,
+		auctionRootEventId: formData.auctionEventId,
+		auctionCoordinate: formData.auctionCoordinates,
+		sellerPubkey: formData.sellerPubkey,
+		p2pkXpub: formData.p2pkXpub,
+		derivationPath,
+		childPubkey,
+		refundPubkey,
+		refundPrivateKey,
+		mintUrl: lockResult.mintUrl,
+		amount: lockResult.amount,
+		locktime,
+		proofs,
+		lockSecrets,
+		proofYs,
+		createdAt: now,
+		status: 'live',
+	})
+
+	void bidderPubkey
+	return bidEvent.id
+}
+
+const bytesToLowerHex = (bytes: Uint8Array): string => {
+	let out = ''
+	for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, '0')
+	return out
 }
 
 export const usePublishAuctionBidMutation = () => {

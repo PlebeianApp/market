@@ -136,8 +136,15 @@ export interface BidEventTagsInput {
 	locktime: number
 	refundPubkey: string
 	childPubkey: string
-	lockSecret: string
-	proofY: string
+	/**
+	 * One entry per Cashu proof making up the bid lock. Order MUST match
+	 * {@link proofYs}. Cashu wallets typically produce 1–8 proofs per
+	 * locked send (preserving the wallet's power-of-2 denomination
+	 * structure), so multi-proof bids are the norm.
+	 */
+	lockSecrets: string[]
+	/** Parallel to {@link lockSecrets}: `Y = hash_to_curve(secret)` for each proof. */
+	proofYs: string[]
 	createdForEndAt: number
 	bidNonce: string
 	prevBidId?: string
@@ -148,9 +155,13 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 	if (!input.auctionRootEventId) throw new Error('buildBidEventTags: auctionRootEventId required')
 	if (!input.auctionCoordinate) throw new Error('buildBidEventTags: auctionCoordinate required')
 	if (!input.sellerPubkey) throw new Error('buildBidEventTags: sellerPubkey required')
-	if (!input.lockSecret) throw new Error('buildBidEventTags: lockSecret required')
-	if (!input.proofY) throw new Error('buildBidEventTags: proofY required')
 	if (!input.childPubkey) throw new Error('buildBidEventTags: childPubkey required')
+	if (!input.lockSecrets.length) throw new Error('buildBidEventTags: at least one lockSecret required')
+	if (input.lockSecrets.length !== input.proofYs.length) {
+		throw new Error(
+			`buildBidEventTags: lockSecrets (${input.lockSecrets.length}) and proofYs (${input.proofYs.length}) must be 1-to-1`,
+		)
+	}
 
 	const tags: string[][] = [
 		['e', input.auctionRootEventId],
@@ -162,13 +173,19 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 		['locktime', String(input.locktime)],
 		['refund_pubkey', input.refundPubkey],
 		['child_pubkey', input.childPubkey],
-		['lock_secret', input.lockSecret],
-		['proof_y', input.proofY],
-		['created_for_end_at', String(input.createdForEndAt)],
-		['bid_nonce', input.bidNonce],
-		['key_scheme', AUCTION_KEY_SCHEME],
-		['status', 'locked'],
 	]
+
+	// Parallel repeated tags. Validators MUST iterate them in order and
+	// treat the i-th lock_secret as the proof whose Y is the i-th proof_y.
+	for (let i = 0; i < input.lockSecrets.length; i++) {
+		tags.push(['lock_secret', input.lockSecrets[i]])
+		tags.push(['proof_y', input.proofYs[i]])
+	}
+
+	tags.push(['created_for_end_at', String(input.createdForEndAt)])
+	tags.push(['bid_nonce', input.bidNonce])
+	tags.push(['key_scheme', AUCTION_KEY_SCHEME])
+	tags.push(['status', 'locked'])
 
 	if (input.prevBidId) tags.push(['prev_bid', input.prevBidId])
 	if (input.note) tags.push(['note', input.note])

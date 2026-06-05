@@ -124,17 +124,22 @@ export interface ParsedBidEvent {
 	/** Pubkey appearing in the lock script — should equal `derive(p2pk_xpub, path)`. */
 	childPubkey: string
 	/**
-	 * The Cashu proof's NUT-10 well-known P2PK secret, in its
-	 * cleartext-but-non-redeemable form. Validators parse this and
-	 * compute `proof_y` to query the mint via NUT-7.
+	 * The Cashu proofs' NUT-10 well-known P2PK secret strings, one per
+	 * proof making up the bid lock. All entries share the same P2PK
+	 * lock parameters (pubkey, locktime, refund) — only the per-proof
+	 * `nonce` differs — but each must be parsed and validated
+	 * independently because each is a separate redeemable proof at the
+	 * mint. The bid event emits one `lock_secret` tag per entry, in
+	 * order; the parser reassembles them into this array.
 	 */
-	lockSecret: string
+	lockSecrets: string[]
 	/**
-	 * `Y = hash_to_curve(secret)` of the locked proof, as compressed
-	 * secp256k1 hex. The Cashu mint accepts this as the lookup key for
-	 * proof-state queries (NUT-7).
+	 * `Y = hash_to_curve(secret)` for each proof making up the lock.
+	 * The Cashu mint accepts these as the lookup key for proof-state
+	 * queries (NUT-7) and `CheckStatePayload.Ys` takes them as a batch.
+	 * MUST be parallel to {@link lockSecrets} (same length, same order).
 	 */
-	proofY: string
+	proofYs: string[]
 
 	// Bookkeeping
 	createdForEndAt: number

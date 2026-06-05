@@ -190,19 +190,37 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// --- Step 4: lock secret structure --------------------------------------
 
 	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
-	const lockParse = parseAuctionLockSecret(bid.lockSecret, {
-		expectedLocktime,
-		expectedChildPubkey: bid.childPubkey,
-		expectedRefundPubkey: bid.refundPubkey,
-	})
-	if (!lockParse.ok) {
-		return { claim: 'bid_invalid', reason: 'bad_lock', detail: `${lockParse.reason}${lockParse.detail ? `: ${lockParse.detail}` : ''}` }
-	}
 	if (bid.locktime !== expectedLocktime) {
 		return {
 			claim: 'bid_invalid',
 			reason: 'bad_lock',
 			detail: `bid locktime tag=${bid.locktime}, expected max_end_at+settlement_grace=${expectedLocktime}`,
+		}
+	}
+	if (bid.lockSecrets.length !== bid.proofYs.length) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `lock_secret and proof_y tags must be parallel: ${bid.lockSecrets.length} vs ${bid.proofYs.length}`,
+		}
+	}
+	// Validate every proof's secret independently. All MUST share the same
+	// lock parameters — the bidder split their input across multiple
+	// denominations but each output proof is its own P2PK lock with its
+	// own nonce. Reject the bid if any proof is malformed; we don't want
+	// validators to selectively trust subsets of a lock set.
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const lockParse = parseAuctionLockSecret(bid.lockSecrets[i], {
+			expectedLocktime,
+			expectedChildPubkey: bid.childPubkey,
+			expectedRefundPubkey: bid.refundPubkey,
+		})
+		if (!lockParse.ok) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_lock',
+				detail: `proof ${i + 1}/${bid.lockSecrets.length}: ${lockParse.reason}${lockParse.detail ? `: ${lockParse.detail}` : ''}`,
+			}
 		}
 	}
 
@@ -237,7 +255,11 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 			// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
 			// raised at settlement time when a kind-1025 reveals a path that
 			// doesn't derive to the lock pubkey.
-			return { claim: 'bid_invalid', reason: 'proof_spent', detail: `mint reports proof Y=${bid.proofY} as SPENT` }
+			return {
+				claim: 'bid_invalid',
+				reason: 'proof_spent',
+				detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
+			}
 		case 'unspent':
 			// Proceed to policy.
 			break

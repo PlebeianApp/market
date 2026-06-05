@@ -95,11 +95,11 @@ interface BidOverrides {
 	mint?: string
 	childPubkey?: string
 	refundPubkey?: string
-	proofY?: string
+	proofYs?: string[]
 	auctionRootEventId?: string
 	auctionCoordinate?: string
 	sellerPubkey?: string
-	lockSecret?: string
+	lockSecrets?: string[]
 }
 
 const buildLockSecret = (params: { childPubkey: string; locktime: number; refundPubkey: string }): string => {
@@ -122,13 +122,15 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 	const locktime = overrides.locktime ?? auction.maxEndAt + auction.settlementGrace
 	const childPubkey = overrides.childPubkey ?? COMPRESSED_PK
 	const refundPubkey = overrides.refundPubkey ?? REFUND_PK
-	const lockSecret =
-		overrides.lockSecret ??
-		buildLockSecret({
-			childPubkey,
-			locktime,
-			refundPubkey,
-		})
+	const lockSecrets =
+		overrides.lockSecrets ?? [
+			buildLockSecret({
+				childPubkey,
+				locktime,
+				refundPubkey,
+			}),
+		]
+	const proofYs = overrides.proofYs ?? Array.from({ length: lockSecrets.length }, () => PROOF_Y)
 	return {
 		rawEvent: stubRawEvent(1023, BIDDER_PK),
 		id: '2'.repeat(64),
@@ -143,8 +145,8 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 		locktime,
 		refundPubkey,
 		childPubkey,
-		lockSecret,
-		proofY: overrides.proofY ?? PROOF_Y,
+		lockSecrets,
+		proofYs,
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
@@ -300,7 +302,7 @@ describe('validateBid — mint allowlist', () => {
 describe('validateBid — lock secret structure', () => {
 	test('bad_lock when lock_secret JSON is malformed', () => {
 		const auction = buildAuction()
-		const bid = buildBid(auction, { lockSecret: 'not-json' })
+		const bid = buildBid(auction, { lockSecrets: ['not-json'] })
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
 		if (verdict.claim === 'bid_invalid') {
@@ -311,11 +313,13 @@ describe('validateBid — lock secret structure', () => {
 	test('bad_lock when lock pubkey differs from child_pubkey tag', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
-			lockSecret: buildLockSecret({
-				childPubkey: ANOTHER_COMPRESSED_PK, // mismatch
-				locktime: auction.maxEndAt + auction.settlementGrace,
-				refundPubkey: REFUND_PK,
-			}),
+			lockSecrets: [
+				buildLockSecret({
+					childPubkey: ANOTHER_COMPRESSED_PK, // mismatch
+					locktime: auction.maxEndAt + auction.settlementGrace,
+					refundPubkey: REFUND_PK,
+				}),
+			],
 		})
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
@@ -329,11 +333,13 @@ describe('validateBid — lock secret structure', () => {
 		const auction = buildAuction()
 		const expected = auction.maxEndAt + auction.settlementGrace
 		const bid = buildBid(auction, {
-			lockSecret: buildLockSecret({
-				childPubkey: COMPRESSED_PK,
-				locktime: expected + 60, // off by 60 seconds
-				refundPubkey: REFUND_PK,
-			}),
+			lockSecrets: [
+				buildLockSecret({
+					childPubkey: COMPRESSED_PK,
+					locktime: expected + 60, // off by 60 seconds
+					refundPubkey: REFUND_PK,
+				}),
+			],
 		})
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
@@ -357,11 +363,13 @@ describe('validateBid — lock secret structure', () => {
 	test('bad_lock when refund pubkey in lock differs from bid tag', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
-			lockSecret: buildLockSecret({
-				childPubkey: COMPRESSED_PK,
-				locktime: auction.maxEndAt + auction.settlementGrace,
-				refundPubkey: ANOTHER_COMPRESSED_PK, // doesn't match REFUND_PK
-			}),
+			lockSecrets: [
+				buildLockSecret({
+					childPubkey: COMPRESSED_PK,
+					locktime: auction.maxEndAt + auction.settlementGrace,
+					refundPubkey: ANOTHER_COMPRESSED_PK, // doesn't match REFUND_PK
+				}),
+			],
 		})
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')

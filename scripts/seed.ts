@@ -30,7 +30,7 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
+import { createAuctionBidEvent, createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -189,6 +189,19 @@ async function seedData() {
 		startingBid: number
 		bidIncrement: number
 		mint: string
+		settlementGraceSeconds: number
+	}> = []
+	const seededBidAuctionEvents: Array<{
+		eventId: string
+		auctionCoordinates: string
+		sellerPubkey: string
+		startAt: number
+		endAt: number
+		maxEndAt: number
+		startingBid: number
+		bidIncrement: number
+		mint: string
+		p2pkXpub: string
 		settlementGraceSeconds: number
 	}> = []
 	const shippingsByUser: Record<string, string[]> = {}
@@ -408,23 +421,64 @@ async function seedData() {
 				mint,
 				settlementGraceSeconds,
 			})
-			// Bid seeding is disabled on this branch — see the
-			// "Skipping bid seeding" log below. The
-			// `seededBidAuctionEvents` accumulator returns in Phase 3
-			// alongside the new bidder-held-path bid seed.
+
+			// Only seed bids on live auctions (live window, not the
+			// quick-settle fixtures which are immediately closing).
+			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
+			if (isLiveForBids) {
+				const p2pkXpub = auctionData.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
+				const maxEndAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'max_end_at')?.[1] || String(endAt), 10)
+				seededBidAuctionEvents.push({
+					eventId: auctionEvent.id,
+					auctionCoordinates: coords,
+					sellerPubkey: pubkey,
+					startAt,
+					endAt,
+					maxEndAt,
+					startingBid,
+					bidIncrement,
+					mint,
+					p2pkXpub,
+					settlementGraceSeconds,
+				})
+			}
 		}
 	}
 
-	// Bid seeding is intentionally skipped on the
-	// `auctions/p2pk-buyer-path-custody-v1` branch. The v1 implementation
-	// relied on the CVM `request_path` tool which is being torn out as
-	// part of the bidder-held-path pivot (see AUCTIONS.md and the Phase
-	// 2/3 plan). Until the new bid-creation flow lands, `bun dev:seed`
-	// produces auctions but no bids — the placeholder Cashu tokens the
-	// old loop emitted were never spendable anyway, so nothing of value
-	// is lost. Re-seeded bids will land in the Phase 3 PR alongside the
-	// new bidder client.
-	console.log('⏭️  Skipping bid seeding (v1 CVM request_path retired; new bidder-held-path bid seed coming in Phase 3)')
+	console.log(`\nCreating auction bids for ${seededBidAuctionEvents.length} live auctions...`)
+	for (const auction of seededBidAuctionEvents) {
+		if (!auction.p2pkXpub) {
+			console.warn(`  ⚠ skipping ${auction.eventId.slice(0, 8)} — no p2pk_xpub`)
+			continue
+		}
+		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((u) => u.pubkey !== auction.sellerPubkey)
+		const bidsCount = faker.number.int({ min: 1, max: 4 })
+		let currentBidAmount = auction.startingBid
+
+		for (let i = 0; i < bidsCount; i++) {
+			const bidder = faker.helpers.arrayElement(eligibleBidders)
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidder.index].sk)
+			await bidderSigner.blockUntilReady()
+
+			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
+
+			await createAuctionBidEvent({
+				signer: bidderSigner,
+				ndk,
+				auctionEventId: auction.eventId,
+				auctionCoordinates: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
+				p2pkXpub: auction.p2pkXpub,
+				cvmRelays: CVM_RELAYS,
+				bidderPrivateKeyHex: devUsers[bidder.index].sk,
+				amount: currentBidAmount,
+				mint: auction.mint,
+				endAt: auction.endAt,
+				maxEndAt: auction.maxEndAt,
+				settlementGraceSeconds: auction.settlementGraceSeconds,
+			})
+		}
+	}
 
 	// Create multi-wallet configurations for all users (standard seeding)
 	console.log('\n🎯 Creating multi-wallet configurations for all users...')

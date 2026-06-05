@@ -352,14 +352,20 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 - `child_pubkey`: HD-derived child pubkey used in the lock (compressed
   secp256k1 hex). Equals `derive(auction.p2pk_xpub, path)`. The path
   remains private to the bidder; only `child_pubkey` is published.
-- `lock_secret`: the full NUT-10 well-known P2PK secret string, as it
-  appears in the locked Cashu proof's `secret` field. Validators parse
-  this to verify lock structure (pubkey, locktime, refund) and use the
-  derived hash to query mint state via NUT-7. REQUIRED under
-  `settlement_policy=cashu_p2pk_bidder_path_v1`.
-- `proof_y`: the proof's `Y = hash_to_curve(secret)` value (compressed
-  hex). Cashu mints accept this as the lookup key for NUT-7 proof-state
-  queries. REQUIRED so validators don't have to recompute it.
+- `lock_secret`: **repeated tag** — one entry per Cashu proof making up
+  the bid lock. Each value is the full NUT-10 well-known P2PK secret
+  string as it appears in that proof's `secret` field. Validators parse
+  each entry to verify lock structure (pubkey, locktime, refund) and
+  use the paired `proof_y` to query mint state via NUT-7. Cashu wallets
+  typically produce 1–8 locked proofs per send (preserving the wallet's
+  power-of-2 denomination structure across the swap), so multi-proof
+  bids are the norm. All proofs share the same lock pubkey, locktime,
+  and refund key — only the per-proof `nonce` differs. REQUIRED at
+  least once under `settlement_policy=cashu_p2pk_bidder_path_v1`.
+- `proof_y`: **repeated tag** — `Y = hash_to_curve(secret)` for each
+  proof, in compressed secp256k1 hex. MUST be 1-to-1 parallel with the
+  `lock_secret` tags (same count, same order). Cashu mints accept Ys
+  as a batched lookup key (NUT-7 `CheckStatePayload.Ys: string[]`).
 - `created_for_end_at`: copied auction end timestamp to bind client intent.
 - `bid_nonce`: random id per bid.
 - `key_scheme`: MUST match the auction `key_scheme`.
