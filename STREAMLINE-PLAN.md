@@ -60,6 +60,53 @@ Each PR on `c03rad0r/market` includes original PR body + `Originally opened as P
 - [x] Update REVIEW-PLAN.md to reflect new scope
 - [x] Update REVIEWER-MESSAGES.md to focus on #975 and #947 only
 
+## Phase 6: CVM Worker — Cherry-pick onto NIP-53 branch
+
+Re-open #968 by cherry-picking the 2 CVM worker commits onto a fresh branch from `feat/nip53-auction-live-chat`, then targeting the PR at #947's branch.
+
+- [ ] Create `feat/cvm-worker-nip53-cherry-pick` from `feat/nip53-auction-live-chat`
+- [ ] Cherry-pick `52bd6848` (feat: add live activity worker with CVM-signed 30311 events)
+- [ ] Cherry-pick `0487cb78` (docs: update CVM-WORKER-PLAN.md checklist)
+- [ ] Resolve conflicts — keep #947's current code as base, add only worker-specific changes
+- [ ] Verify tests pass locally (worker tests, liveChat tests, nip53 tests)
+- [ ] Push branch to fork
+- [ ] Re-open #968 targeting `feat/nip53-auction-live-chat` with description
+- [ ] Update #997 and #947 with cross-references
+
+## Phase 7: VPS Deployment — Fix for NIP-60 Wallet + Redeploy
+
+Fix the "nip60 wallet not ready" error by updating the VPS deployment config.
+
+### 7a: Update `docker-compose.yml.j2`
+
+- [ ] Pin Bun image to `oven/bun:1.3.10` (currently `oven/bun:latest`)
+- [ ] Add `CVM_SERVER_KEY` env var (ephemeral test key for CVM worker)
+- [ ] Add NIP-60 test mint config (`testnut.cashu.space`) via env vars
+
+### 7b: Update `defaults/main.yml`
+
+- [ ] Add default CVM_SERVER_KEY
+- [ ] Add default test mint URL
+
+### 7c: Redeploy PR #947
+
+- [ ] Run `./scripts/deploy-pr.sh --pr 947 --branch feat/nip53-auction-live-chat`
+- [ ] Verify deployment succeeds
+- [ ] Verify Caddy TLS cert provisioned for `pr947.test-market.orangesync.tech`
+
+### 7d: Smoke test at https://pr947.test-market.orangesync.tech
+
+- [ ] Log in with Nostr identity
+- [ ] Dashboard → receiving payments → verify NIP-60 wallet connects to test mint
+- [ ] Create auction → verify publish succeeds (no "nip60 wallet not ready" error)
+- [ ] Verify live chat panel appears on auction page
+- [ ] Verify CVM worker running — check `kind:30311` events being published
+- [ ] Check browser console for errors
+
+### 7e: Commit infra changes
+
+- [ ] Commit updated `docker-compose.yml.j2` and `defaults/main.yml` to `plebeian-market-e2e-infra`
+
 ---
 
 ## What stays on upstream
@@ -68,7 +115,7 @@ Each PR on `c03rad0r/market` includes original PR body + `Originally opened as P
 |----|--------|--------|
 | **#975** | master | Security — CI GREEN, awaiting review |
 | **#947** | auctions | NIP-53 — CHANGES_REQUESTED, awaiting Franchovy re-review |
-| **#967** PR (TBD) | auctions | CVM worker — to be created after #947 merges |
+| **#968** (re-opened) | `feat/nip53-auction-live-chat` (#947) | CVM worker — cherry-picked onto #947 branch |
 
 ## What moved to fork
 
