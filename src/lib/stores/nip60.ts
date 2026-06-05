@@ -2113,21 +2113,22 @@ export const nip60Actions = {
 		if (!pathRequestNdk) throw new Error('NDK is not initialised')
 		// Browser-safe client (the SDK's pino logger crashes the browser
 		// bundle at module init). The Bun-side seed script uses the
-		// ctxcn-generated `PlebeianServerClient` instead.
-		const { PlebeianAuctionClient } = await import('@/lib/ctxcn-clients/PlebeianAuctionClient')
+		// ctxcn-generated `PlebeianServerClient` instead. The pool keeps
+		// the underlying WebSocket open across calls — see
+		// `auctionClientPool.ts` for why we no longer instantiate +
+		// disconnect per call.
+		const { getAuctionClient, releaseAuctionClient } = await import('@/lib/ctxcn-clients/auctionClientPool')
 		const auctionRelays = configStore.state.config.appRelay ? [configStore.state.config.appRelay] : []
 		if (!auctionRelays.length) throw new Error('App relay URL is unavailable for the auction client')
-		const auctionClient = new PlebeianAuctionClient({
-			signer: pathRequestSigner,
-			ndk: pathRequestNdk,
+		const auctionClient = getAuctionClient({
+			pathIssuerPubkey: selected.pathIssuerPubkey,
 			relays: auctionRelays,
-			serverPubkey: selected.pathIssuerPubkey,
 		})
 		let pathGrant
 		try {
 			pathGrant = await auctionClient.RequestPath(selected.event.id, auctionCoordinates, bidderRefundPubkey, bidAmount)
 		} catch (error) {
-			await auctionClient.disconnect()
+			releaseAuctionClient(auctionClient)
 			throw error
 		}
 		const { verifyAuctionPathGrant } = await import('@/lib/auctionP2pk')
@@ -2141,7 +2142,7 @@ export const nip60Actions = {
 				grantIssuer: pathGrant.pathIssuerPubkey,
 			})
 		} catch (error) {
-			await auctionClient.disconnect()
+			releaseAuctionClient(auctionClient)
 			throw error
 		}
 
@@ -2222,7 +2223,7 @@ export const nip60Actions = {
 				throw new Error(submission.rejectReason || 'Issuer rejected the bid token')
 			}
 		} finally {
-			await auctionClient.disconnect()
+			releaseAuctionClient(auctionClient)
 		}
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',

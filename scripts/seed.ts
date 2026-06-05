@@ -30,7 +30,7 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createAuctionBidEvent, createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
+import { createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -181,17 +181,6 @@ async function seedData() {
 	const auctionsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const allAuctionEvents: Array<{
-		eventId: string
-		auctionCoordinates: string
-		sellerPubkey: string
-		startAt: number
-		endAt: number
-		startingBid: number
-		bidIncrement: number
-		mint: string
-		settlementGraceSeconds: number
-	}> = []
-	const seededBidAuctionEvents: Array<{
 		eventId: string
 		auctionCoordinates: string
 		sellerPubkey: string
@@ -419,63 +408,23 @@ async function seedData() {
 				mint,
 				settlementGraceSeconds,
 			})
-			// Only seed bids on auctions that are still in the active
-			// window. `generateAuctionData` randomly marks ~20% of seeded
-			// auctions as 'ended' (endAt in the past); request_path on
-			// those would correctly reject ("auction has reached its hard
-			// bidding cutoff"). Excluding them upfront keeps the seed
-			// log clean.
-			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
-			if (isLiveForBids) {
-				seededBidAuctionEvents.push({
-					eventId: auctionEvent.id,
-					auctionCoordinates: coords,
-					sellerPubkey: pubkey,
-					startAt,
-					endAt,
-					startingBid,
-					bidIncrement,
-					mint,
-					settlementGraceSeconds,
-				})
-			}
+			// Bid seeding is disabled on this branch — see the
+			// "Skipping bid seeding" log below. The
+			// `seededBidAuctionEvents` accumulator returns in Phase 3
+			// alongside the new bidder-held-path bid seed.
 		}
 	}
 
-	console.log('Creating auction bids (each calls request_path on the CVM server)...')
-	for (const auction of seededBidAuctionEvents) {
-		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
-
-		const bidsCount = faker.number.int({ min: 1, max: 6 })
-		let currentBidAmount = auction.startingBid
-
-		for (let i = 0; i < bidsCount; i++) {
-			const bidder = faker.helpers.arrayElement(eligibleBidders)
-			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidder.index].sk)
-			await bidderSigner.blockUntilReady()
-
-			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
-			const maxBidTimestamp = Math.min(auction.endAt - 10, NOW_TIMESTAMP - 10)
-			const minBidTimestamp = Math.max(auction.startAt + 10, maxBidTimestamp - 60 * 60 * 24)
-			const bidTimestamp = minBidTimestamp < maxBidTimestamp ? faker.number.int({ min: minBidTimestamp, max: maxBidTimestamp }) : undefined
-
-			await createAuctionBidEvent({
-				signer: bidderSigner,
-				ndk,
-				auctionEventId: auction.eventId,
-				auctionCoordinates: auction.auctionCoordinates,
-				sellerPubkey: auction.sellerPubkey,
-				pathIssuerPubkey: CVM_SERVER_PUBKEY,
-				cvmRelays: CVM_RELAYS,
-				bidderPrivateKeyHex: devUsers[bidder.index].sk,
-				amount: currentBidAmount,
-				mint: auction.mint,
-				endAt: auction.endAt,
-				settlementGraceSeconds: auction.settlementGraceSeconds,
-				createdAt: bidTimestamp,
-			})
-		}
-	}
+	// Bid seeding is intentionally skipped on the
+	// `auctions/p2pk-buyer-path-custody-v1` branch. The v1 implementation
+	// relied on the CVM `request_path` tool which is being torn out as
+	// part of the bidder-held-path pivot (see AUCTIONS.md and the Phase
+	// 2/3 plan). Until the new bid-creation flow lands, `bun dev:seed`
+	// produces auctions but no bids — the placeholder Cashu tokens the
+	// old loop emitted were never spendable anyway, so nothing of value
+	// is lost. Re-seeded bids will land in the Phase 3 PR alongside the
+	// new bidder client.
+	console.log('⏭️  Skipping bid seeding (v1 CVM request_path retired; new bidder-held-path bid seed coming in Phase 3)')
 
 	// Create multi-wallet configurations for all users (standard seeding)
 	console.log('\n🎯 Creating multi-wallet configurations for all users...')

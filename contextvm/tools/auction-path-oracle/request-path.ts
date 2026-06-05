@@ -45,7 +45,12 @@ export const createRequestPathHandler = (ctx: AuctionContext) => {
 				},
 			}
 		} catch (error) {
-			console.warn('[auction] request_path rejected:', error)
+			// Floor / window / auth rejections are normal protocol-level
+			// outcomes; printing the full Error object spams the dev console
+			// with stack traces for what's basically "client retried with
+			// stale state." Just log the message.
+			const message = error instanceof Error ? error.message : String(error)
+			console.warn('[auction] request_path rejected:', message)
 			return structuredErrorResult(error)
 		}
 	}

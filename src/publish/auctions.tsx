@@ -11,7 +11,8 @@ import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
-import { PlebeianAuctionClient, type RequestPathOutput, type RequestSettlementOutput } from '@/lib/ctxcn-clients/PlebeianAuctionClient'
+import type { PlebeianAuctionClient, RequestPathOutput, RequestSettlementOutput } from '@/lib/ctxcn-clients/PlebeianAuctionClient'
+import { getAuctionClient, releaseAuctionClient } from '@/lib/ctxcn-clients/auctionClientPool'
 import { nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
@@ -168,20 +169,14 @@ export interface AuctionPathGrantResponse {
  * generated client; the React app uses this hand-rolled equivalent.
  *
  * Wire format is identical (kind-1059 gift-wrap of kind-25910 inner with
- * NIP-44 to the facilitator pubkey). Caller MUST `client.disconnect()`
- * once the bid flow completes.
+ * NIP-44 to the facilitator pubkey). Delegates to the pooled cache in
+ * `auctionClientPool` so the underlying WebSocket + subscription are
+ * reused across calls instead of being torn down after every tool
+ * call (which is what produced the "WebSocket is already in CLOSING
+ * or CLOSED state" console spam on deployed envs).
  */
 const openAuctionPathOracleClient = (params: { pathIssuerPubkey: string; relays: string[] }): PlebeianAuctionClient => {
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
-	if (!signer) throw new Error('No signer available — sign in to bid')
-	if (!ndk) throw new Error('NDK is not initialised')
-	return new PlebeianAuctionClient({
-		signer,
-		ndk,
-		relays: params.relays,
-		serverPubkey: params.pathIssuerPubkey,
-	})
+	return getAuctionClient({ pathIssuerPubkey: params.pathIssuerPubkey, relays: params.relays })
 }
 
 const getAuctionClientRelays = (): string[] => {
@@ -207,7 +202,7 @@ export const requestAuctionPathGrant = async (params: {
 	try {
 		grant = await client.RequestPath(params.auctionEventId, params.auctionCoordinates, params.bidderRefundPubkey, params.intendedAmount)
 	} finally {
-		await client.disconnect()
+		releaseAuctionClient(client)
 	}
 	if (grant.pathIssuerPubkey !== params.expectedPathIssuer) {
 		throw new Error('Path issuer pubkey mismatch — server identity does not match auction path_issuer')
@@ -671,7 +666,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		} catch (submitError) {
 			throw tagBidError('Failed to deliver bid token to issuer', submitError)
 		} finally {
-			await submitClient.disconnect()
+			releaseAuctionClient(submitClient)
 		}
 		try {
 			await ndkActions.publishEvent(event)
@@ -773,7 +768,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	try {
 		settlementPlan = await settlementClient.RequestSettlement(formData.auctionEventId, auctionCoordinates)
 	} finally {
-		await settlementClient.disconnect()
+		releaseAuctionClient(settlementClient)
 	}
 	const closeAt = settlementPlan.closeAt || formData.closeAt || Math.floor(Date.now() / 1000)
 	const winningBidEventId = settlementPlan.winningBidEventId || ''

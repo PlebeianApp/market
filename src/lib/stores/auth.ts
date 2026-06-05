@@ -5,6 +5,7 @@ import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
+import { disposeAllAuctionClients } from '@/lib/ctxcn-clients/auctionClientPool'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
@@ -152,6 +153,11 @@ export const authActions = {
 			const signer = new NDKPrivateKeySigner(privateKey)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -200,6 +206,11 @@ export const authActions = {
 			const signer = new NDKNip07Signer()
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -240,6 +251,11 @@ export const authActions = {
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 			const user = await signer.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
@@ -271,6 +287,13 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()
+		// Tear down per-user state (NWC selection, NIP-60 wallet).
+		// Mirrors `runSignerOnboarding` on the login side.
+		ndkActions.clearSignerOnboarding()
+		// Tear down cached auction clients — their gift-wrap subscriptions
+		// are pinned to the previous user's pubkey, so reusing them after
+		// a re-login as a different account would silently miss responses.
+		disposeAllAuctionClients()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
