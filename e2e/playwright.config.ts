@@ -5,30 +5,19 @@ import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-con
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const reporterMode = process.env.PLAYWRIGHT_REPORTER || 'auto'
-const reporter: any =
-	reporterMode === 'blob'
-		? [['blob'], ['github']]
-		: reporterMode === 'json'
-			? [['json', { outputFile: path.join(PROJECT_ROOT, 'test-results', 'results.json') }], ['github']]
-			: process.env.CI
-				? 'github'
-				: 'list'
-
 export default defineConfig({
 	testDir: './tests',
 	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
-	retries: process.env.PLAYWRIGHT_RETRIES !== undefined ? Number(process.env.PLAYWRIGHT_RETRIES) : process.env.CI ? 2 : 0,
+	retries: process.env.CI ? 2 : 0,
 	workers: 1,
-	reporter,
+	reporter: process.env.CI ? 'github' : 'list',
 	testMatch: /.*\.spec\.ts$/,
-	outputDir: path.join(PROJECT_ROOT, 'test-results'),
 
 	use: {
 		baseURL: BASE_URL,
 		trace: 'on-first-retry',
-		screenshot: (process.env.PLAYWRIGHT_SCREENSHOT || 'only-on-failure') as 'on' | 'only-on-failure' | 'off',
+		screenshot: 'only-on-failure',
 		video: 'retain-on-failure',
 	},
 
@@ -48,16 +37,17 @@ export default defineConfig({
 					command: 'nak serve --hostname 0.0.0.0',
 					port: 10547,
 					reuseExistingServer: true,
-					timeout: 120_000,
 					stdout: 'pipe',
 					stderr: 'pipe',
 				},
 				{
+					// Seed the relay with app settings, then start the dev server.
+					// The dev server caches appSettings at startup, so events must
+					// exist on the relay before it initializes.
 					command: 'bun e2e/seed-relay.ts && NODE_ENV=test bun dev',
 					cwd: PROJECT_ROOT,
 					port: TEST_PORT,
 					reuseExistingServer: true,
-					timeout: 120_000,
 					stdout: 'pipe',
 					stderr: 'pipe',
 					env: {

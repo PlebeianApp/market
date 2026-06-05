@@ -5,7 +5,7 @@ import { liveActivityKeys } from './queryKeyFactory'
 import {
 	LIVE_ACTIVITY_KIND,
 	LIVE_CHAT_KIND,
-	getLiveActivityCoord,
+	AUCTION_KIND,
 	parseLiveActivity,
 	parseLiveChatMessage,
 	type LiveActivity,
@@ -20,11 +20,12 @@ export const fetchLiveActivity = async (auctionEvent: NDKEvent): Promise<LiveAct
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return null
 
+	const auctionCoord = `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}`
+
 	const filters: NDKFilter[] = [
 		{
 			kinds: [LIVE_ACTIVITY_KIND],
-			authors: [auctionEvent.pubkey],
-			'#d': [dTag],
+			'#a': [auctionCoord],
 			limit: 1,
 		},
 	]
@@ -56,11 +57,11 @@ export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<
 
 export const useLiveActivity = (auctionEvent: NDKEvent | null) => {
 	const dTag = auctionEvent ? getAuctionId(auctionEvent) : ''
-	const coord = auctionEvent && dTag ? getLiveActivityCoord(auctionEvent.pubkey, dTag) : ''
+	const auctionCoord = auctionEvent && dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
 
 	return useQuery(
 		queryOptions({
-			queryKey: liveActivityKeys.byCoord(coord),
+			queryKey: liveActivityKeys.byCoord(auctionCoord),
 			queryFn: () => (auctionEvent ? fetchLiveActivity(auctionEvent) : null),
 			enabled: !!auctionEvent && !!dTag,
 			refetchInterval: 60_000,

@@ -19,6 +19,7 @@ import { createRequestPathHandler } from './tools/auction-path-oracle/request-pa
 import { createSubmitBidTokenHandler } from './tools/auction-path-oracle/submit-bid-token'
 import { createRequestSettlementHandler } from './tools/auction-path-oracle/request-settlement'
 import { createGetAuctionStateHandler } from './tools/auction-path-oracle/get-auction-state'
+import { startLiveActivityWorker } from './tools/live-activity-worker'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -388,6 +389,9 @@ async function main() {
 	await mcpServer.connect(serverTransport)
 	console.log('Server is running and listening for requests on Nostr...')
 	console.log(`Auction path-oracle pubkey (use as auction \`path_issuer\` tag): ${auctionContext.issuerPubkey}`)
+
+	startLiveActivityWorker(auctionContext)
+
 	console.log('Press Ctrl+C to exit.')
 }
 
