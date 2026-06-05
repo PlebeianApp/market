@@ -6,7 +6,9 @@ Copy and paste these into your messenger.
 
 ## To Franchovy
 
-Hey Franchovy, I have two small focused PRs I'd appreciate your eyes on when you get a chance:
+Hey Franchovy, apologies for the PR flood — I know it's a lot. I actually made it worse on purpose by decomposing the original 2 large PRs into 5 smaller tightly-scoped ones so they'd be easier to review. I've organized everything with a merge order in [#979](https://github.com/PlebeianApp/market/issues/979) so nothing steps on each other.
+
+I have two small focused PRs I'd appreciate your eyes on when you get a chance:
 
 **#975** — Security: remove committed secrets and hardcoded keys
 - 11 files, mostly deletions (`.env.dev`, encrypted wallet, hardcoded fallback keys)
@@ -26,7 +28,9 @@ No rush on #947 — I know that's a bigger review. These two are quick.
 
 ## To maximotodev
 
-Hey! I just reviewed your #988 and #991 — both approved. Quick note: I recommended #988 merge before #991 since they both touch `auctions.$auctionId.tsx`.
+Hey! Apologies for the PR flood — I know it's a lot. I actually made it worse on purpose by decomposing the original 2 large PRs into 5 smaller tightly-scoped ones so they'd be easier to review. I've organized everything with a merge order in [#979](https://github.com/PlebeianApp/market/issues/979) so nothing steps on each other.
+
+I just reviewed your #988 and #991 — both approved. Quick note: I recommended #988 merge before #991 since they both touch `auctions.$auctionId.tsx`.
 
 I'd love a reciprocal review on two small PRs if you have a moment:
 
@@ -43,7 +47,9 @@ I'd love a reciprocal review on two small PRs if you have a moment:
 
 ## To hkarani
 
-Hey! I approved #988 and #991 from maximotodev (both touch auctions detail page FYI). I also saw #951 — looks like Franchovy and maximotodev have some feedback on `isMeaningfulDraft` coverage. Happy to review once you've had a chance to address their comments.
+Hey! Apologies for all the open PRs — I decomposed my work into small tightly-scoped ones to make review easier. I've organized everything with a merge order in [#979](https://github.com/PlebeianApp/market/issues/979) so nothing steps on each other.
+
+I approved #988 and #991 from maximotodev (both touch auctions detail page FYI). I also saw #951 — looks like Franchovy and maximotodev have some feedback on `isMeaningfulDraft` coverage. Happy to review once you've had a chance to address their comments.
 
 If you get a moment, I have one PR that's in your domain:
 
