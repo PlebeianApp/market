@@ -641,7 +641,7 @@ function AuctionDetailRoute() {
 												Settlement & technical details
 											</AccordionTrigger>
 											<AccordionContent className="space-y-3 pb-4">
-												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
+												<TechnicalDataRow label="Auditor" value={pathIssuerPubkey || 'N/A'} />
 												<TechnicalDataRow label="Key scheme" value={keyScheme} />
 												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
 												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />

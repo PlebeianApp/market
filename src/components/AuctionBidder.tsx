@@ -13,7 +13,6 @@ import {
 	useAuctionBids,
 	getAuctionEffectiveEndAt,
 	getAuctionRootEventId,
-	getAuctionPathIssuer,
 	getAuctionMaxEndAt,
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
@@ -96,7 +95,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const trustedMints = getAuctionMints(auction)
 	const auctionDTag = getAuctionId(auction)
-	const pathIssuerPubkey = getAuctionPathIssuer(auction)
 
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
@@ -219,10 +217,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 
 		try {
-			if (!pathIssuerPubkey) {
-				toast.error('This auction is missing a path_issuer pubkey and cannot accept bids.')
-				return
-			}
+			// Under `cashu_p2pk_bidder_path_v1` the bidder generates the
+			// derivation path locally and never consults a "path issuer"
+			// oracle — that was the v1 CVM-coordinator scheme. The only
+			// auction tag the bidder actually needs is `p2pk_xpub`; if
+			// it's absent the auction isn't biddable.
 			if (!p2pkXpub) {
 				toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
 				return
@@ -244,7 +243,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				auctionLocktimeAt: getAuctionMaxEndAt(auction),
 				settlementGraceSeconds: getAuctionSettlementGrace(auction),
 				sellerPubkey: auction.pubkey,
-				pathIssuerPubkey,
 				p2pkXpub,
 				mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
 			})

@@ -796,7 +796,7 @@ function DashboardAuctionDetailRoute() {
 									<AccordionTrigger className="text-sm font-semibold hover:no-underline">Advanced settlement wiring</AccordionTrigger>
 									<AccordionContent className="space-y-3">
 										<TechnicalRow
-											label="Path issuer"
+											label="Auditor"
 											value={getAuctionPathIssuer(auction) || 'N/A'}
 											copyValue={getAuctionPathIssuer(auction) || undefined}
 										/>

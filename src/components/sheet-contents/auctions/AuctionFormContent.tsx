@@ -32,7 +32,6 @@ import {
 	type AuctionSettlementGracePreset,
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
-import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -69,10 +68,12 @@ const INITIAL_FORM: AuctionFormData = {
 	shippings: [],
 	trustedMints: [],
 	isNSFW: false,
-	// `AuctionOracleSelector` populates this once the CEP-15 directory
-	// query resolves; empty string means "fall back to app default" so
-	// nothing breaks if the seller submits before discovery completes.
-	pathIssuerPubkey: '',
+	// Empty string defers auditor selection to the app's configured
+	// default (`config.cvmServerPubkey`). The auction publish path
+	// resolves this via `getAuctionAuditorsOrThrow` — the seller never
+	// has to pick an auditor manually for the minimal demo flow. A
+	// future Phase 7 reputation UI may surface a multi-select here.
+	auditorPubkey: '',
 }
 
 function parseListInput(value: string): string[] {
@@ -1206,8 +1207,6 @@ function AuctionTabContent({
 					</div>
 				)}
 			</div>
-
-			<AuctionOracleSelector formData={formData} setFormData={setFormData} />
 		</div>
 	)
 }

@@ -103,13 +103,15 @@ export interface AuctionFormData {
 	trustedMints: string[]
 	isNSFW: boolean
 	/**
-	 * Pubkey of the path-oracle the seller wants to use for this auction.
-	 * Empty string = "use the app's configured default" (resolved at
-	 * publish time via `getAuctionPathIssuerPubkeyOrThrow`). The form's
-	 * oracle picker writes a non-empty value once the seller has chosen a
-	 * specific announcement from the CEP-15 directory.
+	 * Pubkey of the validator (auditor) the seller wants listed on the
+	 * auction's `auditors` tag. Empty string = "use the app's configured
+	 * default" (resolved at publish time via `getAuctionAuditorsOrThrow`).
+	 *
+	 * Single value today; the kind-30408 event supports a multi-auditor
+	 * list. The Phase 7 reputation UI is expected to grow this into a
+	 * multi-select; for the demo a single pubkey is fine.
 	 */
-	pathIssuerPubkey: string
+	auditorPubkey: string
 }
 
 export interface AuctionBidFormData {
@@ -134,11 +136,6 @@ export interface AuctionBidFormData {
 	 */
 	settlementGraceSeconds: number
 	sellerPubkey: string
-	/**
-	 * Nostr pubkey of the auction's path issuer (the oracle). The bidder
-	 * requests a derivation-path grant from this pubkey before locking funds.
-	 */
-	pathIssuerPubkey: string
 	p2pkXpub: string
 	/**
 	 * Ordered list of the auction's trusted mints (`mint` tags on
@@ -181,25 +178,23 @@ export interface AuctionSettlementFormData {
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
 /**
- * Resolve the path-oracle pubkey to bake into a new auction's
- * `path_issuer` tag. Selection priority:
+ * Resolve the auditor pubkey(s) to bake into a new auction's
+ * `auditors` tag(s). Selection priority:
  *
- *   1. The seller's explicit choice from the form's CEP-15 oracle
- *      picker (`formData.pathIssuerPubkey`). Validated as 32-byte hex.
+ *   1. The seller's explicit choice from the form (`formData.auditorPubkey`).
+ *      Validated as 32-byte hex.
  *   2. The app's configured default (`configStore.config.cvmServerPubkey`).
  *
- * Throws when neither is available — the form is supposed to have
- * pre-selected the default before submit, so reaching this branch
- * usually means the app's `/api/config` hasn't loaded yet.
+ * Throws when neither is available — without an auditor the auction
+ * has no validator emitting kind-30440 verdicts, which means clients
+ * have nothing to filter or aggregate against.
  */
 const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string): string[] => {
-	// In the v1 path-oracle scheme this resolved a single `path_issuer`.
-	// Under `cashu_p2pk_bidder_path_v1` the auction lists `auditors`
-	// (validators whose verdicts the seller trusts). Until the form UI
-	// is updated to multi-select (Phase 7), we promote the
-	// single-pubkey field to a one-element auditors list. Falls back to
-	// the app's CVM server pubkey when the field is empty, so dev/seed
-	// flows that don't choose an auditor explicitly still get one.
+	// Single auditor today; kind-30408 supports a list (multiple
+	// `auditors` tags). Phase 7 (reputation UI) is expected to grow this
+	// into a multi-select. Falls back to the app's configured validator
+	// pubkey when the form field is empty, so dev/seed flows that don't
+	// choose an auditor explicitly still get one.
 	const explicit = formAuditorPubkey?.trim()
 	if (explicit) {
 		if (!HEX_PUBKEY_RE.test(explicit)) {
@@ -256,13 +251,11 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
 	const settlementGraceSeconds = AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	// Validators auctions trust. Sourced from the same form field that used
-	// to carry `path_issuer` (kept as `pathIssuerPubkey` during the
-	// migration so UI components don't have to change in lockstep) plus
-	// the cvm server pubkey as a default until the form is updated to
-	// select multiple validators. Phase 7 (reputation UI) will replace
-	// the single field with a multi-select.
-	const auditorsList = getAuctionAuditorsOrThrow(formData.pathIssuerPubkey)
+	// Validators auctions trust. One pubkey per `auditors` tag; the form
+	// gives the seller a single field today and falls back to the app's
+	// configured default. Phase 7 (reputation UI) will grow this into a
+	// multi-select.
+	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
@@ -301,6 +294,13 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		// kind-30440 verdicts compliant clients consult to gate bid validity
 		// for THIS auction. See AUCTIONS.md §4.1.
 		...auditorsList.map((auditor) => ['auditors', auditor] as NDKTag),
+		// Explicit values for the per-auction validator parameters.
+		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
+		// in src/lib/auction/constants.ts — emitting them explicitly
+		// makes the auction round-trip cleanly through compliant
+		// validators that strictly check tag presence.
+		['auditor_quorum', String(auditorsList.length)],
+		['max_skew_sec', '120'],
 		['max_end_at', String(validated.maxEndAt)],
 		['settlement_grace', String(settlementGraceSeconds)],
 		['min_bid_curve', minBidCurveTagValue],
