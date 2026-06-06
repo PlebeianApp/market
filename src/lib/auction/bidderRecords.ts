@@ -120,6 +120,24 @@ export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefine
 	return loadBidderRecords().find((r) => r.bidEventId === bidEventId)
 }
 
+/**
+ * Find the bidder record whose `refundPubkey` matches the given hex
+ * pubkey. Used by the reclaim flow: each bid leg generates a fresh
+ * refund keypair, persisted as `refundPrivateKey` here. The NIP-60
+ * wallet's `privkeys` map doesn't track those (we don't want refund
+ * keys polluting the wallet's general signing keys), so reclaim falls
+ * back here to recover the privkey at locktime.
+ *
+ * Matches are case-insensitive — pubkeys are hex, but downstream
+ * callers may pass them with different casing depending on whether
+ * they came from a tag or the wallet store.
+ */
+export const findBidderRecordByRefundPubkey = (refundPubkey: string): BidderBidRecord | undefined => {
+	const needle = refundPubkey.trim().toLowerCase()
+	if (!needle) return undefined
+	return loadBidderRecords().find((r) => r.refundPubkey.toLowerCase() === needle)
+}
+
 export const findBidderRecordsForAuction = (auctionRootEventId: string): BidderBidRecord[] => {
 	return loadBidderRecords().filter((r) => r.auctionRootEventId === auctionRootEventId)
 }

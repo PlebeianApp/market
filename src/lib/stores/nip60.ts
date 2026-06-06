@@ -33,6 +33,7 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
 import { configStore } from './config'
+import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -2263,21 +2264,36 @@ export const nip60Actions = {
 			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(waitSeconds)}`)
 		}
 
-		const refundPrivkey = auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null
+		// Look up the refund privkey from three sources in order of
+		// preference:
+		//
+		//   1. The auction's BidderBidRecord (`refundPrivateKey`). This
+		//      is THE authoritative store under cashu_p2pk_bidder_path_v1
+		//      — each bid leg generates a fresh refund keypair at lock
+		//      time and persists the privkey there. Refund keys are
+		//      intentionally NOT added to `wallet.privkeys` because that
+		//      map is for the wallet's general signing keys; mixing in
+		//      per-bid throwaway keys would bloat it across many bids.
+		//   2. The wallet's `privkeys` map. Legacy path; covers older
+		//      bids placed before the BidderBidRecord scheme existed and
+		//      provides a safety net if the local record is missing but
+		//      the user happens to also hold the privkey in their wallet.
+		//   3. None → stop. Without the privkey the timelock refund
+		//      branch can't be signed; falling through would just spam
+		//      the mint with "witness missing" 4xx responses.
+		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
+		const refundPrivkey =
+			bidderRecord?.refundPrivateKey ?? (auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null)
 
-		// If this is an auction bid but we don't hold the refund privkey, stop
-		// immediately. Falling through to an unsigned swap just spams the mint
-		// with rejected requests ("Witness is missing") and eats rate-limit
-		// budget. The typical cause is a wallet rotation / reseed — the bid
-		// was placed with a different wallet than the one loaded right now.
 		if (auctionContext && !refundPrivkey) {
 			const walletPrivkeyCount = wallet.privkeys.size
 			console.warn(
-				`[nip60] Reclaim aborted: wallet does not hold a privkey matching refundPubkey ${auctionContext.refundPubkey}. ` +
-					`Wallet has ${walletPrivkeyCount} privkey(s). The bid may have been placed with a different wallet.`,
+				`[nip60] Reclaim aborted: no refund privkey found for refundPubkey ${auctionContext.refundPubkey} ` +
+					`(checked BidderBidRecord + wallet.privkeys; wallet holds ${walletPrivkeyCount} privkey(s)). ` +
+					`The bid was likely placed with a different browser/profile or local storage was cleared.`,
 			)
 			const reason =
-				'This wallet does not hold the refund private key for this bid. It was probably placed from a different wallet or before a key rotation. The locked sats stay at the mint — they can only be reclaimed by the wallet that originally placed the bid.'
+				'This device does not hold the refund private key for this bid. The key only exists in the wallet that originally placed the bid (per-bid refund keys are stored in localStorage and aren\'t synced). Locked sats stay at the mint until that device reclaims them.'
 			const updatedTokens = nip60Store.state.pendingTokens.map((t) =>
 				t.id === tokenId
 					? {

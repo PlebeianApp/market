@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { authStore } from '../stores/auth'
 import {
+	findBidderRecordByRefundPubkey,
 	findLatestBidderRecordForAuction,
 	loadBidderRecords,
 	upsertBidderRecord,
@@ -170,6 +171,61 @@ describe('walkBidderRecordChain', () => {
 		const chain = walkBidderRecordChain('a'.repeat(64))
 		// Walker must terminate; the two entries are seen exactly once each.
 		expect(chain.length).toBeLessThanOrEqual(2)
+	})
+})
+
+// ---------- refund-key lookup (reclaim flow dependency) ----------
+
+describe('findBidderRecordByRefundPubkey', () => {
+	test('returns undefined when no record matches', () => {
+		expect(findBidderRecordByRefundPubkey('02' + 'ff'.repeat(32))).toBeUndefined()
+	})
+
+	test('finds the leg by exact refundPubkey match', () => {
+		const refundPk = '02' + 'a'.repeat(64)
+		upsertBidderRecord(baseRecord({ bidEventId: 'a'.repeat(64), refundPubkey: refundPk }))
+		const found = findBidderRecordByRefundPubkey(refundPk)
+		expect(found?.bidEventId).toBe('a'.repeat(64))
+		expect(found?.refundPubkey).toBe(refundPk)
+	})
+
+	test('match is case-insensitive', () => {
+		const stored = '02' + 'a'.repeat(64) // lowercase
+		const lookup = '02' + 'A'.repeat(64) // uppercase
+		upsertBidderRecord(baseRecord({ bidEventId: 'a'.repeat(64), refundPubkey: stored }))
+		expect(findBidderRecordByRefundPubkey(lookup)?.bidEventId).toBe('a'.repeat(64))
+	})
+
+	test('empty string never matches', () => {
+		upsertBidderRecord(baseRecord({ bidEventId: 'a'.repeat(64), refundPubkey: '02' + 'a'.repeat(64) }))
+		expect(findBidderRecordByRefundPubkey('')).toBeUndefined()
+		expect(findBidderRecordByRefundPubkey('   ')).toBeUndefined()
+	})
+
+	test('each leg in a chain has its own refundPubkey', () => {
+		// Per-leg refund keys are a privacy + isolation requirement:
+		// no clustering across legs, leaked refund key only affects one
+		// leg. Verify we can recover each leg's privkey independently.
+		const legA = baseRecord({
+			bidEventId: 'a'.repeat(64),
+			amount: 10_000,
+			legLockedAmount: 10_000,
+			refundPubkey: '02' + 'a'.repeat(64),
+			refundPrivateKey: 'aa'.repeat(32),
+		})
+		const legB = baseRecord({
+			bidEventId: 'b'.repeat(64),
+			amount: 12_500,
+			legLockedAmount: 2_500,
+			prevBidEventId: 'a'.repeat(64),
+			refundPubkey: '02' + 'b'.repeat(64),
+			refundPrivateKey: 'bb'.repeat(32),
+		})
+		upsertBidderRecord(legA)
+		upsertBidderRecord(legB)
+
+		expect(findBidderRecordByRefundPubkey('02' + 'a'.repeat(64))?.refundPrivateKey).toBe('aa'.repeat(32))
+		expect(findBidderRecordByRefundPubkey('02' + 'b'.repeat(64))?.refundPrivateKey).toBe('bb'.repeat(32))
 	})
 })
 

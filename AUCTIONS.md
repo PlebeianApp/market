@@ -343,7 +343,10 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 - `e`: `<auction_root_event_id>`
 - `a`: auction coordinate `30408:<seller_pubkey>:<d-tag>`
 - `p`: `<seller_pubkey>`
-- `amount`: bid amount in sats.
+- `amount`: bid amount in sats. **Under the additive rebid chain** (see
+  §4.2.1) this is the bidder's *cumulative* commitment after this leg —
+  not the delta locked by this leg alone. Validators use this value
+  for min-increment checks against the auction's current top bid.
 - `currency`: `SAT`
 - `mint`: mint URL for locked token.
 - `locktime`: unix seconds used in lock script (MUST equal
@@ -353,15 +356,18 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
   secp256k1 hex). Equals `derive(auction.p2pk_xpub, path)`. The path
   remains private to the bidder; only `child_pubkey` is published.
 - `lock_secret`: **repeated tag** — one entry per Cashu proof making up
-  the bid lock. Each value is the full NUT-10 well-known P2PK secret
-  string as it appears in that proof's `secret` field. Validators parse
-  each entry to verify lock structure (pubkey, locktime, refund) and
-  use the paired `proof_y` to query mint state via NUT-7. Cashu wallets
-  typically produce 1–8 locked proofs per send (preserving the wallet's
-  power-of-2 denomination structure across the swap), so multi-proof
-  bids are the norm. All proofs share the same lock pubkey, locktime,
-  and refund key — only the per-proof `nonce` differs. REQUIRED at
-  least once under `settlement_policy=cashu_p2pk_bidder_path_v1`.
+  **this leg's** lock. Each value is the full NUT-10 well-known P2PK
+  secret string as it appears in that proof's `secret` field.
+  Validators parse each entry to verify lock structure (pubkey,
+  locktime, refund) and use the paired `proof_y` to query mint state
+  via NUT-7. Cashu wallets typically produce 1–8 locked proofs per
+  send (preserving the wallet's power-of-2 denomination structure
+  across the swap), so multi-proof legs are the norm. All proofs
+  within one leg share the same lock pubkey, locktime, and refund
+  key — only the per-proof `nonce` differs. REQUIRED at least once
+  under `settlement_policy=cashu_p2pk_bidder_path_v1`. **In a rebid
+  chain each leg has its own `lock_secret`/`proof_y` set,
+  `child_pubkey`, `refund_pubkey`, and lock pubkey — see §4.2.1.**
 - `proof_y`: **repeated tag** — `Y = hash_to_curve(secret)` for each
   proof, in compressed secp256k1 hex. MUST be 1-to-1 parallel with the
   `lock_secret` tags (same count, same order). Cashu mints accept Ys
@@ -373,7 +379,11 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 
 ### Optional tags
 
-- `prev_bid`: previous bid event id from same bidder (replacement chain).
+- `prev_bid`: previous bid event id from the same bidder on this
+  auction. Drives the additive rebid chain (§4.2.1) — REQUIRED on every
+  rebid leg, absent on the chain's first leg. Compliant validators
+  refuse a bid whose `amount` is at or below its `prev_bid`'s `amount`
+  (`replacement_chain_invalid`).
 - `note`: short human text.
 
 ### Forbidden tags
@@ -415,6 +425,65 @@ proofs.
   sign), not how to sign. Pre-locktime, only `derive(seller_xpriv,
 path)` can produce a valid signature, and neither the seller alone
   nor the bidder alone can compute that key (§5).
+
+### 4.2.1 The additive rebid chain
+
+When a bidder raises their own bid on the same auction, the new
+kind-1023 event chains to its predecessor via `prev_bid`. The chain
+is **additive**, not replacement:
+
+- The new leg locks **only the delta**: `amount - prev_leg.amount`
+  sats. The previous leg's lock stays at the mint until either the
+  seller redeems it on settlement (§8.1) or the bidder refunds it at
+  `locktime` (§8.4).
+- The new leg's `amount` tag is the bidder's **cumulative**
+  commitment after this leg. So a 24,118 → 25,742 rebid emits a
+  second kind-1023 whose `amount` is 25,742 and whose `lock_secret`
+  proofs sum to 1,624 (the delta).
+- Each leg has its own fresh `derivation_path`, `child_pubkey`,
+  refund keypair, and lock secret(s). Privacy: refund branches don't
+  cluster across legs. Isolation: a leaked refund key only
+  compromises one leg's collateral.
+- All legs in a chain share the same `locktime` (the auction's
+  `max_end_at + settlement_grace`). Compliant publishers refuse a
+  rebid that would emit a non-uniform locktime, since downstream
+  flows (validator NUT-7 cadence, seller settlement, bidder refund
+  sweep) assume per-chain uniformity.
+
+**Capital efficiency.** Pre-additive-chain implementations made each
+rebid re-lock the full new amount, leaving the bidder's wallet
+temporarily encumbered by the sum of every leg's lock until
+`locktime`. Under the additive chain the live encumbrance equals the
+bidder's current bid — the natural invariant.
+
+**Settlement implications.** On a chain win, the seller's kind-1024
+references the *latest* leg's kind-1025 via `path_release` but must
+redeem every leg in the chain (one `payout` tag each) to recover the
+full bid amount. See §8.1.
+
+**Compliant validator invariants.** A validator MAY emit
+`replacement_chain_invalid` when any of these break:
+- `new_leg.amount > prev_leg.amount` (strict, no equality)
+- `new_leg.bidder == prev_leg.bidder` (same author)
+- `new_leg.locktime == prev_leg.locktime` (uniform locktime)
+- `new_leg.auction == prev_leg.auction` (same auction)
+- No cycle: walking `prev_bid` terminates at a leg with no
+  `prev_bid` tag.
+
+### Bidder local state per leg (extended)
+
+Each leg's record (see §4.2 "Bidder local state") MUST also include:
+
+- `prev_bid_event_id` — the leg's parent in the chain, or `null` on
+  the chain root. Lets settle / refund flows walk the chain offline
+  without re-fetching from the relay.
+- `leg_locked_amount` — sats actually locked at the mint by THIS leg.
+  Equals `sum(proofs[].amount)` for this leg. Distinct from
+  `amount`, which is the cumulative bid value.
+- `refund_private_key` — per-leg refund privkey (hex). Required at
+  locktime to spend the refund branch. NOT added to the wallet's
+  general signing-key map: refund keys are throwaway per-bid material
+  and would bloat the wallet's privkey set across many bids.
 
 ## 4.3 Auction Settlement Events
 
@@ -461,7 +530,32 @@ Optional tags:
 
 - `auditor_ref`: kind-30440 reputation event id(s) the bidder is
   responding to (e.g. the validator's `won_pending_settlement` event).
+- `fallback_offer`: kind-1026 event id this release is accepting (set
+  on `release_reason=fallback_settlement`).
+- `cashu_token`: serialized Cashu token (`cashuA…` / `cashuB…`) wrapping
+  the bid leg's full locked proofs (`{amount, secret, C, id}` per proof).
+  REQUIRED in practice for the seller to redeem: the kind-1023 bid event
+  publishes only `lock_secret` + `proof_y`, so the seller has no way to
+  recover the proofs' `C` value otherwise. Proofs are P2PK-locked to
+  `derive(p2pk_xpub, derivation_path)` — only the seller (who holds
+  `seller_xpriv`) can spend them, so publishing the token publicly is
+  safe. Omit only on synthetic / non-redeemable releases (e.g. seed
+  fixtures); compliant settlers will refuse to redeem without it.
 - `content` (event body): MAY contain a short human note.
+
+### Chain releases
+
+For a multi-leg rebid chain (§4.2.1), the bidder MUST publish **one
+kind-1025 per leg**, each carrying that leg's `derivation_path`,
+`child_pubkey`, and `cashu_token`. The seller's settlement walks the
+chain via the kind-1023 `prev_bid` tags and looks up the corresponding
+kind-1025 for each leg by the leg's bid event id. A chain whose release
+events are partial (some legs unreleased) cannot be redeemed — the
+seller will refuse to publish kind-1024 until every leg has a release.
+
+Compliant bidder clients publish the chain's releases as a single batch
+when the user clicks "settle" so a partial publish doesn't leave the
+seller stuck with a half-redeemable chain.
 
 Verifiability:
 
@@ -472,6 +566,9 @@ Verifiability:
   rather than the expected `settled_promptly`.
 - Once published, the path is public. Only the seller can use it
   (needs `seller_xpriv`), so publication is safe.
+- The cashu_token is similarly safe to publish: the proofs are
+  P2PK-locked, so possession of `C` without `derive(seller_xpriv,
+  path)` confers no spending authority.
 
 ### 4.3.2 Kind `1024` Auction Settlement (seller-signed)
 
@@ -498,10 +595,17 @@ Required tags:
 
 Optional tags:
 
-- `payout`: `["payout", "<bid_event_id>", "<amount>", "redeemed"]`
-- `path_release`: id of the kind-1025 event the seller acted on.
-  REQUIRED when `status=settled` so observers can audit the chain
-  `bid → release → settlement`.
+- `payout`: `["payout", "<bid_event_id>", "<amount>", "redeemed"]` —
+  **repeated tag** when the winning bid is a rebid chain (§4.2.1): one
+  `payout` per leg, with each leg's individual locked amount (not the
+  cumulative bid). The sum of `payout` amounts MUST equal
+  `final_amount`. Observers can audit the chain by verifying each
+  `payout`'s `bid_event_id` walks back to the kind-1023 chain root via
+  `prev_bid` tags.
+- `path_release`: id of the **latest** leg's kind-1025 event the seller
+  acted on. REQUIRED when `status=settled`. Older legs in a chain also
+  have their own kind-1025s; those are discoverable via the bid event
+  chain and don't need explicit references here.
 - `fallback_chain`: repeating tags listing the bids the seller tried
   in order before settling (e.g. winner griefed, second-highest
   settled). Format:
