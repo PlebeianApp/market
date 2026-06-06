@@ -59,7 +59,11 @@ const fetchBidEvent = async (eventId: string, relayUrl: string): Promise<NDKEven
 	return event
 }
 
-const tagValues = (event: NDKEvent, name: string): string[] => event.tags.filter((t) => t[0] === name).map((t) => t[1] ?? '').filter(Boolean)
+const tagValues = (event: NDKEvent, name: string): string[] =>
+	event.tags
+		.filter((t) => t[0] === name)
+		.map((t) => t[1] ?? '')
+		.filter(Boolean)
 
 const main = async () => {
 	const args = parseArgs(process.argv.slice(2))
@@ -168,13 +172,13 @@ const main = async () => {
 	console.log('\n' + '='.repeat(60))
 	if (allUnspent) {
 		console.log('VERDICT: Mint says UNSPENT for every Y. The validator should be reporting')
-		console.log('         valid_bid_placed on the next poll. If it isn\'t, the bug is in the')
+		console.log("         valid_bid_placed on the next poll. If it isn't, the bug is in the")
 		console.log('         validator polling loop (src/server/auction-validator/nut7Poller.ts)')
 		console.log('         or the validator state-aggregation (aggregateProofStates).')
 	} else if (anyMissing) {
 		console.log('VERDICT: Mint omitted at least one Y from its response. NUT-7 spec says every')
 		console.log('         queried Y should get an entry; this is either a mint bug or the')
-		console.log('         mint genuinely doesn\'t know that Y (proof was never minted, or our')
+		console.log("         mint genuinely doesn't know that Y (proof was never minted, or our")
 		console.log('         secret string differs from what was sent to the mint at swap time).')
 	} else {
 		console.log('VERDICT: Mint returned non-UNSPENT for some Ys. See per-line notes above.')

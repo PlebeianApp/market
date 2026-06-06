@@ -344,7 +344,7 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 - `a`: auction coordinate `30408:<seller_pubkey>:<d-tag>`
 - `p`: `<seller_pubkey>`
 - `amount`: bid amount in sats. **Under the additive rebid chain** (see
-  §4.2.1) this is the bidder's *cumulative* commitment after this leg —
+  §4.2.1) this is the bidder's _cumulative_ commitment after this leg —
   not the delta locked by this leg alone. Validators use this value
   for min-increment checks against the auction's current top bid.
 - `currency`: `SAT`
@@ -457,12 +457,13 @@ temporarily encumbered by the sum of every leg's lock until
 bidder's current bid — the natural invariant.
 
 **Settlement implications.** On a chain win, the seller's kind-1024
-references the *latest* leg's kind-1025 via `path_release` but must
+references the _latest_ leg's kind-1025 via `path_release` but must
 redeem every leg in the chain (one `payout` tag each) to recover the
 full bid amount. See §8.1.
 
 **Compliant validator invariants.** A validator MAY emit
 `replacement_chain_invalid` when any of these break:
+
 - `new_leg.amount > prev_leg.amount` (strict, no equality)
 - `new_leg.bidder == prev_leg.bidder` (same author)
 - `new_leg.locktime == prev_leg.locktime` (uniform locktime)
@@ -568,7 +569,7 @@ Verifiability:
   (needs `seller_xpriv`), so publication is safe.
 - The cashu_token is similarly safe to publish: the proofs are
   P2PK-locked, so possession of `C` without `derive(seller_xpriv,
-  path)` confers no spending authority.
+path)` confers no spending authority.
 
 ### 4.3.2 Kind `1024` Auction Settlement (seller-signed)
 

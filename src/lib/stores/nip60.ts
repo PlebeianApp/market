@@ -2293,7 +2293,7 @@ export const nip60Actions = {
 					`The bid was likely placed with a different browser/profile or local storage was cleared.`,
 			)
 			const reason =
-				'This device does not hold the refund private key for this bid. The key only exists in the wallet that originally placed the bid (per-bid refund keys are stored in localStorage and aren\'t synced). Locked sats stay at the mint until that device reclaims them.'
+				"This device does not hold the refund private key for this bid. The key only exists in the wallet that originally placed the bid (per-bid refund keys are stored in localStorage and aren't synced). Locked sats stay at the mint until that device reclaims them."
 			const updatedTokens = nip60Store.state.pendingTokens.map((t) =>
 				t.id === tokenId
 					? {
