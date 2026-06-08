@@ -33,10 +33,15 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 
 	const sendMessageMutation = usePublishLiveChatMessageMutation()
 	const [input, setInput] = useState('')
-	const messagesEndRef = useRef<HTMLDivElement>(null)
+	const chatContainerRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+		const container = chatContainerRef.current
+		if (!container) return
+		const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100
+		if (isNearBottom) {
+			container.scrollTop = container.scrollHeight
+		}
 	}, [messages.length])
 
 	if (!liveActivity) {
@@ -62,7 +67,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	}
 
 	return (
-		<div className="flex h-full flex-col border-l border-zinc-200 bg-white">
+		<div className="flex h-full flex-col bg-white">
 			<div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
 				<div className="flex items-center gap-2">
 					<div className={`h-2 w-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-zinc-300'}`} />
@@ -71,7 +76,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 				<span className="text-xs text-zinc-400">{messages.length} messages</span>
 			</div>
 
-			<div className="flex-1 overflow-y-auto">
+			<div ref={chatContainerRef} className="flex-1 overflow-y-auto">
 				{messages.length === 0 ? (
 					<div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
 						<p className="text-sm text-zinc-400">No messages yet. Be the first!</p>
@@ -83,7 +88,6 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 						))}
 					</div>
 				)}
-				<div ref={messagesEndRef} />
 			</div>
 
 			{user ? (

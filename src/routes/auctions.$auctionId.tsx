@@ -60,7 +60,7 @@ import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Gavel, Trophy, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Gavel, Radio, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -434,318 +434,197 @@ function AuctionDetailRoute() {
 				</div>
 			)}
 
-			<div className="mx-auto flex w-full max-w-7xl gap-0 px-4 py-6">
-				<div className="min-w-0 flex-1">
-					<Tabs defaultValue="overview" className="w-full">
-						<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
-							<TabsTrigger
-								value="overview"
-								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-							>
-								Overview
-							</TabsTrigger>
-							<TabsTrigger
-								value="description"
-								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-							>
-								Description
-							</TabsTrigger>
-							<TabsTrigger
-								value="bids"
-								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-							>
-								Bids
-							</TabsTrigger>
-							<TabsTrigger
-								value="seller"
-								className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-							>
-								Seller
-							</TabsTrigger>
-						</TabsList>
+			<div className="mx-auto w-full max-w-7xl px-4 py-6">
+				<Tabs defaultValue="overview" className="w-full">
+					<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
+						<TabsTrigger
+							value="overview"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Overview
+						</TabsTrigger>
+						<TabsTrigger
+							value="description"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Description
+						</TabsTrigger>
+						<TabsTrigger
+							value="bids"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Bids
+						</TabsTrigger>
+						<TabsTrigger
+							value="seller"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Seller
+						</TabsTrigger>
+						<TabsTrigger
+							value="live"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							<Radio className="mr-1 h-4 w-4" />
+							Live
+						</TabsTrigger>
+					</TabsList>
 
-						<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
-								<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
-									<div className="space-y-4">
-										<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-											<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
-											<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
-											<div className="mt-4 flex flex-wrap gap-2">
-												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-													{auctionType}
-												</Badge>
-												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-													{currency}
-												</Badge>
-												<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-													{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
-												</Badge>
-											</div>
-										</div>
-
-										<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-											<ShopperStat
-												label={ended ? 'Final price' : 'Current price'}
-												value={formatSats(currentPrice)}
-												helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
-											/>
-											<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
-											<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
-											<ShopperStat
-												label="Reserve"
-												value={formatSats(reserve)}
-												helper="Seller threshold that decides whether the winner can settle."
-											/>
-											<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
-											<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
-										</div>
-									</div>
-
-									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-											<UserRound className="h-4 w-4" />
-											Seller & fulfilment
-										</div>
-										<div className="mt-4 space-y-1">
-											<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
-											<ShopperInfoRow
-												label="Categories"
-												value={
-													categories.length > 0 ? (
-														<span className="inline-flex flex-wrap justify-end gap-1.5">
-															{categories.slice(0, 3).map((category) => (
-																<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
-																	{category}
-																</span>
-															))}
-														</span>
-													) : (
-														'None listed'
-													)
-												}
-											/>
-											<ShopperInfoRow
-												label="Shipping options"
-												value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
-											/>
-										</div>
-
-										<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
-											<AccordionItem value="settlement" className="border-none">
-												<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-													Settlement & technical details
-												</AccordionTrigger>
-												<AccordionContent className="space-y-3 pb-4">
-													<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
-													<TechnicalDataRow label="Key scheme" value={keyScheme} />
-													{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
-													<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
-													<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
-													<TechnicalDataRow
-														label="Trusted mints"
-														value={
-															trustedMints.length > 0 ? (
-																<ul className="space-y-1">
-																	{trustedMints.map((mint) => (
-																		<li key={mint}>{mint}</li>
-																	))}
-																</ul>
-															) : (
-																'No mints declared'
-															)
-														}
-													/>
-												</AccordionContent>
-											</AccordionItem>
-										</Accordion>
-									</div>
-								</div>
-							</div>
-						</TabsContent>
-
-						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
-								<div className="space-y-4">
-									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
-										{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-										<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
-											{description || 'No description provided.'}
-										</p>
-									</div>
-
-									{specs.length > 0 && (
-										<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-											<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
-											<dl className="mt-4 divide-y divide-zinc-200">
-												{specs.map((spec, index) => (
-													<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
-														<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
-														<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
-													</div>
-												))}
-											</dl>
-										</div>
-									)}
-								</div>
-
+					<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+							<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
 								<div className="space-y-4">
 									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-											<Gavel className="h-4 w-4" />
-											Categories
-										</div>
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
+										<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
 										<div className="mt-4 flex flex-wrap gap-2">
-											{categories.length > 0 ? (
-												categories.map((category) => (
-													<span
-														key={category}
-														className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
-													>
-														{category}
-													</span>
-												))
-											) : (
-												<p className="text-sm text-zinc-500">No categories listed.</p>
-											)}
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{auctionType}
+											</Badge>
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{currency}
+											</Badge>
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
+											</Badge>
 										</div>
 									</div>
 
-									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-										<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-											<Truck className="h-4 w-4" />
-											Shipping options
-										</div>
-										<div className="mt-4">
-											{resolvedShippingOptions.length > 0 ? (
-												<ul className="space-y-2 text-sm text-zinc-700">
-													{resolvedShippingOptions.map((option, index) => {
-														const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
-														const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
-														return (
-															<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-																{option.status === 'invalid' ? (
-																	<div className="space-y-1">
-																		<p className="font-medium text-zinc-900">Invalid shipping reference</p>
-																		<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																	</div>
-																) : option.info ? (
-																	<div className="space-y-1">
-																		<p className="font-medium text-zinc-900">{option.info.title}</p>
-																		<p className="text-xs text-zinc-600">
-																			Base: {option.info.price.amount} {option.info.price.currency}
-																			{option.info.service ? ` · ${option.info.service}` : ''}
-																			{option.info.carrier ? ` · ${option.info.carrier}` : ''}
-																		</p>
-																		{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
-																	</div>
-																) : (
-																	<div className="space-y-1">
-																		<p className="font-medium text-zinc-900">Shipping option unavailable</p>
-																		<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																	</div>
-																)}
-															</li>
-														)
-													})}
-												</ul>
-											) : (
-												<p className="text-sm text-zinc-500">No shipping options listed.</p>
-											)}
-										</div>
+									<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+										<ShopperStat
+											label={ended ? 'Final price' : 'Current price'}
+											value={formatSats(currentPrice)}
+											helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
+										/>
+										<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
+										<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
+										<ShopperStat
+											label="Reserve"
+											value={formatSats(reserve)}
+											helper="Seller threshold that decides whether the winner can settle."
+										/>
+										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
+										<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
 									</div>
+								</div>
+
+								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<UserRound className="h-4 w-4" />
+										Seller & fulfilment
+									</div>
+									<div className="mt-4 space-y-1">
+										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
+										<ShopperInfoRow
+											label="Categories"
+											value={
+												categories.length > 0 ? (
+													<span className="inline-flex flex-wrap justify-end gap-1.5">
+														{categories.slice(0, 3).map((category) => (
+															<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
+																{category}
+															</span>
+														))}
+													</span>
+												) : (
+													'None listed'
+												)
+											}
+										/>
+										<ShopperInfoRow
+											label="Shipping options"
+											value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
+										/>
+									</div>
+
+									<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
+										<AccordionItem value="settlement" className="border-none">
+											<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+												Settlement & technical details
+											</AccordionTrigger>
+											<AccordionContent className="space-y-3 pb-4">
+												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
+												<TechnicalDataRow label="Key scheme" value={keyScheme} />
+												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
+												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
+												<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
+												<TechnicalDataRow
+													label="Trusted mints"
+													value={
+														trustedMints.length > 0 ? (
+															<ul className="space-y-1">
+																{trustedMints.map((mint) => (
+																	<li key={mint}>{mint}</li>
+																))}
+															</ul>
+														) : (
+															'No mints declared'
+														)
+													}
+												/>
+											</AccordionContent>
+										</AccordionItem>
+									</Accordion>
 								</div>
 							</div>
-						</TabsContent>
+						</div>
+					</TabsContent>
 
-						<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<div>
-										<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
-										<p className="mt-1 text-sm text-zinc-500">
-											Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
-										</p>
-									</div>
-									<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-										{newestBids.length} recorded
-									</Badge>
+					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
+							<div className="space-y-4">
+								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
+									{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
+										{description || 'No description provided.'}
+									</p>
 								</div>
 
-								{newestBids.length === 0 ? (
-									<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
-										No bids yet.
-									</div>
-								) : (
-									<div className="space-y-4">
-										{newestBids.map((bidEvent) => {
-											const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-											const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
-											return (
-												<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
-													<div className="flex flex-wrap items-start justify-between gap-3">
-														<div>
-															<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
-															<p className="mt-1 text-sm text-zinc-500">
-																Recorded{' '}
-																{bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
-															</p>
-														</div>
-														<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-															{getBidStatus(bidEvent)}
-														</Badge>
-													</div>
-
-													<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-														<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
-														<span className="text-zinc-400">•</span>
-														<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
-													</div>
-
-													<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
-														<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
-															<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-																Bid event details
-															</AccordionTrigger>
-															<AccordionContent className="space-y-3 pb-4">
-																<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
-																<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
-																<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
-																<TechnicalDataRow
-																	label="Locktime"
-																	value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
-																/>
-																<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
-															</AccordionContent>
-														</AccordionItem>
-													</Accordion>
+								{specs.length > 0 && (
+									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+										<dl className="mt-4 divide-y divide-zinc-200">
+											{specs.map((spec, index) => (
+												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
+													<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
+													<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
 												</div>
-											)
-										})}
+											))}
+										</dl>
 									</div>
 								)}
 							</div>
-						</TabsContent>
 
-						<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="space-y-4">
 								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<UserRound className="h-4 w-4" />
-										Seller
+										<Gavel className="h-4 w-4" />
+										Categories
+									</div>
+									<div className="mt-4 flex flex-wrap gap-2">
+										{categories.length > 0 ? (
+											categories.map((category) => (
+												<span
+													key={category}
+													className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+												>
+													{category}
+												</span>
+											))
+										) : (
+											<p className="text-sm text-zinc-500">No categories listed.</p>
+										)}
+									</div>
+								</div>
+
+								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<Truck className="h-4 w-4" />
+										Shipping options
 									</div>
 									<div className="mt-4">
-										<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
-									</div>
-									<div className="mt-5 space-y-1">
-										<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
-										<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
-										<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
-									</div>
-									{resolvedShippingOptions.length > 0 && (
-										<div className="mt-4">
-											<div className="text-xs font-semibold text-zinc-500 uppercase mb-2">Shipping</div>
+										{resolvedShippingOptions.length > 0 ? (
 											<ul className="space-y-2 text-sm text-zinc-700">
 												{resolvedShippingOptions.map((option, index) => {
 													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
@@ -757,8 +636,6 @@ function AuctionDetailRoute() {
 																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
 																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
 																</div>
-															) : option.isLoading ? (
-																<p className="text-sm text-zinc-400">Loading shipping details...</p>
 															) : option.info ? (
 																<div className="space-y-1">
 																	<p className="font-medium text-zinc-900">{option.info.title}</p>
@@ -779,18 +656,148 @@ function AuctionDetailRoute() {
 													)
 												})}
 											</ul>
-										</div>
-									)}
+										) : (
+											<p className="text-sm text-zinc-500">No shipping options listed.</p>
+										)}
+									</div>
 								</div>
 							</div>
-						</TabsContent>
-					</Tabs>
-				</div>
-				{auction && (
-					<div className="hidden w-80 shrink-0 lg:block">
-						<LiveChatPanel auctionEvent={auction} />
-					</div>
-				)}
+						</div>
+					</TabsContent>
+
+					<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<div className="flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
+									<p className="mt-1 text-sm text-zinc-500">
+										Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
+									</p>
+								</div>
+								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+									{newestBids.length} recorded
+								</Badge>
+							</div>
+
+							{newestBids.length === 0 ? (
+								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
+									No bids yet.
+								</div>
+							) : (
+								<div className="space-y-4">
+									{newestBids.map((bidEvent) => {
+										const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
+										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
+										return (
+											<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
+												<div className="flex flex-wrap items-start justify-between gap-3">
+													<div>
+														<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
+														<p className="mt-1 text-sm text-zinc-500">
+															Recorded {bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
+														</p>
+													</div>
+													<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+														{getBidStatus(bidEvent)}
+													</Badge>
+												</div>
+
+												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
+													<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
+													<span className="text-zinc-400">•</span>
+													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
+												</div>
+
+												<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
+													<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
+														<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+															Bid event details
+														</AccordionTrigger>
+														<AccordionContent className="space-y-3 pb-4">
+															<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
+															<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
+															<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
+															<TechnicalDataRow
+																label="Locktime"
+																value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
+															/>
+															<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
+														</AccordionContent>
+													</AccordionItem>
+												</Accordion>
+											</div>
+										)
+									})}
+								</div>
+							)}
+						</div>
+					</TabsContent>
+
+					<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+									<UserRound className="h-4 w-4" />
+									Seller
+								</div>
+								<div className="mt-4">
+									<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
+								</div>
+								<div className="mt-5 space-y-1">
+									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
+									<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
+									<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
+								</div>
+								{resolvedShippingOptions.length > 0 && (
+									<div className="mt-4">
+										<div className="text-xs font-semibold text-zinc-500 uppercase mb-2">Shipping</div>
+										<ul className="space-y-2 text-sm text-zinc-700">
+											{resolvedShippingOptions.map((option, index) => {
+												const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
+												const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
+												return (
+													<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+														{option.status === 'invalid' ? (
+															<div className="space-y-1">
+																<p className="font-medium text-zinc-900">Invalid shipping reference</p>
+																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+															</div>
+														) : option.isLoading ? (
+															<p className="text-sm text-zinc-400">Loading shipping details...</p>
+														) : option.info ? (
+															<div className="space-y-1">
+																<p className="font-medium text-zinc-900">{option.info.title}</p>
+																<p className="text-xs text-zinc-600">
+																	Base: {option.info.price.amount} {option.info.price.currency}
+																	{option.info.service ? ` · ${option.info.service}` : ''}
+																	{option.info.carrier ? ` · ${option.info.carrier}` : ''}
+																</p>
+																{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
+															</div>
+														) : (
+															<div className="space-y-1">
+																<p className="font-medium text-zinc-900">Shipping option unavailable</p>
+																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+															</div>
+														)}
+													</li>
+												)
+											})}
+										</ul>
+									</div>
+								)}
+							</div>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="live" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="h-[500px]">
+								<LiveChatPanel auctionEvent={auction} />
+							</div>
+						</div>
+					</TabsContent>
+				</Tabs>
 			</div>
 
 			{moreFromSeller.length > 0 && (
