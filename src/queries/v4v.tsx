@@ -6,6 +6,12 @@ import { nip19 } from 'nostr-tools'
 import { v4 as uuidv4 } from 'uuid'
 import { v4vKeys } from './queryKeyFactory'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
+import {
+	getNextCommunityQueryFixtureStep,
+	hasCommunityQueryFixture,
+	normalizeCommunityArrayFixture,
+	resolveCommunityQueryFixtureStep,
+} from '@/lib/tests/communityQueryFixtures'
 
 export type V4VConfigurationState = 'unknown' | 'never-configured' | 'configured-zero' | 'configured-nonzero'
 
@@ -285,38 +291,40 @@ export const usePublishV4VShares = () => {
 /**
  * Fetches all users who have configured V4V shares (merchants)
  * Returns an array of unique pubkeys
+ * Throws on relay/network errors to enable error state handling
  */
 export const fetchV4VMerchants = async (): Promise<string[]> => {
-	try {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) {
-			console.warn('NDK not ready, returning empty merchants list')
-			return []
-		}
+	const fixtureStep = getNextCommunityQueryFixtureStep<string[]>('merchants')
+	if (fixtureStep) {
+		return await resolveCommunityQueryFixtureStep('merchants', fixtureStep, (data) =>
+			normalizeCommunityArrayFixture<string>('merchants', data),
+		)
+	}
 
-		const events = await ndk.fetchEvents({
-			kinds: [30078],
-			'#l': ['v4v_share'],
-			limit: 100, // Limit to 100 most recent merchants
-		})
+	const ndk = ndkActions.getNDK()
+	if (!ndk) {
+		throw new Error('NDK not ready, cannot fetch merchants')
+	}
 
-		if (!events || events.size === 0) {
-			return []
-		}
+	const events = await ndk.fetchEvents({
+		kinds: [30078],
+		'#l': ['v4v_share'],
+		limit: 100, // Limit to 100 most recent merchants
+	})
 
-		// Get unique pubkeys from the events and filter out blacklisted ones
-		const pubkeySet = new Set<string>()
-		Array.from(events).forEach((event) => {
-			if (event.pubkey) {
-				pubkeySet.add(event.pubkey)
-			}
-		})
-
-		return filterBlacklistedPubkeys(Array.from(pubkeySet))
-	} catch (error) {
-		console.error('Error fetching V4V merchants:', error)
+	if (!events || events.size === 0) {
 		return []
 	}
+
+	// Get unique pubkeys from the events and filter out blacklisted ones
+	const pubkeySet = new Set<string>()
+	Array.from(events).forEach((event) => {
+		if (event.pubkey) {
+			pubkeySet.add(event.pubkey)
+		}
+	})
+
+	return filterBlacklistedPubkeys(Array.from(pubkeySet))
 }
 
 /**
@@ -326,6 +334,7 @@ export const useV4VMerchants = () => {
 	return useQuery({
 		queryKey: v4vKeys.merchants(),
 		queryFn: fetchV4VMerchants,
+		retry: (failureCount) => !hasCommunityQueryFixture('merchants') && failureCount < 3,
 		staleTime: 1000 * 60 * 5, // 5 minutes
 	})
 }
