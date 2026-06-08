@@ -151,6 +151,16 @@ type AuctionShippingOptionDisplay = {
 	isNotFound: boolean
 }
 
+type AuctionParticipantSummary = {
+	pubkey: string
+	visibleBidCount: number
+	highestVisibleBidAmount: number
+	latestVisibleBidTimestamp: number
+	latestBidEventId: string
+	isCurrentLeader: boolean
+	isSettlementWinner: boolean
+}
+
 function AuctionEmptyState({ title, description }: { title: string; description?: string }) {
 	return (
 		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
@@ -497,6 +507,52 @@ function AuctionDetailRoute() {
 		)
 	}, [bids])
 
+	const bidderSummaries = useMemo(() => {
+		const summariesByPubkey = new Map<string, AuctionParticipantSummary>()
+		const currentLeaderPubkey = topBidOverall?.pubkey || ''
+
+		for (const bid of newestBids) {
+			if (!bid.pubkey) continue
+
+			const amount = getBidAmount(bid)
+			const timestamp = bid.created_at || 0
+			const existing = summariesByPubkey.get(bid.pubkey)
+
+			if (!existing) {
+				summariesByPubkey.set(bid.pubkey, {
+					pubkey: bid.pubkey,
+					visibleBidCount: 1,
+					highestVisibleBidAmount: amount,
+					latestVisibleBidTimestamp: timestamp,
+					latestBidEventId: bid.id,
+					isCurrentLeader: bid.pubkey === currentLeaderPubkey,
+					isSettlementWinner: bid.pubkey === settlementWinner,
+				})
+				continue
+			}
+
+			existing.visibleBidCount += 1
+			existing.highestVisibleBidAmount = Math.max(existing.highestVisibleBidAmount, amount)
+
+			const isNewerBid =
+				timestamp > existing.latestVisibleBidTimestamp ||
+				(timestamp === existing.latestVisibleBidTimestamp && bid.id > existing.latestBidEventId)
+			if (isNewerBid) {
+				existing.latestVisibleBidTimestamp = timestamp
+				existing.latestBidEventId = bid.id
+			}
+		}
+
+		return [...summariesByPubkey.values()].sort((a, b) => {
+			if (a.isCurrentLeader !== b.isCurrentLeader) return a.isCurrentLeader ? -1 : 1
+
+			const latestBidDelta = b.latestVisibleBidTimestamp - a.latestVisibleBidTimestamp
+			if (latestBidDelta !== 0) return latestBidDelta
+
+			return a.pubkey.localeCompare(b.pubkey)
+		})
+	}, [newestBids, settlementWinner, topBidOverall?.pubkey])
+
 	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
@@ -748,6 +804,12 @@ function AuctionDetailRoute() {
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
 							Comments
+						</TabsTrigger>
+						<TabsTrigger
+							value="participants"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Participants
 						</TabsTrigger>
 						<TabsTrigger
 							value="seller"
@@ -1019,6 +1081,104 @@ function AuctionDetailRoute() {
 					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
 						<div className="rounded-lg bg-white p-6 shadow-md">
 							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
+						</div>
+					</TabsContent>
+
+					<TabsContent value="participants" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<div className="flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<h2 className="text-xl font-semibold text-zinc-950">Participants</h2>
+									<p className="mt-1 text-sm text-zinc-500">Read-only identities visible from this auction and its visible bids.</p>
+								</div>
+								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+									{bidderSummaries.length} visible {bidderSummaries.length === 1 ? 'bidder' : 'bidders'}
+								</Badge>
+							</div>
+
+							<div className="grid gap-4 lg:grid-cols-2">
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Seller</p>
+									<div className="mt-4 flex flex-wrap items-center gap-3">
+										<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
+										<span className="text-sm font-medium text-zinc-600">{shortenHex(auction.pubkey)}</span>
+									</div>
+								</section>
+
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Current leading bidder</p>
+									{topBidOverall ? (
+										<div className="mt-4 space-y-3">
+											<div className="flex flex-wrap items-center gap-3">
+												<AvatarUser pubkey={topBidOverall.pubkey} colored deterministicFallbackText />
+												<span className="text-sm font-medium text-zinc-600">{shortenHex(topBidOverall.pubkey)}</span>
+											</div>
+											<ShopperInfoRow label="Highest visible bid" value={formatSats(getBidAmount(topBidOverall))} />
+										</div>
+									) : (
+										<div className="mt-4">
+											<AuctionEmptyState title="No visible bidders yet" />
+										</div>
+									)}
+								</section>
+							</div>
+
+							{settlementWinner && (
+								<section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Settlement winner</p>
+									<div className="mt-4 flex flex-wrap items-center gap-3">
+										<AvatarUser pubkey={settlementWinner} colored deterministicFallbackText />
+										<span className="text-sm font-medium text-emerald-900">{shortenHex(settlementWinner)}</span>
+									</div>
+									{settlementFinalAmount > 0 && (
+										<div className="mt-4">
+											<ShopperInfoRow label="Final amount" value={formatSats(settlementFinalAmount)} />
+										</div>
+									)}
+								</section>
+							)}
+
+							<section className="space-y-4">
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<h3 className="text-lg font-semibold text-zinc-950">Visible bidders</h3>
+									<span className="text-sm text-zinc-500">{bidderSummaries.length} unique</span>
+								</div>
+
+								{bidderSummaries.length === 0 ? (
+									<AuctionEmptyState title="No visible bidders yet" />
+								) : (
+									<div className="grid gap-4 lg:grid-cols-2">
+										{bidderSummaries.map((summary) => (
+											<div key={summary.pubkey} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
+												<div className="flex flex-wrap items-start justify-between gap-3">
+													<div className="flex flex-wrap items-center gap-3">
+														<AvatarUser pubkey={summary.pubkey} colored deterministicFallbackText />
+														<span className="text-sm font-medium text-zinc-600">{shortenHex(summary.pubkey)}</span>
+													</div>
+													<div className="flex flex-wrap justify-end gap-2">
+														{summary.isCurrentLeader && (
+															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
+																Current leading bidder
+															</Badge>
+														)}
+														{summary.isSettlementWinner && (
+															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
+																Settlement winner
+															</Badge>
+														)}
+													</div>
+												</div>
+
+												<div className="mt-4 space-y-1">
+													<ShopperInfoRow label="Highest visible bid" value={formatSats(summary.highestVisibleBidAmount)} />
+													<ShopperInfoRow label="Visible bids" value={String(summary.visibleBidCount)} />
+													<ShopperInfoRow label="Latest visible bid" value={formatMaybeDate(summary.latestVisibleBidTimestamp)} />
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</section>
 						</div>
 					</TabsContent>
 
