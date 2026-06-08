@@ -15,6 +15,7 @@ Plebeian Market is a decentralized Nostr marketplace and circular economic commu
 ## Reference Protocol Docs
 
 - Nostr NIPs: <https://nips.nostr.com/>
+- Gamma Markets marketplace protocol spec: <https://github.com/GammaMarkets/market-spec/blob/main/spec.md>
 - Bitcoin developer guide: <https://developer.bitcoin.org/devguide/index.html>
 - Core Lightning docs: <https://docs.corelightning.org/docs/home>
 - Cashu docs: <https://docs.cashu.space/>

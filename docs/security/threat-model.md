@@ -65,6 +65,7 @@ Default stance: relays, wallet responses, zap receipts, user content, media URLs
 - Relay inconsistency causing stale, duplicated, or replayed state.
 - Paid-feature events granted from insufficiently verified zap receipts.
 - NIP-05 or vanity names bound to the wrong identity.
+- Gamma marketplace compatibility requires validating product, collection, shipping, order, payment receipt, and review event shapes against expected kind/tag semantics before accepting, rendering, or acting on relay data.
 
 Mitigations:
 

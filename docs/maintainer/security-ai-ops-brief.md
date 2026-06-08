@@ -38,7 +38,7 @@ Primary principle: marketplace data lives on Nostr relays. The app server must r
 Confirmed protocol areas include:
 
 - NIP-99 product/classified listings, especially kind `30402`.
-- Gamma and legacy marketplace-style product, collection, shipping, and order events.
+- Gamma-style marketplace compatibility references: kind `30402` product listings, kind `30405` product collections, kind `30406` shipping options, merchant preferences, NIP-17 encrypted order communication, kind `14` general order communication, kind `16` order creation/payment request/status update/shipping information messages, kind `17` payment receipts and verification, and kind `31555` product reviews.
 - Private order details using NIP-59 gift wrap/seal/rumor flows and order-related kind `16` messages.
 - NIP-57 zap requests and receipts for paid features.
 - NIP-46 remote signing and NIP-07 extension signing.
@@ -51,6 +51,7 @@ Confirmed protocol areas include:
 Reference docs:
 
 - Nostr NIPs: <https://nips.nostr.com/>
+- Gamma Markets marketplace protocol spec: <https://github.com/GammaMarkets/market-spec/blob/main/spec.md>
 - Bitcoin developer guide: <https://developer.bitcoin.org/devguide/index.html>
 - Core Lightning docs: <https://docs.corelightning.org/docs/home>
 - Cashu docs: <https://docs.cashu.space/>
