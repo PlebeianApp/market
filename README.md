@@ -1,5 +1,7 @@
 # Market Frontend
 
+Plebeian Market is a decentralized Nostr marketplace and circular economic community builder. The app uses Nostr relays as the primary marketplace data layer.
+
 To install dependencies:
 
 ```bash
@@ -19,6 +21,16 @@ bun start
 ```
 
 This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+
+## Maintainer and Contributor Docs
+
+- Agent and maintainer rules: [AGENTS.md](./AGENTS.md)
+- Maintainer security and AI operations brief: [docs/maintainer/security-ai-ops-brief.md](./docs/maintainer/security-ai-ops-brief.md)
+- LLM/Codex launch pad: [docs/llm/launch-pad.md](./docs/llm/launch-pad.md)
+- Command safety matrix: [docs/llm/command-safety.md](./docs/llm/command-safety.md)
+- Security threat model: [docs/security/threat-model.md](./docs/security/threat-model.md)
+
+Keep contributor changes small and reviewable. Do not commit local secrets, private keys, NWC strings, Cashu tokens or proofs, mnemonics, API keys, bearer tokens, preimages, seeds, or credentials.
 
 ## Getting Started
 
@@ -43,14 +55,18 @@ This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) i
    - Update your `.env` file with this relay URL
 
 4. Initialize the application with default settings:
+
    ```bash
    bun run startup
    ```
+
    This will create:
    - Default app settings
    - User roles configuration
    - Ban list
    - Relay list
+
+   This command writes to the configured relay. Do not run it against shared or production infrastructure unless you intend to publish those events.
 
 ### First Run
 
@@ -83,9 +99,32 @@ When you first start the application:
    ```
 
 3. Optional: Seed the relay with test data:
+
    ```bash
    bun seed
    ```
+
+### Command Safety
+
+- `bun run format:check` checks formatting without rewriting files.
+- `bun run test:unit` runs the curated Bun unit baseline used by CI.
+- `bun test` is broad Bun discovery and may pick up Playwright, integration, server, or service-dependent tests.
+- `bun run build` runs route generation before building and may update `src/routeTree.gen.ts` and `dist/`.
+- `bun run generate-routes` and `bun run watch-routes` update the TanStack Router generated route tree.
+- `bun run seed`, `bun run startup`, `bun dev:seed`, E2E scripts, and deploy scripts can mutate local state, relays, reports, or infrastructure.
+
+See [docs/llm/command-safety.md](./docs/llm/command-safety.md) before running mutating, E2E, seed, startup, deploy, release, or issue-tracker commands.
+
+### Testing and Build Baseline
+
+For a local contributor baseline, prefer:
+
+```bash
+bun run format:check
+bun run test:unit
+```
+
+Run `bun run build` when route generation/build output is in scope and check `git status --short` afterward. Run E2E only when the local relay, browser dependencies, env vars, and test data requirements are understood.
 
 ## React Query
 
