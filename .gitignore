@@ -20,11 +20,8 @@ _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
-.env
-.env.dev
-.env.*.local
-.env.local
-.env.deploy.*
+.env*
+!.env*.example
 
 # caches
 .eslintcache
