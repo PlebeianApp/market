@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master, 'auctions/**']
   workflow_dispatch:
+    inputs:
+      pr-number:
+        description: 'PR number to comment on with nsite URL'
+        required: false
+        default: ''
   schedule:
     - cron: '0 6 * * 1'
 
@@ -136,7 +141,7 @@ jobs:
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
         with:
           results-dir: test-results
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
 
@@ -147,7 +152,7 @@ jobs:
         with:
           dashboard-dir: ${{ steps.dashboard.outputs.dashboard-dir }}
           announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
           test-status: ${{ steps.tests.outcome }}
@@ -352,7 +357,7 @@ jobs:
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
         with:
           results-dir: test-results
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
 
@@ -363,7 +368,7 @@ jobs:
         with:
           dashboard-dir: ${{ steps.dashboard-green.outputs.dashboard-dir }}
           announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
           test-status: passed
@@ -456,7 +461,7 @@ jobs:
         uses: c03rad0r/plebeian-testing-nsite-actions/.github/actions/render-dashboard@main
         with:
           results-dir: test-results
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
 
@@ -467,7 +472,7 @@ jobs:
         with:
           dashboard-dir: ${{ steps.dashboard-red.outputs.dashboard-dir }}
           announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
-          pr-number: ${{ github.event.pull_request.number || '' }}
+          pr-number: ${{ github.event.pull_request.number || github.event.inputs.pr-number || '' }}
           branch: ${{ github.head_ref || github.ref_name }}
           commit: ${{ github.sha }}
           test-status: failed
