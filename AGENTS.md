@@ -42,9 +42,115 @@ Mutating or environment-dependent unless proven otherwise: `bun install`, `bun r
 - A task is done only when the diff summary, checks, remaining risks, rollback notes, and PR framing are reported.
 - Committing and pushing are not part of done unless explicitly requested.
 
-## Review Guidance
+## Review guidelines
 
-Lead reviews with findings ordered by severity. For each finding include file/function, confirmed or inferred status, what can go wrong, why it matters for Nostr/Bitcoin/Lightning/Cashu/user sovereignty, smallest safe fix, and the test that proves it.
+These guidelines apply to AI-assisted reviewers and human reviewers. Reviews should be high-signal, maintainer-safe, and focused on risks that could block a safe merge. Prioritize confirmed P0/P1 correctness, security, protocol, payment, privacy, and data-loss issues over style comments.
+
+### Review output
+
+Lead with findings ordered by severity. For each finding, include:
+
+- File/function or code path.
+- Whether the issue is confirmed from the diff or inferred and needs verification.
+- The broken invariant or trust boundary.
+- What can go wrong for users, sellers, buyers, relays, wallets, payments, or maintainers.
+- Why it matters for Nostr, Bitcoin, Lightning, Cashu, auctions, privacy, or user sovereignty.
+- The smallest safe fix.
+- The test or manual verification that proves the fix.
+
+If there are no blocking findings, say so directly and list residual risks, missing checks, or test gaps.
+
+### Scope and diff hygiene
+
+Flag PRs that:
+
+- Mix behavior changes with broad refactors, formatting churn, generated-file drift, dependency updates, or unrelated cleanup.
+- Change protocol, payment, wallet, signer, relay, storage, or server behavior without naming the source of truth and trust boundary.
+- Add dependencies in security-sensitive paths without a clear reason.
+- Weaken tests, validators, auth checks, type checks, schema checks, or protocol checks to make CI pass.
+- Rely on prior audit notes without re-checking current files.
+
+Prefer the smallest reviewable fix. Ask for follow-up PRs when a change combines unrelated concerns.
+
+### Nostr review priorities
+
+Treat relay data as untrusted unless the code validates it.
+
+Flag changes that:
+
+- Use display names, product titles, labels, array order, route text, or optimistic UI state as canonical identity.
+- Confuse event IDs, coordinates, pubkeys, tags, authors, signers, or profile metadata.
+- Mix query/read flows with publish/signing/write flows.
+- Silently change event kind, tag, author, signature, deletion, replacement, or addressable-event semantics.
+- Assume one relay has complete, fresh, unique, honest, or canonical data.
+- Fail to handle missing, stale, duplicated, malformed, deleted, replaced, or conflicting events.
+- Move protocol parsing or validation into UI components when it belongs in query, schema, helper, or publish modules.
+- Claim NIP compatibility without matching repo code and the relevant NIP behavior.
+
+For Nostr findings, identify the event kind, tags, author/pubkey assumptions, relay behavior, and compatibility impact.
+
+### Bitcoin, Lightning, Cashu, NWC, and payment review priorities
+
+Treat payment state as a lifecycle, not a boolean.
+
+Flag changes that:
+
+- Blur invoice creation, payment attempt, wallet acknowledgement, settlement, confirmation, expiry, refund, failure, delivery, or receipt evidence.
+- Treat zap receipts, preimages, wallet responses, relay events, or UI state as equivalent without validation.
+- Mishandle sats/msats, fiat conversion, rounding, fees, minimums, maximums, or stale exchange rates.
+- Leak sensitive payment metadata, wallet connection data, bearer tokens, Cashu proofs, NWC strings, preimages, private keys, seeds, mnemonics, or credentials.
+- Add implicit custodial assumptions or weaken self-custody boundaries.
+- Grant paid benefits before settlement or receipt verification is sufficient for that feature.
+
+For payment findings, identify the lifecycle state being changed and the evidence required to advance state safely.
+
+### Auction and marketplace review priorities
+
+Flag changes that:
+
+- Use product titles, seller names, bidder display names, or rendered order as identity.
+- Confuse seller, buyer, bidder, winner, auctioneer, oracle, relay, app signer, or settlement authority.
+- Change bid, reserve, start time, effective end time, definite end time, refund time, settlement, participant, or shipping semantics without explicit scope.
+- Present stale or conflicting bid/settlement data as final.
+- Hide refund, lockup, custody, expiry, or failure conditions from the user.
+- Change product, shipping, order, review, collection, auction, bid, settlement, or comment behavior without preserving backward compatibility.
+
+For auction findings, identify the canonical event/state owner and the UI/query/publish boundary involved.
+
+### Browser storage, rendering, and privacy review priorities
+
+Flag changes that:
+
+- Store signer, wallet, NWC, Cashu, token, order, or private user data in browser storage without documenting the threat model.
+- Render relay/user-controlled content into HTML, markdown, media, map popups, CSS URLs, links, or image fields without sanitization or URL policy.
+- Introduce XSS, open redirect, tracking, metadata leakage, or unsafe clipboard/download behavior.
+- Log secrets, tokens, payment details, private order content, or sensitive relay/user data.
+
+### Server, app-signer, admin, and bootstrap review priorities
+
+Flag changes that:
+
+- Expand app-key signing authority without allowlists, schema validation, timestamp checks, role checks, and replay protection.
+- Make bootstrap/admin/editor state depend on ambiguous relay state without fail-closed behavior.
+- Treat the app server as the canonical marketplace database instead of a narrow validation, app-signing, bootstrap, NIP-05, vanity, zap-purchase, and web-delivery boundary.
+- Change NIP-05, vanity, zap purchase, admin, editor, blacklist, relay-list, or app-settings behavior without an explicit authorization model.
+
+### Test expectations
+
+Prefer behavior-focused tests over implementation-detail tests.
+
+Ask for tests when a PR changes:
+
+- Canonical identity resolution.
+- Event parsing, validation, replacement, deletion, or dedupe.
+- Query/cache invalidation.
+- Publish/signing behavior.
+- Payment lifecycle transitions.
+- Auction bid, settlement, or refund behavior.
+- Wallet, storage, or signer flows.
+- Secret handling, rendering sinks, or authorization checks.
+
+For docs-only PRs, formatting checks are usually enough. Do not request app tests unless the docs claim behavior that should be verified against source.
 
 ## Deeper Docs
 
