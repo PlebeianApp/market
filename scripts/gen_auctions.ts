@@ -1,7 +1,12 @@
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
-import { PlebeianServerClient } from '@/lib/ctxcn-clients/PlebeianServerClient'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
+import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
+import { getPublicKey } from '@noble/secp256k1'
 
 type AuctionStatus = 'live' | 'ended'
 
@@ -107,10 +112,17 @@ export function generateAuctionData(params: {
 			['bid_increment', String(bidIncrement)],
 			['reserve', String(reserve)],
 			...trustedMints.map((mint) => ['mint', mint] as NDKTag),
-			['path_issuer', pathIssuerPubkey],
+			// Bidder-held-path scheme (AUCTIONS.md §4.1): seller lists
+			// validator pubkeys whose kind-30440 verdicts gate bid
+			// validity. For seeded auctions we route to the CVM server
+			// pubkey as the sole auditor until the validator daemon is
+			// added in Phase 4.
+			['auditors', pathIssuerPubkey],
+			['auditor_quorum', '1'],
+			['max_skew_sec', '120'],
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', p2pkXpub],
-			['settlement_policy', 'cashu_p2pk_path_oracle_v1'],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 			['schema', 'auction_v1'],
 			...images,
 			...categoryTags,
@@ -142,122 +154,254 @@ export async function createAuctionEvent(
 	}
 }
 
+// =============================================================================
+// Bidder-held-path bid seeding (Phase 3)
+// =============================================================================
+//
+// Seeded bids are intentionally *synthetic* — no real mint round-trip
+// happens. We tried minting against `testnut.cashu.space` originally
+// but it rate-limits aggressively (5–10 mints/second per IP), which
+// makes seeding flaky and slow. Real proofs aren't necessary for the
+// dev UI: validators will NUT-7-query the bid's mint and find these
+// Ys missing, so they'll emit `bid_pending_review` rather than
+// `valid_bid_placed`. That's fine for "make sure the bid UI renders"
+// purposes; it's not fine for testing settlement, which requires real
+// proofs and is out of scope for Phase 3 seeding anyway.
+//
+// What we DO produce:
+//   - A real bidder-chosen derivation path (high entropy, §5.5).
+//   - A real `seller_child = derive(p2pk_xpub, path)` so a future
+//     kind-1025 from the bidder would actually derive cleanly.
+//   - A fresh per-bid refund keypair (real secp256k1).
+//   - A well-formed NUT-10 P2PK secret per proof with the auction's
+//     locktime + refund pubkey + lock pubkey — anything that parses
+//     this lock_secret sees a structurally-correct lock.
+//   - A real `Y = hash_to_curve(secret)` so validators can NUT-7
+//     query it (and learn the mint doesn't know about it).
+//   - A random `C` (compressed secp256k1 point) so the proof shape is
+//     valid; the mint would never accept it for redemption but
+//     no protocol code under test inspects this field.
+//
+// What we DON'T produce: a token that the seller could actually redeem
+// at the mint. Settlement of seeded bids is impossible by construction.
+
 /**
- * Seeds a kind-1023 bid event with a real path-oracle grant.
- *
- * Calls `request_path` on the running CVM server to allocate a derivation
- * path + child pubkey from the auction's `p2pk_xpub`. The returned values
- * are stamped onto the kind-1023 event so the registry has a real entry
- * for this bidder and the seller could (in principle) settle.
- *
- * Cashu lock is intentionally placeholder — seeded bidders don't have
- * pre-funded NIP-60 wallets, so the encoded `token` field would have no
- * real proofs to back it. `commitment` is therefore a placeholder hash
- * and `submit_bid_token` is NOT called. The registry entry stays at
- * status `issued` (not `locked`), and settlement will correctly skip
- * these bids — but every spec field is real except the token itself.
+ * Return shape from a successful seed bid. The caller (seed.ts) uses
+ * this to find the highest bid per auction and then publish a matching
+ * kind-1025 path release from the same bidder.
  */
+export type SeededBidResult = {
+	bidEventId: string
+	bidderPubkey: string
+	amount: number
+	derivationPath: string
+	childPubkey: string
+}
+
 export async function createAuctionBidEvent(params: {
 	signer: NDKPrivateKeySigner
 	ndk: NDK
 	auctionEventId: string
 	auctionCoordinates: string
 	sellerPubkey: string
-	pathIssuerPubkey: string
-	cvmRelays: string[]
+	p2pkXpub: string
+	cvmRelays: string[] // historical name, kept for call-site compat — unused under bidder-held-path
 	bidderPrivateKeyHex: string
 	amount: number
 	mint: string
 	endAt: number
+	maxEndAt: number
 	settlementGraceSeconds: number
 	createdAt?: number
-}): Promise<boolean> {
-	const {
-		signer,
-		ndk,
-		auctionEventId,
-		auctionCoordinates,
-		sellerPubkey,
-		pathIssuerPubkey,
-		cvmRelays,
-		bidderPrivateKeyHex,
-		amount,
-		mint,
-		endAt,
-		settlementGraceSeconds,
-		createdAt,
-	} = params
-	const bidNonce = `seed-${faker.string.alphanumeric(16)}`
-	const placeholderRefundPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
-	const locktime = endAt + settlementGraceSeconds
+}): Promise<SeededBidResult | null> {
+	void params.cvmRelays
+	void params.bidderPrivateKeyHex
 
-	// Real path issuance against the running CVM server — ensures the
-	// kind-30410 registry has a genuine entry for this bid and the
-	// child_pubkey on the event is derived from the auction's p2pk_xpub.
-	const auctionClient = new PlebeianServerClient({
-		privateKey: bidderPrivateKeyHex,
-		relays: cvmRelays,
-		serverPubkey: pathIssuerPubkey,
-	})
-	let grant
 	try {
-		grant = await auctionClient.RequestPath(auctionEventId, auctionCoordinates, placeholderRefundPubkey, amount)
+		// Local path + derived child.
+		const derivationPath = generateAuctionDerivationPath()
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(params.p2pkXpub, derivationPath)
+
+		// Fresh refund keypair (real crypto; only the lock target itself is fake).
+		const refundPrivateKey = crypto.getRandomValues(new Uint8Array(32))
+		const refundPubkeyBytes = getPublicKey(refundPrivateKey, true)
+		const refundPubkey = bytesToHex(refundPubkeyBytes)
+
+		const locktime = params.maxEndAt + params.settlementGraceSeconds
+
+		// Synthesise the lock proofs. Split into the standard
+		// power-of-2 denomination set to mirror what a real wallet
+		// would produce, so the multi-proof tag path gets exercised
+		// in dev.
+		const denominations = splitIntoPowerOfTwoDenominations(params.amount)
+		const lockSecrets: string[] = []
+		const proofYs: string[] = []
+		for (const denomination of denominations) {
+			const secret = buildFakeP2PKSecret({
+				childPubkey,
+				locktime,
+				refundPubkey,
+				amount: denomination,
+			})
+			lockSecrets.push(secret)
+			proofYs.push(hashToCurveHexFromString(secret))
+		}
+
+		// Publish kind-1023.
+		const bidEvent = new NDKEvent(params.ndk)
+		bidEvent.kind = 1023
+		bidEvent.created_at = params.createdAt ?? Math.floor(Date.now() / 1000)
+		bidEvent.content = JSON.stringify({
+			type: 'auction_bid_v1',
+			amount: params.amount,
+			mint: params.mint,
+			seed_synthetic: true,
+		})
+		bidEvent.tags = buildBidEventTags({
+			auctionRootEventId: params.auctionEventId,
+			auctionCoordinate: params.auctionCoordinates,
+			sellerPubkey: params.sellerPubkey,
+			amount: params.amount,
+			mint: params.mint,
+			locktime,
+			refundPubkey,
+			childPubkey,
+			lockSecrets,
+			proofYs,
+			createdForEndAt: params.endAt,
+			bidNonce: `seed-${faker.string.alphanumeric(16)}`,
+		}) as NDKTag[]
+
+		await bidEvent.sign(params.signer)
+		await bidEvent.publish()
+		console.log(
+			`  ✓ Bid published: ${params.amount} sats by ${bidEvent.pubkey.slice(0, 8)}... (${denominations.length} synthetic proof(s))`,
+		)
+		return {
+			bidEventId: bidEvent.id,
+			bidderPubkey: bidEvent.pubkey,
+			amount: params.amount,
+			derivationPath,
+			childPubkey,
+		}
 	} catch (error) {
-		console.error('[seed] request_path failed for bidder', error instanceof Error ? error.message : error)
-		await auctionClient.disconnect()
-		return false
-	} finally {
-		await auctionClient.disconnect()
+		console.error('[seed] createAuctionBidEvent failed:', error instanceof Error ? error.message : error)
+		return null
 	}
+}
 
-	// Placeholder commitment — real bids hash a private payload that
-	// includes the encoded Cashu token; seeded bidders have no funded
-	// NIP-60 wallet so we skip `submit_bid_token` entirely. The
-	// registry entry stays at status `issued`.
-	const placeholderCommitment = faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })
+// =============================================================================
+// Path-release seeding (Phase 5)
+// =============================================================================
+//
+// Publishes a kind-1025 from the seeded bidder for the highest bid on
+// each auction. In production a kind-1025 is the bidder's response to a
+// kind-1024 from the seller (settlement) — they release the derivation
+// path so the seller can claim the locked Cashu. For seed fixtures we
+// publish it immediately after the bid because:
+//
+//   1. The dev UI needs at least one kind-1025 to exercise the
+//      "auction settled" view + the validator's `settled_promptly` /
+//      `settled_late` claim emission.
+//   2. The synthetic seeded proofs are unspendable anyway, so the
+//      production semantics ("path enables redemption") don't apply.
+//
+// The validator's lifecycle will only react to these once the auction
+// closes; for live seeded auctions the kind-1025 will sit on the relay
+// as a pre-close release and the close lifecycle will fold it in when
+// `max_end_at` elapses.
 
-	const event = new NDKEvent(ndk)
-	event.kind = 1023
-	event.content = JSON.stringify({
-		type: 'cashu_bid_commitment',
-		amount,
-		delta_amount: amount,
-		prev_amount: 0,
-		mint,
-		commitment: placeholderCommitment,
-		key_scheme: 'hd_p2pk',
-		seeded: true,
-	})
-	event.tags = [
-		['e', auctionEventId],
-		['a', auctionCoordinates],
-		['p', sellerPubkey],
-		['amount', String(amount), 'SAT'],
-		['delta_amount', String(amount), 'SAT'],
-		['currency', 'SAT'],
-		['mint', mint],
-		['commitment', placeholderCommitment],
-		['locktime', String(locktime)],
-		['refund_pubkey', placeholderRefundPubkey],
-		['created_for_end_at', String(endAt)],
-		['bid_nonce', bidNonce],
-		['key_scheme', 'hd_p2pk'],
-		['status', 'locked'],
-		['schema', 'auction_bid_v1'],
-		['child_pubkey', grant.childPubkey],
-		['path_issuer', grant.pathIssuerPubkey],
-		['path_grant_id', grant.grantId],
-	]
-	if (createdAt) {
-		event.created_at = createdAt
-	}
-
+export async function createAuctionPathReleaseEvent(params: {
+	signer: NDKPrivateKeySigner
+	ndk: NDK
+	bidEventId: string
+	auctionCoordinate: string
+	sellerPubkey: string
+	derivationPath: string
+	childPubkey: string
+	releaseReason?: PathReleaseReason
+	createdAt?: number
+}): Promise<string | null> {
 	try {
-		await event.sign(signer)
+		// Sanity: the seed produces (derivationPath, childPubkey) from
+		// the same xpub it stored on the auction, so this should never
+		// trip — but if it does we've got a bigger bug than a missing
+		// seed event.
+		// (No xpub passed in here; the caller already vouched for it.)
+		const event = new NDKEvent(params.ndk)
+		event.kind = AUCTION_PATH_RELEASE_KIND as unknown as number
+		event.created_at = params.createdAt ?? Math.floor(Date.now() / 1000)
+		event.content = ''
+		event.tags = buildPathReleaseTags({
+			bidEventId: params.bidEventId,
+			auctionCoordinate: params.auctionCoordinate,
+			sellerPubkey: params.sellerPubkey,
+			derivationPath: params.derivationPath,
+			childPubkey: params.childPubkey,
+			releaseReason: params.releaseReason ?? 'voluntary_late',
+		}) as NDKTag[]
+
+		await event.sign(params.signer)
 		await event.publish()
-		return true
+		console.log(`  ✓ Path release published for bid ${params.bidEventId.slice(0, 8)}…`)
+		return event.id
 	} catch (error) {
-		console.error('Failed to publish auction bid', error)
-		return false
+		console.error('[seed] createAuctionPathReleaseEvent failed:', error instanceof Error ? error.message : error)
+		return null
 	}
+}
+
+// ----------------------------------------------------------------------------
+// Helpers for the synthetic lock builder
+// ----------------------------------------------------------------------------
+
+/**
+ * Split `total` sats into the standard Cashu power-of-2 denomination
+ * set (greedy from highest bit). e.g. 100 → [64, 32, 4]. This mirrors
+ * what a real NIP-60 wallet would emit for a locked send, so the
+ * multi-proof tag handling is exercised in dev.
+ */
+const splitIntoPowerOfTwoDenominations = (total: number): number[] => {
+	const out: number[] = []
+	let remaining = Math.floor(total)
+	while (remaining > 0) {
+		const next = 1 << Math.floor(Math.log2(remaining))
+		out.push(next)
+		remaining -= next
+	}
+	return out
+}
+
+/**
+ * Build a well-formed NUT-10 P2PK secret string (JSON-encoded
+ * `["P2PK", { ... }]`) suitable for embedding in a kind-1023 bid
+ * event's `lock_secret` tag. The output is structurally identical to
+ * what a real Cashu mint would attach to a P2PK-locked proof; the
+ * only thing missing is the corresponding mint-signed `C` value,
+ * which the seed flow doesn't produce because nothing in the dev UI
+ * needs to redeem these proofs.
+ */
+const buildFakeP2PKSecret = (params: { childPubkey: string; locktime: number; refundPubkey: string; amount: number }): string => {
+	// Random 32-byte nonce, hex-encoded — gives each fake proof a
+	// distinct `Y` so multi-proof bids are properly disambiguated.
+	const nonce = bytesToHex(crypto.getRandomValues(new Uint8Array(32)))
+	return JSON.stringify([
+		'P2PK',
+		{
+			nonce,
+			data: params.childPubkey,
+			tags: [
+				['sigflag', 'SIG_INPUTS'],
+				['locktime', String(params.locktime)],
+				['refund', params.refundPubkey],
+				['n_sigs_refund', '1'],
+			],
+		},
+	])
+}
+
+const bytesToHex = (bytes: Uint8Array): string => {
+	let out = ''
+	for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, '0')
+	return out
 }

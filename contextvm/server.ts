@@ -1,26 +1,19 @@
-import { NostrServerTransport, PrivateKeySigner, ApplesauceRelayPool, withCommonToolSchemas, GiftWrapMode } from '@contextvm/sdk'
+import { NostrServerTransport, PrivateKeySigner, ApplesauceRelayPool, GiftWrapMode } from '@contextvm/sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
-import {
-	AUCTION_TOOL_NAMES,
-	getAuctionStateInputSchema,
-	getAuctionStateOutputSchema,
-	requestPathInputSchema,
-	requestPathOutputSchema,
-	requestSettlementInputSchema,
-	requestSettlementOutputSchema,
-	submitBidTokenInputSchema,
-	submitBidTokenOutputSchema,
-} from './auction-schemas'
-import { buildContextVmAuctionContext } from './auction-context'
-import { createRequestPathHandler } from './tools/auction-path-oracle/request-path'
-import { createSubmitBidTokenHandler } from './tools/auction-path-oracle/submit-bid-token'
-import { createRequestSettlementHandler } from './tools/auction-path-oracle/request-settlement'
-import { createGetAuctionStateHandler } from './tools/auction-path-oracle/get-auction-state'
+import { startAuctionValidator } from '../src/server/auction-validator'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+
+// The v1 auction CVM tools (request_path, submit_bid_token,
+// request_settlement, get_auction_state) and their CEP-15 announcement
+// have been removed. The bidder-held-path scheme has no oracle: bidders
+// generate paths locally, validators publish kind-30440 verdicts as
+// pub/sub on relays. The auction validator daemon will be added to this
+// process in Phase 4 — it doesn't register MCP tools, it just
+// subscribes to relays and publishes.
 
 const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 
@@ -165,15 +158,6 @@ async function main() {
 	console.log(`Supported currencies: ${SUPPORTED_FIAT.length}`)
 	console.log()
 
-	// AUCTIONS.md §7.5 / §11 — auction path-oracle context. Uses the same
-	// CVM signer + relays as the currency tools, but runs through NDK so the
-	// auction domain modules (which were built against NDK's NIP-44 +
-	// fetchEvents helpers) work without a second transport stack.
-	const auctionContext = await buildContextVmAuctionContext({
-		relays,
-		privateKeyHex: SERVER_PRIVATE_KEY,
-	})
-
 	const mcpServer = new McpServer({
 		name: 'plebeian-server',
 		version: '1.0.0',
@@ -262,55 +246,6 @@ async function main() {
 		},
 	)
 
-	// --- Auction path-oracle tools (CEP-15 common-schema family) ----------
-	mcpServer.registerTool(
-		AUCTION_TOOL_NAMES.requestPath,
-		{
-			title: 'Request derivation path for an auction bid',
-			description:
-				'AUCTIONS.md §7.5.1 — Bidder requests a fresh HD derivation path before locking Cashu proofs. The issuer allocates a path, derives the matching child pubkey, and persists the grant in its kind-30410 registry.',
-			inputSchema: requestPathInputSchema,
-			outputSchema: requestPathOutputSchema,
-		},
-		createRequestPathHandler(auctionContext),
-	)
-
-	mcpServer.registerTool(
-		AUCTION_TOOL_NAMES.submitBidToken,
-		{
-			title: 'Submit locked Cashu bid token',
-			description:
-				'AUCTIONS.md §7 — After publishing the kind-1023 commitment, the bidder submits the locked Cashu token plus lock parameters. The issuer runs the §7 MUST checks (mint allowlist, locktime invariant, grant binding) and advances the registry entry from `issued` to `locked`.',
-			inputSchema: submitBidTokenInputSchema,
-			outputSchema: submitBidTokenOutputSchema,
-		},
-		createSubmitBidTokenHandler(auctionContext),
-	)
-
-	mcpServer.registerTool(
-		AUCTION_TOOL_NAMES.requestSettlement,
-		{
-			title: 'Request auction settlement plan',
-			description:
-				'AUCTIONS.md §7.5.3 — Seller asks the issuer to compute the winning chain and release the corresponding derivation paths + locked Cashu tokens. Reserve-not-met returns an empty `releases` array.',
-			inputSchema: requestSettlementInputSchema,
-			outputSchema: requestSettlementOutputSchema,
-		},
-		createRequestSettlementHandler(auctionContext),
-	)
-
-	mcpServer.registerTool(
-		AUCTION_TOOL_NAMES.getAuctionState,
-		{
-			title: 'Get current auction state',
-			description:
-				"Read-only view of an auction's current floor, top bid, bid count, and registry health (paths issued vs locked). Public — no caller identity required.",
-			inputSchema: getAuctionStateInputSchema,
-			outputSchema: getAuctionStateOutputSchema,
-		},
-		createGetAuctionStateHandler(auctionContext),
-	)
-
 	const serverTransport = new NostrServerTransport({
 		signer,
 		relayHandler: relayPool,
@@ -331,63 +266,43 @@ async function main() {
 		// `[]` (vs `undefined`) sets `hasExplicitBootstrapRelayUrls=true`
 		// in the SDK, which disables the default fallback.
 		bootstrapRelayUrls,
-		// Force kind-1059 (persistent gift wraps) for both inbound and
-		// outbound. Why:
-		//   1. The SDK's default (`OPTIONAL`) auto-promotes any client that
-		//      advertises `support_encryption_ephemeral` — and the SDK's own
-		//      client transport always advertises it. Once a session is
-		//      promoted, the server replies with kind-21059 *forever* for
-		//      that pubkey, even when subsequent calls come from the
-		//      hand-rolled browser client (`PlebeianAuctionClient`) which
-		//      only subscribes to kind-1059. The browser would silently
-		//      drop the response and time out at 20s.
-		//   2. Local relays (e.g. `nak`) handle ephemeral kinds erratically;
-		//      we've observed publish retries 40+ times before timing out.
-		// Persistent mode sidesteps both: every response is kind-1059, every
-		// subscription is on kind-1059, and there's no per-pubkey state to
-		// poison cross-client compatibility.
+		// Currency tools don't need persistent gift-wraps (the v1 auction
+		// browser client did; that's gone now), but we keep PERSISTENT
+		// here for compatibility with simple local relays and to avoid
+		// the SDK's auto-promote-to-ephemeral session state.
 		giftWrapMode: GiftWrapMode.PERSISTENT,
-		// Inject the wrapping kind-25910 / 1059 signer pubkey into the
-		// inbound message's `_meta` so auction tools can authenticate the
-		// caller without trusting fields in the input. Closes
-		// AUCTIONS.md §7.5.1's identity-proof requirement.
-		injectClientPubkey: true,
 		serverInfo: {
 			name: 'Plebeian Server',
 			website: 'https://plebeian.market',
-			about: 'BTC exchange rates + English-auction path oracle (CEP-15 common-schema family `english_auction_path_oracle_v1`).',
+			about: 'BTC exchange rates over CEP-15.',
 		},
 		excludedCapabilities: [
 			{ method: 'tools/list' },
 			{ method: 'tools/call', name: 'get_btc_price' },
 			{ method: 'tools/call', name: 'get_btc_price_single' },
-			// Auction tools are public — anyone can call them. Identity is
-			// established at the message-signer level, not at transport
-			// pubkey allowlist level.
-			{ method: 'tools/call', name: AUCTION_TOOL_NAMES.requestPath },
-			{ method: 'tools/call', name: AUCTION_TOOL_NAMES.submitBidToken },
-			{ method: 'tools/call', name: AUCTION_TOOL_NAMES.requestSettlement },
-			{ method: 'tools/call', name: AUCTION_TOOL_NAMES.getAuctionState },
-		],
-	})
-
-	// CEP-15: stamp the auction tools' `_meta.io.contextvm/common-schema`
-	// with their canonical schema hash so clients can discover this server
-	// via `{ kinds: [11317], "#i": ["<hash>"] }`. The decorator handles
-	// both the per-tool `_meta` injection and the `i`/`k` tags on the
-	// kind-11320 tools-list announcement.
-	withCommonToolSchemas(serverTransport, {
-		tools: [
-			{ name: AUCTION_TOOL_NAMES.requestPath },
-			{ name: AUCTION_TOOL_NAMES.submitBidToken },
-			{ name: AUCTION_TOOL_NAMES.requestSettlement },
-			{ name: AUCTION_TOOL_NAMES.getAuctionState },
 		],
 	})
 
 	await mcpServer.connect(serverTransport)
 	console.log('Server is running and listening for requests on Nostr...')
-	console.log(`Auction path-oracle pubkey (use as auction \`path_issuer\` tag): ${auctionContext.issuerPubkey}`)
+
+	// Auction validator (kind-30440 / 30441 publisher). Pure pub/sub
+	// daemon — no MCP transport, no CEP-15 announcement. Shares this
+	// process's signer + relay pool. See src/server/auction-validator.
+	const validatorHandle = await startAuctionValidator({
+		signer,
+		relayPool,
+		name: `Plebeian validator (${STAGE})`,
+	})
+
+	const shutdown = async (sig: NodeJS.Signals) => {
+		console.log(`\nReceived ${sig}, shutting down auction validator...`)
+		await validatorHandle.stop()
+		process.exit(0)
+	}
+	process.once('SIGINT', () => void shutdown('SIGINT'))
+	process.once('SIGTERM', () => void shutdown('SIGTERM'))
+
 	console.log('Press Ctrl+C to exit.')
 }
 

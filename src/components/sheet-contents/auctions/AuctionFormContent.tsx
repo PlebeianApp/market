@@ -33,11 +33,10 @@ import {
 	type AuctionSettlementGracePreset,
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
-import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
+import { ArrowLeft, CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Slider } from '@/components/ui/slider'
@@ -70,10 +69,12 @@ const INITIAL_FORM: AuctionFormData = {
 	shippings: [],
 	trustedMints: [],
 	isNSFW: false,
-	// `AuctionOracleSelector` populates this once the CEP-15 directory
-	// query resolves; empty string means "fall back to app default" so
-	// nothing breaks if the seller submits before discovery completes.
-	pathIssuerPubkey: '',
+	// Empty string defers auditor selection to the app's configured
+	// default (`config.cvmServerPubkey`). The auction publish path
+	// resolves this via `getAuctionAuditorsOrThrow` — the seller never
+	// has to pick an auditor manually for the minimal demo flow. A
+	// future Phase 7 reputation UI may surface a multi-select here.
+	auditorPubkey: '',
 }
 
 function parseListInput(value: string): string[] {
@@ -893,7 +894,7 @@ function AuctionTabContent({
 		}
 	}
 
-	type Section = 'bidding' | 'antiSnipe' | 'settlementGrace' | 'trustedMints' | 'oracle'
+	type Section = 'bidding' | 'antiSnipe' | 'settlementGrace' | 'trustedMints'
 	const [openSection, setOpenSection] = useState<Section | null>(null)
 	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
 
@@ -1242,18 +1243,6 @@ function AuctionTabContent({
 								</div>
 							)}
 						</div>
-					</CollapsibleContent>
-				</Collapsible>
-			</div>
-
-			<div>
-				<Collapsible open={openSection === 'oracle'} onOpenChange={toggle('oracle')}>
-					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
-						Auction Oracle
-						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'oracle' ? 'rotate-180' : ''}`} />
-					</CollapsibleTrigger>
-					<CollapsibleContent className="mt-2">
-						<AuctionOracleSelector formData={formData} setFormData={setFormData} />
 					</CollapsibleContent>
 				</Collapsible>
 			</div>
@@ -1613,6 +1602,26 @@ function ShippingTab({
 	)
 }
 
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+
+const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
+	title: 'Title',
+	description: 'Description',
+	startingBid: 'Starting Bid',
+	bidIncrement: 'Bid Increment',
+	reserve: 'Reserve',
+	startAt: 'Start Time',
+	endAt: 'End Time',
+	duration: 'Duration',
+	antiSnipeWindowMinutes: 'Anti-snipe Window',
+	minBidCurveShape: 'Curve Shape',
+	minBidCurvePeakMultiplier: 'Peak Multiplier',
+	settlementGracePreset: 'Settlement Grace',
+	trustedMints: 'Trusted Mints',
+	imageUrls: 'Image',
+	shippingExtraCost: 'Shipping Extra Cost',
+}
+
 export function AuctionFormContent() {
 	const navigate = useNavigate()
 	const publishMutation = usePublishAuctionMutation()
@@ -1702,6 +1711,72 @@ export function AuctionFormContent() {
 
 	const canSubmit = validationIssues.length === 0
 
+	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
+	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
+
+	const tabValid: Record<AuctionTab, boolean> = {
+		name: hasValidName && hasValidDescription,
+		auction: hasValidBidding && hasValidMints,
+		category: true,
+		spec: true,
+		images: hasValidImages,
+		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+	}
+
+	// Tab at index i is reachable only if every tab before it is valid.
+	const isTabReachable = (tabIndex: number): boolean => {
+		for (let i = 0; i < tabIndex; i++) {
+			if (!tabValid[TAB_ORDER[i]]) return false
+		}
+		return true
+	}
+
+	const handleNext = () => {
+		const nextIndex = currentTabIndex + 1
+		if (nextIndex < TAB_ORDER.length) setActiveTab(TAB_ORDER[nextIndex])
+	}
+
+	const handleBack = () => {
+		const prevIndex = currentTabIndex - 1
+		if (prevIndex >= 0) setActiveTab(TAB_ORDER[prevIndex])
+	}
+
+	const missingLabels = (fields: AuctionPublishValidationField[]): string[] => {
+		const fieldsWithIssues = new Set(validationIssues.filter((i) => fields.includes(i.field)).map((i) => i.field))
+		return [...fieldsWithIssues].map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+	}
+
+	const currentTabErrors: string[] = (() => {
+		if (isLastTab) {
+			const fieldsWithIssues = [...new Set(validationIssues.map((i) => i.field))]
+			return fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+		}
+		switch (activeTab) {
+			case 'name':
+				return missingLabels(['title', 'description'])
+			case 'auction':
+				return missingLabels([
+					'startingBid',
+					'bidIncrement',
+					'reserve',
+					'startAt',
+					'endAt',
+					'duration',
+					'antiSnipeWindowMinutes',
+					'minBidCurveShape',
+					'minBidCurvePeakMultiplier',
+					'settlementGracePreset',
+					'trustedMints',
+				])
+			case 'images':
+				return missingLabels(['imageUrls'])
+			case 'shipping':
+				return missingLabels(['shippingExtraCost'])
+			default:
+				return []
+		}
+	})()
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
@@ -1731,19 +1806,23 @@ export function AuctionFormContent() {
 	]
 
 	return (
-		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4">
-			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
+		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4 overflow-hidden">
+			<div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 				<Tabs
 					value={activeTab}
-					onValueChange={(value) => setActiveTab(value as AuctionTab)}
+					onValueChange={(value) => {
+						const idx = TAB_ORDER.indexOf(value as AuctionTab)
+						if (isTabReachable(idx)) setActiveTab(value as AuctionTab)
+					}}
 					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
-						{tabs.map((tab) => (
+						{tabs.map((tab, index) => (
 							<TabsTrigger
 								key={tab.value}
 								value={tab.value}
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								disabled={!isTabReachable(index)}
+								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
 							>
 								{tab.label}
 								{tab.showAsterisk && <span className="ml-1 text-red-500">*</span>}
@@ -1797,10 +1876,52 @@ export function AuctionFormContent() {
 				</Tabs>
 			</div>
 
-			<div className="bg-white border-t pt-4 pb-2 mt-2">
-				<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
-					{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
-				</Button>
+			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2">
+				{currentTabErrors.length > 0 && (
+					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+						{currentTabErrors.map((err, i) => (
+							<li key={i} className="text-xs text-red-600 flex items-center gap-1">
+								<span>•</span>
+								{err}
+							</li>
+						))}
+					</ul>
+				)}
+				<div className="flex gap-2">
+					{currentTabIndex > 0 && (
+						<Button
+							type="button"
+							variant="ghost"
+							className="flex-1 uppercase border border-input bg-white hover:bg-white"
+							onClick={handleBack}
+						>
+							<ArrowLeft className="w-4 h-4" />
+							Back
+						</Button>
+					)}
+					{isLastTab ? (
+						<Button
+							key="publish"
+							type="submit"
+							variant="secondary"
+							className="flex-1 uppercase"
+							disabled={!canSubmit || publishMutation.isPending}
+						>
+							{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
+						</Button>
+					) : (
+						<Button
+							key="next"
+							type="button"
+							variant="secondary"
+							className="flex-1 uppercase"
+							onClick={handleNext}
+							disabled={!tabValid[activeTab]}
+						>
+							Next
+						</Button>
+					)}
+				</div>
 			</div>
 		</form>
 	)

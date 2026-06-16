@@ -1,5 +1,6 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
+import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
@@ -318,6 +319,66 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
+/**
+ * Fetch all kind-1025 path-release events for an auction. Sellers use
+ * this to discover when a winning bidder has settled. Validators use
+ * this when deriving verdicts. Pulled by `auctionEventId` (root event)
+ * or by `auctionCoordinate`; both filters are applied so we catch
+ * releases that referenced either.
+ */
+export const fetchAuctionPathReleases = async (
+	auctionEventId: string,
+	limit: number = 200,
+	auctionCoordinates?: string,
+): Promise<NDKEvent[]> => {
+	if (!auctionEventId && !auctionCoordinates) return []
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return []
+
+	const filters: NDKFilter[] = []
+	if (auctionEventId) {
+		filters.push({
+			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+			'#a': auctionCoordinates ? [auctionCoordinates] : undefined,
+			limit,
+		})
+	} else if (auctionCoordinates) {
+		filters.push({
+			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+			'#a': [auctionCoordinates],
+			limit,
+		})
+	}
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters[0], { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+/**
+ * Fetch kind-30440 validator verdicts for an auction. These are
+ * parameterised-replaceable per (validator, bidder, auction), so the
+ * relay returns at most one per such tuple.
+ */
+export const fetchAuctionVerdicts = async (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+): Promise<NDKEvent[]> => {
+	if (!auctionEventId && !auctionCoordinates) return []
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return []
+
+	const filter: NDKFilter = {
+		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
+		limit,
+	}
+	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
+	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
+
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
 export const auctionsQueryOptions = (limit: number = 200) =>
 	queryOptions({
 		queryKey: auctionKeys.all,
@@ -397,6 +458,24 @@ export const auctionSettlementsQueryOptions = (auctionEventId: string, limit: nu
 	queryOptions({
 		queryKey: [...auctionKeys.settlements(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
 		queryFn: () => fetchAuctionSettlements(auctionEventId, limit, auctionCoordinates),
+		enabled: !!(auctionEventId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
+
+export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: number = 200, auctionCoordinates?: string) =>
+	queryOptions({
+		queryKey: [...auctionKeys.pathReleases(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
+		queryFn: () => fetchAuctionPathReleases(auctionEventId, limit, auctionCoordinates),
+		enabled: !!(auctionEventId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
+
+export const auctionVerdictsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+	queryOptions({
+		queryKey: [...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
+		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates),
 		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 5000,
 		refetchInterval: 5000,
@@ -500,8 +579,20 @@ export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 
-/** Nostr pubkey of the auction's path issuer (the app running the path oracle). */
-export const getAuctionPathIssuer = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'path_issuer')?.[1] || ''
+/**
+ * Validator pubkeys the auction trusts to audit its bids. Auction events
+ * under `cashu_p2pk_bidder_path_v1` use repeated `auditors` tags (§4.1).
+ */
+export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
+	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
+
+/**
+ * Legacy single-pubkey accessor preserved for callers still phrased
+ * around "path_issuer." Returns the first listed auditor, or '' when
+ * none are listed. Phase 7 (reputation UI) will swap call sites to the
+ * proper multi-value {@link getAuctionAuditors}.
+ */
+export const getAuctionPathIssuer = (event: NDKEvent | null): string => getAuctionAuditors(event)[0] || ''
 
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
@@ -622,6 +713,16 @@ export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
 export const useAuctionSettlements = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
 	useQuery({
 		...auctionSettlementsQueryOptions(auctionEventId, limit, auctionCoordinates),
+	})
+
+export const useAuctionPathReleases = (auctionEventId: string, limit: number = 200, auctionCoordinates?: string) =>
+	useQuery({
+		...auctionPathReleasesQueryOptions(auctionEventId, limit, auctionCoordinates),
+	})
+
+export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+	useQuery({
+		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
 
 // ---------------------------------------------------------------------------

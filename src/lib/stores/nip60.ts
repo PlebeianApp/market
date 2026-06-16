@@ -33,6 +33,7 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
 import { configStore } from './config'
+import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -107,6 +108,14 @@ export interface LockAuctionBidFundsParams {
 export interface LockAuctionBidFundsResult {
 	tokenId: string
 	token: string
+	/**
+	 * The locked Cashu proofs themselves — same set the encoded `token`
+	 * holds, exposed as the structured proof array so callers don't have
+	 * to re-decode (which fails on v2 short keyset IDs without a mint
+	 * keyset map). Callers that need the proof's `secret` / `Y` lookup
+	 * should read these directly.
+	 */
+	proofs: Proof[]
 	amount: number
 	mintUrl: string
 	lockPubkey: string
@@ -673,9 +682,27 @@ const receiveTokenIntoWallet = async (
 	token: string,
 	options?: {
 		privkey?: string
+		/**
+		 * Caller-supplied mint URL. When provided we skip the top-level
+		 * `getDecodedToken(token)` call entirely. Necessary when the
+		 * token carries NUT-2 v2 short keyset IDs (cashu-ts ≥2.x default)
+		 * — without a keyset map cashu-ts cannot decode and the call
+		 * would throw "A short keyset ID v2 was encountered, but got no
+		 * keysets to map it to." The seller settlement path knows the
+		 * mint from the bid event, so it can pass it in.
+		 */
+		mintUrl?: string
 	},
 ): Promise<{ amount: number; mintUrl: string }> => {
-	const mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
+	// Resolve mint URL up front. Prefer the caller's explicit value to
+	// avoid the v2-short-ID decode trap (see the option doc above). Fall
+	// back to decoding the token only if no override was provided.
+	let mintUrl: string
+	if (options?.mintUrl) {
+		mintUrl = normalizeMintUrl(options.mintUrl)
+	} else {
+		mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
+	}
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
 	try {
@@ -703,7 +730,8 @@ const receiveTokenWithPrivkey = async (
 	wallet: NDKCashuWallet,
 	token: string,
 	privkey: string,
-): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey })
+	mintUrl?: string,
+): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey, mintUrl })
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -1701,38 +1729,49 @@ export const nip60Actions = {
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
-			// Wallet state reconciliation is intentionally async so bid publishing
-			// is not blocked by local wallet maintenance operations.
-			void (async () => {
-				if (changeProofs.length > 0) {
-					try {
-						await wallet.state.update({
-							store: changeProofs,
-							mint: targetMint,
-						})
-					} catch (changeErr) {
-						console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
-					}
-				}
+			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
+			// the balance UI doesn't briefly double-count the consumed
+			// inputs. The mint already burned `selectedProofs` during the
+			// swap, so we MUST pass them as `destroy:` — otherwise local
+			// state retains them alongside the new `changeProofs` and the
+			// displayed balance over-reports by `selectedTotal - amount`.
+			// (The previous version offloaded this to a void-async block
+			// + NUT-7 consolidation, which races the UI: refresh before
+			// consolidation lands and you see the inflated number.)
+			try {
+				await wallet.state.update({
+					mint: targetMint,
+					store: changeProofs,
+					destroy: selectedProofs,
+				})
+				// Synchronously re-read balance from wallet.state into the
+				// store so the UI updates immediately (avoids a stale
+				// inflated display until the async consolidation lands).
+				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
+				nip60Store.setState((s) => ({
+					...s,
+					balance: totalBalance,
+					mintBalances,
+					mints: getAllMints(wallet),
+				}))
+			} catch (stateErr) {
+				console.error('[nip60] Failed to reconcile wallet state after bid lock (non-fatal):', stateErr)
+			}
 
-				try {
-					await nip60Actions.consolidateProofs()
-				} catch (consolidateErr) {
-					console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
-				}
-
-				try {
-					await nip60Actions.refresh()
-				} catch (refreshErr) {
-					console.error('[nip60] Bid lock refresh error (non-fatal):', refreshErr)
-				}
-			})()
+			// Note: we used to also kick off `consolidateProofs()` here
+			// in a void async block. That's no longer needed — `destroy:
+			// selectedProofs` above already removes the spent proofs
+			// locally, so we don't have to NUT-7-check them to discover
+			// they're spent. Removing the consolidate eliminates a per-
+			// bid mint round-trip (and the CORS / 429 noise it produced
+			// against testnut).
 
 			const commitment = await sha256Hex(token)
 
 			return {
 				tokenId,
 				token,
+				proofs: lockedProofs,
 				amount: tokenAmount,
 				mintUrl: targetMint,
 				lockPubkey,
@@ -1963,7 +2002,11 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Dev-only helper: pick a live seeded auction, top up with test ecash if needed, and publish a locked bid event.
+	 * Dev-only helper: pick a live seeded auction on the user's relays,
+	 * top up the wallet with test ecash if needed, and publish a bid via
+	 * the bidder-held-path flow. Restored in Phase 3 — delegates the
+	 * heavy lifting to `publishAuctionBid` so this helper stays a thin
+	 * UX wrapper rather than reimplementing the bid pipeline.
 	 */
 	placeDevBidOnSeededAuction: async (params?: {
 		preferredBidAmount?: number
@@ -1978,277 +2021,124 @@ export const nip60Actions = {
 			throw new Error('NIP-60 wallet not ready')
 		}
 
-		const ndk = ndkStore.state.ndk
-		const signer = ndk?.signer
-		if (!ndk || !signer) {
-			throw new Error('NDK signer not available')
-		}
+		const ndk = ndkActions.getNDK()
+		const signer = ndkActions.getSigner()
+		if (!ndk) throw new Error('NDK not initialised')
+		if (!signer) throw new Error('No signer available')
+		const bidder = await signer.user()
 
-		const bidderPubkey = (await signer.user()).pubkey
-		const preferredMint = params?.preferredMintUrl ? normalizeMintUrl(params.preferredMintUrl) : ''
-		const devMintCandidates = getDevTestMintCandidates(preferredMint)
+		// Find a live auction. We pull recent kind-30408 events and
+		// filter to ones that (a) we're not the seller of and (b) still
+		// have time on the clock.
 		const now = Math.floor(Date.now() / 1000)
+		const auctions = Array.from(await ndkActions.fetchEventsWithTimeout({ kinds: [AUCTION_KIND], limit: 100 }, { timeoutMs: 5000 }))
+		const candidates = auctions.filter((auction) => {
+			if (auction.pubkey === bidder.pubkey) return false
+			const endAt = parseNonNegativeInt(getFirstTagValue(auction, 'end_at'), 0)
+			const maxEndAt = parseNonNegativeInt(getFirstTagValue(auction, 'max_end_at'), 0) || endAt
+			if (!endAt || maxEndAt <= now) return false
+			const startAt = parseNonNegativeInt(getFirstTagValue(auction, 'start_at'), 0)
+			if (startAt && startAt > now) return false
+			return true
+		})
+		if (!candidates.length) throw new Error('No live seeded auction available to bid on')
+		const selected = candidates[Math.floor(Math.random() * candidates.length)]
 
-		const auctionEvents = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{
-					kinds: [AUCTION_KIND],
-					limit: 300,
-				},
-				{ timeoutMs: 8000 },
-			),
+		// Pull the auction fields the publish flow needs.
+		const dTag = getFirstTagValue(selected, 'd')
+		const auctionCoordinates = dTag ? `${AUCTION_KIND}:${selected.pubkey}:${dTag}` : ''
+		if (!auctionCoordinates) throw new Error('Selected auction has no `d` tag')
+		const p2pkXpub = getFirstTagValue(selected, 'p2pk_xpub')
+		if (!p2pkXpub) throw new Error('Selected auction is missing p2pk_xpub')
+		const startAt = parseNonNegativeInt(getFirstTagValue(selected, 'start_at'), 0)
+		const endAt = parseNonNegativeInt(getFirstTagValue(selected, 'end_at'), 0)
+		const maxEndAt = parseNonNegativeInt(getFirstTagValue(selected, 'max_end_at'), 0) || endAt
+		const settlementGraceSeconds =
+			parseNonNegativeInt(getFirstTagValue(selected, 'settlement_grace'), 0) || getAuctionSettlementGraceSeconds()
+		const startingBid = parseNonNegativeInt(getFirstTagValue(selected, 'starting_bid'), 0)
+		const bidIncrement = parseNonNegativeInt(getFirstTagValue(selected, 'bid_increment'), 0) || 100
+		const trustedMints = selected.tags.filter((tag) => tag[0] === 'mint' && tag[1]).map((tag) => tag[1])
+
+		// Decide the bid amount: caller's preference, or a minimum
+		// increment over the current top bid.
+		const existingBids = Array.from(
+			await ndkActions.fetchEventsWithTimeout({ kinds: [AUCTION_BID_KIND], '#e': [selected.id], limit: 200 }, { timeoutMs: 5000 }),
 		)
-
-		type CandidateAuction = {
-			event: NDKEvent
-			dTag: string
-			title: string
-			startAt: number
-			endAt: number
-			startingBid: number
-			bidIncrement: number
-			acceptedMints: string[]
-			pathIssuerPubkey: string
-			p2pkXpub: string
-			settlementGraceSeconds: number
-		}
-
-		const candidates: CandidateAuction[] = auctionEvents
-			.map((event) => {
-				const dTag = getFirstTagValue(event, 'd')
-				const title = getFirstTagValue(event, 'title') || 'Untitled Auction'
-				const startAt = parseNonNegativeInt(getFirstTagValue(event, 'start_at'), 0)
-				const endAt = parseNonNegativeInt(getFirstTagValue(event, 'end_at'), 0)
-				const startingBid = parseNonNegativeInt(getFirstTagValue(event, 'starting_bid') || getFirstTagValue(event, 'price'), 0)
-				const bidIncrement = Math.max(1, parseNonNegativeInt(getFirstTagValue(event, 'bid_increment'), 1))
-				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
-				const pathIssuerPubkey = getFirstTagValue(event, 'path_issuer') || event.pubkey
-				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
-				const settlementGraceSeconds = parseNonNegativeInt(getFirstTagValue(event, 'settlement_grace'), 0)
-				return {
-					event,
-					dTag,
-					title,
-					startAt,
-					endAt,
-					startingBid,
-					bidIncrement,
-					acceptedMints,
-					pathIssuerPubkey,
-					p2pkXpub,
-					settlementGraceSeconds,
-				}
-			})
-			.filter((auction) => {
-				if (!auction.dTag) return false
-				if (auction.event.pubkey === bidderPubkey) return false
-				if (auction.endAt <= now) return false
-				if (auction.startAt > now) return false
-				return true
-			})
-			.sort((a, b) => a.endAt - b.endAt)
-
-		const selected =
-			candidates.find((auction) => auction.acceptedMints.some((mint) => devMintCandidates.includes(mint))) ||
-			candidates.find((auction) => auction.acceptedMints.length > 0)
-
-		if (!selected) {
-			throw new Error('No live seeded auction found for bidding')
-		}
-
-		const bidMint = selected.acceptedMints.find((mint) => devMintCandidates.includes(mint)) || selected.acceptedMints[0]
-		const bidEvents = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{
-					kinds: [AUCTION_BID_KIND],
-					'#e': [selected.event.id],
-					limit: 500,
-				},
-				{ timeoutMs: 8000 },
-			),
-		)
-		const highestBid = bidEvents.reduce((max, bidEvent) => {
-			const amount = parseNonNegativeInt(getFirstTagValue(bidEvent, 'amount'), 0)
+		const currentTop = existingBids.reduce((max, bid) => {
+			const amount = parseNonNegativeInt(getFirstTagValue(bid, 'amount'), 0)
 			return amount > max ? amount : max
-		}, selected.startingBid)
+		}, 0)
+		const minBid = currentTop > 0 ? currentTop + bidIncrement : startingBid
+		const preferred = params?.preferredBidAmount ? Math.floor(params.preferredBidAmount) : minBid
+		const bidAmount = Math.max(minBid, Number.isFinite(preferred) && preferred > 0 ? preferred : minBid)
 
-		const minBid = Math.max(selected.startingBid, highestBid + selected.bidIncrement)
-		const requestedAmount = params?.preferredBidAmount ? Math.floor(params.preferredBidAmount) : minBid
-		const bidAmount = Number.isFinite(requestedAmount) && requestedAmount >= minBid ? requestedAmount : minBid
-		const previousBid = resolveLatestActiveBidByBidder(bidEvents, bidderPubkey)
-		const previousAmount = previousBid ? parseNonNegativeInt(getFirstTagValue(previousBid, 'amount'), 0) : 0
-		if (previousAmount > 0 && bidAmount <= previousAmount) {
-			throw new Error(`Rebid must exceed your current bid of ${previousAmount.toLocaleString()} sats`)
-		}
-
-		const deltaAmount = Math.max(0, bidAmount - previousAmount)
-		if (deltaAmount <= 0) {
-			throw new Error('No additional funds required for this rebid')
-		}
-
+		// Top up the wallet at the chosen mint if it can't cover the
+		// bid. mintTestEcash works against the public testnut mints
+		// only — that's a dev-only assumption, fine here.
+		const mintForLock = params?.preferredMintUrl?.trim() || trustedMints[0]
+		if (!mintForLock) throw new Error('Selected auction has no trusted mint')
 		const { mintBalances } = getBalancesFromState(wallet)
-		const existingMintBalance = mintBalances[bidMint] ?? 0
-		const topUpAmount = Math.max(0, deltaAmount - existingMintBalance)
-		let effectiveBidMint = bidMint
-		if (topUpAmount > 0) {
-			const mintResult = await nip60Actions.mintTestEcash(topUpAmount, bidMint)
-			effectiveBidMint = mintResult.mintUrl
+		const balanceAtMint = mintBalances[mintForLock] ?? 0
+		if (balanceAtMint < bidAmount) {
+			const topUpAmount = bidAmount - balanceAtMint + 1000 // small safety buffer for fees / future bids
+			await nip60Actions.mintTestEcash(topUpAmount, mintForLock)
 		}
 
-		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
-		// Honour the auction's own settlement_grace tag rather than a global
-		// default — quick-settle dev fixtures use 30s, normal seeded auctions
-		// use 7200s, and the dev-bid placeholder lock should match either.
-		const settlementGraceSeconds = selected.settlementGraceSeconds || getAuctionSettlementGraceSeconds()
-		const locktime = Math.max(selected.endAt + settlementGraceSeconds, now + 60)
-		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
-
-		// AUCTIONS.md §7.5 — path issuance + bid-token submission run as
-		// MCP tools/call over CEP-15. Same identity assertion as before
-		// (the wrapping kind-25910 / 1059 signature is the §7.5.1 caller
-		// proof) but no HTTP / NIP-98.
-		const pathRequestNdk = ndkActions.getNDK()
-		const pathRequestSigner = ndkActions.getSigner()
-		if (!pathRequestSigner) throw new Error('No signer available — cannot request a path grant')
-		if (!pathRequestNdk) throw new Error('NDK is not initialised')
-		// Browser-safe client (the SDK's pino logger crashes the browser
-		// bundle at module init). The Bun-side seed script uses the
-		// ctxcn-generated `PlebeianServerClient` instead.
-		const { PlebeianAuctionClient } = await import('@/lib/ctxcn-clients/PlebeianAuctionClient')
-		const auctionRelays = configStore.state.config.appRelay ? [configStore.state.config.appRelay] : []
-		if (!auctionRelays.length) throw new Error('App relay URL is unavailable for the auction client')
-		const auctionClient = new PlebeianAuctionClient({
-			signer: pathRequestSigner,
-			ndk: pathRequestNdk,
-			relays: auctionRelays,
-			serverPubkey: selected.pathIssuerPubkey,
-		})
-		let pathGrant
-		try {
-			pathGrant = await auctionClient.RequestPath(selected.event.id, auctionCoordinates, bidderRefundPubkey, bidAmount)
-		} catch (error) {
-			await auctionClient.disconnect()
-			throw error
-		}
-		const { verifyAuctionPathGrant } = await import('@/lib/auctionP2pk')
-		try {
-			verifyAuctionPathGrant({
-				xpub: pathGrant.xpub,
-				derivationPath: pathGrant.derivationPath,
-				childPubkey: pathGrant.childPubkey,
-				expectedXpub: selected.p2pkXpub,
-				expectedIssuer: selected.pathIssuerPubkey,
-				grantIssuer: pathGrant.pathIssuerPubkey,
-			})
-		} catch (error) {
-			await auctionClient.disconnect()
-			throw error
-		}
-
-		const lockedBid = await nip60Actions.lockAuctionBidFunds({
-			amount: deltaAmount,
-			mint: effectiveBidMint,
-			locktime,
-			refundPubkey: bidderRefundPubkey,
-			lockPubkey: pathGrant.childPubkey,
-			auctionEventId: selected.event.id,
+		const { publishAuctionBid } = await import('@/publish/auctions')
+		type AuctionBidFormData = Parameters<typeof publishAuctionBid>[0]
+		const formData: AuctionBidFormData = {
+			auctionEventId: selected.id,
 			auctionCoordinates,
-			sellerPubkey: selected.event.pubkey,
-			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
-			derivationPath: pathGrant.derivationPath,
-			childPubkey: pathGrant.childPubkey,
-			grantId: pathGrant.grantId,
-		})
-		const bidNonce = globalThis.crypto?.randomUUID?.() || generateId()
-
-		const bidEvent = new NDKEvent(ndk)
-		bidEvent.kind = 1023
-		bidEvent.content = JSON.stringify({
-			type: 'cashu_bid_commitment',
 			amount: bidAmount,
-			delta_amount: deltaAmount,
-			prev_amount: previousAmount,
-			mint: lockedBid.mintUrl,
-			commitment: lockedBid.commitment,
-			key_scheme: lockedBid.keyScheme,
-			dev_mode: true,
-		})
-		bidEvent.tags = [
-			['e', selected.event.id],
-			['a', auctionCoordinates],
-			['p', selected.event.pubkey],
-			['amount', String(bidAmount), 'SAT'],
-			['delta_amount', String(deltaAmount), 'SAT'],
-			['currency', 'SAT'],
-			['mint', lockedBid.mintUrl],
-			['commitment', lockedBid.commitment],
-			['locktime', String(lockedBid.locktime)],
-			['refund_pubkey', lockedBid.refundPubkey],
-			['created_for_end_at', String(selected.endAt)],
-			['bid_nonce', bidNonce],
-			['status', 'locked'],
-			['schema', 'auction_bid_v1'],
-			['key_scheme', lockedBid.keyScheme],
-			['child_pubkey', lockedBid.childPubkey || lockedBid.lockPubkey],
-			['path_issuer', pathGrant.pathIssuerPubkey],
-			...(lockedBid.grantId ? ([['path_grant_id', lockedBid.grantId]] as NDKTag[]) : []),
-		]
-		if (previousBid) {
-			bidEvent.tags.push(['prev_bid', previousBid.id])
-			bidEvent.tags.push(['prev_amount', String(previousAmount), 'SAT'])
+			auctionStartAt: startAt,
+			auctionEffectiveEndAt: maxEndAt,
+			auctionLocktimeAt: maxEndAt,
+			settlementGraceSeconds,
+			sellerPubkey: selected.pubkey,
+			// Legacy field kept for back-compat with the publish form.
+			// publishAuctionBid no longer uses it for path issuance.
+			pathIssuerPubkey: '',
+			p2pkXpub,
+			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
 		}
 
-		await bidEvent.sign(signer)
-		// Publish the kind-1023 commitment first so the issuer receives a
-		// matching event id from the relay before we call submit_bid_token.
-		await ndkActions.publishEvent(bidEvent)
-		try {
-			const submission = await auctionClient.SubmitBidToken(
-				selected.event.id,
-				auctionCoordinates,
-				bidEvent.id,
-				pathGrant.grantId,
-				lockedBid.lockPubkey,
-				lockedBid.refundPubkey,
-				lockedBid.mintUrl,
-				lockedBid.amount,
-				bidAmount,
-				lockedBid.commitment,
-				bidNonce,
-				lockedBid.locktime,
-				lockedBid.token,
-			)
-			if (submission.registryStatus !== 'locked') {
-				throw new Error(submission.rejectReason || 'Issuer rejected the bid token')
-			}
-		} finally {
-			await auctionClient.disconnect()
-		}
-		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
-			kind: 'auction_bid',
-			auctionEventId: selected.event.id,
-			auctionCoordinates,
-			bidEventId: bidEvent.id,
-			sellerPubkey: selected.event.pubkey,
-			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
-			lockPubkey: lockedBid.lockPubkey,
-			refundPubkey: lockedBid.refundPubkey,
-			locktime: lockedBid.locktime,
-			derivationPath: lockedBid.derivationPath,
-			childPubkey: lockedBid.childPubkey,
-			grantId: lockedBid.grantId,
-		})
+		const bidEventId = await publishAuctionBid(formData, signer, ndk)
 
 		return {
-			bidEventId: bidEvent.id,
-			auctionEventId: selected.event.id,
+			bidEventId,
+			auctionEventId: selected.id,
 			auctionCoordinates,
-			auctionTitle: selected.title,
-			mintUrl: lockedBid.mintUrl,
+			auctionTitle: getFirstTagValue(selected, 'title') || 'untitled',
+			mintUrl: mintForLock,
 			bidAmount,
 			minBid,
-			topUpAmount,
+			topUpAmount: Math.max(0, bidAmount - balanceAtMint),
 		}
+	},
+
+	/**
+	 * Dev/wallet helper: settle one of the user's bids by publishing
+	 * the kind-1025 path release. Thin wrapper over
+	 * `publishBidderPathRelease` for the wallet dev panel (so the
+	 * happy path is one click away from the existing
+	 * `placeDevBidOnSeededAuction` helper).
+	 */
+	settleAuctionAsWinner: async (params: {
+		bidEventId: string
+		releaseReason?: 'settlement' | 'fallback_settlement' | 'voluntary_late'
+		note?: string
+	}): Promise<{ pathReleaseEventId: string }> => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndkActions.getSigner()
+		if (!ndk) throw new Error('NDK not initialised')
+		if (!signer) throw new Error('No signer available')
+		const { publishBidderPathRelease } = await import('@/publish/auctions')
+		const result = await publishBidderPathRelease(
+			{ bidEventId: params.bidEventId, releaseReason: params.releaseReason, note: params.note },
+			signer,
+			ndk,
+		)
+		return { pathReleaseEventId: result.pathReleaseEventId }
 	},
 
 	/**
@@ -2274,7 +2164,19 @@ export const nip60Actions = {
 		}
 	},
 
-	receiveLockedEcash: async (token: string, privkey: string): Promise<boolean> => {
+	/**
+	 * Receive a P2PK-locked Cashu token and swap it into the wallet's
+	 * spendable proofs. The caller MUST pass the unlocking `privkey`
+	 * derived from `seller_xpriv + derivation_path`. `mintUrl` is
+	 * optional but strongly recommended: cashu-ts ≥2.x emits NUT-2 v2
+	 * short keyset IDs by default, and `getDecodedToken(token)`
+	 * without a keyset map cannot expand them — it throws "A short
+	 * keyset ID v2 was encountered, but got no keysets to map it to."
+	 * The seller settlement path knows the mint from the winning bid
+	 * event, so it can pass it in and skip the decode-to-find-mint
+	 * step entirely.
+	 */
+	receiveLockedEcash: async (token: string, privkey: string, mintUrl?: string): Promise<boolean> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet) {
 			console.warn('[nip60] Cannot receive locked ecash without wallet')
@@ -2282,7 +2184,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			await receiveTokenWithPrivkey(wallet, token, privkey)
+			await receiveTokenWithPrivkey(wallet, token, privkey, mintUrl)
 			await nip60Actions.refresh()
 			return true
 		} catch (err) {
@@ -2362,21 +2264,36 @@ export const nip60Actions = {
 			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(waitSeconds)}`)
 		}
 
-		const refundPrivkey = auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null
+		// Look up the refund privkey from three sources in order of
+		// preference:
+		//
+		//   1. The auction's BidderBidRecord (`refundPrivateKey`). This
+		//      is THE authoritative store under cashu_p2pk_bidder_path_v1
+		//      — each bid leg generates a fresh refund keypair at lock
+		//      time and persists the privkey there. Refund keys are
+		//      intentionally NOT added to `wallet.privkeys` because that
+		//      map is for the wallet's general signing keys; mixing in
+		//      per-bid throwaway keys would bloat it across many bids.
+		//   2. The wallet's `privkeys` map. Legacy path; covers older
+		//      bids placed before the BidderBidRecord scheme existed and
+		//      provides a safety net if the local record is missing but
+		//      the user happens to also hold the privkey in their wallet.
+		//   3. None → stop. Without the privkey the timelock refund
+		//      branch can't be signed; falling through would just spam
+		//      the mint with "witness missing" 4xx responses.
+		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
+		const refundPrivkey =
+			bidderRecord?.refundPrivateKey ?? (auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null)
 
-		// If this is an auction bid but we don't hold the refund privkey, stop
-		// immediately. Falling through to an unsigned swap just spams the mint
-		// with rejected requests ("Witness is missing") and eats rate-limit
-		// budget. The typical cause is a wallet rotation / reseed — the bid
-		// was placed with a different wallet than the one loaded right now.
 		if (auctionContext && !refundPrivkey) {
 			const walletPrivkeyCount = wallet.privkeys.size
 			console.warn(
-				`[nip60] Reclaim aborted: wallet does not hold a privkey matching refundPubkey ${auctionContext.refundPubkey}. ` +
-					`Wallet has ${walletPrivkeyCount} privkey(s). The bid may have been placed with a different wallet.`,
+				`[nip60] Reclaim aborted: no refund privkey found for refundPubkey ${auctionContext.refundPubkey} ` +
+					`(checked BidderBidRecord + wallet.privkeys; wallet holds ${walletPrivkeyCount} privkey(s)). ` +
+					`The bid was likely placed with a different browser/profile or local storage was cleared.`,
 			)
 			const reason =
-				'This wallet does not hold the refund private key for this bid. It was probably placed from a different wallet or before a key rotation. The locked sats stay at the mint — they can only be reclaimed by the wallet that originally placed the bid.'
+				"This device does not hold the refund private key for this bid. The key only exists in the wallet that originally placed the bid (per-bid refund keys are stored in localStorage and aren't synced). Locked sats stay at the mint until that device reclaims them."
 			const updatedTokens = nip60Store.state.pendingTokens.map((t) =>
 				t.id === tokenId
 					? {

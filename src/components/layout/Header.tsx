@@ -19,6 +19,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
 import { BugReportModal } from '../BugReportModal'
+import { ConnectionStatusPill } from '../ConnectionStatusPill'
 import { TooltipButton } from '../shared/TooltipButton'
 
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
@@ -339,7 +340,11 @@ export function Header() {
 					<div className="hidden lg:block flex-1">
 						<ProductSearch />
 					</div>
-					<div className="flex gap-2">
+					<div className="flex items-center gap-2">
+						{/* Connection-status pill — only renders when relay connectivity
+							is not healthy. Click to manually retry. */}
+						<ConnectionStatusPill />
+
 						{/* Bug Report Button - Only when authenticated */}
 						{isAuthenticated && (
 							<BugReportButton className="!static relative hover:!bg-black !shadow-none p-2 !bg-primary-border !border-2 !border-transparent hover:!border-primary-border-hover !rounded-lg !w-auto hover:[&>span]:text-secondary" />
