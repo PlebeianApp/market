@@ -16,6 +16,7 @@ import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { buildAuctionClaimPublicMarkerTags, createPrivateAuctionClaimMessageWithSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -1126,43 +1127,71 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 	const signer = ndkActions.getSigner()
 	if (!signer) throw new Error('No active user')
 
+	const buyerPubkey = await resolveAuctionClaimBuyerPubkey(ndk, signer)
 	const orderId = uuidv4()
+	const claimFields = {
+		orderId,
+		auctionCoordinates: formData.auctionCoordinates,
+		auctionEventId: formData.auctionEventId,
+		settlementEventId: formData.settlementEventId,
+		buyerPubkey,
+		sellerPubkey: formData.sellerPubkey,
+		totalAmountSats: formData.finalAmount,
+		shippingAddress: formData.shippingAddress,
+		email: formData.email,
+		phone: formData.phone,
+		notes: formData.notes,
+	}
 
-	const addressParts = [
-		formData.shippingAddress.name,
-		formData.shippingAddress.firstLineOfAddress,
-		formData.shippingAddress.additionalInformation,
-		formData.shippingAddress.city,
-		formData.shippingAddress.zipPostcode,
-		formData.shippingAddress.country,
-	].filter(Boolean)
-
-	const tags: NDKTag[] = [
-		['p', formData.sellerPubkey],
-		['subject', `Auction claim for ${formData.auctionEventId.substring(0, 8)}`],
-		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
-		['order', orderId],
-		['amount', String(formData.finalAmount)],
-		// Link to auction & settlement
-		['a', formData.auctionCoordinates],
-		['e', formData.auctionEventId],
-		['e', formData.settlementEventId, '', 'settlement'],
-		['address', addressParts.join('\n')],
-	]
-
-	if (formData.email) tags.push(['email', formData.email])
-	if (formData.phone) tags.push(['phone', formData.phone])
-	if (formData.notes) tags.push(['notes', formData.notes])
+	const privateClaim = await createPrivateAuctionClaimMessageWithSigner({
+		...claimFields,
+		signer,
+	})
+	const privateEvent = new NDKEvent(ndk, privateClaim.giftWrap)
+	await publishRequiredPrivateGiftWrap(privateEvent)
 
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
-	event.content = formData.notes || 'Auction win — shipping details enclosed'
-	event.tags = tags
+	event.content = ''
+	event.tags = buildAuctionClaimPublicMarkerTags(claimFields) as NDKTag[]
 
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
 
 	return event.id
+}
+
+function publishResultHasRelayDetails(result: unknown): boolean {
+	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
+}
+
+function publishResultHasRelaySuccess(result: unknown): boolean {
+	if (result instanceof Set) return result.size > 0
+	if (Array.isArray(result)) return result.length > 0
+	if (typeof result === 'object' && result !== null && 'size' in result && typeof (result as { size?: unknown }).size === 'number') {
+		return (result as { size: number }).size > 0
+	}
+	return true
+}
+
+async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<void> {
+	const result = await ndkActions.publishEvent(event)
+	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
+		throw new Error('Encrypted auction claim details could not be published')
+	}
+}
+
+async function resolveAuctionClaimBuyerPubkey(ndk: NDK, signer: NDKSigner): Promise<string> {
+	const user = await signer.user()
+	const signerPubkey = user.pubkey
+	if (!HEX_PUBKEY_RE.test(signerPubkey)) throw new Error('Active signer pubkey is not a 32-byte hex Nostr pubkey.')
+
+	const activeUserPubkey = ndk.activeUser?.pubkey
+	if (activeUserPubkey && activeUserPubkey !== signerPubkey) {
+		throw new Error('Active user does not match active signer.')
+	}
+
+	return signerPubkey
 }
 
 export const usePublishAuctionClaimOrderMutation = () => {
