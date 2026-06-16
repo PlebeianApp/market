@@ -14,7 +14,7 @@ import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auct
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { nip60Actions } from '@/lib/stores/nip60'
+import { getAuctionSettlementGraceSeconds, nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
@@ -60,6 +60,7 @@ import {
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
 	useAuctionSettlements,
+	getAuctionSettlementGrace,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
 import { useQueries } from '@tanstack/react-query'
@@ -73,6 +74,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
+import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -390,6 +392,7 @@ function AuctionDetailRoute() {
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
 	const specs = getAuctionSpecs(auction)
+	const refundTime = getAuctionMaxEndAt(auction) + getAuctionSettlementGrace(auction)
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
@@ -817,6 +820,12 @@ function AuctionDetailRoute() {
 						>
 							Seller
 						</TabsTrigger>
+						<TabsTrigger
+							value="visual"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Visual
+						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
@@ -1199,6 +1208,19 @@ function AuctionDetailRoute() {
 								</div>
 							</div>
 						</div>
+					</TabsContent>
+
+					<TabsContent value="visual" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<AuctionTimelineChart
+							bids={bids}
+							auctionStart={startAt * 1000}
+							effectiveEndAt={effectiveEndAt * 1000}
+							absoluteEndAt={endAt * 1000}
+							refundTime={refundTime * 1000} // You'll need to determine this based on your auction logic
+							startingBid={startingBid}
+							reserve={reserve}
+							currentPrice={currentPrice}
+						/>
 					</TabsContent>
 				</Tabs>
 			</div>
