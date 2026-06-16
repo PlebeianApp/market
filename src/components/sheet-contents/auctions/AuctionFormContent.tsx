@@ -1584,8 +1584,13 @@ const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
 	shippingExtraCost: 'Shipping Extra Cost',
 }
 
-function isMeaningfulDraft(formData: AuctionFormData): boolean {
-	return formData.title.trim().length > 0
+function isMeaningfulDraft(formData: AuctionFormData, baselineMints: string[]): boolean {
+	if (formData.title.trim().length > 0) return true
+
+	const baseline = new Set(baselineMints)
+	const current = formData.trustedMints
+	if (baseline.size !== current.length) return true
+	return current.some((mint) => !baseline.has(mint))
 }
 
 export function AuctionFormContent() {
@@ -1658,7 +1663,7 @@ export function AuctionFormContent() {
 
 		saveTimerRef.current = setTimeout(() => {
 			if (draftGenerationRef.current !== gen) return
-			if (!isMeaningfulDraft(formData)) return
+			if (!isMeaningfulDraft(formData, availableMints)) return
 			saveAuctionFormDraft(userPubkey, { formData, images, startMode, endMode, durationSeconds, subCategoryInput })
 			if (draftGenerationRef.current === gen) setDraftSavedAt(Date.now())
 		}, 1500)
@@ -1666,7 +1671,7 @@ export function AuctionFormContent() {
 		return () => {
 			if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
 		}
-	}, [formData, images, startMode, endMode, durationSeconds, subCategoryInput, userPubkey])
+	}, [formData, images, startMode, endMode, durationSeconds, subCategoryInput, userPubkey, availableMints])
 
 	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
