@@ -11,6 +11,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for hardcoded Nostr keys and secrets
+        run: bash scripts/git-hooks/pre-commit --full-repo
+
   unit-integration:
     runs-on: ubuntu-latest
 

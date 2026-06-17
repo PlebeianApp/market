@@ -31,7 +31,5 @@ export function resolveCvmServerPubkey(): string {
 		return getPublicKey(hexToBytes(privateKey))
 	}
 
-	throw new Error(
-		'No CVM server pubkey available. Set CVM_SERVER_PUBLIC_KEY or CVM_SERVER_KEY in your environment.',
-	)
+	throw new Error('No CVM server pubkey available. Set CVM_SERVER_PUBLIC_KEY or CVM_SERVER_KEY in your environment.')
 }
