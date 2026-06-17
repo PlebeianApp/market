@@ -322,36 +322,39 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 /**
  * Fetch all kind-1025 path-release events for an auction. Sellers use
  * this to discover when a winning bidder has settled. Validators use
- * this when deriving verdicts. Pulled by `auctionEventId` (root event)
- * or by `auctionCoordinate`; both filters are applied so we catch
- * releases that referenced either.
+ * this when deriving verdicts. Path releases are queried by auction
+ * coordinate only; never query kind-1025 broadly by root event id alone.
  */
 export const fetchAuctionPathReleases = async (
 	auctionEventId: string,
 	limit: number = 200,
 	auctionCoordinates?: string,
 ): Promise<NDKEvent[]> => {
-	if (!auctionEventId && !auctionCoordinates) return []
+	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
+	if (!filter) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const filters: NDKFilter[] = []
-	if (auctionEventId) {
-		filters.push({
-			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
-			'#a': auctionCoordinates ? [auctionCoordinates] : undefined,
-			limit,
-		})
-	} else if (auctionCoordinates) {
-		filters.push({
-			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
-			'#a': [auctionCoordinates],
-			limit,
-		})
-	}
+	void auctionEventId
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters[0], { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events))
+		.filter((event) => isAuctionPathReleaseForCoordinate(event, filter['#a'][0]))
+		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number = 200): NDKFilter | null {
+	const coordinate = auctionCoordinates?.trim()
+	if (!coordinate) return null
+	return {
+		kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+		'#a': [coordinate],
+		limit,
+	}
+}
+
+export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordinates: string): boolean {
+	return event.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
 }
 
 /**
@@ -467,7 +470,7 @@ export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: n
 	queryOptions({
 		queryKey: [...auctionKeys.pathReleases(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
 		queryFn: () => fetchAuctionPathReleases(auctionEventId, limit, auctionCoordinates),
-		enabled: !!(auctionEventId || auctionCoordinates),
+		enabled: !!auctionCoordinates?.trim(),
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})

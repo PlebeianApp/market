@@ -854,7 +854,11 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (signerUser.pubkey !== sellerPubkey) {
 		throw new Error('Only the auction seller can publish a kind-1024 settlement event')
 	}
-	const auctionCoordinate = formData.auctionCoordinates || `${30408}:${sellerPubkey}:${getTag(auctionEvent, 'd') ?? ''}`
+	const auctionDTag = getTag(auctionEvent, 'd')?.trim()
+	const auctionCoordinate = formData.auctionCoordinates?.trim() || (auctionDTag ? `${30408}:${sellerPubkey}:${auctionDTag}` : '')
+	if (!auctionCoordinate) {
+		throw new Error('Auction coordinate is required to query kind-1025 path releases')
+	}
 	const auctionRootEventId = auctionEvent.id
 	const p2pkXpub = getTag(auctionEvent, 'p2pk_xpub') ?? ''
 	const declaredPolicy = getTag(auctionEvent, 'settlement_policy')
