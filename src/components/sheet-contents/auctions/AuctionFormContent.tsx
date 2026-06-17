@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,7 +36,7 @@ import {
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, CalendarIcon, Plus, X } from 'lucide-react'
+import { ArrowLeft, CalendarIcon, ChevronDown, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { Slider } from '@/components/ui/slider'
@@ -214,8 +215,6 @@ const DURATION_PRESETS: AuctionDurationPreset[] = [
 	{ label: '25d', seconds: 25 * 86400 },
 	{ label: '30d', seconds: 30 * 86400 },
 ]
-
-const DURATION_PRESET_DEFAULT_INDEX = 25 // Index for 1 Day
 
 const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
 	DURATION_PRESETS[9], // 1 Hour
@@ -871,7 +870,10 @@ function AuctionTabContent({
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
 	const [useReserve, setUseReserve] = useState(false)
-	const [inputSliderValue, setInputSliderValue] = useState<number>(DURATION_PRESET_DEFAULT_INDEX)
+	const [inputSliderValue, setInputSliderValue] = useState<number>(() => {
+		const idx = DURATION_PRESETS.findIndex((p) => p.seconds === durationSeconds)
+		return idx >= 0 ? idx + 1 : 1
+	})
 
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
@@ -893,9 +895,15 @@ function AuctionTabContent({
 		}
 	}
 
+	type Section = 'antiSnipe' | 'settlementGrace' | 'trustedMints'
+	const [openSection, setOpenSection] = useState<Section | null>(null)
+	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
+
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
 	const reserveNum = parseInt(formData.reserve ?? '', 10)
+	const showBidLadder =
+		formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0 && !isNaN(reserveNum)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -1107,7 +1115,8 @@ function AuctionTabContent({
 						type="number"
 						min="1"
 						value={formData.bidIncrement}
-						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value }))}
+						onFocus={(e) => e.target.select()}
+						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
 					/>
 					{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
 				</div>
@@ -1139,73 +1148,109 @@ function AuctionTabContent({
 						type="number"
 						min="0"
 						value={formData.reserve}
+						onFocus={(e) => e.target.select()}
 						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
 					/>
 					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 				</div>
 			)}
 
-			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
+			{showBidLadder && <BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
 
-			<AntiSnipeCurveSettings
-				formData={formData}
-				setFormData={setFormData}
-				startAtSeconds={effectiveStartSeconds}
-				endAtSeconds={virtualEndSeconds}
-				maxEndAtSeconds={curveMaxEndSeconds}
-				settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
-				startingBid={startingBidNum}
-				bidIncrement={bidIncrementNum}
-				reserve={reserveNum}
-			/>
-			<SettlementGraceSettings formData={formData} setFormData={setFormData} />
+			<div>
+				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Anti-snipe &amp; Curve Settings
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<AntiSnipeCurveSettings
+							formData={formData}
+							setFormData={setFormData}
+							startAtSeconds={effectiveStartSeconds}
+							endAtSeconds={virtualEndSeconds}
+							maxEndAtSeconds={curveMaxEndSeconds}
+							settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
+							startingBid={startingBidNum}
+							bidIncrement={bidIncrementNum}
+							reserve={reserveNum}
+						/>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 
-			<div className="grid w-full gap-1.5">
-				<Label>Trusted Mints</Label>
-				<p className="text-xs text-zinc-500">
-					Bids will be rejected unless the token is minted by one of these mints. At least one is required.
-				</p>
-				{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
+			<div>
+				<Collapsible open={openSection === 'settlementGrace'} onOpenChange={toggle('settlementGrace')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Settlement Grace
+						<ChevronDown
+							className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
+						/>
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<SettlementGraceSettings formData={formData} setFormData={setFormData} />
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 
-				<div className="space-y-2 mt-1">
-					{selectedMints.map((mint) => (
-						<div key={mint} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
-							<span className="truncate text-sm text-zinc-900" title={mint}>
-								{mint}
-							</span>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => removeMint(mint)}
-								disabled={!canRemoveMint}
-								className="text-red-600 hover:text-red-700 disabled:opacity-40"
-								title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
-							>
-								<X className="w-4 h-4" />
-							</Button>
+			<div>
+				<Collapsible open={openSection === 'trustedMints'} onOpenChange={toggle('trustedMints')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Trusted Mints
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+							<p className="text-xs text-zinc-500">
+								Bids will be rejected unless the token is minted by one of these mints. At least one is required.
+							</p>
+							{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
+
+							<div className="space-y-2 mt-1">
+								{selectedMints.map((mint) => (
+									<div
+										key={mint}
+										className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+									>
+										<span className="truncate text-sm text-zinc-900" title={mint}>
+											{mint}
+										</span>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => removeMint(mint)}
+											disabled={!canRemoveMint}
+											className="text-red-600 hover:text-red-700 disabled:opacity-40"
+											title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
+										>
+											<X className="w-4 h-4" />
+										</Button>
+									</div>
+								))}
+							</div>
+
+							{unselectedMints.length > 0 && (
+								<div className="space-y-2 mt-3">
+									<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
+									{unselectedMints.map((mint) => (
+										<button
+											key={mint}
+											type="button"
+											onClick={() => addMint(mint)}
+											className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
+										>
+											<span className="truncate" title={mint}>
+												{mint}
+											</span>
+											<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+										</button>
+									))}
+								</div>
+							)}
 						</div>
-					))}
-				</div>
-
-				{unselectedMints.length > 0 && (
-					<div className="space-y-2 mt-3">
-						<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
-						{unselectedMints.map((mint) => (
-							<button
-								key={mint}
-								type="button"
-								onClick={() => addMint(mint)}
-								className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
-							>
-								<span className="truncate" title={mint}>
-									{mint}
-								</span>
-								<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
-							</button>
-						))}
-					</div>
-				)}
+					</CollapsibleContent>
+				</Collapsible>
 			</div>
 		</div>
 	)
