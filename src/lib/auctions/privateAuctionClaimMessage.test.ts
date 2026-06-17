@@ -7,6 +7,8 @@ import {
 	createPrivateAuctionClaimMessage,
 	createPrivateAuctionClaimMessageWithSigner,
 	decryptPrivateAuctionClaimMessage,
+	getAuctionClaimPublicMarkerFields,
+	privateAuctionClaimMatchesPublicMarker,
 	type AuctionClaimMessageFields,
 } from './privateAuctionClaimMessage'
 
@@ -228,5 +230,71 @@ describe('private auction claim message', () => {
 			['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
 		])
 		expectNoPii({ content: '', tags })
+	})
+
+	test('extracts canonical public marker fields for private claim matching', () => {
+		const fields = baseFields()
+		const marker = {
+			pubkey: fields.buyerPubkey,
+			tags: buildAuctionClaimPublicMarkerTags(fields),
+		}
+
+		expect(getAuctionClaimPublicMarkerFields(marker)).toEqual({
+			orderId: fields.orderId,
+			auctionCoordinates: fields.auctionCoordinates,
+			auctionEventId: fields.auctionEventId,
+			settlementEventId: fields.settlementEventId,
+			buyerPubkey: fields.buyerPubkey,
+			sellerPubkey: fields.sellerPubkey,
+			totalAmountSats: fields.totalAmountSats,
+		})
+	})
+
+	test('matches private claim payloads to public markers by canonical fields', () => {
+		const fields = baseFields()
+		const payload = buildPrivateAuctionClaimPayload(fields)
+		const marker = {
+			pubkey: fields.buyerPubkey,
+			tags: buildAuctionClaimPublicMarkerTags(fields),
+		}
+
+		expect(privateAuctionClaimMatchesPublicMarker(payload, marker)).toBe(true)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				tags: marker.tags.map((tag) => (tag[0] === 'order' ? ['order', 'different-order'] : tag)),
+			}),
+		).toBe(false)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				pubkey: 'f'.repeat(64),
+			}),
+		).toBe(false)
+		expect(
+			privateAuctionClaimMatchesPublicMarker(payload, {
+				...marker,
+				tags: marker.tags.map((tag) => (tag[0] === 'amount' ? ['amount', '21001'] : tag)),
+			}),
+		).toBe(false)
+	})
+
+	test('rejects public markers missing required auction claim references', () => {
+		const fields = baseFields()
+		const tags = buildAuctionClaimPublicMarkerTags(fields)
+
+		expect(getAuctionClaimPublicMarkerFields({ pubkey: fields.buyerPubkey, tags: tags.filter((tag) => tag[0] !== 'a') })).toBeNull()
+		expect(
+			getAuctionClaimPublicMarkerFields({
+				pubkey: fields.buyerPubkey,
+				tags: tags.filter((tag) => !(tag[0] === 'e' && tag[3] === 'settlement')),
+			}),
+		).toBeNull()
+		expect(
+			getAuctionClaimPublicMarkerFields({
+				pubkey: fields.buyerPubkey,
+				tags: tags.map((tag) => (tag[0] === 'subject' ? ['subject', 'not-auction-claim'] : tag)),
+			}),
+		).toBeNull()
 	})
 })

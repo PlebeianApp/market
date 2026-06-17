@@ -74,6 +74,16 @@ export type PrivateAuctionClaimMessage = {
 	rumor: UnsignedRumor
 }
 
+export type AuctionClaimPublicMarkerFields = {
+	orderId: string
+	auctionCoordinates: string
+	auctionEventId: string
+	settlementEventId: string
+	buyerPubkey: string
+	sellerPubkey: string
+	totalAmountSats: number
+}
+
 export type ParsePrivateAuctionClaimRumorOptions = {
 	expectedBuyerPubkey?: string
 	expectedSellerPubkey?: string
@@ -186,6 +196,65 @@ export function buildAuctionClaimPublicMarkerTags(fields: AuctionClaimMessageFie
 	]
 }
 
+export function getAuctionClaimPublicMarkerFields(event: { pubkey?: string; tags: string[][] }): AuctionClaimPublicMarkerFields | null {
+	const buyerPubkey = event.pubkey ?? ''
+	if (!HEX_32_BYTES_RE.test(buyerPubkey)) return null
+
+	const sellerPubkey = readTag(event.tags, 'p')
+	const subject = readTag(event.tags, 'subject')
+	const type = readTag(event.tags, 'type')
+	const orderId = readTag(event.tags, 'order')
+	const amount = readTag(event.tags, 'amount')
+	const auctionCoordinates = readTag(event.tags, 'a')
+	const settlementEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] === 'settlement')?.[1] ?? ''
+	const auctionEventId = event.tags.find((tag) => tag[0] === 'e' && tag[3] !== 'settlement')?.[1] ?? ''
+	const totalAmountSats = Number(amount)
+
+	if (subject !== AUCTION_CLAIM_SUBJECT) return null
+	if (type !== ORDER_MESSAGE_TYPE.ORDER_CREATION) return null
+	if (!orderId) return null
+	if (!auctionCoordinates) return null
+	if (!HEX_32_BYTES_RE.test(sellerPubkey ?? '')) return null
+	if (!HEX_32_BYTES_RE.test(auctionEventId)) return null
+	if (!HEX_32_BYTES_RE.test(settlementEventId)) return null
+	if (!Number.isSafeInteger(totalAmountSats) || totalAmountSats <= 0) return null
+
+	try {
+		const coordinate = parseAuctionCoordinate(auctionCoordinates)
+		if (coordinate.sellerPubkey !== sellerPubkey) return null
+	} catch {
+		return null
+	}
+
+	return {
+		orderId,
+		auctionCoordinates,
+		auctionEventId,
+		settlementEventId,
+		buyerPubkey,
+		sellerPubkey: sellerPubkey ?? '',
+		totalAmountSats,
+	}
+}
+
+export function privateAuctionClaimMatchesPublicMarker(
+	payload: PrivateAuctionClaimPayload,
+	marker: AuctionClaimPublicMarkerFields | { pubkey?: string; tags: string[][] },
+): boolean {
+	const markerFields = 'tags' in marker ? getAuctionClaimPublicMarkerFields(marker) : marker
+	if (!markerFields) return false
+
+	return (
+		payload.orderId === markerFields.orderId &&
+		payload.auctionCoordinates === markerFields.auctionCoordinates &&
+		payload.auctionEventId === markerFields.auctionEventId &&
+		payload.settlementEventId === markerFields.settlementEventId &&
+		payload.buyerPubkey === markerFields.buyerPubkey &&
+		payload.sellerPubkey === markerFields.sellerPubkey &&
+		payload.totalAmountSats === markerFields.totalAmountSats
+	)
+}
+
 export function buildPrivateAuctionClaimPayload(fields: AuctionClaimMessageFields): PrivateAuctionClaimPayload {
 	assertNonEmptyString(fields.orderId, 'order id')
 	assertHex32Bytes(fields.buyerPubkey, 'buyer pubkey')
@@ -272,6 +341,10 @@ function parsePrivateAuctionClaimPayload(content: string): PrivateAuctionClaimPa
 	})
 
 	return payload
+}
+
+function readTag(tags: string[][], name: string): string | undefined {
+	return tags.find((tag) => tag[0] === name)?.[1]
 }
 
 function normalizeShippingAddress(value: AuctionClaimDeliveryDetails): AuctionClaimDeliveryDetails {

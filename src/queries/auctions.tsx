@@ -2,6 +2,12 @@ import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
+	decryptPrivateAuctionClaimMessageWithSigner,
+	getAuctionClaimPublicMarkerFields,
+	privateAuctionClaimMatchesPublicMarker,
+	type PrivateAuctionClaimMessage,
+} from '@/lib/auctions/privateAuctionClaimMessage'
+import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
 	AUCTION_ROOT_EVENT_ID_TAG,
@@ -17,6 +23,7 @@ import {
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
+import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -25,6 +32,11 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
+
+export type PrivateAuctionClaimLookupResult =
+	| { status: 'found'; claim: PrivateAuctionClaimMessage }
+	| { status: 'not_found' }
+	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_ndk' | 'no_signer' | 'not_seller' }
 
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 
@@ -757,6 +769,56 @@ export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promi
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
+export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent): Promise<PrivateAuctionClaimLookupResult> => {
+	const markerFields = getAuctionClaimPublicMarkerFields({ pubkey: publicMarker.pubkey, tags: publicMarker.tags })
+	if (!markerFields) return { status: 'unavailable', reason: 'missing_marker_fields' }
+
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return { status: 'unavailable', reason: 'no_ndk' }
+
+	const signer = ndkActions.getSigner()
+	if (!signer) return { status: 'unavailable', reason: 'no_signer' }
+
+	const signerUser = await signer.user()
+	if (signerUser.pubkey !== markerFields.sellerPubkey) return { status: 'unavailable', reason: 'not_seller' }
+
+	const filter: NDKFilter = {
+		kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+		'#p': [markerFields.sellerPubkey],
+		limit: 100,
+	}
+
+	const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
+	const matches: PrivateAuctionClaimMessage[] = []
+
+	for (const giftWrap of events) {
+		try {
+			const claim = await decryptPrivateAuctionClaimMessageWithSigner({
+				giftWrap: giftWrap.rawEvent(),
+				signer,
+				expectedBuyerPubkey: markerFields.buyerPubkey,
+				expectedSellerPubkey: markerFields.sellerPubkey,
+				expectedOrderId: markerFields.orderId,
+			})
+			if (privateAuctionClaimMatchesPublicMarker(claim.payload, markerFields)) {
+				matches.push(claim)
+			}
+		} catch {
+			// Relay data is untrusted. Ignore malformed, unrelated, or undecryptable gift wraps without logging private payloads.
+		}
+	}
+
+	if (matches.length === 0) return { status: 'not_found' }
+
+	matches.sort((a, b) => {
+		const createdAtDelta = (b.rumor.created_at ?? 0) - (a.rumor.created_at ?? 0)
+		if (createdAtDelta !== 0) return createdAtDelta
+		return (b.rumor.id ?? '').localeCompare(a.rumor.id ?? '')
+	})
+
+	return { status: 'found', claim: matches[0] }
+}
+
 export const auctionClaimOrdersQueryOptions = (auctionCoordinates: string) =>
 	queryOptions({
 		queryKey: [...auctionKeys.all, 'claimOrders', auctionCoordinates],
@@ -769,4 +831,21 @@ export const auctionClaimOrdersQueryOptions = (auctionCoordinates: string) =>
 export const useAuctionClaimOrders = (auctionCoordinates: string) =>
 	useQuery({
 		...auctionClaimOrdersQueryOptions(auctionCoordinates),
+	})
+
+export const privateAuctionClaimQueryOptions = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+	queryOptions({
+		queryKey: [...auctionKeys.all, 'privateClaim', publicMarker?.id ?? ''],
+		queryFn: () => {
+			if (!publicMarker) return Promise.resolve<PrivateAuctionClaimLookupResult>({ status: 'not_found' })
+			return fetchPrivateAuctionClaimForMarker(publicMarker)
+		},
+		enabled: enabled && !!publicMarker,
+		staleTime: 10000,
+		refetchInterval: 10000,
+	})
+
+export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+	useQuery({
+		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
