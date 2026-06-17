@@ -587,6 +587,23 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	await bidEvent.sign(signer)
 	await ndkActions.publishEvent(bidEvent)
+	const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
+		kind: 'auction_bid',
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates: formData.auctionCoordinates,
+		bidEventId: bidEvent.id,
+		sellerPubkey: formData.sellerPubkey,
+		pathIssuerPubkey: '',
+		lockPubkey: lockResult.lockPubkey,
+		refundPubkey: lockResult.refundPubkey,
+		locktime: lockResult.locktime,
+		derivationPath: lockResult.derivationPath,
+		childPubkey: lockResult.childPubkey,
+		grantId: lockResult.grantId,
+	})
+	if (!updatedPendingToken) {
+		console.warn('[auctions] Published auction bid but could not attach bid event id to the local pending lock record')
+	}
 
 	// Step 8 — persist the bidder-side record. Loss of this record makes
 	// settlement (and timelock refund) impossible for this bid, so we
