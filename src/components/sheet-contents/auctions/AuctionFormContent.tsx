@@ -216,8 +216,6 @@ const DURATION_PRESETS: AuctionDurationPreset[] = [
 	{ label: '30d', seconds: 30 * 86400 },
 ]
 
-const DURATION_PRESET_DEFAULT_INDEX = 25 // Index for 1 Day
-
 const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
 	DURATION_PRESETS[9], // 1 Hour
 	DURATION_PRESETS[19], // 12 Hours
@@ -872,7 +870,10 @@ function AuctionTabContent({
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
 	const [useReserve, setUseReserve] = useState(false)
-	const [inputSliderValue, setInputSliderValue] = useState<number>(DURATION_PRESET_DEFAULT_INDEX)
+	const [inputSliderValue, setInputSliderValue] = useState<number>(() => {
+		const idx = DURATION_PRESETS.findIndex((p) => p.seconds === durationSeconds)
+		return idx >= 0 ? idx + 1 : 1
+	})
 
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
