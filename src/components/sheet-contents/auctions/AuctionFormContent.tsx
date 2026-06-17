@@ -70,6 +70,7 @@ const INITIAL_FORM: AuctionFormData = {
 	shippings: [],
 	trustedMints: [],
 	isNSFW: false,
+	enableLiveChat: true,
 	// Empty string defers auditor selection to the app's configured
 	// default (`config.cvmServerPubkey`). The auction publish path
 	// resolves this via `getAuctionAuditorsOrThrow` — the seller never

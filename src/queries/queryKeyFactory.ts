@@ -172,3 +172,9 @@ export const zapKeys = {
 	byEvent: (eventId: string, recipientPubkey: string) => [...zapKeys.all, 'byEvent', eventId, recipientPubkey] as const,
 	byProvider: (userPubkey: string, targetEventId?: string) => [...zapKeys.all, 'provider', userPubkey, targetEventId || 'all'] as const,
 } as const
+
+export const liveActivityKeys = {
+	all: ['liveActivities'] as const,
+	byCoord: (auctionCoord: string) => [...liveActivityKeys.all, 'byCoord', auctionCoord] as const,
+	chatMessages: (liveActivityCoord: string) => [...liveActivityKeys.all, 'chat', liveActivityCoord] as const,
+} as const
