@@ -900,7 +900,7 @@ function AuctionTabContent({
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve ?? '0', 10)
+	const reserveNum = parseInt(formData.reserve ?? '', 10)
 	const showBidLadder =
 		formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0 && !isNaN(reserveNum)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
@@ -1121,18 +1121,38 @@ function AuctionTabContent({
 				</div>
 			</div>
 
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-				<Input
-					id="auction-reserve"
-					type="number"
-					min="0"
-					value={formData.reserve ?? ''}
-					onFocus={(e) => e.target.select()}
-					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value.replace(/^0+(\d)/, '$1') }))}
+			<div className="flex items-center space-x-2">
+				<Checkbox
+					id="use-reserve"
+					checked={!!formData.reserve || useReserve}
+					onCheckedChange={(checked) => {
+						if (checked === true) {
+							setUseReserve(true)
+							setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
+						} else {
+							setUseReserve(false)
+							setFormData((prev) => ({ ...prev, reserve: undefined }))
+						}
+					}}
 				/>
-				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+				<Label htmlFor="use-reserve">Set Reserve Price</Label>
+				<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve." />
 			</div>
+
+			{(!!formData.reserve || useReserve) && (
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+					<Input
+						id="auction-reserve"
+						type="number"
+						min="0"
+						value={formData.reserve}
+						onFocus={(e) => e.target.select()}
+						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+					/>
+					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+				</div>
+			)}
 
 			{showBidLadder && <BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
 
