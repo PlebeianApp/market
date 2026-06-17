@@ -40,7 +40,8 @@ describe('PlebianCurrencyClient unit tests', () => {
 	})
 
 	test('gift wrap event has correct structure for ContextVM protocol', () => {
-		const serverPubkey = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+		const serverPriv = crypto.getRandomValues(new Uint8Array(32))
+		const serverPubkey = getPublicKey(serverPriv)
 		const clientPriv = crypto.getRandomValues(new Uint8Array(32))
 		const clientPub = getPublicKey(clientPriv)
 
@@ -69,7 +70,8 @@ describe('PlebianCurrencyClient unit tests', () => {
 	})
 
 	test('gift wrap envelope has correct kind and p tag', () => {
-		const serverPubkey = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+		const serverPriv = crypto.getRandomValues(new Uint8Array(32))
+		const serverPubkey = getPublicKey(serverPriv)
 		const giftWrapPriv = crypto.getRandomValues(new Uint8Array(32))
 		const giftWrapPub = getPublicKey(giftWrapPriv)
 
@@ -94,6 +96,8 @@ describe('PlebianCurrencyClient unit tests', () => {
 
 	test('response correlation: e tag references gift wrap event id', () => {
 		const giftWrapId = 'abc123def456'
+		const serverPriv = crypto.getRandomValues(new Uint8Array(32))
+		const serverPubkey = getPublicKey(serverPriv)
 		const serverResponse = {
 			jsonrpc: '2.0',
 			id: 'test-123',
@@ -106,7 +110,7 @@ describe('PlebianCurrencyClient unit tests', () => {
 
 		const responseEvent = {
 			kind: 25910,
-			pubkey: '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15',
+			pubkey: serverPubkey,
 			tags: [
 				['p', 'clientpub'],
 				['e', giftWrapId],
@@ -132,9 +136,11 @@ describe('PlebianCurrencyClient unit tests', () => {
 			},
 		}
 
+		const serverPriv = crypto.getRandomValues(new Uint8Array(32))
+		const serverPubkey = getPublicKey(serverPriv)
 		const responseEvent = {
 			kind: 25910,
-			pubkey: '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15',
+			pubkey: serverPubkey,
 			tags: [
 				['p', 'clientpub'],
 				['e', 'giftwrap-id'],

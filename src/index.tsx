@@ -6,6 +6,7 @@ import { bech32 } from '@scure/base'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
+import { resolveCvmServerPubkey } from './lib/cvm-identity'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
 import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
@@ -41,17 +42,7 @@ function getAppPublicKeyOrThrow(): string {
 
 function getCvmServerPublicKey(): string {
 	if (CVM_SERVER_PUBKEY) return CVM_SERVER_PUBKEY
-	if (process.env.CVM_SERVER_PUBKEY) {
-		CVM_SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY
-		return CVM_SERVER_PUBKEY
-	}
-	const serverPrivateKey = process.env.CVM_SERVER_KEY
-	if (serverPrivateKey && /^[0-9a-fA-F]{64}$/.test(serverPrivateKey)) {
-		CVM_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(serverPrivateKey, 'hex')))
-		return CVM_SERVER_PUBKEY
-	}
-
-	CVM_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+	CVM_SERVER_PUBKEY = resolveCvmServerPubkey()
 	return CVM_SERVER_PUBKEY
 }
 

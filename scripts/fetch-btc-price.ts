@@ -1,25 +1,17 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { NostrClientTransport, PrivateKeySigner, ApplesauceRelayPool } from '@contextvm/sdk'
-import { getPublicKey } from 'nostr-tools/pure'
+import { resolveCvmServerPubkey } from '../src/lib/cvm-identity'
 
 const RELAY_URL = process.argv[2] || 'ws://100.90.22.201:10547'
 
-function getCvmServerPubkey(): string {
-	const configuredServerPrivateKey = process.env.CVM_SERVER_KEY
-	if (configuredServerPrivateKey && /^[0-9a-fA-F]{64}$/.test(configuredServerPrivateKey)) {
-		return getPublicKey(new Uint8Array(Buffer.from(configuredServerPrivateKey, 'hex')))
+const CVM_SERVER_PUBKEY = (() => {
+	try {
+		return resolveCvmServerPubkey()
+	} catch {
+		console.error('CVM_SERVER_KEY or CVM_SERVER_PUBKEY is required. Set one in your environment.')
+		process.exit(1)
 	}
-
-	const explicitPubkey = process.env.CVM_SERVER_PUBKEY || process.env.CURRENCY_SERVER_PUBKEY
-	if (explicitPubkey) {
-		return explicitPubkey
-	}
-
-	console.error('CVM_SERVER_KEY or CVM_SERVER_PUBKEY is required. Set one in your environment.')
-	process.exit(1)
-}
-
-const CVM_SERVER_PUBKEY = getCvmServerPubkey()
+})()
 
 const ephemeralKey = crypto.getRandomValues(new Uint8Array(32))
 const hexKey = Array.from(ephemeralKey)
