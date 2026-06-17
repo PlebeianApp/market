@@ -68,11 +68,12 @@ import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Check, Gavel, Landmark, Trophy, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
@@ -869,6 +870,13 @@ function AuctionDetailRoute() {
 							Participants
 						</TabsTrigger>
 						<TabsTrigger
+							value="live"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							<Radio className="mr-1 h-4 w-4" />
+							Live
+						</TabsTrigger>
+						<TabsTrigger
 							value="seller"
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
@@ -1236,6 +1244,14 @@ function AuctionDetailRoute() {
 									</div>
 								)}
 							</section>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="live" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="h-[500px]">
+								<LiveChatPanel auctionEvent={auction} />
+							</div>
 						</div>
 					</TabsContent>
 

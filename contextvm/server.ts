@@ -4,6 +4,7 @@ import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } 
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
 import { startAuctionValidator } from '../src/server/auction-validator'
+import { startLiveActivityWorker, stopLiveActivityWorker } from './tools/live-activity-worker'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -295,8 +296,11 @@ async function main() {
 		name: `Plebeian validator (${STAGE})`,
 	})
 
+	startLiveActivityWorker({ relayPool, signer, issuerPubkey: serverPubkey })
+
 	const shutdown = async (sig: NodeJS.Signals) => {
-		console.log(`\nReceived ${sig}, shutting down auction validator...`)
+		console.log(`\nReceived ${sig}, shutting down...`)
+		stopLiveActivityWorker()
 		await validatorHandle.stop()
 		process.exit(0)
 	}

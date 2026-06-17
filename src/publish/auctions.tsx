@@ -102,6 +102,7 @@ export interface AuctionFormData {
 	shippings: ProductShippingSelectionInput[]
 	trustedMints: string[]
 	isNSFW: boolean
+	enableLiveChat: boolean
 	/**
 	 * Pubkey of the validator (auditor) the seller wants listed on the
 	 * auction's `auditors` tag. Empty string = "use the app's configured
@@ -313,6 +314,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		...specTags,
 		...shippingTags,
 		...(formData.isNSFW ? ([['content-warning', 'nsfw'] as NDKTag] as NDKTag[]) : []),
+		...(formData.enableLiveChat ? ([['live_chat', 'enabled'] as NDKTag] as NDKTag[]) : []),
 	]
 
 	return event
