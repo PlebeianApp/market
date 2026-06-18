@@ -23,7 +23,12 @@ useWebSocketImplementation(WebSocket)
 
 // Fixed LNURL server keypair — signs zap receipts and is returned as `nostrPubkey`
 // in LNURL-pay metadata so the app trusts the receipts.
-const LNURL_SERVER_SK = 'e2e1111111111111111111111111111111111111111111111111111111111111'
+const LNURL_SERVER_SK = (() => {
+	const bytes = crypto.getRandomValues(new Uint8Array(32))
+	return Array.from(bytes)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('')
+})()
 const LNURL_SERVER_PK = getPublicKey(hexToBytes(LNURL_SERVER_SK))
 
 // Mock domain used in the LNURL callback URL. Playwright intercepts requests
