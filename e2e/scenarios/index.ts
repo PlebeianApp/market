@@ -591,3 +591,62 @@ export async function seedV4VWithRecipients(skHex: string, recipients: Array<{ p
 		relay.close()
 	}
 }
+
+export async function seedAuction(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		title?: string
+		description?: string
+		startingBid?: number
+		bidIncrement?: number
+		reserve?: number
+		shippingOptions?: Array<{ shippingRef: string; extraCost?: string }>
+	},
+): Promise<VerifiedEvent> {
+	const now = Math.floor(Date.now() / 1000)
+	const auctionId = `e2e-auction-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+	const startingBid = opts.startingBid ?? 1000
+	const bidIncrement = opts.bidIncrement ?? 100
+	const reserve = opts.reserve ?? 0
+
+	const shippingTags: string[][] = []
+	for (const so of opts.shippingOptions ?? []) {
+		if (so.extraCost) {
+			shippingTags.push(['shipping_option', so.shippingRef, so.extraCost])
+		} else {
+			shippingTags.push(['shipping_option', so.shippingRef])
+		}
+	}
+
+	const event = await publish(relay, skHex, {
+		kind: 30408,
+		created_at: now,
+		content: opts.description ?? 'E2E test auction description.',
+		tags: [
+			['d', auctionId],
+			['title', opts.title ?? `Test Auction ${auctionId}`],
+			['summary', 'E2E test auction'],
+			['auction_type', 'english'],
+			['start_at', String(now)],
+			['end_at', String(now + 86400)],
+			['currency', 'SAT'],
+			['price', String(startingBid), 'SAT'],
+			['starting_bid', String(startingBid), 'SAT'],
+			['bid_increment', String(bidIncrement)],
+			['reserve', String(reserve)],
+			['mint', 'https://nofees.testnut.cashu.space'],
+			['escrow_pubkey', '02' + '00'.repeat(32)],
+			['key_scheme', 'hd_p2pk'],
+			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+			['settlement_policy', 'cashu_p2pk_v1'],
+			['schema', 'auction_v1'],
+			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
+			['t', 'Bitcoin'],
+			...shippingTags,
+		],
+	})
+
+	console.log(`    Published auction: ${opts.title ?? auctionId}`)
+	return event
+}

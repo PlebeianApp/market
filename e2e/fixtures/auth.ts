@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test'
 import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
+import { encrypt as nip44Encrypt, decrypt as nip44Decrypt, getConversationKey } from 'nostr-tools/nip44'
 import { hexToBytes, bytesToHex } from '@noble/hashes/utils.js'
 
 export interface TestUser {
@@ -7,14 +8,7 @@ export interface TestUser {
 	pk: string // hex public key
 }
 
-/**
- * Sets up a browser context with a NIP-07 (window.nostr) mock that
- * enables automatic login. Signing happens in Node.js via exposeFunction
- * so we have full access to nostr-tools.
- */
 export async function setupAuthContext(context: BrowserContext, user: TestUser): Promise<void> {
-	// Expose the signing function to the browser.
-	// This runs in Node.js where we have nostr-tools available.
 	await context.exposeFunction('__nostrSignEvent', (eventJson: string): string => {
 		const event = JSON.parse(eventJson) as UnsignedEvent
 		const skBytes = hexToBytes(user.sk)
@@ -22,12 +16,21 @@ export async function setupAuthContext(context: BrowserContext, user: TestUser):
 		return JSON.stringify(signed)
 	})
 
-	// Expose getPublicKey as well (simpler than passing the pubkey)
 	await context.exposeFunction('__nostrGetPublicKey', (): string => {
 		return user.pk
 	})
 
-	// Inject window.nostr mock before any page scripts run
+	const skBytes = hexToBytes(user.sk)
+	await context.exposeFunction('__nostrNip44Encrypt', (pubkey: string, plaintext: string): string => {
+		const convKey = getConversationKey(skBytes, pubkey)
+		return nip44Encrypt(plaintext, convKey)
+	})
+
+	await context.exposeFunction('__nostrNip44Decrypt', (pubkey: string, ciphertext: string): string => {
+		const convKey = getConversationKey(skBytes, pubkey)
+		return nip44Decrypt(ciphertext, convKey)
+	})
+
 	await context.addInitScript(() => {
 		;(window as any).nostr = {
 			getPublicKey: async () => {
@@ -41,23 +44,27 @@ export async function setupAuthContext(context: BrowserContext, user: TestUser):
 
 			nip04: {
 				encrypt: async (_pubkey: string, plaintext: string) => {
-					// In tests, return plaintext wrapped to indicate "encrypted"
 					return `test_encrypted:${plaintext}`
 				},
 				decrypt: async (_pubkey: string, ciphertext: string) => {
-					// In tests, unwrap if it was our fake encryption
 					if (ciphertext.startsWith('test_encrypted:')) {
 						return ciphertext.slice('test_encrypted:'.length)
 					}
 					return ciphertext
 				},
 			},
+
+			nip44: {
+				encrypt: async (pubkey: string, plaintext: string) => {
+					return await (window as any).__nostrNip44Encrypt(pubkey, plaintext)
+				},
+				decrypt: async (pubkey: string, ciphertext: string) => {
+					return await (window as any).__nostrNip44Decrypt(pubkey, ciphertext)
+				},
+			},
 		}
 
-		// Enable auto-login so the app picks up our NIP-07 mock
 		localStorage.setItem('nostr_auto_login', 'true')
-
-		// Pre-accept Terms & Conditions so the dialog doesn't block tests
 		localStorage.setItem('plebeian_terms_accepted', 'true')
 	})
 }

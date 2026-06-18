@@ -1,5 +1,5 @@
 // Types
-export type { ProofInfo, PendingToken, ProofEntry } from './types'
+export type { ProofInfo, PendingToken, PendingTokenContext, AuctionBidPendingTokenContext, ProofEntry } from './types'
 
 // Proof utilities
 export { extractProofsByMint, getProofsForMint } from './proofs'

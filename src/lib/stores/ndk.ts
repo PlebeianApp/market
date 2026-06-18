@@ -1,4 +1,5 @@
-import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, type Stage } from '@/lib/constants'
+import { computeNdkConfig, resolveMainRelay, resolveZapRelays } from '@/lib/relay-policy'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -7,6 +8,18 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
+
+/**
+ * Connection health, derived from pool events + the watchdog.
+ *  - `unknown`: pre-boot, NDK not initialized yet.
+ *  - `connecting`: connect() in flight, no relay has fired `relay:connect` yet.
+ *  - `connected`: at least one relay is currently connected.
+ *  - `reconnecting`: we were connected, then dropped to zero, and the watchdog
+ *    or NDK's own retry logic is trying to bring relays back.
+ *  - `offline`: we've been at zero connected relays for long enough that we
+ *    consider the connection severed (UI surface for the status pill).
+ */
+export type ConnectionHealth = 'unknown' | 'connecting' | 'connected' | 'reconnecting' | 'offline'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -18,6 +31,12 @@ export interface NDKState {
 	writeRelayUrls: string[] // Relays we're allowed to write to (staging restriction)
 	activeNwcWalletUri: string | null
 	signer?: NDKSigner
+	/** Last known connection health — updated by pool events + watchdog. */
+	health: ConnectionHealth
+	/** Number of relays the pool currently reports as connected. */
+	connectedRelayCount: number
+	/** Timestamp (ms) of the last watchdog health check, for debugging. */
+	lastHealthCheckAt: number | null
 }
 
 const initialState: NDKState = {
@@ -30,80 +49,119 @@ const initialState: NDKState = {
 	writeRelayUrls: [],
 	activeNwcWalletUri: null,
 	signer: undefined,
+	health: 'unknown',
+	connectedRelayCount: 0,
+	lastHealthCheckAt: null,
 }
 
 export const ndkStore = new Store<NDKState>(initialState)
 
-let configRelaySyncInitialized = false
-let lastSyncedAppRelay: string | undefined
+// Connect-promise singletons — guard against re-entrant connect() calls
+// during boot (config subscriber + watchdog + manual triggers could all
+// race otherwise). The store's `isConnecting` flag mirrors this for
+// callers that only need to read state; the module refs are how the
+// in-flight promise itself is shared.
 let connectPromise: Promise<void> | null = null
 let connectZapPromise: Promise<void> | null = null
 
+// Watchdog singletons. Kept at module level so `startConnectionWatchdog`
+// is idempotent (boot orchestrator + tests can call it without piling up
+// duplicate intervals/listeners). The pool-event listeners run alongside
+// the periodic check — events catch state changes immediately, the
+// interval is the safety net for missed events or stuck reconnects.
+let watchdogInterval: ReturnType<typeof setInterval> | null = null
+let watchdogVisibilityHandler: (() => void) | null = null
+let watchdogPoolListeners: Array<() => void> = []
+/** Timestamp (ms) of the last moment we observed zero connected relays. */
+let firstSawZeroConnectedAt: number | null = null
+
+/** Interval between watchdog health checks (ms). */
+const WATCHDOG_INTERVAL_MS = 30_000
 /**
- * Helper to connect an NDK instance with timeout
- * Returns true if at least one relay connected
+ * How long the pool can sit at 0 connected relays before we declare the
+ * connection offline. NDK's own per-relay retry runs faster than this, so
+ * a brief blip won't flip us into `offline` — only a sustained outage.
+ */
+const WATCHDOG_OFFLINE_THRESHOLD_MS = 15_000
+
+/**
+ * Helper to connect an NDK instance with timeout.
+ * Returns true if at least one relay connected.
+ *
+ * If `ndk.connect()` doesn't resolve within `timeoutMs` we still count
+ * the call a success when any relay actually came up — partial-connect
+ * is the normal happy path on a slow network. We only warn when zero
+ * relays connected, and we never dump the timeout Error's stack trace
+ * (it's expected, not a bug).
  */
 async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string): Promise<boolean> {
+	let timedOut = false
 	try {
 		await Promise.race([
 			ndk.connect(),
-			new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} connection timeout`)), timeoutMs)),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => {
+					timedOut = true
+					reject(new Error(`${label} connection timeout`))
+				}, timeoutMs),
+			),
 		])
 		return true
 	} catch (error) {
-		console.warn(`${label} connection issue:`, error)
-		// Check if any relays connected despite the timeout
+		let connectedCount = 0
 		try {
-			const connected = ndk.pool?.connectedRelays() || []
-			if (connected.length > 0) {
-				console.log(`✅ ${label} partially connected to ${connected.length} relays`)
-				return true
-			}
+			connectedCount = ndk.pool?.connectedRelays().length ?? 0
 		} catch {
-			// Ignore pool access errors
+			// Ignore pool access errors — we'll fall through to the
+			// connected-zero branch below.
 		}
+
+		if (connectedCount > 0) {
+			// At least one relay made it. Treat as success and log
+			// informationally — no stack trace, no "warn" prefix.
+			if (timedOut) {
+				console.log(`✅ ${label} partially connected to ${connectedCount} relays (slow handshake)`)
+			} else {
+				console.log(`✅ ${label} connected to ${connectedCount} relays (with non-fatal errors)`)
+			}
+			return true
+		}
+
+		const message = error instanceof Error ? error.message : String(error)
+		console.warn(`${label} connection failed: ${message}`)
 		return false
 	}
 }
 
 /**
- * Get the current stage from config.
- * Returns undefined if config hasn't been loaded yet.
+ * Read the current stage from the loaded config. Returns `undefined`
+ * when config hasn't loaded yet — callers should treat that as
+ * "boot incomplete" rather than defaulting to a stage. Boot
+ * orchestrator (`src/lib/boot.ts`) gates NDK initialization on
+ * config being loaded, so during normal flow this only returns
+ * `undefined` at the very start of app startup.
  */
 function getCurrentStage(): Stage | undefined {
 	if (!configStore.state.isLoaded) return undefined
 	return configStore.state.config.stage || 'development'
 }
 
-/**
- * Get the main relay for the current stage.
- * Returns undefined if config hasn't been loaded yet (prevents localhost relay in production).
- */
+/** Re-exports for backwards compatibility — actual logic lives in `lib/relay-policy.ts`. */
 export function getMainRelay(): string | undefined {
-	const appRelay = configStore.state.config.appRelay
-	if (appRelay) return appRelay // Server-provided appRelay takes precedence
-	const stage = getCurrentStage()
-	if (!stage) return undefined // Config not loaded yet, don't assume a stage
-	return MAIN_RELAY_BY_STAGE[stage]
+	return resolveMainRelay(getCurrentStage(), configStore.state.config.appRelay)
 }
 
 /**
- * Get the write relay(s) for the current stage
- * Staging: main relay only
- * Development: main relay only (prevents leaking test/dev data to public relays)
- * Production: all connected relays
+ * Get the write relay(s) for the current stage. Thin wrapper around
+ * `computeNdkConfig` for callers that only need the write set.
+ * Staging/development → main relay only; production → all connected.
  */
 export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
-	if (stage === 'staging') {
+	if (stage === 'staging' || stage === 'development') {
 		const mainRelay = getMainRelay()
 		return mainRelay ? [mainRelay] : []
 	}
-	if (stage === 'development') {
-		const mainRelay = getMainRelay()
-		return mainRelay ? [mainRelay] : []
-	}
-	// Production: write to all connected relays
 	return ndkStore.state.explicitRelayUrls
 }
 
@@ -171,54 +229,115 @@ export async function fetchLatestAppEvent(filter: AppEventFilter): Promise<NDKEv
 }
 
 /**
- * Determine which relays to use based on config and environment
+ * Bun runtime sniff used by the Node-only `LOCAL_RELAY_ONLY` flag.
+ * Kept inside the store rather than the pure policy module so the
+ * policy stays free of runtime-detection side effects.
  */
-function getRelayUrls(overrideRelays?: string[]): string[] {
-	const stage = getCurrentStage()
+function isBunLocalRelayOnly(): boolean {
 	// @ts-ignore - Bun.env is available in Bun runtime
-	const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+	return typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+}
 
-	// Get main relay (from config or stage default)
-	// Will be undefined if config hasn't loaded yet, preventing localhost relay in production
-	const mainRelay = getMainRelay()
+/**
+ * Read the current pool state and reconcile `health` /
+ * `connectedRelayCount` on the store. Called from pool events + the
+ * watchdog tick + visibilitychange. Idempotent — only writes when the
+ * derived health actually changes.
+ */
+function updateHealthFromPool(): void {
+	const state = ndkStore.state
+	const ndk = state.ndk
+	if (!ndk) return
 
-	// Development mode: only use local/main relay to prevent polluting public relays
-	// This applies to both server (Bun) and browser environments
-	if (stage === 'development' && mainRelay) {
-		return [mainRelay]
+	let connectedCount = 0
+	try {
+		connectedCount = ndk.pool?.connectedRelays().length ?? 0
+	} catch {
+		connectedCount = 0
 	}
 
-	// Server-side with LOCAL_RELAY_ONLY flag: only local relay
-	if (localRelayOnly && mainRelay) {
-		return [mainRelay]
+	const now = Date.now()
+
+	// Track the moment we first observed zero connected relays. Cleared
+	// the instant we see at least one again. The "did we drop?" decision
+	// in `maybeKickReconnect` reads this.
+	if (connectedCount === 0) {
+		if (firstSawZeroConnectedAt === null) firstSawZeroConnectedAt = now
+	} else {
+		firstSawZeroConnectedAt = null
 	}
 
-	// Override relays take precedence if provided (include main relay if available)
-	if (overrideRelays?.length) {
-		const relays = mainRelay ? [mainRelay, ...overrideRelays] : overrideRelays
-		return Array.from(new Set(relays))
+	let nextHealth: ConnectionHealth = state.health
+	if (connectedCount > 0) {
+		nextHealth = 'connected'
+	} else if (state.isConnecting || state.health === 'unknown') {
+		nextHealth = 'connecting'
+	} else if (state.health === 'connected' || state.health === 'connecting') {
+		nextHealth = 'reconnecting'
+	} else if (
+		state.health === 'reconnecting' &&
+		firstSawZeroConnectedAt !== null &&
+		now - firstSawZeroConnectedAt >= WATCHDOG_OFFLINE_THRESHOLD_MS
+	) {
+		nextHealth = 'offline'
 	}
 
-	// Standard case: main relay (if available) + public default relays
-	const relays = mainRelay ? [mainRelay, ...DEFAULT_PUBLIC_RELAYS] : DEFAULT_PUBLIC_RELAYS
-	return Array.from(new Set(relays))
+	if (nextHealth === state.health && connectedCount === state.connectedRelayCount && state.lastHealthCheckAt !== null) {
+		// No change; skip the setState to avoid waking subscribers.
+		return
+	}
+
+	ndkStore.setState((s) => ({
+		...s,
+		health: nextHealth,
+		connectedRelayCount: connectedCount,
+		lastHealthCheckAt: now,
+		isConnected: connectedCount > 0,
+	}))
+}
+
+/**
+ * Kick `ndk.connect()` again if the pool has been at zero connected
+ * relays past the offline threshold. Called from the watchdog tick and
+ * the visibility handler.
+ *
+ * We don't kick on every zero observation — NDKRelay has its own retry
+ * backoff and we'd just pile on. The threshold gives the built-in retry
+ * a chance to recover first.
+ */
+function maybeKickReconnect(source: 'interval' | 'visibilitychange'): void {
+	const state = ndkStore.state
+	const ndk = state.ndk
+	if (!ndk) return
+	if (state.isConnecting) return // connect() already in flight
+
+	const zeroFor = firstSawZeroConnectedAt === null ? 0 : Date.now() - firstSawZeroConnectedAt
+
+	// `visibilitychange` is special: when the tab comes back into focus
+	// and we're not connected, kick immediately — browser throttling may
+	// have killed the WS handshake mid-retry while we were backgrounded.
+	const shouldKick = state.connectedRelayCount === 0 && (source === 'visibilitychange' || zeroFor >= WATCHDOG_OFFLINE_THRESHOLD_MS)
+	if (!shouldKick) return
+
+	console.warn(`[watchdog] No connected relays (${Math.round(zeroFor / 1000)}s, source=${source}); kicking reconnect`)
+	void ndkActions.connect().catch((err) => {
+		console.warn('[watchdog] Reconnect kick failed:', err)
+	})
 }
 
 export const ndkActions = {
 	/**
-	 * Ensure the instance relay (config.appRelay) is always present,
-	 * even before a signer exists (read-only queries must still work).
+	 * Idempotent helper that adds `config.appRelay` to NDK if not
+	 * already present. Used by the boot orchestrator after config
+	 * loads, and as a manual hook for callers that change the app
+	 * relay at runtime (e.g. admin tools). `addSingleRelay` already
+	 * dedupes against `explicitRelayUrls` so calling this repeatedly
+	 * is safe.
 	 */
 	ensureAppRelayFromConfig: (): void => {
 		const appRelay = configStore.state.config.appRelay
 		if (!appRelay) return
-
-		// Avoid repeated attempts when config updates but relay is unchanged
-		if (lastSyncedAppRelay === appRelay) return
-
-		// Add/connect to the relay if NDK is ready
-		const added = ndkActions.addSingleRelay(appRelay)
-		if (added) lastSyncedAppRelay = appRelay
+		ndkActions.addSingleRelay(appRelay)
 	},
 
 	/**
@@ -272,62 +391,44 @@ export const ndkActions = {
 	},
 
 	/**
-	 * Initialize NDK instances (does not connect yet)
+	 * Construct the two NDK instances (main + zap) and stash them in
+	 * the store. Idempotent — returns the existing instance if already
+	 * initialized.
+	 *
+	 * Boot orchestrator (`src/lib/boot.ts`) calls this exactly once
+	 * AFTER the /api/config fetch has resolved, so we're guaranteed
+	 * to see the real stage. The earlier defensive plumbing
+	 * (`ensureAppRelayFromConfig`, the module-level
+	 * `configRelaySyncInitialized` subscription) is gone — the boot
+	 * orchestrator is responsible for ordering, and live
+	 * config-change handling moves to a single explicit subscription
+	 * registered there.
 	 */
 	initialize: (relays?: string[]) => {
-		const state = ndkStore.state
-		if (state.ndk) return state.ndk
+		if (ndkStore.state.ndk) return ndkStore.state.ndk
 
-		if (!configRelaySyncInitialized) {
-			configRelaySyncInitialized = true
-			configStore.subscribe((currentVal) => {
-				const appRelay = currentVal.config.appRelay
-				if (!appRelay) return
-				if (lastSyncedAppRelay === appRelay) return
-				const added = ndkActions.addSingleRelay(appRelay)
-				if (added) lastSyncedAppRelay = appRelay
-			})
-		}
-
-		const explicitRelays = getRelayUrls(relays)
-		// @ts-ignore - Bun.env is available in Bun runtime
-		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 		const stage = getCurrentStage()
-
-		// Disable outbox model for staging, development, and local-only mode
-		// This prevents NDK from discovering and connecting to additional relays
-		const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
+		const { explicitRelayUrls, writeRelayUrls, enableOutbox } = computeNdkConfig({
+			stage,
+			appRelay: configStore.state.config.appRelay,
+			overrideRelays: relays,
+			localRelayOnly: isBunLocalRelayOnly(),
+		})
 
 		const ndk = new NDK({
-			explicitRelayUrls: explicitRelays,
+			explicitRelayUrls,
 			enableOutboxModel: enableOutbox,
 			aiGuardrails: {
 				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
 			},
 		})
 
-		// Always monitor zap receipts on public ZAP_RELAYS (plus the app relay).
-		// LSPs publish zap receipts to their own public relays, not the local/app relay,
-		// so we must subscribe there to detect paid invoices.
-		const zapNdk = new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] })
+		// Zap NDK monitors zap receipts on public relays — LSPs broadcast
+		// receipts to their own pools, not the app relay. Always uses the
+		// union of ZAP_RELAYS + the main read set.
+		const zapNdk = new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls) })
 
-		// Determine write relays - staging only writes to main relay, others write to all
-		const mainRelay = getMainRelay()
-		const writeRelays =
-			stage === 'staging' && mainRelay
-				? [mainRelay] // Staging: only main relay
-				: explicitRelays // Others: all explicit relays
-
-		ndkStore.setState((s) => ({
-			...s,
-			ndk,
-			zapNdk,
-			explicitRelayUrls: explicitRelays,
-			writeRelayUrls: writeRelays,
-		}))
-
-		// If config was already loaded before initialization, ensure appRelay is included.
-		ndkActions.ensureAppRelayFromConfig()
+		ndkStore.setState((s) => ({ ...s, ndk, zapNdk, explicitRelayUrls, writeRelayUrls }))
 
 		return ndk
 	},
@@ -345,7 +446,14 @@ export const ndkActions = {
 		}
 
 		connectPromise = (async () => {
-			ndkStore.setState((s) => ({ ...s, isConnecting: true }))
+			ndkStore.setState((s) => ({
+				...s,
+				isConnecting: true,
+				// Only flip health to 'connecting' from a non-connected state —
+				// if we're already connected and a reconnect kick fires, we
+				// don't want the UI flickering to "connecting" on a healthy pool.
+				health: s.health === 'connected' ? s.health : 'connecting',
+			}))
 
 			try {
 				const connected = await connectNdkWithTimeout(state.ndk!, timeoutMs, 'NDK')
@@ -388,6 +496,99 @@ export const ndkActions = {
 		})
 
 		return await connectZapPromise
+	},
+
+	/**
+	 * Start the connection watchdog: pool-event listeners + a periodic
+	 * health check + a `visibilitychange` handler that kicks reconnects
+	 * when the tab comes back into focus.
+	 *
+	 * Why this exists:
+	 *   - NDKRelay has its own per-relay reconnect logic, but in
+	 *     practice we still see all relays sitting in CLOSED/CLOSING
+	 *     after a network blip — especially after a tab has been
+	 *     backgrounded and the browser throttled the WS connections
+	 *     into oblivion. The user has to reload to recover.
+	 *   - Pool events (`relay:connect` / `relay:disconnect`) give us
+	 *     fast feedback for the status pill in the nav.
+	 *   - The 30s tick is a safety net for missed events or stuck
+	 *     reconnects: if no relays are connected and that state has
+	 *     persisted past WATCHDOG_OFFLINE_THRESHOLD_MS, we declare
+	 *     `offline` and call `ndk.connect()` again to kick the pool.
+	 *   - `visibilitychange` fires the same kick immediately on focus
+	 *     so the user doesn't sit on a stale screen waiting for the
+	 *     next tick.
+	 *
+	 * Idempotent: re-calling has no effect (boot orchestrator + manual
+	 * triggers in tests can both call it without piling up handlers).
+	 */
+	startConnectionWatchdog: (): void => {
+		if (watchdogInterval !== null) return
+
+		const ndk = ndkStore.state.ndk
+		if (!ndk) {
+			console.warn('[watchdog] NDK not initialized; skipping watchdog start')
+			return
+		}
+
+		// Pool events — drive the live count + health updates.
+		const onRelayConnect = () => updateHealthFromPool()
+		const onRelayDisconnect = () => updateHealthFromPool()
+		const onPoolConnect = () => updateHealthFromPool()
+
+		ndk.pool.on('relay:connect', onRelayConnect)
+		ndk.pool.on('relay:disconnect', onRelayDisconnect)
+		ndk.pool.on('connect', onPoolConnect)
+
+		watchdogPoolListeners = [
+			() => ndk.pool.off('relay:connect', onRelayConnect),
+			() => ndk.pool.off('relay:disconnect', onRelayDisconnect),
+			() => ndk.pool.off('connect', onPoolConnect),
+		]
+
+		// Initial reading so the store reflects the pool's current state
+		// instead of staying on `unknown` until the first event fires.
+		updateHealthFromPool()
+
+		// Periodic tick — safety net + offline-detection.
+		watchdogInterval = setInterval(() => {
+			updateHealthFromPool()
+			maybeKickReconnect('interval')
+		}, WATCHDOG_INTERVAL_MS)
+
+		// Visibility change — browsers throttle (or fully suspend) WS
+		// reconnect attempts in background tabs. When the tab comes back
+		// we want an immediate health check + kick, not a 30s wait.
+		if (typeof document !== 'undefined') {
+			watchdogVisibilityHandler = () => {
+				if (document.visibilityState === 'visible') {
+					updateHealthFromPool()
+					maybeKickReconnect('visibilitychange')
+				}
+			}
+			document.addEventListener('visibilitychange', watchdogVisibilityHandler)
+		}
+
+		console.log('[watchdog] Connection watchdog started')
+	},
+
+	/**
+	 * Stop the watchdog and remove all listeners. Mainly for tests + HMR
+	 * — production has no path that needs to stop the watchdog once
+	 * started.
+	 */
+	stopConnectionWatchdog: (): void => {
+		if (watchdogInterval !== null) {
+			clearInterval(watchdogInterval)
+			watchdogInterval = null
+		}
+		if (watchdogVisibilityHandler && typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', watchdogVisibilityHandler)
+			watchdogVisibilityHandler = null
+		}
+		for (const off of watchdogPoolListeners) off()
+		watchdogPoolListeners = []
+		firstSawZeroConnectedAt = null
 	},
 
 	addExplicitRelay: (relayUrls: string[]): string[] => {
@@ -466,47 +667,81 @@ export const ndkActions = {
 		}
 	},
 
-	setSigner: async (signer: NDKSigner | undefined) => {
-		const state = ndkStore.state
-		if (!state.ndk) {
+	/**
+	 * Assign the signer to both NDK instances and the store. NO side
+	 * effects beyond the assignment — for the downstream "user is
+	 * signed in" pipeline (relay-list load, NWC selection, NIP-60
+	 * wallet bootstrap, etc.) the auth flow calls
+	 * `runSignerOnboarding(signer)` explicitly. Decoupling those steps
+	 * keeps `setSigner` readable and the auth flow's effects visible
+	 * at the call site instead of buried inside a setter.
+	 */
+	setSigner: (signer: NDKSigner | undefined): void => {
+		// Lazy-init NDK if a signer arrives before boot finished —
+		// happens in tests and in re-login flows after a logout. Safe
+		// because `initialize()` is idempotent.
+		if (!ndkStore.state.ndk) {
 			console.warn('Attempted to set signer before NDK was initialized. Initializing NDK now.')
 			ndkActions.initialize()
 			if (!ndkStore.state.ndk) {
 				console.error('NDK initialization failed. Cannot set signer.')
 				return
 			}
-			const newState = ndkStore.state
-			newState.ndk!.signer = signer
-			// Also set signer for zap NDK
-			if (newState.zapNdk) {
-				newState.zapNdk.signer = signer
-			}
-		} else {
-			state.ndk.signer = signer
-			// Also set signer for zap NDK
-			if (state.zapNdk) {
-				state.zapNdk.signer = signer
-			}
 		}
 
+		const state = ndkStore.state
+		if (state.ndk) state.ndk.signer = signer
+		if (state.zapNdk) state.zapNdk.signer = signer
 		ndkStore.setState((s) => ({ ...s, signer }))
+	},
 
-		if (signer) {
-			await Promise.all([ndkActions.loadRelaysFromNostr(), ndkActions.selectAndSetInitialNwcWallet()])
-
-			// Initialize NIP-60 Cashu wallet
-			try {
-				const user = await signer.user()
-				if (user?.pubkey) {
-					void nip60Actions.initialize(user.pubkey)
-				}
-			} catch (e) {
-				console.error('[ndk] Failed to initialize NIP-60 wallet:', e)
-			}
-		} else {
-			ndkActions.setActiveNwcWalletUri(null)
-			nip60Actions.reset()
+	/**
+	 * Post-signer pipeline: load the user's NIP-65 relay list, select
+	 * the best NWC wallet by balance, and bootstrap the NIP-60 Cashu
+	 * wallet. The three are run concurrently — they only share `user`
+	 * (derived once up front) and don't observe each other.
+	 *
+	 * The auth flow MUST call this after `setSigner(s)` for a fresh
+	 * login. Logout calls `clearSignerOnboarding()` instead.
+	 */
+	runSignerOnboarding: async (signer: NDKSigner): Promise<void> => {
+		let user: NDKUser | null = null
+		try {
+			user = await signer.user()
+		} catch (error) {
+			console.error('[ndk] Failed to resolve user from signer; skipping onboarding pipeline:', error)
+			return
 		}
+		if (!user?.pubkey) {
+			console.warn('[ndk] Signer returned no pubkey; skipping onboarding pipeline')
+			return
+		}
+
+		// Run in parallel — each step handles its own failure (caller
+		// just sees a warning) so a failed NWC lookup doesn't block
+		// NIP-60 init and vice versa.
+		const userPubkey = user.pubkey
+		await Promise.all([
+			ndkActions.loadRelaysFromNostr().catch((e) => console.error('[ndk] loadRelaysFromNostr failed:', e)),
+			ndkActions.selectAndSetInitialNwcWallet().catch((e) => console.error('[ndk] selectAndSetInitialNwcWallet failed:', e)),
+			(async () => {
+				try {
+					await nip60Actions.initialize(userPubkey)
+				} catch (e) {
+					console.error('[ndk] nip60Actions.initialize failed:', e)
+				}
+			})(),
+		])
+	},
+
+	/**
+	 * Tear-down counterpart to `runSignerOnboarding`. Auth logout calls
+	 * this after `setSigner(undefined)` so the store doesn't carry
+	 * stale NWC / NIP-60 state into the unauthenticated session.
+	 */
+	clearSignerOnboarding: (): void => {
+		ndkActions.setActiveNwcWalletUri(null)
+		nip60Actions.reset()
 	},
 
 	/**

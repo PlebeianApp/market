@@ -8,7 +8,7 @@ import {
 import { usePublishCommentMutation } from '@/publish/comments'
 import { authStore, useAuth } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
@@ -31,16 +31,20 @@ interface CommentThreadProps {
 	replyingTo?: Comment
 	setReplyingTo: (comment?: Comment) => void
 	depth?: number
+	entityLabel?: string
 }
 
 interface AddCommentProps {
 	targetEvent: NDKEvent
 	parentComment?: Comment
 	onCancel?: () => void
+	entityLabel?: string
 }
 
 interface CommentsProps {
 	targetEvent: NDKEvent
+	entityLabel?: string
+	testId?: string
 }
 
 function formatDate(timestamp: number): string {
@@ -96,11 +100,11 @@ function CommentItem({ comment, onPressReply }: CommentItemProps) {
 	)
 }
 
-function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo, depth = 0 }: CommentThreadProps) {
+function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo, depth = 0, entityLabel }: CommentThreadProps) {
 	return (
 		<>
 			{comments.map((commentChild) => (
-				<>
+				<Fragment key={commentChild.id}>
 					<CommentItem key={'comment-' + commentChild.id} comment={commentChild} onPressReply={() => setReplyingTo(commentChild)} />
 					{replyingTo && replyingTo.id === commentChild.id ? (
 						<AddCommentForm
@@ -108,6 +112,7 @@ function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo, depth =
 							targetEvent={eventRoot}
 							parentComment={commentChild}
 							onCancel={() => setReplyingTo()}
+							entityLabel={entityLabel}
 						/>
 					) : null}
 					{commentChild.children && commentChild.children.length > 0 && depth < MAX_COMMENT_THREAD_DEPTH - 1 ? (
@@ -118,16 +123,17 @@ function CommentThread({ comments, replyingTo, eventRoot, setReplyingTo, depth =
 								eventRoot={eventRoot}
 								setReplyingTo={setReplyingTo}
 								depth={depth + 1}
+								entityLabel={entityLabel}
 							/>
 						</div>
 					) : null}
-				</>
+				</Fragment>
 			))}
 		</>
 	)
 }
 
-function AddCommentForm({ targetEvent, parentComment, onCancel }: AddCommentProps) {
+function AddCommentForm({ targetEvent, parentComment, onCancel, entityLabel = 'product' }: AddCommentProps) {
 	const [content, setContent] = useState('')
 	const publishMutation = usePublishCommentMutation()
 
@@ -181,7 +187,7 @@ function AddCommentForm({ targetEvent, parentComment, onCancel }: AddCommentProp
 				id="comment-input"
 				value={content}
 				onChange={(e) => setContent(e.target.value)}
-				placeholder={parentComment ? 'Write your reply...' : 'Share your thoughts about this product...'}
+				placeholder={parentComment ? 'Write your reply...' : `Share your thoughts about this ${entityLabel}...`}
 				rows={4}
 				className="resize-none"
 			/>
@@ -198,7 +204,7 @@ function AddCommentForm({ targetEvent, parentComment, onCancel }: AddCommentProp
 	)
 }
 
-export function Comments({ targetEvent }: CommentsProps) {
+export function Comments({ targetEvent, entityLabel = 'product', testId = 'product-comments' }: CommentsProps) {
 	const { isAuthenticated } = useStore(authStore)
 	const { data: comments, isLoading, error } = useComments(targetEvent)
 	const [showAll, setShowAll] = useState(false)
@@ -212,7 +218,7 @@ export function Comments({ targetEvent }: CommentsProps) {
 		<div className="space-y-6" id="comments-section">
 			{/* Add Comment Form - only show for authenticated users */}
 			{isAuthenticated ? (
-				<AddCommentForm targetEvent={targetEvent} />
+				<AddCommentForm targetEvent={targetEvent} entityLabel={entityLabel} />
 			) : (
 				<div className="bg-gray-50 p-4 rounded-lg text-center">
 					<p className="text-gray-600">Please log in to leave a comment.</p>
@@ -220,7 +226,7 @@ export function Comments({ targetEvent }: CommentsProps) {
 			)}
 
 			{/* Comments List */}
-			<div data-testid="product-comments">
+			<div data-testid={testId}>
 				{isLoading && <p className="text-gray-500 text-center py-4">Loading comments...</p>}
 
 				{error && <p className="text-red-600 text-center py-4">Failed to load comments</p>}
@@ -234,7 +240,13 @@ export function Comments({ targetEvent }: CommentsProps) {
 
 				{displayedComments && displayedComments.length > 0 && (
 					<div>
-						<CommentThread comments={displayedComments} eventRoot={targetEvent} setReplyingTo={setReplyingTo} replyingTo={replyingTo} />
+						<CommentThread
+							comments={displayedComments}
+							eventRoot={targetEvent}
+							setReplyingTo={setReplyingTo}
+							replyingTo={replyingTo}
+							entityLabel={entityLabel}
+						/>
 
 						{hasMoreComments && !showAll && (
 							<Button

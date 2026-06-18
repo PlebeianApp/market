@@ -48,6 +48,11 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 		parentPath: '/dashboard/products/collections',
 		parentTitle: '🗂️ Collections',
 	},
+	// Dynamic route for auction details/settlement
+	'/dashboard/products/auctions/': {
+		parentPath: '/dashboard/products/auctions',
+		parentTitle: '🔨 Auctions',
+	},
 	// Dynamic route for order details - uses browser history to return to correct page (sales or purchases)
 	'/dashboard/orders/': {
 		parentPath: '', // Empty path signals to use browser history
@@ -75,6 +80,11 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
 	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
 		return backButtonRoutes['/dashboard/products/collections/']
+	}
+
+	// Check for auction detail pages (pattern: /dashboard/products/auctions/[auctionId])
+	if (currentPath.startsWith('/dashboard/products/auctions/') && currentPath !== '/dashboard/products/auctions') {
+		return backButtonRoutes['/dashboard/products/auctions/']
 	}
 
 	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
@@ -106,7 +116,14 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 }
 
 // Helper to get notification count for a navigation item
-function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number, unseenPurchases: number): number {
+function getNotificationCount(
+	path: string,
+	unseenOrders: number,
+	unseenMessages: number,
+	unseenPurchases: number,
+	unseenAuctionBids: number,
+	unseenBidUpdates: number,
+): number {
 	if (path === '/dashboard/sales/sales') {
 		return unseenOrders
 	}
@@ -115,6 +132,12 @@ function getNotificationCount(path: string, unseenOrders: number, unseenMessages
 	}
 	if (path === '/dashboard/account/your-purchases') {
 		return unseenPurchases
+	}
+	if (path === '/dashboard/products/auctions') {
+		return unseenAuctionBids
+	}
+	if (path === '/dashboard/products/bids') {
+		return unseenBidUpdates
 	}
 	return 0
 }
@@ -147,7 +170,7 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
+	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 	// Admin checking
@@ -214,6 +237,10 @@ function DashboardLayout() {
 			// Check if we're on a collection creation/edit page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
 				navigate({ to: '/dashboard/products/collections' })
+			}
+			// Check if we're on an auction detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/products/auctions/')) {
+				navigate({ to: '/dashboard/products/auctions' })
 			}
 			// Check if we're on an order detail page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/orders/')) {
@@ -305,7 +332,14 @@ function DashboardLayout() {
 										<nav className="space-y-2 p-4 lg:p-0 lg:text-base text-xl">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
-												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages, unseenPurchases)
+												const notificationCount = getNotificationCount(
+													item.path,
+													unseenOrders,
+													unseenMessages,
+													unseenPurchases,
+													unseenAuctionBids,
+													unseenBidUpdates,
+												)
 												return (
 													<Link
 														key={item.path}
@@ -387,6 +421,8 @@ function DashboardLayout() {
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
+												location.pathname.startsWith('/dashboard/products/auctions') && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/bids' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/migration-tool' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
@@ -414,6 +450,8 @@ function DashboardLayout() {
 												!location.pathname.startsWith('/dashboard/sales/messages') &&
 												location.pathname !== '/dashboard/sales/circular-economy' &&
 												location.pathname !== '/dashboard/products/products' &&
+												location.pathname !== '/dashboard/products/auctions' &&
+												location.pathname !== '/dashboard/products/bids' &&
 												location.pathname !== '/dashboard/products/collections' &&
 												location.pathname !== '/dashboard/products/migration-tool' &&
 												location.pathname !== '/dashboard/products/receiving-payments' &&
@@ -448,6 +486,8 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/app-settings/featured-items' &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
+														location.pathname !== '/dashboard/products/auctions' &&
+														location.pathname !== '/dashboard/products/bids' &&
 														location.pathname !== '/dashboard/products/collections' &&
 														location.pathname !== '/dashboard/products/migration-tool' &&
 														location.pathname !== '/dashboard/products/receiving-payments' &&

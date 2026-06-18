@@ -19,6 +19,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
 import { BugReportModal } from '../BugReportModal'
+import { ConnectionStatusPill } from '../ConnectionStatusPill'
 import { TooltipButton } from '../shared/TooltipButton'
 
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
@@ -200,23 +201,24 @@ export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const { mobileMenuOpen } = useStore(uiStore)
-	const { unseenOrders, unseenMessages, unseenPurchases } = useStore(notificationStore)
+	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Calculate total notification count for dashboard button
-	const totalNotifications = unseenOrders + unseenMessages + unseenPurchases
+	const totalNotifications = unseenOrders + unseenMessages + unseenPurchases + unseenAuctionBids + unseenBidUpdates
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
+	const isAuctionPage = location.pathname === '/auctions' || location.pathname.startsWith('/auctions/')
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
 	const isCommunityPage = location.pathname === '/community'
 	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
-	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
+	const shouldUseTransparentHeader = isProductPage || isAuctionPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
 	useEffect(() => {
@@ -304,6 +306,15 @@ export function Header() {
 							Products
 						</Link>
 						<Link
+							to="/auctions"
+							className="hover:text-secondary"
+							activeProps={{
+								className: 'text-secondary',
+							}}
+						>
+							Auctions
+						</Link>
+						<Link
 							to="/community"
 							className="hover:text-secondary"
 							activeProps={{
@@ -329,7 +340,11 @@ export function Header() {
 					<div className="hidden lg:block flex-1">
 						<ProductSearch />
 					</div>
-					<div className="flex gap-2">
+					<div className="flex items-center gap-2">
+						{/* Connection-status pill — only renders when relay connectivity
+							is not healthy. Click to manually retry. */}
+						<ConnectionStatusPill />
+
 						{/* Bug Report Button - Only when authenticated */}
 						{isAuthenticated && (
 							<BugReportButton className="!static relative hover:!bg-black !shadow-none p-2 !bg-primary-border !border-2 !border-transparent hover:!border-primary-border-hover !rounded-lg !w-auto hover:[&>span]:text-secondary" />
