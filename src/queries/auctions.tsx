@@ -39,6 +39,9 @@ export type PrivateAuctionClaimLookupResult =
 	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_ndk' | 'no_signer' | 'not_seller' }
 
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES = 5
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
 	try {
@@ -782,29 +785,61 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 	const signerUser = await signer.user()
 	if (signerUser.pubkey !== markerFields.sellerPubkey) return { status: 'unavailable', reason: 'not_seller' }
 
-	const filter: NDKFilter = {
-		kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
-		'#p': [markerFields.sellerPubkey],
-		limit: 100,
-	}
-
-	const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
 	const matches: PrivateAuctionClaimMessage[] = []
+	const seenGiftWrapIds = new Set<string>()
+	const markerCreatedAt = publicMarker.created_at
+	const hasMarkerCreatedAt = Number.isSafeInteger(markerCreatedAt) && (markerCreatedAt ?? 0) > 0
+	const since = hasMarkerCreatedAt ? Math.max(0, (markerCreatedAt ?? 0) - PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS) : undefined
+	let until = hasMarkerCreatedAt ? (markerCreatedAt ?? 0) + PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS : undefined
 
-	for (const giftWrap of events) {
-		try {
-			const claim = await decryptPrivateAuctionClaimMessageWithSigner({
-				giftWrap: giftWrap.rawEvent(),
-				signer,
-				expectedBuyerPubkey: markerFields.buyerPubkey,
-				expectedSellerPubkey: markerFields.sellerPubkey,
-				expectedOrderId: markerFields.orderId,
-			})
-			if (privateAuctionClaimMatchesPublicMarker(claim.payload, markerFields)) {
-				matches.push(claim)
+	// The private gift wrap is published just before the public marker, but busy sellers
+	// can have more than one page of incoming wraps. Keep this bounded at 5 pages / 500 events.
+	for (let page = 0; page < PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES; page += 1) {
+		const filter: NDKFilter = {
+			kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+			'#p': [markerFields.sellerPubkey],
+			limit: PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT,
+			...(since !== undefined ? { since } : {}),
+			...(until !== undefined ? { until } : {}),
+		}
+
+		const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
+		if (events.length === 0) break
+
+		let oldestCreatedAt: number | undefined
+		for (const giftWrap of events) {
+			if (Number.isSafeInteger(giftWrap.created_at) && (oldestCreatedAt === undefined || (giftWrap.created_at ?? 0) < oldestCreatedAt)) {
+				oldestCreatedAt = giftWrap.created_at
 			}
-		} catch {
-			// Relay data is untrusted. Ignore malformed, unrelated, or undecryptable gift wraps without logging private payloads.
+
+			if (giftWrap.id && seenGiftWrapIds.has(giftWrap.id)) continue
+			if (giftWrap.id) seenGiftWrapIds.add(giftWrap.id)
+
+			try {
+				const claim = await decryptPrivateAuctionClaimMessageWithSigner({
+					giftWrap: giftWrap.rawEvent(),
+					signer,
+					expectedBuyerPubkey: markerFields.buyerPubkey,
+					expectedSellerPubkey: markerFields.sellerPubkey,
+					expectedOrderId: markerFields.orderId,
+				})
+				if (privateAuctionClaimMatchesPublicMarker(claim.payload, markerFields)) {
+					matches.push(claim)
+				}
+			} catch {
+				// Relay data is untrusted. Ignore malformed, unrelated, or undecryptable gift wraps without logging private payloads.
+			}
+		}
+
+		if (matches.length > 0) break
+		if (oldestCreatedAt === undefined) break
+
+		const nextUntil = oldestCreatedAt - 1
+		if (since !== undefined && nextUntil < since) break
+		until = nextUntil
+		if (until < 0) break
+		if (seenGiftWrapIds.size === 0) {
+			break
 		}
 	}
 

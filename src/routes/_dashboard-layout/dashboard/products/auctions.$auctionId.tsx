@@ -61,7 +61,11 @@ import { useStore } from '@tanstack/react-store'
 import { Clock, Copy, ExternalLink, Gavel, MapPin, Package, Shield, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import type { PrivateAuctionClaimPayload } from '@/lib/auctions/privateAuctionClaimMessage'
+import {
+	getLegacyAuctionClaimPublicDetails,
+	type LegacyAuctionClaimPublicDetails,
+	type PrivateAuctionClaimPayload,
+} from '@/lib/auctions/privateAuctionClaimMessage'
 
 const AUCTION_STATUS_STYLES: Record<string, string> = {
 	Live: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -145,6 +149,14 @@ function privateClaimUnavailableMessage(status?: string, reason?: string): strin
 		return 'Private shipping details unavailable because the public claim marker is missing required references.'
 	}
 	return 'Private shipping details are not available from the encrypted claim path yet.'
+}
+
+function shouldUseLegacyPublicClaimDetails(isOwner: boolean, result: ReturnType<typeof usePrivateAuctionClaimForOrder>['data']): boolean {
+	return isOwner && result?.status === 'unavailable' && result.reason === 'missing_marker_fields'
+}
+
+function formatLegacyPublicClaimAddress(details: LegacyAuctionClaimPublicDetails): string {
+	return details.address ?? ''
 }
 
 function PartyRow({ label, pubkey, helper }: { label: string; pubkey: string; helper?: string }) {
@@ -307,6 +319,10 @@ function DashboardAuctionDetailRoute() {
 	const privateClaimQuery = usePrivateAuctionClaimForOrder(winnerClaimOrder, isOwner && !!winnerClaimOrder)
 	const privateClaimResult = privateClaimQuery.data
 	const privateClaimPayload = privateClaimResult?.status === 'found' ? privateClaimResult.claim.payload : null
+	const legacyPublicClaimDetails =
+		winnerClaimOrder && shouldUseLegacyPublicClaimDetails(isOwner, privateClaimResult)
+			? getLegacyAuctionClaimPublicDetails({ pubkey: winnerClaimOrder.pubkey, tags: winnerClaimOrder.tags })
+			: null
 
 	// --- Perspective ----------------------------------------------------------
 	// The dashboard auction detail route is consumed by both sellers and buyers
@@ -953,7 +969,34 @@ function DashboardAuctionDetailRoute() {
 													</div>
 												)}
 
-												{!privateClaimQuery.isLoading && !privateClaimPayload && (
+												{!privateClaimQuery.isLoading && !privateClaimPayload && legacyPublicClaimDetails && (
+													<div className="space-y-3">
+														{legacyPublicClaimDetails.address && (
+															<div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+																<p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+																	Legacy public shipping details
+																</p>
+																<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-900">
+																	{formatLegacyPublicClaimAddress(legacyPublicClaimDetails)}
+																</p>
+																<p className="mt-2 text-xs text-amber-700">
+																	This immutable legacy claim stored fulfilment data in public tags. New auction claims use encrypted
+																	private details.
+																</p>
+															</div>
+														)}
+
+														{legacyPublicClaimDetails.email && (
+															<OverviewItem
+																label="Legacy public contact email"
+																value={legacyPublicClaimDetails.email}
+																helper="Shown only to the seller for old immutable auction claims."
+															/>
+														)}
+													</div>
+												)}
+
+												{!privateClaimQuery.isLoading && !privateClaimPayload && !legacyPublicClaimDetails && (
 													<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
 														{privateClaimUnavailableMessage(
 															privateClaimResult?.status,

@@ -84,6 +84,11 @@ export type AuctionClaimPublicMarkerFields = {
 	totalAmountSats: number
 }
 
+export type LegacyAuctionClaimPublicDetails = {
+	address?: string
+	email?: string
+}
+
 export type ParsePrivateAuctionClaimRumorOptions = {
 	expectedBuyerPubkey?: string
 	expectedSellerPubkey?: string
@@ -237,6 +242,22 @@ export function getAuctionClaimPublicMarkerFields(event: { pubkey?: string; tags
 	}
 }
 
+export function getLegacyAuctionClaimPublicDetails(event: { pubkey?: string; tags: string[][] }): LegacyAuctionClaimPublicDetails | null {
+	if (getAuctionClaimPublicMarkerFields(event)) return null
+	if (readTag(event.tags, 'subject') === AUCTION_CLAIM_SUBJECT) return null
+	if (readTag(event.tags, 'type') !== ORDER_MESSAGE_TYPE.ORDER_CREATION) return null
+	if (event.pubkey && !HEX_32_BYTES_RE.test(event.pubkey)) return null
+
+	const address = legacyPublicTag(event.tags, 'address')
+	const email = legacyPublicTag(event.tags, 'email')
+	if (!address && !email) return null
+
+	return {
+		...optionalStringField('address', address),
+		...optionalStringField('email', email),
+	}
+}
+
 export function privateAuctionClaimMatchesPublicMarker(
 	payload: PrivateAuctionClaimPayload,
 	marker: AuctionClaimPublicMarkerFields | { pubkey?: string; tags: string[][] },
@@ -345,6 +366,11 @@ function parsePrivateAuctionClaimPayload(content: string): PrivateAuctionClaimPa
 
 function readTag(tags: string[][], name: string): string | undefined {
 	return tags.find((tag) => tag[0] === name)?.[1]
+}
+
+function legacyPublicTag(tags: string[][], name: string): string | undefined {
+	const value = readTag(tags, name)?.trim()
+	return value ? value : undefined
 }
 
 function normalizeShippingAddress(value: AuctionClaimDeliveryDetails): AuctionClaimDeliveryDetails {

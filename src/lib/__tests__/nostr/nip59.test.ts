@@ -12,7 +12,7 @@ import {
 	unwrapNip59GiftWrap,
 	unwrapNip59GiftWrapWithSigner,
 	type UnsignedRumor,
-} from './nip59'
+} from '../../nostr/nip59'
 
 const CREATED_AT = 1_700_000_000
 const PII_SENTINELS = [

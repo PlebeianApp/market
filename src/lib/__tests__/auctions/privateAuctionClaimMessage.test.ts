@@ -8,9 +8,10 @@ import {
 	createPrivateAuctionClaimMessageWithSigner,
 	decryptPrivateAuctionClaimMessage,
 	getAuctionClaimPublicMarkerFields,
+	getLegacyAuctionClaimPublicDetails,
 	privateAuctionClaimMatchesPublicMarker,
 	type AuctionClaimMessageFields,
-} from './privateAuctionClaimMessage'
+} from '../../auctions/privateAuctionClaimMessage'
 
 const CREATED_AT = 1_700_000_000
 const AUCTION_EVENT_ID = 'a'.repeat(64)
@@ -294,6 +295,50 @@ describe('private auction claim message', () => {
 			getAuctionClaimPublicMarkerFields({
 				pubkey: fields.buyerPubkey,
 				tags: tags.map((tag) => (tag[0] === 'subject' ? ['subject', 'not-auction-claim'] : tag)),
+			}),
+		).toBeNull()
+	})
+
+	test('extracts seller-only legacy public address and email from pre-private auction claims', () => {
+		const fields = baseFields()
+		const details = getLegacyAuctionClaimPublicDetails({
+			pubkey: fields.buyerPubkey,
+			tags: [
+				['p', fields.sellerPubkey],
+				['type', '1'],
+				['order', ORDER_ID],
+				['amount', '21000'],
+				['a', fields.auctionCoordinates],
+				['address', '  123 Main Street  '],
+				['email', '  buyer@example.com  '],
+			],
+		})
+
+		expect(details).toEqual({
+			address: '123 Main Street',
+			email: 'buyer@example.com',
+		})
+	})
+
+	test('does not use legacy public details when a private auction claim marker is present', () => {
+		const fields = baseFields()
+		const markerTags = buildAuctionClaimPublicMarkerTags(fields)
+
+		expect(
+			getLegacyAuctionClaimPublicDetails({
+				pubkey: fields.buyerPubkey,
+				tags: [...markerTags, ['address', '123 Main Street'], ['email', 'buyer@example.com']],
+			}),
+		).toBeNull()
+		expect(
+			getLegacyAuctionClaimPublicDetails({
+				pubkey: fields.buyerPubkey,
+				tags: [
+					['subject', 'auction-claim'],
+					['type', '1'],
+					['address', '123 Main Street'],
+					['email', 'buyer@example.com'],
+				],
 			}),
 		).toBeNull()
 	})
