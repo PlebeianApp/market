@@ -171,6 +171,8 @@ jobs:
             mkdir -p ~/releases ~/logs
             chmod 755 ~
             rm -rf /tmp/deploy-package
+            mkdir -p /tmp/deploy-package
+            chmod 755 /tmp/deploy-package
 
       - name: Upload files to tmp
         uses: appleboy/scp-action@v0.1.7
