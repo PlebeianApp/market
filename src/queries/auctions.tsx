@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
@@ -45,6 +46,7 @@ const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS = 5 * 60
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
+	if (typeof localStorage === 'undefined') return new Map()
 	try {
 		const stored = localStorage.getItem(DELETED_AUCTIONS_STORAGE_KEY)
 		if (stored) {
@@ -723,6 +725,90 @@ export const useAuctionBids = (auctionEventId: string, limit: number = 500, auct
 	useQuery({
 		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
+
+// Pure helpers — exported for unit tests, used by useStreamingAuctionBids.
+
+export function buildAuctionBidFilters(rootEventId: string, coordinates: string | undefined, limit: number): NDKFilter[] {
+	const filters: NDKFilter[] = []
+	if (rootEventId) filters.push({ kinds: [AUCTION_BID_KIND], '#e': [rootEventId], limit })
+	if (coordinates) filters.push({ kinds: [AUCTION_BID_KIND], '#a': [coordinates], limit })
+	return filters
+}
+
+export function mergeAndSortBids(existing: NDKEvent[], incoming: NDKEvent[]): NDKEvent[] {
+	const existingIds = new Set(existing.map((b) => b.id))
+	const fresh = incoming.filter((b) => !existingIds.has(b.id))
+	if (fresh.length === 0) return existing
+	return [...existing, ...fresh].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+}
+
+export function useStreamingAuctionBids(
+	auctionRootEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+): { bids: NDKEvent[]; isStreaming: boolean } {
+	const [bids, setBids] = useState<NDKEvent[]>([])
+	const [isStreaming, setIsStreaming] = useState(false)
+	const seenIds = useRef(new Set<string>())
+	const pendingBids = useRef<NDKEvent[]>([])
+	const eoseReceived = useRef(false)
+
+	useEffect(() => {
+		if (!auctionRootEventId && !auctionCoordinates) return
+		const ndk = ndkActions.getNDK()
+		if (!ndk) return
+		// Clear buffers but keep displayed bids — avoids a flash of empty state when
+		// auctionCoordinates arrives after the auction query resolves.
+		seenIds.current.clear()
+		pendingBids.current = []
+		eoseReceived.current = false
+		setIsStreaming(true)
+
+		const filters = buildAuctionBidFilters(auctionRootEventId, auctionCoordinates, limit)
+		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
+
+		sub.on('event', (event: NDKEvent) => {
+			if (seenIds.current.has(event.id)) return
+			seenIds.current.add(event.id)
+			const [filtered] = filterBlacklistedEvents([event])
+			if (!filtered) return
+
+			if (!eoseReceived.current) {
+				pendingBids.current.push(filtered)
+			} else {
+				setBids((prev) => mergeAndSortBids(prev, [filtered]))
+			}
+		})
+
+		// Merge pending buffer into state without clearing existing bids — prevents
+		// a flash of empty state when the effect re-runs as auctionCoordinates resolves.
+		const flushPending = () => {
+			const incoming = pendingBids.current
+			pendingBids.current = []
+			setBids((prev) => mergeAndSortBids(prev, incoming))
+		}
+
+		sub.on('eose', () => {
+			eoseReceived.current = true
+			flushPending()
+			setIsStreaming(false)
+		})
+
+		const timeoutId = setTimeout(() => {
+			if (eoseReceived.current) return
+			eoseReceived.current = true
+			flushPending()
+			setIsStreaming(false)
+		}, 10000)
+
+		return () => {
+			clearTimeout(timeoutId)
+			sub.stop()
+		}
+	}, [auctionRootEventId, auctionCoordinates, limit])
+
+	return { bids, isStreaming }
+}
 
 export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
 	useQuery({
