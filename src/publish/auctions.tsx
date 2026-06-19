@@ -16,6 +16,7 @@ import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { buildAuctionClaimPublicMarkerTags, createPrivateAuctionClaimMessageWithSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -26,7 +27,7 @@ import { AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKRelaySet, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
@@ -588,6 +589,23 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	await bidEvent.sign(signer)
 	await ndkActions.publishEvent(bidEvent)
+	const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
+		kind: 'auction_bid',
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates: formData.auctionCoordinates,
+		bidEventId: bidEvent.id,
+		sellerPubkey: formData.sellerPubkey,
+		pathIssuerPubkey: '',
+		lockPubkey: lockResult.lockPubkey,
+		refundPubkey: lockResult.refundPubkey,
+		locktime: lockResult.locktime,
+		derivationPath: lockResult.derivationPath,
+		childPubkey: lockResult.childPubkey,
+		grantId: lockResult.grantId,
+	})
+	if (!updatedPendingToken) {
+		console.warn('[auctions] Published auction bid but could not attach bid event id to the local pending lock record')
+	}
 
 	// Step 8 — persist the bidder-side record. Loss of this record makes
 	// settlement (and timelock refund) impossible for this bid, so we
@@ -855,7 +873,11 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (signerUser.pubkey !== sellerPubkey) {
 		throw new Error('Only the auction seller can publish a kind-1024 settlement event')
 	}
-	const auctionCoordinate = formData.auctionCoordinates || `${30408}:${sellerPubkey}:${getTag(auctionEvent, 'd') ?? ''}`
+	const auctionDTag = getTag(auctionEvent, 'd')?.trim()
+	const auctionCoordinate = formData.auctionCoordinates?.trim() || (auctionDTag ? `${30408}:${sellerPubkey}:${auctionDTag}` : '')
+	if (!auctionCoordinate) {
+		throw new Error('Auction coordinate is required to query kind-1025 path releases')
+	}
 	const auctionRootEventId = auctionEvent.id
 	const p2pkXpub = getTag(auctionEvent, 'p2pk_xpub') ?? ''
 	const declaredPolicy = getTag(auctionEvent, 'settlement_policy')
@@ -1128,43 +1150,97 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 	const signer = ndkActions.getSigner()
 	if (!signer) throw new Error('No active user')
 
+	const buyerPubkey = await resolveAuctionClaimBuyerPubkey(ndk, signer)
 	const orderId = uuidv4()
+	const claimFields = {
+		orderId,
+		auctionCoordinates: formData.auctionCoordinates,
+		auctionEventId: formData.auctionEventId,
+		settlementEventId: formData.settlementEventId,
+		buyerPubkey,
+		sellerPubkey: formData.sellerPubkey,
+		totalAmountSats: formData.finalAmount,
+		shippingAddress: formData.shippingAddress,
+		email: formData.email,
+		phone: formData.phone,
+		notes: formData.notes,
+	}
 
-	const addressParts = [
-		formData.shippingAddress.name,
-		formData.shippingAddress.firstLineOfAddress,
-		formData.shippingAddress.additionalInformation,
-		formData.shippingAddress.city,
-		formData.shippingAddress.zipPostcode,
-		formData.shippingAddress.country,
-	].filter(Boolean)
-
-	const tags: NDKTag[] = [
-		['p', formData.sellerPubkey],
-		['subject', `Auction claim for ${formData.auctionEventId.substring(0, 8)}`],
-		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
-		['order', orderId],
-		['amount', String(formData.finalAmount)],
-		// Link to auction & settlement
-		['a', formData.auctionCoordinates],
-		['e', formData.auctionEventId],
-		['e', formData.settlementEventId, '', 'settlement'],
-		['address', addressParts.join('\n')],
-	]
-
-	if (formData.email) tags.push(['email', formData.email])
-	if (formData.phone) tags.push(['phone', formData.phone])
-	if (formData.notes) tags.push(['notes', formData.notes])
+	const privateClaim = await createPrivateAuctionClaimMessageWithSigner({
+		...claimFields,
+		signer,
+	})
+	const privateEvent = new NDKEvent(ndk, privateClaim.giftWrap)
+	const privateRelayUrls = await publishRequiredPrivateGiftWrap(privateEvent)
 
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
-	event.content = formData.notes || 'Auction win — shipping details enclosed'
-	event.tags = tags
+	event.content = ''
+	event.tags = buildAuctionClaimPublicMarkerTags(claimFields) as NDKTag[]
 
 	await event.sign(signer)
-	await ndkActions.publishEvent(event)
+	await publishAuctionClaimMarkerToPrivateRelays(event, ndk, privateRelayUrls)
 
 	return event.id
+}
+
+function publishResultHasRelayDetails(result: unknown): boolean {
+	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
+}
+
+function publishResultHasRelaySuccess(result: unknown): boolean {
+	if (result instanceof Set) return result.size > 0
+	if (Array.isArray(result)) return result.length > 0
+	if (typeof result === 'object' && result !== null && 'size' in result && typeof (result as { size?: unknown }).size === 'number') {
+		return (result as { size: number }).size > 0
+	}
+	return true
+}
+
+function publishResultAcceptedRelayUrls(result: unknown): string[] {
+	const relays = result instanceof Set || Array.isArray(result) ? Array.from(result) : []
+	const urls = relays
+		.map((relay) =>
+			typeof relay === 'object' && relay !== null && 'url' in relay && typeof (relay as { url?: unknown }).url === 'string'
+				? (relay as { url: string }).url.trim()
+				: '',
+		)
+		.filter((url) => url.length > 0)
+
+	return [...new Set(urls)]
+}
+
+async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<string[]> {
+	const result = await ndkActions.publishEvent(event)
+	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
+		throw new Error('Encrypted auction claim details could not be published')
+	}
+	const acceptedRelayUrls = publishResultAcceptedRelayUrls(result)
+	if (acceptedRelayUrls.length === 0) {
+		throw new Error('Encrypted auction claim details were published but no accepted relay URLs were available')
+	}
+	return acceptedRelayUrls
+}
+
+async function publishAuctionClaimMarkerToPrivateRelays(event: NDKEvent, ndk: NDK, privateRelayUrls: string[]): Promise<void> {
+	const markerRelaySet = NDKRelaySet.fromRelayUrls(privateRelayUrls, ndk)
+	const result = await event.publish(markerRelaySet)
+	if (!publishResultHasRelayDetails(result) || !publishResultHasRelaySuccess(result)) {
+		throw new Error('Auction claim marker could not be published to the private claim relays')
+	}
+}
+
+async function resolveAuctionClaimBuyerPubkey(ndk: NDK, signer: NDKSigner): Promise<string> {
+	const user = await signer.user()
+	const signerPubkey = user.pubkey
+	if (!HEX_PUBKEY_RE.test(signerPubkey)) throw new Error('Active signer pubkey is not a 32-byte hex Nostr pubkey.')
+
+	const activeUserPubkey = ndk.activeUser?.pubkey
+	if (activeUserPubkey && activeUserPubkey !== signerPubkey) {
+		throw new Error('Active user does not match active signer.')
+	}
+
+	return signerPubkey
 }
 
 export const usePublishAuctionClaimOrderMutation = () => {

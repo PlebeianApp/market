@@ -2316,7 +2316,7 @@ export const nip60Actions = {
 
 		try {
 			if (refundPrivkey) {
-				await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey)
+				await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey, pendingToken.mintUrl)
 			} else {
 				// Non-auction pending token (e.g. a regular sendEcash token
 				// the recipient hasn't claimed). Best-effort unsigned receive.

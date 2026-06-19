@@ -51,6 +51,7 @@ import {
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
 	useAuctionSettlements,
+	usePrivateAuctionClaimForOrder,
 } from '@/queries/auctions'
 import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -60,6 +61,11 @@ import { useStore } from '@tanstack/react-store'
 import { Clock, Copy, ExternalLink, Gavel, MapPin, Package, Shield, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import {
+	getLegacyAuctionClaimPublicDetails,
+	type LegacyAuctionClaimPublicDetails,
+	type PrivateAuctionClaimPayload,
+} from '@/lib/auctions/privateAuctionClaimMessage'
 
 const AUCTION_STATUS_STYLES: Record<string, string> = {
 	Live: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -117,6 +123,40 @@ function OverviewItem({ label, value, helper }: { label: string; value: React.Re
 			{helper && <p className="mt-1 text-xs text-zinc-500">{helper}</p>}
 		</div>
 	)
+}
+
+function formatPrivateClaimAddress(payload: PrivateAuctionClaimPayload): string {
+	const { shippingAddress } = payload
+	return [
+		shippingAddress.name,
+		shippingAddress.firstLineOfAddress,
+		shippingAddress.additionalInformation,
+		[shippingAddress.city, shippingAddress.zipPostcode].filter(Boolean).join(' '),
+		shippingAddress.country,
+	]
+		.filter(Boolean)
+		.join('\n')
+}
+
+function privateClaimUnavailableMessage(status?: string, reason?: string): string {
+	if (status === 'unavailable' && reason === 'no_signer') {
+		return 'Private shipping details unavailable until the seller signing session is connected.'
+	}
+	if (status === 'unavailable' && reason === 'not_seller') {
+		return 'Private shipping details are only available to the auction seller.'
+	}
+	if (status === 'unavailable' && reason === 'missing_marker_fields') {
+		return 'Private shipping details unavailable because the public claim marker is missing required references.'
+	}
+	return 'Private shipping details are not available from the encrypted claim path yet.'
+}
+
+function shouldUseLegacyPublicClaimDetails(isOwner: boolean, result: ReturnType<typeof usePrivateAuctionClaimForOrder>['data']): boolean {
+	return isOwner && result?.status === 'unavailable' && result.reason === 'missing_marker_fields'
+}
+
+function formatLegacyPublicClaimAddress(details: LegacyAuctionClaimPublicDetails): string {
+	return details.address ?? ''
 }
 
 function PartyRow({ label, pubkey, helper }: { label: string; pubkey: string; helper?: string }) {
@@ -267,6 +307,8 @@ function DashboardAuctionDetailRoute() {
 
 	// Settlement / claim ordering data — needed by both perspectives.
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
+	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
+	const isWinner = !!(user?.pubkey && settlementWinner && user.pubkey === settlementWinner)
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const claimOrders = claimOrdersQuery.data ?? []
 	const winnerClaimOrder = claimOrders.find((order) => order.pubkey === settlementWinner) ?? null
@@ -274,6 +316,13 @@ function DashboardAuctionDetailRoute() {
 
 	const claimOrderDetailQuery = useOrderById(winnerClaimOrderId)
 	const claimOrderWithEvents: OrderWithRelatedEvents | null = claimOrderDetailQuery.data ?? null
+	const privateClaimQuery = usePrivateAuctionClaimForOrder(winnerClaimOrder, isOwner && !!winnerClaimOrder)
+	const privateClaimResult = privateClaimQuery.data
+	const privateClaimPayload = privateClaimResult?.status === 'found' ? privateClaimResult.claim.payload : null
+	const legacyPublicClaimDetails =
+		winnerClaimOrder && shouldUseLegacyPublicClaimDetails(isOwner, privateClaimResult)
+			? getLegacyAuctionClaimPublicDetails({ pubkey: winnerClaimOrder.pubkey, tags: winnerClaimOrder.tags })
+			: null
 
 	// --- Perspective ----------------------------------------------------------
 	// The dashboard auction detail route is consumed by both sellers and buyers
@@ -281,8 +330,6 @@ function DashboardAuctionDetailRoute() {
 	// the current user holds. Sellers see settlement + outgoing fulfilment;
 	// winners see "submit your address" + incoming fulfilment; viewers see the
 	// public state only. OrderActions itself handles per-role action gating.
-	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
-	const isWinner = !!(user?.pubkey && settlementWinner && user.pubkey === settlementWinner)
 	const isSettled = latestSettlementStatus === 'settled'
 	const winnerHasClaimed = !!winnerClaimOrder
 	const winnerNeedsAddress = isSettled && isWinner && !winnerHasClaimed
@@ -896,24 +943,69 @@ function DashboardAuctionDetailRoute() {
 
 								{claimOrderWithEvents && user?.pubkey && (
 									<div className="space-y-3">
-										{/* Shipping address — visible to seller, hidden from public/buyer to keep PII tight */}
-										{(() => {
-											const addressTag = claimOrderWithEvents.order.tags.find((t) => t[0] === 'address')?.[1]
-											if (!addressTag) return null
-											if (!isOwner && !isWinner) return null
-											return (
-												<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Shipping address</p>
-													<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-900">{addressTag}</p>
-												</div>
-											)
-										})()}
+										{isOwner && (
+											<>
+												{privateClaimQuery.isLoading && (
+													<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+														Loading private shipping details...
+													</div>
+												)}
 
-										{(() => {
-											const email = claimOrderWithEvents.order.tags.find((t) => t[0] === 'email')?.[1]
-											if (!email || (!isOwner && !isWinner)) return null
-											return <OverviewItem label="Contact email" value={email} />
-										})()}
+												{!privateClaimQuery.isLoading && privateClaimPayload && (
+													<div className="space-y-3">
+														<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Private shipping address</p>
+															<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-900">
+																{formatPrivateClaimAddress(privateClaimPayload)}
+															</p>
+														</div>
+
+														<div className="grid gap-3 sm:grid-cols-2">
+															{privateClaimPayload.email && <OverviewItem label="Contact email" value={privateClaimPayload.email} />}
+															{privateClaimPayload.phone && <OverviewItem label="Contact phone" value={privateClaimPayload.phone} />}
+														</div>
+
+														{privateClaimPayload.notes && <OverviewItem label="Message to seller" value={privateClaimPayload.notes} />}
+													</div>
+												)}
+
+												{!privateClaimQuery.isLoading && !privateClaimPayload && legacyPublicClaimDetails && (
+													<div className="space-y-3">
+														{legacyPublicClaimDetails.address && (
+															<div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+																<p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+																	Legacy public shipping details
+																</p>
+																<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-900">
+																	{formatLegacyPublicClaimAddress(legacyPublicClaimDetails)}
+																</p>
+																<p className="mt-2 text-xs text-amber-700">
+																	This immutable legacy claim stored fulfilment data in public tags. New auction claims use encrypted
+																	private details.
+																</p>
+															</div>
+														)}
+
+														{legacyPublicClaimDetails.email && (
+															<OverviewItem
+																label="Legacy public contact email"
+																value={legacyPublicClaimDetails.email}
+																helper="Shown only to the seller for old immutable auction claims."
+															/>
+														)}
+													</div>
+												)}
+
+												{!privateClaimQuery.isLoading && !privateClaimPayload && !legacyPublicClaimDetails && (
+													<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
+														{privateClaimUnavailableMessage(
+															privateClaimResult?.status,
+															privateClaimResult?.status === 'unavailable' ? privateClaimResult.reason : undefined,
+														)}
+													</div>
+												)}
+											</>
+										)}
 
 										{/* Order controls — perspective-aware via OrderActions itself */}
 										<div className="rounded-xl border border-zinc-200 bg-white p-4">

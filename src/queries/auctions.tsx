@@ -2,6 +2,12 @@ import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
+	decryptPrivateAuctionClaimMessageWithSigner,
+	getAuctionClaimPublicMarkerFields,
+	privateAuctionClaimMatchesPublicMarker,
+	type PrivateAuctionClaimMessage,
+} from '@/lib/auctions/privateAuctionClaimMessage'
+import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
 	AUCTION_ROOT_EVENT_ID_TAG,
@@ -17,6 +23,7 @@ import {
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
+import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -26,7 +33,16 @@ import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
+export type PrivateAuctionClaimLookupResult =
+	| { status: 'found'; claim: PrivateAuctionClaimMessage }
+	| { status: 'not_found' }
+	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_ndk' | 'no_signer' | 'not_seller' }
+
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES = 5
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS = 5 * 60
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
 	try {
@@ -322,36 +338,39 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 /**
  * Fetch all kind-1025 path-release events for an auction. Sellers use
  * this to discover when a winning bidder has settled. Validators use
- * this when deriving verdicts. Pulled by `auctionEventId` (root event)
- * or by `auctionCoordinate`; both filters are applied so we catch
- * releases that referenced either.
+ * this when deriving verdicts. Path releases are queried by auction
+ * coordinate only; never query kind-1025 broadly by root event id alone.
  */
 export const fetchAuctionPathReleases = async (
 	auctionEventId: string,
 	limit: number = 200,
 	auctionCoordinates?: string,
 ): Promise<NDKEvent[]> => {
-	if (!auctionEventId && !auctionCoordinates) return []
+	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
+	if (!filter) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const filters: NDKFilter[] = []
-	if (auctionEventId) {
-		filters.push({
-			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
-			'#a': auctionCoordinates ? [auctionCoordinates] : undefined,
-			limit,
-		})
-	} else if (auctionCoordinates) {
-		filters.push({
-			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
-			'#a': [auctionCoordinates],
-			limit,
-		})
-	}
+	void auctionEventId
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters[0], { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events))
+		.filter((event) => isAuctionPathReleaseForCoordinate(event, filter['#a'][0]))
+		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number = 200): NDKFilter | null {
+	const coordinate = auctionCoordinates?.trim()
+	if (!coordinate) return null
+	return {
+		kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+		'#a': [coordinate],
+		limit,
+	}
+}
+
+export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordinates: string): boolean {
+	return event.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
 }
 
 /**
@@ -467,7 +486,7 @@ export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: n
 	queryOptions({
 		queryKey: [...auctionKeys.pathReleases(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
 		queryFn: () => fetchAuctionPathReleases(auctionEventId, limit, auctionCoordinates),
-		enabled: !!(auctionEventId || auctionCoordinates),
+		enabled: !!auctionCoordinates?.trim(),
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})
@@ -754,6 +773,89 @@ export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promi
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
+export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent): Promise<PrivateAuctionClaimLookupResult> => {
+	const markerFields = getAuctionClaimPublicMarkerFields({ pubkey: publicMarker.pubkey, tags: publicMarker.tags })
+	if (!markerFields) return { status: 'unavailable', reason: 'missing_marker_fields' }
+
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return { status: 'unavailable', reason: 'no_ndk' }
+
+	const signer = ndkActions.getSigner()
+	if (!signer) return { status: 'unavailable', reason: 'no_signer' }
+
+	const signerUser = await signer.user()
+	if (signerUser.pubkey !== markerFields.sellerPubkey) return { status: 'unavailable', reason: 'not_seller' }
+
+	const matches: PrivateAuctionClaimMessage[] = []
+	const seenGiftWrapIds = new Set<string>()
+	const markerCreatedAt = publicMarker.created_at
+	const hasMarkerCreatedAt = Number.isSafeInteger(markerCreatedAt) && (markerCreatedAt ?? 0) > 0
+	const since = hasMarkerCreatedAt ? Math.max(0, (markerCreatedAt ?? 0) - PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS) : undefined
+	let until = hasMarkerCreatedAt ? (markerCreatedAt ?? 0) + PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS : undefined
+
+	// The private gift wrap is expected just before the public marker. A small
+	// post-marker grace covers relay timestamp/clock skew while keeping the
+	// lookup bounded at 5 pages / 500 seller-addressed gift wraps.
+	for (let page = 0; page < PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES; page += 1) {
+		const filter: NDKFilter = {
+			kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+			'#p': [markerFields.sellerPubkey],
+			limit: PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT,
+			...(since !== undefined ? { since } : {}),
+			...(until !== undefined ? { until } : {}),
+		}
+
+		const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
+		if (events.length === 0) break
+
+		let oldestCreatedAt: number | undefined
+		for (const giftWrap of events) {
+			if (Number.isSafeInteger(giftWrap.created_at) && (oldestCreatedAt === undefined || (giftWrap.created_at ?? 0) < oldestCreatedAt)) {
+				oldestCreatedAt = giftWrap.created_at
+			}
+
+			if (giftWrap.id && seenGiftWrapIds.has(giftWrap.id)) continue
+			if (giftWrap.id) seenGiftWrapIds.add(giftWrap.id)
+
+			try {
+				const claim = await decryptPrivateAuctionClaimMessageWithSigner({
+					giftWrap: giftWrap.rawEvent(),
+					signer,
+					expectedBuyerPubkey: markerFields.buyerPubkey,
+					expectedSellerPubkey: markerFields.sellerPubkey,
+					expectedOrderId: markerFields.orderId,
+				})
+				if (privateAuctionClaimMatchesPublicMarker(claim.payload, markerFields)) {
+					matches.push(claim)
+				}
+			} catch {
+				// Relay data is untrusted. Ignore malformed, unrelated, or undecryptable gift wraps without logging private payloads.
+			}
+		}
+
+		if (matches.length > 0) break
+		if (oldestCreatedAt === undefined) break
+
+		const nextUntil = oldestCreatedAt - 1
+		if (since !== undefined && nextUntil < since) break
+		until = nextUntil
+		if (until < 0) break
+		if (seenGiftWrapIds.size === 0) {
+			break
+		}
+	}
+
+	if (matches.length === 0) return { status: 'not_found' }
+
+	matches.sort((a, b) => {
+		const createdAtDelta = (b.rumor.created_at ?? 0) - (a.rumor.created_at ?? 0)
+		if (createdAtDelta !== 0) return createdAtDelta
+		return (b.rumor.id ?? '').localeCompare(a.rumor.id ?? '')
+	})
+
+	return { status: 'found', claim: matches[0] }
+}
+
 export const auctionClaimOrdersQueryOptions = (auctionCoordinates: string) =>
 	queryOptions({
 		queryKey: [...auctionKeys.all, 'claimOrders', auctionCoordinates],
@@ -766,4 +868,20 @@ export const auctionClaimOrdersQueryOptions = (auctionCoordinates: string) =>
 export const useAuctionClaimOrders = (auctionCoordinates: string) =>
 	useQuery({
 		...auctionClaimOrdersQueryOptions(auctionCoordinates),
+	})
+
+export const privateAuctionClaimQueryOptions = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+	queryOptions({
+		queryKey: [...auctionKeys.all, 'privateClaim', publicMarker?.id ?? ''],
+		queryFn: () => {
+			if (!publicMarker) return Promise.resolve<PrivateAuctionClaimLookupResult>({ status: 'not_found' })
+			return fetchPrivateAuctionClaimForMarker(publicMarker)
+		},
+		enabled: enabled && !!publicMarker,
+		staleTime: 10000,
+	})
+
+export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+	useQuery({
+		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
