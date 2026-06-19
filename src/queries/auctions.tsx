@@ -727,7 +727,8 @@ export function useStreamingAuctionBids(
 		if (!auctionRootEventId && !auctionCoordinates) return
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
-		setBids([])
+		// Clear buffers but keep displayed bids — avoids a flash of empty state when
+		// auctionCoordinates arrives after the auction query resolves.
 		seenIds.current.clear()
 		pendingBids.current = []
 		eoseReceived.current = false
@@ -756,18 +757,29 @@ export function useStreamingAuctionBids(
 			}
 		})
 
+		// Merge pending buffer into state without clearing existing bids — prevents
+		// a flash of empty state when the effect re-runs as auctionCoordinates resolves.
+		const flushPending = () => {
+			const incoming = pendingBids.current
+			pendingBids.current = []
+			setBids((prev) => {
+				const existingIds = new Set(prev.map((b) => b.id))
+				const fresh = incoming.filter((b) => !existingIds.has(b.id))
+				if (fresh.length === 0) return prev
+				return [...prev, ...fresh].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+			})
+		}
+
 		sub.on('eose', () => {
 			eoseReceived.current = true
-			setBids(pendingBids.current.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
-			pendingBids.current = []
+			flushPending()
 			setIsStreaming(false)
 		})
 
 		const timeoutId = setTimeout(() => {
 			if (eoseReceived.current) return
 			eoseReceived.current = true
-			setBids(pendingBids.current.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
-			pendingBids.current = []
+			flushPending()
 			setIsStreaming(false)
 		}, 10000)
 
