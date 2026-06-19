@@ -31,6 +31,7 @@ const MAX_AUCTIONS_PER_POLL = 500
 const MAX_CHAT_MESSAGES_PER_ACTIVITY = 500
 
 let dedupMap = new Map<string, LiveActivityState>()
+let bidSubscriptions = new Map<string, () => void>()
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let discoveryUnsub: (() => void) | null = null
 
@@ -76,6 +77,61 @@ function getTagValue(event: NostrEvent, name: string): string {
 
 function getTagValues(event: NostrEvent, name: string): string[] {
 	return event.tags.filter((t) => t[0] === name && t[1]).map((t) => t[1] ?? '')
+}
+
+// =========================================================================
+// Phase 2: CVM Commentator — publish system chat messages on auction events
+// =========================================================================
+
+async function publishCommentatorMessage(ctx: LiveActivityWorkerContext, liveActivityCoord: string, content: string): Promise<void> {
+	const template: EventTemplate = {
+		kind: LIVE_CHAT_KIND,
+		content,
+		created_at: Math.floor(Date.now() / 1000),
+		tags: [['a', liveActivityCoord, '', 'root']],
+	}
+	const signed = await ctx.signer.signEvent(template)
+	await ctx.relayPool.publish(signed)
+}
+
+async function openBidSubscription(
+	ctx: LiveActivityWorkerContext,
+	auctionCoord: string,
+	liveActivityCoord: string,
+	dedupKey: string,
+	since: number,
+): Promise<void> {
+	if (bidSubscriptions.has(dedupKey)) return
+
+	const unsub = await ctx.relayPool.subscribe(
+		[{ kinds: [1023], '#a': [auctionCoord], since } as unknown as Filter],
+		async (bidEvent: NostrEvent) => {
+			try {
+				const amountTag = bidEvent.tags.find((t) => t[0] === 'amount')?.[1]
+				const amount = amountTag ? parseInt(amountTag, 10) : 0
+				const formattedAmount = amount.toLocaleString()
+				await publishCommentatorMessage(ctx, liveActivityCoord, `🔵 New bid: ${formattedAmount} sats`)
+			} catch (err) {
+				console.error('[live-activity-worker] Failed to publish commentator message:', err)
+			}
+		},
+	)
+
+	bidSubscriptions.set(dedupKey, unsub)
+	console.log(`[live-activity-worker] Bid subscription opened for ${dedupKey}`)
+}
+
+function closeBidSubscription(dedupKey: string): void {
+	const unsub = bidSubscriptions.get(dedupKey)
+	if (unsub) {
+		unsub()
+		bidSubscriptions.delete(dedupKey)
+		console.log(`[live-activity-worker] Bid subscription closed for ${dedupKey}`)
+	}
+}
+
+export function getBidSubscriptions(): Map<string, () => void> {
+	return bidSubscriptions
 }
 
 async function fetchEventsUntilEose(relayPool: ApplesauceRelayPool, filters: Filter[], timeoutMs = 5000): Promise<NostrEvent[]> {
@@ -313,6 +369,32 @@ export async function pollAndUpdateLiveActivities(
 				updatedAt: now,
 			})
 
+			// Phase 2: CVM commentator — manage bid subscriptions and publish milestones
+			const prevStatus = lastKnown?.status
+			const prevParticipants = lastKnown?.currentParticipants ?? 0
+
+			if (status === 'live') {
+				// Open bid subscription if not already open
+				await openBidSubscription(ctx, auctionCoord, liveActivityCoord, dedupKey, now)
+
+				// Announce participant milestones
+				if (prevStatus !== 'live' && prevStatus !== undefined) {
+					await publishCommentatorMessage(ctx, liveActivityCoord, '🟢 Auction is now live!')
+				}
+				if (currentParticipants > prevParticipants && currentParticipants > 0) {
+					await publishCommentatorMessage(ctx, liveActivityCoord, `👥 ${currentParticipants} watching now`)
+				}
+			} else if (status === 'ended') {
+				// Close bid subscription when auction ends
+				closeBidSubscription(dedupKey)
+
+				if (prevStatus !== 'ended' && prevStatus !== undefined) {
+					const reserveTag = getTagValue(auction, 'reserve')
+					const reserve = reserveTag ? parseInt(reserveTag, 10) : 0
+					await publishCommentatorMessage(ctx, liveActivityCoord, `🏁 Auction ended. ${totalParticipants} total participants.`)
+				}
+			}
+
 			if (existing) {
 				stats.updated++
 			} else {
@@ -352,6 +434,10 @@ export function startLiveActivityWorker(ctx: LiveActivityWorkerContext, interval
 }
 
 export function stopLiveActivityWorker(): void {
+	for (const [key, unsub] of bidSubscriptions) {
+		unsub()
+	}
+	bidSubscriptions.clear()
 	if (discoveryUnsub) {
 		discoveryUnsub()
 		discoveryUnsub = null

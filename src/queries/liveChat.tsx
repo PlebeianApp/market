@@ -15,6 +15,7 @@ import {
 type NDKKind = NonNullable<NDKFilter['kinds']>[number]
 const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
 const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
+const REACTION_KIND_NDK = 7 as unknown as NDKKind
 import { getAuctionId } from './auctions'
 import { configStore } from '@/lib/stores/config'
 
@@ -43,7 +44,16 @@ export const fetchLiveActivity = async (auctionEvent: NDKEvent): Promise<LiveAct
 	if (events.size === 0) return null
 
 	const sorted = Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-	return parseLiveActivity(sorted[0])
+	const parsed = parseLiveActivity(sorted[0])
+
+	// NIP-53 stale check: if status=live but event is older than 1hr, treat as ended
+	const STALE_THRESHOLD_S = 3600
+	const eventAge = Math.floor(Date.now() / 1000) - (sorted[0].created_at ?? 0)
+	if (parsed.status === 'live' && eventAge > STALE_THRESHOLD_S) {
+		parsed.status = 'ended'
+	}
+
+	return parsed
 }
 
 export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<LiveChatMessage[]> => {
@@ -85,6 +95,49 @@ export const useLiveChatMessages = (liveActivityCoord: string, isActive: boolean
 			queryFn: () => fetchLiveChatMessages(liveActivityCoord),
 			enabled: !!liveActivityCoord,
 			refetchInterval: isActive ? 3_000 : 15_000,
+		}),
+	)
+}
+
+export type ReactionCounts = Record<string, number>
+
+export const fetchReactions = async (messageIds: string[]): Promise<Record<string, ReactionCounts>> => {
+	if (messageIds.length === 0) return {}
+
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return {}
+
+	const filters: NDKFilter[] = [
+		{
+			kinds: [REACTION_KIND_NDK],
+			'#e': messageIds,
+			limit: 500,
+		},
+	]
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters, { timeoutMs: 5000 })
+	const result: Record<string, ReactionCounts> = {}
+
+	for (const event of events) {
+		const eTag = event.tags.find((t) => t[0] === 'e')
+		if (!eTag?.[1]) continue
+		const messageId = eTag[1]
+		const emoji = event.content || '👍'
+
+		if (!result[messageId]) result[messageId] = {}
+		result[messageId][emoji] = (result[messageId][emoji] ?? 0) + 1
+	}
+
+	return result
+}
+
+export const useReactions = (messageIds: string[], isActive: boolean) => {
+	return useQuery(
+		queryOptions({
+			queryKey: ['reactions', messageIds.sort().join(',')],
+			queryFn: () => fetchReactions(messageIds),
+			enabled: messageIds.length > 0,
+			refetchInterval: isActive ? 10_000 : 30_000,
 		}),
 	)
 }
