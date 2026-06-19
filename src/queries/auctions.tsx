@@ -879,7 +879,6 @@ export const privateAuctionClaimQueryOptions = (publicMarker: NDKEvent | null | 
 		},
 		enabled: enabled && !!publicMarker,
 		staleTime: 10000,
-		refetchInterval: 10000,
 	})
 
 export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
