@@ -1449,6 +1449,27 @@ export const nip60Actions = {
 			activeDeposit: null,
 			depositInvoice: null,
 			depositStatus: 'idle',
+			error: null,
+		}))
+	},
+
+	/**
+	 * Clear a completed deposit result from the UI.
+	 *
+	 * This is intentionally separate from cancelDeposit(): cancelDeposit() is
+	 * for abandoning an active pending deposit, while this only clears terminal
+	 * success/error UI state after the mint has already resolved the deposit.
+	 */
+	clearDepositResult: (): void => {
+		const { depositStatus } = nip60Store.state
+		if (depositStatus !== 'success' && depositStatus !== 'error') return
+
+		nip60Store.setState((s) => ({
+			...s,
+			activeDeposit: null,
+			depositInvoice: null,
+			depositStatus: 'idle',
+			error: null,
 		}))
 	},
 
