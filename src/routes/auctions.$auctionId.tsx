@@ -15,7 +15,7 @@ import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auct
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { nip60Actions } from '@/lib/stores/nip60'
+import { getAuctionSettlementGraceSeconds, nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
@@ -61,6 +61,7 @@ import {
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
 	useAuctionSettlements,
+	getAuctionSettlementGrace,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
 import { useProfileName } from '@/queries/profiles'
@@ -77,6 +78,8 @@ import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
+import AuctionTimelineChart from '@/components/AuctionTimelineChart'
+import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -113,10 +116,10 @@ function shortenHex(value: string, left: number = 10, right: number = 8): string
 
 function ShopperStat({ label, value, helper }: { label: string; value: string; helper?: string }) {
 	return (
-		<div className="rounded-xl border border-zinc-200 bg-white px-4 py-4 shadow-sm">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</p>
-			{helper && <p className="mt-2 text-sm leading-6 text-zinc-500">{helper}</p>}
+		<div className="rounded-xl border border-zinc-200 bg-background px-4 py-4 shadow-sm">
+			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+			<p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+			{helper && <p className="mt-2 text-sm leading-6 text-muted-foreground">{helper}</p>}
 		</div>
 	)
 }
@@ -124,17 +127,8 @@ function ShopperStat({ label, value, helper }: { label: string; value: string; h
 function ShopperInfoRow({ label, value }: { label: string; value: ReactNode }) {
 	return (
 		<div className="flex items-start justify-between gap-4 border-b border-zinc-200/80 py-3 last:border-b-0">
-			<span className="text-sm font-medium text-zinc-500">{label}</span>
-			<span className="text-sm font-semibold text-right text-zinc-950">{value}</span>
-		</div>
-	)
-}
-
-function TechnicalDataRow({ label, value }: { label: string; value: ReactNode }) {
-	return (
-		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
+			<span className="text-sm font-medium text-muted-foreground">{label}</span>
+			<span className="text-sm font-semibold text-right text-foreground">{value}</span>
 		</div>
 	)
 }
@@ -169,7 +163,7 @@ function AuctionEmptyState({ title, description }: { title: string; description?
 	return (
 		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
 			<p className="text-sm font-medium text-zinc-900">{title}</p>
-			{description && <p className="mt-1 text-sm leading-6 text-zinc-500">{description}</p>}
+			{description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>}
 		</div>
 	)
 }
@@ -250,7 +244,7 @@ function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode 
 
 	return (
 		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</dt>
+			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</dt>
 			<dd className="mt-1 break-words text-sm font-medium text-zinc-900">{value}</dd>
 		</div>
 	)
@@ -259,26 +253,25 @@ function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode 
 function AuctionShippingOptionCard({ option, auctionCurrency }: { option: AuctionShippingOptionDisplay; auctionCurrency: string }) {
 	if (option.status === 'invalid') {
 		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-zinc-950">Invalid shipping reference</h3>
-				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-foreground">Invalid shipping reference</h3>
+				{option.info?.description && <p className="mt-2 break-all text-xs text-muted-foreground">{option.info?.description}</p>}
 			</li>
 		)
 	}
 
 	if (option.isLoading) {
 		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<p className="text-sm text-zinc-500">Loading shipping details...</p>
+			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
+				<p className="text-sm text-muted-foreground">Loading shipping details...</p>
 			</li>
 		)
 	}
 
 	if (!option.event && !option.info) {
 		return (
-			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-				<h3 className="text-sm font-semibold text-zinc-950">Shipping option unavailable</h3>
-				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-foreground">Shipping option unavailable</h3>
 			</li>
 		)
 	}
@@ -293,11 +286,11 @@ function AuctionShippingOptionCard({ option, auctionCurrency }: { option: Auctio
 	const hasPartialShippingInfo = !!option.event && !option.info
 
 	return (
-		<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+		<li className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
 			<div className="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<h3 className="text-base font-semibold text-zinc-950">{title}</h3>
-					<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+					<h3 className="text-base font-semibold text-foreground">{title}</h3>
+					{option.info?.description && <p className="mt-2 break-all text-xs text-muted-foreground">{option.info?.description}</p>}
 				</div>
 				<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
 					{formatShippingPrice(option.info, option.event, auctionCurrency)}
@@ -394,6 +387,7 @@ function AuctionDetailRoute() {
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
 	const specs = getAuctionSpecs(auction)
+	const refundTime = getAuctionMaxEndAt(auction) + getAuctionSettlementGrace(auction)
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
@@ -682,51 +676,45 @@ function AuctionDetailRoute() {
 										{ended ? 'ENDED' : 'LIVE'}
 									</div>
 									{trustedMints.length > 0 && (
-										<TooltipProvider>
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<div className="relative flex items-center text-white/80 bg-black/30 border border-white/20 rounded px-2 h-6 cursor-default">
-														<Landmark className="h-3 w-3 text-pink-400" />
-														<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-pink-500 text-[9px] font-bold leading-none text-white">
-															{trustedMints.length}
-														</span>
-													</div>
-												</TooltipTrigger>
-												<TooltipContent side="top">
-													<p className="font-semibold mb-1">
-														{trustedMints.length} trusted {trustedMints.length === 1 ? 'mint' : 'mints'}
-													</p>
-													<ul className="list-disc pl-4 space-y-0.5">
-														{trustedMints.map((mint) => (
-															<li key={mint} className="text-xs opacity-80 break-all">
-																{mint}
-															</li>
-														))}
-													</ul>
-												</TooltipContent>
-											</Tooltip>
-										</TooltipProvider>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<div className="relative flex items-center text-white/80 bg-black/30 border border-white/20 rounded px-2 h-6 cursor-default">
+													<Landmark className="h-3 w-3 text-primary" />
+													<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-pink-500 text-[9px] font-bold leading-none text-white">
+														{trustedMints.length}
+													</span>
+												</div>
+											</TooltipTrigger>
+											<TooltipContent side="top">
+												<p className="font-semibold mb-1">
+													{trustedMints.length} trusted {trustedMints.length === 1 ? 'mint' : 'mints'}
+												</p>
+												<ul className="list-disc pl-4 space-y-0.5">
+													{trustedMints.map((mint) => (
+														<li key={mint} className="text-xs opacity-80 break-all">
+															{mint}
+														</li>
+													))}
+												</ul>
+											</TooltipContent>
+										</Tooltip>
 									)}
 									{pathIssuerPubkey && (
-										<TooltipProvider>
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<div className="relative cursor-default">
-														<div className="w-6 h-6 rounded-full overflow-hidden bg-white ring-1 ring-white/20">
-															<img src="/images/logo.svg" alt="Plebeian oracle" className="w-full h-full object-cover" />
-														</div>
-														<span className="absolute -bottom-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500">
-															<Check className="h-2 w-2 text-white stroke-[3]" />
-														</span>
-													</div>
-												</TooltipTrigger>
-												<TooltipContent side="top">
-													<p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">Oracle</p>
-													{oracleName && <p className="font-semibold">{oracleName}</p>}
-													<p className="text-xs opacity-70 font-mono break-all">{shortenHex(pathIssuerPubkey, 10, 8)}</p>
-												</TooltipContent>
-											</Tooltip>
-										</TooltipProvider>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<div className="relative cursor-default">
+													<AvatarUser pubkey={pathIssuerPubkey} />
+													<span className="absolute -bottom-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500">
+														<Check className="h-2 w-2 text-white stroke-[3]" />
+													</span>
+												</div>
+											</TooltipTrigger>
+											<TooltipContent side="top">
+												<p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">Validator</p>
+												{oracleName && <p className="font-semibold">{oracleName}</p>}
+												<p className="text-xs opacity-70 font-mono break-all">{shortenHex(pathIssuerPubkey, 10, 8)}</p>
+											</TooltipContent>
+										</Tooltip>
 									)}
 								</div>
 							</div>
@@ -820,7 +808,7 @@ function AuctionDetailRoute() {
 								</div>
 							</div>
 							{hasClaimOrder ? (
-								<div className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-800">
+								<div className="rounded-lg border border-emerald-300 bg-background px-4 py-2 text-sm font-medium text-emerald-800">
 									Shipping details submitted — awaiting seller
 								</div>
 							) : (
@@ -853,10 +841,10 @@ function AuctionDetailRoute() {
 							Shipping
 						</TabsTrigger>
 						<TabsTrigger
-							value="bids"
+							value="details"
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
-							Bids
+							Auction Details
 						</TabsTrigger>
 						<TabsTrigger
 							value="comments"
@@ -864,132 +852,42 @@ function AuctionDetailRoute() {
 						>
 							Comments
 						</TabsTrigger>
-						<TabsTrigger
-							value="participants"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Participants
-						</TabsTrigger>
-						<TabsTrigger
-							value="live"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							<Radio className="mr-1 h-4 w-4" />
-							Live
-						</TabsTrigger>
-						<TabsTrigger
-							value="seller"
-							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
-						>
-							Seller
-						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
-							<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
-								<div className="space-y-4">
-									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
-										<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
-										<div className="mt-4 flex flex-wrap gap-2">
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{auctionType}
-											</Badge>
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{currency}
-											</Badge>
-											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-												{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
-											</Badge>
-										</div>
-									</div>
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+							{/* Latest Bids Container */}
+							<div className="rounded-lg bg-background p-6 shadow-md">
+								<h2 className="text-xl font-semibold text-foreground mb-4">Latest Bids</h2>
 
-									<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-										<ShopperStat
-											label={ended ? 'Final price' : 'Current price'}
-											value={formatSats(currentPrice)}
-											helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
-										/>
-										<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
-										<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
-										<ShopperStat
-											label="Reserve"
-											value={formatSats(reserve)}
-											helper="Seller threshold that decides whether the winner can settle."
-										/>
-										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
-										<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
-									</div>
+								<AuctionBidsContainer
+									auctionRootEventId={auctionRootEventId || auctionId}
+									auctionCoordinates={auctionCoordinates}
+									className="max-h-[500px]"
+								/>
+
+								{/* <AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} /> */}
+							</div>
+
+							{/* Live Chat Panel */}
+							<div className="rounded-lg bg-background p-6 shadow-md">
+								<div className="flex items-center">
+									<Radio className="mr-2 size-6" />
+									<h2 className="text-xl font-semibold text-foreground">Live Chat</h2>
 								</div>
-
-								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<UserRound className="h-4 w-4" />
-										Seller & fulfilment
-									</div>
-									<div className="mt-4 space-y-1">
-										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
-										<ShopperInfoRow
-											label="Categories"
-											value={
-												categories.length > 0 ? (
-													<span className="inline-flex flex-wrap justify-end gap-1.5">
-														{categories.slice(0, 3).map((category) => (
-															<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
-																{category}
-															</span>
-														))}
-													</span>
-												) : (
-													'None listed'
-												)
-											}
-										/>
-										<ShopperInfoRow
-											label="Shipping options"
-											value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
-										/>
-									</div>
-
-									<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
-										<AccordionItem value="settlement" className="border-none">
-											<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-												Settlement & technical details
-											</AccordionTrigger>
-											<AccordionContent className="space-y-3 pb-4">
-												<TechnicalDataRow label="Auditor" value={pathIssuerPubkey || 'N/A'} />
-												<TechnicalDataRow label="Key scheme" value={keyScheme} />
-												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
-												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
-												<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
-												<TechnicalDataRow
-													label="Trusted mints"
-													value={
-														trustedMints.length > 0 ? (
-															<ul className="space-y-1">
-																{trustedMints.map((mint) => (
-																	<li key={mint}>{mint}</li>
-																))}
-															</ul>
-														) : (
-															'No mints declared'
-														)
-													}
-												/>
-											</AccordionContent>
-										</AccordionItem>
-									</Accordion>
+								<div className="h-125">
+									<LiveChatPanel auctionEvent={auction} />
 								</div>
 							</div>
 						</div>
 					</TabsContent>
 
 					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
-							<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-								<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</h2>
-								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+						<div className="space-y-6 rounded-lg bg-background p-6 shadow-md">
+							<h2 className="text-xl font-semibold text-foreground mb-4">Description</h2>
+							<section className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
+								<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Description</h2>
+								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-muted-foreground">{summary}</p>}
 								{description ? (
 									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">{description}</p>
 								) : (
@@ -1003,13 +901,13 @@ function AuctionDetailRoute() {
 							</section>
 
 							<div className="grid gap-4 lg:grid-cols-2">
-								<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</h2>
+								<section className="rounded-xl border border-zinc-200 bg-background px-5 py-5 shadow-sm">
+									<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Specifications</h2>
 									{specs.length > 0 ? (
 										<dl className="mt-4 divide-y divide-zinc-200">
 											{specs.map((spec, index) => (
 												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
-													<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
+													<dt className="text-sm font-medium text-muted-foreground">{spec.key}</dt>
 													<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
 												</div>
 											))}
@@ -1031,13 +929,13 @@ function AuctionDetailRoute() {
 											categories.map((category) => (
 												<span
 													key={category}
-													className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+													className="rounded-full border border-zinc-300 bg-background px-3 py-1.5 text-xs font-semibold text-zinc-700"
 												>
 													{category}
 												</span>
 											))
 										) : (
-											<p className="text-sm text-zinc-500">No categories listed.</p>
+											<p className="text-sm text-muted-foreground">No categories listed.</p>
 										)}
 									</div>
 								</section>
@@ -1046,19 +944,8 @@ function AuctionDetailRoute() {
 					</TabsContent>
 
 					<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
-							<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-								<div className="flex items-start gap-3">
-									<Truck className="mt-0.5 h-5 w-5 text-zinc-700" />
-									<div>
-										<h2 className="text-lg font-semibold text-zinc-950">Shipping options</h2>
-										<p className="mt-1 text-sm leading-6 text-zinc-500">
-											Seller-provided shipping options attached to this auction. Availability is shown as listed by the seller.
-										</p>
-									</div>
-								</div>
-							</section>
-
+						<div className="space-y-5 rounded-lg bg-background p-6 shadow-md">
+							<h2 className="text-xl font-semibold text-foreground mb-4">Shipping</h2>
 							{resolvedShippingOptions.length > 0 ? (
 								<ul className="space-y-4">
 									{resolvedShippingOptions.map((option, index) => (
@@ -1074,88 +961,15 @@ function AuctionDetailRoute() {
 						</div>
 					</TabsContent>
 
-					<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+					<TabsContent value="details" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-background p-6 shadow-md">
+							<h2 className="text-xl font-semibold text-foreground mb-4">Auction Details</h2>
+							<AuctionTimelineChart bids={bids} auction={auction} />
+
 							<div className="flex flex-wrap items-center justify-between gap-3">
 								<div>
-									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
-									<p className="mt-1 text-sm text-zinc-500">
-										Streaming Live Bids. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
-									</p>
-								</div>
-								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
-									{newestBids.length} recorded
-								</Badge>
-							</div>
-
-							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
-
-							{newestBids.length === 0 ? (
-								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
-									No bids yet.
-								</div>
-							) : (
-								<div className="space-y-4">
-									{newestBids.map((bidEvent) => {
-										const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
-										return (
-											<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
-												<div className="flex flex-wrap items-start justify-between gap-3">
-													<div>
-														<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
-														<p className="mt-1 text-sm text-zinc-500">
-															Recorded {bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
-														</p>
-													</div>
-													<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-														{getBidStatus(bidEvent)}
-													</Badge>
-												</div>
-
-												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-													<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
-													<span className="text-zinc-400">•</span>
-													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
-												</div>
-
-												<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
-													<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
-														<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
-															Bid event details
-														</AccordionTrigger>
-														<AccordionContent className="space-y-3 pb-4">
-															<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
-															<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
-															<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
-															<TechnicalDataRow
-																label="Locktime"
-																value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
-															/>
-															<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
-														</AccordionContent>
-													</AccordionItem>
-												</Accordion>
-											</div>
-										)
-									})}
-								</div>
-							)}
-						</div>
-					</TabsContent>
-
-					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
-						</div>
-					</TabsContent>
-
-					<TabsContent value="participants" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
-							<div className="flex flex-wrap items-center justify-between gap-3">
-								<div>
-									<h2 className="text-xl font-semibold text-zinc-950">Participants</h2>
-									<p className="mt-1 text-sm text-zinc-500">Read-only identities visible from this auction and its visible bids.</p>
+									<h2 className="text-xl font-semibold text-foreground">Participants</h2>
+									<p className="mt-1 text-sm text-muted-foreground">Read-only identities visible from this auction and its visible bids.</p>
 								</div>
 								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
 									{bidderSummaries.length} visible {bidderSummaries.length === 1 ? 'bidder' : 'bidders'}
@@ -1164,20 +978,18 @@ function AuctionDetailRoute() {
 
 							<div className="grid gap-4 lg:grid-cols-2">
 								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Seller</p>
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Seller</p>
 									<div className="mt-4 flex flex-wrap items-center gap-3">
-										<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
-										<span className="text-sm font-medium text-zinc-600">{shortenHex(auction.pubkey)}</span>
+										<UserCard pubkey={auction.pubkey} />
 									</div>
 								</section>
 
 								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Current leading bidder</p>
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Current leading bidder</p>
 									{topBidOverall ? (
 										<div className="mt-4 space-y-3">
 											<div className="flex flex-wrap items-center gap-3">
-												<AvatarUser pubkey={topBidOverall.pubkey} colored deterministicFallbackText />
-												<span className="text-sm font-medium text-zinc-600">{shortenHex(topBidOverall.pubkey)}</span>
+												<UserCard pubkey={topBidOverall.pubkey} />
 											</div>
 											<ShopperInfoRow label="Highest visible bid" value={formatSats(getBidAmount(topBidOverall))} />
 										</div>
@@ -1193,8 +1005,7 @@ function AuctionDetailRoute() {
 								<section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-5">
 									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Settlement winner</p>
 									<div className="mt-4 flex flex-wrap items-center gap-3">
-										<AvatarUser pubkey={settlementWinner} colored deterministicFallbackText />
-										<span className="text-sm font-medium text-emerald-900">{shortenHex(settlementWinner)}</span>
+										<UserCard pubkey={settlementWinner} />
 									</div>
 									{settlementFinalAmount > 0 && (
 										<div className="mt-4">
@@ -1206,8 +1017,8 @@ function AuctionDetailRoute() {
 
 							<section className="space-y-4">
 								<div className="flex flex-wrap items-center justify-between gap-3">
-									<h3 className="text-lg font-semibold text-zinc-950">Visible bidders</h3>
-									<span className="text-sm text-zinc-500">{bidderSummaries.length} unique</span>
+									<h3 className="text-lg font-semibold text-foreground">Visible bidders</h3>
+									<span className="text-sm text-muted-foreground">{bidderSummaries.length} unique</span>
 								</div>
 
 								{bidderSummaries.length === 0 ? (
@@ -1218,8 +1029,7 @@ function AuctionDetailRoute() {
 											<div key={summary.pubkey} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
 												<div className="flex flex-wrap items-start justify-between gap-3">
 													<div className="flex flex-wrap items-center gap-3">
-														<AvatarUser pubkey={summary.pubkey} colored deterministicFallbackText />
-														<span className="text-sm font-medium text-zinc-600">{shortenHex(summary.pubkey)}</span>
+														<UserCard pubkey={summary.pubkey} />
 													</div>
 													<div className="flex flex-wrap justify-end gap-2">
 														{summary.isCurrentLeader && (
@@ -1248,30 +1058,10 @@ function AuctionDetailRoute() {
 						</div>
 					</TabsContent>
 
-					<TabsContent value="live" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<div className="h-[500px]">
-								<LiveChatPanel auctionEvent={auction} />
-							</div>
-						</div>
-					</TabsContent>
-
-					<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-								<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-									<UserRound className="h-4 w-4" />
-									Seller
-								</div>
-								<div className="mt-4">
-									<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
-								</div>
-								<div className="mt-5 space-y-1">
-									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
-									<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
-									<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
-								</div>
-							</div>
+					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-background p-6 shadow-md">
+							<h2 className="text-xl font-semibold text-foreground mb-4">Comments</h2>
+							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
 						</div>
 					</TabsContent>
 				</Tabs>
