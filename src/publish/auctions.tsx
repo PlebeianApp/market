@@ -27,7 +27,7 @@ import { AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKRelaySet, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
@@ -1169,7 +1169,7 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 		signer,
 	})
 	const privateEvent = new NDKEvent(ndk, privateClaim.giftWrap)
-	await publishRequiredPrivateGiftWrap(privateEvent)
+	const privateRelayUrls = await publishRequiredPrivateGiftWrap(privateEvent)
 
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
@@ -1177,7 +1177,7 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 	event.tags = buildAuctionClaimPublicMarkerTags(claimFields) as NDKTag[]
 
 	await event.sign(signer)
-	await ndkActions.publishEvent(event)
+	await publishAuctionClaimMarkerToPrivateRelays(event, ndk, privateRelayUrls)
 
 	return event.id
 }
@@ -1195,10 +1195,36 @@ function publishResultHasRelaySuccess(result: unknown): boolean {
 	return true
 }
 
-async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<void> {
+function publishResultAcceptedRelayUrls(result: unknown): string[] {
+	const relays = result instanceof Set || Array.isArray(result) ? Array.from(result) : []
+	const urls = relays
+		.map((relay) =>
+			typeof relay === 'object' && relay !== null && 'url' in relay && typeof (relay as { url?: unknown }).url === 'string'
+				? (relay as { url: string }).url.trim()
+				: '',
+		)
+		.filter((url) => url.length > 0)
+
+	return [...new Set(urls)]
+}
+
+async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<string[]> {
 	const result = await ndkActions.publishEvent(event)
 	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
 		throw new Error('Encrypted auction claim details could not be published')
+	}
+	const acceptedRelayUrls = publishResultAcceptedRelayUrls(result)
+	if (acceptedRelayUrls.length === 0) {
+		throw new Error('Encrypted auction claim details were published but no accepted relay URLs were available')
+	}
+	return acceptedRelayUrls
+}
+
+async function publishAuctionClaimMarkerToPrivateRelays(event: NDKEvent, ndk: NDK, privateRelayUrls: string[]): Promise<void> {
+	const markerRelaySet = NDKRelaySet.fromRelayUrls(privateRelayUrls, ndk)
+	const result = await event.publish(markerRelaySet)
+	if (!publishResultHasRelayDetails(result) || !publishResultHasRelaySuccess(result)) {
+		throw new Error('Auction claim marker could not be published to the private claim relays')
 	}
 }
 
