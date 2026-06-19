@@ -1,7 +1,8 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { Send, MessageCircle, ChevronDown } from 'lucide-react'
-import { useLiveChatMessages, useLiveActivity } from '@/queries/liveChat'
-import { usePublishLiveChatMessageMutation } from '@/publish/liveChat'
+import { useLiveChatMessages, useLiveActivity, useReactions } from '@/queries/liveChat'
+import { usePublishLiveChatMessageMutation, usePublishReactionMutation } from '@/publish/liveChat'
+import { useQueryClient } from '@tanstack/react-query'
 import { deriveLiveActivityStatus, type LiveActivityStatus } from '@/lib/nip53'
 import { getAuctionId } from '@/queries/auctions'
 import { getAuctionStartAt, getAuctionMaxEndAt } from '@/lib/auctionSettlement'
@@ -43,8 +44,13 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 
 	const chatQuery = useLiveChatMessages(liveActivityCoord, isLive)
 	const messages = chatQuery.data ?? []
+	const messageIds = useMemo(() => messages.map((m) => m.id), [messages])
+	const reactionsQuery = useReactions(messageIds, isLive)
+	const reactions = reactionsQuery.data ?? {}
 
 	const sendMessageMutation = usePublishLiveChatMessageMutation()
+	const reactionMutation = usePublishReactionMutation()
+	const queryClient = useQueryClient()
 	const [input, setInput] = useState('')
 	const chatContainerRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
@@ -115,6 +121,15 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 		sendMessageMutation.mutate({ liveActivityCoord, content: trimmed }, { onSuccess: () => setInput('') })
 	}
 
+	const handleReact = (messageId: string, emoji: string) => {
+		const msg = messages.find((m) => m.id === messageId)
+		if (!msg) return
+		reactionMutation.mutate(
+			{ messageId, messagePubkey: msg.authorPubkey, liveActivityCoord, emoji },
+			{ onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reactions'] }) },
+		)
+	}
+
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault()
@@ -142,7 +157,7 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 				) : (
 					<div className="divide-y divide-zinc-100">
 						{messages.map((msg) => (
-							<LiveChatMessageBubble key={msg.id} message={msg} />
+							<LiveChatMessageBubble key={msg.id} message={msg} reactions={reactions[msg.id]} onReact={canChat ? handleReact : undefined} />
 						))}
 					</div>
 				)}
