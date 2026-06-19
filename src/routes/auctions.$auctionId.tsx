@@ -57,7 +57,7 @@ import {
 	getAuctionTitle,
 	getAuctionType,
 	isNSFWAuction,
-	useAuctionBids,
+	useStreamingAuctionBids,
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
 	useAuctionSettlements,
@@ -427,8 +427,7 @@ function AuctionDetailRoute() {
 		[parsedShippingRefs, shippingQueryResults],
 	)
 
-	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
+	const { bids } = useStreamingAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const ended = countdown.isEnded
@@ -747,7 +746,9 @@ function AuctionDetailRoute() {
 									<div className="font-semibold">{bidsCount}</div>
 								</div>
 							</div>
-							<AuctionCountdown auction={auction} className="w-full gap-3" />
+							<div className="w-full">
+								<AuctionCountdown auction={auction} bids={bids} />
+							</div>
 
 							<div className="flex flex-row justify-between">
 								{bidderStatus && (
@@ -1079,7 +1080,7 @@ function AuctionDetailRoute() {
 								<div>
 									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
 									<p className="mt-1 text-sm text-zinc-500">
-										Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
+										Streaming Live Bids. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
 									</p>
 								</div>
 								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
