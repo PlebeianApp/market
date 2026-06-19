@@ -14,6 +14,8 @@ interface DepositLightningModalProps {
 	onClose: () => void
 }
 
+type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
+
 export function DepositLightningModal({ open, onClose }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
@@ -22,23 +24,17 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [copied, setCopied] = useState(false)
 	const [selectedNwcWalletId, setSelectedNwcWalletId] = useState('')
-	const [isPayingWithNwc, setIsPayingWithNwc] = useState(false)
-	const [nwcPaymentAttempted, setNwcPaymentAttempted] = useState(false)
-	const [nwcPaymentSent, setNwcPaymentSent] = useState(false)
-	const nwcPaymentAttemptedRef = useRef(false)
+	const [nwcPaymentStatus, setNwcPaymentStatus] = useState<NwcDepositPaymentStatus>('idle')
+	const sentNwcInvoiceRef = useRef<string | null>(null)
+	const nwcPaymentSentForCurrentInvoice = !!depositInvoice && sentNwcInvoiceRef.current === depositInvoice
+	const isPayingWithNwc = nwcPaymentStatus === 'paying'
+	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
+	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
 
 	const savedNwcWallets = useMemo(() => wallets.filter((wallet) => !!wallet.nwcUri), [wallets])
 
 	const resetNwcPaymentState = useCallback(() => {
-		nwcPaymentAttemptedRef.current = false
-		setNwcPaymentAttempted(false)
-		setNwcPaymentSent(false)
-		setIsPayingWithNwc(false)
-	}, [])
-
-	const markNwcPaymentAttempted = useCallback(() => {
-		nwcPaymentAttemptedRef.current = true
-		setNwcPaymentAttempted(true)
+		setNwcPaymentStatus('idle')
 	}, [])
 
 	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
@@ -68,6 +64,7 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 
 	useEffect(() => {
 		if (depositStatus === 'success' || depositStatus === 'error' || (!depositInvoice && depositStatus !== 'pending')) {
+			sentNwcInvoiceRef.current = null
 			resetNwcPaymentState()
 		}
 	}, [depositInvoice, depositStatus, resetNwcPaymentState])
@@ -106,7 +103,7 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 	}
 
 	const handlePayWithNwc = async () => {
-		if (!depositInvoice || nwcPaymentAttempted) return
+		if (!depositInvoice || nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice) return
 
 		const selectedWallet = savedNwcWallets.find((wallet) => wallet.id === selectedNwcWalletId)
 		if (!selectedWallet?.nwcUri) {
@@ -120,35 +117,35 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 			return
 		}
 
-		markNwcPaymentAttempted()
-		setIsPayingWithNwc(true)
+		const invoiceBeingPaid = depositInvoice
+		setNwcPaymentStatus('paying')
 		try {
-			await walletActions.payInvoiceWithNwc(selectedWallet.nwcUri, depositInvoice, signer)
-			setNwcPaymentSent(true)
+			await walletActions.payInvoiceWithNwc(selectedWallet.nwcUri, invoiceBeingPaid, signer)
+			sentNwcInvoiceRef.current = invoiceBeingPaid
+			setNwcPaymentStatus('sent')
 			toast.success('Payment sent. Waiting for mint confirmation...')
 		} catch (error) {
+			setNwcPaymentStatus('idle')
 			toast.error(error instanceof Error ? error.message : 'Could not pay invoice with connected wallet')
-		} finally {
-			setIsPayingWithNwc(false)
 		}
 	}
 
 	const handleClose = () => {
-		const hasNwcPaymentAttempt = nwcPaymentAttemptedRef.current
+		if (isPayingWithNwc) return
+
+		const hasSentNwcPayment = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 		const isTerminalDepositState = depositStatus === 'success' || depositStatus === 'error'
 
-		if (depositStatus === 'pending' && !hasNwcPaymentAttempt) {
+		if (depositStatus === 'pending' && !hasSentNwcPayment) {
 			nip60Actions.cancelDeposit()
 		}
 		if (isTerminalDepositState) {
 			nip60Actions.clearDepositResult()
 		}
+
 		setAmount('')
 		setCopied(false)
-		setIsPayingWithNwc(false)
-		if (!(depositStatus === 'pending' && hasNwcPaymentAttempt)) {
-			resetNwcPaymentState()
-		}
+		resetNwcPaymentState()
 		onClose()
 	}
 
@@ -231,7 +228,7 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 							<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
 						</div>
 						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
+							<Button variant="outline" onClick={handleClose} disabled={isPayingWithNwc}>
 								{nwcPaymentAttempted ? 'Close' : 'Cancel'}
 							</Button>
 						</div>
