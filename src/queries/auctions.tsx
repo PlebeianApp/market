@@ -42,6 +42,7 @@ const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES = 5
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
+const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS = 5 * 60
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
 	try {
@@ -790,10 +791,11 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 	const markerCreatedAt = publicMarker.created_at
 	const hasMarkerCreatedAt = Number.isSafeInteger(markerCreatedAt) && (markerCreatedAt ?? 0) > 0
 	const since = hasMarkerCreatedAt ? Math.max(0, (markerCreatedAt ?? 0) - PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS) : undefined
-	let until = hasMarkerCreatedAt ? (markerCreatedAt ?? 0) + PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS : undefined
+	let until = hasMarkerCreatedAt ? (markerCreatedAt ?? 0) + PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS : undefined
 
-	// The private gift wrap is published just before the public marker, but busy sellers
-	// can have more than one page of incoming wraps. Keep this bounded at 5 pages / 500 events.
+	// The private gift wrap is expected just before the public marker. A small
+	// post-marker grace covers relay timestamp/clock skew while keeping the
+	// lookup bounded at 5 pages / 500 seller-addressed gift wraps.
 	for (let page = 0; page < PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES; page += 1) {
 		const filter: NDKFilter = {
 			kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
