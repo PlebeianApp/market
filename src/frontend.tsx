@@ -1,17 +1,15 @@
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { StrictMode, useEffect, useState } from 'react'
+import { useStore } from '@tanstack/react-store'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../styles/index.css'
 import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
-import { configActions, configStore } from './lib/stores/config'
-import { ndkActions, ndkStore } from './lib/stores/ndk'
-import { authActions } from './lib/stores/auth'
-import { walletActions } from './lib/stores/wallet'
+import { bootApp, bootStore } from './lib/boot'
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
-import { configKeys } from './queries/queryKeyFactory'
+import { useServiceWorker } from './hooks/useServiceWorker'
 
 if (process.env.NODE_ENV !== 'development') {
 	console.log = () => {}
@@ -20,7 +18,9 @@ if (process.env.NODE_ENV !== 'development') {
 	console.info = () => {}
 }
 
-// Create queryClient once at module level
+// Create queryClient + router once at module level. Re-creating the
+// router on every render would lose route state (TanStack Router stores
+// match cache + pending nav on the instance).
 const queryClient = createQueryClient()
 
 function DefaultPending() {
@@ -34,7 +34,6 @@ function DefaultPending() {
 	)
 }
 
-// Function to create a router once we have a queryClient
 function createAppRouter(queryClient: QueryClient) {
 	return createRouter({
 		routeTree,
@@ -49,109 +48,26 @@ function createAppRouter(queryClient: QueryClient) {
 	})
 }
 
-// Create router once at module level
 const router = createAppRouter(queryClient)
 
-// Main app initialization and rendering
+/**
+ * Root component. All of the boot heavy-lifting lives in `bootApp`
+ * (see `src/lib/boot.ts`) — this component just kicks it off once on
+ * mount and renders based on the resulting status.
+ */
 function App() {
-	const [configLoaded, setConfigLoaded] = useState(configStore.state.isLoaded)
-	const [error, setError] = useState<string | null>(null)
-	const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+	const { status, error } = useStore(bootStore)
+	const { showUpdateDialog, dismissUpdate } = useServiceWorker()
 
-	// Register service worker and listen for updates (production only —
-	// in development/test the SW's skipWaiting + clients.claim cycle causes
-	// non-deterministic page reloads that break Playwright navigation)
 	useEffect(() => {
-		if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-			navigator.serviceWorker
-				.register('/sw.js')
-				.then((registration) => {
-					console.log('SW registered:', registration.scope)
-
-					// Check for updates periodically
-					setInterval(() => registration.update(), 60 * 60 * 1000) // hourly
-
-					// Listen for new service worker installing
-					registration.addEventListener('updatefound', () => {
-						const newWorker = registration.installing
-						if (!newWorker) return
-
-						newWorker.addEventListener('statechange', () => {
-							// New SW is installed and waiting, and we have an active controller
-							if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-								setShowUpdateDialog(true)
-							}
-						})
-					})
-				})
-				.catch((err) => {
-					console.error('SW registration failed:', err)
-				})
-
-			// Also detect when a new SW takes control (e.g., skipWaiting was called)
-			navigator.serviceWorker.addEventListener('controllerchange', () => {
-				// Only reload if we're not already reloading
-				if (!sessionStorage.getItem('sw-reload')) {
-					sessionStorage.setItem('sw-reload', 'true')
-					window.location.reload()
-				}
-			})
-		}
+		// bootApp is idempotent — safe under StrictMode double-mount.
+		bootApp(queryClient).catch(() => {
+			// Error already surfaced via bootStore; swallow here so React
+			// doesn't see an unhandled promise rejection.
+		})
 	}, [])
 
-	// Fetch config on mount if not already loaded
-	useEffect(() => {
-		if (configStore.state.isLoaded) {
-			setConfigLoaded(true)
-			return
-		}
-
-		const loadConfig = async () => {
-			try {
-				const controller = new AbortController()
-				const timeout = setTimeout(() => controller.abort(), 10000)
-
-				const response = await fetch('/api/config', { signal: controller.signal })
-				clearTimeout(timeout)
-
-				if (!response.ok) {
-					throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
-				}
-				const config = await response.json()
-				configActions.setConfig(config)
-				// Prime React Query cache so useConfigQuery() doesn't re-fetch
-				queryClient.setQueryData(configKeys.all, config)
-				console.log('Fetched config:', { stage: config.stage, appRelay: config.appRelay })
-
-				// Initialize NDK AFTER config is loaded so stage-based relay selection works.
-				// Previously this ran at module level (before config), causing development/test
-				// environments to connect to public relays instead of only the local relay.
-				ndkActions.initialize()
-				ndkActions.ensureAppRelayFromConfig()
-
-				// Log which relays NDK will connect to (dry-run verification)
-				const relayUrls = ndkStore.state.explicitRelayUrls
-				console.log(`NDK initialized with ${relayUrls.length} relay(s):`, relayUrls)
-
-				ndkActions.connect().catch((err) => {
-					console.warn('Background NDK connection issue:', err)
-				})
-
-				// Auth and wallet init depend on NDK being ready
-				void authActions.getAuthFromLocalStorageAndLogin()
-				void walletActions.initialize()
-
-				setConfigLoaded(true)
-			} catch (err) {
-				console.error('Config fetch error:', err)
-				setError(err instanceof Error ? err.message : 'Failed to load configuration')
-			}
-		}
-
-		loadConfig()
-	}, [])
-
-	if (error) {
+	if (status === 'error') {
 		return (
 			<div className="flex justify-center items-center h-screen flex-col gap-2">
 				<div className="text-red-500">Error: {error}</div>
@@ -162,9 +78,7 @@ function App() {
 		)
 	}
 
-	// Show minimal loading only if config isn't loaded yet
-	// This should be very brief since config fetch is fast
-	if (!configLoaded) {
+	if (status !== 'ready') {
 		return <div className="flex justify-center items-center h-screen">Loading...</div>
 	}
 
@@ -172,7 +86,7 @@ function App() {
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
 				<RouterProvider router={router} />
-				<UpdateAvailableDialog open={showUpdateDialog} onDismiss={() => setShowUpdateDialog(false)} />
+				<UpdateAvailableDialog open={showUpdateDialog} onDismiss={dismissUpdate} />
 			</QueryClientProvider>
 		</StrictMode>
 	)

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,12 +33,14 @@ import {
 	type AuctionSettlementGracePreset,
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
-import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CalendarIcon, Plus, X } from 'lucide-react'
+import { ArrowLeft, CalendarIcon, ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
+import { Slider } from '@/components/ui/slider'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
@@ -50,7 +53,7 @@ const INITIAL_FORM: AuctionFormData = {
 	description: '',
 	startingBid: '',
 	bidIncrement: '1',
-	reserve: '0',
+	reserve: undefined,
 	startAt: '',
 	endAt: '',
 	// Anti-snipe defaults: no window, no curve, 1h settlement grace.
@@ -67,10 +70,13 @@ const INITIAL_FORM: AuctionFormData = {
 	shippings: [],
 	trustedMints: [],
 	isNSFW: false,
-	// `AuctionOracleSelector` populates this once the CEP-15 directory
-	// query resolves; empty string means "fall back to app default" so
-	// nothing breaks if the seller submits before discovery completes.
-	pathIssuerPubkey: '',
+	enableLiveChat: true,
+	// Empty string defers auditor selection to the app's configured
+	// default (`config.cvmServerPubkey`). The auction publish path
+	// resolves this via `getAuctionAuditorsOrThrow` — the seller never
+	// has to pick an auditor manually for the minimal demo flow. A
+	// future Phase 7 reputation UI may surface a multi-select here.
+	auditorPubkey: '',
 }
 
 function parseListInput(value: string): string[] {
@@ -164,25 +170,69 @@ function NameTab({ formData, setFormData }: TabProps) {
 type StartMode = 'immediate' | 'scheduled'
 type EndMode = 'duration' | 'absolute'
 
-const DURATION_PRESETS: { label: string; seconds: number }[] = [
+type AuctionDurationPreset = { label: string; seconds: number }
+
+const DURATION_PRESETS: AuctionDurationPreset[] = [
+	{ label: '1m', seconds: 1 * 60 },
+	{ label: '2m', seconds: 2 * 60 },
+	{ label: '3m', seconds: 3 * 60 },
+	{ label: '4m', seconds: 4 * 60 },
+	{ label: '5m', seconds: 5 * 60 },
+	{ label: '10m', seconds: 10 * 60 },
+	{ label: '15m', seconds: 15 * 60 },
+	{ label: '30m', seconds: 30 * 60 },
+	{ label: '45m', seconds: 45 * 60 },
 	{ label: '1h', seconds: 3600 },
+	{ label: '2h', seconds: 2 * 3600 },
+	{ label: '3h', seconds: 3 * 3600 },
+	{ label: '4h', seconds: 4 * 3600 },
+	{ label: '5h', seconds: 5 * 3600 },
 	{ label: '6h', seconds: 6 * 3600 },
+	{ label: '7h', seconds: 7 * 3600 },
+	{ label: '8h', seconds: 8 * 3600 },
+	{ label: '9h', seconds: 9 * 3600 },
+	{ label: '10h', seconds: 10 * 3600 },
+	{ label: '12h', seconds: 12 * 3600 },
+	{ label: '14h', seconds: 14 * 3600 },
+	{ label: '16h', seconds: 16 * 3600 },
+	{ label: '18h', seconds: 18 * 3600 },
+	{ label: '20h', seconds: 20 * 3600 },
+	{ label: '22h', seconds: 22 * 3600 },
 	{ label: '1d', seconds: 86400 },
+	{ label: '2d', seconds: 2 * 86400 },
 	{ label: '3d', seconds: 3 * 86400 },
+	{ label: '4d', seconds: 4 * 86400 },
+	{ label: '5d', seconds: 5 * 86400 },
+	{ label: '6d', seconds: 6 * 86400 },
 	{ label: '7d', seconds: 7 * 86400 },
+	{ label: '8d', seconds: 8 * 86400 },
+	{ label: '9d', seconds: 9 * 86400 },
+	{ label: '10d', seconds: 10 * 86400 },
+	{ label: '11d', seconds: 11 * 86400 },
+	{ label: '12d', seconds: 12 * 86400 },
+	{ label: '13d', seconds: 13 * 86400 },
 	{ label: '14d', seconds: 14 * 86400 },
+	{ label: '15d', seconds: 15 * 86400 },
+	{ label: '20d', seconds: 20 * 86400 },
+	{ label: '25d', seconds: 25 * 86400 },
 	{ label: '30d', seconds: 30 * 86400 },
 ]
 
-const MIN_DURATION_HOURS = 1
-const MAX_DURATION_HOURS = 30 * 24
+const DURATION_PRESETS_SHORTCUT: AuctionDurationPreset[] = [
+	DURATION_PRESETS[9], // 1 Hour
+	DURATION_PRESETS[19], // 12 Hours
+	DURATION_PRESETS[25], // 1 Day
+	DURATION_PRESETS[31], // 7 Days
+	DURATION_PRESETS[38], // 14 Days
+	DURATION_PRESETS[42], // 30 Days
+]
 
 function pad2(n: number): string {
 	return n.toString().padStart(2, '0')
 }
 
 function toDatetimeLocal(date: Date): string {
-	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
 }
 
 function parseDatetimeLocalSeconds(value: string): number | null {
@@ -821,6 +871,12 @@ function AuctionTabContent({
 	userRemovedMints: Set<string>
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
+	const [useReserve, setUseReserve] = useState(false)
+	const [inputSliderValue, setInputSliderValue] = useState<number>(() => {
+		const idx = DURATION_PRESETS.findIndex((p) => p.seconds === durationSeconds)
+		return idx >= 0 ? idx + 1 : 1
+	})
+
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -841,9 +897,15 @@ function AuctionTabContent({
 		}
 	}
 
+	type Section = 'antiSnipe' | 'settlementGrace' | 'trustedMints'
+	const [openSection, setOpenSection] = useState<Section | null>(null)
+	const toggle = (s: Section) => (isOpen: boolean) => setOpenSection(isOpen ? s : null)
+
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
-	const reserveNum = parseInt(formData.reserve, 10)
+	const reserveNum = parseInt(formData.reserve ?? '', 10)
+	const showBidLadder =
+		formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0 && !isNaN(reserveNum)
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -895,8 +957,6 @@ function AuctionTabContent({
 			return { ...prev, endAt: toDatetimeLocal(initial) }
 		})
 	}
-
-	const durationHours = Math.max(MIN_DURATION_HOURS, Math.round(durationSeconds / 3600))
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -964,13 +1024,17 @@ function AuctionTabContent({
 				{endMode === 'duration' ? (
 					<div className="space-y-3">
 						<div className="flex flex-wrap gap-1.5">
-							{DURATION_PRESETS.map((preset) => {
+							{DURATION_PRESETS_SHORTCUT.map((preset) => {
 								const isActive = durationSeconds === preset.seconds
 								return (
 									<button
 										key={preset.label}
 										type="button"
-										onClick={() => setDurationSeconds(preset.seconds)}
+										onClick={() => {
+											const indexSlider = DURATION_PRESETS.findIndex((v) => v.seconds === preset.seconds)
+											setInputSliderValue(indexSlider + 1)
+											setDurationSeconds(preset.seconds)
+										}}
 										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
 											isActive
 												? 'border-secondary bg-secondary text-white'
@@ -984,17 +1048,23 @@ function AuctionTabContent({
 						</div>
 
 						<div>
-							<input
-								type="range"
-								min={MIN_DURATION_HOURS}
-								max={MAX_DURATION_HOURS}
-								step={1}
-								value={durationHours}
-								onChange={(e) => setDurationSeconds(parseInt(e.target.value, 10) * 3600)}
+							<Slider
+								min={1}
+								max={DURATION_PRESETS.length}
+								value={[inputSliderValue]}
+								onValueChange={(val) => {
+									const sliderValue = val?.at(0)
+									if (sliderValue) {
+										setInputSliderValue(sliderValue)
+
+										const value = DURATION_PRESETS[sliderValue - 1]
+										setDurationSeconds(value.seconds)
+									}
+								}}
 								className="w-full accent-secondary"
 							/>
 							<div className="flex items-center justify-between text-[10px] text-zinc-500">
-								<span>1h</span>
+								<span>1m</span>
 								<span>30d</span>
 							</div>
 						</div>
@@ -1024,7 +1094,7 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid sm:grid-cols-2 gap-4">
+			<div className="grid sm:grid-cols-2 gap-4 items-start">
 				<div className="grid w-full gap-1.5">
 					<Label htmlFor="auction-starting-bid">
 						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
@@ -1047,88 +1117,143 @@ function AuctionTabContent({
 						type="number"
 						min="1"
 						value={formData.bidIncrement}
-						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value }))}
+						onFocus={(e) => e.target.select()}
+						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
 					/>
 					{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
 				</div>
 			</div>
 
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-				<Input
-					id="auction-reserve"
-					type="number"
-					min="0"
-					value={formData.reserve}
-					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+			<div className="flex items-center space-x-2">
+				<Checkbox
+					id="use-reserve"
+					checked={!!formData.reserve || useReserve}
+					onCheckedChange={(checked) => {
+						if (checked === true) {
+							setUseReserve(true)
+							setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
+						} else {
+							setUseReserve(false)
+							setFormData((prev) => ({ ...prev, reserve: undefined }))
+						}
+					}}
 				/>
-				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+				<Label htmlFor="use-reserve">Set Reserve Price</Label>
+				<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve." />
 			</div>
 
-			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
-
-			<AntiSnipeCurveSettings
-				formData={formData}
-				setFormData={setFormData}
-				startAtSeconds={effectiveStartSeconds}
-				endAtSeconds={virtualEndSeconds}
-				maxEndAtSeconds={curveMaxEndSeconds}
-				settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
-				startingBid={startingBidNum}
-				bidIncrement={bidIncrementNum}
-				reserve={reserveNum}
-			/>
-			<SettlementGraceSettings formData={formData} setFormData={setFormData} />
-
-			<div className="grid w-full gap-1.5">
-				<Label>Trusted Mints</Label>
-				<p className="text-xs text-zinc-500">
-					Bids will be rejected unless the token is minted by one of these mints. At least one is required.
-				</p>
-				{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
-
-				<div className="space-y-2 mt-1">
-					{selectedMints.map((mint) => (
-						<div key={mint} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
-							<span className="truncate text-sm text-zinc-900" title={mint}>
-								{mint}
-							</span>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => removeMint(mint)}
-								disabled={!canRemoveMint}
-								className="text-red-600 hover:text-red-700 disabled:opacity-40"
-								title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
-							>
-								<X className="w-4 h-4" />
-							</Button>
-						</div>
-					))}
+			{(!!formData.reserve || useReserve) && (
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="auction-reserve">Reserve (sats)</Label>
+					<Input
+						id="auction-reserve"
+						type="number"
+						min="0"
+						value={formData.reserve}
+						onFocus={(e) => e.target.select()}
+						onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+					/>
+					{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 				</div>
+			)}
 
-				{unselectedMints.length > 0 && (
-					<div className="space-y-2 mt-3">
-						<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
-						{unselectedMints.map((mint) => (
-							<button
-								key={mint}
-								type="button"
-								onClick={() => addMint(mint)}
-								className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
-							>
-								<span className="truncate" title={mint}>
-									{mint}
-								</span>
-								<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
-							</button>
-						))}
-					</div>
-				)}
+			{showBidLadder && <BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
+
+			<div>
+				<Collapsible open={openSection === 'antiSnipe'} onOpenChange={toggle('antiSnipe')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Anti-snipe &amp; Curve Settings
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'antiSnipe' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<AntiSnipeCurveSettings
+							formData={formData}
+							setFormData={setFormData}
+							startAtSeconds={effectiveStartSeconds}
+							endAtSeconds={virtualEndSeconds}
+							maxEndAtSeconds={curveMaxEndSeconds}
+							settlementGraceSeconds={AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]}
+							startingBid={startingBidNum}
+							bidIncrement={bidIncrementNum}
+							reserve={reserveNum}
+						/>
+					</CollapsibleContent>
+				</Collapsible>
 			</div>
 
-			<AuctionOracleSelector formData={formData} setFormData={setFormData} />
+			<div>
+				<Collapsible open={openSection === 'settlementGrace'} onOpenChange={toggle('settlementGrace')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Settlement Grace
+						<ChevronDown
+							className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'settlementGrace' ? 'rotate-180' : ''}`}
+						/>
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<SettlementGraceSettings formData={formData} setFormData={setFormData} />
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
+
+			<div>
+				<Collapsible open={openSection === 'trustedMints'} onOpenChange={toggle('trustedMints')}>
+					<CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50">
+						Trusted Mints
+						<ChevronDown className={`w-4 h-4 text-zinc-700 transition-transform ${openSection === 'trustedMints' ? 'rotate-180' : ''}`} />
+					</CollapsibleTrigger>
+					<CollapsibleContent className="mt-2">
+						<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+							<p className="text-xs text-zinc-500">
+								Bids will be rejected unless the token is minted by one of these mints. At least one is required.
+							</p>
+							{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
+
+							<div className="space-y-2 mt-1">
+								{selectedMints.map((mint) => (
+									<div
+										key={mint}
+										className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+									>
+										<span className="truncate text-sm text-zinc-900" title={mint}>
+											{mint}
+										</span>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => removeMint(mint)}
+											disabled={!canRemoveMint}
+											className="text-red-600 hover:text-red-700 disabled:opacity-40"
+											title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
+										>
+											<X className="w-4 h-4" />
+										</Button>
+									</div>
+								))}
+							</div>
+
+							{unselectedMints.length > 0 && (
+								<div className="space-y-2 mt-3">
+									<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
+									{unselectedMints.map((mint) => (
+										<button
+											key={mint}
+											type="button"
+											onClick={() => addMint(mint)}
+											className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
+										>
+											<span className="truncate" title={mint}>
+												{mint}
+											</span>
+											<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 		</div>
 	)
 }
@@ -1485,6 +1610,35 @@ function ShippingTab({
 	)
 }
 
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+
+const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
+	title: 'Title',
+	description: 'Description',
+	startingBid: 'Starting Bid',
+	bidIncrement: 'Bid Increment',
+	reserve: 'Reserve',
+	startAt: 'Start Time',
+	endAt: 'End Time',
+	duration: 'Duration',
+	antiSnipeWindowMinutes: 'Anti-snipe Window',
+	minBidCurveShape: 'Curve Shape',
+	minBidCurvePeakMultiplier: 'Peak Multiplier',
+	settlementGracePreset: 'Settlement Grace',
+	trustedMints: 'Trusted Mints',
+	imageUrls: 'Image',
+	shippingExtraCost: 'Shipping Extra Cost',
+}
+
+function isMeaningfulDraft(formData: AuctionFormData, baselineMints: string[]): boolean {
+	if (formData.title.trim().length > 0) return true
+
+	const baseline = new Set(baselineMints)
+	const current = formData.trustedMints
+	if (baseline.size !== current.length) return true
+	return current.some((mint) => !baseline.has(mint))
+}
+
 export function AuctionFormContent() {
 	const navigate = useNavigate()
 	const publishMutation = usePublishAuctionMutation()
@@ -1524,6 +1678,46 @@ export function AuctionFormContent() {
 	const [startMode, setStartMode] = useState<StartMode>('immediate')
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
+
+	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
+	const draftLoadedRef = useRef(false)
+	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const draftGenerationRef = useRef(0)
+
+	const hasDraft = draftSavedAt !== null
+
+	useEffect(() => {
+		if (!userPubkey || draftLoadedRef.current) return
+
+		draftLoadedRef.current = true
+		const draft = getAuctionFormDraft(userPubkey)
+		if (!draft) return
+		setDraftSavedAt(draft.savedAt)
+		setFormData(draft.formData)
+		setImages(draft.images)
+		setStartMode(draft.startMode)
+		setEndMode(draft.endMode)
+		setDurationSeconds(draft.durationSeconds)
+		setSubCategoryInput(draft.subCategoryInput)
+	}, [userPubkey])
+
+	useEffect(() => {
+		if (!userPubkey || !draftLoadedRef.current) return
+
+		const gen = draftGenerationRef.current
+		if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+
+		saveTimerRef.current = setTimeout(() => {
+			if (draftGenerationRef.current !== gen) return
+			if (!isMeaningfulDraft(formData, availableMints)) return
+			saveAuctionFormDraft(userPubkey, { formData, images, startMode, endMode, durationSeconds, subCategoryInput })
+			if (draftGenerationRef.current === gen) setDraftSavedAt(Date.now())
+		}, 1500)
+
+		return () => {
+			if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+		}
+	}, [formData, images, startMode, endMode, durationSeconds, subCategoryInput, userPubkey, availableMints])
 
 	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
@@ -1574,6 +1768,85 @@ export function AuctionFormContent() {
 
 	const canSubmit = validationIssues.length === 0
 
+	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
+	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
+
+	const tabValid: Record<AuctionTab, boolean> = {
+		name: hasValidName && hasValidDescription,
+		auction: hasValidBidding && hasValidMints,
+		category: true,
+		spec: true,
+		images: hasValidImages,
+		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+	}
+
+	// Tab at index i is reachable only if every tab before it is valid.
+	const isTabReachable = (tabIndex: number): boolean => {
+		for (let i = 0; i < tabIndex; i++) {
+			if (!tabValid[TAB_ORDER[i]]) return false
+		}
+		return true
+	}
+
+	const handleNext = () => {
+		const nextIndex = currentTabIndex + 1
+		if (nextIndex < TAB_ORDER.length) setActiveTab(TAB_ORDER[nextIndex])
+	}
+
+	const handleBack = () => {
+		const prevIndex = currentTabIndex - 1
+		if (prevIndex >= 0) setActiveTab(TAB_ORDER[prevIndex])
+	}
+
+	const missingLabels = (fields: AuctionPublishValidationField[]): string[] => {
+		const fieldsWithIssues = new Set(validationIssues.filter((i) => fields.includes(i.field)).map((i) => i.field))
+		return [...fieldsWithIssues].map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+	}
+
+	const currentTabErrors: string[] = (() => {
+		if (isLastTab) {
+			const fieldsWithIssues = [...new Set(validationIssues.map((i) => i.field))]
+			return fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+		}
+		switch (activeTab) {
+			case 'name':
+				return missingLabels(['title', 'description'])
+			case 'auction':
+				return missingLabels([
+					'startingBid',
+					'bidIncrement',
+					'reserve',
+					'startAt',
+					'endAt',
+					'duration',
+					'antiSnipeWindowMinutes',
+					'minBidCurveShape',
+					'minBidCurvePeakMultiplier',
+					'settlementGracePreset',
+					'trustedMints',
+				])
+			case 'images':
+				return missingLabels(['imageUrls'])
+			case 'shipping':
+				return missingLabels(['shippingExtraCost'])
+			default:
+				return []
+		}
+	})()
+
+	const handleClearDraft = () => {
+		draftGenerationRef.current++
+		draftLoadedRef.current = true
+		clearAuctionFormDraft(userPubkey)
+		setDraftSavedAt(null)
+		setFormData({ ...INITIAL_FORM, trustedMints: [...availableMints] })
+		setImages([])
+		setStartMode('immediate')
+		setEndMode('duration')
+		setDurationSeconds(24 * 60 * 60)
+		setSubCategoryInput('')
+	}
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 		event.stopPropagation()
@@ -1585,6 +1858,10 @@ export function AuctionFormContent() {
 			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
 			if (!publishedEventId) return
+
+			draftGenerationRef.current++
+			clearAuctionFormDraft(userPubkey)
+			setDraftSavedAt(null)
 
 			document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 			navigate({ to: '/auctions' })
@@ -1603,19 +1880,23 @@ export function AuctionFormContent() {
 	]
 
 	return (
-		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4">
-			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
+		<form onSubmit={handleSubmit} className="flex flex-col h-full mt-4 overflow-hidden">
+			<div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 				<Tabs
 					value={activeTab}
-					onValueChange={(value) => setActiveTab(value as AuctionTab)}
+					onValueChange={(value) => {
+						const idx = TAB_ORDER.indexOf(value as AuctionTab)
+						if (isTabReachable(idx)) setActiveTab(value as AuctionTab)
+					}}
 					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
-						{tabs.map((tab) => (
+						{tabs.map((tab, index) => (
 							<TabsTrigger
 								key={tab.value}
 								value={tab.value}
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								disabled={!isTabReachable(index)}
+								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
 							>
 								{tab.label}
 								{tab.showAsterisk && <span className="ml-1 text-red-500">*</span>}
@@ -1669,10 +1950,67 @@ export function AuctionFormContent() {
 				</Tabs>
 			</div>
 
-			<div className="bg-white border-t pt-4 pb-2 mt-2">
-				<Button type="submit" variant="secondary" className="w-full uppercase" disabled={!canSubmit || publishMutation.isPending}>
-					{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
-				</Button>
+			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2 flex flex-col gap-2">
+				{hasDraft && (
+					<div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5">
+						<p className="text-xs font-medium text-amber-700">Draft saved</p>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-red-600 px-2"
+							onClick={handleClearDraft}
+						>
+							<Trash2 className="w-3 h-3" />
+							Clear draft
+						</Button>
+					</div>
+				)}
+				{currentTabErrors.length > 0 && (
+					<ul className="mb-3 max-h-28 overflow-y-auto space-y-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+						{currentTabErrors.map((err, i) => (
+							<li key={i} className="text-xs text-red-600 flex items-center gap-1">
+								<span>•</span>
+								{err}
+							</li>
+						))}
+					</ul>
+				)}
+				<div className="flex gap-2">
+					{currentTabIndex > 0 && (
+						<Button
+							type="button"
+							variant="ghost"
+							className="flex-1 uppercase border border-input bg-white hover:bg-white"
+							onClick={handleBack}
+						>
+							<ArrowLeft className="w-4 h-4" />
+							Back
+						</Button>
+					)}
+					{isLastTab ? (
+						<Button
+							key="publish"
+							type="submit"
+							variant="secondary"
+							className="flex-1 uppercase"
+							disabled={!canSubmit || publishMutation.isPending}
+						>
+							{publishMutation.isPending ? 'Publishing...' : 'Publish Auction'}
+						</Button>
+					) : (
+						<Button
+							key="next"
+							type="button"
+							variant="secondary"
+							className="flex-1 uppercase"
+							onClick={handleNext}
+							disabled={!tabValid[activeTab]}
+						>
+							Next
+						</Button>
+					)}
+				</div>
 			</div>
 		</form>
 	)

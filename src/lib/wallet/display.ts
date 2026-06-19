@@ -21,3 +21,11 @@ export function getMintHostname(mintUrl: string): string {
 export function formatSats(sats: number): string {
 	return sats.toLocaleString()
 }
+
+/**
+ * Normalize a mint URL for stable comparisons.
+ * Trims whitespace and removes trailing slashes.
+ */
+export function normalizeMintUrl(mintUrl: string): string {
+	return mintUrl.trim().replace(/\/+$/, '')
+}

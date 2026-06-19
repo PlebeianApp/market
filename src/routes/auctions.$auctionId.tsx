@@ -1,6 +1,7 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { ImageCarousel } from '@/components/ImageCarousel'
@@ -9,12 +10,17 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
+import { findBidderRecord } from '@/lib/auction/bidderRecords'
+import { useQueryClient } from '@tanstack/react-query'
+import { auctionKeys } from '@/queries/queryKeyFactory'
 import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,
@@ -51,20 +57,25 @@ import {
 	getAuctionTitle,
 	getAuctionType,
 	isNSFWAuction,
-	useAuctionBids,
+	useStreamingAuctionBids,
 	useAuctionClaimOrders,
+	useAuctionPathReleases,
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
+import { useProfileName } from '@/queries/profiles'
 import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Gavel, Trophy, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionBidder } from '@/components/AuctionBidder'
+import { LiveChatPanel } from '@/components/LiveChatPanel'
+import { UserCard } from '@/components/UserCard'
+import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 
 function useHeroBackground(imageUrl: string, className: string) {
@@ -125,6 +136,191 @@ function TechnicalDataRow({ label, value }: { label: string; value: ReactNode })
 			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
 			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
 		</div>
+	)
+}
+
+type ShippingInfo = NonNullable<ReturnType<typeof getShippingInfo>>
+
+type ShippingTagSource = {
+	tags: string[][]
+}
+
+type AuctionShippingOptionDisplay = {
+	shippingRef: string
+	extraCost: string
+	status: 'valid' | 'invalid'
+	info: ShippingInfo | null
+	event: ShippingTagSource | null
+	isLoading: boolean
+	isNotFound: boolean
+}
+
+type AuctionParticipantSummary = {
+	pubkey: string
+	visibleBidCount: number
+	highestVisibleBidAmount: number
+	latestVisibleBidTimestamp: number
+	latestBidEventId: string
+	isCurrentLeader: boolean
+	isSettlementWinner: boolean
+}
+
+function AuctionEmptyState({ title, description }: { title: string; description?: string }) {
+	return (
+		<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6">
+			<p className="text-sm font-medium text-zinc-900">{title}</p>
+			{description && <p className="mt-1 text-sm leading-6 text-zinc-500">{description}</p>}
+		</div>
+	)
+}
+
+function getShippingTagValues(event: ShippingTagSource | null, tagName: string): string[] {
+	return (
+		event?.tags
+			.find((tag) => tag[0] === tagName)
+			?.slice(1)
+			.filter(Boolean) ?? []
+	)
+}
+
+function getShippingTagValue(event: ShippingTagSource | null, tagName: string): string {
+	return getShippingTagValues(event, tagName)[0] || ''
+}
+
+function getShippingCurrency(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
+	const priceTagValues = getShippingTagValues(event, 'price')
+	return info?.price.currency || priceTagValues[1] || fallbackCurrency
+}
+
+function formatShippingPrice(info: ShippingInfo | null, event: ShippingTagSource | null, fallbackCurrency: string): string {
+	const priceTagValues = getShippingTagValues(event, 'price')
+	const amount = info?.price.amount || priceTagValues[0] || ''
+	const currency = getShippingCurrency(info, event, fallbackCurrency)
+
+	if (!amount) return 'Price unavailable'
+	return currency ? `${amount} ${currency}` : amount
+}
+
+function formatShippingExtraCost(extraCost: string, currency: string): string | null {
+	const extraCostNumber = extraCost ? Number(extraCost) : 0
+	if (Number.isNaN(extraCostNumber) || extraCostNumber <= 0) return null
+
+	return currency ? `${extraCostNumber} ${currency}` : `${extraCostNumber}`
+}
+
+function formatShippingDestination(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
+	const countries = info?.countries.length ? info.countries : getShippingTagValues(event, 'country')
+	const regions = getShippingTagValues(event, 'region')
+	const destinationParts = [
+		countries.length > 0 ? `Countries: ${countries.join(', ')}` : '',
+		regions.length > 0 ? `Regions: ${regions.join(', ')}` : '',
+	].filter(Boolean)
+
+	return destinationParts.length > 0 ? destinationParts.join(' · ') : null
+}
+
+function formatShippingDuration(info: ShippingInfo | null, event: ShippingTagSource | null): string | null {
+	const durationTagValues = getShippingTagValues(event, 'duration')
+	const min = info?.duration?.min || durationTagValues[0] || ''
+	const max = info?.duration?.max || durationTagValues[1] || ''
+	const unit = info?.duration?.unit || durationTagValues[2] || ''
+	const unitSuffix = unit ? ` ${unit}` : ''
+
+	if (min && max) return `${min}-${max}${unitSuffix}`
+	if (min) return `${min}${unitSuffix}`
+	if (max) return `Up to ${max}${unitSuffix}`
+	return null
+}
+
+function formatShippingPickup(event: ShippingTagSource | null): string | null {
+	const structuredAddress = [
+		getShippingTagValue(event, 'pickup-street'),
+		getShippingTagValue(event, 'pickup-city'),
+		getShippingTagValue(event, 'pickup-state'),
+		getShippingTagValue(event, 'pickup-postal-code'),
+		getShippingTagValue(event, 'pickup-country'),
+	].filter(Boolean)
+
+	if (structuredAddress.length > 0) return structuredAddress.join(', ')
+	return getShippingTagValue(event, 'pickup-address') || null
+}
+
+function ShippingDetailRow({ label, value }: { label: string; value?: ReactNode }) {
+	if (value === null || value === undefined || value === '') return null
+
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+			<dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</dt>
+			<dd className="mt-1 break-words text-sm font-medium text-zinc-900">{value}</dd>
+		</div>
+	)
+}
+
+function AuctionShippingOptionCard({ option, auctionCurrency }: { option: AuctionShippingOptionDisplay; auctionCurrency: string }) {
+	if (option.status === 'invalid') {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-zinc-950">Invalid shipping reference</h3>
+				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			</li>
+		)
+	}
+
+	if (option.isLoading) {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<p className="text-sm text-zinc-500">Loading shipping details...</p>
+			</li>
+		)
+	}
+
+	if (!option.event && !option.info) {
+		return (
+			<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+				<h3 className="text-sm font-semibold text-zinc-950">Shipping option unavailable</h3>
+				<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+			</li>
+		)
+	}
+
+	const title = option.info?.title || getShippingTagValue(option.event, 'title') || 'Untitled shipping option'
+	const shippingCurrency = getShippingCurrency(option.info, option.event, auctionCurrency)
+	const extraCost = formatShippingExtraCost(option.extraCost, shippingCurrency)
+	const service = option.info?.service || getShippingTagValue(option.event, 'service')
+	const carrier = option.info?.carrier || getShippingTagValue(option.event, 'carrier')
+	const location = option.info?.location || getShippingTagValue(option.event, 'location')
+	const pickup = formatShippingPickup(option.event)
+	const hasPartialShippingInfo = !!option.event && !option.info
+
+	return (
+		<li className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h3 className="text-base font-semibold text-zinc-950">{title}</h3>
+					<p className="mt-2 break-all text-xs text-zinc-500">{option.shippingRef}</p>
+				</div>
+				<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+					{formatShippingPrice(option.info, option.event, auctionCurrency)}
+				</Badge>
+			</div>
+
+			{hasPartialShippingInfo && (
+				<div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-600">
+					Some shipping details are missing or malformed.
+				</div>
+			)}
+
+			<dl className="mt-4 grid gap-3 sm:grid-cols-2">
+				<ShippingDetailRow label="Base price" value={formatShippingPrice(option.info, option.event, auctionCurrency)} />
+				<ShippingDetailRow label="Service" value={service} />
+				<ShippingDetailRow label="Carrier" value={carrier} />
+				<ShippingDetailRow label="Destination" value={formatShippingDestination(option.info, option.event)} />
+				<ShippingDetailRow label="Duration" value={formatShippingDuration(option.info, option.event)} />
+				<ShippingDetailRow label="Location" value={location} />
+				<ShippingDetailRow label="Pickup" value={pickup} />
+				<ShippingDetailRow label="Auction extra cost" value={extraCost} />
+			</dl>
+		</li>
 	)
 }
 
@@ -215,13 +411,14 @@ function AuctionDetailRoute() {
 		() =>
 			parsedShippingRefs.map((entry, index) => {
 				if (entry.status !== 'valid') {
-					return { ...entry, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
+					return { ...entry, event: null, info: null as ReturnType<typeof getShippingInfo> | null, isLoading: false, isNotFound: false }
 				}
 				const queryResult = shippingQueryResults[index]
 				const event = queryResult?.data ?? null
 				const info = event ? getShippingInfo(event) : null
 				return {
 					...entry,
+					event,
 					info,
 					isLoading: (queryResult?.isLoading ?? false) && !queryResult?.data,
 					isNotFound: !queryResult?.isLoading && !queryResult?.data,
@@ -230,8 +427,7 @@ function AuctionDetailRoute() {
 		[parsedShippingRefs, shippingQueryResults],
 	)
 
-	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
+	const { bids } = useStreamingAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const ended = countdown.isEnded
@@ -250,6 +446,8 @@ function AuctionDetailRoute() {
 			}),
 		[activeUserPubkey, auction, bids, ended],
 	)
+
+	const { data: oracleName } = useProfileName(pathIssuerPubkey || '')
 
 	const sellerAuctionsQuery = useQuery({
 		...auctionsByPubkeyQueryOptions(auction?.pubkey || '', 20),
@@ -273,6 +471,118 @@ function AuctionDetailRoute() {
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const claimOrders = claimOrdersQuery.data ?? []
 	const hasClaimOrder = claimOrders.some((order) => order.pubkey === currentUserPubkey)
+
+	// -- Bidder-held-path settlement state -------------------------------
+	// Under cashu_p2pk_bidder_path_v1 the bidder publishes a kind-1025
+	// path release to enable the seller's redemption. We surface a
+	// "Release path / Settle" button when the current user is the top
+	// bidder, the auction has ended, and they haven't already released
+	// (no kind-1025 from them on this auction yet).
+	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
+	const pathReleases = pathReleasesQuery.data ?? []
+	const queryClient = useQueryClient()
+
+	const myTopBidEvent = useMemo(() => {
+		if (!activeUserPubkey) return null
+		const mine = bids.filter((b) => b.pubkey === activeUserPubkey)
+		if (!mine.length) return null
+		return mine.reduce(
+			(best, bid) => {
+				if (!best) return bid
+				const delta = getBidAmount(bid) - getBidAmount(best)
+				if (delta > 0) return bid
+				if (delta < 0) return best
+				return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+			},
+			mine[0] as (typeof mine)[0] | null,
+		)
+	}, [bids, activeUserPubkey])
+
+	const topBidOverall = useMemo(() => {
+		if (!bids.length) return null
+		return bids.reduce(
+			(best, bid) => {
+				if (!best) return bid
+				const delta = getBidAmount(bid) - getBidAmount(best)
+				if (delta > 0) return bid
+				if (delta < 0) return best
+				return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
+			},
+			bids[0] as (typeof bids)[0] | null,
+		)
+	}, [bids])
+
+	const bidderSummaries = useMemo(() => {
+		const summariesByPubkey = new Map<string, AuctionParticipantSummary>()
+		const currentLeaderPubkey = topBidOverall?.pubkey || ''
+
+		for (const bid of newestBids) {
+			if (!bid.pubkey) continue
+
+			const amount = getBidAmount(bid)
+			const timestamp = bid.created_at || 0
+			const existing = summariesByPubkey.get(bid.pubkey)
+
+			if (!existing) {
+				summariesByPubkey.set(bid.pubkey, {
+					pubkey: bid.pubkey,
+					visibleBidCount: 1,
+					highestVisibleBidAmount: amount,
+					latestVisibleBidTimestamp: timestamp,
+					latestBidEventId: bid.id,
+					isCurrentLeader: bid.pubkey === currentLeaderPubkey,
+					isSettlementWinner: bid.pubkey === settlementWinner,
+				})
+				continue
+			}
+
+			existing.visibleBidCount += 1
+			existing.highestVisibleBidAmount = Math.max(existing.highestVisibleBidAmount, amount)
+
+			const isNewerBid =
+				timestamp > existing.latestVisibleBidTimestamp ||
+				(timestamp === existing.latestVisibleBidTimestamp && bid.id > existing.latestBidEventId)
+			if (isNewerBid) {
+				existing.latestVisibleBidTimestamp = timestamp
+				existing.latestBidEventId = bid.id
+			}
+		}
+
+		return [...summariesByPubkey.values()].sort((a, b) => {
+			if (a.isCurrentLeader !== b.isCurrentLeader) return a.isCurrentLeader ? -1 : 1
+
+			const latestBidDelta = b.latestVisibleBidTimestamp - a.latestVisibleBidTimestamp
+			if (latestBidDelta !== 0) return latestBidDelta
+
+			return a.pubkey.localeCompare(b.pubkey)
+		})
+	}, [newestBids, settlementWinner, topBidOverall?.pubkey])
+
+	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
+	const myAlreadyReleased = useMemo(() => {
+		if (!myTopBidEvent) return false
+		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
+	}, [pathReleases, myTopBidEvent])
+	const canReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
+	const [isReleasing, setIsReleasing] = useState(false)
+
+	const handleReleasePath = async () => {
+		if (!myTopBidEvent) return
+		setIsReleasing(true)
+		try {
+			const result = await nip60Actions.settleAuctionAsWinner({
+				bidEventId: myTopBidEvent.id,
+				releaseReason: 'settlement',
+			})
+			toast.success('Path release published — seller can now redeem')
+			void result.pathReleaseEventId
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId || auctionId) })
+		} catch (err) {
+			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
+		} finally {
+			setIsReleasing(false)
+		}
+	}
 
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
@@ -367,10 +677,62 @@ function AuctionDetailRoute() {
 						<div className="flex flex-col gap-2 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
 							<div className="flex items-center justify-between gap-4">
 								<h1 className="text-3xl font-semibold">{title}</h1>
-								<div className={`text-xs font-bold px-2 py-1 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
-									{ended ? 'ENDED' : 'LIVE'}
+								<div className="flex items-center gap-2 flex-shrink-0">
+									<div className={`flex items-center text-xs font-bold px-2 h-6 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
+										{ended ? 'ENDED' : 'LIVE'}
+									</div>
+									{trustedMints.length > 0 && (
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<div className="relative flex items-center text-white/80 bg-black/30 border border-white/20 rounded px-2 h-6 cursor-default">
+														<Landmark className="h-3 w-3 text-pink-400" />
+														<span className="absolute -bottom-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-pink-500 text-[9px] font-bold leading-none text-white">
+															{trustedMints.length}
+														</span>
+													</div>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<p className="font-semibold mb-1">
+														{trustedMints.length} trusted {trustedMints.length === 1 ? 'mint' : 'mints'}
+													</p>
+													<ul className="list-disc pl-4 space-y-0.5">
+														{trustedMints.map((mint) => (
+															<li key={mint} className="text-xs opacity-80 break-all">
+																{mint}
+															</li>
+														))}
+													</ul>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
+									{pathIssuerPubkey && (
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<div className="relative cursor-default">
+														<div className="w-6 h-6 rounded-full overflow-hidden bg-white ring-1 ring-white/20">
+															<img src="/images/logo.svg" alt="Plebeian oracle" className="w-full h-full object-cover" />
+														</div>
+														<span className="absolute -bottom-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-500">
+															<Check className="h-2 w-2 text-white stroke-[3]" />
+														</span>
+													</div>
+												</TooltipTrigger>
+												<TooltipContent side="top">
+													<p className="text-[10px] font-semibold uppercase tracking-wide opacity-60 mb-1">Oracle</p>
+													{oracleName && <p className="font-semibold">{oracleName}</p>}
+													<p className="text-xs opacity-70 font-mono break-all">{shortenHex(pathIssuerPubkey, 10, 8)}</p>
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
 								</div>
 							</div>
+
+							<span>Posted by</span>
+							<UserCard pubkey={auction.pubkey} size="md" />
 
 							<div className="text-lg">{summary || 'No summary provided.'}</div>
 
@@ -384,7 +746,9 @@ function AuctionDetailRoute() {
 									<div className="font-semibold">{bidsCount}</div>
 								</div>
 							</div>
-							<AuctionCountdown auction={auction} className="w-full gap-3" />
+							<div className="w-full">
+								<AuctionCountdown auction={auction} bids={bids} />
+							</div>
 
 							<div className="flex flex-row justify-between">
 								{bidderStatus && (
@@ -404,6 +768,40 @@ function AuctionDetailRoute() {
 					</div>
 				</div>
 			</div>
+
+			{/* Bidder settle action — shown to the top bidder once the auction ends
+			    so they can publish their kind-1025 path release. The seller can't
+			    redeem (and therefore can't publish kind-1024) until this lands. */}
+			{canReleaseNow && (
+				<div className="mx-auto w-full max-w-7xl px-4">
+					<div className="rounded-xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
+						<div className="flex flex-wrap items-center justify-between gap-4">
+							<div className="flex items-center gap-3">
+								<div className="rounded-full bg-sky-100 p-2">
+									<Gavel className="h-5 w-5 text-sky-700" />
+								</div>
+								<div>
+									<h3 className="text-lg font-semibold text-sky-950">You won — release your path to settle</h3>
+									<p className="text-sm text-sky-800">
+										Bid: <span className="font-semibold">{getBidAmount(myTopBidEvent!).toLocaleString()} sats</span>. Publishing your
+										kind-1025 reveals the derivation path so the seller can redeem your locked proofs.
+									</p>
+								</div>
+							</div>
+							<Button onClick={() => void handleReleasePath()} disabled={isReleasing}>
+								{isReleasing ? 'Releasing…' : 'Release path & settle'}
+							</Button>
+						</div>
+					</div>
+				</div>
+			)}
+			{isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled' && (
+				<div className="mx-auto w-full max-w-7xl px-4">
+					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+						Path release published — waiting for seller to redeem and publish settlement.
+					</div>
+				</div>
+			)}
 
 			{/* Winner banner — shown to the auction winner after settlement */}
 			{isWinner && settlementStatus === 'settled' && (
@@ -449,10 +847,35 @@ function AuctionDetailRoute() {
 							Description
 						</TabsTrigger>
 						<TabsTrigger
+							value="shipping"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Shipping
+						</TabsTrigger>
+						<TabsTrigger
 							value="bids"
 							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
 						>
 							Bids
+						</TabsTrigger>
+						<TabsTrigger
+							value="comments"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Comments
+						</TabsTrigger>
+						<TabsTrigger
+							value="participants"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Participants
+						</TabsTrigger>
+						<TabsTrigger
+							value="live"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							<Radio className="mr-1 h-4 w-4" />
+							Live
 						</TabsTrigger>
 						<TabsTrigger
 							value="seller"
@@ -535,7 +958,7 @@ function AuctionDetailRoute() {
 												Settlement & technical details
 											</AccordionTrigger>
 											<AccordionContent className="space-y-3 pb-4">
-												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
+												<TechnicalDataRow label="Auditor" value={pathIssuerPubkey || 'N/A'} />
 												<TechnicalDataRow label="Key scheme" value={keyScheme} />
 												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
 												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
@@ -563,19 +986,26 @@ function AuctionDetailRoute() {
 					</TabsContent>
 
 					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
-							<div className="space-y-4">
-								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
-									{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
-										{description || 'No description provided.'}
-									</p>
-								</div>
+						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+							<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+								<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</h2>
+								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+								{description ? (
+									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">{description}</p>
+								) : (
+									<div className="mt-4">
+										<AuctionEmptyState
+											title="No description provided."
+											description="The seller has not added a full description for this auction."
+										/>
+									</div>
+								)}
+							</section>
 
-								{specs.length > 0 && (
-									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+							<div className="grid gap-4 lg:grid-cols-2">
+								<section className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</h2>
+									{specs.length > 0 ? (
 										<dl className="mt-4 divide-y divide-zinc-200">
 											{specs.map((spec, index) => (
 												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
@@ -584,15 +1014,17 @@ function AuctionDetailRoute() {
 												</div>
 											))}
 										</dl>
-									</div>
-								)}
-							</div>
+									) : (
+										<div className="mt-4">
+											<AuctionEmptyState title="No specifications listed." />
+										</div>
+									)}
+								</section>
 
-							<div className="space-y-4">
-								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
 										<Gavel className="h-4 w-4" />
-										Categories
+										<h2>Categories</h2>
 									</div>
 									<div className="mt-4 flex flex-wrap gap-2">
 										{categories.length > 0 ? (
@@ -608,54 +1040,37 @@ function AuctionDetailRoute() {
 											<p className="text-sm text-zinc-500">No categories listed.</p>
 										)}
 									</div>
-								</div>
-
-								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
-										<Truck className="h-4 w-4" />
-										Shipping options
-									</div>
-									<div className="mt-4">
-										{resolvedShippingOptions.length > 0 ? (
-											<ul className="space-y-2 text-sm text-zinc-700">
-												{resolvedShippingOptions.map((option, index) => {
-													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
-													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
-													return (
-														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-															{option.status === 'invalid' ? (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
-																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																</div>
-															) : option.isLoading ? (
-																<p className="text-sm text-zinc-400">Loading shipping details...</p>
-															) : option.info ? (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">{option.info.title}</p>
-																	<p className="text-xs text-zinc-600">
-																		Base: {option.info.price.amount} {option.info.price.currency}
-																		{option.info.service ? ` · ${option.info.service}` : ''}
-																		{option.info.carrier ? ` · ${option.info.carrier}` : ''}
-																	</p>
-																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
-																</div>
-															) : (
-																<div className="space-y-1">
-																	<p className="font-medium text-zinc-900">Shipping option unavailable</p>
-																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
-																</div>
-															)}
-														</li>
-													)
-												})}
-											</ul>
-										) : (
-											<p className="text-sm text-zinc-500">No shipping options listed.</p>
-										)}
-									</div>
-								</div>
+								</section>
 							</div>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<div className="flex items-start gap-3">
+									<Truck className="mt-0.5 h-5 w-5 text-zinc-700" />
+									<div>
+										<h2 className="text-lg font-semibold text-zinc-950">Shipping options</h2>
+										<p className="mt-1 text-sm leading-6 text-zinc-500">
+											Seller-provided shipping options attached to this auction. Availability is shown as listed by the seller.
+										</p>
+									</div>
+								</div>
+							</section>
+
+							{resolvedShippingOptions.length > 0 ? (
+								<ul className="space-y-4">
+									{resolvedShippingOptions.map((option, index) => (
+										<AuctionShippingOptionCard key={`${option.shippingRef}-${index}`} option={option} auctionCurrency={currency} />
+									))}
+								</ul>
+							) : (
+								<AuctionEmptyState
+									title="No shipping options listed."
+									description="The seller has not attached any shipping options to this auction."
+								/>
+							)}
 						</div>
 					</TabsContent>
 
@@ -665,13 +1080,15 @@ function AuctionDetailRoute() {
 								<div>
 									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
 									<p className="mt-1 text-sm text-zinc-500">
-										Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
+										Streaming Live Bids. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
 									</p>
 								</div>
 								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
 									{newestBids.length} recorded
 								</Badge>
 							</div>
+
+							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
 
 							{newestBids.length === 0 ? (
 								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
@@ -724,6 +1141,118 @@ function AuctionDetailRoute() {
 									})}
 								</div>
 							)}
+						</div>
+					</TabsContent>
+
+					<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<Comments targetEvent={auction} entityLabel="auction" testId="auction-comments" />
+						</div>
+					</TabsContent>
+
+					<TabsContent value="participants" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<div className="flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<h2 className="text-xl font-semibold text-zinc-950">Participants</h2>
+									<p className="mt-1 text-sm text-zinc-500">Read-only identities visible from this auction and its visible bids.</p>
+								</div>
+								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+									{bidderSummaries.length} visible {bidderSummaries.length === 1 ? 'bidder' : 'bidders'}
+								</Badge>
+							</div>
+
+							<div className="grid gap-4 lg:grid-cols-2">
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Seller</p>
+									<div className="mt-4 flex flex-wrap items-center gap-3">
+										<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
+										<span className="text-sm font-medium text-zinc-600">{shortenHex(auction.pubkey)}</span>
+									</div>
+								</section>
+
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Current leading bidder</p>
+									{topBidOverall ? (
+										<div className="mt-4 space-y-3">
+											<div className="flex flex-wrap items-center gap-3">
+												<AvatarUser pubkey={topBidOverall.pubkey} colored deterministicFallbackText />
+												<span className="text-sm font-medium text-zinc-600">{shortenHex(topBidOverall.pubkey)}</span>
+											</div>
+											<ShopperInfoRow label="Highest visible bid" value={formatSats(getBidAmount(topBidOverall))} />
+										</div>
+									) : (
+										<div className="mt-4">
+											<AuctionEmptyState title="No visible bidders yet" />
+										</div>
+									)}
+								</section>
+							</div>
+
+							{settlementWinner && (
+								<section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-5">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Settlement winner</p>
+									<div className="mt-4 flex flex-wrap items-center gap-3">
+										<AvatarUser pubkey={settlementWinner} colored deterministicFallbackText />
+										<span className="text-sm font-medium text-emerald-900">{shortenHex(settlementWinner)}</span>
+									</div>
+									{settlementFinalAmount > 0 && (
+										<div className="mt-4">
+											<ShopperInfoRow label="Final amount" value={formatSats(settlementFinalAmount)} />
+										</div>
+									)}
+								</section>
+							)}
+
+							<section className="space-y-4">
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<h3 className="text-lg font-semibold text-zinc-950">Visible bidders</h3>
+									<span className="text-sm text-zinc-500">{bidderSummaries.length} unique</span>
+								</div>
+
+								{bidderSummaries.length === 0 ? (
+									<AuctionEmptyState title="No visible bidders yet" />
+								) : (
+									<div className="grid gap-4 lg:grid-cols-2">
+										{bidderSummaries.map((summary) => (
+											<div key={summary.pubkey} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
+												<div className="flex flex-wrap items-start justify-between gap-3">
+													<div className="flex flex-wrap items-center gap-3">
+														<AvatarUser pubkey={summary.pubkey} colored deterministicFallbackText />
+														<span className="text-sm font-medium text-zinc-600">{shortenHex(summary.pubkey)}</span>
+													</div>
+													<div className="flex flex-wrap justify-end gap-2">
+														{summary.isCurrentLeader && (
+															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
+																Current leading bidder
+															</Badge>
+														)}
+														{summary.isSettlementWinner && (
+															<Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
+																Settlement winner
+															</Badge>
+														)}
+													</div>
+												</div>
+
+												<div className="mt-4 space-y-1">
+													<ShopperInfoRow label="Highest visible bid" value={formatSats(summary.highestVisibleBidAmount)} />
+													<ShopperInfoRow label="Visible bids" value={String(summary.visibleBidCount)} />
+													<ShopperInfoRow label="Latest visible bid" value={formatMaybeDate(summary.latestVisibleBidTimestamp)} />
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</section>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="live" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="h-[500px]">
+								<LiveChatPanel auctionEvent={auction} />
+							</div>
 						</div>
 					</TabsContent>
 

@@ -268,7 +268,7 @@ const normalizeAuctionPublishInput = (
 	}
 
 	const durationSeconds = parsedEndAt ? parsedEndAt - effectiveStartBoundary : 0
-	if (parsedEndAt && options.minDurationSeconds && durationSeconds < options.minDurationSeconds) {
+	if (parsedEndAt !== null && options.minDurationSeconds !== undefined && durationSeconds < options.minDurationSeconds) {
 		// Compute the human label from the configured minimum so the message
 		// reflects the actual rule the form is enforcing, not a hard-coded
 		// "1 minute". Prefer minute granularity above 60 s so we don't say

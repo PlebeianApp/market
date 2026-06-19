@@ -8,15 +8,18 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
+import { normalizeMintUrl } from '@/lib/wallet'
 
 interface DepositLightningModalProps {
 	open: boolean
 	onClose: () => void
+	initialAmount?: number
+	preferredMint?: string
 }
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
-export function DepositLightningModal({ open, onClose }: DepositLightningModalProps) {
+export function DepositLightningModal({ open, onClose, initialAmount, preferredMint }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
@@ -25,6 +28,7 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 	const [copied, setCopied] = useState(false)
 	const [selectedNwcWalletId, setSelectedNwcWalletId] = useState('')
 	const [nwcPaymentStatus, setNwcPaymentStatus] = useState<NwcDepositPaymentStatus>('idle')
+	const wasOpenRef = useRef(false)
 	const sentNwcInvoiceRef = useRef<string | null>(null)
 	const nwcPaymentSentForCurrentInvoice = !!depositInvoice && sentNwcInvoiceRef.current === depositInvoice
 	const isPayingWithNwc = nwcPaymentStatus === 'paying'
@@ -37,12 +41,22 @@ export function DepositLightningModal({ open, onClose }: DepositLightningModalPr
 		setNwcPaymentStatus('idle')
 	}, [])
 
-	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
 	useEffect(() => {
-		if (open) {
-			setSelectedMint(defaultMint ?? mints[0] ?? '')
+		if (!open) {
+			wasOpenRef.current = false
+			return
 		}
-	}, [open, defaultMint, mints])
+
+		if (wasOpenRef.current) return
+		wasOpenRef.current = true
+
+		const preferred = preferredMint ? mints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(preferredMint)) : ''
+		setSelectedMint(preferred || defaultMint || mints[0] || '')
+
+		if (typeof initialAmount === 'number' && Number.isFinite(initialAmount) && initialAmount > 0) {
+			setAmount(String(Math.ceil(initialAmount)))
+		}
+	}, [open, defaultMint, mints, initialAmount, preferredMint])
 
 	useEffect(() => {
 		if (open && !walletsInitialized && !walletsLoading) {

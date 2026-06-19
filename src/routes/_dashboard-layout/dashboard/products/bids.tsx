@@ -55,7 +55,7 @@ const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60To
 const getPendingTokenLocktime = (token: PendingNip60Token): number => token.context?.locktime ?? 0
 
 /**
- * Earliest timestamp at which this pending bid leg can actually be reclaimed,
+ * Earliest timestamp at which this pending bid token can actually be reclaimed,
  * accounting for both the authoritative proof-secret locktime and the ~30s
  * skew buffer applied inside the wallet's reclaim path. Using the same helper
  * here keeps the "Reclaim available" banner consistent with the reclaim gate
@@ -135,7 +135,7 @@ const getBidGroupState = (
 	if (reclaimableTokens.length > 0) {
 		return {
 			label: 'Reclaim available',
-			helper: `${reclaimableTokens.length} locked bid ${reclaimableTokens.length === 1 ? 'leg is' : 'legs are'} past locktime and can be reclaimed now.`,
+			helper: `${reclaimableTokens.length} locked bid ${reclaimableTokens.length === 1 ? 'part is' : 'parts are'} past locktime and can be reclaimed now.`,
 			toneClass: 'border-amber-200 bg-amber-50 text-amber-700',
 			reclaimableTokens,
 			reclaimReadyAt,
@@ -250,9 +250,9 @@ function BidsOverviewComponent() {
 	// the wallet is later recreated by dev seed), the token stays here as an
 	// orphan — it points at a bid event the relay doesn't have, and often at
 	// a refund privkey the current wallet doesn't hold. We split pendingTokens
-	// into "real" tokens (attached to an actual bid event on the relay) and
-	// "orphans" so the UI only shows legitimate bid legs and offers a single
-	// action to clear the dead weight.
+	// into tokens attached to relay-visible bid events and orphaned local
+	// custody records. Orphaned records are preserved because they may be the
+	// only local evidence available for recovery/debugging.
 	const bidGroups = useMemo(() => {
 		const auctionBidTokens = getPendingAuctionBidTokens(pendingTokens)
 		const groups = new Map<string, BidGroup>()
@@ -316,17 +316,6 @@ function BidsOverviewComponent() {
 
 	const orphanedAmount = orphanedTokens.reduce((sum, token) => sum + token.amount, 0)
 
-	const handleClearOrphans = () => {
-		if (orphanedTokens.length === 0) return
-		const count = orphanedTokens.length
-		const removed = nip60Actions.removePendingTokens(orphanedTokens.map((token) => token.id))
-		if (removed > 0) {
-			toast.success(
-				`Cleared ${count} orphaned lock ${count === 1 ? 'attempt' : 'attempts'}. The sats remain at the mint and can only be recovered by the wallet that originally placed them.`,
-			)
-		}
-	}
-
 	const auctionResults = useQueries({
 		queries: bidGroups.map((group) => ({
 			...auctionQueryOptions(group.auctionEventId),
@@ -355,7 +344,7 @@ function BidsOverviewComponent() {
 	const handleRefreshBidStatuses = async () => {
 		setIsRefreshingBids(true)
 		try {
-			await nip60Actions.refresh()
+			await nip60Actions.refresh({ consolidate: true })
 		} finally {
 			setIsRefreshingBids(false)
 		}
@@ -386,7 +375,7 @@ function BidsOverviewComponent() {
 			const auctionTitle = getAuctionTitle(auctionResults[groupIndex]?.data ?? null) || 'auction'
 
 			if (reclaimedCount > 0) {
-				toast.success(`Reclaimed ${reclaimedCount} bid ${reclaimedCount === 1 ? 'leg' : 'legs'} for ${auctionTitle}`)
+				toast.success(`Reclaimed ${reclaimedCount} locked bid ${reclaimedCount === 1 ? 'part' : 'parts'} for ${auctionTitle}`)
 			}
 			if (failures.length > 0) {
 				toast.error(failures[0])
@@ -413,7 +402,7 @@ function BidsOverviewComponent() {
 				</div>
 				<Button variant="outline" size="sm" className="gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
 					{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-					Refresh Refunds
+					Refresh wallet state
 				</Button>
 			</div>
 
@@ -422,7 +411,7 @@ function BidsOverviewComponent() {
 					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
 					<Button variant="outline" className="w-full gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
 						{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-						Refresh Refunds
+						Refresh wallet state
 					</Button>
 				</div>
 
@@ -434,12 +423,13 @@ function BidsOverviewComponent() {
 						</p>
 						<p className="mt-1 text-xs leading-relaxed">
 							These are lock attempts whose bid event never made it to the relay — usually from a failed bid during a rate-limit storm, or
-							from a wallet that was since recreated. They stay in your browser's localStorage because they're not on any relay. Clearing
-							them only removes the local record; the locked sats remain at the mint and can be recovered only by the wallet that originally
-							placed them.
+							from a wallet that was since recreated. Keep these local bid lock records until all auction bids are settled or reclaimed;
+							they may be needed to recover funds or diagnose a failed bid. Do not clear browser storage, local wallet data, or local
+							auction bid records while locked bid funds may still be recoverable.
 						</p>
-						<Button variant="outline" size="sm" className="mt-2" onClick={handleClearOrphans}>
-							Clear {orphanedTokens.length} orphan{orphanedTokens.length === 1 ? '' : 's'}
+						<Button variant="outline" size="sm" className="mt-2 gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
+							{isRefreshingBids ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+							Refresh wallet state
 						</Button>
 					</div>
 				)}
@@ -484,10 +474,10 @@ function BidsOverviewComponent() {
 							const myClaimOrder = claimOrders.find((o) => o.pubkey === user.pubkey)
 							const hasClaimed = !!myClaimOrder
 
-							// Bid legs: every bid this user placed on this auction, in
+							// Bid parts: every bid this user placed on this auction, in
 							// chronological order. The "headline" bid amount lives on the
-							// most recent leg; earlier legs are the rebid chain.
-							const legs = [...group.bids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+							// most recent part; earlier parts are the rebid chain.
+							const bidParts = [...group.bids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 
 							return (
 								<li key={group.key}>
@@ -585,29 +575,31 @@ function BidsOverviewComponent() {
 												</div>
 											</div>
 
-											{/* Bid legs / rebid chain — every leg this user placed on this auction */}
+											{/* Bid chain — every relay-visible bid this user placed on this auction */}
 											<div className="rounded-md border bg-white">
 												<div className="px-3 py-2 border-b">
-													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Your bid legs ({legs.length})</p>
+													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+														Your locked bid parts ({bidParts.length})
+													</p>
 													<p className="mt-0.5 text-[11px] text-gray-500">
-														Each leg is a Cashu lock from one of your bids or rebids on this auction. The chain settles together.
+														Each part is a Cashu lock from one of your bids or rebids on this auction. The chain settles together.
 													</p>
 												</div>
 												<ul className="divide-y">
-													{legs.map((leg, i) => {
-														const legAmount = getBidAmount(leg)
-														const legLocktime = getBidLocktime(leg)
-														const createdAt = leg.created_at ? new Date(leg.created_at * 1000).toLocaleString() : 'N/A'
-														const matchingPending = group.pendingTokens.find((t) => t.context?.bidEventId === leg.id)
+													{bidParts.map((bidPart, i) => {
+														const partAmount = getBidAmount(bidPart)
+														const partLocktime = getBidLocktime(bidPart)
+														const createdAt = bidPart.created_at ? new Date(bidPart.created_at * 1000).toLocaleString() : 'N/A'
+														const matchingPending = group.pendingTokens.find((t) => t.context?.bidEventId === bidPart.id)
 														return (
-															<li key={leg.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-xs">
+															<li key={bidPart.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-xs">
 																<div className="min-w-0">
 																	<p className="font-semibold text-zinc-900">
-																		Leg {i + 1}
-																		{i === legs.length - 1 ? ' (latest)' : ''} — {legAmount.toLocaleString()} sats
+																		Part {i + 1}
+																		{i === bidParts.length - 1 ? ' (latest)' : ''} — {partAmount.toLocaleString()} sats
 																	</p>
 																	<p className="mt-0.5 text-zinc-500">{createdAt}</p>
-																	{legLocktime > 0 && <p className="text-zinc-500">Locktime: {formatMaybeDate(legLocktime)}</p>}
+																	{partLocktime > 0 && <p className="text-zinc-500">Locktime: {formatMaybeDate(partLocktime)}</p>}
 																</div>
 																<div className="flex flex-col items-end text-right">
 																	{matchingPending ? (
@@ -653,7 +645,7 @@ function BidsOverviewComponent() {
 													) : (
 														<RotateCcw className="w-3.5 h-3.5" />
 													)}
-													Reclaim Eligible Legs
+													Reclaim eligible parts
 												</Button>
 											</div>
 										</div>

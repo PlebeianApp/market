@@ -30,7 +30,14 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createAuctionBidEvent, createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
+import {
+	createAuctionBidEvent,
+	createAuctionEvent,
+	createAuctionPathReleaseEvent,
+	DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS,
+	generateAuctionData,
+	type SeededBidResult,
+} from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -197,9 +204,11 @@ async function seedData() {
 		sellerPubkey: string
 		startAt: number
 		endAt: number
+		maxEndAt: number
 		startingBid: number
 		bidIncrement: number
 		mint: string
+		p2pkXpub: string
 		settlementGraceSeconds: number
 	}> = []
 	const shippingsByUser: Record<string, string[]> = {}
@@ -419,34 +428,46 @@ async function seedData() {
 				mint,
 				settlementGraceSeconds,
 			})
-			// Only seed bids on auctions that are still in the active
-			// window. `generateAuctionData` randomly marks ~20% of seeded
-			// auctions as 'ended' (endAt in the past); request_path on
-			// those would correctly reject ("auction has reached its hard
-			// bidding cutoff"). Excluding them upfront keeps the seed
-			// log clean.
+
+			// Only seed bids on live auctions (live window, not the
+			// quick-settle fixtures which are immediately closing).
 			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
 			if (isLiveForBids) {
+				const p2pkXpub = auctionData.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
+				const maxEndAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'max_end_at')?.[1] || String(endAt), 10)
 				seededBidAuctionEvents.push({
 					eventId: auctionEvent.id,
 					auctionCoordinates: coords,
 					sellerPubkey: pubkey,
 					startAt,
 					endAt,
+					maxEndAt,
 					startingBid,
 					bidIncrement,
 					mint,
+					p2pkXpub,
 					settlementGraceSeconds,
 				})
 			}
 		}
 	}
 
-	console.log('Creating auction bids (each calls request_path on the CVM server)...')
+	console.log(`\nCreating auction bids for ${seededBidAuctionEvents.length} live auctions...`)
+	// Track each auction's highest accepted bid so we can publish a
+	// matching kind-1025 path release after the bid loop. The bid loop
+	// monotonically increments the amount, so the last successful bid
+	// is by definition the highest.
+	const highestSeededBids = new Map<
+		string,
+		{ auction: (typeof seededBidAuctionEvents)[number]; bidderUserIndex: number; bid: SeededBidResult }
+	>()
 	for (const auction of seededBidAuctionEvents) {
-		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
-
-		const bidsCount = faker.number.int({ min: 1, max: 6 })
+		if (!auction.p2pkXpub) {
+			console.warn(`  ⚠ skipping ${auction.eventId.slice(0, 8)} — no p2pk_xpub`)
+			continue
+		}
+		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((u) => u.pubkey !== auction.sellerPubkey)
+		const bidsCount = faker.number.int({ min: 1, max: 4 })
 		let currentBidAmount = auction.startingBid
 
 		for (let i = 0; i < bidsCount; i++) {
@@ -455,24 +476,50 @@ async function seedData() {
 			await bidderSigner.blockUntilReady()
 
 			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
-			const maxBidTimestamp = Math.min(auction.endAt - 10, NOW_TIMESTAMP - 10)
-			const minBidTimestamp = Math.max(auction.startAt + 10, maxBidTimestamp - 60 * 60 * 24)
-			const bidTimestamp = minBidTimestamp < maxBidTimestamp ? faker.number.int({ min: minBidTimestamp, max: maxBidTimestamp }) : undefined
 
-			await createAuctionBidEvent({
+			const result = await createAuctionBidEvent({
 				signer: bidderSigner,
 				ndk,
 				auctionEventId: auction.eventId,
 				auctionCoordinates: auction.auctionCoordinates,
 				sellerPubkey: auction.sellerPubkey,
-				pathIssuerPubkey: CVM_SERVER_PUBKEY,
+				p2pkXpub: auction.p2pkXpub,
 				cvmRelays: CVM_RELAYS,
 				bidderPrivateKeyHex: devUsers[bidder.index].sk,
 				amount: currentBidAmount,
 				mint: auction.mint,
 				endAt: auction.endAt,
+				maxEndAt: auction.maxEndAt,
 				settlementGraceSeconds: auction.settlementGraceSeconds,
-				createdAt: bidTimestamp,
+			})
+
+			if (result) {
+				const existing = highestSeededBids.get(auction.eventId)
+				if (!existing || result.amount > existing.bid.amount) {
+					highestSeededBids.set(auction.eventId, {
+						auction,
+						bidderUserIndex: bidder.index,
+						bid: result,
+					})
+				}
+			}
+		}
+	}
+
+	if (highestSeededBids.size > 0) {
+		console.log(`\nPublishing kind-1025 path releases for ${highestSeededBids.size} top seeded bids...`)
+		for (const { auction, bidderUserIndex, bid } of Array.from(highestSeededBids.values())) {
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidderUserIndex].sk)
+			await bidderSigner.blockUntilReady()
+			await createAuctionPathReleaseEvent({
+				signer: bidderSigner,
+				ndk,
+				bidEventId: bid.bidEventId,
+				auctionCoordinate: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
+				derivationPath: bid.derivationPath,
+				childPubkey: bid.childPubkey,
+				releaseReason: 'voluntary_late',
 			})
 		}
 	}

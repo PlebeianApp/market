@@ -1,11 +1,13 @@
 import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAuctionClaimPublicMarkerFields, type PrivateAuctionClaimPayload } from '@/lib/auctions/privateAuctionClaimMessage'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
@@ -49,6 +51,29 @@ interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
 }
 
+function formatPrivateAuctionClaimAddress(payload: PrivateAuctionClaimPayload): string {
+	const { shippingAddress } = payload
+	return [
+		shippingAddress.name,
+		shippingAddress.firstLineOfAddress,
+		shippingAddress.additionalInformation,
+		[shippingAddress.city, shippingAddress.zipPostcode].filter(Boolean).join(' '),
+		shippingAddress.country,
+	]
+		.filter(Boolean)
+		.join('\n')
+}
+
+function privateAuctionClaimUnavailableMessage(status?: string, reason?: string): string {
+	if (status === 'unavailable' && reason === 'no_signer') {
+		return 'Private auction claim details unavailable until the seller signing session is connected.'
+	}
+	if (status === 'unavailable' && reason === 'not_seller') {
+		return 'Private auction claim details are only available to the auction seller.'
+	}
+	return 'Private auction claim details are not available from the encrypted claim path yet.'
+}
+
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -75,6 +100,10 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const canViewBuyerContact = isBuyer || isOrderSeller
+	const auctionClaimFields = getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
+	const privateAuctionClaimQuery = usePrivateAuctionClaimForOrder(orderEvent, isOrderSeller && !!auctionClaimFields)
+	const privateAuctionClaimResult = privateAuctionClaimQuery.data
+	const privateAuctionClaimPayload = privateAuctionClaimResult?.status === 'found' ? privateAuctionClaimResult.claim.payload : null
 
 	const totalAmount = getTotalAmount(orderEvent)
 
@@ -303,6 +332,57 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								<strong>Delivery contact:</strong> {deliveryContact}
 							</p>
 							<p className="text-xs text-gray-500 mt-2">The seller can use this contact for order coordination after payment settles.</p>
+						</CardContent>
+					</Card>
+				)}
+
+				{isOrderSeller && auctionClaimFields && (
+					<Card>
+						<CardHeader>
+							<CardTitle>Private Auction Claim Details</CardTitle>
+						</CardHeader>
+						<CardContent>
+							{privateAuctionClaimQuery.isLoading && <p className="text-sm text-gray-600">Loading private auction claim details...</p>}
+
+							{!privateAuctionClaimQuery.isLoading && privateAuctionClaimPayload && (
+								<div className="space-y-4">
+									<div>
+										<p className="text-sm font-semibold text-gray-900">Private shipping address</p>
+										<p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+											{formatPrivateAuctionClaimAddress(privateAuctionClaimPayload)}
+										</p>
+									</div>
+
+									<div className="grid gap-3 sm:grid-cols-2">
+										{privateAuctionClaimPayload.email && (
+											<p className="text-sm text-gray-700">
+												<strong>Contact email:</strong> {privateAuctionClaimPayload.email}
+											</p>
+										)}
+										{privateAuctionClaimPayload.phone && (
+											<p className="text-sm text-gray-700">
+												<strong>Contact phone:</strong> {privateAuctionClaimPayload.phone}
+											</p>
+										)}
+									</div>
+
+									{privateAuctionClaimPayload.notes && (
+										<div>
+											<p className="text-sm font-semibold text-gray-900">Message to seller</p>
+											<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{privateAuctionClaimPayload.notes}</p>
+										</div>
+									)}
+								</div>
+							)}
+
+							{!privateAuctionClaimQuery.isLoading && !privateAuctionClaimPayload && (
+								<p className="text-sm text-gray-600">
+									{privateAuctionClaimUnavailableMessage(
+										privateAuctionClaimResult?.status,
+										privateAuctionClaimResult?.status === 'unavailable' ? privateAuctionClaimResult.reason : undefined,
+									)}
+								</p>
+							)}
 						</CardContent>
 					</Card>
 				)}
