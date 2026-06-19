@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
@@ -704,6 +705,80 @@ export const useAuctionBids = (auctionEventId: string, limit: number = 500, auct
 	useQuery({
 		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
+
+/**
+ * Persistent NDK subscription for live bid updates on the auction detail page.
+ * Replaces the 5-second poll (`refetchInterval`) for consumers that need sub-second freshness.
+ * Historical bids are buffered until EOSE then flushed in one setState to avoid excessive re-renders during initial load. After EOSE the subscription stays open (`closeOnEose: false`)
+ * so the relay pushes new bids as they arrive.
+ */
+export function useStreamingAuctionBids(
+	auctionRootEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+): { bids: NDKEvent[]; isStreaming: boolean } {
+	const [bids, setBids] = useState<NDKEvent[]>([])
+	const [isStreaming, setIsStreaming] = useState(false)
+	const seenIds = useRef(new Set<string>())
+	const pendingBids = useRef<NDKEvent[]>([])
+	const eoseReceived = useRef(false)
+
+	useEffect(() => {
+		if (!auctionRootEventId && !auctionCoordinates) return
+		const ndk = ndkActions.getNDK()
+		if (!ndk) return
+		setBids([])
+		seenIds.current.clear()
+		pendingBids.current = []
+		eoseReceived.current = false
+		setIsStreaming(true)
+
+		const filters: NDKFilter[] = []
+		if (auctionRootEventId) {
+			filters.push({ kinds: [AUCTION_BID_KIND], '#e': [auctionRootEventId], limit })
+		}
+		if (auctionCoordinates) {
+			filters.push({ kinds: [AUCTION_BID_KIND], '#a': [auctionCoordinates], limit })
+		}
+
+		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
+
+		sub.on('event', (event: NDKEvent) => {
+			if (seenIds.current.has(event.id)) return
+			seenIds.current.add(event.id)
+			const [filtered] = filterBlacklistedEvents([event])
+			if (!filtered) return
+
+			if (!eoseReceived.current) {
+				pendingBids.current.push(filtered)
+			} else {
+				setBids((prev) => [...prev, filtered].sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
+			}
+		})
+
+		sub.on('eose', () => {
+			eoseReceived.current = true
+			setBids(pendingBids.current.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
+			pendingBids.current = []
+			setIsStreaming(false)
+		})
+
+		const timeoutId = setTimeout(() => {
+			if (eoseReceived.current) return
+			eoseReceived.current = true
+			setBids(pendingBids.current.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
+			pendingBids.current = []
+			setIsStreaming(false)
+		}, 10000)
+
+		return () => {
+			clearTimeout(timeoutId)
+			sub.stop()
+		}
+	}, [auctionRootEventId, auctionCoordinates, limit])
+
+	return { bids, isStreaming }
+}
 
 export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
 	useQuery({
