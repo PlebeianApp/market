@@ -1,4 +1,4 @@
-import { getMintHostname } from '@/lib/wallet'
+import { getMintHostname, normalizeMintUrl } from '@/lib/wallet'
 
 export interface AvailableMint {
 	mintUrl: string
@@ -23,8 +23,6 @@ export interface MintSelectionResult {
 	unfundedTrustedMints: string[]
 	error: string | null
 }
-
-const normalizeMintUrl = (url: string): string => url.trim().replace(/\/+$/, '')
 
 export function resolveAuctionMintSelection(input: MintSelectionInput): MintSelectionResult {
 	const { trustedMints, walletMints, mintBalances, bidAmount, previousBidAmount = 0 } = input

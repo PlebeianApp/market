@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionEndAt,
@@ -29,6 +30,9 @@ import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
 import { useStore } from '@tanstack/react-store'
 import { nip60Store } from '@/lib/stores/nip60'
+import { authStore } from '@/lib/stores/auth'
+import { uiActions } from '@/lib/stores/ui'
+import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 
 interface AuctionBidderProps {
@@ -60,9 +64,12 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 
 	const manualMintValid = manualMint ? result.availableMints.some((m) => m.mintUrl === manualMint) : false
 
-	const manualMintCanFund = manualMint ? (result.availableMints.find((m) => m.mintUrl === manualMint)?.balance ?? 0 >= deltaAmount) : false
-
 	const selectedMint = manualMintValid ? manualMint : result.selectedMint
+	const walletMintSet = new Set((nip60State.mints ?? []).map(normalizeMintUrl))
+	const unfundedWalletMint = result.unfundedTrustedMints.find((mint) => walletMintSet.has(normalizeMintUrl(mint))) ?? null
+	const depositMint = manualMintValid
+		? manualMint
+		: (result.insufficientBalanceMints[0]?.mintUrl ?? result.availableMints[0]?.mintUrl ?? unfundedWalletMint)
 
 	const setSelectedMint = useCallback((mintUrl: string | null) => {
 		setManualMint(mintUrl)
@@ -72,6 +79,7 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 
 	return {
 		selectedMint,
+		depositMint,
 		availableMints: result.availableMints,
 		eligibleMints,
 		insufficientBalanceMints: result.insufficientBalanceMints,
@@ -87,6 +95,8 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 
 export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
 	const bidMutation = usePublishAuctionBidMutation()
+	const { status: nip60Status } = useStore(nip60Store)
+	const { isAuthenticated, user } = useStore(authStore)
 
 	// Derive auction state
 	const auctionId = auction.id
@@ -117,12 +127,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const notStarted = startAt > 0 && countdown.now < startAt
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const signedInBidderPubkey = isAuthenticated ? user?.pubkey || currentUserPubkey || '' : ''
+	const hasSignedInBidder = !!signedInBidderPubkey
+	const isNip60Ready = nip60Status === 'ready'
+	const isNip60Loading = nip60Status === 'idle' || nip60Status === 'initializing'
 	const previousBidAmount = useMemo(() => {
-		if (!currentUserPubkey) return 0
-		const myBids = bids.filter((b) => b.pubkey === currentUserPubkey)
+		if (!signedInBidderPubkey) return 0
+		const myBids = bids.filter((b) => b.pubkey === signedInBidderPubkey)
 		if (!myBids.length) return 0
 		return Math.max(...myBids.map(getBidAmount))
-	}, [bids, currentUserPubkey])
+	}, [bids, signedInBidderPubkey])
 	// AUCTIONS.md §6.1 — bidder-side live floor. Display the floor at
 	// `client_now` (no inflation). The CVM server is more lenient by
 	// `BID_FLOOR_TIME_GRACE_SECONDS = 5`, so a click at the displayed
@@ -152,11 +166,14 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const inCurveWindow = countdown.now > endAt && countdown.now < (getAuctionMaxEndAt(auction) || endAt)
 	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
-	const isOwnAuction = currentUserPubkey === auction.pubkey
+	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
 	const [isEditing, setIsEditing] = useState(false)
+	const [isDepositOpen, setIsDepositOpen] = useState(false)
+	const [depositAmount, setDepositAmount] = useState(0)
+	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -164,11 +181,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return Number.isFinite(val) ? val : NaN
 	}, [bidAmountInput])
 
-	const { selectedMint, availableMints, showMintSelector, mintError, setSelectedMint, canFund } = useAuctionMintSelection(
-		trustedMints,
-		Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0,
-		previousBidAmount,
-	)
+	const { selectedMint, depositMint, availableMints, showMintSelector, mintError, setSelectedMint, canFund, deltaAmount } =
+		useAuctionMintSelection(trustedMints, Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0, previousBidAmount)
+
+	const hasInsufficientBidFunds =
+		hasSignedInBidder &&
+		isNip60Ready &&
+		!ended &&
+		!notStarted &&
+		!isOwnAuction &&
+		Number.isFinite(parsedBidAmount) &&
+		parsedBidAmount >= minBid &&
+		deltaAmount > 0 &&
+		!canFund
 
 	// Initialize input to min bid on mount or when min changes
 	useEffect(() => {
@@ -202,10 +227,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (ended) return 'Auction Ended'
 		if (notStarted) return 'Bidding not started'
 		if (bidMutation.isPending) return 'Submitting...'
+		if (!hasSignedInBidder) return 'Sign in to bid'
 		const selectedValue = getSelectedValue()
 		if (compact || selectedValue === 'edit' || selectedValue === 'mult2') return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
 		return 'Place Bid'
-	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, parsedBidAmount])
+	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
 	const handleSubmitBid = async () => {
 		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return
@@ -213,6 +239,28 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
 			toast.error(`Bid must be at least ${minBid.toLocaleString()} sats`)
+			return
+		}
+
+		if (!hasSignedInBidder) {
+			uiActions.openDialog('login')
+			return
+		}
+
+		if (isNip60Loading) {
+			toast.info('Wallet is still loading. Try again in a moment.')
+			return
+		}
+
+		if (hasInsufficientBidFunds) {
+			if (!depositMint) {
+				toast.error(mintError || 'No suitable mint available for bidding.')
+				return
+			}
+
+			setDepositAmount(Math.ceil(deltaAmount))
+			setPreferredDepositMint(depositMint)
+			setIsDepositOpen(true)
 			return
 		}
 
@@ -256,6 +304,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	return (
 		<div className="flex flex-col gap-2 w-full">
+			<DepositLightningModal
+				open={isDepositOpen}
+				onClose={() => setIsDepositOpen(false)}
+				initialAmount={depositAmount}
+				preferredMint={preferredDepositMint}
+			/>
 			{/* Anti-snipe curve banner — visible only when we're inside
 			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
 			    Tells the bidder why the floor is higher than they'd expect
