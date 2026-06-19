@@ -30,6 +30,7 @@ export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
+	if (typeof localStorage === 'undefined') return new Map()
 	try {
 		const stored = localStorage.getItem(DELETED_AUCTIONS_STORAGE_KEY)
 		if (stored) {
@@ -706,12 +707,22 @@ export const useAuctionBids = (auctionEventId: string, limit: number = 500, auct
 		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
 
-/**
- * Persistent NDK subscription for live bid updates on the auction detail page.
- * Replaces the 5-second poll (`refetchInterval`) for consumers that need sub-second freshness.
- * Historical bids are buffered until EOSE then flushed in one setState to avoid excessive re-renders during initial load. After EOSE the subscription stays open (`closeOnEose: false`)
- * so the relay pushes new bids as they arrive.
- */
+// Pure helpers — exported for unit tests, used by useStreamingAuctionBids.
+
+export function buildAuctionBidFilters(rootEventId: string, coordinates: string | undefined, limit: number): NDKFilter[] {
+	const filters: NDKFilter[] = []
+	if (rootEventId) filters.push({ kinds: [AUCTION_BID_KIND], '#e': [rootEventId], limit })
+	if (coordinates) filters.push({ kinds: [AUCTION_BID_KIND], '#a': [coordinates], limit })
+	return filters
+}
+
+export function mergeAndSortBids(existing: NDKEvent[], incoming: NDKEvent[]): NDKEvent[] {
+	const existingIds = new Set(existing.map((b) => b.id))
+	const fresh = incoming.filter((b) => !existingIds.has(b.id))
+	if (fresh.length === 0) return existing
+	return [...existing, ...fresh].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+}
+
 export function useStreamingAuctionBids(
 	auctionRootEventId: string,
 	limit: number = 500,
@@ -734,14 +745,7 @@ export function useStreamingAuctionBids(
 		eoseReceived.current = false
 		setIsStreaming(true)
 
-		const filters: NDKFilter[] = []
-		if (auctionRootEventId) {
-			filters.push({ kinds: [AUCTION_BID_KIND], '#e': [auctionRootEventId], limit })
-		}
-		if (auctionCoordinates) {
-			filters.push({ kinds: [AUCTION_BID_KIND], '#a': [auctionCoordinates], limit })
-		}
-
+		const filters = buildAuctionBidFilters(auctionRootEventId, auctionCoordinates, limit)
 		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
 
 		sub.on('event', (event: NDKEvent) => {
@@ -753,7 +757,7 @@ export function useStreamingAuctionBids(
 			if (!eoseReceived.current) {
 				pendingBids.current.push(filtered)
 			} else {
-				setBids((prev) => [...prev, filtered].sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
+				setBids((prev) => mergeAndSortBids(prev, [filtered]))
 			}
 		})
 
@@ -762,12 +766,7 @@ export function useStreamingAuctionBids(
 		const flushPending = () => {
 			const incoming = pendingBids.current
 			pendingBids.current = []
-			setBids((prev) => {
-				const existingIds = new Set(prev.map((b) => b.id))
-				const fresh = incoming.filter((b) => !existingIds.has(b.id))
-				if (fresh.length === 0) return prev
-				return [...prev, ...fresh].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
-			})
+			setBids((prev) => mergeAndSortBids(prev, incoming))
 		}
 
 		sub.on('eose', () => {
