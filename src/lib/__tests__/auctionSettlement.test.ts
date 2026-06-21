@@ -5,6 +5,7 @@ import {
 	compareAuctionBidChainPriority,
 	computeAuctionBidFloor,
 	computeAuctionFloorMultiplier,
+	getAuctionBidAcceptanceEndAt,
 	getAuctionBiddingCutoffAt,
 	getAuctionCurrentPrice,
 	getAuctionEffectiveEndAt,
@@ -220,6 +221,25 @@ describe('auctionSettlement helpers', () => {
 		})
 
 		expect(getAuctionBiddingCutoffAt(auction)).toBe(200)
+	})
+
+	test('fixed-window v1 bid helpers include bids through max_end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 320,
+		})
+		const bids = [
+			makeBid({ id: 'bid-before-end-at', pubkey: 'alice', amount: 1100, createdAt: 150 }),
+			makeBid({ id: 'bid-in-anti-snipe-window', pubkey: 'bob', amount: 1400, createdAt: 250 }),
+			makeBid({ id: 'bid-after-max-end-at', pubkey: 'carol', amount: 1800, createdAt: 321 }),
+		]
+
+		expect(getAuctionBidAcceptanceEndAt(auction, bids)).toBe(320)
+		expect(getAuctionWindowValidBids(auction, bids).map((bid) => bid.id)).toEqual(['bid-before-end-at', 'bid-in-anti-snipe-window'])
+		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1400)
 	})
 })
 

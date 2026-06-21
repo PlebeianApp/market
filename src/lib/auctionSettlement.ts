@@ -327,17 +327,27 @@ export const getAuctionEffectiveEndAt = (auctionEvent: NDKEvent, bids: NDKEvent[
 	return effectiveEndAt
 }
 
+export const getAuctionBidAcceptanceEndAt = (auctionEvent: NDKEvent, bids: NDKEvent[]): number => {
+	const extensionRule = getAuctionExtensionRule(auctionEvent)
+
+	if (extensionRule.kind === 'anti_sniping') {
+		return getAuctionEffectiveEndAt(auctionEvent, bids)
+	}
+
+	return getAuctionBiddingCutoffAt(auctionEvent)
+}
+
 export const getAuctionWindowValidBids = (auctionEvent: NDKEvent, bids: NDKEvent[]): NDKEvent[] => {
 	const auctionRootEventId = getAuctionRootEventId(auctionEvent)
 	const startAt = getAuctionStartAt(auctionEvent)
-	const effectiveEndAt = getAuctionEffectiveEndAt(auctionEvent, bids)
+	const acceptanceEndAt = getAuctionBidAcceptanceEndAt(auctionEvent, bids)
 
 	return [...bids].sort(compareAuctionBidChronologyAscending).filter((bid) => {
 		if (!ACTIVE_AUCTION_BID_STATUSES.has(getAuctionBidStatus(bid))) return false
 		if (getAuctionTagValue(bid, 'e') !== auctionRootEventId) return false
 
 		const bidCreatedAt = bid.created_at || 0
-		return bidCreatedAt >= startAt && bidCreatedAt <= effectiveEndAt
+		return bidCreatedAt >= startAt && bidCreatedAt <= acceptanceEndAt
 	})
 }
 
