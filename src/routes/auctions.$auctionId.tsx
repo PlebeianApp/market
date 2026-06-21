@@ -35,9 +35,8 @@ import {
 	getAuctionBidIncrement,
 	getAuctionCategories,
 	getAuctionCurrentPriceFromBids,
-	getAuctionEffectiveEndAt,
+	getAuctionBiddingCutoffAt,
 	getAuctionCurrency,
-	getAuctionEndAt,
 	getAuctionId,
 	getAuctionPathIssuer,
 	getAuctionImages,
@@ -372,7 +371,6 @@ function AuctionDetailRoute() {
 	useHeroBackground(backgroundImageUrl, heroClassName)
 
 	const startAt = getAuctionStartAt(auction)
-	const endAt = getAuctionEndAt(auction)
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const reserve = getAuctionReserve(auction)
@@ -422,8 +420,8 @@ function AuctionDetailRoute() {
 	)
 
 	const { bids } = useStreamingAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
-	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
@@ -749,7 +747,7 @@ function AuctionDetailRoute() {
 										{bidderStatus.label}
 									</div>
 								)}
-								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(effectiveEndAt, false)}</span>}
+								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(biddingCutoffAt, false)}</span>}
 							</div>
 							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
 						</div>

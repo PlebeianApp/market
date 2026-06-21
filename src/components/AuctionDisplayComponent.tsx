@@ -4,14 +4,10 @@ import { Card } from '@/components/ui/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	auctionByATagQueryOptions,
-	getAuctionEffectiveEndAt,
-	getAuctionEndAt,
-	getAuctionId,
+	getAuctionBiddingCutoffAt,
 	getAuctionImages,
-	getAuctionRootEventId,
 	getAuctionSummary,
 	getAuctionTitle,
-	useAuctionBids,
 } from '@/queries/auctions'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
@@ -50,14 +46,8 @@ export function AuctionDisplayComponent({
 	const summary = auction ? getAuctionSummary(auction) : 'No summary available'
 	const images = auction ? getAuctionImages(auction) : []
 	const imageUrl = images.length > 0 ? images[0][1] : null
-	const auctionDTag = getAuctionId(auction)
-	const auctionCoordinatesValue = auction && auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
-	const auctionRootEventId = getAuctionRootEventId(auction)
-	const bidsQuery = useAuctionBids(auctionRootEventId || '', 500, auctionCoordinatesValue || undefined)
-	const bids = bidsQuery.data ?? []
-	const endAt = auction ? getAuctionEndAt(auction) : 0
-	const effectiveEndAt = auction ? getAuctionEffectiveEndAt(auction, bids) || endAt : 0
-	const endAtLabel = effectiveEndAt ? new Date(effectiveEndAt * 1000).toLocaleString() : 'No end date'
+	const biddingCutoffAt = auction ? getAuctionBiddingCutoffAt(auction) : 0
+	const endAtLabel = biddingCutoffAt ? new Date(biddingCutoffAt * 1000).toLocaleString() : 'No end date'
 
 	return (
 		<Card className="p-4">

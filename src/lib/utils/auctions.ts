@@ -1,10 +1,4 @@
-import {
-	getAuctionCategories,
-	getAuctionEffectiveEndAt,
-	getAuctionRootEventId,
-	getAuctionStartingBid,
-	getAuctionTitle,
-} from '@/queries/auctions'
+import { getAuctionCategories, getAuctionBiddingCutoffAt, getAuctionStartingBid, getAuctionTitle } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMemo } from 'react'
 
@@ -74,7 +68,7 @@ export function calculateAppliedFilterCount(filters: AuctionFilterState): number
 	return count
 }
 
-export function useFilteredAuctions({ auctions, bidsByAuctionId, filters, tag }: UseFilteredAuctionsProps) {
+export function useFilteredAuctions({ auctions, filters, tag }: UseFilteredAuctionsProps) {
 	const hideEnded = filters.hideEnded ?? defaultAuctionFilters.hideEnded
 	const sort = filters.sort ?? defaultAuctionFilters.sort
 
@@ -90,9 +84,7 @@ export function useFilteredAuctions({ auctions, bidsByAuctionId, filters, tag }:
 		// 2. Filter by UI State (Hide Ended)
 		if (hideEnded) {
 			filtered = filtered.filter((auction) => {
-				const rootId = getAuctionRootEventId(auction) || auction.id
-				const bids = bidsByAuctionId?.get(rootId) ?? []
-				const visibleEndAt = getAuctionEffectiveEndAt(auction, bids)
+				const visibleEndAt = getAuctionBiddingCutoffAt(auction)
 
 				return visibleEndAt > 0 && visibleEndAt > now
 			})
@@ -107,11 +99,8 @@ export function useFilteredAuctions({ auctions, bidsByAuctionId, filters, tag }:
 
 			case 'ending-soon':
 				sorted.sort((a, b) => {
-					const aBids = bidsByAuctionId?.get(getAuctionRootEventId(a) || a.id) ?? []
-					const bBids = bidsByAuctionId?.get(getAuctionRootEventId(b) || b.id) ?? []
-
-					const aEnd = getAuctionEffectiveEndAt(a, aBids)
-					const bEnd = getAuctionEffectiveEndAt(b, bBids)
+					const aEnd = getAuctionBiddingCutoffAt(a)
+					const bEnd = getAuctionBiddingCutoffAt(b)
 
 					const aEnded = aEnd > 0 && aEnd <= now
 					const bEnded = bEnd > 0 && bEnd <= now
@@ -140,5 +129,5 @@ export function useFilteredAuctions({ auctions, bidsByAuctionId, filters, tag }:
 		}
 
 		return sorted
-	}, [auctions, bidsByAuctionId, filters, tag])
+	}, [auctions, filters, tag])
 }

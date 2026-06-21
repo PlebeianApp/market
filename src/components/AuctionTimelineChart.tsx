@@ -24,7 +24,6 @@ import {
 	getAuctionMaxEndAt,
 	getAuctionSettlementGrace,
 } from '@/queries/auctions'
-import { getAuctionEffectiveEndAt } from '@/lib/auctionSettlement'
 
 // Function to generate color from pubkey
 const getPubkeyColor = (pubkey: string) => {
@@ -241,8 +240,8 @@ export default function AuctionTimelineChart({ bids, auction }: AuctionTimelineC
 	const startingBid = getAuctionStartingBid(auction)
 	const reserve = getAuctionReserve(auction)
 	const maxEndAt = getAuctionMaxEndAt(auction)
-	const refundTime = maxEndAt + getAuctionSettlementGrace(auction)
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids)
+	const displayedMaxEndAt = maxEndAt >= endAt ? maxEndAt : endAt
+	const refundTime = displayedMaxEndAt + getAuctionSettlementGrace(auction)
 
 	// Transform bids to chart data format
 	const chartBids = bids.map((bid) => ({
@@ -302,18 +301,17 @@ export default function AuctionTimelineChart({ bids, auction }: AuctionTimelineC
 	]
 
 	// Handle different end timing scenarios:
-	// 1. When all timings are equal, show only one "Auction End"
-	// 2. When maxEndAt !== endAt, show extension window and "Auction End" at endAt
+	// 1. When max_end_at > end_at, end_at starts the anti-snipe ramp and
+	//    max_end_at is the fixed auction end.
+	// 2. Otherwise, show only one "Auction End" at the bidding cutoff.
 
-	const hasExtensionWindow = maxEndAt !== endAt
+	const hasAntiSnipeWindow = maxEndAt > endAt
 
-	if (hasExtensionWindow) {
-		// Show extension window between endAt and maxEndAt
-		// Show "Auction End" at endAt
-		verticalMarkers.push({ label: 'Auction End', ts: endAt * 1000, color: '#ef4444', position: 'insideTopRight' })
-	} else {
-		// All timings are equal, show "Auction End" at maxEndAt
+	if (hasAntiSnipeWindow) {
+		verticalMarkers.push({ label: 'Anti-snipe begins', ts: endAt * 1000, color: '#ef4444', position: 'insideTopRight' })
 		verticalMarkers.push({ label: 'Auction End', ts: maxEndAt * 1000, color: '#ef4444', position: 'insideTopRight' })
+	} else if (displayedMaxEndAt > 0) {
+		verticalMarkers.push({ label: 'Auction End', ts: displayedMaxEndAt * 1000, color: '#ef4444', position: 'insideTopRight' })
 	}
 
 	// Add current time marker if it's within the auction period
@@ -344,7 +342,7 @@ export default function AuctionTimelineChart({ bids, auction }: AuctionTimelineC
 		})
 	}
 
-	const settlementStart = maxEndAt * 1000
+	const settlementStart = displayedMaxEndAt * 1000
 	const settlementEnd = refundTime * 1000
 
 	// Generate custom ticks for x-axis
@@ -405,8 +403,8 @@ export default function AuctionTimelineChart({ bids, auction }: AuctionTimelineC
 					{/* 2. Conditionally Render the "No bids yet" text */}
 					{chartBids.length === 0 && <Label position="center">No bids yet</Label>}
 
-					{/* Extension Window Area */}
-					{hasExtensionWindow && (
+					{/* Anti-snipe Window Area */}
+					{hasAntiSnipeWindow && (
 						<ReferenceArea
 							x1={endAt * 1000}
 							x2={maxEndAt * 1000}
@@ -414,7 +412,7 @@ export default function AuctionTimelineChart({ bids, auction }: AuctionTimelineC
 							fillOpacity={0.15}
 							stroke="#06b6d4"
 							strokeDasharray="4 4"
-							label={{ position: 'center', value: 'Extension Window', fill: '#06b6d4', fontSize: 11, fontWeight: 600, angle: 45 }}
+							label={{ position: 'center', value: 'Anti-snipe Window', fill: '#06b6d4', fontSize: 11, fontWeight: 600, angle: 45 }}
 						/>
 					)}
 

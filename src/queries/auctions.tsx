@@ -13,6 +13,7 @@ import {
 	AUCTION_KIND,
 	AUCTION_ROOT_EVENT_ID_TAG,
 	AUCTION_SETTLEMENT_KIND,
+	getAuctionBiddingCutoffAt as getAuctionBiddingCutoffAtValue,
 	getAuctionCurrentPrice as computeAuctionCurrentPrice,
 	getAuctionEffectiveEndAt as computeAuctionEffectiveEndAt,
 	getAuctionEndAt as getAuctionEndAtValue,
@@ -539,6 +540,8 @@ export const getAuctionEffectiveEndAt = (event: NDKEvent | null, bids: NDKEvent[
 }
 
 export const getAuctionMaxEndAt = (event: NDKEvent | null): number => (event ? getAuctionMaxEndAtValue(event) : 0)
+
+export const getAuctionBiddingCutoffAt = (event: NDKEvent | null): number => (event ? getAuctionBiddingCutoffAtValue(event) : 0)
 
 export const getAuctionSettlementGrace = (event: NDKEvent | null): number => (event ? getAuctionSettlementGraceValue(event) : 0)
 

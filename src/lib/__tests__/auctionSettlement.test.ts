@@ -5,6 +5,7 @@ import {
 	compareAuctionBidChainPriority,
 	computeAuctionBidFloor,
 	computeAuctionFloorMultiplier,
+	getAuctionBiddingCutoffAt,
 	getAuctionCurrentPrice,
 	getAuctionEffectiveEndAt,
 	getAuctionMinBidCurve,
@@ -183,6 +184,42 @@ describe('auctionSettlement helpers', () => {
 		expect(getAuctionEffectiveEndAt(auction, bids)).toBe(320)
 		expect(getAuctionWindowValidBids(auction, bids).map((bid) => bid.id)).toEqual(['bid-early', 'bid-snipe-1', 'bid-snipe-2'])
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1300)
+	})
+
+	test('bidding cutoff is max_end_at when max_end_at is after end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 320,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(320)
+	})
+
+	test('bidding cutoff falls back to end_at when max_end_at is 0', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 0,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(200)
+	})
+
+	test('bidding cutoff falls back to end_at when max_end_at is before end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 150,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(200)
 	})
 })
 
