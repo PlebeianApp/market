@@ -1,8 +1,10 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import { fetchEvents as fetchEventsIo, subscribe as subscribeIo, type NostrFilter } from '@/lib/nostr/io'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
@@ -63,6 +65,21 @@ const SHIPPING_REF_KIND = '30406'
 const ORDER_CREATION_SUBJECT = 'order-info'
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
+/**
+ * Fetches events via the library-agnostic Nostr I/O seam and rehydrates them as
+ * NDKEvents so the existing orders domain types are unchanged. Routing through
+ * the seam (instead of `ndk.fetchEvents` directly) applies the anti-hang timeout
+ * guard and lets the transport flip to applesauce without touching call sites.
+ */
+async function fetchNdkEventSet(
+	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>> | null,
+	filter: NDKFilter | NDKFilter[],
+): Promise<Set<NDKEvent>> {
+	if (!ndk) throw new Error('NDK not initialized')
+	const raw = await fetchEventsIo(filter as NostrFilter | NostrFilter[])
+	return new Set(raw.map((event) => new NDKEvent(ndk, event)))
+}
+
 export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Promise<NDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -73,7 +90,7 @@ export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Pr
 		limit: 500,
 	}
 
-	return Array.from(await ndk.fetchEvents(giftWrapFilter))
+	return Array.from(await fetchNdkEventSet(ndk, giftWrapFilter))
 }
 
 export const decryptSellerPrivateOrderGiftWraps = async (params: {
@@ -204,8 +221,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		limit: 100,
 	}
 
-	const ordersSent = await ndk.fetchEvents(orderCreationFilter)
-	const ordersReceived = await ndk.fetchEvents(orderReceivedFilter)
+	const ordersSent = await fetchNdkEventSet(ndk, orderCreationFilter)
+	const ordersReceived = await fetchNdkEventSet(ndk, orderReceivedFilter)
 
 	// Filter for ORDER_CREATION type programmatically (since relays reject multi-character tags)
 	const filterByType = (events: Set<NDKEvent>, messageType: string) => {
@@ -258,8 +275,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 	// Fetch events from both filters in parallel
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		ndk.fetchEvents(relatedEventsFilters[0]),
-		ndk.fetchEvents(relatedEventsFilters[1]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
 	// Combine and deduplicate
@@ -414,7 +431,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 		limit: 100,
 	}
 
-	const allOrders = await ndk.fetchEvents(orderCreationFilter)
+	const allOrders = await fetchNdkEventSet(ndk, orderCreationFilter)
 
 	// Filter for ORDER_CREATION type programmatically
 	const orders = new Set<NDKEvent>(
@@ -460,8 +477,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		ndk.fetchEvents(relatedEventsFilters[0]),
-		ndk.fetchEvents(relatedEventsFilters[1]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
@@ -601,7 +618,7 @@ export const fetchOrdersBySeller = async (
 		limit: 100,
 	}
 
-	const allOrders = await ndk.fetchEvents(orderReceivedFilter)
+	const allOrders = await fetchNdkEventSet(ndk, orderReceivedFilter)
 
 	// Filter for ORDER_CREATION type programmatically
 	const orders = new Set<NDKEvent>(
@@ -646,8 +663,8 @@ export const fetchOrdersBySeller = async (
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		ndk.fetchEvents(relatedEventsFilters[0]),
-		ndk.fetchEvents(relatedEventsFilters[1]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
@@ -816,7 +833,7 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 		orderFilter.ids = [orderId]
 	}
 
-	const allOrderEvents = await ndk.fetchEvents(orderFilter)
+	const allOrderEvents = await fetchNdkEventSet(ndk, orderFilter)
 
 	// Filter programmatically for ORDER_CREATION type and matching order ID
 	const matchingOrders = Array.from(allOrderEvents).filter((event) => {
@@ -862,8 +879,8 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		ndk.fetchEvents(relatedEventsFilters[0]),
-		ndk.fetchEvents(relatedEventsFilters[1]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
@@ -991,34 +1008,35 @@ export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {})
 		if (!orderId || !ndk) return
 
 		// Subscription for all related events - no multi-character tag filters
-		const relatedEventsFilter = {
+		const relatedEventsFilter: NostrFilter = {
 			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
 		}
-
-		const subscription = ndk.subscribe(relatedEventsFilter, {
-			closeOnEose: false, // Keep subscription open
-		})
 
 		const refreshOrderDetails = () => {
 			void queryClient.invalidateQueries({ queryKey })
 			void queryClient.refetchQueries({ queryKey })
 		}
 
-		// Event handler for all events related to this order
-		subscription.on('event', (newEvent) => {
-			const taggedOrderId = newEvent.tags.find((tag) => tag[0] === 'order')?.[1]
-			const matchesRouteId = newEvent.id === orderId || taggedOrderId === orderId
-			const matchesFetchedOrder = !!taggedOrderId && (taggedOrderId === logicalOrderId || taggedOrderId === fetchedOrderEventId)
+		// Live subscription via the Nostr I/O seam; rehydrate as NDKEvent for the handler.
+		const stop = subscribeIo(
+			relatedEventsFilter,
+			(rawEvent) => {
+				const newEvent = new NDKEvent(ndk, rawEvent)
+				const taggedOrderId = newEvent.tags.find((tag) => tag[0] === 'order')?.[1]
+				const matchesRouteId = newEvent.id === orderId || taggedOrderId === orderId
+				const matchesFetchedOrder = !!taggedOrderId && (taggedOrderId === logicalOrderId || taggedOrderId === fetchedOrderEventId)
 
-			// Any related event should refresh order details (status, shipping, payment requests/receipts, messages)
-			if (!matchesRouteId && !matchesFetchedOrder) return
+				// Any related event should refresh order details (status, shipping, payment requests/receipts, messages)
+				if (!matchesRouteId && !matchesFetchedOrder) return
 
-			refreshOrderDetails()
-		})
+				refreshOrderDetails()
+			},
+			{ closeOnEose: false },
+		)
 
 		// Clean up subscription when unmounting
 		return () => {
-			subscription.stop()
+			stop()
 		}
 	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient, queryKey])
 
