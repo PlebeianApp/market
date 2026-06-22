@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master, 'auctions/**']
   workflow_dispatch:
+    inputs:
+      test_grep:
+        description: 'Optional grep filter (runs only matching tests). Empty = default full run.'
+        required: false
+        default: ''
   schedule:
     - cron: '0 6 * * 1'
 
@@ -222,7 +227,12 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
-        run: bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
+        run: |
+          if [ -n "${{ inputs.test_grep }}" ]; then
+            bun run test:e2e -- --grep "${{ inputs.test_grep }}"
+          else
+            bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
+          fi
 
       - name: Show server logs on failure
         if: failure()
