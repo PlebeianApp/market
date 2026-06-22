@@ -205,3 +205,45 @@ Branch naming: `chore/applesauce-foundation` (Wave 0),
 ### Wave E — Server runtime (🧹, integration tests only)
 
 - [ ] E1: `src/server/*` (`NDKService.ts`, `EventHandler.ts`, `ZapPurchaseManager.ts`, managers)
+
+---
+
+## 9. Diagnosis & pilot retarget (2026-06-22)
+
+A read-only diagnosis of where the e2e red actually lives **reframed the pilot**. Full
+detail in [epic #1028 comment](https://github.com/PlebeianApp/market/issues/1028#issuecomment-4771481882).
+
+**The e2e CI is deliberately gated (`e2e.yml`).**
+
+- `e2e-pricing` (PR/push) runs **one** test (`--grep 'Product Page - View Only'`,
+  line 108) → every PR "passes" e2e in ~2 min. PRs never run the failing specs.
+- `e2e-full` (weekly cron + `workflow_dispatch` only, line 131) runs the rest — the
+  34-min job that's currently **23 failed**. A separate "test-fix branch" owns it.
+
+**The 4 failing specs, classified:**
+| Spec | Root cause | NDK? |
+|---|---|---|
+| `cart` multi-merchant | product streaming (`waitForProducts`) | likely yes |
+| `buyer-purchase` cart totals | product streaming ("load from relay") | likely yes |
+| `auth` remove stored key | `browserContext.close` (Playwright infra) | **no** — test-infra |
+| `app-settings` blacklist remove | publish mute list + re-read | maybe |
+
+**Orders — the original A1 pilot target — is NOT in the failing list.** The shared
+dependency of the two headline reds (cart + buyer-purchase) is the **product-streaming
+read path** (`src/queries/products.tsx` / `useStreamingProducts`) = **A2a** territory.
+
+**Pilot retarget (pending isolation run):**
+
+- If isolated cart+buyer-purchase **PASS** → full-run state-leakage (not NDK) → red cron
+  to the test-fix branch; migration stays structural.
+- If isolated **FAIL on product-card visibility** → NDK product-streaming flakiness →
+  **retarget the pilot to A2a** (product reads → seam → applesauce).
+- If isolated **FAIL on totals/shipping assertion** → logic bug → debug separately.
+
+**Sequencing change:** A1 (orders) is no longer the #1005 pilot — it's structural prep
+(it routes the orders transport through the seam; the applesauce flip waits). The pilot
+moves to **A2a (product streaming)**, conditional on the isolation run confirming NDK.
+A tiny `e2e.yml` grep-input PR (`ci/e2e-grep-input`) makes the isolation run — and future
+per-wave e2e validation — possible via `workflow_dispatch` on the fork.
+
+`auth` `browserContext.close` → test-infra, routed to the test-fix branch regardless.
