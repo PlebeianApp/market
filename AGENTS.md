@@ -70,3 +70,12 @@ import { fetchEvents, subscribe, publish, sign, getUser } from '@/lib/nostr/io'
 5. **NIP-46 bunker** rewrite is deferred to A3b (gates Wave D).
 6. When a wave **reduces** the NDK footprint, lower the baseline in
    `scripts/ndk-baseline.txt` in the same PR so the guard ratchets down.
+
+**E2E CI reality (2026-06-22 diagnosis):** PR e2e runs only one smoke test
+(`e2e.yml` `e2e-pricing`, `--grep 'Product Page - View Only'`). The full suite runs
+only on the weekly cron / `workflow_dispatch` (`e2e-full`) and is currently red
+(cart, buyer-purchase, auth, app-settings). So **PR CI cannot validate flakiness
+fixes** — use `gh workflow run e2e.yml --repo c03rad0r/market --ref <branch> -f
+test_grep=...` (fork Actions) or run specs locally. The failing specs are **not**
+orders; the pilot retargets to **product streaming (A2a)** pending the isolation run
+(see plan doc §9). Orders (A1) is now structural prep, not the pilot.
