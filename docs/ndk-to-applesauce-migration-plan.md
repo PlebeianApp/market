@@ -240,10 +240,25 @@ read path** (`src/queries/products.tsx` / `useStreamingProducts`) = **A2a** terr
   **retarget the pilot to A2a** (product reads → seam → applesauce).
 - If isolated **FAIL on totals/shipping assertion** → logic bug → debug separately.
 
-**Sequencing change:** A1 (orders) is no longer the #1005 pilot — it's structural prep
-(it routes the orders transport through the seam; the applesauce flip waits). The pilot
-moves to **A2a (product streaming)**, conditional on the isolation run confirming NDK.
-A tiny `e2e.yml` grep-input PR (`ci/e2e-grep-input`) makes the isolation run — and future
-per-wave e2e validation — possible via `workflow_dispatch` on the fork.
+**RESULT (2026-06-22 isolation run, fork [#27975662763](https://github.com/c03rad0r/market/actions/runs/27975662763)):**
+cart (×3) + buyer-purchase **fail in isolation**, but the cause is **NOT NDK — it's
+UI-selector drift**. Both fail identically at the shipping selector:
+`buyer-purchase` → `getByText('Select shipping method')` not found (after products
+loaded fine); `cart` → `shippingTriggers.toHaveCount(2)` got 0. The cart/shipping UI
+was redesigned and these specs still look for the old "Select shipping method" text.
+Owned by **fork PR #3 (`fix/shipping-selectors-cart-redesign`)**. `auth` is Playwright
+infra (`browserContext.close`). **None of the headline reds are NDK.**
+
+**Revised conclusion:** the red cron run goes to the test-fix workstream (PR #3 +
+auth infra), **not** the applesauce migration. **The pilot does NOT retarget to A2a** —
+there is no NDK flakiness in the observed reds to fix. The migration continues as
+**structural modernization** (long-term reliability + DDD/leaky-abstraction cleanup per
+upstream #629). Wave A1 (orders transport on the seam) stands as valid structural work.
+(`app-settings` is the one unclassified spec; isolating it wouldn't change this.)
+
+**Sequencing change:** A1 (orders) is structural prep
+(it routes the orders transport through the seam; the applesauce flip waits). The
+tiny `e2e.yml` grep-input PR (#1031, `ci/e2e-grep-input`) makes targeted diagnostics —
+and future per-wave e2e validation — possible via `workflow_dispatch` on the fork.
 
 `auth` `browserContext.close` → test-infra, routed to the test-fix branch regardless.
