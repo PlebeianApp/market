@@ -97,7 +97,7 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 				<div className="flex flex-col gap-4 rounded-xl border-2 border-secondary bg-secondary/10 px-4 py-4 shadow-sm">
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
-							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Top bid</p>
+							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Highest visible bid</p>
 							<p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(topBid))} sats</p>
 							<p className="mt-1 text-sm text-zinc-600">Recorded {formatBidRecordedAt(topBid)}</p>
 						</div>
