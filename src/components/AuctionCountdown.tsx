@@ -3,14 +3,7 @@ import { formatAuctionCountdownDetailed, formatAuctionEndTimeLabel, getAuctionCo
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from './shared/ProgressBar'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import {
-	getAuctionEffectiveEndAt,
-	getAuctionEndAt,
-	getAuctionId,
-	getAuctionRootEventId,
-	getAuctionStartAt,
-	useAuctionBids,
-} from '@/queries/auctions'
+import { getAuctionBiddingCutoffAt, getAuctionStartAt } from '@/queries/auctions'
 
 type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'finalBids' | 'ended'
 
@@ -84,35 +77,22 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 
 export function AuctionCountdown({
 	auction,
-	bids: bidsProp,
 }: {
 	auction: NDKEvent
-	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
+	/** Retained for source compatibility; fixed-window v1 cutoff no longer depends on bids. */
 	bids?: NDKEvent[]
 }) {
-	const auctionDTag = getAuctionId(auction)
-	const auctionRootEventId = getAuctionRootEventId(auction)
-	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
-
-	const shouldFetchBids = bidsProp === undefined
-	const bidsQuery = useAuctionBids(
-		shouldFetchBids ? auctionRootEventId || auction.id : '',
-		500,
-		shouldFetchBids ? auctionCoordinates : undefined,
-	)
-	const bids = bidsProp ?? bidsQuery.data ?? []
-	const endTime = getAuctionEndAt(auction)
-	const endTimeEffective = getAuctionEffectiveEndAt(auction, bids) || endTime
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const currentTime = Date.now() / 1000
 	const startTime = getAuctionStartAt(auction)
 
-	const totalDuration = endTimeEffective - startTime
-	const remaining = endTimeEffective - currentTime
+	const totalDuration = biddingCutoffAt - startTime
+	const remaining = biddingCutoffAt - currentTime
 
 	const urgency = getUrgency(remaining)
 	const color = getProgressColor(urgency)
 	const isEnded = remaining <= 0
-	const centerLabel = isEnded ? formatAuctionEndTimeLabel(endTimeEffective, true) : `${formatAuctionCountdownDetailed(remaining)} left`
+	const centerLabel = isEnded ? formatAuctionEndTimeLabel(biddingCutoffAt, true) : `${formatAuctionCountdownDetailed(remaining)} left`
 
 	// 1. Calculate forward progress so the bar fills from left to right as time runs out.
 	let progress = 0

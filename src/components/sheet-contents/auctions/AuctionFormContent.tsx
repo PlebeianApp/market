@@ -499,13 +499,19 @@ function AuctionTimelinePreview({
 		anchor: 'start' | 'middle' | 'end'
 	}> = [
 		{ xPct: 0, color: '#10b981', label: 'start', sub: formatAbsoluteCompact(startAtSeconds), anchor: 'start' },
-		{ xPct: endX, color: '#10b981', label: 'end', sub: formatAbsoluteCompact(endAtSeconds), anchor: 'middle' },
+		{
+			xPct: endX,
+			color: '#10b981',
+			label: hasWindow ? 'ramp begins' : 'auction end',
+			sub: formatAbsoluteCompact(endAtSeconds),
+			anchor: 'middle',
+		},
 		...(hasWindow
 			? [
 					{
 						xPct: maxEndX,
 						color: '#f59e0b',
-						label: 'abs. end',
+						label: 'auction end',
 						sub: formatAbsoluteCompact(maxEndAtSeconds),
 						anchor: 'middle' as const,
 					},
@@ -579,11 +585,11 @@ function AuctionTimelinePreview({
 
 			<div className="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-[11px] text-zinc-600">
 				<p>
-					Floor at <span className="font-semibold text-zinc-900">auction end</span>:{' '}
+					Floor when <span className="font-semibold text-zinc-900">{hasWindow ? 'anti-snipe ramp begins' : 'auction ends'}</span>:{' '}
 					<span className="font-semibold">{baseline.toLocaleString()} sats</span>
 				</p>
 				<p>
-					Floor at <span className="font-semibold text-zinc-900">absolute end</span>:{' '}
+					Floor at <span className="font-semibold text-zinc-900">auction end</span>:{' '}
 					<span className={`font-semibold ${showCurve ? 'text-emerald-700' : 'text-zinc-700'}`}>{peakFloor.toLocaleString()} sats</span>{' '}
 					{showCurve ? (
 						<span className="text-zinc-400">
@@ -674,8 +680,8 @@ function AntiSnipeCurveSettings({
 			<div>
 				<Label className="text-zinc-950">Anti-snipe</Label>
 				<p className="mt-1 text-xs text-zinc-500">
-					After the auction end, late bids can still land in an extra window — but the minimum bid ramps up to make sniping expensive. The
-					absolute end is fixed at publish time.
+					After flat bidding ends, bids can still land during the anti-snipe window — but the minimum bid ramps up to make sniping
+					expensive. The auction end is fixed at publish time.
 				</p>
 			</div>
 
@@ -762,7 +768,7 @@ function AntiSnipeCurveSettings({
 				</div>
 				{!curveDisabled && (
 					<p className="text-[11px] text-zinc-500">
-						Floor at the absolute end will be {formData.minBidCurvePeakMultiplier}× the floor at auction end.
+						Floor at auction end will be {formData.minBidCurvePeakMultiplier}× the floor when the anti-snipe ramp begins.
 					</p>
 				)}
 			</div>
@@ -818,7 +824,7 @@ function SettlementGraceSettings({
 			<div>
 				<Label className="text-zinc-950">Settlement grace</Label>
 				<p className="mt-1 text-xs text-zinc-500">
-					How long after the absolute end you have to publish the settlement before losing bidders can reclaim their funds. Bids carry the
+					How long after the auction end you have to publish the settlement before losing bidders can reclaim their funds. Bids carry the
 					same locktime regardless of how many bids land.
 				</p>
 			</div>
@@ -1721,17 +1727,17 @@ export function AuctionFormContent() {
 
 	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
-		let effectiveEndAt = formData.endAt
+		let resolvedEndAt = formData.endAt
 		if (endMode === 'duration') {
 			const parsedStart = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
 			const startSeconds = startMode === 'immediate' ? nowSeconds : (parsedStart ?? nowSeconds)
-			effectiveEndAt = toDatetimeLocal(new Date((startSeconds + durationSeconds) * 1000))
+			resolvedEndAt = toDatetimeLocal(new Date((startSeconds + durationSeconds) * 1000))
 		}
 
 		return {
 			...formData,
 			startAt: effectiveStartAt,
-			endAt: effectiveEndAt,
+			endAt: resolvedEndAt,
 			imageUrls: images
 				.slice()
 				.sort((a, b) => a.imageOrder - b.imageOrder)

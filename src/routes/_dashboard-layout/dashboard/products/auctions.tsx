@@ -9,10 +9,9 @@ import { uiActions } from '@/lib/stores/ui'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
 	auctionsByPubkeyQueryOptions,
+	getAuctionBiddingCutoffAt,
 	getAuctionBidCountFromBids,
 	getAuctionCurrentPriceFromBids,
-	getAuctionEffectiveEndAt,
-	getAuctionEndAt,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionReserve,
@@ -83,13 +82,12 @@ function AuctionListBody({
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const startAt = getAuctionStartAt(auction)
-	const endAt = getAuctionEndAt(auction)
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
 	const currentBid = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
@@ -144,7 +142,7 @@ function AuctionListBody({
 						Reserve: <span className="font-medium">{reserve.toLocaleString()} sats</span>
 					</p>
 					<p className="text-gray-600 col-span-2">
-						Ends: <span className="font-medium">{formatMaybeDate(effectiveEndAt)}</span>
+						Bidding ends: <span className="font-medium">{formatMaybeDate(biddingCutoffAt)}</span>
 					</p>
 				</div>
 
@@ -192,14 +190,9 @@ function AuctionListItem({
 	isSettling: boolean
 }) {
 	const startAt = getAuctionStartAt(auction)
-	const endAt = getAuctionEndAt(auction)
-	const auctionRootEventId = getAuctionRootEventId(auction)
-	const auctionCoordinates = getAuctionCoordinates(auction)
-	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 

@@ -17,12 +17,11 @@ import { auctionKeys } from '@/queries/queryKeyFactory'
 import { useQueryClient } from '@tanstack/react-query'
 import {
 	auctionQueryOptions,
+	getAuctionBiddingCutoffAt,
 	getAuctionBidCountFromBids,
 	getAuctionBidIncrement,
 	getAuctionCurrentPriceFromBids,
 	getAuctionCurrency,
-	getAuctionEffectiveEndAt,
-	getAuctionEndAt,
 	getAuctionPathIssuer,
 	getAuctionId,
 	getAuctionImages,
@@ -238,7 +237,6 @@ function DashboardAuctionDetailRoute() {
 	const reserve = getAuctionReserve(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const startAt = getAuctionStartAt(auction)
-	const endAt = getAuctionEndAt(auction)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
 	const trustedMints = getAuctionMints(auction)
@@ -248,10 +246,10 @@ function DashboardAuctionDetailRoute() {
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
-	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const now = countdown.now
-	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const bidCount = getAuctionBidCountFromBids(auction, bids)
@@ -501,7 +499,7 @@ function DashboardAuctionDetailRoute() {
 							<OverviewItem label="Auction type" value={auctionType} helper="Primary format shown to buyers." />
 							<OverviewItem label="Currency" value={currency} helper="Display currency for bidding." />
 							<OverviewItem label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise between bids." />
-							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(effectiveEndAt)}`} />
+							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(biddingCutoffAt)}`} />
 						</div>
 
 						{/* Parties — pubkeys resolved via AvatarUser for both perspectives */}

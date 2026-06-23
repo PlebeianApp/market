@@ -6,20 +6,17 @@ import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
+	getAuctionBiddingCutoffAt,
 	getAuctionBidIncrement,
 	getAuctionBidCountFromBids,
 	getAuctionCurrentPriceFromBids,
-	getAuctionEffectiveEndAt,
-	getAuctionEndAt,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
-	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
 	getAuctionPathIssuer,
 	getAuctionRootEventId,
-	getAuctionSettlementGrace,
 	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionTitle,
@@ -51,7 +48,6 @@ export function AuctionCard({
 	const { user: currentUser } = useStore(authStore)
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
-	const endAt = getAuctionEndAt(auction)
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const acceptedMints = getAuctionMints(auction)
@@ -73,8 +69,8 @@ export function AuctionCard({
 	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const startAt = getAuctionStartAt(auction)
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
-	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)

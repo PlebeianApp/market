@@ -5,6 +5,8 @@ import {
 	compareAuctionBidChainPriority,
 	computeAuctionBidFloor,
 	computeAuctionFloorMultiplier,
+	getAuctionBidAcceptanceEndAt,
+	getAuctionBiddingCutoffAt,
 	getAuctionCurrentPrice,
 	getAuctionEffectiveEndAt,
 	getAuctionMinBidCurve,
@@ -183,6 +185,61 @@ describe('auctionSettlement helpers', () => {
 		expect(getAuctionEffectiveEndAt(auction, bids)).toBe(320)
 		expect(getAuctionWindowValidBids(auction, bids).map((bid) => bid.id)).toEqual(['bid-early', 'bid-snipe-1', 'bid-snipe-2'])
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1300)
+	})
+
+	test('bidding cutoff is max_end_at when max_end_at is after end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 320,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(320)
+	})
+
+	test('bidding cutoff falls back to end_at when max_end_at is 0', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 0,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(200)
+	})
+
+	test('bidding cutoff falls back to end_at when max_end_at is before end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 150,
+		})
+
+		expect(getAuctionBiddingCutoffAt(auction)).toBe(200)
+	})
+
+	test('fixed-window v1 bid helpers include bids through max_end_at', () => {
+		const auction = makeAuction({
+			id: 'auction-root',
+			startAt: 100,
+			endAt: 200,
+			extensionRule: 'none',
+			maxEndAt: 320,
+		})
+		const bids = [
+			makeBid({ id: 'bid-before-end-at', pubkey: 'alice', amount: 1100, createdAt: 150 }),
+			makeBid({ id: 'bid-in-anti-snipe-window', pubkey: 'bob', amount: 1400, createdAt: 250 }),
+			makeBid({ id: 'bid-after-max-end-at', pubkey: 'carol', amount: 1800, createdAt: 321 }),
+		]
+
+		expect(getAuctionBidAcceptanceEndAt(auction, bids)).toBe(320)
+		expect(getAuctionWindowValidBids(auction, bids).map((bid) => bid.id)).toEqual(['bid-before-end-at', 'bid-in-anti-snipe-window'])
+		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1400)
 	})
 })
 

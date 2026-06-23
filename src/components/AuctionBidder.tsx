@@ -4,6 +4,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
+	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
 	getAuctionBidIncrement,
 	getAuctionStartAt,
@@ -12,9 +13,7 @@ import {
 	getAuctionMints,
 	getAuctionId,
 	useAuctionBids,
-	getAuctionEffectiveEndAt,
 	getAuctionRootEventId,
-	getAuctionMaxEndAt,
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
 	getBidAmount,
@@ -118,8 +117,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endAt = getAuctionEndAt(auction)
 	const startAt = getAuctionStartAt(auction)
-	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
-	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
 	// Lower-bound gate: bidding is closed until start_at elapses. Using the
 	// countdown's ticking `now` keeps this reactive — the UI flips from
@@ -163,7 +162,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const flatFloor = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const minBid = Math.max(flatFloor, curveFloor)
-	const inCurveWindow = countdown.now > endAt && countdown.now < (getAuctionMaxEndAt(auction) || endAt)
+	const inCurveWindow = countdown.now > endAt && countdown.now < biddingCutoffAt
 	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
@@ -287,8 +286,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				auctionCoordinates,
 				amount: parsedAmount,
 				auctionStartAt: startAt,
-				auctionEffectiveEndAt: effectiveEndAt,
-				auctionLocktimeAt: getAuctionMaxEndAt(auction),
+				auctionEffectiveEndAt: biddingCutoffAt,
+				auctionLocktimeAt: biddingCutoffAt,
 				settlementGraceSeconds: getAuctionSettlementGrace(auction),
 				sellerPubkey: auction.pubkey,
 				p2pkXpub,
@@ -318,7 +317,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
 					<p className="font-semibold">Anti-snipe window — minimum bid rising</p>
 					<p className="mt-0.5 text-amber-700">
-						The auction's nominal end has passed. Bids are still accepted until the absolute end, but the floor ramps up{' '}
+						Flat bidding has ended. Bids are still accepted until auction end, but the floor ramps up{' '}
 						<span className="font-semibold">{auctionCurve.shape}</span>ly to {auctionCurve.peakMultiplier}× by then. Floor right now:{' '}
 						<span className="font-semibold">{minBid.toLocaleString()} sats</span>.
 					</p>
