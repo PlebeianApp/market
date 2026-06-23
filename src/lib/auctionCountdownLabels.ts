@@ -98,6 +98,40 @@ export function formatAuctionEndTimeLabel(endTimestamp: number, isEnded: boolean
 	return `Ends on ${endDate.toLocaleDateString()} at ${timeStr}`
 }
 
+/**
+ * Formats a pre-start countdown into "Starts in …" copy, mirroring the
+ * shape of formatAuctionCountdownDetailed but with a "Starts in" prefix.
+ */
+export function formatAuctionStartsIn(seconds: number): string {
+	if (seconds <= 0) return 'Starting now'
+
+	const days = Math.floor(seconds / 86400)
+	const hours = Math.floor((seconds % 86400) / 3600)
+	const minutes = Math.floor((seconds % 3600) / 60)
+	const secs = Math.round(seconds % 60)
+
+	const mm = minutes.toString().padStart(2, '0')
+	const ss = secs.toString().padStart(2, '0')
+	const coreTime = `${mm}:${ss}`
+
+	if (days > 0) {
+		const dayLabel = days === 1 ? 'Day' : 'Days'
+		const hourLabel = hours === 1 ? 'Hour' : 'Hours'
+		return `Starts in ${days} ${dayLabel} ${hours} ${hourLabel} ${coreTime}`
+	}
+
+	if (hours > 0) {
+		const hourLabel = hours === 1 ? 'Hour' : 'Hours'
+		return `Starts in ${hours} ${hourLabel} ${coreTime}`
+	}
+
+	if (seconds < 60) {
+		return `Starts in ${Math.round(seconds)}s`
+	}
+
+	return `Starts in ${coreTime}`
+}
+
 export function getAuctionCountdownLabels(endAt: number, now: number, options?: AuctionCountdownLabelOptions): AuctionCountdownLabels {
 	if (endAt <= 0) {
 		return {
