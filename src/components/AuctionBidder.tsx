@@ -175,6 +175,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
+	const [rulesDialogBidAmount, setRulesDialogBidAmount] = useState<number | null>(null)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -312,23 +313,36 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
+		setRulesDialogBidAmount(bidData.amount)
 		setIsRulesDialogOpen(true)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
 		setIsRulesDialogOpen(open)
+		if (!open) {
+			setRulesDialogBidAmount(null)
+		}
 	}
 
 	const handleConfirmBid = async () => {
-		if (bidMutation.isPending) return
+		if (bidMutation.isPending || rulesDialogBidAmount === null) return
 
 		const bidData = prepareBidSubmission()
 		if (!bidData) {
 			setIsRulesDialogOpen(false)
+			setRulesDialogBidAmount(null)
+			return
+		}
+
+		if (rulesDialogBidAmount !== null && bidData.amount !== rulesDialogBidAmount) {
+			setIsRulesDialogOpen(false)
+			setRulesDialogBidAmount(null)
+			toast.info('The bid amount changed while you were reviewing the rules. Please review the updated amount and try again.')
 			return
 		}
 
 		setIsRulesDialogOpen(false)
+		setRulesDialogBidAmount(null)
 		await submitPreparedBid(bidData)
 	}
 
@@ -349,6 +363,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3 py-2 text-sm text-muted-foreground">
+						{rulesDialogBidAmount !== null && (
+							<p className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground">
+								You are confirming a bid of {rulesDialogBidAmount.toLocaleString()} sats.
+							</p>
+						)}
 						<ul className="list-disc space-y-2 pl-5">
 							<li>Auctions are timed. The highest valid bid may win, but bids are not guaranteed.</li>
 							<li>Your bid may lock funds using the auction's Cashu/P2PK flow.</li>
@@ -361,7 +380,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						<Button variant="outline" onClick={() => handleRulesDialogOpenChange(false)} disabled={bidMutation.isPending}>
 							Cancel
 						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending}>
+						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || rulesDialogBidAmount === null}>
 							{bidMutation.isPending ? 'Submitting...' : 'I understand, place bid'}
 						</Button>
 					</DialogFooter>
