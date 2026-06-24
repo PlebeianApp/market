@@ -110,7 +110,8 @@ async function openBidSubscription(
 				const amountTag = bidEvent.tags.find((t) => t[0] === 'amount')?.[1]
 				const amount = amountTag ? parseInt(amountTag, 10) : 0
 				const formattedAmount = amount.toLocaleString()
-				await publishCommentatorMessage(ctx, liveActivityCoord, `🔵 New bid: ${formattedAmount} sats`)
+				const bidderNpub = `npub1${bidEvent.pubkey.slice(0, 12)}…`
+				await publishCommentatorMessage(ctx, liveActivityCoord, `🔵 New bid from ${bidderNpub}: ${formattedAmount} sats`)
 			} catch (err) {
 				console.error('[live-activity-worker] Failed to publish commentator message:', err)
 			}
@@ -371,27 +372,20 @@ export async function pollAndUpdateLiveActivities(
 
 			// Phase 2: CVM commentator — manage bid subscriptions and publish milestones
 			const prevStatus = lastKnown?.status
-			const prevParticipants = lastKnown?.currentParticipants ?? 0
 
 			if (status === 'live') {
 				// Open bid subscription if not already open
 				await openBidSubscription(ctx, auctionCoord, liveActivityCoord, dedupKey, now)
 
-				// Announce participant milestones
 				if (prevStatus !== 'live' && prevStatus !== undefined) {
 					await publishCommentatorMessage(ctx, liveActivityCoord, '🟢 Auction is now live!')
-				}
-				if (currentParticipants > prevParticipants && currentParticipants > 0) {
-					await publishCommentatorMessage(ctx, liveActivityCoord, `👥 ${currentParticipants} watching now`)
 				}
 			} else if (status === 'ended') {
 				// Close bid subscription when auction ends
 				closeBidSubscription(dedupKey)
 
 				if (prevStatus !== 'ended' && prevStatus !== undefined) {
-					const reserveTag = getTagValue(auction, 'reserve')
-					const reserve = reserveTag ? parseInt(reserveTag, 10) : 0
-					await publishCommentatorMessage(ctx, liveActivityCoord, `🏁 Auction ended. ${totalParticipants} total participants.`)
+					await publishCommentatorMessage(ctx, liveActivityCoord, `🏁 Auction ended. Watched by ${totalParticipants} users.`)
 				}
 			}
 

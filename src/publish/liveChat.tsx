@@ -54,38 +54,3 @@ export const usePublishLiveChatMessageMutation = () => {
 		},
 	})
 }
-
-interface PublishReactionParams {
-	messageId: string
-	messagePubkey: string
-	liveActivityCoord: string
-	emoji: string
-}
-
-export const publishReaction = async ({ messageId, messagePubkey, emoji }: PublishReactionParams): Promise<void> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-	if (!ndk.signer) throw new Error('No signer available')
-
-	const event = new NDKEvent(ndk)
-	event.kind = 7
-	event.content = emoji
-	event.created_at = Math.floor(Date.now() / 1000)
-	event.tags = [
-		['e', messageId],
-		['p', messagePubkey],
-		['k', String(LIVE_CHAT_KIND)],
-	]
-
-	await event.sign(ndk.signer)
-	await ndkActions.publishEvent(event)
-}
-
-export const usePublishReactionMutation = () => {
-	return useMutation({
-		mutationFn: publishReaction,
-		onError: (error) => {
-			console.error('Failed to publish reaction:', error)
-		},
-	})
-}
