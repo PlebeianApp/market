@@ -1,8 +1,9 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
-import { usePublishAuctionBidMutation } from '@/publish/auctions'
+import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
@@ -33,6 +34,8 @@ import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
+
+const AUCTION_RULES_ACK_VERSION = 'v1'
 
 interface AuctionBidderProps {
 	auction: NDKEvent
@@ -166,6 +169,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
+	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
+	const auctionRulesAuctionIdentity = auctionRootEventId || auction.id
+	const auctionRulesAckKey =
+		hasSignedInBidder && auctionRulesBidderPubkey && auctionRulesAuctionIdentity
+			? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}:${auctionRulesAuctionIdentity}`
+			: null
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
@@ -173,6 +182,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
+	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
+	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -198,6 +209,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
 	}, [minBid])
+
+	useEffect(() => {
+		if (!auctionRulesAckKey || typeof window === 'undefined') {
+			setHasAcknowledgedAuctionRules(false)
+			return
+		}
+
+		try {
+			setHasAcknowledgedAuctionRules(window.localStorage.getItem(auctionRulesAckKey) === 'true')
+		} catch {
+			setHasAcknowledgedAuctionRules(false)
+		}
+	}, [auctionRulesAckKey])
 
 	// Disable logic
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
@@ -232,73 +256,110 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return 'Place Bid'
 	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
-	const handleSubmitBid = async () => {
-		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return
+	const prepareBidSubmission = (): AuctionBidFormData | null => {
+		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
 			toast.error(`Bid must be at least ${minBid.toLocaleString()} sats`)
-			return
+			return null
 		}
 
 		if (!hasSignedInBidder) {
 			uiActions.openDialog('login')
-			return
+			return null
 		}
 
 		if (isNip60Loading) {
 			toast.info('Wallet is still loading. Try again in a moment.')
-			return
+			return null
 		}
 
 		if (hasInsufficientBidFunds) {
 			if (!depositMint) {
 				toast.error(mintError || 'No suitable mint available for bidding.')
-				return
+				return null
 			}
 
 			setDepositAmount(Math.ceil(deltaAmount))
 			setPreferredDepositMint(depositMint)
 			setIsDepositOpen(true)
-			return
+			return null
 		}
 
+		// Under `cashu_p2pk_bidder_path_v1` the bidder generates the
+		// derivation path locally and never consults a "path issuer"
+		// oracle - that was the v1 CVM-coordinator scheme. The only
+		// auction tag the bidder actually needs is `p2pk_xpub`; if
+		// it's absent the auction isn't biddable.
+		if (!p2pkXpub) {
+			toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
+			return null
+		}
+		if (!selectedMint) {
+			toast.error(mintError || 'No suitable mint available for bidding.')
+			return null
+		}
+		if (!canFund) {
+			toast.error('Insufficient balance on selected mint to cover the required delta.')
+			return null
+		}
+
+		return {
+			auctionEventId: auctionRootEventId || auction.id,
+			auctionCoordinates,
+			amount: parsedAmount,
+			auctionStartAt: startAt,
+			auctionEffectiveEndAt: biddingCutoffAt,
+			auctionLocktimeAt: biddingCutoffAt,
+			settlementGraceSeconds: getAuctionSettlementGrace(auction),
+			sellerPubkey: auction.pubkey,
+			p2pkXpub,
+			mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
+		}
+	}
+
+	const submitPreparedBid = async (bidData: AuctionBidFormData) => {
 		try {
-			// Under `cashu_p2pk_bidder_path_v1` the bidder generates the
-			// derivation path locally and never consults a "path issuer"
-			// oracle — that was the v1 CVM-coordinator scheme. The only
-			// auction tag the bidder actually needs is `p2pk_xpub`; if
-			// it's absent the auction isn't biddable.
-			if (!p2pkXpub) {
-				toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
-				return
-			}
-			if (!selectedMint) {
-				toast.error(mintError || 'No suitable mint available for bidding.')
-				return
-			}
-			if (!canFund) {
-				toast.error('Insufficient balance on selected mint to cover the required delta.')
-				return
-			}
-			await bidMutation.mutateAsync({
-				auctionEventId: auctionRootEventId || auction.id,
-				auctionCoordinates,
-				amount: parsedAmount,
-				auctionStartAt: startAt,
-				auctionEffectiveEndAt: biddingCutoffAt,
-				auctionLocktimeAt: biddingCutoffAt,
-				settlementGraceSeconds: getAuctionSettlementGrace(auction),
-				sellerPubkey: auction.pubkey,
-				p2pkXpub,
-				mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
-			})
+			await bidMutation.mutateAsync(bidData)
 			toast.success('Bid placed successfully')
 			setIsEditing(false)
 			onBidSuccess?.()
 		} catch {
 			// Error handled by mutation
 		}
+	}
+
+	const handleSubmitBid = async () => {
+		const bidData = prepareBidSubmission()
+		if (!bidData) return
+
+		if (!hasAcknowledgedAuctionRules) {
+			setIsRulesDialogOpen(true)
+			return
+		}
+
+		await submitPreparedBid(bidData)
+	}
+
+	const handleRulesDialogOpenChange = (open: boolean) => {
+		setIsRulesDialogOpen(open)
+	}
+
+	const handleConfirmRules = () => {
+		if (auctionRulesAckKey) {
+			try {
+				if (typeof window !== 'undefined') {
+					window.localStorage.setItem(auctionRulesAckKey, 'true')
+				}
+			} catch {
+				// Local persistence failed; keep the acknowledgment in memory for this mounted session.
+			}
+		}
+
+		setHasAcknowledgedAuctionRules(true)
+		setIsRulesDialogOpen(false)
+		toast.info('Auction rules reviewed. Check the current bid amount before placing your bid.')
 	}
 
 	return (
@@ -309,6 +370,48 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				initialAmount={depositAmount}
 				preferredMint={preferredDepositMint}
 			/>
+			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Review auction rules before bidding</DialogTitle>
+						<DialogDescription>
+							Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing bids in this auction.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-3 py-2 text-sm text-muted-foreground">
+						<ul className="list-disc space-y-2 pl-5">
+							<li>
+								Your bid may lock Cashu e-cash to an auction-derived P2PK key, with a refund path that only opens after the auction and
+								settlement window.
+							</li>
+							<li>
+								The lock is designed so the seller cannot redeem the bid from public relay data alone before settlement; settlement requires
+								the bid-specific path secret.
+							</li>
+							<li>
+								If you win, settlement may require you to reveal or transfer the bid's path secret so the seller can redeem the funds.
+							</li>
+							<li>
+								If the winning bid is not settled before the settlement window closes, it may be invalidated or move to the refund/fallback
+								path.
+							</li>
+							<li>If you lose, or settlement does not complete, your funds may only become refundable after the refund window opens.</li>
+							<li>
+								This auction still relies on trusted parties: Cashu mints custody the bitcoin behind e-cash, validators/auditors and relay
+								data affect what the app shows, and bidders/sellers must complete settlement and delivery honestly.
+							</li>
+						</ul>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => handleRulesDialogOpenChange(false)} disabled={bidMutation.isPending}>
+							Cancel
+						</Button>
+						<Button onClick={handleConfirmRules} disabled={bidMutation.isPending}>
+							I understand these rules
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 			{/* Anti-snipe curve banner — visible only when we're inside
 			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
 			    Tells the bidder why the floor is higher than they'd expect
@@ -453,6 +556,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
+			{hasAcknowledgedAuctionRules && hasSignedInBidder && !isOwnAuction && (
+				<Button
+					type="button"
+					variant="link"
+					size="sm"
+					onClick={() => setIsRulesDialogOpen(true)}
+					className="h-auto justify-start p-0 text-xs text-muted-foreground"
+				>
+					Review auction rules
+				</Button>
+			)}
 		</div>
 	)
 }
