@@ -1,3 +1,7 @@
+import { ORDER_STATUS } from '../schemas/order'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { getOrderStatus } from '@/queries/orders'
+
 // Invoice-related types for order utility functions
 export interface InvoiceData {
 	id: string
@@ -107,10 +111,6 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 		status: overallStatus,
 	}
 }
-
-import { ORDER_STATUS } from '../schemas/order'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getOrderStatus } from '@/queries/orders'
 
 export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 	const status = getOrderStatus(order)
