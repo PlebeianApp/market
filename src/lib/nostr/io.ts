@@ -16,6 +16,7 @@ import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
 
 import { ndkIo } from './io-ndk'
+import { applesauceIo } from './io-applesauce'
 
 export type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 export type NostrFilter = Filter
@@ -51,7 +52,14 @@ export interface NostrIo {
 	getUser(): Promise<NostrUser | null>
 }
 
-let active: NostrIo = ndkIo
+let active: NostrIo = (() => {
+	try {
+		if ((globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NOSTR_BACKEND === 'applesauce') {
+			return applesauceIo
+		}
+	} catch { /* browser without process.env shim */ }
+	return ndkIo
+})()
 
 /** Returns the currently active Nostr I/O adapter. */
 export function getNostrIo(): NostrIo {
