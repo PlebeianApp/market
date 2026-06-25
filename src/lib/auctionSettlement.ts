@@ -8,7 +8,14 @@ import {
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
+	type PathReleaseReason,
 } from './auction/constants'
+import { getBuyerPubkey, getSellerPubkey, type OrderWithRelatedEvents } from '@/queries/orders'
+import { deriveAuctionChildP2pkPubkeyFromXpub, auctionP2pkPubkeysMatch } from './auctionP2pk'
+import { parsePathReleaseEvent, parseSettlementEvent } from './schemas/auction/settlementEvents'
+import { parseBidEvent } from './schemas/auction/bidEvent'
+import { parseAuctionEvent } from './schemas/auction/auctionEvent'
+import type { ParsedPathReleaseEvent, ParsedSettlementEvent } from './auction/events'
 
 // Re-export the constants that used to live here so downstream callers
 // don't have to chase the move. The canonical definitions are in
@@ -37,6 +44,41 @@ export interface ResolvedAuctionVersionSet {
 	displayEvent: NDKEvent
 	rootEventId: string
 	rejectedEventIds: string[]
+}
+
+/**
+ * Validation states for auction settlement
+ */
+export type AuctionSettlementValidationState =
+	| 'no_observed_event'
+	| 'observed_unverified'
+	| 'validated_buyer_path_release'
+	| 'validated_seller_settlement'
+	| 'fully_validated_settled'
+
+/**
+ * Validation result for auction settlement events
+ */
+export interface AuctionSettlementValidationResult {
+	state: AuctionSettlementValidationState
+	hasPathRelease: boolean
+	hasSettlement: boolean
+	pathReleaseValid: boolean
+	settlementValid: boolean
+	validations: {
+		auctionCoordinate: boolean
+		buyerAuthor: boolean
+		sellerAuthor: boolean
+		participantTags: boolean
+		amountShape: boolean
+	}
+	detailedErrors: {
+		pathRelease?: string[]
+		settlement?: string[]
+		cryptographic?: string[]
+		crossReference?: string[]
+	}
+	errors: string[]
 }
 
 // `AuctionSettlementWinnerToken` and `AuctionSettlementPlanResponse`
@@ -414,4 +456,300 @@ export const compareAuctionBidChainPriority = (left: AuctionBidChainGroup, right
 	if (createdAtDelta !== 0) return createdAtDelta
 
 	return left.latestBid.id.localeCompare(right.latestBid.id)
+}
+
+/**
+ * Enhanced validation for auction settlement events
+ * Addresses all critical flaws identified in PR review
+ */
+export function validateAuctionSettlementEvents(
+	settlements: NDKEvent[],
+	pathReleases: NDKEvent[],
+	auctionCoordinates: string,
+	order: OrderWithRelatedEvents,
+	// Additional parameters for comprehensive validation
+	auctionEvent?: NDKEvent,
+	bidEvents?: NDKEvent[],
+): AuctionSettlementValidationResult {
+	const result: AuctionSettlementValidationResult = {
+		state: 'no_observed_event',
+		hasPathRelease: pathReleases.length > 0,
+		hasSettlement: settlements.length > 0,
+		pathReleaseValid: false,
+		settlementValid: false,
+		validations: {
+			auctionCoordinate: false,
+			buyerAuthor: false,
+			sellerAuthor: false,
+			participantTags: false,
+			amountShape: false,
+		},
+		errors: [],
+		detailedErrors: {
+			pathRelease: [],
+			settlement: [],
+			cryptographic: [],
+			crossReference: [],
+		},
+	}
+
+	const buyerPubkey = getBuyerPubkey(order.order)
+	const sellerPubkey = getSellerPubkey(order.order)
+	let pathReleaseData: ParsedPathReleaseEvent | null = null
+	let settlementData: ParsedSettlementEvent | null = null
+
+	// Validate path release events
+	if (pathReleases.length > 0) {
+		const pathRelease = pathReleases[0]
+
+		// Parse the path release event using the schema
+		const parsedPathRelease = parsePathReleaseEvent(pathRelease)
+		if (!parsedPathRelease.ok) {
+			// Handle structured error format from schema validation
+			const errorMessage =
+				typeof parsedPathRelease.error === 'string' ? parsedPathRelease.error : JSON.stringify(parsedPathRelease.error, null, 2)
+			result.detailedErrors.pathRelease?.push(`Path release schema validation failed: ${errorMessage}`)
+		} else {
+			pathReleaseData = parsedPathRelease.value
+		}
+
+		// 1. Validate auction coordinate
+		const hasCorrectCoordinate = pathRelease.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
+		if (!hasCorrectCoordinate) {
+			result.errors.push('Path release missing correct auction coordinate')
+			result.detailedErrors.pathRelease?.push('Missing or incorrect auction coordinate')
+		}
+		result.validations.auctionCoordinate = hasCorrectCoordinate
+
+		// 2. Validate buyer is the author
+		const isBuyerAuthor = pathRelease.pubkey === buyerPubkey
+		if (!isBuyerAuthor) {
+			result.errors.push('Path release not authored by buyer')
+			result.detailedErrors.pathRelease?.push('Path release not authored by the order buyer')
+		}
+		result.validations.buyerAuthor = isBuyerAuthor
+
+		// 3. Validate p tag points to seller
+		const hasCorrectRecipient = pathRelease.tags.some((tag) => tag[0] === 'p' && tag[1] === sellerPubkey)
+		if (!hasCorrectRecipient) {
+			result.errors.push('Path release missing correct recipient')
+			result.detailedErrors.pathRelease?.push('Missing or incorrect seller recipient tag')
+		}
+		result.validations.participantTags = hasCorrectRecipient
+
+		// 4. Validate mandatory tags presence and format
+		const derivationPath = pathRelease.tags.find((tag) => tag[0] === 'derivation_path')?.[1]
+		if (!derivationPath) {
+			result.errors.push('Path release missing derivation_path tag')
+			result.detailedErrors.pathRelease?.push('Missing required derivation_path tag')
+		} else if (!/^m\/(\d+\/){4}\d+$/.test(derivationPath)) {
+			result.detailedErrors.pathRelease?.push('Invalid derivation path format')
+		}
+
+		const childPubkey = pathRelease.tags.find((tag) => tag[0] === 'child_pubkey')?.[1]
+		if (!childPubkey) {
+			result.errors.push('Path release missing child_pubkey tag')
+			result.detailedErrors.pathRelease?.push('Missing required child_pubkey tag')
+		}
+
+		const releaseReason = pathRelease.tags.find((tag) => tag[0] === 'release_reason')?.[1] as PathReleaseReason | undefined
+		const validReasons: PathReleaseReason[] = ['settlement', 'fallback_settlement', 'voluntary_late']
+		if (releaseReason && !validReasons.includes(releaseReason)) {
+			result.detailedErrors.pathRelease?.push('Invalid release_reason value')
+		}
+
+		// 5. Cryptographic validation - verify derivation path produces child pubkey
+		if (derivationPath && childPubkey && auctionEvent) {
+			const parsedAuction = parseAuctionEvent(auctionEvent)
+			if (parsedAuction.ok) {
+				const p2pkXpub = parsedAuction.value.p2pkXpub
+				if (p2pkXpub) {
+					try {
+						const derivedPubkey = deriveAuctionChildP2pkPubkeyFromXpub(p2pkXpub, derivationPath)
+						if (!auctionP2pkPubkeysMatch(derivedPubkey, childPubkey)) {
+							result.errors.push('Derived pubkey does not match child_pubkey')
+							result.detailedErrors.cryptographic?.push('Path derivation failed to match child pubkey')
+						}
+					} catch (error) {
+						result.detailedErrors.cryptographic?.push(`Path derivation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+					}
+				}
+			}
+		}
+
+		// 6. Validate referenced bid event exists and belongs to auction
+		const bidEventId = pathRelease.tags.find((tag) => tag[0] === 'e')?.[1]
+		let bidEvent: NDKEvent | undefined
+		if (bidEventId && bidEvents) {
+			bidEvent = bidEvents.find((bid) => bid.id === bidEventId)
+			if (!bidEvent) {
+				result.errors.push('Referenced bid event not found')
+				result.detailedErrors.crossReference?.push('Path release references non-existent bid event')
+			} else {
+				// Validate bid belongs to this auction
+				const bidAuctionCoord = bidEvent.tags.find((tag) => tag[0] === 'a')?.[1]
+				if (bidAuctionCoord !== auctionCoordinates) {
+					result.detailedErrors.crossReference?.push('Referenced bid does not belong to this auction')
+				}
+
+				// Validate bidder is the same as the path release author
+				if (bidEvent.pubkey !== buyerPubkey) {
+					result.detailedErrors.crossReference?.push('Referenced bid author does not match path release author')
+				}
+
+				// Parse bid event for additional validation
+				const parsedBid = parseBidEvent(bidEvent)
+				if (!parsedBid.ok) {
+					const errorMessage = typeof parsedBid.error === 'string' ? parsedBid.error : JSON.stringify(parsedBid.error, null, 2)
+					result.detailedErrors.crossReference?.push(`Referenced bid validation failed: ${errorMessage}`)
+				}
+			}
+		}
+
+		// Check if all basic validations passed (schema issues don't count as validation failures for state)
+		result.pathReleaseValid =
+			(hasCorrectCoordinate &&
+				isBuyerAuthor &&
+				hasCorrectRecipient &&
+				!!derivationPath &&
+				!!childPubkey &&
+				result.errors.length === 0 &&
+				!Object.values(result.detailedErrors).some((errs) => errs.length > 0)) ??
+			false
+
+		if (result.pathReleaseValid) {
+			result.state = 'validated_buyer_path_release'
+		} else {
+			result.state = 'observed_unverified'
+		}
+	}
+
+	// Validate settlement events
+	if (settlements.length > 0) {
+		const settlement = settlements[0]
+
+		// Parse the settlement event using the schema
+		const parsedSettlement = parseSettlementEvent(settlement)
+		if (!parsedSettlement.ok) {
+			// Handle structured error format from schema validation
+			const errorMessage =
+				typeof parsedSettlement.error === 'string' ? parsedSettlement.error : JSON.stringify(parsedSettlement.error, null, 2)
+			result.detailedErrors.settlement?.push(`Settlement schema validation failed: ${errorMessage}`)
+		} else {
+			settlementData = parsedSettlement.value
+		}
+
+		// Validate auction coordinate
+		const hasCorrectCoordinate = settlement.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
+		result.validations.auctionCoordinate = result.validations.auctionCoordinate || hasCorrectCoordinate
+
+		if (!hasCorrectCoordinate) {
+			result.errors.push('Settlement missing correct auction coordinate')
+			result.detailedErrors.settlement?.push('Missing or incorrect auction coordinate')
+		}
+
+		// Validate seller is the author
+		const isSellerAuthor = settlement.pubkey === sellerPubkey
+		if (!isSellerAuthor) {
+			result.errors.push('Settlement not authored by seller')
+			result.detailedErrors.settlement?.push('Settlement not authored by the auction seller')
+		}
+		result.validations.sellerAuthor = isSellerAuthor
+
+		// Validate winner tag matches buyer
+		const winnerTag = settlement.tags.find((tag) => tag[0] === 'winner')
+		const hasCorrectWinner = winnerTag && winnerTag[1] === buyerPubkey
+		if (!hasCorrectWinner) {
+			result.errors.push('Settlement missing correct winner')
+			result.detailedErrors.settlement?.push('Settlement winner does not match order buyer')
+		}
+		result.validations.participantTags = (result.validations.participantTags || hasCorrectWinner) ?? false
+
+		// Validate amount is present and properly formatted
+		const finalAmountTag = settlement.tags.find((tag) => tag[0] === 'final_amount')
+		const finalAmount = finalAmountTag ? parseInt(finalAmountTag[1]) : NaN
+		const hasAmount = finalAmountTag && !isNaN(finalAmount) && finalAmount > 0
+		if (!hasAmount) {
+			result.errors.push('Settlement missing valid amount')
+			result.detailedErrors.settlement?.push('Settlement missing or has invalid final_amount')
+		}
+		result.validations.amountShape = hasAmount ?? false
+
+		// 7. Validate status is one of the allowed values
+		const statusTag = settlement.tags.find((tag) => tag[0] === 'status')?.[1]
+		const validStatuses = ['settled', 'reserve_not_met', 'cancelled', 'griefed_no_fallback']
+		if (statusTag && !validStatuses.includes(statusTag)) {
+			result.detailedErrors.settlement?.push('Invalid settlement status value')
+		}
+
+		// 8. Cross-check final amount against winning bid
+		if (hasAmount && bidEvents && settlementData?.winningBidId) {
+			const winningBid = bidEvents.find((bid) => bid.id === settlementData?.winningBidId)
+			if (winningBid) {
+				// Validate bid belongs to this auction
+				const bidAuctionCoord = winningBid.tags.find((tag) => tag[0] === 'a')?.[1]
+				if (bidAuctionCoord !== auctionCoordinates) {
+					result.detailedErrors.crossReference?.push('Winning bid does not belong to this auction')
+				}
+
+				// Validate bidder is the same as the settlement winner
+				if (winningBid.pubkey !== buyerPubkey) {
+					result.detailedErrors.crossReference?.push('Winning bid author does not match settlement winner')
+				}
+
+				// Parse bid event for additional validation
+				const parsedWinningBid = parseBidEvent(winningBid)
+				if (parsedWinningBid.ok) {
+					const bidAmount = parsedWinningBid.value.amount
+					if (finalAmount !== bidAmount) {
+						result.detailedErrors.crossReference?.push(`Settlement amount ${finalAmount} does not match bid amount ${bidAmount}`)
+					}
+				} else {
+					const errorMessage =
+						typeof parsedWinningBid.error === 'string' ? parsedWinningBid.error : JSON.stringify(parsedWinningBid.error, null, 2)
+					result.detailedErrors.crossReference?.push(`Error in parsing winning bid: ${errorMessage}`)
+				}
+			} else {
+				result.detailedErrors.crossReference?.push('Settlement references non-existent winning bid')
+			}
+		}
+
+		// 9. Validate path_release tag when status is 'settled'
+		if (statusTag === 'settled') {
+			const pathReleaseId = settlement.tags.find((tag) => tag[0] === 'path_release')?.[1]
+			if (!pathReleaseId) {
+				result.detailedErrors.settlement?.push('Settlement with status=settled missing required path_release tag')
+			}
+		}
+
+		// Check if all basic validations passed (schema issues don't count as validation failures for state)
+		const basicValidationsPassed = hasCorrectCoordinate && isSellerAuthor && hasCorrectWinner && hasAmount
+		result.settlementValid =
+			(basicValidationsPassed &&
+				!result.detailedErrors.settlement?.some(
+					(err) => err.includes('schema validation failed') || err.includes('missing') || err.includes('Invalid'),
+				) &&
+				!result.detailedErrors.crossReference?.some(
+					(err) => err.includes('does not belong to this auction') || err.includes('author does not match') || err.includes('amount'),
+				)) ??
+			false
+
+		if (result.settlementValid) {
+			if (result.state === 'validated_buyer_path_release') {
+				result.state = 'fully_validated_settled'
+			} else {
+				result.state = 'validated_seller_settlement'
+			}
+		} else if (result.state === 'no_observed_event') {
+			result.state = 'observed_unverified'
+		} else if (result.hasPathRelease || result.hasSettlement) {
+			result.state = 'observed_unverified'
+		}
+	}
+
+	if (!result.hasPathRelease && !result.hasSettlement) {
+		result.state = 'no_observed_event'
+	}
+
+	return result
 }

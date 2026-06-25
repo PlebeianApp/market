@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { fetchProductByATag, fetchProduct, getProductId, getProductStock } from '@/queries/products'
+import { fetchProductByATag, fetchProduct, getProductId, getProductStock, isNSFWProduct } from '@/queries/products'
 import { useUpdateProductMutation, type ProductFormData } from '@/publish/products'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
@@ -156,11 +156,13 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 				const categories = getProductCategories(product.productEvent)
 				const shippingOptions = getProductShippingOptions(product.productEvent)
 				const collectionTag = getProductCollection(product.productEvent)
+				const isNsfw = isNSFWProduct(product.productEvent)
 
 				const formData: ProductFormData = {
 					name: product.productName,
 					summary: getProductSummary(product.productEvent),
 					description: getProductDescription(product.productEvent),
+					isNSFW: isNsfw,
 					price: priceTag?.[1] || '0',
 					quantity: product.newStock.toString(),
 					currency: priceTag?.[2] || 'USD',
