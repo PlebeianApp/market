@@ -359,7 +359,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 					<DialogHeader>
 						<DialogTitle>Review auction rules before bidding</DialogTitle>
 						<DialogDescription>
-							Placing an auction bid may lock Cashu funds until the auction ends and the settlement/refund window has passed.
+							Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing this bid.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3 py-2 text-sm text-muted-foreground">
@@ -369,11 +369,26 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							</p>
 						)}
 						<ul className="list-disc space-y-2 pl-5">
-							<li>Auctions are timed. The highest valid bid may win, but bids are not guaranteed.</li>
-							<li>Your bid may lock funds using the auction's Cashu/P2PK flow.</li>
-							<li>If you win, settlement may require a later action from you and the seller.</li>
-							<li>If you lose or settlement does not complete, funds may only become available through the refund path after locktime.</li>
-							<li>Relay data, validator/auditor review, mint state, and settlement events can affect what the app shows.</li>
+							<li>
+								Your bid may lock Cashu e-cash to an auction-derived P2PK key, with a refund path that only opens after the auction and
+								settlement window.
+							</li>
+							<li>
+								The lock is designed so the seller cannot redeem the bid from public relay data alone before settlement; settlement requires
+								the bid-specific path secret.
+							</li>
+							<li>
+								If you win, settlement may require you to reveal or transfer the bid's path secret so the seller can redeem the funds.
+							</li>
+							<li>
+								If the winning bid is not settled before the settlement window closes, it may be invalidated or move to the refund/fallback
+								path.
+							</li>
+							<li>If you lose, or settlement does not complete, your funds may only become refundable after the refund window opens.</li>
+							<li>
+								This auction still relies on trust assumptions: Cashu mints custody the bitcoin behind e-cash, validator/auditor and relay
+								data affect what the app shows, and bidders/sellers must complete settlement and delivery honestly.
+							</li>
 						</ul>
 					</div>
 					<DialogFooter>
