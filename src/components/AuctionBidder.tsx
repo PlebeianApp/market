@@ -35,6 +35,8 @@ import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 
+const AUCTION_RULES_ACK_VERSION = 'v1'
+
 interface AuctionBidderProps {
 	auction: NDKEvent
 	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
@@ -167,6 +169,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
+	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
+	const auctionRulesAuctionIdentity = auctionRootEventId || auction.id
+	const auctionRulesAckKey =
+		hasSignedInBidder && auctionRulesBidderPubkey && auctionRulesAuctionIdentity
+			? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}:${auctionRulesAuctionIdentity}`
+			: null
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
@@ -175,7 +183,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
-	const [rulesDialogBidAmount, setRulesDialogBidAmount] = useState<number | null>(null)
+	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -201,6 +209,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
 	}, [minBid])
+
+	useEffect(() => {
+		if (!auctionRulesAckKey || typeof window === 'undefined') {
+			setHasAcknowledgedAuctionRules(false)
+			return
+		}
+
+		try {
+			setHasAcknowledgedAuctionRules(window.localStorage.getItem(auctionRulesAckKey) === 'true')
+		} catch {
+			setHasAcknowledgedAuctionRules(false)
+		}
+	}, [auctionRulesAckKey])
 
 	// Disable logic
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
@@ -309,41 +330,36 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 	}
 
-	const handleSubmitBid = () => {
+	const handleSubmitBid = async () => {
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
-		setRulesDialogBidAmount(bidData.amount)
-		setIsRulesDialogOpen(true)
+		if (!hasAcknowledgedAuctionRules) {
+			setIsRulesDialogOpen(true)
+			return
+		}
+
+		await submitPreparedBid(bidData)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
 		setIsRulesDialogOpen(open)
-		if (!open) {
-			setRulesDialogBidAmount(null)
-		}
 	}
 
-	const handleConfirmBid = async () => {
-		if (bidMutation.isPending || rulesDialogBidAmount === null) return
-
-		const bidData = prepareBidSubmission()
-		if (!bidData) {
-			setIsRulesDialogOpen(false)
-			setRulesDialogBidAmount(null)
-			return
+	const handleConfirmRules = () => {
+		if (auctionRulesAckKey) {
+			try {
+				if (typeof window !== 'undefined') {
+					window.localStorage.setItem(auctionRulesAckKey, 'true')
+				}
+			} catch {
+				// Local persistence failed; keep the acknowledgment in memory for this mounted session.
+			}
 		}
 
-		if (rulesDialogBidAmount !== null && bidData.amount !== rulesDialogBidAmount) {
-			setIsRulesDialogOpen(false)
-			setRulesDialogBidAmount(null)
-			toast.info('The bid amount changed while you were reviewing the rules. Please review the updated amount and try again.')
-			return
-		}
-
+		setHasAcknowledgedAuctionRules(true)
 		setIsRulesDialogOpen(false)
-		setRulesDialogBidAmount(null)
-		await submitPreparedBid(bidData)
+		toast.info('Auction rules reviewed. Check the current bid amount before placing your bid.')
 	}
 
 	return (
@@ -359,15 +375,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 					<DialogHeader>
 						<DialogTitle>Review auction rules before bidding</DialogTitle>
 						<DialogDescription>
-							Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing this bid.
+							Auction bids use Cashu e-cash with P2PK locks. Review what can happen to your funds before placing bids in this auction.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="space-y-3 py-2 text-sm text-muted-foreground">
-						{rulesDialogBidAmount !== null && (
-							<p className="rounded-md bg-muted px-3 py-2 text-sm font-medium text-foreground">
-								You are confirming a bid of {rulesDialogBidAmount.toLocaleString()} sats.
-							</p>
-						)}
 						<ul className="list-disc space-y-2 pl-5">
 							<li>
 								Your bid may lock Cashu e-cash to an auction-derived P2PK key, with a refund path that only opens after the auction and
@@ -386,7 +397,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							</li>
 							<li>If you lose, or settlement does not complete, your funds may only become refundable after the refund window opens.</li>
 							<li>
-								This auction still relies on trust assumptions: Cashu mints custody the bitcoin behind e-cash, validator/auditor and relay
+								This auction still relies on trusted parties: Cashu mints custody the bitcoin behind e-cash, validators/auditors and relay
 								data affect what the app shows, and bidders/sellers must complete settlement and delivery honestly.
 							</li>
 						</ul>
@@ -395,8 +406,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						<Button variant="outline" onClick={() => handleRulesDialogOpenChange(false)} disabled={bidMutation.isPending}>
 							Cancel
 						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || rulesDialogBidAmount === null}>
-							{bidMutation.isPending ? 'Submitting...' : 'I understand, place bid'}
+						<Button onClick={handleConfirmRules} disabled={bidMutation.isPending}>
+							I understand these rules
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -545,6 +556,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
+			{hasAcknowledgedAuctionRules && hasSignedInBidder && !isOwnAuction && (
+				<Button
+					type="button"
+					variant="link"
+					size="sm"
+					onClick={() => setIsRulesDialogOpen(true)}
+					className="h-auto justify-start p-0 text-xs text-muted-foreground"
+				>
+					Review auction rules
+				</Button>
+			)}
 		</div>
 	)
 }
