@@ -50,7 +50,7 @@ export const DEFAULT_PUBLIC_RELAYS: string[] = [
  * Used as the primary read relay in production to eliminate the multi-second
  * dead-relay timeouts in the auctions UI (#1046).
  */
-export const MARKET_AGGREGATOR_RELAY = 'wss://market-agg.orangesync.tech'
+export const MARKET_AGGREGATOR_RELAY = process.env.NEXT_PUBLIC_MARKET_AGG_RELAY ?? ''
 
 // Keep for backward compatibility (deprecated - use DEFAULT_PUBLIC_RELAYS instead)
 export const defaultRelaysUrls: string[] = DEFAULT_PUBLIC_RELAYS
