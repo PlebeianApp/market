@@ -93,7 +93,10 @@ export const CURRENCIES = [
 	'NGN', // Nigerian Naira
 ] as const
 
-const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org']
+// Issue #901: connect to multiple CVM relays so a single relay outage no
+// longer hangs currency lookups. applesauce-relay's RelayLiveness will
+// auto-blacklist any of these that go down (see src/lib/ctxcn-client.ts).
+const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay.primal.net', 'wss://relay.nostr.net']
 
 export function getCurrencyServerRelays(): string[] {
 	const env = process.env.NODE_ENV || 'development'
