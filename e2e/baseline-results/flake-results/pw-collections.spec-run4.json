@@ -1,0 +1,263 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "collections.spec.ts",
+      "file": "collections.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Collection Management",
+          "file": "collections.spec.ts",
+          "line": 116,
+          "column": 6,
+          "specs": [
+            {
+              "title": "collections list page is accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5531,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:29:02.839Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "484e6cbb83c9c429bc58-012f01323d2868ded020",
+              "file": "collections.spec.ts",
+              "line": 117,
+              "column": 2
+            },
+            {
+              "title": "can create a collection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8269,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:29:09.849Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "484e6cbb83c9c429bc58-77c5e67c84e4332a5447",
+              "file": "collections.spec.ts",
+              "line": 121,
+              "column": 2
+            },
+            {
+              "title": "can edit a collection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14748,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:29:18.164Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "484e6cbb83c9c429bc58-83f68ad52e6c2ac8efcc",
+              "file": "collections.spec.ts",
+              "line": 134,
+              "column": 2
+            },
+            {
+              "title": "can delete a collection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12071,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:29:32.959Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "484e6cbb83c9c429bc58-db9d78b20a1c524c089e",
+              "file": "collections.spec.ts",
+              "line": 171,
+              "column": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:28:59.013Z",
+    "duration": 46305.361000000004,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

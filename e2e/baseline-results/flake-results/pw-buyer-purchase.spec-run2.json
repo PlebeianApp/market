@@ -1,0 +1,196 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "buyer-purchase.spec.ts",
+      "file": "buyer-purchase.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Buyer Purchase Flow",
+          "file": "buyer-purchase.spec.ts",
+          "line": 5,
+          "column": 6,
+          "specs": [
+            {
+              "title": "buyer adds two products to cart and totals are correct",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 18633,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Select shipping method')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Select shipping method')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Select shipping method')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Select shipping method')\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/buyer-purchase.spec.ts:39:33",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/buyer-purchase.spec.ts",
+                          "column": 33,
+                          "line": 39
+                        },
+                        "snippet": "  37 | \t\t// Wait for cart content to load and shipping options to appear\n  38 | \t\tconst shippingTrigger = buyerPage.getByText('Select shipping method')\n> 39 | \t\tawait expect(shippingTrigger).toBeVisible({ timeout: 10_000 })\n     | \t\t                              ^\n  40 |\n  41 | \t\t// Select \"Worldwide Standard\" shipping (5,000 sats)\n  42 | \t\tawait shippingTrigger.click()"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/buyer-purchase.spec.ts",
+                            "column": 33,
+                            "line": 39
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Select shipping method')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Select shipping method')\u001b[22m\n\n\n  37 | \t\t// Wait for cart content to load and shipping options to appear\n  38 | \t\tconst shippingTrigger = buyerPage.getByText('Select shipping method')\n> 39 | \t\tawait expect(shippingTrigger).toBeVisible({ timeout: 10_000 })\n     | \t\t                              ^\n  40 |\n  41 | \t\t// Select \"Worldwide Standard\" shipping (5,000 sats)\n  42 | \t\tawait shippingTrigger.click()\n    at /home/c03rad0r/market/e2e/tests/buyer-purchase.spec.ts:39:33"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:07:35.943Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/buyer-purchase-Buyer-Purch-a4dbf-cart-and-totals-are-correct-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/buyer-purchase-Buyer-Purch-a4dbf-cart-and-totals-are-correct-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/buyer-purchase.spec.ts",
+                        "column": 33,
+                        "line": 39
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "85b70f9ba3e5d9c5516b-bfc0895fa58bfb255b65",
+              "file": "buyer-purchase.spec.ts",
+              "line": 6,
+              "column": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:07:33.971Z",
+    "duration": 21619.404000000002,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

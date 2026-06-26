@@ -1,0 +1,878 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "app-settings.spec.ts",
+      "file": "app-settings.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "App Settings",
+          "file": "app-settings.spec.ts",
+          "line": 82,
+          "column": 6,
+          "specs": [
+            {
+              "title": "admin can navigate to app settings page",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 12570,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n\n    at Object.merchantPage (/home/c03rad0r/market/e2e/fixtures/index.ts:47:40)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 40,
+                          "line": 47
+                        },
+                        "snippet": "   at ../fixtures/index.ts:47\n\n  45 | \t\tawait page.waitForLoadState('networkidle')\n  46 | \t\t// Give the auto-login a moment to complete\n> 47 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n     | \t\t                                     ^\n  48 |\n  49 | \t\tawait use(page)\n  50 | \t\tawait context.close()"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 40,
+                            "line": 47
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n\n\n   at ../fixtures/index.ts:47\n\n  45 | \t\tawait page.waitForLoadState('networkidle')\n  46 | \t\t// Give the auto-login a moment to complete\n> 47 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n     | \t\t                                     ^\n  48 |\n  49 | \t\tawait use(page)\n  50 | \t\tawait context.close()\n    at Object.merchantPage (/home/c03rad0r/market/e2e/fixtures/index.ts:47:40)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:51:04.452Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/app-settings-App-Settings--e7ec3-vigate-to-app-settings-page-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/app-settings-App-Settings--e7ec3-vigate-to-app-settings-page-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 40,
+                        "line": 47
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-2d76b826566e8c68dbf2",
+              "file": "app-settings.spec.ts",
+              "line": 83,
+              "column": 2
+            },
+            {
+              "title": "non-admin is redirected away from app settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9140,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:51:21.247Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-5a9dd80005b11388f035",
+              "file": "app-settings.spec.ts",
+              "line": 92,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Featured Items",
+          "file": "app-settings.spec.ts",
+          "line": 105,
+          "column": 6,
+          "specs": [
+            {
+              "title": "admin can view featured items page with tabs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10485,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:51:32.165Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-5f99f47564e241994d83",
+              "file": "app-settings.spec.ts",
+              "line": 106,
+              "column": 2
+            },
+            {
+              "title": "can add a product to featured list by coordinate",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12529,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:51:42.780Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-9015a4e714276789d30e",
+              "file": "app-settings.spec.ts",
+              "line": 116,
+              "column": 2
+            },
+            {
+              "title": "can remove a product from featured list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8742,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:51:55.386Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-79448267da804392908c",
+              "file": "app-settings.spec.ts",
+              "line": 145,
+              "column": 2
+            },
+            {
+              "title": "collections tab shows empty state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8135,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:04.177Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-0049f69a11d70086b166",
+              "file": "app-settings.spec.ts",
+              "line": 157,
+              "column": 2
+            },
+            {
+              "title": "can add a user to featured list by hex pubkey",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9753,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:12.350Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-5d2c5efe6fc9dc6ba4d6",
+              "file": "app-settings.spec.ts",
+              "line": 167,
+              "column": 2
+            },
+            {
+              "title": "permissions section shows admin role",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6973,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:22.175Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-8e54c11362adb80f2ae6",
+              "file": "app-settings.spec.ts",
+              "line": 184,
+              "column": 2
+            },
+            {
+              "title": "non-admin user is redirected away from featured items",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8644,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:29.187Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-da5359330be8a795d93e",
+              "file": "app-settings.spec.ts",
+              "line": 195,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Blacklists",
+          "file": "app-settings.spec.ts",
+          "line": 208,
+          "column": 6,
+          "specs": [
+            {
+              "title": "admin can view blacklists page with tabs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8675,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:37.897Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-6a4c8bd9ce780e9886e0",
+              "file": "app-settings.spec.ts",
+              "line": 209,
+              "column": 2
+            },
+            {
+              "title": "can add a user to blacklist by hex pubkey",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7837,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:46.664Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-bc5449b58c5f5578cf91",
+              "file": "app-settings.spec.ts",
+              "line": 219,
+              "column": 2
+            },
+            {
+              "title": "can remove a user from blacklist",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8795,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:52:54.659Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-df7b3ba9d1a3fc3b80e0",
+              "file": "app-settings.spec.ts",
+              "line": 229,
+              "column": 2
+            },
+            {
+              "title": "can add a product to blacklist by coordinate",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6703,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:53:03.531Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-95a03923ca3b8bfb98ef",
+              "file": "app-settings.spec.ts",
+              "line": 239,
+              "column": 2
+            },
+            {
+              "title": "collections tab shows empty state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5634,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:53:10.283Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-61c895907b92df6100d4",
+              "file": "app-settings.spec.ts",
+              "line": 255,
+              "column": 2
+            },
+            {
+              "title": "permissions section shows admin role",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5363,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:53:15.983Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-6761fc4a24d5c6715299",
+              "file": "app-settings.spec.ts",
+              "line": 265,
+              "column": 2
+            },
+            {
+              "title": "non-admin user is redirected away from blacklists",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7448,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Reset app Featured list.\n"
+                        },
+                        {
+                          "text": "    Reset app Blacklist.\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T21:53:21.394Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "0f4f0a5440c19302f503-89f83fb9beac06ebb950",
+              "file": "app-settings.spec.ts",
+              "line": 276,
+              "column": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T21:51:00.629Z",
+    "duration": 148654.448,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

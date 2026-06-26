@@ -1,0 +1,896 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "payments.spec.ts",
+      "file": "payments.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Receiving Payments Configuration",
+          "file": "payments.spec.ts",
+          "line": 82,
+          "column": 6,
+          "specs": [
+            {
+              "title": "displays existing seeded payment details",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10499,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:48:45.047Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-4593a8cf450b9dc33c2b",
+              "file": "payments.spec.ts",
+              "line": 83,
+              "column": 2
+            },
+            {
+              "title": "can add a new Lightning payment method",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 13143,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('testmerchant@getalby.com')\nExpected: visible\nError: strict mode violation: getByText('testmerchant@getalby.com') resolved to 3 elements:\n    1) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').first()\n    2) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(1)\n    3) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(2)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('testmerchant@getalby.com')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('testmerchant@getalby.com')\nExpected: visible\nError: strict mode violation: getByText('testmerchant@getalby.com') resolved to 3 elements:\n    1) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').first()\n    2) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(1)\n    3) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(2)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('testmerchant@getalby.com')\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:116:68",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                          "column": 68,
+                          "line": 116
+                        },
+                        "snippet": "  114 |\n  115 | \t\t// The new payment detail should appear in the list\n> 116 | \t\tawait expect(merchantPage.getByText('testmerchant@getalby.com')).toBeVisible({ timeout: 10_000 })\n      | \t\t                                                                 ^\n  117 | \t})\n  118 |\n  119 | \ttest('can delete a payment method', async ({ merchantPage }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "column": 68,
+                            "line": 116
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('testmerchant@getalby.com')\nExpected: visible\nError: strict mode violation: getByText('testmerchant@getalby.com') resolved to 3 elements:\n    1) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').first()\n    2) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(1)\n    3) <p class=\"text-sm text-muted-foreground break-all\">testmerchant@getalby.com - Global</p> aka getByText('testmerchant@getalby.com -').nth(2)\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByText('testmerchant@getalby.com')\u001b[22m\n\n\n  114 |\n  115 | \t\t// The new payment detail should appear in the list\n> 116 | \t\tawait expect(merchantPage.getByText('testmerchant@getalby.com')).toBeVisible({ timeout: 10_000 })\n      | \t\t                                                                 ^\n  117 | \t})\n  118 |\n  119 | \ttest('can delete a payment method', async ({ merchantPage }) => {\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:116:68"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:48:56.300Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/payments-Receiving-Payment-356b1-ew-Lightning-payment-method-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/payments-Receiving-Payment-356b1-ew-Lightning-payment-method-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "column": 68,
+                        "line": 116
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-33de3a92a6f50caff6e2",
+              "file": "payments.spec.ts",
+              "line": 97,
+              "column": 2
+            },
+            {
+              "title": "can delete a payment method",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14186,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:49:10.805Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-91ead7ae68b8007bdc43",
+              "file": "payments.spec.ts",
+              "line": 119,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "NWC Wallet Management",
+          "file": "payments.spec.ts",
+          "line": 143,
+          "column": 6,
+          "specs": [
+            {
+              "title": "empty state shows add wallet prompt",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 19681,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:148:78",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                          "column": 78,
+                          "line": 148
+                        },
+                        "snippet": "  146 |\n  147 | \t\t// Wait for auth — the heading only shows when authenticated\n> 148 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  149 |\n  150 | \t\t// Should show empty state with prompt to add wallet\n  151 | \t\tawait expect(buyerPage.getByText(/no wallets configured/i)).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "column": 78,
+                            "line": 148
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n\n  146 |\n  147 | \t\t// Wait for auth — the heading only shows when authenticated\n> 148 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  149 |\n  150 | \t\t// Should show empty state with prompt to add wallet\n  151 | \t\tawait expect(buyerPage.getByText(/no wallets configured/i)).toBeVisible({ timeout: 10_000 })\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:148:78"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:49:25.813Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Manage-655be-ate-shows-add-wallet-prompt-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Manage-655be-ate-shows-add-wallet-prompt-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "column": 78,
+                        "line": 148
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-aabf24ccf55a6df6c51d",
+              "file": "payments.spec.ts",
+              "line": 144,
+              "column": 2
+            },
+            {
+              "title": "can add NWC wallet via manual fields",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 20350,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:161:78",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                          "column": 78,
+                          "line": 161
+                        },
+                        "snippet": "  159 |\n  160 | \t\t// Wait for auth\n> 161 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  162 |\n  163 | \t\t// Click \"Add Wallet\" to open the form\n  164 | \t\tawait buyerPage"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "column": 78,
+                            "line": 161
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n\n  159 |\n  160 | \t\t// Wait for auth\n> 161 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  162 |\n  163 | \t\t// Click \"Add Wallet\" to open the form\n  164 | \t\tawait buyerPage\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:161:78"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:49:46.705Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Manage-15347-WC-wallet-via-manual-fields-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Manage-15347-WC-wallet-via-manual-fields-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "column": 78,
+                        "line": 161
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-0315b4b4d1cf4f3c3672",
+              "file": "payments.spec.ts",
+              "line": 157,
+              "column": 2
+            },
+            {
+              "title": "can delete an NWC wallet",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 19570,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:195:78",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                          "column": 78,
+                          "line": 195
+                        },
+                        "snippet": "  193 |\n  194 | \t\t// Wait for auth — the heading only shows when authenticated\n> 195 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  196 |\n  197 | \t\t// Now inject the test wallet into localStorage and reload\n  198 | \t\tawait buyerPage.evaluate(() => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "column": 78,
+                            "line": 195
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('heading', { name: /making payments/i })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('heading', { name: /making payments/i })\u001b[22m\n\n\n  193 |\n  194 | \t\t// Wait for auth — the heading only shows when authenticated\n> 195 | \t\tawait expect(buyerPage.getByRole('heading', { name: /making payments/i })).toBeVisible({ timeout: 15_000 })\n      | \t\t                                                                           ^\n  196 |\n  197 | \t\t// Now inject the test wallet into localStorage and reload\n  198 | \t\tawait buyerPage.evaluate(() => {\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:195:78"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:50:08.825Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Management-can-delete-an-NWC-wallet-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/payments-NWC-Wallet-Management-can-delete-an-NWC-wallet-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "column": 78,
+                        "line": 195
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-661d568925ff3e664796",
+              "file": "payments.spec.ts",
+              "line": 188,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Checkout Flow",
+          "file": "payments.spec.ts",
+          "line": 314,
+          "column": 6,
+          "specs": [
+            {
+              "title": "empty cart shows redirect message",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 9388,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: /continue shopping/i })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /continue shopping/i })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: /continue shopping/i })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /continue shopping/i })\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:326:79",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                          "column": 79,
+                          "line": 326
+                        },
+                        "snippet": "  324 |\n  325 | \t\t// Should show \"Continue Shopping\" button\n> 326 | \t\tawait expect(buyerPage.getByRole('button', { name: /continue shopping/i })).toBeVisible()\n      | \t\t                                                                            ^\n  327 | \t})\n  328 |\n  329 | \ttest.skip('full checkout flow with mocked Lightning invoices', async ({ buyerPage }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "column": 79,
+                            "line": 326
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: /continue shopping/i })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /continue shopping/i })\u001b[22m\n\n\n  324 |\n  325 | \t\t// Should show \"Continue Shopping\" button\n> 326 | \t\tawait expect(buyerPage.getByRole('button', { name: /continue shopping/i })).toBeVisible()\n      | \t\t                                                                            ^\n  327 | \t})\n  328 |\n  329 | \ttest.skip('full checkout flow with mocked Lightning invoices', async ({ buyerPage }) => {\n    at /home/c03rad0r/market/e2e/tests/payments.spec.ts:326:79"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:50:30.399Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/payments-Checkout-Flow-empty-cart-shows-redirect-message-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/payments-Checkout-Flow-empty-cart-shows-redirect-message-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "column": 79,
+                        "line": 326
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "bd51122182d9e4115608-eff13db26c3819fe208f",
+              "file": "payments.spec.ts",
+              "line": 317,
+              "column": 2
+            },
+            {
+              "title": "full checkout flow with mocked Lightning invoices",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "line": 329,
+                        "column": 7
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:50:40.516Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "line": 329,
+                            "column": 7
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "bd51122182d9e4115608-053d1184205d154c4c92",
+              "file": "payments.spec.ts",
+              "line": 329,
+              "column": 7
+            },
+            {
+              "title": "checkout publishes order events to relay",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "line": 352,
+                        "column": 7
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:50:40.516Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "line": 352,
+                            "column": 7
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "bd51122182d9e4115608-9339c3e94a63cbebc94d",
+              "file": "payments.spec.ts",
+              "line": 352,
+              "column": 7
+            },
+            {
+              "title": "allows buyer to defer an invoice and continue checkout",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                        "line": 387,
+                        "column": 7
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:50:40.516Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/payments.spec.ts",
+                            "line": 387,
+                            "column": 7
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "bd51122182d9e4115608-375f3f9f40b1c1dba422",
+              "file": "payments.spec.ts",
+              "line": 387,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:48:42.909Z",
+    "duration": 117659.003,
+    "expected": 2,
+    "skipped": 3,
+    "unexpected": 5,
+    "flaky": 0
+  }
+}

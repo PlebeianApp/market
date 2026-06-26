@@ -1,0 +1,1319 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "cart.spec.ts",
+      "file": "cart.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Cart - Remove Items",
+          "file": "cart.spec.ts",
+          "line": 98,
+          "column": 6,
+          "specs": [
+            {
+              "title": "can remove a single item from cart",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8072,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:20:53.014Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-60d5ff2fb02ce8e73b71",
+              "file": "cart.spec.ts",
+              "line": 99,
+              "column": 2
+            },
+            {
+              "title": "removing one item from multi-item cart keeps others",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 341,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 75
+                        },
+                        "snippet": "   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 75
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:21:02.224Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Remove-Items-r-13f61-ulti-item-cart-keeps-others-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Remove-Items-r-13f61-ulti-item-cart-keeps-others-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 75
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-2784d26742ad0ab53062",
+              "file": "cart.spec.ts",
+              "line": 118,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Cart - Change Quantity",
+          "file": "cart.spec.ts",
+          "line": 152,
+          "column": 6,
+          "specs": [
+            {
+              "title": "can increment product quantity using the plus button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 11369,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:21:04.196Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-bc6314c83aaaceb7c6f5",
+              "file": "cart.spec.ts",
+              "line": 153,
+              "column": 2
+            },
+            {
+              "title": "can decrement product quantity using the minus button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13815,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:21:16.340Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-183eddaa432f1bd5b41a",
+              "file": "cart.spec.ts",
+              "line": 174,
+              "column": 2
+            },
+            {
+              "title": "decrement button is disabled at quantity 1",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16487,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:21:30.198Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-e98b6ca000756a613d11",
+              "file": "cart.spec.ts",
+              "line": 200,
+              "column": 2
+            },
+            {
+              "title": "can add same product multiple times from product listing",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14684,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:21:46.731Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-8fb1cf50f0452c86794d",
+              "file": "cart.spec.ts",
+              "line": 214,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Cart - Multiple Merchants",
+          "file": "cart.spec.ts",
+          "line": 250,
+          "column": 6,
+          "specs": [
+            {
+              "title": "products from different sellers are grouped separately",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 11653,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:77:40)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 40,
+                          "line": 77
+                        },
+                        "snippet": "   at ../fixtures/index.ts:77\n\n  75 | \t\tawait page.goto('/')\n  76 | \t\tawait page.waitForLoadState('networkidle')\n> 77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n     | \t\t                                     ^\n  78 |\n  79 | \t\tawait use(page)\n  80 | \t\tawait context.close()"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 40,
+                            "line": 77
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('header')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for locator('header')\u001b[22m\n\n\n   at ../fixtures/index.ts:77\n\n  75 | \t\tawait page.goto('/')\n  76 | \t\tawait page.waitForLoadState('networkidle')\n> 77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n     | \t\t                                     ^\n  78 |\n  79 | \t\tawait use(page)\n  80 | \t\tawait context.close()\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:77:40)"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:22:01.448Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-8aa0d-lers-are-grouped-separately-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-8aa0d-lers-are-grouped-separately-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 40,
+                        "line": 77
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-f0d64ac6cd9212c9ed05",
+              "file": "cart.spec.ts",
+              "line": 251,
+              "column": 2
+            },
+            {
+              "title": "can add multiple products from same seller",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 21040,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/cart.spec.ts:288:34",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                          "column": 34,
+                          "line": 288
+                        },
+                        "snippet": "  286 | \t\t// They're grouped under the same seller, so only 1 shipping selector\n  287 | \t\tconst shippingTriggers = dialog.getByText('Select shipping method')\n> 288 | \t\tawait expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })\n      | \t\t                               ^\n  289 | \t})\n  290 |\n  291 | \ttest('removing all items from one seller keeps other seller items', async ({ newUserPage }) => {"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                            "column": 34,
+                            "line": 288
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).getByText('Select shipping method')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n\n  286 | \t\t// They're grouped under the same seller, so only 1 shipping selector\n  287 | \t\tconst shippingTriggers = dialog.getByText('Select shipping method')\n> 288 | \t\tawait expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })\n      | \t\t                               ^\n  289 | \t})\n  290 |\n  291 | \ttest('removing all items from one seller keeps other seller items', async ({ newUserPage }) => {\n    at /home/c03rad0r/market/e2e/tests/cart.spec.ts:288:34"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:22:15.491Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-3f604-e-products-from-same-seller-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-3f604-e-products-from-same-seller-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                        "column": 34,
+                        "line": 288
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-9743786eedda8c131a0b",
+              "file": "cart.spec.ts",
+              "line": 271,
+              "column": 2
+            },
+            {
+              "title": "removing all items from one seller keeps other seller items",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 20151,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/cart.spec.ts:315:35",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                          "column": 35,
+                          "line": 315
+                        },
+                        "snippet": "  313 | \t\t// don't get mistaken for an active seller section.\n  314 | \t\tconst shippingSelectors = dialog.locator('[data-slot=\"select-trigger\"]:visible')\n> 315 | \t\tawait expect(shippingSelectors).toHaveCount(1, { timeout: 10_000 })\n      | \t\t                                ^\n  316 | \t})\n  317 | })\n  318 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                            "column": 35,
+                            "line": 315
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nTimeout:  10000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 10000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: /your cart/i }).locator('[data-slot=\"select-trigger\"]:visible')\u001b[22m\n\u001b[2m    23 × locator resolved to 0 elements\u001b[22m\n\u001b[2m       - unexpected value \"0\"\u001b[22m\n\n\n  313 | \t\t// don't get mistaken for an active seller section.\n  314 | \t\tconst shippingSelectors = dialog.locator('[data-slot=\"select-trigger\"]:visible')\n> 315 | \t\tawait expect(shippingSelectors).toHaveCount(1, { timeout: 10_000 })\n      | \t\t                                ^\n  316 | \t})\n  317 | })\n  318 |\n    at /home/c03rad0r/market/e2e/tests/cart.spec.ts:315:35"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:22:39.312Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-42afa-er-keeps-other-seller-items-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Multiple-Merch-42afa-er-keeps-other-seller-items-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/cart.spec.ts",
+                        "column": 35,
+                        "line": 315
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-c8db8e5f23e99088397d",
+              "file": "cart.spec.ts",
+              "line": 291,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Cart - Persistence",
+          "file": "cart.spec.ts",
+          "line": 323,
+          "column": 6,
+          "specs": [
+            {
+              "title": "cart items persist after page reload",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 707,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 75
+                        },
+                        "snippet": "   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 75
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:23:01.910Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Persistence-cart-items-persist-after-page-reload-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 75
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-7f6155def24b7e5c5bb2",
+              "file": "cart.spec.ts",
+              "line": 324,
+              "column": 2
+            },
+            {
+              "title": "cart quantity persists after page reload",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 629,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 75
+                        },
+                        "snippet": "   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 75
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:23:05.163Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Persistence-ca-26287--persists-after-page-reload-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 75
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-7250bcd6eacaa8061d63",
+              "file": "cart.spec.ts",
+              "line": 345,
+              "column": 2
+            },
+            {
+              "title": "cart persists after navigating to another page and back",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 2015,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 75
+                        },
+                        "snippet": "   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 75
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:75\n\n  73 | \t\tconst page = await context.newPage()\n  74 |\n> 75 | \t\tawait page.goto('/')\n     | \t\t           ^\n  76 | \t\tawait page.waitForLoadState('networkidle')\n  77 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  78 |\n    at Object.newUserPage (/home/c03rad0r/market/e2e/fixtures/index.ts:75:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:23:08.301Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Persistence-ca-89926-ng-to-another-page-and-back-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 75
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-c64af1a8b44c92454b63",
+              "file": "cart.spec.ts",
+              "line": 376,
+              "column": 2
+            },
+            {
+              "title": "clearing cart removes all items after reload",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 726,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "  Seeding: merchant (shipping, payments, products)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Worldwide Standard\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published shipping: Local Pickup - Bitcoin Store\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Hardware Wallet\n"
+                        },
+                        {
+                          "text": "    Published product: Nostr T-Shirt\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin E-Book\n"
+                        },
+                        {
+                          "text": "    Published product: Bitcoin Conference Ticket\n"
+                        },
+                        {
+                          "text": "  Seeding: marketplace (second merchant)\n"
+                        },
+                        {
+                          "text": "    Published shipping: Express Shipping\n"
+                        },
+                        {
+                          "text": "    Published shipping: Digital Delivery\n"
+                        },
+                        {
+                          "text": "    Published payment: LIGHTNING_NETWORK\n"
+                        },
+                        {
+                          "text": "    Published V4V shares (10% to community)\n"
+                        },
+                        {
+                          "text": "    Published product: Lightning Node Setup Guide\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:23:12.855Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/cart-Cart---Persistence-cl-3e726-oves-all-items-after-reload-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "1981448f0b79506fb670-c0872d1d099502e8ffd1",
+              "file": "cart.spec.ts",
+              "line": 395,
+              "column": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:20:51.088Z",
+    "duration": 143437.351,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 8,
+    "flaky": 0
+  }
+}

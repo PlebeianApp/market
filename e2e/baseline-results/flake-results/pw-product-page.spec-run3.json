@@ -1,0 +1,1637 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "product-page.spec.ts",
+      "file": "product-page.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Product Page - View Only (Unauthenticated)",
+          "file": "product-page.spec.ts",
+          "line": 184,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display correct product details",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 698,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427889808\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:29.725Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--d54a6-lay-correct-product-details-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1ddbf62ad959ec6e66c4",
+              "file": "product-page.spec.ts",
+              "line": 187,
+              "column": 2
+            },
+            {
+              "title": "should show product image",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 408,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427893045\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:32.977Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--75a7f-d-should-show-product-image-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-3f741e06a8f55228f031",
+              "file": "product-page.spec.ts",
+              "line": 201,
+              "column": 2
+            },
+            {
+              "title": "should navigate through tabs and show content",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 431,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427895472\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:35.406Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3ce69-rough-tabs-and-show-content-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-6ef831da0ffcd5abd613",
+              "file": "product-page.spec.ts",
+              "line": 212,
+              "column": 2
+            },
+            {
+              "title": "should display SocialInteractions component at product level",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 381,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427897699\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:37.635Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--f2916--component-at-product-level-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-e8b518dd63b4fd187867",
+              "file": "product-page.spec.ts",
+              "line": 249,
+              "column": 2
+            },
+            {
+              "title": "should display ReactionsList for product reactions",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 407,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427899916\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:39.848Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--c5880-sList-for-product-reactions-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-ebc01e147a94cfcfbec3",
+              "file": "product-page.spec.ts",
+              "line": 269,
+              "column": 2
+            },
+            {
+              "title": "should show login prompt when clicking reaction button (unauthenticated)",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 382,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427902177\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:42.088Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--c4383-ion-button-unauthenticated--chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-17e4e4f5f1abe88382f8",
+              "file": "product-page.spec.ts",
+              "line": 278,
+              "column": 2
+            },
+            {
+              "title": "can view existing reactions from other users",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 397,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427904965\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:44.880Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--6e35c--reactions-from-other-users-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-068e781aa68467879373",
+              "file": "product-page.spec.ts",
+              "line": 289,
+              "column": 2
+            },
+            {
+              "title": "should navigate to comments tab when clicking product-level comment button",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 520,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427907339\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:47.237Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--46aab-roduct-level-comment-button-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-68869161d88f7bc2ff47",
+              "file": "product-page.spec.ts",
+              "line": 301,
+              "column": 2
+            },
+            {
+              "title": "should display SocialInteractions for each comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 494,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427910456\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:50.351Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--f7797-teractions-for-each-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-5e2893dcba82dfcea0d7",
+              "file": "product-page.spec.ts",
+              "line": 313,
+              "column": 2
+            },
+            {
+              "title": "should show existing reactions on a comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 490,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427913662\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:53.546Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--6541e-ting-reactions-on-a-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-6b75371d369261881bf4",
+              "file": "product-page.spec.ts",
+              "line": 339,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Product Page - Interactions & Social (Authenticated)",
+          "file": "product-page.spec.ts",
+          "line": 377,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should allow posting a new comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 542,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427916768\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:56.655Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--4bc31-allow-posting-a-new-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-211661b8aa7aad3603cd",
+              "file": "product-page.spec.ts",
+              "line": 380,
+              "column": 2
+            },
+            {
+              "title": "should allow replying to an existing comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 11,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30264,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 21,
+                            "line": 407
+                          },
+                          "message": "Error: locator.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('[data-slot=\"tabs\"]').locator('[role=\"tablist\"]').getByRole('tab', { name: 'Comments' })\u001b[22m\n\u001b[2m    - locator resolved to <button role=\"tab\" type=\"button\" tabindex=\"-1\" aria-selected=\"false\" data-state=\"inactive\" data-slot=\"tabs-trigger\" data-orientation=\"horizontal\" data-radix-collection-item=\"\" id=\"radix-_r_o_-trigger-Comments\" aria-controls=\"radix-_r_o_-content-Comments\" class=\"relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 border border-transparent whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tab…>Comments</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"font-medium break-words\">Event aa0d0538...</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  9 × retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\n\n  405 | \t\tawait buyerPage.goto(`/products/${currentProductId}`)\n  406 | \t\tconst commentsTab = getTabsList(buyerPage).getByRole('tab', { name: 'Comments' })\n> 407 | \t\tawait commentsTab.click()\n      | \t\t                  ^\n  408 |\n  409 | \t\t// Wait for comment to load\n  410 | \t\tawait buyerPage.getByText('Existing seeded comment for testing.').waitFor()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:407:21"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427919728\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "    Published comment: \"$Existing seeded comment for te$...\"\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:51:59.600Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3bfe8-ying-to-an-existing-comment-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3bfe8-ying-to-an-existing-comment-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-499070a4635173abd3ed",
+              "file": "product-page.spec.ts",
+              "line": 398,
+              "column": 2
+            },
+            {
+              "title": "should cancel comment draft",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 12,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30191,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 71,
+                            "line": 434
+                          },
+                          "message": "Error: locator.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('[data-slot=\"tabs\"]').locator('[role=\"tablist\"]').getByRole('tab', { name: 'Comments' })\u001b[22m\n\u001b[2m    - locator resolved to <button role=\"tab\" type=\"button\" tabindex=\"-1\" aria-selected=\"false\" data-state=\"inactive\" data-slot=\"tabs-trigger\" data-orientation=\"horizontal\" data-radix-collection-item=\"\" id=\"radix-_r_o_-trigger-Comments\" aria-controls=\"radix-_r_o_-content-Comments\" class=\"relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 border border-transparent whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tab…>Comments</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  10 × retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\u001b[2m       - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\u001b[2m       - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\u001b[2m       - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\u001b[2m       - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying click action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\n\n  432 | \t\tif (!currentProductId) throw new Error('Product not seeded')\n  433 | \t\tawait buyerPage.goto(`/products/${currentProductId}`)\n> 434 | \t\tawait getTabsList(buyerPage).getByRole('tab', { name: 'Comments' }).click()\n      | \t\t                                                                    ^\n  435 |\n  436 | \t\t// Seed a comment on product\n  437 | \t\tawait seedExistingComment()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:434:71"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427952415\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:52:32.340Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--d2c0f-should-cancel-comment-draft-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--d2c0f-should-cancel-comment-draft-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-38f8d53ced213abd313f",
+              "file": "product-page.spec.ts",
+              "line": 431,
+              "column": 2
+            },
+            {
+              "title": "reaction button opens popover with emoji options",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 13,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30380,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 21,
+                            "line": 478
+                          },
+                          "message": "Error: locator.hover: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('.hero-content-product').getByTestId('reaction-button')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-size=\"icon\" data-state=\"closed\" aria-expanded=\"false\" data-variant=\"outline\" aria-haspopup=\"dialog\" data-slot=\"popover-trigger\" aria-controls=\"radix-_r_b_\" data-testid=\"reaction-button\" class=\"inline-flex shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-i…>…</button>\u001b[22m\n\u001b[2m  - attempting hover action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  9 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"text-gray-600 text-xs mt-1\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"text-gray-600 text-xs mt-1\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_72_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_73_\" aria-describedby=\"radix-_r_74_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\n\n  476 |\n  477 | \t\t// Hover to open popover\n> 478 | \t\tawait reactionBtn.hover()\n      | \t\t                  ^\n  479 |\n  480 | \t\tconst popover = getPopoverContent(buyerPage)\n  481 | \t\tawait expect(popover).toBeVisible({ timeout: 5000 })\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:478:21"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427985048\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:53:04.980Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--54191--popover-with-emoji-options-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--54191--popover-with-emoji-options-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-8ab381938dc29e63972f",
+              "file": "product-page.spec.ts",
+              "line": 470,
+              "column": 2
+            },
+            {
+              "title": "can add a reaction by selecting an emoji",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 14,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30282,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 21,
+                            "line": 496
+                          },
+                          "message": "Error: locator.hover: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('.hero-content-product').getByTestId('reaction-button')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-size=\"icon\" data-state=\"closed\" aria-expanded=\"false\" data-variant=\"outline\" aria-haspopup=\"dialog\" data-slot=\"popover-trigger\" aria-controls=\"radix-_r_b_\" data-testid=\"reaction-button\" class=\"inline-flex shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-i…>…</button>\u001b[22m\n\u001b[2m  - attempting hover action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  8 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"text-gray-600 text-xs mt-1\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"text-gray-600 text-xs mt-1\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\n\n  494 |\n  495 | \t\tconst reactionBtn = getReactionButton(buyerPage)\n> 496 | \t\tawait reactionBtn.hover()\n      | \t\t                  ^\n  497 |\n  498 | \t\t// Select Fire emoji\n  499 | \t\tawait buyerPage.getByText('😂').click()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:496:21"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782428017675\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:53:37.605Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--4b6b2-ction-by-selecting-an-emoji-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--4b6b2-ction-by-selecting-an-emoji-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-fd2a6212c28b1ae5997e",
+              "file": "product-page.spec.ts",
+              "line": 491,
+              "column": 2
+            },
+            {
+              "title": "can remove an own-user reaction by clicking it",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 15,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30214,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 21,
+                            "line": 513
+                          },
+                          "message": "Error: locator.hover: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('.hero-content-product').getByTestId('reaction-button')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-size=\"icon\" data-state=\"closed\" aria-expanded=\"false\" data-variant=\"outline\" aria-haspopup=\"dialog\" data-slot=\"popover-trigger\" aria-controls=\"radix-_r_b_\" data-testid=\"reaction-button\" class=\"inline-flex shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-i…>…</button>\u001b[22m\n\u001b[2m  - attempting hover action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div dir=\"ltr\" data-slot=\"scroll-area\" class=\"relative h-40 border rounded p-2\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  8 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div class=\"text-gray-600 text-xs mt-1\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible and stable\u001b[22m\n\u001b[2m    - element is visible and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - <div class=\"bg-yellow-50 border-l-4 border-yellow-400 p-4\">…</div> from <div role=\"dialog\" tabindex=\"-1\" id=\"radix-_r_12_\" data-state=\"open\" data-slot=\"dialog-content\" aria-labelledby=\"radix-_r_13_\" aria-describedby=\"radix-_r_14_\" class=\"fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 d…>…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m  2 × retrying hover action\u001b[22m\n\u001b[2m      - waiting 500ms\u001b[22m\n\u001b[2m      - waiting for element to be visible and stable\u001b[22m\n\u001b[2m      - element is visible and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <div data-state=\"open\" aria-hidden=\"true\" data-aria-hidden=\"true\" data-slot=\"dialog-overlay\" class=\"fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0\"></div> intercepts pointer events\u001b[22m\n\u001b[2m  - retrying hover action\u001b[22m\n\u001b[2m    - waiting 500ms\u001b[22m\n\n\n  511 |\n  512 | \t\tconst reactionBtn = getReactionButton(buyerPage)\n> 513 | \t\tawait reactionBtn.hover()\n      | \t\t                  ^\n  514 |\n  515 | \t\t// Remove reaction (click again)\n  516 | \t\tawait reactionBtn.click()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:513:21"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782428050284\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "    Published reaction: \"😂\" on event 567f06595fe70273b53b4870bc69671079df9c98c32708d22a4a7ba50a1142e9\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:54:10.179Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--cc8a7-ser-reaction-by-clicking-it-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--cc8a7-ser-reaction-by-clicking-it-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1f19328fd6348ea2514b",
+              "file": "product-page.spec.ts",
+              "line": 505,
+              "column": 2
+            },
+            {
+              "title": "can click an existing reaction to add it",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 16,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 18894,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByTestId('reactions-list').getByRole('button', { name: '💰' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('reactions-list').getByRole('button', { name: '💰' })\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByTestId('reactions-list').getByRole('button', { name: '💰' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('reactions-list').getByRole('button', { name: '💰' })\u001b[22m\n\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:532:29",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                          "column": 29,
+                          "line": 532
+                        },
+                        "snippet": "  530 | \t\t// Wait for seeding to complete\n  531 | \t\tconst reactionBtn = getReactionsList(buyerPage).getByRole('button', { name: '💰' })\n> 532 | \t\tawait expect(reactionBtn).toBeVisible({ timeout: 15000 })\n      | \t\t                          ^\n  533 |\n  534 | \t\t// Click the existing reaction\n  535 | \t\tawait reactionBtn.click()"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 29,
+                            "line": 532
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByTestId('reactions-list').getByRole('button', { name: '💰' })\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 15000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('reactions-list').getByRole('button', { name: '💰' })\u001b[22m\n\n\n  530 | \t\t// Wait for seeding to complete\n  531 | \t\tconst reactionBtn = getReactionsList(buyerPage).getByRole('button', { name: '💰' })\n> 532 | \t\tawait expect(reactionBtn).toBeVisible({ timeout: 15000 })\n      | \t\t                          ^\n  533 |\n  534 | \t\t// Click the existing reaction\n  535 | \t\tawait reactionBtn.click()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:532:29"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782428082754\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "    Published reaction: \"💰\" on event 933966975ffa5a1db75a73408d95977490cdf1ef24b9a8ed4c5f162b9c26fd89\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:54:42.657Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--095ce-existing-reaction-to-add-it-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--095ce-existing-reaction-to-add-it-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                        "column": 29,
+                        "line": 532
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-2a5a0948a00594f3e421",
+              "file": "product-page.spec.ts",
+              "line": 522,
+              "column": 2
+            },
+            {
+              "title": "can remove a reaction by clicking the existing one in the list",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 17,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30151,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "column": 21,
+                            "line": 555
+                          },
+                          "message": "Error: locator.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for getByTestId('reactions-list').getByRole('button', { name: '👀' })\u001b[22m\n\n\n  553 |\n  554 | \t\t// Now try to remove it by clicking the button again (toggle behavior)\n> 555 | \t\tawait reactionBtn.click()\n      | \t\t                  ^\n  556 |\n  557 | \t\t// Verify removal\n  558 | \t\tawait expect(reactionBtn).toBeVisible()\n    at /home/c03rad0r/market/e2e/tests/product-page.spec.ts:555:21"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782428104252\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "    Published reaction: \"👀\" on event 66780bc50276f09e98c801132392f504b0e30114e25718f8003c6937b3bc83bb\n"
+                        },
+                        {
+                          "text": "    Published reaction: \"👀\" on event 66780bc50276f09e98c801132392f504b0e30114e25718f8003c6937b3bc83bb\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:55:04.180Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--9750f-he-existing-one-in-the-list-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--9750f-he-existing-one-in-the-list-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-85b38495680f581b9f95",
+              "file": "product-page.spec.ts",
+              "line": 543,
+              "column": 2
+            },
+            {
+              "title": "should allow adding reaction to a comment",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                        "line": 562,
+                        "column": 7
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:55:34.971Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "line": 562,
+                            "column": 7
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1d5c1bdd41f907627ca6",
+              "file": "product-page.spec.ts",
+              "line": 562,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:51:27.661Z",
+    "duration": 247334.16100000002,
+    "expected": 0,
+    "skipped": 1,
+    "unexpected": 18,
+    "flaky": 0
+  }
+}

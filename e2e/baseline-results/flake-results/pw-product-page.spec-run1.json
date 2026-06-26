@@ -1,0 +1,1333 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "product-page.spec.ts",
+      "file": "product-page.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Product Page - View Only (Unauthenticated)",
+          "file": "product-page.spec.ts",
+          "line": 184,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display correct product details",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12038,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427500715\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:00.588Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1ddbf62ad959ec6e66c4",
+              "file": "product-page.spec.ts",
+              "line": 187,
+              "column": 2
+            },
+            {
+              "title": "should show product image",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5299,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427513721\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:13.703Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-3f741e06a8f55228f031",
+              "file": "product-page.spec.ts",
+              "line": 201,
+              "column": 2
+            },
+            {
+              "title": "should navigate through tabs and show content",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 409,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427519058\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:19.034Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3ce69-rough-tabs-and-show-content-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3ce69-rough-tabs-and-show-content-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-6ef831da0ffcd5abd613",
+              "file": "product-page.spec.ts",
+              "line": 212,
+              "column": 2
+            },
+            {
+              "title": "should display SocialInteractions component at product level",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9707,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427521107\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:21.023Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-e8b518dd63b4fd187867",
+              "file": "product-page.spec.ts",
+              "line": 249,
+              "column": 2
+            },
+            {
+              "title": "should display ReactionsList for product reactions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6654,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427531969\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:31.918Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-ebc01e147a94cfcfbec3",
+              "file": "product-page.spec.ts",
+              "line": 269,
+              "column": 2
+            },
+            {
+              "title": "should show login prompt when clicking reaction button (unauthenticated)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5402,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427538661\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:38.627Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-17e4e4f5f1abe88382f8",
+              "file": "product-page.spec.ts",
+              "line": 278,
+              "column": 2
+            },
+            {
+              "title": "can view existing reactions from other users",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5920,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427544088\n"
+                        },
+                        {
+                          "text": "    Published reaction: \"🔥\" on event f6be610c03b706a81522cbe2a2a5742cea000255c27df8f83e3948737b28ecef\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:44.066Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-068e781aa68467879373",
+              "file": "product-page.spec.ts",
+              "line": 289,
+              "column": 2
+            },
+            {
+              "title": "should navigate to comments tab when clicking product-level comment button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5947,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427550071\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:50.030Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-68869161d88f7bc2ff47",
+              "file": "product-page.spec.ts",
+              "line": 301,
+              "column": 2
+            },
+            {
+              "title": "should display SocialInteractions for each comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 311,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427556072\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:56.026Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--f7797-teractions-for-each-comment-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--f7797-teractions-for-each-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-5e2893dcba82dfcea0d7",
+              "file": "product-page.spec.ts",
+              "line": 313,
+              "column": 2
+            },
+            {
+              "title": "should show existing reactions on a comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 2163,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 89
+                        },
+                        "snippet": "   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 89
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:89\n\n  87 | \t\tconst page = await context.newPage()\n  88 |\n> 89 | \t\tawait page.goto('/')\n     | \t\t           ^\n  90 | \t\tawait page.waitForLoadState('networkidle')\n  91 | \t\t// Verify we are NOT logged in (check for login button visibility)\n  92 | \t\tawait expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })\n    at Object.unauthenticatedPage (/home/c03rad0r/market/e2e/fixtures/index.ts:89:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427558066\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:45:57.974Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--6541e-ting-reactions-on-a-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 89
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-6b75371d369261881bf4",
+              "file": "product-page.spec.ts",
+              "line": 339,
+              "column": 2
+            }
+          ]
+        },
+        {
+          "title": "Product Page - Interactions & Social (Authenticated)",
+          "file": "product-page.spec.ts",
+          "line": 377,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should allow posting a new comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 559,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427562655\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:02.576Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--4bc31-allow-posting-a-new-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-211661b8aa7aad3603cd",
+              "file": "product-page.spec.ts",
+              "line": 380,
+              "column": 2
+            },
+            {
+              "title": "should allow replying to an existing comment",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 573,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427565758\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:05.664Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--3bfe8-ying-to-an-existing-comment-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-499070a4635173abd3ed",
+              "file": "product-page.spec.ts",
+              "line": 398,
+              "column": 2
+            },
+            {
+              "title": "should cancel comment draft",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 522,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427568942\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:08.862Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--d2c0f-should-cancel-comment-draft-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-38f8d53ced213abd313f",
+              "file": "product-page.spec.ts",
+              "line": 431,
+              "column": 2
+            },
+            {
+              "title": "reaction button opens popover with emoji options",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 510,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427571848\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:11.763Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--54191--popover-with-emoji-options-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-8ab381938dc29e63972f",
+              "file": "product-page.spec.ts",
+              "line": 470,
+              "column": 2
+            },
+            {
+              "title": "can add a reaction by selecting an emoji",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 666,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427574802\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:14.715Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--4b6b2-ction-by-selecting-an-emoji-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-fd2a6212c28b1ae5997e",
+              "file": "product-page.spec.ts",
+              "line": 491,
+              "column": 2
+            },
+            {
+              "title": "can remove an own-user reaction by clicking it",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 564,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427577832\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:17.753Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--cc8a7-ser-reaction-by-clicking-it-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1f19328fd6348ea2514b",
+              "file": "product-page.spec.ts",
+              "line": 505,
+              "column": 2
+            },
+            {
+              "title": "can click an existing reaction to add it",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 514,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427580789\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:20.717Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--095ce-existing-reaction-to-add-it-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-2a5a0948a00594f3e421",
+              "file": "product-page.spec.ts",
+              "line": 522,
+              "column": 2
+            },
+            {
+              "title": "can remove a reaction by clicking the existing one in the list",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 501,
+                      "error": {
+                        "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n",
+                        "stack": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                          "column": 14,
+                          "line": 60
+                        },
+                        "snippet": "   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                            "column": 14,
+                            "line": 60
+                          },
+                          "message": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:34567/\nCall log:\n\u001b[2m  - navigating to \"http://localhost:34567/\", waiting until \"load\"\u001b[22m\n\n\n   at ../fixtures/index.ts:60\n\n  58 | \t\tconst page = await context.newPage()\n  59 |\n> 60 | \t\tawait page.goto('/')\n     | \t\t           ^\n  61 | \t\tawait page.waitForLoadState('networkidle')\n  62 | \t\tawait expect(page.locator('header')).toBeVisible({ timeout: 10_000 })\n  63 |\n    at Object.buyerPage (/home/c03rad0r/market/e2e/fixtures/index.ts:60:14)"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "    Published product: View Test Product 1782427583900\n"
+                        },
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:23.825Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/product-page-Product-Page--9750f-he-existing-one-in-the-list-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/fixtures/index.ts",
+                        "column": 14,
+                        "line": 60
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-85b38495680f581b9f95",
+              "file": "product-page.spec.ts",
+              "line": 543,
+              "column": 2
+            },
+            {
+              "title": "should allow adding reaction to a comment",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [
+                    {
+                      "type": "skip",
+                      "location": {
+                        "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                        "line": 562,
+                        "column": 7
+                      }
+                    }
+                  ],
+                  "expectedStatus": "skipped",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": -1,
+                      "parallelIndex": -1,
+                      "status": "skipped",
+                      "duration": 0,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:46:25.226Z",
+                      "annotations": [
+                        {
+                          "type": "skip",
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/product-page.spec.ts",
+                            "line": 562,
+                            "column": 7
+                          }
+                        }
+                      ],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "b5d1d95a930771fc222a-1d5c1bdd41f907627ca6",
+              "file": "product-page.spec.ts",
+              "line": 562,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:44:58.187Z",
+    "duration": 87074.94,
+    "expected": 7,
+    "skipped": 1,
+    "unexpected": 11,
+    "flaky": 0
+  }
+}

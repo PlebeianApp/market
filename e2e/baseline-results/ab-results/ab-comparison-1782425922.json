@@ -1,0 +1,281 @@
+{
+  "metadata": {
+    "timestamp": "2026-06-25 22:18:42 UTC",
+    "branch": "chore/applesauce-foundation",
+    "workdir": "/home/c03rad0r/worktrees/ndk-to-applesauce",
+    "num_runs": 3,
+    "specs": [
+      "app-settings.spec",
+      "cart.spec",
+      "marketplace.spec",
+      "products.spec"
+    ],
+    "total_elapsed_seconds": 4304.9
+  },
+  "results": [
+    {
+      "backend": "ndk",
+      "spec": "app-settings.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 113454,
+      "num_tests": 0,
+      "num_passed": 13,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "app-settings.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 174903,
+      "num_tests": 0,
+      "num_passed": 15,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "app-settings.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 168060,
+      "num_tests": 0,
+      "num_passed": 15,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "cart.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 236223,
+      "num_tests": 0,
+      "num_passed": 10,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "cart.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 288580,
+      "num_tests": 0,
+      "num_passed": 7,
+      "num_failed": 6,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "cart.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 300000,
+      "num_tests": 0,
+      "num_passed": 0,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "marketplace.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 179604,
+      "num_tests": 0,
+      "num_passed": 4,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "marketplace.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 168301,
+      "num_tests": 0,
+      "num_passed": 3,
+      "num_failed": 4,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "marketplace.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 129167,
+      "num_tests": 0,
+      "num_passed": 3,
+      "num_failed": 4,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "products.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 136007,
+      "num_tests": 0,
+      "num_passed": 12,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "products.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 145569,
+      "num_tests": 0,
+      "num_passed": 13,
+      "num_failed": 2,
+      "fetch_timings": []
+    },
+    {
+      "backend": "ndk",
+      "spec": "products.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 186414,
+      "num_tests": 0,
+      "num_passed": 12,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "app-settings.spec",
+      "run_num": 1,
+      "passed": true,
+      "duration_ms": 132224,
+      "num_tests": 0,
+      "num_passed": 16,
+      "num_failed": 0,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "app-settings.spec",
+      "run_num": 2,
+      "passed": true,
+      "duration_ms": 144372,
+      "num_tests": 0,
+      "num_passed": 16,
+      "num_failed": 0,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "app-settings.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 155427,
+      "num_tests": 0,
+      "num_passed": 15,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "cart.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 238557,
+      "num_tests": 0,
+      "num_passed": 7,
+      "num_failed": 6,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "cart.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 156996,
+      "num_tests": 0,
+      "num_passed": 6,
+      "num_failed": 7,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "cart.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 300000,
+      "num_tests": 0,
+      "num_passed": 0,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "marketplace.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 152245,
+      "num_tests": 0,
+      "num_passed": 4,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "marketplace.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 133142,
+      "num_tests": 0,
+      "num_passed": 4,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "marketplace.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 124818,
+      "num_tests": 0,
+      "num_passed": 4,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "products.spec",
+      "run_num": 1,
+      "passed": false,
+      "duration_ms": 159098,
+      "num_tests": 0,
+      "num_passed": 12,
+      "num_failed": 3,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "products.spec",
+      "run_num": 2,
+      "passed": false,
+      "duration_ms": 114606,
+      "num_tests": 0,
+      "num_passed": 14,
+      "num_failed": 1,
+      "fetch_timings": []
+    },
+    {
+      "backend": "applesauce",
+      "spec": "products.spec",
+      "run_num": 3,
+      "passed": false,
+      "duration_ms": 165457,
+      "num_tests": 0,
+      "num_passed": 11,
+      "num_failed": 4,
+      "fetch_timings": []
+    }
+  ]
+}

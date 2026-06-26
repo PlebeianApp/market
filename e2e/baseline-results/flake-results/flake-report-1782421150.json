@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "timestamp": "2026-06-25 20:59:10 UTC",
+    "branch": "diag/auction-io-timing",
+    "workdir": "/home/c03rad0r/market",
+    "num_runs": 2,
+    "timing_enabled": true,
+    "total_elapsed_seconds": 186.5,
+    "total_specs": 1
+  },
+  "summary": {
+    "stable": 0,
+    "flaky": 0,
+    "very_flaky": 0,
+    "broken": 1
+  },
+  "specs": [
+    {
+      "spec": "app-settings.spec",
+      "total_runs": 2,
+      "pass_count": 0,
+      "fail_count": 2,
+      "pass_rate": 0.0,
+      "avg_duration_ms": 90930.0,
+      "min_duration_ms": 90925,
+      "max_duration_ms": 90935,
+      "classification": "\u274c BROKEN",
+      "individual_results": [
+        {
+          "spec": "app-settings.spec",
+          "run_num": 1,
+          "passed": false,
+          "duration_ms": 90925,
+          "num_tests": 0,
+          "num_passed": 5,
+          "num_failed": 11,
+          "num_flaky": 0,
+          "error": ""
+        },
+        {
+          "spec": "app-settings.spec",
+          "run_num": 2,
+          "passed": false,
+          "duration_ms": 90935,
+          "num_tests": 0,
+          "num_passed": 15,
+          "num_failed": 1,
+          "num_flaky": 0,
+          "error": ""
+        }
+      ],
+      "timing_samples": []
+    }
+  ]
+}

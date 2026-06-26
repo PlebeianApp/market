@@ -1,0 +1,544 @@
+{
+  "config": {
+    "configFile": "/home/c03rad0r/market/e2e/playwright.local.config.ts",
+    "rootDir": "/home/c03rad0r/market/e2e/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/home/c03rad0r/market/e2e/global-setup.ts",
+    "globalTeardown": "/home/c03rad0r/market/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/c03rad0r/market/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/c03rad0r/market/e2e/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "pii-exposure-remediation.spec.ts",
+      "file": "pii-exposure-remediation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "PII Exposure Remediation Workflow",
+          "file": "pii-exposure-remediation.spec.ts",
+          "line": 166,
+          "column": 6,
+          "specs": [
+            {
+              "title": "scanner flags affected kind 16 order events with sensitive delivery/contact fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12294,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "Deleted 1 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:58:37.352Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-6c9a76b76f86304acaf8",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 177,
+              "column": 2
+            },
+            {
+              "title": "scanner ignores unrelated/non-PII events",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8534,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Deleted 1 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:58:50.691Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-42a6e07ec5a1b0e1b9a6",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 214,
+              "column": 2
+            },
+            {
+              "title": "successfully deletes PII events through UI and confirms deletion via relay query",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 15630,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:266:24",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                          "column": 24,
+                          "line": 266
+                        },
+                        "snippet": "  264 | \t\t// Wait for PII modal to appear using header text detection\n  265 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 266 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  267 |\n  268 | \t\t// Click the \"Request Deletion and Verify\" button\n  269 | \t\tawait merchantPage.click('button:has-text(\"Request Deletion and Verify\")')"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                            "column": 24,
+                            "line": 266
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  264 | \t\t// Wait for PII modal to appear using header text detection\n  265 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 266 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  267 |\n  268 | \t\t// Click the \"Request Deletion and Verify\" button\n  269 | \t\tawait merchantPage.click('button:has-text(\"Request Deletion and Verify\")')\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:266:24"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Deleted 1 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:58:59.264Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-ec54b-ms-deletion-via-relay-query-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-ec54b-ms-deletion-via-relay-query-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                        "column": 24,
+                        "line": 266
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-7f3c62ff0b1be22bd00c",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 255,
+              "column": 2
+            },
+            {
+              "title": "prevents deletion of events not authored by the current user",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 19949,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:59:17.855Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-4ea6136b50818632f8a3",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 297,
+              "column": 2
+            },
+            {
+              "title": "modal copy says \"request deleted,\" not \"deleted\"",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 17192,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:332:24",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                          "column": 24,
+                          "line": 332
+                        },
+                        "snippet": "  330 | \t\t// Wait for PII modal to appear using header text detection\n  331 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 332 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  333 |\n  334 | \t\t// Check button text\n  335 | \t\tconst buttonText = await merchantPage.locator('button:has-text(\"Request Deletion and Verify\")').textContent()"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                            "column": 24,
+                            "line": 332
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  330 | \t\t// Wait for PII modal to appear using header text detection\n  331 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 332 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  333 |\n  334 | \t\t// Check button text\n  335 | \t\tconst buttonText = await merchantPage.locator('button:has-text(\"Request Deletion and Verify\")').textContent()\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:332:24"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Deleted 1 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:59:39.326Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-26734-equest-deleted-not-deleted--chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-26734-equest-deleted-not-deleted--chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                        "column": 24,
+                        "line": 332
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-6cfc3bcfc67ff6bc8899",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 321,
+              "column": 2
+            },
+            {
+              "title": "hides raw PII values in UI showing only field types",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 16253,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:351:24",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                          "column": 24,
+                          "line": 351
+                        },
+                        "snippet": "  349 | \t\t// Wait for PII modal to appear using header text detection\n  350 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 351 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  352 |\n  353 | \t\t// Get modal content\n  354 | \t\tconst modalContent = await (await merchantPage.getByRole('dialog', { name: 'Personal Information Leak' }).allTextContents()).join('')"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                            "column": 24,
+                            "line": 351
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  349 | \t\t// Wait for PII modal to appear using header text detection\n  350 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 351 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  352 |\n  353 | \t\t// Get modal content\n  354 | \t\tconst modalContent = await (await merchantPage.getByRole('dialog', { name: 'Personal Information Leak' }).allTextContents()).join('')\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:351:24"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "Deleted 1 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T22:59:58.251Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-a1c91-UI-showing-only-field-types-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-a1c91-UI-showing-only-field-types-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                        "column": 24,
+                        "line": 351
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-17f1aac2296c7b2015cb",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 340,
+              "column": 2
+            },
+            {
+              "title": "completely executes deletion workflow and verifies event removal",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 15287,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:390:24",
+                        "location": {
+                          "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                          "column": 24,
+                          "line": 390
+                        },
+                        "snippet": "  388 | \t\t// Wait for PII modal to appear\n  389 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 390 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  391 |\n  392 | \t\t// Verify both events are listed in the modal\n  393 | \t\tconst event1ListItem = await merchantPage.locator(`li:has-text(\"Event ${piiEvent1.id.substring(0, 8)}\")`)"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                            "column": 24,
+                            "line": 390
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n  388 | \t\t// Wait for PII modal to appear\n  389 | \t\tconst modalVisible = await waitForPIIModal(merchantPage, 10000)\n> 390 | \t\texpect(modalVisible).toBe(true)\n      | \t\t                     ^\n  391 |\n  392 | \t\t// Verify both events are listed in the modal\n  393 | \t\tconst event1ListItem = await merchantPage.locator(`li:has-text(\"Event ${piiEvent1.id.substring(0, 8)}\")`)\n    at /home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts:390:24"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "  Seeding: base (user profiles)\n"
+                        },
+                        {
+                          "text": "    Published profile: TestMerchant\n"
+                        },
+                        {
+                          "text": "    Published profile: TestBuyer\n"
+                        },
+                        {
+                          "text": "    Published profile: TestApp\n"
+                        },
+                        {
+                          "text": "    Published admin list with devUser1\n"
+                        },
+                        {
+                          "text": "Deleted 2 kind 16 events\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-25T23:00:17.030Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-1fdf5--and-verifies-event-removal-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/c03rad0r/market/test-results/pii-exposure-remediation-P-1fdf5--and-verifies-event-removal-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/c03rad0r/market/e2e/tests/pii-exposure-remediation.spec.ts",
+                        "column": 24,
+                        "line": 390
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "2613be15c2da9c265671-7a2ea15f3668dc1027f9",
+              "file": "pii-exposure-remediation.spec.ts",
+              "line": 376,
+              "column": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-06-25T22:58:32.281Z",
+    "duration": 121245.16600000001,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 4,
+    "flaky": 0
+  }
+}
