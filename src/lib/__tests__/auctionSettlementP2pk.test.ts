@@ -32,7 +32,7 @@ const makeP2pkSecret = (lockPubkey: string): string =>
 		},
 	])
 
-const makeToken = (secret: string, amount = 1): string => {
+const makeToken = (secret: string, amount = 1, mint = 'https://mint.example'): string => {
 	const proof: Proof = {
 		id: '009a1f293253e41e',
 		amount,
@@ -41,7 +41,7 @@ const makeToken = (secret: string, amount = 1): string => {
 	}
 
 	return getEncodedToken({
-		mint: 'https://mint.example',
+		mint,
 		proofs: [proof],
 	})
 }
@@ -208,6 +208,27 @@ describe('auction settlement P2PK chain preflight', () => {
 				],
 			}),
 		).toThrow(`expected leg amount must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
+	})
+
+	test('rejects chain leg token whose decoded mint does not match bid mint', () => {
+		const fixture = makeFixture()
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: fixture.xpub,
+				legs: [
+					{
+						bidEventId: '3'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(fixture.childPubkey), AUCTION_MIN_BID_LEG_SATS, 'https://other-mint.example'),
+						derivationPath: fixture.derivationPath,
+						bidChildPubkey: fixture.childPubkey,
+						releaseChildPubkey: fixture.childPubkey,
+						expectedAmount: AUCTION_MIN_BID_LEG_SATS,
+					},
+				],
+			}),
+		).toThrow('token mint URL https://other-mint.example does not match expected mint URL https://mint.example')
 	})
 
 	test('rejects chain if any leg has a mismatched P2PK lock pubkey', () => {

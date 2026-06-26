@@ -30,6 +30,7 @@ export interface AuctionSettlementP2pkPreflightResult {
 	derivedChildPubkey: string
 	settlementPlanChildPubkey: string
 	tokenLockPubkey: string
+	tokenMintUrl: string
 	tokenAmount: number
 	proofCount: number
 }
@@ -125,6 +126,11 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 		throw new Error('Winner token contains no proofs')
 	}
 
+	const tokenMintUrl = decodedToken.mint?.trim()
+	if (!tokenMintUrl) {
+		throw new Error('Winner token mint URL is missing')
+	}
+
 	let tokenLockPubkey = ''
 	let tokenAmount = 0
 	for (const proof of decodedToken.proofs) {
@@ -144,6 +150,7 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 		derivedChildPubkey,
 		settlementPlanChildPubkey,
 		tokenLockPubkey,
+		tokenMintUrl,
 		tokenAmount,
 		proofCount: decodedToken.proofs.length,
 	}
@@ -188,6 +195,10 @@ export const preflightAuctionSettlementP2pkChain = (
 				token: leg.token,
 				mintKeysets: leg.mintKeysets,
 			})
+
+			if (preflight.tokenMintUrl !== mintUrl) {
+				throw new Error(`token mint URL ${preflight.tokenMintUrl} does not match expected mint URL ${mintUrl}`)
+			}
 
 			if (preflight.tokenAmount !== leg.expectedAmount) {
 				throw new Error(`token proof sum ${preflight.tokenAmount} sats does not equal expected leg amount ${leg.expectedAmount} sats`)
