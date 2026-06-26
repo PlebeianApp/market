@@ -1,0 +1,36 @@
+# Market Aggregator Relay (strfry)
+#
+# WoT-gated aggregation relay for Plebeian Market.
+# Scrapes market-relevant events from upstream relays and serves them
+# from a single fast local relay, eliminating multi-second dead-relay
+# timeouts in the auctions UI.
+#
+# Deployed on vps2 (market-agg.orangesync.tech:7780 -> container :7777)
+# See: deploy-simple/aggregator/strfry.conf for relay config
+# See: deploy-simple/aggregator/write-policy.py for WoT gate
+
+services:
+  strfry-market-agg:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strfry-market-agg:local
+    container_name: strfry-market-agg
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7780:7777"
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - ./db:/strfry-db
+      - ./write-policy.py:/opt/strfry-agg/write-policy.py:ro
+      - ./state:/opt/strfry-agg/state:ro
+    environment:
+      - STRFRY_AGG_ALLOWED=/opt/strfry-agg/state/allowed.npubs
+      # Root npub hex (c03rad0r) — bootstrap trust anchor
+      - STRFRY_AGG_ROOT_HEX=c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
