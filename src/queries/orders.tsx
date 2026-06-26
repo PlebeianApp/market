@@ -1,7 +1,10 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
-import { fetchEvents as fetchEventsIo, subscribe as subscribeIo, type NostrFilter } from '@/lib/nostr/io'
+// Wave A1b: orders relay reads are now applesauce-backed (RelayPool), selected
+// explicitly through the seam so the global NDK default stays untouched. Flip
+// back to the seam's default pass-throughs (fetchEvents/subscribe) to revert.
+import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
@@ -67,16 +70,17 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
 /**
  * Fetches events via the library-agnostic Nostr I/O seam and rehydrates them as
- * NDKEvents so the existing orders domain types are unchanged. Routing through
- * the seam (instead of `ndk.fetchEvents` directly) applies the anti-hang timeout
- * guard and lets the transport flip to applesauce without touching call sites.
+ * NDKEvents so the existing orders domain types are unchanged. Wave A1b: the
+ * reads now resolve through `applesauceIo` (RelayPool-backed), selected
+ * explicitly at the import so the seam's global default stays NDK-backed.
+ * Reverting the import flips orders back to NDK in one step.
  */
 async function fetchNdkEventSet(
 	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>> | null,
 	filter: NDKFilter | NDKFilter[],
 ): Promise<Set<NDKEvent>> {
 	if (!ndk) throw new Error('NDK not initialized')
-	const raw = await fetchEventsIo(filter as NostrFilter | NostrFilter[])
+	const raw = await applesauceIo.fetchEvents(filter as NostrFilter | NostrFilter[])
 	return new Set(raw.map((event) => new NDKEvent(ndk, event)))
 }
 
@@ -1017,8 +1021,8 @@ export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {})
 			void queryClient.refetchQueries({ queryKey })
 		}
 
-		// Live subscription via the Nostr I/O seam; rehydrate as NDKEvent for the handler.
-		const stop = subscribeIo(
+		// Live subscription via the Nostr I/O seam (applesauce-backed); rehydrate as NDKEvent.
+		const stop = applesauceIo.subscribe(
 			relatedEventsFilter,
 			(rawEvent) => {
 				const newEvent = new NDKEvent(ndk, rawEvent)
