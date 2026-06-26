@@ -16,6 +16,12 @@ import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
 
 import { ndkIo } from './io-ndk'
+import { applesauceIo } from './io-applesauce'
+
+// Both adapters are re-exported through the seam so a module that has flipped
+// can select its backend explicitly without disturbing the global default
+// (which stays NDK-backed until Wave D). Per-module flip = one import swap.
+export { ndkIo, applesauceIo }
 
 export type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 export type NostrFilter = Filter
