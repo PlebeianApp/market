@@ -141,7 +141,7 @@ jobs:
 
       - name: Create environment file
         run: |
-          cat > deploy-package/.env << EOF
+          cat > deploy-package/.env << 'EOF'
           APP_STAGE=staging
           NODE_ENV=production
           PORT=3002
@@ -176,7 +176,7 @@ jobs:
             rm -f ~/Caddyfile.staging
             rm -f ~/deploy-package.tar.gz ~/caddyfile-staging.tar.gz
 
-      - name: Upload files to tmp
+      - name: Upload files to deployer staging
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.STAGING_HOST }}
