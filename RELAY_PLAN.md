@@ -75,14 +75,17 @@ All relay configuration lives in `src/lib/constants.ts`:
 
 ## Aggregator Gate Policy
 
-### Market-Kind Gate (current)
+### Dual-Mode Gate (current — reconciled from #1066 + #1069)
 
-The write-policy plugin (`deploy-simple/aggregator/write-policy.py`) accepts
-events that meet **any** of these criteria:
+The write-policy plugin (`deploy-simple/aggregator/write-policy.py`) uses a
+**dual-mode** gate that separates public market data from private data:
 
-1. **Market-relevant kind** (from any pubkey) — the primary gate
-2. **Root npub** — bootstrap/personal events
-3. **Allowlisted pubkey** — additional trust layer for future use
+1. **PUBLIC market kind** (from any pubkey) — profiles, stalls, listings,
+   comments, zap receipts, relay lists, app settings, etc.
+2. **RESTRICTED kind** (from root npub or WoT allowlist only) — gift wraps,
+   order messages, payment receipts, Cashu wallets, app-specific data
+3. **Root npub** — bootstrap/personal events always accepted
+4. **Allowlisted pubkey** — additional trust layer for future use
 
 Market-relevant kinds (discovered from the codebase):
 
