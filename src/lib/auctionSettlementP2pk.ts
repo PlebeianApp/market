@@ -5,6 +5,7 @@ import {
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
 import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
+import { AUCTION_MIN_BID_LEG_SATS } from './auction/constants'
 
 export interface AuctionSettlementP2pkPreflightInput {
 	auctionP2pkXpub: string
@@ -165,8 +166,8 @@ export const preflightAuctionSettlementP2pkChain = (
 		if (!mintUrl) {
 			throw new Error(`${label} is missing its mint URL`)
 		}
-		if (!Number.isSafeInteger(leg.expectedAmount) || leg.expectedAmount <= 0) {
-			throw new Error(`${label} has invalid expected leg amount`)
+		if (!Number.isSafeInteger(leg.expectedAmount) || leg.expectedAmount < AUCTION_MIN_BID_LEG_SATS) {
+			throw new Error(`${label} expected leg amount must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
 		}
 
 		try {

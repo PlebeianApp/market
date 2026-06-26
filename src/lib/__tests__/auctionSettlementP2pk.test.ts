@@ -3,6 +3,7 @@ import { HDKey } from '@scure/bip32'
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { preflightAuctionSettlementP2pk, preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
+import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 
 const makeFixture = (derivationPath = '7/11/13/17/19') => {
 	const seed = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
@@ -185,6 +186,28 @@ describe('auction settlement P2PK chain preflight', () => {
 				],
 			}),
 		).toThrow('token proof sum 9 sats does not equal expected leg amount 10 sats')
+	})
+
+	test('rejects chain leg below AUCTION_MIN_BID_LEG_SATS even when token sum matches', () => {
+		const fixture = makeFixture()
+		const tinyAmount = AUCTION_MIN_BID_LEG_SATS - 1
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: fixture.xpub,
+				legs: [
+					{
+						bidEventId: '9'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(fixture.childPubkey), tinyAmount),
+						derivationPath: fixture.derivationPath,
+						bidChildPubkey: fixture.childPubkey,
+						releaseChildPubkey: fixture.childPubkey,
+						expectedAmount: tinyAmount,
+					},
+				],
+			}),
+		).toThrow(`expected leg amount must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
 	})
 
 	test('rejects chain if any leg has a mismatched P2PK lock pubkey', () => {
