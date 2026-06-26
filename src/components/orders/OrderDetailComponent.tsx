@@ -42,7 +42,6 @@ import {
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
-import { Separator } from '../ui/separator'
 import { OrderActions } from './OrderActions'
 import { TimelineEventCard } from './TimelineEventCard'
 import type { ComponentType, SVGProps } from 'react'
@@ -70,16 +69,11 @@ import {
 	useAuctionBids,
 	useAuctionSettlements,
 	useAuctionPathReleases,
-	getAuctionId,
-	fetchAuctionByATag,
 	getAuctionTitle,
 	getAuctionSettlementStatus,
 	getAuctionSettlementFinalAmount,
-	getAuctionSettlementWinner,
-	getBidAmount,
 	getAuctionCurrentPriceFromBids,
 } from '@/queries/auctions'
-import { queryOptions } from '@tanstack/react-query'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -140,7 +134,6 @@ function AuctionSettlementStatus({
 }: {
 	settlements: NDKEvent[]
 	pathReleases: NDKEvent[]
-	auctionBids: NDKEvent[]
 	currentPrice: number
 }) {
 	const settlement = settlements[0]
@@ -228,7 +221,7 @@ function AuctionSettlementStatus({
 						<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
 							<span>Status:</span>
 							<span className={hasSettlement ? 'text-blue-700 font-medium' : 'text-orange-700'}>
-								{hasSettlement ? (getAuctionSettlementStatus(settlement) as string).replace(/_/g, ' ') : 'Pending'}
+								{hasSettlement ? getAuctionSettlementStatus(settlement).replace(/_/g, ' ') : 'Pending'}
 							</span>
 						</div>
 						{hasSettlement && settlementStatus === 'settled' && (
@@ -457,7 +450,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Fetch auction-related data if this is an auction order
 	const auctionCoords = isValidATag(auctionCoordinates || '') ? getCoordsFromATag(auctionCoordinates || '') : null
-	const { data: auctionData, isLoading: isLoadingAuctionData } = useQuery({
+	const { data: auctionData } = useQuery({
 		...auctionByATagQueryOptions(auctionCoords?.pubkey ?? '', auctionCoords?.identifier ?? ''),
 		enabled: !!auctionCoords?.pubkey && !!auctionCoords.identifier,
 	})
@@ -466,14 +459,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { data: auctionSettlements = [] } = useAuctionSettlements('', 100, auctionCoordinates || '')
 	const { data: auctionPathReleases = [] } = useAuctionPathReleases('', 200, auctionCoordinates || '')
 
-	// Determine auction status if this is an auction order
-	const auctionStatus = isAuctionOrder ? getAuctionSettlementStatus(auctionSettlements.at(-1) ?? null) : null
-
 	// Calculate current price for display in settlement card
 	const currentPrice = isAuctionOrder && auctionData ? getAuctionCurrentPriceFromBids(auctionData, auctionBids) : 0
 
 	// Status helpers
-	const { bgColor: statusBadgeBgColor, textColor: statusTextColor, iconName, label: statusLabel } = getStatusStyles(order)
+	const { bgColor: statusBadgeBgColor, iconName, label: statusLabel } = getStatusStyles(order)
 
 	// Helper to determine status explanation based on order state
 	const statusExplanation = useMemo(() => {
@@ -752,12 +742,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{/* For Auctions: Show Settlement Status */}
 				{isAuctionOrder ? (
 					<>
-						<AuctionSettlementStatus
-							settlements={auctionSettlements}
-							pathReleases={auctionPathReleases}
-							auctionBids={auctionBids}
-							currentPrice={currentPrice}
-						/>
+						<AuctionSettlementStatus settlements={auctionSettlements} pathReleases={auctionPathReleases} currentPrice={currentPrice} />
 					</>
 				) : (
 					/* For Products: Show Invoice Logic */

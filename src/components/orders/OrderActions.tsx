@@ -106,10 +106,6 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		return null
 	}
 
-	const handleStockUpdateComplete = () => {}
-
-	const breakpoint = useBreakpoint()
-
 	return (
 		<div className={cn('space-y-3', className)}>
 			{/* Primary Action Button */}
@@ -251,7 +247,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 					open={isStockUpdateOpen}
 					onOpenChange={setIsStockUpdateOpen}
 					order={order}
-					onComplete={handleStockUpdateComplete}
+					onComplete={() => {}} // No-op: no additional actions needed.
 				/>
 			)}
 		</div>
