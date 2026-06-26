@@ -4,6 +4,7 @@ import {
 	getAuctionP2pkLockPubkeyFromSecret,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
+import { normalizeMintUrl } from '@/lib/wallet'
 import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
 import { AUCTION_MIN_BID_LEG_SATS } from './auction/constants'
 
@@ -196,7 +197,10 @@ export const preflightAuctionSettlementP2pkChain = (
 				mintKeysets: leg.mintKeysets,
 			})
 
-			if (preflight.tokenMintUrl !== mintUrl) {
+			const normalizedTokenMintUrl = normalizeMintUrl(preflight.tokenMintUrl)
+			const normalizedLegMintUrl = normalizeMintUrl(mintUrl)
+
+			if (normalizedTokenMintUrl !== normalizedLegMintUrl) {
 				throw new Error(`token mint URL ${preflight.tokenMintUrl} does not match expected mint URL ${mintUrl}`)
 			}
 

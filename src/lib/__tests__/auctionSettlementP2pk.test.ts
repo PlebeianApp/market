@@ -231,6 +231,27 @@ describe('auction settlement P2PK chain preflight', () => {
 		).toThrow('token mint URL https://other-mint.example does not match expected mint URL https://mint.example')
 	})
 
+	test('accepts chain leg token mint with equivalent trailing-slash spelling', () => {
+		const fixture = makeFixture()
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: fixture.xpub,
+				legs: [
+					{
+						bidEventId: '4'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(fixture.childPubkey), AUCTION_MIN_BID_LEG_SATS, 'https://mint.example/'),
+						derivationPath: fixture.derivationPath,
+						bidChildPubkey: fixture.childPubkey,
+						releaseChildPubkey: fixture.childPubkey,
+						expectedAmount: AUCTION_MIN_BID_LEG_SATS,
+					},
+				],
+			}),
+		).not.toThrow()
+	})
+
 	test('rejects chain if any leg has a mismatched P2PK lock pubkey', () => {
 		const first = makeFixture('7/11/13/17/19')
 		const second = makeFixture('2/3/5/7/11')
