@@ -21,6 +21,7 @@ function TechnicalDataRow({ label, value }: { label: string; value: ReactNode })
 interface Props {
 	auctionRootEventId: string
 	auctionCoordinates: string
+	currentUserPubkey?: string
 	className?: string
 }
 
@@ -62,7 +63,7 @@ function BidEventDetails({ bidEvent }: { bidEvent: NDKEvent }) {
 	)
 }
 
-export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, className }: Props) {
+export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, currentUserPubkey, className }: Props) {
 	const { bids } = useStreamingAuctionBids(auctionRootEventId, 500, auctionCoordinates)
 
 	const topBid = bids.reduce<NDKEvent | null>((best, bid) => {
@@ -94,16 +95,40 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 	) : (
 		<div className="space-y-4">
 			{topBid && (
-				<div className="flex flex-col gap-4 rounded-xl border-2 border-secondary bg-secondary/10 px-4 py-4 shadow-sm">
+				<div
+					className={cn(
+						'flex flex-col gap-4 rounded-xl border-2 px-4 py-4 shadow-sm',
+						topBid.pubkey === currentUserPubkey ? 'border-pink-400 bg-pink-50' : 'border-secondary bg-secondary/10',
+					)}
+				>
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
-							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-secondary">Highest visible bid</p>
+							<p
+								className={cn(
+									'text-[11px] font-semibold uppercase tracking-[0.18em]',
+									topBid.pubkey === currentUserPubkey ? 'text-pink-600' : 'text-secondary',
+								)}
+							>
+								Highest visible bid
+							</p>
 							<p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(topBid))} sats</p>
 							<p className="mt-1 text-sm text-zinc-600">Recorded {formatBidRecordedAt(topBid)}</p>
 						</div>
-						<Badge variant="outline" className="border-secondary bg-white text-secondary">
-							{getBidStatus(topBid)}
-						</Badge>
+						<div className="flex items-center gap-2">
+							{topBid.pubkey === currentUserPubkey && (
+								<Badge className="border-pink-400 bg-pink-100 text-pink-700 hover:bg-pink-100">Your Bid</Badge>
+							)}
+							<Badge
+								variant="outline"
+								className={
+									topBid.pubkey === currentUserPubkey
+										? 'border-pink-300 bg-white text-pink-700'
+										: 'border-secondary bg-white text-secondary'
+								}
+							>
+								{getBidStatus(topBid)}
+							</Badge>
+						</div>
 					</div>
 
 					<UserCard pubkey={topBid.pubkey} size="md" />
@@ -126,26 +151,38 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 							No other bids yet.
 						</div>
 					) : (
-						latestBids.map((bidEvent) => (
-							<div
-								key={bidEvent.id}
-								className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
-							>
-								<div className="flex flex-wrap items-start justify-between gap-3">
-									<div>
-										<p className="text-xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))} sats</p>
-										<p className="mt-1 text-sm text-zinc-500">Recorded {formatBidRecordedAt(bidEvent)}</p>
+						latestBids.map((bidEvent) => {
+							const isOwnBid = bidEvent.pubkey === currentUserPubkey
+							return (
+								<div
+									key={bidEvent.id}
+									className={cn(
+										'flex flex-col gap-3 rounded-xl border px-4 py-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-200',
+										isOwnBid ? 'border-pink-300 bg-pink-50/70' : 'border-zinc-200 bg-zinc-50/70',
+									)}
+								>
+									<div className="flex flex-wrap items-start justify-between gap-3">
+										<div>
+											<p className="text-xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))} sats</p>
+											<p className="mt-1 text-sm text-zinc-500">Recorded {formatBidRecordedAt(bidEvent)}</p>
+										</div>
+										<div className="flex items-center gap-2">
+											{isOwnBid && <Badge className="border-pink-400 bg-pink-100 text-pink-700 hover:bg-pink-100">Your Bid</Badge>}
+											<Badge
+												variant="outline"
+												className={isOwnBid ? 'border-pink-300 bg-white text-pink-700' : 'border-zinc-300 bg-white text-zinc-700'}
+											>
+												{getBidStatus(bidEvent)}
+											</Badge>
+										</div>
 									</div>
-									<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
-										{getBidStatus(bidEvent)}
-									</Badge>
-								</div>
 
-								<UserCard pubkey={bidEvent.pubkey} size="sm" />
-								<BidMintRow mint={getBidMint(bidEvent)} />
-								<BidEventDetails bidEvent={bidEvent} />
-							</div>
-						))
+									<UserCard pubkey={bidEvent.pubkey} size="sm" />
+									<BidMintRow mint={getBidMint(bidEvent)} />
+									<BidEventDetails bidEvent={bidEvent} />
+								</div>
+							)
+						})
 					)}
 				</div>
 			</div>

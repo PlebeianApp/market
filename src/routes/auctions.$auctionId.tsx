@@ -861,6 +861,7 @@ function AuctionDetailRoute() {
 								<AuctionBidsContainer
 									auctionRootEventId={auctionRootEventId || auctionId}
 									auctionCoordinates={auctionCoordinates}
+									currentUserPubkey={activeUserPubkey}
 									className="max-h-[500px]"
 								/>
 
