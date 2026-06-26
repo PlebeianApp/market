@@ -1005,7 +1005,7 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 	// Generate the invoice using the resolved lightning address
 	try {
 		console.log(`⚡ Generating invoice for ${lnAddress} (${amountSats} sats)`)
-		const ln = new LightningAddress(lnAddress)
+		const ln = new LightningAddress(lnAddress, { proxy: false })
 		await ln.fetch()
 
 		const zapSupported = (ln.lnurlpData?.allowsNostr ?? ln.lnurlpData?.rawData?.allowsNostr ?? false) && !!ln.nostrPubkey
