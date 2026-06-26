@@ -249,4 +249,48 @@ describe('cart store persistence orchestration', () => {
 
 		expect(publishCount).toBe(0)
 	})
+
+	test('local cart items are preserved when a newer remote snapshot arrives (re-read guard, #964)', async () => {
+		// Bug #964: reconcileRemoteCartForUser overwrites locally-added items once the async
+		// remote fetch resolves with a newer updatedAt. The re-read guard must preserve the
+		// local cart when the user already has items locally, regardless of remote freshness.
+		const localCart = buildCart('local-product')
+		cartStore.setState((state) => ({
+			...state,
+			cart: localCart,
+			productsBySeller: {
+				[sellerPubkey]: [localCart.products['local-product']],
+			},
+			lastCartIntentUpdatedAt: 100, // local intent is OLDER than remote below
+		}))
+
+		let remotePublished = false
+		cartTestUtils.setSyncDependencies({
+			now: () => 500,
+			fetchLatestCartSnapshot: async () => ({
+				version: 1,
+				updatedAt: 300, // remote is NEWER than local (100) -> shouldAdoptRemote would be true
+				items: [
+					{
+						productRef: `30402:${sellerPubkey}:remote:product`,
+						quantity: 2,
+						shippingRef: `30406:${sellerPubkey}:ship:1`,
+					},
+				],
+			}),
+			publishCartSnapshot: async () => {
+				remotePublished = true
+				return 'event-id'
+			},
+		})
+
+		await cartActions.reconcileRemoteCartForUser('buyer', {} as any, {} as any)
+
+		// Local item must survive; remote must NOT overwrite it.
+		expect(Object.keys(cartStore.state.cart.products)).toEqual(['local-product'])
+		expect(cartStore.state.cart.products['remote:product']).toBeUndefined()
+		expect(cartStore.state.hasRemoteCartHydrated).toBe(true)
+		// Reconciliation must never publish the remote snapshot.
+		expect(remotePublished).toBe(false)
+	})
 })
