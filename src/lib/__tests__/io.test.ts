@@ -138,6 +138,16 @@ describe('nostr io seam', () => {
 		expect(getNostrIo()).toBe(ndkIo)
 	})
 
+	test('seam re-exports both adapters for per-module selection without disturbing the global default', async () => {
+		// A module that has flipped (e.g. orders relay reads, Wave A1b) imports
+		// applesauceIo through the seam and calls it directly, so the global
+		// default stays NDK-backed until Wave D. One import swap = one revert.
+		const seam = await import('../nostr/io')
+		expect(seam.applesauceIo).toBe(applesauceIo)
+		expect(seam.ndkIo).toBe(ndkIo)
+		expect(getNostrIo()).toBe(ndkIo)
+	})
+
 	test('setNostrIo swaps the active adapter', () => {
 		const stub = makeStubIo()
 		setNostrIo(stub)
