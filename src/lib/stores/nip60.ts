@@ -14,6 +14,7 @@ import {
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
+import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
@@ -1570,15 +1571,15 @@ export const nip60Actions = {
 	},
 
 	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> => {
+		const amount = Math.floor(params.amount)
+		if (!Number.isFinite(amount) || amount < AUCTION_MIN_BID_LEG_SATS) {
+			throw new Error(`Bid lock amount must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
+		}
+
 		const wallet = nip60Store.state.wallet
 		const state = nip60Store.state
 		if (!wallet || state.status !== 'ready') {
 			throw new Error('NIP-60 wallet not ready')
-		}
-
-		const amount = Math.floor(params.amount)
-		if (!Number.isFinite(amount) || amount <= 0) {
-			throw new Error('Bid amount must be a positive integer')
 		}
 
 		const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'

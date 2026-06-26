@@ -23,8 +23,9 @@ import {
 	upsertBidderRecord,
 	walkBidderRecordChain,
 } from '@/lib/auction/bidderRecords'
-import { AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
+import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
+import { getEncodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKRelaySet, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -455,7 +456,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
 	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path derivation')
-	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+	if (!Number.isFinite(formData.amount) || formData.amount < AUCTION_MIN_BID_SATS) {
+		throw new Error(`Bid amount must be at least ${AUCTION_MIN_BID_SATS} sats`)
+	}
 	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
 		throw new Error('Auction start time is required for bidding')
 	}
@@ -494,8 +497,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		throw new Error(`Rebid (${formData.amount} sats) must exceed your previous bid on this auction (${prevLeg.amount} sats)`)
 	}
 	const legLockAmount = formData.amount - prevLegAmount
-	if (legLockAmount <= 0) {
-		throw new Error(`Computed lock amount must be positive (got ${legLockAmount})`)
+	if (legLockAmount < AUCTION_MIN_BID_LEG_SATS) {
+		throw new Error(`Bid raise must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
 	}
 
 	// Step 2/3 — generate path + derive child pubkey locally. Fresh per
@@ -974,6 +977,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		bid: NDKEvent
 		releaseEventId: string
 		derivationPath: string
+		bidChildPubkey: string
+		releaseChildPubkey: string
 		childPubkey: string
 		mintUrl: string
 		cashuToken: string
@@ -1003,12 +1008,13 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		}
 		const legChildFromBid = (getTag(legBid, 'child_pubkey') ?? '').toLowerCase()
 		const derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(p2pkXpub, release.derivationPath).toLowerCase()
+		const releaseChildPubkey = release.childPubkey.toLowerCase()
 		if (derivedChild !== legChildFromBid) {
 			throw new Error(
 				`Leg ${legBid.id.slice(0, 8)}… release derives to ${derivedChild} but the bid was locked to ${legChildFromBid}. Fraudulent bid leg.`,
 			)
 		}
-		if (derivedChild !== release.childPubkey.toLowerCase()) {
+		if (derivedChild !== releaseChildPubkey) {
 			throw new Error(`Leg ${legBid.id.slice(0, 8)}… release child_pubkey tag does not match locally-derived child pubkey`)
 		}
 
@@ -1026,6 +1032,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			bid: legBid,
 			releaseEventId: release.id,
 			derivationPath: release.derivationPath,
+			bidChildPubkey: legChildFromBid,
+			releaseChildPubkey,
 			childPubkey: derivedChild,
 			mintUrl: legMint,
 			cashuToken: release.cashuToken,
@@ -1038,6 +1046,25 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			`Chain sum (${runningCumulative} sats) does not equal winning bid amount (${winningAmount} sats). Chain integrity broken.`,
 		)
 	}
+
+	const mintKeysetsByMint = new Map<string, MintKeyset[]>()
+	for (const legMintUrl of Array.from(new Set(resolvedLegs.map((leg) => leg.mintUrl)))) {
+		mintKeysetsByMint.set(legMintUrl, await nip60Actions.loadAuctionMintKeysets(legMintUrl))
+	}
+
+	preflightAuctionSettlementP2pkChain({
+		auctionP2pkXpub: p2pkXpub,
+		legs: resolvedLegs.map((leg) => ({
+			bidEventId: leg.bid.id,
+			mintUrl: leg.mintUrl,
+			token: leg.cashuToken,
+			derivationPath: leg.derivationPath,
+			bidChildPubkey: leg.bidChildPubkey,
+			releaseChildPubkey: leg.releaseChildPubkey,
+			expectedAmount: leg.legAmount,
+			mintKeysets: mintKeysetsByMint.get(leg.mintUrl),
+		})),
+	})
 
 	// 6. For each leg in the chain (oldest → newest): derive the
 	// seller's child privkey from the auction xpriv + leg's path, then

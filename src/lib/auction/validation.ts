@@ -26,7 +26,14 @@
  * type-guard.
  */
 
-import { BID_FLOOR_TIME_GRACE_SECONDS, type Nut7ProofState, type ValidatorClaim, type ValidatorReason } from './constants'
+import {
+	AUCTION_MIN_BID_LEG_SATS,
+	AUCTION_MIN_BID_SATS,
+	BID_FLOOR_TIME_GRACE_SECONDS,
+	type Nut7ProofState,
+	type ValidatorClaim,
+	type ValidatorReason,
+} from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent } from './events'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 
@@ -111,7 +118,8 @@ const computeFloorMultiplier = (
  */
 export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: number; atSeconds: number }): number => {
 	const { auction, topBid, atSeconds } = input
-	const baseline = topBid > 0 ? topBid + auction.bidIncrement : auction.startingBid
+	const baseline =
+		topBid > 0 ? topBid + Math.max(auction.bidIncrement, AUCTION_MIN_BID_LEG_SATS) : Math.max(auction.startingBid, AUCTION_MIN_BID_SATS)
 	const multiplier = computeFloorMultiplier(
 		atSeconds,
 		auction.endAt,

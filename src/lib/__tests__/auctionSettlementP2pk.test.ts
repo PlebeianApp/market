@@ -2,15 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { HDKey } from '@scure/bip32'
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
-import { preflightAuctionSettlementP2pk } from '@/lib/auctionSettlementP2pk'
+import { preflightAuctionSettlementP2pk, preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
 
-const makeFixture = () => {
+const makeFixture = (derivationPath = '7/11/13/17/19') => {
 	const seed = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
 	const account = HDKey.fromMasterSeed(seed).derive("m/30408'/0'/0'")
 	const xpub = account.publicExtendedKey
 	if (!xpub) throw new Error('Failed to derive test xpub')
 
-	const derivationPath = '7/11/13/17/19'
 	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, derivationPath)
 
 	return {
@@ -32,10 +31,10 @@ const makeP2pkSecret = (lockPubkey: string): string =>
 		},
 	])
 
-const makeToken = (secret: string): string => {
+const makeToken = (secret: string, amount = 1): string => {
 	const proof: Proof = {
 		id: '009a1f293253e41e',
-		amount: 1,
+		amount,
 		secret,
 		C: '02'.padEnd(66, '1'),
 	}
@@ -45,6 +44,12 @@ const makeToken = (secret: string): string => {
 		proofs: [proof],
 	})
 }
+
+const makeEmptyToken = (): string =>
+	getEncodedToken({
+		mint: 'https://mint.example',
+		proofs: [],
+	})
 
 describe('auction settlement P2PK preflight', () => {
 	test('accepts compressed token lock pubkey matching derived child key', () => {
@@ -136,5 +141,148 @@ describe('auction settlement P2PK preflight', () => {
 				token: makeToken(makeP2pkSecret(fixture.childPubkeyXOnly)),
 			}),
 		).toThrow('Winner token P2PK lock pubkey is not compressed; cannot settle this bid safely')
+	})
+})
+
+describe('auction settlement P2PK chain preflight', () => {
+	test('rejects chain leg token with no proofs', () => {
+		const fixture = makeFixture()
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: fixture.xpub,
+				legs: [
+					{
+						bidEventId: 'a'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeEmptyToken(),
+						derivationPath: fixture.derivationPath,
+						bidChildPubkey: fixture.childPubkey,
+						releaseChildPubkey: fixture.childPubkey,
+						expectedAmount: 10,
+					},
+				],
+			}),
+		).toThrow('Winner token contains no proofs')
+	})
+
+	test('rejects chain leg token whose proof sum does not equal expected legAmount', () => {
+		const fixture = makeFixture()
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: fixture.xpub,
+				legs: [
+					{
+						bidEventId: 'b'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(fixture.childPubkey), 9),
+						derivationPath: fixture.derivationPath,
+						bidChildPubkey: fixture.childPubkey,
+						releaseChildPubkey: fixture.childPubkey,
+						expectedAmount: 10,
+					},
+				],
+			}),
+		).toThrow('token proof sum 9 sats does not equal expected leg amount 10 sats')
+	})
+
+	test('rejects chain if any leg has a mismatched P2PK lock pubkey', () => {
+		const first = makeFixture('7/11/13/17/19')
+		const second = makeFixture('2/3/5/7/11')
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: first.xpub,
+				legs: [
+					{
+						bidEventId: 'c'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+						derivationPath: first.derivationPath,
+						bidChildPubkey: first.childPubkey,
+						releaseChildPubkey: first.childPubkey,
+						expectedAmount: 10,
+					},
+					{
+						bidEventId: 'd'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(first.childPubkey), 15),
+						derivationPath: second.derivationPath,
+						bidChildPubkey: second.childPubkey,
+						releaseChildPubkey: second.childPubkey,
+						expectedAmount: 15,
+					},
+				],
+			}),
+		).toThrow('Winner token P2PK lock pubkey does not match auction p2pk_xpub + derivation path')
+	})
+
+	test('accepts a multi-leg chain when all structural checks pass', () => {
+		const first = makeFixture('7/11/13/17/19')
+		const second = makeFixture('2/3/5/7/11')
+
+		const result = preflightAuctionSettlementP2pkChain({
+			auctionP2pkXpub: first.xpub,
+			legs: [
+				{
+					bidEventId: 'e'.repeat(64),
+					mintUrl: 'https://mint.example',
+					token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+					derivationPath: first.derivationPath,
+					bidChildPubkey: first.childPubkey,
+					releaseChildPubkey: first.childPubkey,
+					expectedAmount: 10,
+				},
+				{
+					bidEventId: 'f'.repeat(64),
+					mintUrl: 'https://mint.example',
+					token: makeToken(makeP2pkSecret(second.childPubkey), 15),
+					derivationPath: second.derivationPath,
+					bidChildPubkey: second.childPubkey,
+					releaseChildPubkey: second.childPubkey,
+					expectedAmount: 15,
+				},
+			],
+		})
+
+		expect(result.totalAmount).toBe(25)
+		expect(result.legs).toHaveLength(2)
+		expect(result.legs.map((leg) => leg.tokenAmount)).toEqual([10, 15])
+	})
+
+	test('preflight failure happens before a caller would redeem any leg', () => {
+		const first = makeFixture('7/11/13/17/19')
+		const second = makeFixture('2/3/5/7/11')
+		let wouldRedeem = false
+
+		expect(() => {
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: first.xpub,
+				legs: [
+					{
+						bidEventId: '1'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+						derivationPath: first.derivationPath,
+						bidChildPubkey: first.childPubkey,
+						releaseChildPubkey: first.childPubkey,
+						expectedAmount: 10,
+					},
+					{
+						bidEventId: '2'.repeat(64),
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(second.childPubkey), 9),
+						derivationPath: second.derivationPath,
+						bidChildPubkey: second.childPubkey,
+						releaseChildPubkey: second.childPubkey,
+						expectedAmount: 10,
+					},
+				],
+			})
+			wouldRedeem = true
+		}).toThrow('token proof sum 9 sats does not equal expected leg amount 10 sats')
+
+		expect(wouldRedeem).toBe(false)
 	})
 })

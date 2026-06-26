@@ -29,6 +29,29 @@ export interface AuctionSettlementP2pkPreflightResult {
 	derivedChildPubkey: string
 	settlementPlanChildPubkey: string
 	tokenLockPubkey: string
+	tokenAmount: number
+	proofCount: number
+}
+
+export interface AuctionSettlementP2pkChainLegPreflightInput {
+	bidEventId?: string
+	mintUrl?: string
+	token: string
+	derivationPath?: string
+	bidChildPubkey?: string
+	releaseChildPubkey?: string
+	expectedAmount: number
+	mintKeysets?: MintKeyset[]
+}
+
+export interface AuctionSettlementP2pkChainPreflightInput {
+	auctionP2pkXpub: string
+	legs: AuctionSettlementP2pkChainLegPreflightInput[]
+}
+
+export interface AuctionSettlementP2pkChainPreflightResult {
+	legs: Array<AuctionSettlementP2pkPreflightResult & { bidEventId?: string; mintUrl: string; expectedAmount: number }>
+	totalAmount: number
 }
 
 const X_ONLY_HEX_RE = /^[0-9a-f]{64}$/i
@@ -54,6 +77,9 @@ const requireCompressedTokenLockPubkey = (pubkey: string): string => {
 		throw new Error('Winner token P2PK lock pubkey is malformed; cannot settle this bid safely')
 	}
 }
+
+const getChainLegLabel = (leg: AuctionSettlementP2pkChainLegPreflightInput, index: number): string =>
+	leg.bidEventId ? `Chain leg ${leg.bidEventId.slice(0, 8)}…` : `Chain leg ${index + 1}`
 
 export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPreflightInput): AuctionSettlementP2pkPreflightResult => {
 	const derivationPath = input.derivationPath?.trim()
@@ -99,7 +125,12 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 	}
 
 	let tokenLockPubkey = ''
+	let tokenAmount = 0
 	for (const proof of decodedToken.proofs) {
+		if (!Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+			throw new Error('Winner token proof amount is malformed')
+		}
+		tokenAmount += proof.amount
 		const proofLockPubkey = requireCompressedTokenLockPubkey(extractP2pkLockPubkeyFromSecret(proof.secret))
 		if (proofLockPubkey !== derivedChildPubkey) {
 			throw new Error('Winner token P2PK lock pubkey does not match auction p2pk_xpub + derivation path')
@@ -112,5 +143,70 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 		derivedChildPubkey,
 		settlementPlanChildPubkey,
 		tokenLockPubkey,
+		tokenAmount,
+		proofCount: decodedToken.proofs.length,
+	}
+}
+
+export const preflightAuctionSettlementP2pkChain = (
+	input: AuctionSettlementP2pkChainPreflightInput,
+): AuctionSettlementP2pkChainPreflightResult => {
+	if (!input.legs.length) {
+		throw new Error('Settlement chain contains no legs')
+	}
+
+	const preflightedLegs: AuctionSettlementP2pkChainPreflightResult['legs'] = []
+	let totalAmount = 0
+
+	for (let index = 0; index < input.legs.length; index++) {
+		const leg = input.legs[index]
+		const label = getChainLegLabel(leg, index)
+		const mintUrl = leg.mintUrl?.trim()
+		if (!mintUrl) {
+			throw new Error(`${label} is missing its mint URL`)
+		}
+		if (!Number.isSafeInteger(leg.expectedAmount) || leg.expectedAmount <= 0) {
+			throw new Error(`${label} has invalid expected leg amount`)
+		}
+
+		try {
+			if (!leg.bidChildPubkey?.trim()) {
+				throw new Error('bid child pubkey is required')
+			}
+			if (!leg.releaseChildPubkey?.trim()) {
+				throw new Error('release child pubkey is required')
+			}
+			if (!auctionP2pkPubkeysMatch(leg.bidChildPubkey, leg.releaseChildPubkey)) {
+				throw new Error('release child pubkey does not match bid child pubkey')
+			}
+
+			const preflight = preflightAuctionSettlementP2pk({
+				auctionP2pkXpub: input.auctionP2pkXpub,
+				derivationPath: leg.derivationPath,
+				settlementPlanChildPubkey: leg.releaseChildPubkey,
+				token: leg.token,
+				mintKeysets: leg.mintKeysets,
+			})
+
+			if (preflight.tokenAmount !== leg.expectedAmount) {
+				throw new Error(`token proof sum ${preflight.tokenAmount} sats does not equal expected leg amount ${leg.expectedAmount} sats`)
+			}
+
+			preflightedLegs.push({
+				...preflight,
+				bidEventId: leg.bidEventId,
+				mintUrl,
+				expectedAmount: leg.expectedAmount,
+			})
+			totalAmount += leg.expectedAmount
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			throw new Error(`${label}: ${message}`)
+		}
+	}
+
+	return {
+		legs: preflightedLegs,
+		totalAmount,
 	}
 }
