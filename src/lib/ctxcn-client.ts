@@ -1,5 +1,6 @@
-import { finalizeEvent, getPublicKey, nip44, SimplePool } from 'nostr-tools'
-import type { Event } from 'nostr-tools'
+import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
+import type { NostrEvent } from 'nostr-tools/pure'
+import { RelayLiveness, RelayPool } from 'applesauce-relay'
 
 const CTXVM_MESSAGES_KIND = 25910
 const GIFT_WRAP_KIND = 1059
@@ -26,18 +27,43 @@ function uuidv4(): string {
 export class PlebianCurrencyClient {
 	private privateKey: Uint8Array
 	private publicKey: string
-	private pool: SimplePool
+	private pool: RelayPool
+	private liveness: RelayLiveness
 	private relays: string[]
 	private serverPubkey: string
 	private pendingRequests: Map<string, PendingRequest> = new Map()
-	private activeSubs: any[] = []
+	private activeSubs: { unsubscribe: () => void }[] = []
 
 	constructor(options: { privateKey: Uint8Array; relays: string[]; serverPubkey: string }) {
 		this.privateKey = options.privateKey
 		this.publicKey = getPublicKey(options.privateKey)
 		this.relays = options.relays
 		this.serverPubkey = options.serverPubkey
-		this.pool = new SimplePool()
+		// applesauce-relay pool: subscriptions auto-reconnect, publishes retry,
+		// and RelayLiveness tracks per-relay health so dead relays are skipped.
+		this.pool = new RelayPool()
+		this.liveness = new RelayLiveness({ maxFailuresBeforeDead: 3 })
+		this.liveness.connectToPool(this.pool)
+	}
+
+	/**
+	 * Relays that are currently usable (not dead, not in backoff).
+	 * On a cold start liveness has not observed any relay yet, so every
+	 * configured relay is returned and the first request still goes out.
+	 */
+	healthyRelays(): string[] {
+		return this.liveness.filter(this.relays)
+	}
+
+	/**
+	 * True when every configured relay is known to liveness and none are
+	 * currently usable. Callers can use this to short-circuit straight to an
+	 * HTTPS fallback instead of waiting out a timeout. Returns false on a cold
+	 * start (relays not yet observed) so the first request is always attempted.
+	 */
+	allRelaysUnhealthy(): boolean {
+		if (this.relays.length === 0) return true
+		return this.liveness.filter(this.relays).length === 0
 	}
 
 	async callTool(params: { name: string; arguments: Record<string, any> }): Promise<any> {
@@ -68,6 +94,7 @@ export class PlebianCurrencyClient {
 				serverPubkey: this.serverPubkey,
 				clientPubkey: this.publicKey,
 				relays: this.relays,
+				healthyRelays: this.healthyRelays(),
 			})
 
 			void (async () => {
@@ -90,16 +117,28 @@ export class PlebianCurrencyClient {
 			relays: this.relays,
 		})
 
-		const sub = this.pool.subscribeMany(this.relays, { kinds: [GIFT_WRAP_KIND], '#p': [this.publicKey], limit: 20 } as any, {
-			onevent: (event: Event) => {
+		// Long-lived REQ across every configured relay. reconnect: Infinity keeps
+		// retrying connection errors forever (survives transient relay drops);
+		// resubscribe: true re-opens the REQ if a relay sends a clean CLOSED.
+		const events$ = this.pool.subscription(
+			this.relays,
+			{ kinds: [GIFT_WRAP_KIND], '#p': [this.publicKey], limit: 20 },
+			{ reconnect: Infinity, resubscribe: true },
+		)
+
+		const sub = events$.subscribe({
+			next: (event: NostrEvent) => {
 				this.handleGiftWrapResponse(event)
+			},
+			error: (error: unknown) => {
+				console.warn('ContextVM response subscription errored:', error)
 			},
 		})
 
 		this.activeSubs.push(sub)
 	}
 
-	private async handleGiftWrapResponse(event: Event): Promise<void> {
+	private async handleGiftWrapResponse(event: NostrEvent): Promise<void> {
 		try {
 			console.info('ContextVM candidate response event', {
 				eventId: event.id,
@@ -109,7 +148,7 @@ export class PlebianCurrencyClient {
 			})
 			const conversationKey = nip44.v2.utils.getConversationKey(this.privateKey, event.pubkey)
 			const decrypted = nip44.v2.decrypt(event.content, conversationKey)
-			const innerEvent = JSON.parse(decrypted) as Event
+			const innerEvent = JSON.parse(decrypted) as NostrEvent
 			const mcpMessage = JSON.parse(innerEvent.content)
 			const responseId = mcpMessage.id || innerEvent.tags?.find((t: string[]) => t[0] === 'e')?.[1]
 			console.info('ContextVM response received', {
@@ -174,15 +213,33 @@ export class PlebianCurrencyClient {
 
 		const signedGiftWrap = finalizeEvent(giftWrap, giftWrapPrivateKey)
 
-		const publishPromises = this.relays.map((relay) => Promise.resolve(this.pool.publish([relay], signedGiftWrap)).catch(() => {}))
+		// Only publish to relays liveness considers usable, so a dead relay no
+		// longer blocks the request. publish() retries each relay (default 3x)
+		// and resolves once the relay accepts the EVENT.
+		const relays = this.healthyRelays()
+		if (relays.length === 0) {
+			console.warn('ContextVM publish skipped — no healthy relays', {
+				requestId: mcpMessage.id,
+				giftWrapId: signedGiftWrap.id,
+			})
+			return { giftWrapId: signedGiftWrap.id, innerEventId: signedInner.id }
+		}
 
-		await Promise.allSettled(publishPromises)
-
-		console.info('ContextVM request published', {
-			requestId: mcpMessage.id,
-			giftWrapId: signedGiftWrap.id,
-			innerEventId: signedInner.id,
-		})
+		try {
+			const responses = await this.pool.publish(relays, signedGiftWrap)
+			const okCount = responses.filter((r) => r.ok).length
+			console.info('ContextVM request published', {
+				requestId: mcpMessage.id,
+				giftWrapId: signedGiftWrap.id,
+				innerEventId: signedInner.id,
+				publishedTo: responses.map((r) => r.from),
+				ok: `${okCount}/${responses.length}`,
+			})
+		} catch (error) {
+			// publish() rejects only when every relay failed to accept the event;
+			// the pending request simply times out and the caller falls back to Yadio.
+			console.warn('ContextVM publish failed on all relays:', error)
+		}
 
 		return { giftWrapId: signedGiftWrap.id, innerEventId: signedInner.id }
 	}
@@ -196,11 +253,14 @@ export class PlebianCurrencyClient {
 
 		for (const sub of this.activeSubs) {
 			try {
-				sub.close()
+				sub.unsubscribe()
 			} catch {}
 		}
 		this.activeSubs = []
 
-		this.pool.close(this.relays)
+		try {
+			this.liveness.disconnectFromPool(this.pool)
+		} catch {}
+		this.pool.close()
 	}
 }
