@@ -44,6 +44,14 @@ export const DEFAULT_PUBLIC_RELAYS: string[] = [
 	'wss://relay.minibits.cash',
 ]
 
+/**
+ * Market aggregator relay — fast WoT-gated strfry relay that mirrors
+ * market-relevant events from upstream relays into a single local relay.
+ * Used as the primary read relay in production to eliminate the multi-second
+ * dead-relay timeouts in the auctions UI (#1046).
+ */
+export const MARKET_AGGREGATOR_RELAY = 'wss://market-agg.orangesync.tech'
+
 // Keep for backward compatibility (deprecated - use DEFAULT_PUBLIC_RELAYS instead)
 export const defaultRelaysUrls: string[] = DEFAULT_PUBLIC_RELAYS
 
