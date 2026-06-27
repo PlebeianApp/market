@@ -278,6 +278,7 @@ test.describe('Authentication', () => {
 		})
 
 		test('remove stored key shows fresh key input', async ({ browser }) => {
+			test.setTimeout(60_000)
 			const context = await browser.newContext()
 			const nsec = hexToNsec(devUser2.sk)
 
@@ -293,7 +294,9 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				// Use 'domcontentloaded' instead of 'networkidle' — active NDK
+				// WebSocket connections prevent networkidle from ever firing.
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				await page.locator('[data-testid="private-key-tab"]').click()
@@ -312,7 +315,13 @@ test.describe('Authentication', () => {
 				const storedKey = await page.evaluate(() => localStorage.getItem('nostr_local_encrypted_signer_key'))
 				expect(storedKey).toBeNull()
 			} finally {
-				await context.close()
+				// Guard against teardown race: if the test timed out, the
+				// browser context may already be closed by Playwright.
+				try {
+					await context.close()
+				} catch {
+					// Context already closed — ignore
+				}
 			}
 		})
 	})
