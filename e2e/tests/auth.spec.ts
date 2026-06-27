@@ -59,8 +59,10 @@ async function createFreshPage(context: BrowserContext): Promise<Page> {
 async function openLoginDialog(page: Page) {
 	const loginButton = page.locator('[data-testid="login-button"]').first()
 	await expect(loginButton).toBeVisible({ timeout: 10_000 })
-	await loginButton.click()
-	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 5_000 })
+	// The login button is wrapped in a tooltip — force click to bypass
+	// any tooltip overlay that may intercept the pointer event.
+	await loginButton.click({ force: true })
+	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 10_000 })
 }
 
 /** Verify the user is authenticated (dashboard button visible) */

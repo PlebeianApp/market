@@ -343,10 +343,11 @@ test.describe('Cart - Persistence', () => {
 		// Open the cart and verify both items survived the reload
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
-		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 20_000 })
 		// Second product (different seller) needs the same generous window for its
-		// relay read after reload — the default 5s is flaky here.
-		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible({ timeout: 10_000 })
+		// relay read after reload — the default 5s is flaky here. Bumped to 20s
+		// because the relay round-trip on CI runners is slower than locally.
+		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible({ timeout: 20_000 })
 	})
 
 	test('cart quantity persists after page reload', async ({ newUserPage }) => {
