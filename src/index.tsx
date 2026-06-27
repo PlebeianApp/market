@@ -9,6 +9,7 @@ import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
 import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
+import { isWebSocketOriginAllowed } from './lib/security/webSocketOrigin'
 import { join } from 'path'
 import { file } from 'bun'
 
@@ -53,53 +54,6 @@ function getCvmServerPublicKey(): string {
 
 	CVM_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 	return CVM_SERVER_PUBKEY
-}
-
-/**
- * Resolve the explicit allowlist of WebSocket origins (H1: cross-site WS hijacking).
- * Set via the `ALLOWED_ORIGINS` env var as a comma-separated list
- * (e.g. "https://plebeian.market,https://staging.plebeian.market").
- * Production SHOULD set this explicitly; an empty list falls back to same-origin
- * matching in isWebSocketOriginAllowed() so default/dev deployments keep working.
- */
-function getAllowedOrigins(): string[] {
-	const raw = process.env.ALLOWED_ORIGINS
-	if (raw && raw.trim()) {
-		return raw
-			.split(',')
-			.map((s) => s.trim())
-			.filter(Boolean)
-	}
-	return []
-}
-
-/**
- * H1: Validate the WebSocket Origin header to prevent cross-site WebSocket hijacking.
- *
- * Browser WebSocket clients always send an `Origin` header; programmatic clients
- * (relay software, tests, server-to-server) typically do not. Absent Origin is
- * therefore allowed. When Origin is present:
- *   - if `ALLOWED_ORIGINS` is configured, it must contain the origin verbatim;
- *   - otherwise the origin's host must match the request's `Host` header
- *     (same-origin), which is the common SPA case and still blocks genuine
- *     cross-origin abuse.
- */
-function isWebSocketOriginAllowed(req: Request): boolean {
-	const origin = req.headers.get('origin')
-	if (!origin) return true // non-browser client (no Origin header)
-
-	const allowlist = getAllowedOrigins()
-	if (allowlist.length > 0) {
-		return allowlist.includes(origin)
-	}
-	// No explicit allowlist: accept same-origin only.
-	try {
-		const originHost = new URL(origin).host
-		const requestHost = req.headers.get('host')
-		return !!requestHost && originHost === requestHost
-	} catch {
-		return false
-	}
 }
 
 function decodeLnurlBech32(lnurl: string): string | null {
