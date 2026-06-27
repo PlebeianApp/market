@@ -262,10 +262,11 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// Each seller group gets its own shipping selector,
-		// so there should be 2 "Select shipping method" triggers
-		const shippingTriggers = dialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(2, { timeout: 10_000 })
+		// Post-redesign (#1045): shipping selection moved from the cart dialog to the
+		// checkout sidebar. The cart now defers shipping — each product renders a
+		// "Select shipping at checkout" notice (exact), one per product.
+		const shippingNotices = dialog.getByText('Select shipping at checkout', { exact: true })
+		await expect(shippingNotices).toHaveCount(2, { timeout: 10_000 })
 	})
 
 	test('can add multiple products from same seller', async ({ newUserPage }) => {
@@ -283,9 +284,11 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 		await expect(dialog.getByText('Nostr T-Shirt')).toBeVisible()
 
-		// They're grouped under the same seller, so only 1 shipping selector
-		const shippingTriggers = dialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })
+		// Post-redesign (#1045): shipping is deferred to checkout, so each product
+		// (not each seller group) carries its own "Select shipping at checkout"
+		// notice. Two products => two notices regardless of seller grouping.
+		const shippingNotices = dialog.getByText('Select shipping at checkout', { exact: true })
+		await expect(shippingNotices).toHaveCount(2, { timeout: 10_000 })
 	})
 
 	test('removing all items from one seller keeps other seller items', async ({ newUserPage }) => {
@@ -308,11 +311,11 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 5_000 })
 		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// Only 1 live shipping selector control should remain for the remaining seller.
-		// Count the actual select triggers rather than raw text so exiting animated nodes
-		// don't get mistaken for an active seller section.
-		const shippingSelectors = dialog.locator('[data-slot="select-trigger"]:visible')
-		await expect(shippingSelectors).toHaveCount(1, { timeout: 10_000 })
+		// Only the remaining product should still show its "Select shipping at
+		// checkout" notice. The removed item's assertion above already waited for
+		// its node to leave the DOM, so exactly one notice should remain.
+		const shippingNotices = dialog.getByText('Select shipping at checkout', { exact: true })
+		await expect(shippingNotices).toHaveCount(1, { timeout: 10_000 })
 	})
 })
 
