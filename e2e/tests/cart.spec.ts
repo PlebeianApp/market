@@ -23,11 +23,11 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 		} catch (error) {
 			const msg = String(error)
 			if (!msg.includes('interrupted by another navigation') && !msg.includes('ERR_ABORTED')) throw error
-			await page.waitForLoadState('networkidle').catch(() => {})
+			await page.waitForLoadState('domcontentloaded').catch(() => {})
 		}
 
 		await page.waitForTimeout(1000)
-		await page.waitForLoadState('networkidle').catch(() => {})
+		await page.waitForLoadState('domcontentloaded').catch(() => {})
 
 		const currentPath = new URL(page.url()).pathname
 		if (currentPath === targetPath || currentPath.startsWith(targetPath)) {
@@ -338,15 +338,15 @@ test.describe('Cart - Persistence', () => {
 
 		// Reload the page
 		await newUserPage.reload()
-		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForLoadState('domcontentloaded')
 
 		// Open the cart and verify both items survived the reload
 		await openCart(newUserPage)
 		const dialog = cartDialog(newUserPage)
-		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 30_000 })
 		// Second product (different seller) needs the same generous window for its
 		// relay read after reload — the default 5s is flaky here.
-		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible({ timeout: 10_000 })
+		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible({ timeout: 30_000 })
 	})
 
 	test('cart quantity persists after page reload', async ({ newUserPage }) => {
@@ -371,7 +371,7 @@ test.describe('Cart - Persistence', () => {
 		// Close dialog and reload
 		await newUserPage.keyboard.press('Escape')
 		await newUserPage.reload()
-		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForLoadState('domcontentloaded')
 
 		// Verify quantity is still 3 after reload
 		await openCart(newUserPage)
@@ -387,11 +387,11 @@ test.describe('Cart - Persistence', () => {
 
 		// Navigate away to a different page
 		await safeGoto(newUserPage, '/')
-		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForLoadState('domcontentloaded')
 
 		// Navigate back to products
 		await safeGoto(newUserPage, '/products')
-		await newUserPage.waitForLoadState('networkidle')
+		await newUserPage.waitForLoadState('domcontentloaded')
 
 		// Cart should still have the item
 		await openCart(newUserPage)
@@ -423,7 +423,7 @@ test.describe('Cart - Persistence', () => {
 		// Close and reload to confirm persistence of the cleared state
 		await buyerPage.keyboard.press('Escape')
 		await buyerPage.reload()
-		await buyerPage.waitForLoadState('networkidle')
+		await buyerPage.waitForLoadState('domcontentloaded')
 
 		// Re-open cart — should still be empty (no phantom items)
 		await openCart(buyerPage)

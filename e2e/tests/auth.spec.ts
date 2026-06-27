@@ -57,10 +57,16 @@ async function createFreshPage(context: BrowserContext): Promise<Page> {
 
 /** Open the login dialog from the header */
 async function openLoginDialog(page: Page) {
+	// Wait for React hydration — the app shell must be interactive
+	// before clicking. DialogRegistry needs to be mounted for the
+	// openDialog('login') state update to render anything.
+	await expect(page.locator('header')).toBeVisible({ timeout: 15_000 })
+	await page.waitForTimeout(500) // brief settle for React hydration
+
 	const loginButton = page.locator('[data-testid="login-button"]').first()
 	await expect(loginButton).toBeVisible({ timeout: 10_000 })
 	await loginButton.click()
-	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 5_000 })
+	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 15_000 })
 }
 
 /** Verify the user is authenticated (dashboard button visible) */

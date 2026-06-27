@@ -28,12 +28,12 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 			const msg = String(error)
 			if (!msg.includes('interrupted by another navigation') && !msg.includes('ERR_ABORTED')) throw error
 			// Wait for whatever navigation the SPA triggered to finish
-			await page.waitForLoadState('networkidle').catch(() => {})
+			await page.waitForLoadState('domcontentloaded').catch(() => {})
 		}
 
 		// Wait for SPA router to settle after any potential redirects
 		await page.waitForTimeout(1000)
-		await page.waitForLoadState('networkidle').catch(() => {})
+		await page.waitForLoadState('domcontentloaded').catch(() => {})
 
 		// Check if we're on the right page
 		const currentPath = new URL(page.url()).pathname
@@ -317,7 +317,7 @@ test.describe('Checkout Flow', () => {
 	test('empty cart shows redirect message', async ({ buyerPage }) => {
 		// Navigate directly to checkout with no items in cart
 		await safeGoto(buyerPage, '/checkout')
-		await buyerPage.waitForLoadState('networkidle')
+		await buyerPage.waitForLoadState('domcontentloaded')
 
 		// Should show empty cart message
 		await expect(buyerPage.getByText(/your cart is empty/i)).toBeVisible({ timeout: 15_000 })
