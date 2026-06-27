@@ -39,21 +39,21 @@ e2e-report (depends on e2e-shard) — always runs
 
 ## Timing
 
-| Path | Time |
-|------|------|
-| **Green** (common) | ~9 min (7 min shards + 2 min merge/publish) |
+| Path               | Time                                                                       |
+| ------------------ | -------------------------------------------------------------------------- |
+| **Green** (common) | ~9 min (7 min shards + 2 min merge/publish)                                |
 | **Red** (failures) | ~16 min (7 min shards + 2 min merge + 5 min re-run + 2 min render/publish) |
-| **Current** | ~20 min (single serial job) |
+| **Current**        | ~20 min (single serial job)                                                |
 
 ## Files to Change
 
 ### 1. `e2e/playwright.config.ts` — env var overrides
 
-| Env Var | Values | Default | Purpose |
-|---------|--------|---------|---------|
-| `PLAYWRIGHT_SCREENSHOT` | `'on'`, `'only-on-failure'`, `'off'` | `'only-on-failure'` | Screenshot mode |
-| `PLAYWRIGHT_REPORTER` | `'json'`, `'blob'`, `'auto'` | `'auto'` (CI→github, local→list) | Reporter selection |
-| `PLAYWRIGHT_RETRIES` | any number | CI→2, local→0 | Retry count |
+| Env Var                 | Values                               | Default                          | Purpose            |
+| ----------------------- | ------------------------------------ | -------------------------------- | ------------------ |
+| `PLAYWRIGHT_SCREENSHOT` | `'on'`, `'only-on-failure'`, `'off'` | `'only-on-failure'`              | Screenshot mode    |
+| `PLAYWRIGHT_REPORTER`   | `'json'`, `'blob'`, `'auto'`         | `'auto'` (CI→github, local→list) | Reporter selection |
+| `PLAYWRIGHT_RETRIES`    | any number                           | CI→2, local→0                    | Retry count        |
 
 ### 2. `e2e/extract-failures.ts` — new (~35 lines)
 
