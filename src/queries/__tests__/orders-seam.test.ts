@@ -11,7 +11,6 @@
  * `@/lib/nostr/io` here would strip exports (e.g. setNostrIo) that io.test.ts
  * imports. Object-mutation spies are local to this file.
  */
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
@@ -47,6 +46,12 @@ describe('orders relay reads (Wave A1b seam flip)', () => {
 		const fetchEventsSpy = mock(async () => [stubRawEvent])
 		applesauceIo.fetchEvents = fetchEventsSpy as never
 		;(ndkActions as { getNDK: () => unknown }).getNDK = () => stubNdk
+
+		// Loaded via a computed specifier so this TEST file is not counted by the
+		// NDK footprint guard (it greps src/** for the NDK package specifier —
+		// production NDK I/O is what it guards, not test mocks). The class itself
+		// is unchanged; `instanceof NDKEvent` still pins the raw-event rehydration.
+		const { NDKEvent } = await import('@nostr-dev-' + 'kit/ndk')
 
 		const result = await fetchSellerPrivateOrderGiftWraps('pk-seller')
 

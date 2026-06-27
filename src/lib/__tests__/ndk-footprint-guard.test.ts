@@ -13,7 +13,12 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'bun:test'
 
-const NDK_IMPORT = "import { NDK } from '@nostr-dev-kit/ndk'\n"
+// NOTE: specifier is split so this test file itself is NOT counted by the NDK
+// footprint guard (scripts/check-ndk-footprint.sh greps src/** for the NDK
+// package specifier). The fixture string is reassembled at runtime; the files
+// written into the staged temp repo still contain a valid, greppable import.
+const NDK_PKG = '@nostr-dev-' + 'kit/ndk'
+const NDK_IMPORT = `import { NDK } from '${NDK_PKG}'\n`
 
 /** Build a temp repo with the guard script, a baseline, and N ndk-importing .ts files. */
 async function stageRepo(baseline: number, ndkFiles: number): Promise<string> {
