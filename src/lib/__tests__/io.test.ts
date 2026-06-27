@@ -74,15 +74,8 @@ mock.module('@/lib/stores/ndk', () => ({
 // bindings the cached instance reads through its closures — reassigning them
 // reconfigures behaviour for the next call without recreating the pool.
 type ReqHandlers = { next: (e: typeof stubRawEvent) => void; complete: () => void; error: (e: unknown) => void }
-let poolRequestController = (_h: ReqHandlers, _urls: string[], _filters: unknown): { unsubscribe: () => void } => ({
-	unsubscribe: () => {},
-})
-let poolSubscriptionController = (
-	_cb: (msg: unknown) => void,
-	_urls: string[],
-	_filters: unknown,
-	_opts: unknown,
-): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
+let poolRequestController = (_h: ReqHandlers, _urls: string[], _filters: unknown): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
+let poolSubscriptionController = (_cb: (msg: unknown) => void, _urls: string[], _filters: unknown, _opts: unknown): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
 let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => undefined
 
 mock.module('applesauce-relay', () => ({
@@ -323,7 +316,9 @@ describe('applesauce adapter (io-applesauce)', () => {
 			h.error(new Error('relay down'))
 			return { unsubscribe: () => {} }
 		}
-		await expect(applesauceIo.fetchEvents({ kinds: [1] }, { relayUrls: ['wss://relay.example'] })).rejects.toThrow('relay down')
+		await expect(
+			applesauceIo.fetchEvents({ kinds: [1] }, { relayUrls: ['wss://relay.example'] }),
+		).rejects.toThrow('relay down')
 	})
 
 	test('fetchEvents returns whatever was collected before the timeout elapses', async () => {
@@ -332,13 +327,10 @@ describe('applesauce adapter (io-applesauce)', () => {
 			h.next(stubRawEvent)
 			return { unsubscribe: mock(() => {}) }
 		}
-		const events = await applesauceIo.fetchEvents(
-			{ kinds: [1] },
-			{
-				relayUrls: ['wss://relay.example'],
-				timeoutMs: 15,
-			},
-		)
+		const events = await applesauceIo.fetchEvents({ kinds: [1] }, {
+			relayUrls: ['wss://relay.example'],
+			timeoutMs: 15,
+		})
 		expect(events).toEqual([stubRawEvent])
 	})
 
