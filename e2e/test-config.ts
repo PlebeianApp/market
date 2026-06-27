@@ -2,18 +2,20 @@ import { getPublicKey } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 
 /**
- * Fixed test app private key used by both the Playwright config (for the dev server)
- * and the global setup (for publishing app settings to the relay).
+ * Test app private key used by the Playwright config (dev server) and
+ * the global setup (publishing app settings to the relay).
  *
- * This defaults to a valid secp256k1 private key (64 hex chars), but can be
- * overridden for local automation via TEST_APP_PRIVATE_KEY.
+ * Both the seed-relay script and the dev server run as separate processes
+ * that import this module. They MUST see the same key, so we use a fixed
+ * test-only key as the default. Override with TEST_APP_PRIVATE_KEY env
+ * var for custom test deployments.
+ *
+ * This is a well-known test key — not used in production.
  */
 export const TEST_APP_PRIVATE_KEY = process.env.TEST_APP_PRIVATE_KEY || 'e2e0000000000000000000000000000000000000000000000000000000000001'
 
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
 
 export const RELAY_URL = 'ws://localhost:10547'
-// Use a dedicated high port to prevent reusing a production-connected dev server
-// and to avoid common local conflicts on more frequently used low ports.
 export const TEST_PORT = 34567
 export const BASE_URL = `http://localhost:${TEST_PORT}`

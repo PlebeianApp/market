@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# Pre-commit hook: detect potential Nostr private keys and secrets.
+#
+# Three-tier detection:
+#   Tier 1 — Hard fail: nsec, env-var hex fallbacks, key-named variables
+#   Tier 2 — Warning:   any other 64-char hex string literal
+#   Tier 3 — Skip:      comments, hashes, commit SHAs, event IDs
+#
+# Install: bun run prepare  (auto-installs via package.json)
+#   Or:    ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit
+
+set -uo pipefail
+
+# --full-repo mode: scan all tracked files (used by CI)
+if [[ "${1:-}" == "--full-repo" ]]; then
+	STAGED_FILES=$(git ls-files '*.ts' '*.tsx' '*.js' '*.jsx' '*.yml' '*.yaml' '*.sh' 2>/dev/null)
+else
+	STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+fi
+
+if [ -z "$STAGED_FILES" ]; then
+	exit 0
+fi
+
+HARD_FAIL=0
+WARNINGS=0
+
+# Test fixture files — downgrade Tier 1 hard-fails to warnings
+# (these contain well-known test keys, not production secrets)
+is_test_file() {
+	case "$1" in
+		e2e/*|*fixtures*|*.test.ts|*.test.tsx|*.integration.test.ts|*.spec.ts)
+			return 0 ;;
+		*)
+			return 1 ;;
+	esac
+}
+
+for file in $STAGED_FILES; do
+	if [ ! -f "$file" ]; then
+		continue
+	fi
+
+	case "$file" in
+		package-lock.json|bun.lock|*.svg|*.png|*.jpg|*.jpeg|*.ico|*.woff2|*.gif|*.pdf|*.lock)
+			continue
+			;;
+		*.example|*.md)
+			continue
+			;;
+	esac
+
+	if [[ "${1:-}" == "--full-repo" ]]; then
+		CONTENT=$(cat "$file" 2>/dev/null) || continue
+	else
+		CONTENT=$(git show ":$file" 2>/dev/null) || continue
+	fi
+
+	# =========================================================================
+	# Tier 1: HARD FAIL — definitely a key
+	# =========================================================================
+
+	# 1a. Bech32 nsec (unambiguous private key)
+	NSEC_MATCHES=$(echo "$CONTENT" | grep -nE 'nsec1[023456789acdefghjklmnpqrstuvwxyz]{6,}' | grep -v '^\s*[0-9]*:\s*//' || true)
+	if [ -n "$NSEC_MATCHES" ]; then
+		if is_test_file "$file"; then
+			echo ""
+			echo "WARNING: nsec in test file $file:"
+			echo "$NSEC_MATCHES" | head -3
+			WARNINGS=1
+		else
+			echo ""
+			echo "BLOCKED: nsec (private key) detected in $file:"
+			echo "$NSEC_MATCHES" | head -5
+			HARD_FAIL=1
+		fi
+	fi
+
+	# 1b. Hardcoded env fallback: process.env.X || 'hex64' (the bug pattern)
+	ENV_FALLBACK=$(echo "$CONTENT" | grep -nE "process\.env\.\w+\s*\|\|\s*['\"][0-9a-fA-F]{64}['\"]" || true)
+	if [ -n "$ENV_FALLBACK" ]; then
+		if is_test_file "$file"; then
+			echo ""
+			echo "WARNING: Hardcoded env-var fallback in test file $file:"
+			echo "$ENV_FALLBACK" | head -3
+			WARNINGS=1
+		else
+			echo ""
+			echo "BLOCKED: Hardcoded key as env-var fallback in $file:"
+			echo "$ENV_FALLBACK" | head -5
+			HARD_FAIL=1
+		fi
+	fi
+
+	# 1c. Key-named variable assigned a hex literal
+	#     Matches: const/let/var somethingKey/Priv/Secret/sk/Pubkey = 'hex64'
+	KEY_VAR=$(echo "$CONTENT" | grep -niE "(const|let|var)\s+\w*(priv|secret|nsec|signer|private.?key|\bsk\b|pub.?key)\w*\s*=\s*['\"][0-9a-fA-F]{64}['\"]" || true)
+	if [ -n "$KEY_VAR" ]; then
+		if is_test_file "$file"; then
+			echo ""
+			echo "WARNING: Key variable in test file $file:"
+			echo "$KEY_VAR" | head -3
+			WARNINGS=1
+		else
+			echo ""
+			echo "BLOCKED: Key assigned to variable in $file:"
+			echo "$KEY_VAR" | head -5
+			HARD_FAIL=1
+		fi
+	fi
+
+	# =========================================================================
+	# Tier 2: WARNING — might be a key
+	# =========================================================================
+	# Any 64-char hex string literal that isn't clearly a hash/event-id/commit.
+	# Excludes (Tier 3): comments, sha/hash/digest/commit/oid/eventId/rootEvent
+	HEX_LITERAL=$(echo "$CONTENT" | grep -nE "['\"][0-9a-fA-F]{64}['\"]" || true)
+	if [ -n "$HEX_LITERAL" ]; then
+		# Filter out Tier 3 contexts
+		NOT_KEY_CONTEXT=$(echo "$HEX_LITERAL" | grep -viE 'sha256|sha512|sha-256|sha-512|\.hash|\.digest|checksum|commit|\.oid|eventId|rootEvent|root_event|^\s*[0-9]+:\s*(//|/\*|\*)' || true)
+		# Also filter anything already caught by Tier 1
+		NOT_KEY_CONTEXT=$(echo "$NOT_KEY_CONTEXT" | grep -viE 'process\.env|nsec1' || true)
+		if [ -n "$NOT_KEY_CONTEXT" ]; then
+			echo ""
+			echo "WARNING: 64-char hex string in $file (review — might be a key):"
+			echo "$NOT_KEY_CONTEXT" | head -3
+			WARNINGS=1
+		fi
+	fi
+done
+
+# =========================================================================
+# Exit codes
+# =========================================================================
+
+if [ $HARD_FAIL -ne 0 ]; then
+	echo ""
+	echo "============================================"
+	echo "Private keys or secrets detected in staged files."
+	echo "These must be removed before committing."
+	echo ""
+	echo "If these are confirmed false positives:"
+	echo "  git commit --no-verify"
+	echo "============================================"
+	exit 1
+fi
+
+if [ $WARNINGS -ne 0 ]; then
+	echo ""
+	echo "Warnings above — please review before pushing."
+	echo "To bypass: git commit --no-verify"
+	echo ""
+fi
+
+exit 0
