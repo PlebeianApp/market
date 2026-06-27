@@ -56,6 +56,17 @@ The centralized resolver (`src/lib/cvm-identity.ts`) resolves the CVM pubkey usi
 
 This ensures the most specific configuration takes precedence.
 
+### Auction validator
+
+A separate resolver, `resolveCvmAuctionsServerPubkey()` (also in `src/lib/cvm-identity.ts`), covers the case where the auction validator runs on a different key than the currency CVM (part of the `auctions/p2pk-buyer-path-custody-v1` architecture):
+
+```
+1. CVM_AUCTIONS_SERVER_PUBLIC_KEY                              ← auction-specific
+2. resolveCvmServerPubkey() (currency → public → private)      ← general fallback
+```
+
+When `CVM_AUCTIONS_SERVER_PUBLIC_KEY` is not set, the auction validator transparently uses the same identity as the rest of the app.
+
 ## Environment Variable Reference
 
 | Variable                         | Type              | Scenario | Description                                       |

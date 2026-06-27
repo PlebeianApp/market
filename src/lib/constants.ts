@@ -107,7 +107,10 @@ export function getCurrencyServerRelays(): string[] {
 	}
 }
 
-export { resolveCvmServerPubkey as CVM_SERVER_PUBKEY_RESOLVER } from './cvm-identity'
+export {
+	resolveCvmServerPubkey as CVM_SERVER_PUBKEY_RESOLVER,
+	resolveCvmAuctionsServerPubkey as CVM_AUCTIONS_SERVER_PUBKEY_RESOLVER,
+} from './cvm-identity'
 
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 21 sats', amount: 21 },
