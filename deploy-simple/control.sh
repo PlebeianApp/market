@@ -73,15 +73,17 @@ if [[ -z "$SSH_HOST" && ! "$COMMAND" =~ ^(help|--help|-h)$ ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# SSH setup
+# SSH setup (key-based auth only — H3/H4 security hardening, mirrors deploy.sh)
 # -----------------------------------------------------------------------------
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+# H4: accept-new trusts the first-seen host key and FAILS on key changes (MITM
+# detection), recording keys to a real known_hosts file instead of /dev/null.
+KNOWN_HOSTS_FILE="${KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
+# H3: key-based auth only. SSH_PASSWORD/sshpass support removed.
 if [[ -n "$SSH_KEY" ]]; then
-    SSH_CMD="ssh $SSH_OPTS -i $SSH_KEY -p $SSH_PORT $SSH_USER@$SSH_HOST"
-elif [[ -n "$SSH_PASSWORD" ]]; then
-    SSH_CMD="sshpass -p $SSH_PASSWORD ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
+	SSH_CMD="ssh $SSH_OPTS -i $SSH_KEY -p $SSH_PORT $SSH_USER@$SSH_HOST"
 else
-    SSH_CMD="ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
+	SSH_CMD="ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
 fi
 
 run_ssh() { $SSH_CMD "$@"; }

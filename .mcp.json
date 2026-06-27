@@ -2,7 +2,7 @@
 	"mcpServers": {
 		"nostrbook": {
 			"command": "npx",
-			"args": ["-y", "@nostrbook/mcp@latest"]
+			"args": ["-y", "@nostrBook/mcp@0.5.3"]
 		},
 		"nak": {
 			"command": "nak",
