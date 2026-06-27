@@ -1,4 +1,11 @@
-import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, MARKET_AGGREGATOR_RELAY, type Stage } from '@/lib/constants'
+import {
+	defaultRelaysUrls,
+	ZAP_RELAYS,
+	DEFAULT_PUBLIC_RELAYS,
+	MAIN_RELAY_BY_STAGE,
+	MARKET_AGGREGATOR_RELAY,
+	type Stage,
+} from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -203,9 +210,7 @@ function getRelayUrls(overrideRelays?: string[]): string[] {
 	// (see #1046) — it mirrors market events from upstream relays into one fast
 	// local relay, eliminating dead-relay fan-out. Then main relay + public defaults.
 	const primaryAgg = stage === 'production' && MARKET_AGGREGATOR_RELAY ? [MARKET_AGGREGATOR_RELAY] : []
-	const relays = mainRelay
-		? [...primaryAgg, mainRelay, ...DEFAULT_PUBLIC_RELAYS]
-		: [...primaryAgg, ...DEFAULT_PUBLIC_RELAYS]
+	const relays = mainRelay ? [...primaryAgg, mainRelay, ...DEFAULT_PUBLIC_RELAYS] : [...primaryAgg, ...DEFAULT_PUBLIC_RELAYS]
 	return Array.from(new Set(relays))
 }
 
