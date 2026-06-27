@@ -8,11 +8,11 @@
 Three relay services serve Plebeian Market. They have **distinct roles** —
 no duplicates:
 
-| Relay | Software | Role | Internal Port | Deploy Artifacts |
-|-------|----------|------|---------------|------------------|
-| `relay.plebeian.market` | **Khatru** (custom Go) | **WRITE** — app publishes stalls, listings, auctions, orders here | `127.0.0.1:3334` | `deploy-simple/relay/` |
-| `market-agg.orangesync.tech` | **strfry** | **READ** — fast cache, market-kind gated, scrapes upstream relays | `127.0.0.1:7780` → container `:7777` | `deploy-simple/aggregator/` |
-| `bugs.plebeian.market` | — | Bug report intake | — | — |
+| Relay                        | Software               | Role                                                              | Internal Port                        | Deploy Artifacts            |
+| ---------------------------- | ---------------------- | ----------------------------------------------------------------- | ------------------------------------ | --------------------------- |
+| `relay.plebeian.market`      | **Khatru** (custom Go) | **WRITE** — app publishes stalls, listings, auctions, orders here | `127.0.0.1:3334`                     | `deploy-simple/relay/`      |
+| `market-agg.orangesync.tech` | **strfry**             | **READ** — fast cache, market-kind gated, scrapes upstream relays | `127.0.0.1:7780` → container `:7777` | `deploy-simple/aggregator/` |
+| `bugs.plebeian.market`       | —                      | Bug report intake                                                 | —                                    | —                           |
 
 ## Data Flow
 
@@ -61,14 +61,14 @@ Unchanged — no aggregator relay. Uses `MAIN_RELAY_BY_STAGE[stage]` +
 
 All relay configuration lives in `src/lib/constants.ts`:
 
-| Constant | Purpose | Count | Used For |
-|----------|---------|-------|----------|
-| `MAIN_RELAY_BY_STAGE` | Primary relay per stage | 3 stages | Write operations, app relay set |
-| `DEFAULT_PUBLIC_RELAYS` | Read fan-out to broader Nostr | 6 relays | Backup read path |
-| `MARKET_AGGREGATOR_RELAY` | Production read primary | 1 relay | Prepended in production `getRelayUrls()` |
-| `ZAP_RELAYS` | Zap receipt detection | 7 relays | NIP-57 payment monitoring |
-| `DEFAULT_NIP46_RELAYS` | NIP-46 bunker connections | 5 relays | Wallet/signing |
-| `BUG_RELAY` | Bug report submission | 1 relay | Error reporting |
+| Constant                  | Purpose                       | Count    | Used For                                 |
+| ------------------------- | ----------------------------- | -------- | ---------------------------------------- |
+| `MAIN_RELAY_BY_STAGE`     | Primary relay per stage       | 3 stages | Write operations, app relay set          |
+| `DEFAULT_PUBLIC_RELAYS`   | Read fan-out to broader Nostr | 6 relays | Backup read path                         |
+| `MARKET_AGGREGATOR_RELAY` | Production read primary       | 1 relay  | Prepended in production `getRelayUrls()` |
+| `ZAP_RELAYS`              | Zap receipt detection         | 7 relays | NIP-57 payment monitoring                |
+| `DEFAULT_NIP46_RELAYS`    | NIP-46 bunker connections     | 5 relays | Wallet/signing                           |
+| `BUG_RELAY`               | Bug report submission         | 1 relay  | Error reporting                          |
 
 > **Future:** Consider consolidating these into a single `RELAY_TOPOLOGY`
 > config object so adding/removing a relay happens in one place.
@@ -89,33 +89,33 @@ The write-policy plugin (`deploy-simple/aggregator/write-policy.py`) uses a
 
 Market-relevant kinds (discovered from the codebase):
 
-| Kind | NIP | Description |
-|------|-----|-------------|
-| 0 | 1 | Metadata (user profiles) |
-| 3 | 2 | Contacts / follow lists |
-| 5 | 9 | Deletions |
-| 1 | 1 | Text notes (bug reports) |
-| 4 | 4 | DMs |
-| 7 | 25 | Reactions |
-| 13 | 59 | Seals (private order details) |
-| 14 | 17 | General communication (order messages) |
-| 16 | — | Order processing and status updates |
-| 17 | — | Payment receipts |
-| 1059 | 59 | Gift wraps (private order details) |
-| 1111 | — | Comments |
-| 30018 | 15 | Products (legacy) |
-| 30402 | 99 | Classified listings (products) |
-| 30405 | — | Collections |
-| 30406 | — | Shipping options |
-| 31989 | 89 | Handler recommendation |
-| 31990 | 89 | App handler info |
-| 9735 | 57 | Zap receipts |
-| 10000 | 51 | Mute lists |
-| 10002 | 65 | Relay lists |
-| 30000 | 51 | App settings, vanity, NIP-05 |
-| 30078 | 78 | Cart persistence, relay prefs, v4v |
-| 9775 | 78 | App-specific data (NWC wallets) |
-| 25910 | — | ctxvm client messages |
+| Kind  | NIP | Description                            |
+| ----- | --- | -------------------------------------- |
+| 0     | 1   | Metadata (user profiles)               |
+| 3     | 2   | Contacts / follow lists                |
+| 5     | 9   | Deletions                              |
+| 1     | 1   | Text notes (bug reports)               |
+| 4     | 4   | DMs                                    |
+| 7     | 25  | Reactions                              |
+| 13    | 59  | Seals (private order details)          |
+| 14    | 17  | General communication (order messages) |
+| 16    | —   | Order processing and status updates    |
+| 17    | —   | Payment receipts                       |
+| 1059  | 59  | Gift wraps (private order details)     |
+| 1111  | —   | Comments                               |
+| 30018 | 15  | Products (legacy)                      |
+| 30402 | 99  | Classified listings (products)         |
+| 30405 | —   | Collections                            |
+| 30406 | —   | Shipping options                       |
+| 31989 | 89  | Handler recommendation                 |
+| 31990 | 89  | App handler info                       |
+| 9735  | 57  | Zap receipts                           |
+| 10000 | 51  | Mute lists                             |
+| 10002 | 65  | Relay lists                            |
+| 30000 | 51  | App settings, vanity, NIP-05           |
+| 30078 | 78  | Cart persistence, relay prefs, v4v     |
+| 9775  | 78  | App-specific data (NWC wallets)        |
+| 25910 | —   | ctxvm client messages                  |
 
 ### Previous: WoT-Social Gate (replaced)
 
@@ -127,14 +127,14 @@ rejected the event → invisible through the primary read relay.
 
 ## strfry Configuration Highlights
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| DB mapsize | 3 GB | Market events are small but numerous |
-| `maxTagsPerFilter` | 8 | Market queries filter on stall_id, category, price, location (was 3, too low) |
-| `maxNumTags` | 2000 | Stalls/listings carry many tags (price, images, shipping) |
-| `maxFilterLimit` | 500 | Matches app-side query limits |
-| `maxReqFilterSize` | 200 | Complex market filters |
-| Negentropy | enabled | Fast sync from upstream relays |
+| Setting            | Value   | Rationale                                                                     |
+| ------------------ | ------- | ----------------------------------------------------------------------------- |
+| DB mapsize         | 3 GB    | Market events are small but numerous                                          |
+| `maxTagsPerFilter` | 8       | Market queries filter on stall_id, category, price, location (was 3, too low) |
+| `maxNumTags`       | 2000    | Stalls/listings carry many tags (price, images, shipping)                     |
+| `maxFilterLimit`   | 500     | Matches app-side query limits                                                 |
+| `maxReqFilterSize` | 200     | Complex market filters                                                        |
+| Negentropy         | enabled | Fast sync from upstream relays                                                |
 
 ## Future Considerations
 

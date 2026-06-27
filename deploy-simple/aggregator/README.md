@@ -31,12 +31,12 @@ scraped upstream: relay.plebeian.market + damus + nos.lol ◄──────�
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Container orchestration |
-| `strfry.conf` | Relay configuration (DB size, limits, write-policy) |
-| `write-policy.py` | Market-kind gate — accepts market-relevant events from any pubkey |
-| `Dockerfile` | strfry + python3 for write-policy plugin |
+| File                 | Purpose                                                           |
+| -------------------- | ----------------------------------------------------------------- |
+| `docker-compose.yml` | Container orchestration                                           |
+| `strfry.conf`        | Relay configuration (DB size, limits, write-policy)               |
+| `write-policy.py`    | Market-kind gate — accepts market-relevant events from any pubkey |
+| `Dockerfile`         | strfry + python3 for write-policy plugin                          |
 
 ## Deploy
 
