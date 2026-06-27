@@ -52,6 +52,8 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 	})
 
 	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
+		// CI runners are slower — give the mock module setup extra time
+		// before the default 5s timeout kills this test.
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
 		})
