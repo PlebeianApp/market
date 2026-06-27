@@ -44,9 +44,7 @@ function pubkeyFromPrivateKey(): string | null {
 }
 
 function throwNoCvmKey(): never {
-	throw new Error(
-		'No CVM server pubkey available. Set CVM_SERVER_PUBLIC_KEY or CVM_SERVER_KEY in your environment.',
-	)
+	throw new Error('No CVM server pubkey available. Set CVM_SERVER_PUBLIC_KEY or CVM_SERVER_KEY in your environment.')
 }
 
 /**
