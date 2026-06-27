@@ -137,9 +137,9 @@ describe('H2 — ZapPurchaseManager.generateInvoice signature verification', () 
 		const valid = signedZapRequestWire(1000)
 		const forged = { ...valid, pubkey: getPublicKey(generateSecretKey()) }
 
-		await expect(
-			manager.generateInvoice(requestBody(forged, 1000), appPubkey, 'seller@ln', resolver),
-		).rejects.toThrow(/signature verification failed/)
+		await expect(manager.generateInvoice(requestBody(forged, 1000), appPubkey, 'seller@ln', resolver)).rejects.toThrow(
+			/signature verification failed/,
+		)
 	})
 
 	test('accepts a correctly-signed zap request and flows through to an invoice', async () => {
