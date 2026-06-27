@@ -1,8 +1,5 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
-import {
-	isWebSocketOriginAllowed,
-	getAllowedOrigins,
-} from '../webSocketOrigin'
+import { isWebSocketOriginAllowed, getAllowedOrigins } from '../webSocketOrigin'
 
 /**
  * H1 — WebSocket Origin validation (cross-site WebSocket hijacking).
@@ -24,8 +21,7 @@ describe('H1 — isWebSocketOriginAllowed', () => {
 		else process.env.ALLOWED_ORIGINS = PREV_ORIGINS
 	})
 
-	const req = (headers: Record<string, string> = {}) =>
-		new Request('https://example.invalid/', { headers })
+	const req = (headers: Record<string, string> = {}) => new Request('https://example.invalid/', { headers })
 
 	test('allows requests with no Origin header (non-browser / server-to-server)', () => {
 		expect(isWebSocketOriginAllowed(req({ host: 'plebeian.market' }))).toBe(true)
@@ -34,31 +30,20 @@ describe('H1 — isWebSocketOriginAllowed', () => {
 
 	test('blocks a cross-origin browser request when no allowlist is set (same-origin fallback)', () => {
 		// attacker.com opening a WS against plebeian.market must be refused
-		expect(
-			isWebSocketOriginAllowed(req({ origin: 'https://attacker.com', host: 'plebeian.market' })),
-		).toBe(false)
+		expect(isWebSocketOriginAllowed(req({ origin: 'https://attacker.com', host: 'plebeian.market' }))).toBe(false)
 	})
 
 	test('allows a same-origin browser request when no allowlist is set', () => {
-		expect(
-			isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market', host: 'plebeian.market' })),
-		).toBe(true)
+		expect(isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market', host: 'plebeian.market' }))).toBe(true)
 	})
 
 	test('respects an explicit ALLOWED_ORIGINS allowlist (positive + negative)', () => {
-		process.env.ALLOWED_ORIGINS =
-			'https://plebeian.market, https://staging.plebeian.market '
+		process.env.ALLOWED_ORIGINS = 'https://plebeian.market, https://staging.plebeian.market '
 		// listed origin → allowed (even if host header differs, allowlist wins)
-		expect(
-			isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market', host: 'cdn.example' })),
-		).toBe(true)
-		expect(
-			isWebSocketOriginAllowed(req({ origin: 'https://staging.plebeian.market', host: 'x' })),
-		).toBe(true)
+		expect(isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market', host: 'cdn.example' }))).toBe(true)
+		expect(isWebSocketOriginAllowed(req({ origin: 'https://staging.plebeian.market', host: 'x' }))).toBe(true)
 		// unlisted origin → blocked, even if it would otherwise be same-origin
-		expect(
-			isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market.evil', host: 'plebeian.market.evil' })),
-		).toBe(false)
+		expect(isWebSocketOriginAllowed(req({ origin: 'https://plebeian.market.evil', host: 'plebeian.market.evil' }))).toBe(false)
 	})
 
 	test('rejects a malformed Origin header', () => {
