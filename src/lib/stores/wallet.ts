@@ -4,8 +4,16 @@ import { v4 as uuidv4 } from 'uuid'
 import { useEffect, useState } from 'react'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
+import { secureGet, secureSet } from '@/lib/wallet/secureStorage'
 
-// Wallet interface
+// H8: NWC wallet connection secrets (payment capability) are sensitive — they
+// allow spending from the user's Lightning wallet. We encrypt them at rest
+// with AES-GCM, keyed by a secret derived from the authenticated user's
+// private key (set via setEncryptionSecret after login). Before auth, or for
+// extension logins without a private key, data falls back to plaintext and is
+// upgraded on the next authenticated write.
+const NWC_WALLETS_KEY = 'nwc_wallets'
+let walletEncryptionSecret: string | undefined
 export interface Wallet {
 	id: string
 	name: string
@@ -103,6 +111,16 @@ const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
 
 // Actions for the wallet store
 export const walletActions = {
+	/**
+	 * H8: Set the encryption secret used to encrypt/decrypt NWC wallet data at
+	 * rest. Should be called after the user authenticates with a private key
+	 * (e.g. from authActions). Once set, all subsequent saves are encrypted
+	 * and any existing plaintext wallets are migrated on the next save.
+	 */
+	setEncryptionSecret: (secretHex: string | undefined): void => {
+		walletEncryptionSecret = secretHex
+	},
+
 	// Set callback for wallet changes
 	setOnWalletChange: (callback: (wallets: Wallet[]) => void): void => {
 		walletStore.setState((state) => ({ ...state, onWalletChange: callback }))
@@ -165,14 +183,20 @@ export const walletActions = {
 		})
 	},
 
-	// Load wallets from localStorage
+	// Load wallets from localStorage (H8: decrypts at rest when encryption secret is set)
 	loadWalletsFromLocalStorage: async (): Promise<Wallet[]> => {
 		try {
-			const savedWallets = localStorage.getItem('nwc_wallets')
-			if (savedWallets) {
-				const parsed = JSON.parse(savedWallets)
+			const result = await secureGet<Wallet[]>(NWC_WALLETS_KEY, walletEncryptionSecret)
+
+			// Encrypted data exists but we don't have the key yet (pre-auth).
+			// Return empty — wallets will load after setEncryptionSecret + reload.
+			if (result.isEncrypted && result.data === null) {
+				return []
+			}
+
+			if (result.data) {
 				// Ensure all fields are present
-				return parsed.map((wallet: any) => ({
+				return result.data.map((wallet: any) => ({
 					id: wallet.id || uuidv4(),
 					name: wallet.name || `Wallet ${Math.floor(Math.random() * 1000)}`,
 					nwcUri: wallet.nwcUri,
@@ -189,10 +213,13 @@ export const walletActions = {
 		return []
 	},
 
-	// Save wallets to local storage
+	// Save wallets to local storage (H8: encrypts at rest when encryption secret is set)
 	saveWalletsToLocalStorage: (wallets: Wallet[]): void => {
 		try {
-			localStorage.setItem('nwc_wallets', JSON.stringify(wallets))
+			// secureSet is async but we call it fire-and-forget to preserve the
+			// existing synchronous call signature. Encryption errors are caught
+			// inside secureSet's try/catch path.
+			void secureSet(NWC_WALLETS_KEY, wallets, walletEncryptionSecret)
 		} catch (error) {
 			console.error('Failed to save wallets to localStorage:', error)
 			toast.error('Failed to save wallets to local storage')

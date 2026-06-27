@@ -5,6 +5,7 @@ import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
+import { walletActions } from './wallet'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
@@ -108,6 +109,11 @@ export const authActions = {
 
 			// Login with the decrypted key
 			await authActions.loginWithPrivateKey(privateKeyHex)
+
+			// H8: Use the decrypted key to encrypt/decrypt NWC wallet data at rest
+			walletActions.setEncryptionSecret(privateKeyHex)
+			await walletActions.initialize()
+
 			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
 			authActions.checkAndShowTermsDialog()
 		} catch (error) {
@@ -158,6 +164,10 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
+
+			// H8: Use the private key to encrypt/decrypt NWC wallet data at rest
+			walletActions.setEncryptionSecret(privateKey)
+			await walletActions.initialize()
 
 			authStore.setState((state) => ({
 				...state,
@@ -260,6 +270,10 @@ export const authActions = {
 			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
 			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
+			// H8: Use the NIP-46 local signer key to encrypt/decrypt NWC wallet data
+			walletActions.setEncryptionSecret(localSigner.privateKey || undefined)
+			await walletActions.initialize()
+
 			authStore.setState((state) => ({
 				...state,
 				user,
@@ -284,6 +298,9 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()
+		// H8: Clear the wallet encryption secret so encrypted NWC data stays
+		// encrypted at rest after logout
+		walletActions.setEncryptionSecret(undefined)
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
