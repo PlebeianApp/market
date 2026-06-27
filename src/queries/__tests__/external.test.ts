@@ -1,19 +1,11 @@
-import { describe, test, expect, afterEach, mock, spyOn } from 'bun:test'
+import { describe, test, expect, afterEach, beforeEach, mock, spyOn } from 'bun:test'
 
 const originalWarn = console.warn
 const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-mock.module('@/lib/ctxcn-client', () => ({
-	PlebianCurrencyClient: class {
-		async callTool() {
-			return { rates: null, error: 'test stub' }
-		}
-		close() {}
-	},
-}))
-
+import { PlebianCurrencyClient } from '@/lib/ctxcn-client'
 import { convertCurrencyToSats, fetchBtcExchangeRates, resetCurrencyClient } from '../external'
 
 const ORIGINAL_FETCH = globalThis.fetch
@@ -47,12 +39,31 @@ function jsonOk(body: unknown): Response {
 	})
 }
 
-describe('external.tsx - fetchBtcExchangeRates', () => {
-	afterEach(() => {
-		globalThis.fetch = ORIGINAL_FETCH
-		resetCurrencyClient()
-	})
+// Stub ContextVM at the prototype level so every client instance resolves
+// callTool() immediately with an "unavailable" result, forcing the Yadio
+// fallback path under test.
+//
+// This replaces an earlier `mock.module('@/lib/ctxcn-client', ...)` which is
+// fragile: in the full unit suite, bun may have already loaded and cached the
+// real module (and bound the real class into external.tsx) before this test
+// file's mock.module runs, so the mock silently no-ops and the real client's
+// 5s ContextVM deadline fires (issue #963). Patching the prototype affects
+// every instance regardless of import order, so the test stays fast and
+// deterministic across environments. resetCurrencyClient() drops the module
+// singleton between tests so each test rebuilds a clean client.
+let callToolSpy: ReturnType<typeof spyOn>
+beforeEach(() => {
+	callToolSpy = spyOn(PlebianCurrencyClient.prototype, 'callTool').mockImplementation(async () => ({ rates: null, error: 'test stub' }))
+	resetCurrencyClient()
+})
 
+afterEach(() => {
+	callToolSpy?.mockRestore()
+	globalThis.fetch = ORIGINAL_FETCH
+	resetCurrencyClient()
+})
+
+describe('external.tsx - fetchBtcExchangeRates', () => {
 	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
@@ -113,11 +124,6 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 })
 
 describe('external.tsx - convertCurrencyToSats', () => {
-	afterEach(() => {
-		globalThis.fetch = ORIGINAL_FETCH
-		resetCurrencyClient()
-	})
-
 	test('returns amount directly for sats currency', async () => {
 		const result = await convertCurrencyToSats('sats', 5000)
 		expect(result).toBe(5000)
