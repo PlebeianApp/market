@@ -19,11 +19,11 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 		} catch (error) {
 			const msg = String(error)
 			if (!msg.includes('interrupted by another navigation') && !msg.includes('ERR_ABORTED')) throw error
-			await page.waitForLoadState('networkidle').catch(() => {})
+			await page.waitForLoadState('domcontentloaded').catch(() => {})
 		}
 
 		await page.waitForTimeout(1000)
-		await page.waitForLoadState('networkidle').catch(() => {})
+		await page.waitForLoadState('domcontentloaded').catch(() => {})
 
 		const currentPath = new URL(page.url()).pathname
 		if (currentPath === targetPath || currentPath.startsWith(targetPath)) {
