@@ -289,13 +289,34 @@ export class Nip46Mock {
 
 	/**
 	 * Encrypt content and publish as a Kind 24133 event.
-	 * Retries on "mute" rejections (no matching subscription yet) with
-	 * a fresh event each time to avoid duplicate-event deduplication.
+	 *
+	 * Retries on "mute" rejections (no matching subscription yet) with a fresh
+	 * event each time to avoid duplicate-event deduplication. This is essential
+	 * for the QR-code (nostrconnect://) handshake: the mock (signer) publishes
+	 * the initial `connect` request immediately after parsing the QR, but the
+	 * client app's NDK subscription for its own pubkey may not be open yet on
+	 * the relay. `nak serve` (and some production relays) reject such events
+	 * with OK=false, "mute: no one was listening for this" — the event is
+	 * dropped, NOT buffered, so it must be republished until the subscription
+	 * appears. A fixed 5s budget (the previous default) is too short on slow
+	 * CI runners; we retry on a deadline instead.
+	 *
+	 * Non-"mute" rejections are treated as fatal (they indicate a real error
+	 * such as an invalid signature or rate-limiting, which retrying won't fix).
 	 */
-	private async sendEncrypted(recipientPubkey: string, content: object, maxRetries = 10): Promise<void> {
+	private async sendEncrypted(
+		recipientPubkey: string,
+		content: object,
+		opts: { timeoutMs?: number; intervalMs?: number } = {},
+	): Promise<void> {
+		const { timeoutMs = 25_000, intervalMs = 400 } = opts
 		const plaintext = JSON.stringify(content)
+		const deadline = Date.now() + timeoutMs
+		let attempt = 0
+		let lastReason: string | undefined
 
-		for (let attempt = 0; attempt < maxRetries; attempt++) {
+		while (Date.now() < deadline) {
+			attempt++
 			const encrypted = await this.encryptContent(recipientPubkey, plaintext)
 			const template: EventTemplate = {
 				kind: 24133,
@@ -310,13 +331,18 @@ export class Nip46Mock {
 				return
 			}
 
-			if (result.reason?.includes('mute') && attempt < maxRetries - 1) {
-				await new Promise((r) => setTimeout(r, 500))
-				continue
+			lastReason = result.reason
+			// Only the "mute" (no matching subscription yet) rejection is retryable.
+			if (!result.reason?.includes('mute')) {
+				throw new Error(`Relay rejected event: ${result.reason}`)
 			}
 
-			throw new Error(`Relay rejected event: ${result.reason}`)
+			await new Promise((r) => setTimeout(r, intervalMs))
 		}
+
+		throw new Error(
+			`Relay rejected event (mute) after ${attempt} attempts over ~${timeoutMs}ms: ${lastReason}`,
+		)
 	}
 
 	close(): void {
