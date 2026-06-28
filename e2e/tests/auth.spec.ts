@@ -3,7 +3,6 @@ import type { BrowserContext, Page } from '@playwright/test'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { nip19 } from 'nostr-tools'
 import { Nip46Mock } from '../utils/nip46-mock'
 import { RELAY_URL } from '../test-config'
 import { encrypt } from 'nostr-tools/nip49'
@@ -73,11 +72,6 @@ async function expectAuthenticated(page: Page) {
 /** Verify the user is NOT authenticated (login button visible) */
 async function expectNotAuthenticated(page: Page) {
 	await expect(page.locator('[data-testid="login-button"]').first()).toBeVisible({ timeout: 10_000 })
-}
-
-/** Convert hex SK to nsec format */
-function hexToNsec(hexSk: string): string {
-	return nip19.nsecEncode(hexToBytes(hexSk))
 }
 
 // ─── Tests ──────────────────────────────────────────────────
@@ -282,14 +276,18 @@ test.describe('Authentication', () => {
 		test('remove stored key shows fresh key input', async ({ browser }) => {
 			test.setTimeout(60_000)
 			const context = await browser.newContext()
-			const nsec = hexToNsec(devUser2.sk)
 
+			// Seed localStorage with a properly encrypted ncryptsec key.
+			// A raw nsec MUST NOT be used here: authStore.getNeedsMigration()
+			// detects unencrypted nsec values in nostr_local_encrypted_signer_key
+			// and auto-opens MigratePrivateKeyDialog, which blocks login-dialog.
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
 			await context.addInitScript(
-				({ pk, nsec }: { pk: string; nsec: string }) => {
-					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${nsec}`)
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
 					localStorage.setItem('plebeian_terms_accepted', 'true')
 				},
-				{ pk: devUser2.pk, nsec },
+				{ pk: devUser2.pk, ncryptsec },
 			)
 
 			const page = await context.newPage()
