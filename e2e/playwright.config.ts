@@ -24,7 +24,14 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] },
+			use: {
+				...devices['Desktop Chrome'],
+				// Use system Chrome if available (PLAYWRIGHT_CHANNEL=chrome),
+				// otherwise fall back to Playwright's bundled Chromium.
+				// This avoids snap confinement issues on Ubuntu while keeping
+				// zero-setup for contributors who don't have Chrome installed.
+				...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+			},
 		},
 	],
 
