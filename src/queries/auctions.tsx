@@ -974,3 +974,66 @@ export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | u
 	useQuery({
 		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
+
+// ---------------------------------------------------------------------------
+// Composite parallel read — Fix 3, #1046
+//
+// The per-auction reads (bids, settlements, path releases, verdicts, claim
+// orders) are mutually independent: each is keyed off the auction root event
+// id and/or the auction coordinate, and none depends on another's result.
+// Fetching them as a sequential `await` chain stacks their latencies (and,
+// worse, stacks their dead-relay 8s timeouts). Wrapping them in a single
+// `Promise.all` collapses the waterfall into one concurrent batch —
+// ~max(latency) instead of sum(latencies).
+//
+// The React Query detail route already runs these as parallel `useQuery`
+// hooks; this composite is the non-React / server-side-prefetch / migration
+// entry point that codifies the same concurrency in one call.
+// ---------------------------------------------------------------------------
+
+export type AuctionDetails = {
+	bids: NDKEvent[]
+	settlements: NDKEvent[]
+	pathReleases: NDKEvent[]
+	verdicts: NDKEvent[]
+	claimOrders: NDKEvent[]
+}
+
+export type FetchAuctionDetailsOptions = {
+	auctionCoordinates?: string
+	bidsLimit?: number
+	settlementsLimit?: number
+	pathReleasesLimit?: number
+	verdictsLimit?: number
+}
+
+export const fetchAuctionDetails = async (
+	auctionRootEventId: string,
+	options: FetchAuctionDetailsOptions = {},
+): Promise<AuctionDetails> => {
+	if (!auctionRootEventId) {
+		return { bids: [], settlements: [], pathReleases: [], verdicts: [], claimOrders: [] }
+	}
+
+	const { auctionCoordinates, bidsLimit, settlementsLimit, pathReleasesLimit, verdictsLimit } = options
+
+	const [bids, settlements, pathReleases, verdicts, claimOrders] = await Promise.all([
+		fetchAuctionBids(auctionRootEventId, bidsLimit ?? 500, auctionCoordinates),
+		fetchAuctionSettlements(auctionRootEventId, settlementsLimit ?? 100, auctionCoordinates),
+		fetchAuctionPathReleases(auctionRootEventId, pathReleasesLimit ?? 200, auctionCoordinates),
+		fetchAuctionVerdicts(auctionRootEventId, verdictsLimit ?? 500, auctionCoordinates),
+		fetchAuctionClaimOrders(auctionCoordinates ?? ''),
+	])
+
+	return { bids, settlements, pathReleases, verdicts, claimOrders }
+}
+
+export const auctionDetailsQueryOptions = (
+	auctionRootEventId: string,
+	options: FetchAuctionDetailsOptions = {},
+) =>
+	queryOptions({
+		queryKey: [...auctionKeys.all, 'details', auctionRootEventId, options],
+		queryFn: () => fetchAuctionDetails(auctionRootEventId, options),
+		enabled: !!auctionRootEventId,
+	})

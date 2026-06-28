@@ -906,8 +906,15 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		return event.id
 	}
 
-	// 3. Bids → winning bid.
-	const bids = await fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate)
+	// 3. Bids + path releases — fetched concurrently (Fix 3, #1046). Both reads
+	// are keyed off the auction coordinate (resolved above) and neither depends
+	// on the other's result, so they have no data dependency. Running them in a
+	// single Promise.all removes a sequential relay round-trip — and, with a
+	// dead relay in the set, one stacked 8s timeout — from the settlement path.
+	const [bids, allReleases] = await Promise.all([
+		fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
+		fetchAuctionPathReleases(formData.auctionEventId, 500, auctionCoordinate),
+	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
 	}
@@ -955,12 +962,11 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	}
 	if (chainBids.length === 0) throw new Error('Empty chain — should be impossible')
 
-	// 5. Path releases — collect a kind-1025 for every leg. The bidder
-	// publishes one per leg as part of `publishBidderPathRelease`.
-	// Refuse to settle if any leg is missing its release: a partial
-	// chain can't be redeemed and the seller would only end up with
-	// some of the bid value.
-	const allReleases = await fetchAuctionPathReleases(formData.auctionEventId, 500, auctionCoordinate)
+	// 5. Path releases — collect a kind-1025 for every leg. (Fetched
+	// concurrently with bids in step 3.) The bidder publishes one per leg as
+	// part of `publishBidderPathRelease`. Refuse to settle if any leg is
+	// missing its release: a partial chain can't be redeemed and the seller
+	// would only end up with some of the bid value.
 	const releasesByBidId = new Map<string, NDKEvent[]>()
 	for (const ev of allReleases) {
 		const e = getTag(ev, 'e') ?? ''
