@@ -29,9 +29,7 @@ interface RelaySummary {
  */
 export default function BrowserRelayStatus() {
 	const [summary, setSummary] = useState<RelaySummary | null>(null)
-	const [storage, setStorage] = useState<{ usage: number; quota: number; percent: number } | null>(
-		null,
-	)
+	const [storage, setStorage] = useState<{ usage: number; quota: number; percent: number } | null>(null)
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
@@ -84,9 +82,7 @@ export default function BrowserRelayStatus() {
 				fontSize: '13px',
 			}}
 		>
-			<div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#8be9fd' }}>
-				🔥 Browser Relay (DEBUG)
-			</div>
+			<div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#8be9fd' }}>🔥 Browser Relay (DEBUG)</div>
 
 			{error && <div style={{ color: '#ff5555' }}>Error: {error}</div>}
 
@@ -94,15 +90,14 @@ export default function BrowserRelayStatus() {
 				<>
 					<div style={{ display: 'flex', gap: '24px', marginBottom: '8px' }}>
 						<span>
-							<strong>Total Events:</strong>{' '}
-							<span style={{ color: '#50fa7b' }}>{summary.total_events.toLocaleString()}</span>
+							<strong>Total Events:</strong> <span style={{ color: '#50fa7b' }}>{summary.total_events.toLocaleString()}</span>
 						</span>
 						{storage && (
 							<span>
 								<strong>Storage:</strong>{' '}
 								<span style={{ color: '#ffb86c' }}>
-									{(storage.usage / 1024 / 1024).toFixed(1)} MB /{' '}
-									{(storage.quota / 1024 / 1024).toFixed(0)} MB ({storage.percent.toFixed(1)}%)
+									{(storage.usage / 1024 / 1024).toFixed(1)} MB / {(storage.quota / 1024 / 1024).toFixed(0)} MB (
+									{storage.percent.toFixed(1)}%)
 								</span>
 							</span>
 						)}

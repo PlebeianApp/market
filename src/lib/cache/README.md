@@ -22,13 +22,13 @@ the browser cache by calling `setupBrowserCache()` from `setup.ts`.
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `browser-cache.ts` | Worker relay init, cache request/persist factories |
-| `sync-manager.ts` | Background NIP-77 negentropy sync from upstream relays |
-| `persist.ts` | Storage persistence (prevent browser eviction) |
-| `setup.ts` | **Entry point** — wires everything into applesauce EventStore |
-| `__tests__/browser-cache.test.ts` | Unit tests |
+| File                              | Purpose                                                       |
+| --------------------------------- | ------------------------------------------------------------- |
+| `browser-cache.ts`                | Worker relay init, cache request/persist factories            |
+| `sync-manager.ts`                 | Background NIP-77 negentropy sync from upstream relays        |
+| `persist.ts`                      | Storage persistence (prevent browser eviction)                |
+| `setup.ts`                        | **Entry point** — wires everything into applesauce EventStore |
+| `__tests__/browser-cache.test.ts` | Unit tests                                                    |
 
 ## How It Works
 

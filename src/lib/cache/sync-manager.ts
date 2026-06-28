@@ -130,9 +130,7 @@ export class NegentropySyncManager {
 			this.lastSyncTime = new Date()
 
 			const totalReceived = results.reduce((sum, r) => sum + r.eventsReceived, 0)
-			console.log(
-				`✅ Browser relay sync complete: +${totalReceived} events from ${results.length} relays`,
-			)
+			console.log(`✅ Browser relay sync complete: +${totalReceived} events from ${results.length} relays`)
 		} finally {
 			this.isSyncing = false
 		}
@@ -185,9 +183,7 @@ export class NegentropySyncManager {
 			}
 
 			stat.eventsReceived = received
-			console.log(
-				`✅ Synced from ${relayUrl}: +${received} events (NIP-77 supported)`,
-			)
+			console.log(`✅ Synced from ${relayUrl}: +${received} events (NIP-77 supported)`)
 		} catch (err) {
 			stat.error = err instanceof Error ? err.message : String(err)
 			console.warn(`⚠️ Sync failed for ${relayUrl}:`, err)
