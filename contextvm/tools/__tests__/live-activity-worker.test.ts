@@ -1,5 +1,16 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
-import { countParticipants, getIntervalMs, getLookbackDays, resetDedupMap, getDedupMap } from '../live-activity-worker'
+import {
+	countParticipants,
+	getIntervalMs,
+	getLookbackDays,
+	resetDedupMap,
+	getDedupMap,
+	summarizeBids,
+	buildAuctionEndMessage,
+	scheduleAuctionEnd,
+	clearEndTimers,
+	getEndTimers,
+} from '../live-activity-worker'
 import { AUCTION_KIND, buildLiveActivityDTag } from '../../../src/lib/nip53'
 
 const SELLER_A = 'a'.repeat(64)
@@ -103,6 +114,140 @@ describe('live-activity-worker', () => {
 			delete process.env.LIVE_ACTIVITY_LOOKBACK_DAYS
 			expect(getLookbackDays()).toBe(7)
 			if (orig) process.env.LIVE_ACTIVITY_LOOKBACK_DAYS = orig
+		})
+	})
+
+	describe('countParticipants excludes system author', () => {
+		test('excludes provided pubkeys from both current and total', () => {
+			const now = 1000000
+			const cvm = 'cvm'.repeat(16).padEnd(64, '0').slice(0, 64)
+			const messages = [
+				{ pubkey: 'user1', created_at: now - 10 },
+				{ pubkey: cvm, created_at: now - 5 },
+				{ pubkey: 'user2', created_at: now - 20 },
+				{ pubkey: cvm, created_at: now - 30 },
+			]
+			const result = countParticipants(messages, now, [cvm])
+			expect(result.total).toBe(2)
+			expect(result.current).toBe(2)
+		})
+
+		test('no exclusion param behaves like before', () => {
+			const now = 1000000
+			const messages = [
+				{ pubkey: 'user1', created_at: now - 10 },
+				{ pubkey: 'user2', created_at: now - 20 },
+			]
+			expect(countParticipants(messages, now).total).toBe(2)
+		})
+	})
+
+	describe('summarizeBids', () => {
+		test('picks highest bid as winner and counts unique bidders', () => {
+			const bids = [
+				{ pubkey: 'a', amount: 1000 },
+				{ pubkey: 'b', amount: 4500 },
+				{ pubkey: 'a', amount: 2000 },
+			]
+			const result = summarizeBids(bids)
+			expect(result.winnerPubkey).toBe('b')
+			expect(result.finalAmountSats).toBe(4500)
+			expect(result.totalBids).toBe(3)
+			expect(result.totalBidders).toBe(2)
+		})
+
+		test('excludes zero/negative amounts and the issuer pubkey', () => {
+			const issuer = 'cvm'.repeat(16).padEnd(64, '0').slice(0, 64)
+			const bids = [
+				{ pubkey: 'a', amount: 1000 },
+				{ pubkey: issuer, amount: 9999 },
+				{ pubkey: 'b', amount: 0 },
+				{ pubkey: 'b', amount: -5 },
+			]
+			const result = summarizeBids(bids, [issuer])
+			expect(result.winnerPubkey).toBe('a')
+			expect(result.finalAmountSats).toBe(1000)
+			expect(result.totalBids).toBe(1)
+			expect(result.totalBidders).toBe(1)
+		})
+
+		test('returns null winner and zero stats for no valid bids', () => {
+			expect(summarizeBids([])).toEqual({
+				winnerPubkey: null,
+				finalAmountSats: 0,
+				totalBids: 0,
+				totalBidders: 0,
+			})
+		})
+	})
+
+	describe('buildAuctionEndMessage', () => {
+		test('includes winner, price, bid/bidder counts, and watchers', () => {
+			const msg = buildAuctionEndMessage({
+				winnerPubkey: 'npub1abcdef',
+				finalAmountSats: 11000,
+				totalBids: 7,
+				totalBidders: 4,
+				watchers: 23,
+			})
+			expect(msg).toContain('Won by npub1abcdef')
+			expect(msg).toContain('11,000 sats')
+			expect(msg).toContain('7 bids from 4 bidders')
+			expect(msg).toContain('Watched by 23 users.')
+		})
+
+		test('uses singular bid/bidder wording for a single bid', () => {
+			const msg = buildAuctionEndMessage({
+				winnerPubkey: 'xyz',
+				finalAmountSats: 500,
+				totalBids: 1,
+				totalBidders: 1,
+				watchers: 2,
+			})
+			expect(msg).toContain('1 bid from 1 bidder')
+		})
+
+		test('handles no-bids case gracefully', () => {
+			const msg = buildAuctionEndMessage({
+				winnerPubkey: null,
+				finalAmountSats: 0,
+				totalBids: 0,
+				totalBidders: 0,
+				watchers: 5,
+			})
+			expect(msg).toContain('No bids were placed')
+			expect(msg).toContain('Watched by 5 users.')
+		})
+	})
+
+	describe('scheduleAuctionEnd', () => {
+		const fakeCtx = { relayPool: {}, signer: {}, issuerPubkey: 'issuer' } as never
+
+		beforeEach(() => {
+			clearEndTimers()
+		})
+
+		test('returns 0 and registers nothing when maxEndAt is in the past', () => {
+			const past = Math.floor(Date.now() / 1000) - 100
+			expect(scheduleAuctionEnd(fakeCtx, 'k1', past)).toBe(0)
+			expect(getEndTimers().size).toBe(0)
+		})
+
+		test('schedules a timer when maxEndAt is in the future', () => {
+			const future = Math.floor(Date.now() / 1000) + 60
+			const delay = scheduleAuctionEnd(fakeCtx, 'k2', future)
+			expect(delay).toBeGreaterThan(0)
+			expect(getEndTimers().has('k2')).toBe(true)
+			clearEndTimers()
+			expect(getEndTimers().size).toBe(0)
+		})
+
+		test('does not double-schedule for the same key', () => {
+			const future = Math.floor(Date.now() / 1000) + 120
+			scheduleAuctionEnd(fakeCtx, 'k3', future)
+			const second = scheduleAuctionEnd(fakeCtx, 'k3', future)
+			expect(second).toBe(0)
+			expect(getEndTimers().size).toBe(1)
 		})
 	})
 })

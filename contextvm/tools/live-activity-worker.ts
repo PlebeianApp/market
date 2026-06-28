@@ -32,6 +32,10 @@ const MAX_CHAT_MESSAGES_PER_ACTIVITY = 500
 
 let dedupMap = new Map<string, LiveActivityState>()
 let bidSubscriptions = new Map<string, () => void>()
+// One-shot timers scheduled to fire at each auction's maxEndAt, so the
+// end-of-auction announcement is published immediately instead of waiting
+// for the next 60s poll tick. Keyed by dedupKey (sellerPubkey:auctionDTag).
+let endTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let discoveryUnsub: (() => void) | null = null
 
@@ -47,6 +51,11 @@ export function getLookbackDays(): number {
 
 export function resetDedupMap(): void {
 	dedupMap = new Map()
+	// Also clear the other ephemeral module state so unit tests start clean.
+	for (const unsub of bidSubscriptions.values()) unsub()
+	bidSubscriptions.clear()
+	for (const handle of endTimers.values()) clearTimeout(handle)
+	endTimers.clear()
 }
 
 export function getDedupMap(): Map<string, LiveActivityState> {
@@ -56,12 +65,20 @@ export function getDedupMap(): Map<string, LiveActivityState> {
 export function countParticipants(
 	messages: Array<{ pubkey: string; created_at: number }>,
 	now: number,
+	excludePubkeys?: string[],
 ): { current: number; total: number } {
+	// The CVM publishes its own kind-1311 commentator messages (bid alerts,
+	// milestones) signed with the issuer key. Those are system messages, not
+	// participants, so callers pass the issuer pubkey here to keep it out of
+	// the counts. (A logged-out viewer who later logs in still appears under
+	// two pubkeys — that needs client-side identity linking, out of scope.)
+	const exclude = excludePubkeys?.length ? new Set(excludePubkeys) : null
 	const authors = new Set<string>()
 	const recentAuthors = new Set<string>()
 	const cutoff = now - PARTICIPANT_ACTIVE_WINDOW_S
 
 	for (const msg of messages) {
+		if (exclude?.has(msg.pubkey)) continue
 		authors.add(msg.pubkey)
 		if (msg.created_at >= cutoff) {
 			recentAuthors.add(msg.pubkey)
@@ -133,6 +150,101 @@ function closeBidSubscription(dedupKey: string): void {
 
 export function getBidSubscriptions(): Map<string, () => void> {
 	return bidSubscriptions
+}
+
+// =========================================================================
+// Auction-end summary: pick the winning bid + aggregate counts for the
+// richer end-of-auction commentator message requested in PR #1019 review.
+// Pure functions so they can be unit-tested without a relay.
+// =========================================================================
+
+export interface BidSummary {
+	winnerPubkey: string | null
+	finalAmountSats: number
+	totalBids: number
+	totalBidders: number
+}
+
+/**
+ * Reduce a set of kind-1023 bid events to the winner (highest amount) plus
+ * aggregate stats. Bidders equal to the issuer (the CVM republishing a bid)
+ * are excluded so the system author is never counted as a bidder.
+ */
+export function summarizeBids(bids: Array<{ pubkey: string; amount: number }>, excludePubkeys?: string[]): BidSummary {
+	const exclude = excludePubkeys?.length ? new Set(excludePubkeys) : null
+	let winnerPubkey: string | null = null
+	let finalAmountSats = 0
+	let totalBids = 0
+	const bidders = new Set<string>()
+
+	for (const bid of bids) {
+		if (bid.amount <= 0) continue
+		if (exclude?.has(bid.pubkey)) continue
+		totalBids++
+		bidders.add(bid.pubkey)
+		if (bid.amount > finalAmountSats) {
+			finalAmountSats = bid.amount
+			winnerPubkey = bid.pubkey
+		}
+	}
+
+	return { winnerPubkey, finalAmountSats, totalBids, totalBidders: bidders.size }
+}
+
+function shortenNpub(pubkey: string): string {
+	// Bech32 npub strings start with "npub1"; the raw hex pubkey does not.
+	// The commentator already used an npub-style prefix for bids, so match
+	// that shape for consistency. If the caller passed a hex pubkey, render a
+	// truncated hex with the same visual weight.
+	return `npub1${pubkey.replace(/^npub1/, '').slice(0, 12)}…`
+}
+
+export interface AuctionEndMessageInput {
+	winnerPubkey: string | null
+	finalAmountSats: number
+	totalBids: number
+	totalBidders: number
+	/** unique viewers who chatted during the auction (totalParticipants) */
+	watchers: number
+}
+
+/**
+ * Compose the end-of-auction system message per Franchovy's #1019 feedback:
+ * final price + winning user + total bids from total bidders, with
+ * "watched by X users" wording (was "total participants").
+ */
+export function buildAuctionEndMessage(input: AuctionEndMessageInput): string {
+	const { winnerPubkey, finalAmountSats, totalBids, totalBidders, watchers } = input
+
+	if (!winnerPubkey || finalAmountSats <= 0) {
+		return `🏁 Auction ended. No bids were placed. Watched by ${watchers} users.`
+	}
+
+	const winner = shortenNpub(winnerPubkey)
+	const formattedPrice = finalAmountSats.toLocaleString()
+	const bidWord = totalBids === 1 ? 'bid' : 'bids'
+	const bidderWord = totalBidders === 1 ? 'bidder' : 'bidders'
+
+	return (
+		`🏁 Auction ended. Won by ${winner} for ${formattedPrice} sats. ` +
+		`${totalBids} ${bidWord} from ${totalBidders} ${bidderWord}. ` +
+		`Watched by ${watchers} users.`
+	)
+}
+
+async function fetchAuctionBids(ctx: LiveActivityWorkerContext, auctionCoord: string): Promise<Array<{ pubkey: string; amount: number }>> {
+	const events = await fetchEventsUntilEose(ctx.relayPool, [
+		{
+			kinds: [1023],
+			'#a': [auctionCoord],
+			limit: 500,
+		},
+	])
+	return events.map((e) => {
+		const amountTag = e.tags.find((t) => t[0] === 'amount')?.[1]
+		const amount = amountTag ? parseInt(amountTag, 10) : 0
+		return { pubkey: e.pubkey, amount: Number.isFinite(amount) ? amount : 0 }
+	})
 }
 
 async function fetchEventsUntilEose(relayPool: ApplesauceRelayPool, filters: Filter[], timeoutMs = 5000): Promise<NostrEvent[]> {
@@ -277,6 +389,52 @@ type PublishFn = (params: {
 	totalParticipants: number
 }) => Promise<void>
 
+// -------------------------------------------------------------------------
+// Scheduled end callback (PR #1019 review): instead of waiting up to
+// `interval` for the next poll to notice an auction ended, schedule a
+// one-shot timer at maxEndAt that fires an immediate poll tick so the
+// end transition + commentator message publish right on time. The poll's
+// existing dedup / prevStatus guards keep the announcement idempotent if
+// both the timer and a regular poll tick race.
+// -------------------------------------------------------------------------
+
+export function getEndTimers(): Map<string, ReturnType<typeof setTimeout>> {
+	return endTimers
+}
+
+export function clearEndTimers(): void {
+	for (const handle of endTimers.values()) clearTimeout(handle)
+	endTimers.clear()
+}
+
+/**
+ * Schedule a one-shot poll at the auction's maxEndAt. No-op if `maxEndAt` is
+ * not in the future or a timer is already registered for `dedupKey`.
+ * Returns the scheduled delay in ms (0 means not scheduled).
+ */
+export function scheduleAuctionEnd(ctx: LiveActivityWorkerContext, dedupKey: string, maxEndAt: number): number {
+	if (endTimers.has(dedupKey)) return 0
+	const delay = maxEndAt * 1000 - Date.now()
+	if (!Number.isFinite(delay) || delay <= 0) return 0
+
+	const handle = setTimeout(() => {
+		endTimers.delete(dedupKey)
+		console.log(`[live-activity-worker] Scheduled end callback fired for ${dedupKey}`)
+		pollAndUpdateLiveActivities(ctx).catch((err) => console.error('[live-activity-worker] Error in scheduled end poll:', err))
+	}, delay)
+
+	endTimers.set(dedupKey, handle)
+	return delay
+}
+
+function clearAuctionEndTimer(dedupKey: string): void {
+	const handle = endTimers.get(dedupKey)
+	if (handle) {
+		clearTimeout(handle)
+		endTimers.delete(dedupKey)
+	}
+}
+
 export async function pollAndUpdateLiveActivities(
 	ctx: LiveActivityWorkerContext,
 	opts?: { publishOverride?: PublishFn },
@@ -330,7 +488,8 @@ export async function pollAndUpdateLiveActivities(
 			let totalParticipants = 0
 			if (existing) {
 				const participants = await fetchChatParticipants(ctx, liveActivityCoord)
-				const counts = countParticipants(participants, now)
+				// Exclude the CVM's own commentator messages from participant counts.
+				const counts = countParticipants(participants, now, [ctx.issuerPubkey])
 				currentParticipants = counts.current
 				totalParticipants = counts.total
 			}
@@ -380,12 +539,37 @@ export async function pollAndUpdateLiveActivities(
 				if (prevStatus !== 'live' && prevStatus !== undefined) {
 					await publishCommentatorMessage(ctx, liveActivityCoord, '🟢 Auction is now live!')
 				}
+
+				// Schedule a one-shot poll at auction end so the end transition +
+				// announcement fire immediately instead of waiting up to 60s.
+				if (maxEndAt > now) {
+					scheduleAuctionEnd(ctx, dedupKey, maxEndAt)
+				}
 			} else if (status === 'ended') {
 				// Close bid subscription when auction ends
 				closeBidSubscription(dedupKey)
+				// The scheduled end timer is no longer needed (we're ending now).
+				clearAuctionEndTimer(dedupKey)
 
 				if (prevStatus !== 'ended' && prevStatus !== undefined) {
-					await publishCommentatorMessage(ctx, liveActivityCoord, `🏁 Auction ended. Watched by ${totalParticipants} users.`)
+					// Richer end message: winner, final price, total bids/bidders,
+					// watchers (per Franchovy's #1019 review).
+					const bids = await fetchAuctionBids(ctx, auctionCoord)
+					const summary = summarizeBids(bids, [ctx.issuerPubkey])
+					const endMessage = buildAuctionEndMessage({
+						winnerPubkey: summary.winnerPubkey,
+						finalAmountSats: summary.finalAmountSats,
+						totalBids: summary.totalBids,
+						totalBidders: summary.totalBidders,
+						watchers: totalParticipants,
+					})
+					await publishCommentatorMessage(ctx, liveActivityCoord, endMessage)
+				}
+			} else if (status === 'planned') {
+				// Auction hasn't started yet, but make sure we'll catch the exact
+				// end time once it does go live (timer is a no-op until maxEndAt).
+				if (maxEndAt > now) {
+					scheduleAuctionEnd(ctx, dedupKey, maxEndAt)
 				}
 			}
 
@@ -432,6 +616,10 @@ export function stopLiveActivityWorker(): void {
 		unsub()
 	}
 	bidSubscriptions.clear()
+	for (const handle of endTimers.values()) {
+		clearTimeout(handle)
+	}
+	endTimers.clear()
 	if (discoveryUnsub) {
 		discoveryUnsub()
 		discoveryUnsub = null
