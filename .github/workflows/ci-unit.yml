@@ -11,6 +11,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for hardcoded Nostr keys and secrets
+        run: bash scripts/git-hooks/pre-commit --full-repo
+
   unit-integration:
     runs-on: ubuntu-latest
 
@@ -56,7 +65,11 @@ jobs:
           nohup "$HOME/go/bin/nak" serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
           RELAY_PID=$!
 
-          NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 CVM_SERVER_KEY=2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71 nohup bun run contextvm/server.ts > /tmp/currency-server.log 2>&1 &
+          CVM_SERVER_KEY=$("$HOME/go/bin/nak" key generate | head -1)
+          echo "Generated ephemeral CVM_SERVER_KEY"
+          export CVM_SERVER_KEY
+
+          NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 nohup bun run contextvm/server.ts > /tmp/currency-server.log 2>&1 &
           SERVER_PID=$!
 
           echo "Waiting for relay on port 10547..."
