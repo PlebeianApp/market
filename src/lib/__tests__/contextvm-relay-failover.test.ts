@@ -51,9 +51,7 @@ class FakeRelayPool {
 	remove$ = new FakeSubject<FakeRelay>()
 	// publish() is the boundary we assert on: it must only ever receive the
 	// healthy relay subset. Each call records {from, ok} like the real pool.
-	publish = mock((_relays: string[], _event: unknown) =>
-		Promise.resolve(_relays.map((url) => ({ from: url, ok: true }))),
-	)
+	publish = mock((_relays: string[], _event: unknown) => Promise.resolve(_relays.map((url) => ({ from: url, ok: true }))))
 	private relays = new Map<string, FakeRelay>()
 
 	constructor() {
