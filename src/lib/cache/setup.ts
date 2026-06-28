@@ -35,12 +35,7 @@ import { persistEventsToCache } from 'applesauce-core/helpers'
 import { createEventLoaderForStore } from 'applesauce-loaders/loaders'
 import type { RelayPool } from 'applesauce-relay'
 
-import {
-	initBrowserRelay,
-	createCacheRequest,
-	createPersistFn,
-	isBrowserCacheAvailable,
-} from './browser-cache'
+import { initBrowserRelay, createCacheRequest, createPersistFn, isBrowserCacheAvailable } from './browser-cache'
 import { NegentropySyncManager } from './sync-manager'
 import { requestPersistentStorage } from './persist'
 
@@ -64,10 +59,7 @@ export { isBrowserCacheAvailable }
  * @param pool The applesauce RelayPool
  * @returns The sync manager instance (call .stop() to stop background sync)
  */
-export async function setupBrowserCache(
-	eventStore: EventStore,
-	pool: RelayPool,
-): Promise<NegentropySyncManager> {
+export async function setupBrowserCache(eventStore: EventStore, pool: RelayPool): Promise<NegentropySyncManager> {
 	// 1. Initialize the browser relay
 	const browserRelay = await initBrowserRelay()
 

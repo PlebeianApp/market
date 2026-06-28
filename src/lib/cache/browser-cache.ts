@@ -92,9 +92,7 @@ export function createPersistFn(relay: WorkerRelayInterface) {
  * Get relay stats for UI/diagnostics.
  * Returns total event count and per-kind breakdown.
  */
-export async function getCacheStats(
-	relay: WorkerRelayInterface,
-): Promise<{ total_events: number; kinds?: Record<string, number> }> {
+export async function getCacheStats(relay: WorkerRelayInterface): Promise<{ total_events: number; kinds?: Record<string, number> }> {
 	const summary = await relay.summary()
 	return summary as { total_events: number; kinds?: Record<string, number> }
 }
