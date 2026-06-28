@@ -82,9 +82,40 @@ export const useLiveActivity = (auctionEvent: NDKEvent | null) => {
 			queryKey: liveActivityKeys.byCoord(auctionCoord),
 			queryFn: () => (auctionEvent ? fetchLiveActivity(auctionEvent) : null),
 			enabled: !!auctionEvent && !!dTag,
-			refetchInterval: 60_000,
+			// Poll faster (15s) while an auction is planned and approaching its
+			// start time, so the live chat activates promptly when the auction
+			// goes live instead of waiting up to 60s. (PR #1019 review.)
+			refetchInterval: (query) => pickLiveActivityRefetchMs(auctionEvent, query.state.data?.status),
 		}),
 	)
+}
+
+const LIVE_ACTIVITY_FAST_REFETCH_MS = 15_000
+const LIVE_ACTIVITY_DEFAULT_REFETCH_MS = 60_000
+const NEAR_START_WINDOW_S = 10 * 60
+
+function getAuctionStartsAt(auctionEvent: NDKEvent | null): number {
+	const raw = auctionEvent?.tags.find((t) => t[0] === 'start_at')?.[1]
+	const parsed = raw ? parseInt(raw, 10) : 0
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+function pickLiveActivityRefetchMs(auctionEvent: NDKEvent | null, status?: string): number {
+	// Once we know it's planned, poll fast to catch the live transition.
+	if (status === 'planned') return LIVE_ACTIVITY_FAST_REFETCH_MS
+
+	// Before the first response (or if status is unknown), poll fast when the
+	// auction's start time is within the near-start window — this is exactly
+	// the window where the planned->live transition is about to happen.
+	const startsAt = getAuctionStartsAt(auctionEvent)
+	if (startsAt > 0) {
+		const nowS = Math.floor(Date.now() / 1000)
+		if (nowS >= startsAt - NEAR_START_WINDOW_S && nowS < startsAt + NEAR_START_WINDOW_S) {
+			return LIVE_ACTIVITY_FAST_REFETCH_MS
+		}
+	}
+
+	return LIVE_ACTIVITY_DEFAULT_REFETCH_MS
 }
 
 export const useLiveChatMessages = (liveActivityCoord: string, isActive: boolean) => {
