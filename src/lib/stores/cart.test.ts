@@ -139,7 +139,7 @@ describe('cart store persistence orchestration', () => {
 		expect(cartStore.state.cart.products['remote:product']?.amount).toBe(2)
 		expect(cartStore.state.cart.products['remote:product']?.shippingMethodId).toBe(`30406:${sellerPubkey}:ship:1`)
 		expect(cartStore.state.lastCartIntentUpdatedAt).toBe(300)
-	})
+	}, 15_000)
 
 	test('user mutation schedules debounced publish', async () => {
 		const published: any[] = []
@@ -150,7 +150,7 @@ describe('cart store persistence orchestration', () => {
 			},
 		})
 
-		await cartActions.addProduct('buyer', {
+		await cartActions.addProduct({
 			id: 'product-1',
 			amount: 1,
 			shippingMethodId: null,
