@@ -44,7 +44,7 @@ export interface UseFilteredAuctionsProps {
 
 export const defaultAuctionFilters: AuctionFilterState = {
 	hideEnded: false,
-	sort: 'ending-soon',
+	sort: 'newest',
 }
 
 /**
