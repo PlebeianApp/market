@@ -11,7 +11,7 @@ no duplicates:
 | Relay                        | Software               | Role                                                              | Internal Port                        | Deploy Artifacts            |
 | ---------------------------- | ---------------------- | ----------------------------------------------------------------- | ------------------------------------ | --------------------------- |
 | `relay.plebeian.market`      | **Khatru** (custom Go) | **WRITE** — app publishes stalls, listings, auctions, orders here | `127.0.0.1:3334`                     | `deploy-simple/relay/`      |
-| `market-agg.orangesync.tech` | **strfry**             | **READ** — fast cache, market-kind gated, scrapes upstream relays | `127.0.0.1:7780` → container `:7777` | `deploy-simple/aggregator/` |
+| `relay.plebeian.market` | **strfry**             | **READ** — fast cache, market-kind gated, scrapes upstream relays | `127.0.0.1:7780` → container `:7777` | `deploy-simple/aggregator/` |
 | `bugs.plebeian.market`       | —                      | Bug report intake                                                 | —                                    | —                           |
 
 ## Data Flow
@@ -35,7 +35,7 @@ no duplicates:
 [Market App]
      │ queries (ONE relay, ~5ms)
      ▼
-[market-agg.orangesync.tech : strfry :7780]
+[relay.plebeian.market : strfry :7780]
      │ market-kind gate       ↑ scrapes upstream
      │ (any pubkey,           │
      │  market-relevant)      │

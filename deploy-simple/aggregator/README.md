@@ -19,7 +19,7 @@ for the full relay strategy.
      │ READ PATH                              [relay.plebeian.market : Khatru :3334]
      │                                                       (authoritative source)
      ▼                                                              │
-[market-agg.orangesync.tech : strfry :7780] ◄──────────────────────┤
+[<your-aggregator-relay-domain> : strfry :7780] ◄──────────────────────┤
      │ market-kind gate             ◄────────────────────────────  │
      │ (any pubkey,                  ◄────────────────────────────  │
      │  market-relevant kinds)                  [relay.damus.io]    │
@@ -56,4 +56,4 @@ additional trust layer (future: verified-seller badge). See
 ## Market app wiring
 
 After deployment, `src/lib/stores/ndk.ts` uses
-`wss://market-agg.orangesync.tech` as a primary relay for production.
+`wss://<your-aggregator-relay-domain>` as a primary relay for production.

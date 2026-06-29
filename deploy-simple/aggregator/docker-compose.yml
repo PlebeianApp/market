@@ -5,7 +5,7 @@
 # from a single fast local relay, eliminating multi-second dead-relay
 # timeouts in the auctions UI.
 #
-# Deployed on vps2 (market-agg.orangesync.tech:7780 -> container :7777)
+# Deployed on vps2 (<your-aggregator-relay-domain>:7780 -> container :7777)
 # See: deploy-simple/aggregator/strfry.conf for relay config
 # See: deploy-simple/aggregator/write-policy.py for WoT gate
 
