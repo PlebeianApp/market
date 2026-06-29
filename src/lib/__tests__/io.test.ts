@@ -332,10 +332,10 @@ describe('seam pass-through option forwarding', () => {
 		expect(subFn).toHaveBeenCalledWith([{ kinds: [1] }, { kinds: [4] }], cb, { closeOnEose: true, relayUrls: ['wss://x'] })
 	})
 
-	test('publish forwards the event and opts to the active adapter', async () => {
+	test('publish forwards the event to the active adapter', async () => {
 		const pubFn = mock(async () => {})
 		setNostrIo(makeStubIo({ publish: pubFn }))
-		await publish(stubRawEvent as never, { relayUrls: ['wss://x'] })
-		expect(pubFn).toHaveBeenCalledWith(stubRawEvent, { relayUrls: ['wss://x'] })
+		await publish(stubRawEvent as never)
+		expect(pubFn).toHaveBeenCalledWith(stubRawEvent, undefined)
 	})
 })

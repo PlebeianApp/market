@@ -42,11 +42,13 @@ bd sync               # Sync with git
 ## NDK → Applesauce Migration
 
 Full plan & progress checklist: [`docs/ndk-to-applesauce-migration-plan.md`](docs/ndk-to-applesauce-migration-plan.md).
-Upstream epic: `PlebeianApp/market#1005`. Worktree: `~/worktrees/ndk-to-applesauce`.
+Upstream epic: `PlebeianApp/market#1005`.
 
-**Do NOT add new `@nostr-dev-kit` imports.** A CI guard (`scripts/check-ndk-footprint.sh`,
-baseline `scripts/ndk-baseline.txt`) fails the build if the footprint grows. New
-relay I/O must route through the **strangler-fig seam** instead:
+**Do NOT add new files importing `@nostr-dev-kit`.** The CI guard
+(`scripts/check-ndk-footprint.sh`, baseline `scripts/ndk-baseline.txt`) is
+file-footprint based: it fails if the number of files importing `@nostr-dev-kit`
+grows, but it does not detect additional NDK usage inside already-counted files.
+New relay I/O must route through the **strangler-fig seam** instead:
 
 ```ts
 import { fetchEvents, subscribe, publish, sign, getUser } from '@/lib/nostr/io'
