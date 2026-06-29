@@ -11,6 +11,11 @@
  * is flipped to the applesauce implementation (`io-applesauce.ts`) module by
  * module, with tests gating each flip. When the last caller has flipped,
  * `io-ndk.ts` and the NDK singleton are deleted (Wave D).
+ *
+ * Wave 0 intentionally does not promise full adapter parity. fetch/subscribe
+ * callers may pass relayUrls, but callers that require strict relay targeting
+ * must verify active-adapter support. publish uses the adapter's configured
+ * write policy until later publish waves add an explicit relay-target contract.
  */
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools'
@@ -27,20 +32,20 @@ export interface NostrUser {
 export interface FetchOptions {
 	/** Abort the fetch after this many milliseconds (default: ~8s). */
 	timeoutMs?: number
-	/** Restrict the fetch to these relay URLs. Default: adapter's configured relays. */
+	/** Request these relay URLs; strict targeting depends on active-adapter support. */
 	relayUrls?: string[]
 }
 
 export interface SubscribeOptions {
 	/** Close the subscription once relays reach EOSE. Default: false. */
 	closeOnEose?: boolean
-	/** Restrict the subscription to these relay URLs. Default: adapter's configured relays. */
+	/** Request these relay URLs; strict targeting depends on active-adapter support. */
 	relayUrls?: string[]
 }
 
 export interface PublishOptions {
-	/** Restrict publishing to these relay URLs. Default: adapter's write relays. */
-	relayUrls?: string[]
+	/** Reserved for later publish waves; Wave 0 uses the configured write policy. */
+	readonly __reserved?: never
 }
 
 export interface NostrIo {

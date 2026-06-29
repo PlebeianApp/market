@@ -3,9 +3,10 @@
 # (see docs/ndk-to-applesauce-migration-plan.md)
 #
 # Fails if the number of source files importing @nostr-dev-kit has INCREASED
-# beyond the committed baseline. This prevents new NDK usage from sneaking in
-# while the migration is underway — new relay I/O must route through the
-# library-agnostic seam at src/lib/nostr/io.ts instead.
+# beyond the committed baseline. This blocks new files with NDK imports while
+# the migration is underway, but it does not detect additional NDK usage inside
+# an already-counted file. New relay I/O must route through the library-agnostic
+# seam at src/lib/nostr/io.ts instead.
 #
 # When a wave REDUCES the footprint, that wave's PR should also lower the
 # baseline in scripts/ndk-baseline.txt so the guard ratchets downward.
@@ -22,8 +23,9 @@ echo "NDK footprint: $CURRENT file(s) import @nostr-dev-kit (baseline: $BASELINE
 if [ "$CURRENT" -gt "$BASELINE" ]; then
 	echo ""
 	echo "::error::NDK footprint increased from $BASELINE to $CURRENT."
-	echo "New NDK usage is blocked during the migration. Route subscribe/fetch/publish"
-	echo "through src/lib/nostr/io.ts (the strangler-fig seam) instead. See"
+	echo "New files importing @nostr-dev-kit are blocked during the migration."
+	echo "Route subscribe/fetch/publish through src/lib/nostr/io.ts"
+	echo "(the strangler-fig seam) instead. See"
 	echo "docs/ndk-to-applesauce-migration-plan.md for the pattern."
 	exit 1
 fi

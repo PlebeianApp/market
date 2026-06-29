@@ -1,7 +1,7 @@
 # NDK → Applesauce Migration Plan
 
 > **Tracking:** Upstream epic lives under [`PlebeianApp/market#1005`](https://github.com/PlebeianApp/market/issues/1005).
-> **Status:** Wave 0 (foundation) in progress. Worktree: `~/worktrees/ndk-to-applesauce` on branch `chore/applesauce-foundation`.
+> **Status:** Wave 0 (foundation) is under review as PR #1075 on branch `wave-0/io-seam-and-ci-guard`.
 
 This document is the single source of truth for the migration. It captures every
 decision, the architecture, the wave-by-wave roadmap, and a checklist for
@@ -12,22 +12,31 @@ persist across LLM sessions.
 
 ## 1. Why we're doing this
 
-NDK is the root cause of our e2e test flakiness. Evidence:
+Runtime relay I/O and NDK coupling are migration targets because they currently
+make app behavior harder to bound and test. Evidence:
 
 - `e2e/ARCHITECTURE.md:1173` — NDK keeps WebSocket connections alive in the
   background, preventing Node.js from exiting (hung Playwright setup/seeding).
 - `e2e/ARCHITECTURE.md:1239` — NDK's outbox model discovers and connects to
   extra relays, leaking test data to public relays.
 - `src/lib/stores/ndk.ts:228` — `fetchEventsWithTimeout`, a race-timeout
-  workaround that exists _because_ NDK fetches hang.
+  workaround for fetches that can hang.
 
-The e2e **harness** already fled NDK for `nostr-tools` (`e2e/scenarios`,
-`e2e/utils/relay-query.ts`, etc.). The remaining flakiness is the **app's**
-runtime NDK I/O (subscribe/fetch/publish races). Applesauce is already present
-transitively (`applesauce-core@5.2.0`, `applesauce-relay@5.2.0` via
-`@contextvm/sdk`) and — critically — uses **raw `nostr-tools` events natively**
-(no `NDKEvent` wrapper class), so migrating is mostly about redirecting where
-I/O calls land, not about changing event types.
+This does **not** mean every observed failure is caused by NDK. Some failures
+are selector, test infrastructure, or business-flow issues and should be fixed
+at that boundary. This migration targets the app's runtime relay I/O coupling
+(subscribe/fetch/publish races, background connections, outbox relay discovery,
+and wrapper/event lifecycle differences).
+
+The e2e **harness** already uses `nostr-tools` for direct relay access
+(`e2e/scenarios`, `e2e/utils/relay-query.ts`, etc.). Wave 0 promotes
+`applesauce-core` and `applesauce-relay` to direct dependencies:
+`applesauce-relay` backs the destination adapter, and `applesauce-core` is
+intentional foundation for near-term EventStore/cache waves so those later
+behavior PRs do not also carry the dependency-policy decision. Applesauce uses
+**raw `nostr-tools` events natively** (no `NDKEvent` wrapper class), so migrating
+is mostly about redirecting where I/O calls land, not about changing event
+types.
 
 Upstream issue [#1005](https://github.com/PlebeianApp/market/issues/1005)
 (Franchovy) prescribes exactly the approach below: pilot applesauce on one flaky
@@ -49,13 +58,18 @@ migrated, the old NDK tree is fully "strangled" and we delete it.
 interface NostrIo {
 	fetchEvents(filter, opts?): Promise<NostrEvent[]>
 	subscribe(filter, onEvent, opts?): () => void // returns cleanup
-	publish(event, opts?): Promise<void>
+	publish(event, opts?): Promise<void> // opts reserved; configured write policy in Wave 0
 	sign(template): Promise<NostrEvent>
 	getUser(): Promise<NostrUser | null>
 }
 ```
 
 Every event that flows through it is a raw `nostr-tools` event.
+Wave 0 adapter parity is intentionally limited: fetch/subscribe may accept
+`relayUrls`, but callers that need strict relay targeting must verify the active
+adapter supports it. publish does not implement per-call relay targeting in Wave
+0; it uses the adapter's configured write policy until later publish waves
+define that contract.
 
 **Two adapters implement the Port:**
 
@@ -82,7 +96,7 @@ never notices what backs it.
 | Decision                | Choice                                                                                                                                       |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Scope**               | App-first; unit + e2e tests are the reliability gate                                                                                         |
-| **Branching**           | One git worktree (`~/worktrees/ndk-to-applesauce`); one PR per wave                                                                          |
+| **Branching**           | One wave-scoped branch and PR per wave                                                                                                       |
 | **PR strategy**         | Stacked PRs against `PlebeianApp/market` `master`; only the bottom wave is non-draft at a time; merge bottom-up, rebase the stack            |
 | **Merge target**        | `master` on `PlebeianApp/market` (push branch to fork `c03rad0r/market`, PR fork→upstream)                                                   |
 | **Conflict-zone files** | Migrate non-overlapping modules first; isolate the 4 overlapping files into Wave C; `nip60.ts` handed to the auctions team                   |
@@ -119,13 +133,12 @@ Only **4 files** are on both the migration and the auctions feature roads:
 - `src/publish/orders.tsx`
 - `src/routes/_dashboard-layout/dashboard/index.tsx` (type-only)
 
-Verified (2026-06-22): none of the open auctions PRs (#1001, #1020, #1019)
-currently touch these files, so there is **no active conflict** — coordination is
-forward-looking. Wave C is at the top of the stack (drafts, merge last), so if
-auctions lands first we simply rebase; small files, low conflict.
+Historical check (2026-06-22): the then-open auctions PRs (#1001, #1020,
+#1019) did not touch these files. Re-check current PR overlap before starting
+Wave C. Wave C stays at the top of the stack (drafts, merge last), so if
+auctions lands first we rebase and keep migration changes narrow.
 
-Coordination comments are posted on PRs **#1001** and **#1020** linking to the
-epic.
+Coordination comments should be re-checked or posted before Wave C work starts.
 
 ---
 
@@ -142,8 +155,8 @@ master ← wave0 ← waveA ← waveB ← waveC ← waveD ← waveE
 - Development never blocks: keep committing higher waves while lower ones review.
 - CI is cumulative per PR (Wave B's CI runs with A+B applied).
 
-Branch naming: `chore/applesauce-foundation` (Wave 0),
-`feat/applesauce-wave-a`, etc.
+Current Wave 0 branch: `wave-0/io-seam-and-ci-guard` (PR #1075). Future wave
+branches should stay wave-scoped (`feat/applesauce-wave-a`, etc.).
 
 ---
 
@@ -162,17 +175,17 @@ Branch naming: `chore/applesauce-foundation` (Wave 0),
 
 ### Wave 0 — Foundation (⚙️)
 
-- [x] Create worktree `~/worktrees/ndk-to-applesauce` on `chore/applesauce-foundation`
+- [x] Open Wave 0 PR #1075 on branch `wave-0/io-seam-and-ci-guard`
 - [x] Promote `applesauce-core` / `applesauce-relay` to direct deps in `package.json`
+      (`applesauce-core` stays direct for near-term EventStore/cache waves)
 - [x] Add seam: `src/lib/nostr/io.ts` + `io-ndk.ts` + `io-applesauce.ts`
-- [x] Add unit test `src/lib/__tests__/io.test.ts` (5 tests, green)
+- [x] Add unit coverage `src/lib/__tests__/io.test.ts`
 - [x] Add CI guard `.github/workflows/ci-ndk-guard.yml` + `scripts/check-ndk-footprint.sh`
-- [x] `test:unit` green (108 pass); new files typecheck clean
+- [x] Add guard coverage `src/lib/__tests__/ndk-footprint-guard.test.ts`
 - [x] Write this plan doc
 - [x] Append condensed ruleset to `AGENTS.md`
-- [ ] File single epic upstream under #1005
+- [x] Track under upstream epic #1005
 - [ ] Post coordination comments on PRs #1001 + #1020
-- [ ] Open Wave 0 PR (base: `PlebeianApp/market` master)
 - [ ] Push Waves A–E as draft stack (opened lazily as each wave begins)
 
 ### Wave A — Root-cause, no auctions overlap (🔥)
