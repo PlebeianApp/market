@@ -9,6 +9,7 @@ import {
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
 } from './auction/constants'
+import { getBuyerPubkey, getSellerPubkey, type OrderWithRelatedEvents } from '@/queries/orders'
 
 // Re-export the constants that used to live here so downstream callers
 // don't have to chase the move. The canonical definitions are in
@@ -37,6 +38,35 @@ export interface ResolvedAuctionVersionSet {
 	displayEvent: NDKEvent
 	rootEventId: string
 	rejectedEventIds: string[]
+}
+
+/**
+ * Validation states for auction settlement
+ */
+export type AuctionSettlementValidationState =
+	| 'no_observed_event'
+	| 'observed_unverified'
+	| 'validated_buyer_path_release'
+	| 'validated_seller_settlement'
+	| 'fully_validated_settled'
+
+/**
+ * Validation result for auction settlement events
+ */
+export interface AuctionSettlementValidationResult {
+	state: AuctionSettlementValidationState
+	hasPathRelease: boolean
+	hasSettlement: boolean
+	pathReleaseValid: boolean
+	settlementValid: boolean
+	validations: {
+		auctionCoordinate: boolean
+		buyerAuthor: boolean
+		sellerAuthor: boolean
+		participantTags: boolean
+		amountShape: boolean
+	}
+	errors: string[]
 }
 
 // `AuctionSettlementWinnerToken` and `AuctionSettlementPlanResponse`
@@ -414,4 +444,126 @@ export const compareAuctionBidChainPriority = (left: AuctionBidChainGroup, right
 	if (createdAtDelta !== 0) return createdAtDelta
 
 	return left.latestBid.id.localeCompare(right.latestBid.id)
+}
+
+/**
+ * Validates auction settlement events for display in the UI
+ *
+ * This function ensures that settlement events are properly validated
+ * before displaying settlement status to users, preventing malicious
+ * or incorrect events from being treated as canonical settlement state.
+ */
+export function validateAuctionSettlementEvents(
+	settlements: NDKEvent[],
+	pathReleases: NDKEvent[],
+	auctionCoordinates: string,
+	order: OrderWithRelatedEvents,
+): AuctionSettlementValidationResult {
+	const result: AuctionSettlementValidationResult = {
+		state: 'no_observed_event',
+		hasPathRelease: pathReleases.length > 0,
+		hasSettlement: settlements.length > 0,
+		pathReleaseValid: false,
+		settlementValid: false,
+		validations: {
+			auctionCoordinate: false,
+			buyerAuthor: false,
+			sellerAuthor: false,
+			participantTags: false,
+			amountShape: false,
+		},
+		errors: [],
+	}
+
+	const buyerPubkey = getBuyerPubkey(order.order)
+	const sellerPubkey = getSellerPubkey(order.order)
+
+	// Validate path release events
+	if (pathReleases.length > 0) {
+		const pathRelease = pathReleases[0]
+
+		// Validate auction coordinate
+		const hasCorrectCoordinate = pathRelease.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
+
+		if (!hasCorrectCoordinate) {
+			result.errors.push('Path release missing correct auction coordinate')
+		}
+		result.validations.auctionCoordinate = hasCorrectCoordinate
+
+		// Validate buyer is the author
+		const isBuyerAuthor = pathRelease.pubkey === buyerPubkey
+		if (!isBuyerAuthor) {
+			result.errors.push('Path release not authored by buyer')
+		}
+		result.validations.buyerAuthor = isBuyerAuthor
+
+		// Validate p tag points to seller
+		const hasCorrectRecipient = pathRelease.tags.some((tag) => tag[0] === 'p' && tag[1] === sellerPubkey)
+		if (!hasCorrectRecipient) {
+			result.errors.push('Path release missing correct recipient')
+		}
+		result.validations.participantTags = hasCorrectRecipient
+
+		result.pathReleaseValid = hasCorrectCoordinate && isBuyerAuthor && hasCorrectRecipient
+
+		if (result.pathReleaseValid) {
+			result.state = 'validated_buyer_path_release'
+		} else {
+			result.state = 'observed_unverified'
+		}
+	}
+
+	// Validate settlement events
+	if (settlements.length > 0) {
+		const settlement = settlements[0]
+
+		// Validate auction coordinate
+		const hasCorrectCoordinate = settlement.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
+		result.validations.auctionCoordinate = result.validations.auctionCoordinate || hasCorrectCoordinate
+
+		if (!hasCorrectCoordinate) {
+			result.errors.push('Settlement missing correct auction coordinate')
+		}
+
+		// Validate seller is the author
+		const isSellerAuthor = settlement.pubkey === sellerPubkey
+		if (!isSellerAuthor) {
+			result.errors.push('Settlement not authored by seller')
+		}
+		result.validations.sellerAuthor = isSellerAuthor
+
+		// Validate winner tag matches buyer
+		const winnerTag = settlement.tags.find((tag) => tag[0] === 'winner')
+		const hasCorrectWinner = winnerTag && winnerTag[1] === buyerPubkey
+		if (!hasCorrectWinner) {
+			result.errors.push('Settlement missing correct winner')
+		}
+		result.validations.participantTags = (result.validations.participantTags || hasCorrectWinner) ?? false
+
+		// Validate amount is present
+		const finalAmountTag = settlement.tags.find((tag) => tag[0] === 'final_amount')
+		const hasAmount = finalAmountTag && !isNaN(parseInt(finalAmountTag[1]))
+		if (!hasAmount) {
+			result.errors.push('Settlement missing valid amount')
+		}
+		result.validations.amountShape = hasAmount ?? false
+
+		result.settlementValid = (hasCorrectCoordinate && isSellerAuthor && hasCorrectWinner && hasAmount) ?? false
+
+		if (result.settlementValid) {
+			if (result.state === 'validated_buyer_path_release') {
+				result.state = 'fully_validated_settled'
+			} else {
+				result.state = 'validated_seller_settlement'
+			}
+		} else if (result.state === 'no_observed_event') {
+			result.state = 'observed_unverified'
+		}
+	}
+
+	if (!result.hasPathRelease && !result.hasSettlement) {
+		result.state = 'no_observed_event'
+	}
+
+	return result
 }

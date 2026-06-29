@@ -13,7 +13,9 @@ import {
 	getAuctionRootEventId,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
+	validateAuctionSettlementEvents,
 } from '../auctionSettlement'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
 
 const makeBid = (params: {
 	id: string
@@ -363,5 +365,259 @@ describe('computeAuctionBidFloor (AUCTIONS.md §6.1)', () => {
 			expect(floor).toBeGreaterThanOrEqual(previous)
 			previous = floor
 		}
+	})
+})
+
+// Add this test suite at the end of the file
+describe('auctionSettlement validation', () => {
+	// Helper to create a mock order event
+	const makeOrderEvent = (params: { pubkey: string; sellerPubkey?: string; tags?: string[][] }): any => ({
+		pubkey: params.pubkey,
+		tags: [['p', params.sellerPubkey ?? 'seller'], ...(params.tags ?? [])],
+	})
+
+	// Helper to create a mock order
+	const makeOrder = (params: { buyerPubkey: string; sellerPubkey: string }): OrderWithRelatedEvents =>
+		({
+			order: makeOrderEvent({
+				pubkey: params.buyerPubkey,
+				sellerPubkey: params.sellerPubkey,
+			}),
+			statusUpdates: [],
+			shippingUpdates: [],
+			paymentRequests: [],
+			paymentReceipts: [],
+			generalMessages: [],
+			latestStatus: null,
+			latestShipping: null,
+		}) as any
+
+	test('no_observed_event when no events present', () => {
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('no_observed_event')
+		expect(result.hasPathRelease).toBe(false)
+		expect(result.hasSettlement).toBe(false)
+		expect(result.errors).toEqual([])
+	})
+
+	test('observed_unverified when path release missing auction coordinate', () => {
+		const pathRelease = {
+			pubkey: 'buyer',
+			tags: [['p', 'seller']], // Missing 'a' tag
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [pathRelease], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.hasPathRelease).toBe(true)
+		expect(result.pathReleaseValid).toBe(false)
+		expect(result.errors).toContain('Path release missing correct auction coordinate')
+	})
+
+	test('observed_unverified when path release not authored by buyer', () => {
+		const pathRelease = {
+			pubkey: 'attacker',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['p', 'seller'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [pathRelease], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.pathReleaseValid).toBe(false)
+		expect(result.errors).toContain('Path release not authored by buyer')
+	})
+
+	test('observed_unverified when path release missing correct recipient', () => {
+		const pathRelease = {
+			pubkey: 'buyer',
+			tags: [
+				['a', '30408:seller:auction1'],
+				// Missing 'p' tag or wrong recipient
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [pathRelease], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.pathReleaseValid).toBe(false)
+		expect(result.errors).toContain('Path release missing correct recipient')
+	})
+
+	test('validated_buyer_path_release when path release is valid', () => {
+		const pathRelease = {
+			pubkey: 'buyer',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['p', 'seller'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [pathRelease], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('validated_buyer_path_release')
+		expect(result.pathReleaseValid).toBe(true)
+		expect(result.errors).toEqual([])
+	})
+
+	test('observed_unverified when settlement missing auction coordinate', () => {
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['winner', 'buyer'],
+				['final_amount', '1000'],
+				// Missing 'a' tag
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.hasSettlement).toBe(true)
+		expect(result.settlementValid).toBe(false)
+		expect(result.errors).toContain('Settlement missing correct auction coordinate')
+	})
+
+	test('observed_unverified when settlement not authored by seller', () => {
+		const settlement = {
+			pubkey: 'attacker',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'buyer'],
+				['final_amount', '1000'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.settlementValid).toBe(false)
+		expect(result.errors).toContain('Settlement not authored by seller')
+	})
+
+	test('observed_unverified when settlement missing correct winner', () => {
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'wrong-buyer'],
+				['final_amount', '1000'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.settlementValid).toBe(false)
+		expect(result.errors).toContain('Settlement missing correct winner')
+	})
+
+	test('observed_unverified when settlement missing valid amount', () => {
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'buyer'],
+				// Missing 'final_amount' tag
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.settlementValid).toBe(false)
+		expect(result.errors).toContain('Settlement missing valid amount')
+	})
+
+	test('validated_seller_settlement when settlement is valid', () => {
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'buyer'],
+				['final_amount', '1000'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('validated_seller_settlement')
+		expect(result.settlementValid).toBe(true)
+		expect(result.errors).toEqual([])
+	})
+
+	test('fully_validated_settled when both path release and settlement are valid', () => {
+		const pathRelease = {
+			pubkey: 'buyer',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['p', 'seller'],
+			],
+		} as NDKEvent
+
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'buyer'],
+				['final_amount', '1000'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [pathRelease], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('fully_validated_settled')
+		expect(result.pathReleaseValid).toBe(true)
+		expect(result.settlementValid).toBe(true)
+		expect(result.errors).toEqual([])
+	})
+
+	test('validates coordinate matching correctly', () => {
+		const pathRelease = {
+			pubkey: 'buyer',
+			tags: [
+				['a', '30408:seller:different-auction'],
+				['p', 'seller'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([], [pathRelease], '30408:seller:correct-auction', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.pathReleaseValid).toBe(false)
+		expect(result.errors).toContain('Path release missing correct auction coordinate')
+	})
+
+	test('validates amount shape correctly', () => {
+		const settlement = {
+			pubkey: 'seller',
+			tags: [
+				['a', '30408:seller:auction1'],
+				['winner', 'buyer'],
+				['final_amount', 'invalid'],
+			],
+		} as NDKEvent
+
+		const order = makeOrder({ buyerPubkey: 'buyer', sellerPubkey: 'seller' })
+		const result = validateAuctionSettlementEvents([settlement], [], '30408:seller:auction1', order)
+
+		expect(result.state).toBe('observed_unverified')
+		expect(result.settlementValid).toBe(false)
+		expect(result.errors).toContain('Settlement missing valid amount')
 	})
 })
