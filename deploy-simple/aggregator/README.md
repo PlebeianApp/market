@@ -12,7 +12,7 @@ The deployment runs in one of two modes. The _write-policy_ is identical in
 both — the difference is what the **scraper daemon** collects:
 
 ```
-                            PERSONAL MODE (vps2)               PLEBEIAN MODE (future)
+                            PERSONAL MODE (operator)            PLEBEIAN MODE (future)
   scraper collects          root npub's follow graph +         all market participants'
                             market activity + WoT network      market events
 ```
@@ -22,7 +22,7 @@ both — the difference is what the **scraper daemon** collects:
                                    | queries (ONE relay, ~ms local)
                                    v
                 +--------------------------------------------+
-                | market-agg.orangesync.tech : strfry :7777 |
+                | market-agg.example.com : strfry :7777 |
                 |   write-policy.py  <-  allowed.npubs (WoT) |
                 +--------------------------------------------+
                        ^ republish EVENTS          ^ state/allowed.npubs
@@ -82,9 +82,7 @@ This deployment is fully **self-contained**: `docker-compose.yml` defines its
 own bridge network (no external networks) and both services build from the
 local `Dockerfile`. It runs standalone on any host with Docker — no other
 project's networks or containers are required — so it can be deployed wherever
-you like. (The VPS2 `/opt/tollgate/strfry-market-agg/` path is a legacy
-location carried over from when this relay shared infra with the tollgate
-project; it is not a requirement.)
+you like.
 
 ```bash
 cd deploy-simple/aggregator
@@ -93,7 +91,7 @@ docker compose up -d --build
 ```
 
 - The relay container (`market-agg-relay`, compose service `strfry-market-agg`)
-  listens on `127.0.0.1:7780` (Caddy proxies `market-agg.orangesync.tech` ->
+  listens on `127.0.0.1:7780` (Caddy proxies `market-agg.example.com` ->
   `:7780`).
 - `scraper` starts after the relay, bootstraps the root npub's network, and
   begins scraping. Tail logs with `docker compose logs -f scraper`.
@@ -118,4 +116,4 @@ All knobs are environment variables (see `docker-compose.yml`):
 ## Market app wiring
 
 After deployment, `src/lib/stores/ndk.ts` uses
-`wss://market-agg.orangesync.tech` as a primary relay for production.
+`wss://market-agg.example.com` as a primary relay for production.

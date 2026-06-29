@@ -16,7 +16,7 @@ DUAL-MODE POLICY
 ----------------
 The aggregator relay runs in one of two modes (``$STRFRY_AGG_MODE``):
 
-  * ``personal`` (default, vps2) — mirrors events relevant to the root npub.
+  * ``personal`` (default) — mirrors events relevant to the root npub.
   * ``plebeian``  (future)        — mirrors all market-relevant events from
                                     every participant.
 

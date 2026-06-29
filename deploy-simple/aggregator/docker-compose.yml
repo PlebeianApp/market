@@ -9,7 +9,7 @@
 #                        strfry. Also maintains the WoT allowlist the write-policy
 #                        gates on.
 #
-# Example deployment: vps2 (market-agg.orangesync.tech:7780 -> container :7777).
+# Example deployment: host (market-agg.example.com:7780 -> container :7777).
 # Replace with your own host/port — the URL surfaced to the app is configured
 # via NEXT_PUBLIC_MARKET_AGG_RELAY, not hardcoded here.
 # See: deploy-simple/aggregator/strfry.conf      for relay config
