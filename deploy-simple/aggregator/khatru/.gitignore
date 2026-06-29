@@ -1,0 +1,6 @@
+# Build artifact (see Makefile `build` target)
+market-agg-relay
+
+# Runtime SQLite store
+*.db
+*.db-*

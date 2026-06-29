@@ -3,6 +3,37 @@
 > **Status:** Living document. Updated with PR #1066 (market-kind gate).
 > **Related issues:** #1046 (dead-relay timeouts), #1066 (aggregator relay).
 
+## Implementation Options
+
+There are two ways to build the market-kind-gated aggregator relay. They share
+the **same dual-mode gate policy** (see [Aggregator Gate Policy](#aggregator-gate-policy))
+and the same `MARKET_KINDS` set; they differ only in the runtime that enforces
+it and caches events.
+
+### Option A (Recommended): Khatru-only on `relay.plebeian.market`
+
+A single Go binary that collapses the WRITE and READ/cache tiers into one
+[Khatru](https://github.com/fiatjaf/khatru) relay. The gate is a native
+`RejectEvent` Go hook (no Python subprocess), events are cached in an embedded
+SQLite store, and NIP-77 negentropy sync is built-in. Runs on the **existing**
+relay host — no new infrastructure, no second relay process.
+
+- Artifacts: [`deploy-simple/aggregator/khatru/`](deploy-simple/aggregator/khatru/)
+- Addresses @Franchovy's review concerns on PR #1066: no new infra, no doubled
+  relay load.
+
+### Option B (Alternative): strfry as a separate cache relay
+
+A dedicated [strfry](https://github.com/hoytech/strfry) relay acts as a
+fast read cache, gated by a `write-policy.py` plugin and backfilled by a
+separate `scraper.py`. This is the approach documented in detail in the rest of
+this document and deployed at `market-agg.orangesync.tech`.
+
+- Artifacts: [`deploy-simple/aggregator/`](deploy-simple/aggregator/) (Dockerfile,
+  docker-compose.yml, strfry.conf, write-policy.py)
+
+Both options are kept in-tree so they can be evaluated side by side.
+
 ## Architecture Overview
 
 Three relay services serve Plebeian Market. They have **distinct roles** —

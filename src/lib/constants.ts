@@ -45,8 +45,8 @@ export const DEFAULT_PUBLIC_RELAYS: string[] = [
 ]
 
 /**
- * Market aggregator relay — fast WoT-gated strfry relay that mirrors
- * market-relevant events from upstream relays into a single local relay.
+ * Market aggregator relay — fast read-only strfry relay that caches
+ * marketplace events mirrored from upstream relays into a single local relay.
  * Used as the primary read relay in production to eliminate the multi-second
  * dead-relay timeouts in the auctions UI (#1046).
  */
