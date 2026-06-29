@@ -1,178 +1,169 @@
-# Market Frontend
+# Plebeian Market
 
-To install dependencies:
+A decentralized, peer-to-peer marketplace built on the [Nostr](https://github.com/nostr-protocol/nostr) protocol. All marketplace data — product listings, orders, profiles, messages — lives on Nostr relays. There is no central database. Payments are settled over the Bitcoin Lightning Network.
+
+For protocol and data-model details see [SPEC.md](./SPEC.md) and [gamma_spec.md](./gamma_spec.md).
+
+## Key Features
+
+- **Product listings** — create, edit, and browse physical/digital goods stored as Nostr events
+- **Shopping cart** — multi-item cart persisted client-side
+- **Lightning payments** — pay via NWC (Nostr Wallet Connect), WebLN, or QR/BOLT11 invoice
+- **Order management** — order lifecycle from pending → paid → shipped → completed
+- **Buyer–seller messaging** — direct Nostr encrypted DMs per order
+- **Vanity URLs** — human-readable handles (`/@alice`) backed by NIP-05
+- **V4V payment splits** — value-for-value splits to creators/affiliates on each sale
+- **NIP-05 identity** — verified handles and identity lookup
+- **Web of Trust** — reputation and trust scoring via [NDK WoT](https://github.com/nostr-dev-kit/ndk)
+- **ContextVM** — on-demand currency conversion server for fiat↔BTC pricing
+
+## Tech Stack
+
+| Layer    | Technology                                                                |
+| -------- | ------------------------------------------------------------------------- |
+| Runtime  | [Bun](https://bun.sh)                                                     |
+| Frontend | React 19, TypeScript, TanStack Router, TanStack Query & Store             |
+| Styling  | Tailwind CSS v4, [shadcn/ui](https://ui.shadcn.com) (Radix)               |
+| Nostr    | [NDK v3](https://github.com/nostr-dev-kit/ndk)                            |
+| Backend  | Bun WebSocket server (ContextVM currency server)                          |
+| Testing  | `bun:test` (unit/integration), [Playwright](https://playwright.dev) (E2E) |
+
+## Prerequisites
+
+- **Bun v1.2+** — [install instructions](https://bun.sh/docs/installation)
+- **Go** (optional) — only needed to install the `nak` local relay for development
+- A **Nostr client or browser extension** (e.g. [Alby](https://getalby.com), [nos2x](https://github.com/fiatjaf/nos2x)) for testing authentication flows
+
+## Quick Start
 
 ```bash
+# 1. Install dependencies
 bun install
-```
 
-To start a development server:
+# 2. Configure environment (local dev with a local relay)
+cp .env.local.example .env.local
+#   Edit .env.local and fill in your keys (see Environment Variables below)
 
-```bash
+# 3. Initialize default app settings (settings, roles, ban list, relay list)
+bun run startup
+
+# 4. Start the dev server
 bun dev
 ```
 
-To run for production:
+The app is served at `http://localhost:3000` by default. On first run, if no settings are found on the configured relay you will be redirected to `/setup`; the first user to complete setup becomes the administrator (skip this if you ran `bun run startup`, which seeds defaults).
+
+> **Tip:** `bun dev:seed` is a one-command shortcut that runs `startup` + `seed` + the dev server for a fully-populated local environment.
+
+## Environment Variables
+
+The repo ships **three** example files. Copy the one that matches your workflow:
+
+| File                 | When to use                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `.env.example`       | **Production / staging** template. Uses a public relay and a remote currency server.              |
+| `.env.local.example` | **Local development** against a local relay, with ContextVM currency features enabled.            |
+| `.env.dev.example`   | **Minimal local dev** against a local relay, with no ContextVM keys (currency features disabled). |
+
+### Variable reference
+
+| Variable                       | Description                                                                                                                  | Required?               | Example                            |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------- |
+| `NODE_ENV`                     | Runtime mode (`development` or `production`).                                                                                | Yes                     | `development`                      |
+| `APP_RELAY_URL`                | Nostr relay URL the app reads from and writes to.                                                                            | Yes                     | `ws://localhost:10547`             |
+| `APP_PRIVATE_KEY`              | App's Nostr private key (hex), used for initialization and signing.                                                          | Yes                     | _generate with `nak key generate`_ |
+| `CVM_SERVER_KEY`               | ContextVM currency server **private** key (hex).                                                                             | For currency features   | _generate with `nak key generate`_ |
+| `CVM_SERVER_PUBKEY`            | ContextVM currency server **public** key (hex), derived from `CVM_SERVER_KEY`.                                               | Local relay w/ currency | _derive with `nak key public`_     |
+| `LOCAL_RELAY_ONLY`             | Restrict the app to the local relay only (skip public relays).                                                               | No (local dev)          | `true`                             |
+| `NEXT_PUBLIC_MARKET_AGG_RELAY` | Market aggregator relay for faster reads via cached events. When unset, reads fall back to the main relay + public defaults. | No                      | `wss://your-agg-relay.example.com` |
+
+## Available Scripts
+
+Every script below is defined in [`package.json`](./package.json). `bun run <name>` is the explicit form; for scripts whose name contains no colon, the `bun <name>` shorthand also works (e.g. `bun dev`, `bun seed`).
+
+### Development
+
+| Command                   | Description                                                           |
+| ------------------------- | --------------------------------------------------------------------- |
+| `bun dev`                 | Dev server with hot reload (public relays).                           |
+| `bun dev:local-only`      | Dev server restricted to the local relay (`LOCAL_RELAY_ONLY=true`).   |
+| `bun dev:seed`            | Dev server after running `startup` + `seed` (fully seeded local env). |
+| `bun run watch-routes`    | Watch route files and regenerate the route tree on change.            |
+| `bun run generate-routes` | Generate the route tree once (`tsr generate`).                        |
+
+### Build & Run
+
+| Command                    | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `bun start`                | Production server (generates routes first).         |
+| `bun run start:local-only` | Production server, local relay only.                |
+| `bun run start:production` | Production server with `NODE_ENV=production`.       |
+| `bun run start:staging`    | Staging server with `NODE_ENV=production`.          |
+| `bun run build`            | Build the application (generates routes + bundles). |
+| `bun run build:production` | Production build (minified, no source maps).        |
+| `bun run deploy:staging`   | Deploy to staging via `scripts/deploy-staging.sh`.  |
+
+### App Initialization & Data
+
+| Command                        | Description                                                         |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `bun run startup`              | Initialize the app with default settings (roles, ban list, relays). |
+| `bun seed`                     | Seed the configured relay with test data.                           |
+| `bun run build-icons`          | Rebuild icon components from SVG sources.                           |
+| `bun run dev:contextvm-server` | Start the ContextVM currency conversion server.                     |
+
+### Formatting
+
+| Command                | Description                               |
+| ---------------------- | ----------------------------------------- |
+| `bun run format`       | Format all files with Prettier.           |
+| `bun run format:check` | Check formatting without modifying files. |
+
+### Testing
+
+| Command                    | Description                                     |
+| -------------------------- | ----------------------------------------------- |
+| `bun run test:unit`        | Run unit tests (`bun:test`).                    |
+| `bun run test:unit:watch`  | Run unit tests in watch mode.                   |
+| `bun run test:integration` | Run integration tests.                          |
+| `bun run test:e2e`         | Run E2E tests with Playwright (headless).       |
+| `bun run test:e2e:headed`  | Run E2E tests with a visible browser.           |
+| `bun run test:e2e:ui`      | Run E2E tests in the interactive Playwright UI. |
+| `bun run test:e2e:debug`   | Run E2E tests in step-through debug mode.       |
+
+## Local Relay Setup
+
+Local development needs a Nostr relay to read/write events. The recommended option is [nak](https://github.com/fiatjaf/nak):
 
 ```bash
-bun start
+# Install nak (requires Go)
+go install github.com/fiatjaf/nak@latest
+
+# Start a local relay on ws://localhost:10547
+nak serve
 ```
 
-This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
-
-## Getting Started
-
-### Initial Setup
-
-1. Install dependencies with `bun install`
-2. Copy `.env.example` to `.env` and configure your environment variables:
-   - `APP_RELAY_URL`: Your relay URL
-   - `APP_PRIVATE_KEY`: Your private key for initialization
-3. Set up a development relay (required for local development)
-   - We recommend using [nak](https://github.com/fiatjaf/nak) for development:
-
-     ```bash
-     # Install nak
-     go install github.com/fiatjaf/nak@latest
-
-     # Start a local relay
-     nak serve
-     ```
-
-   - The relay will be available at `ws://localhost:10547`
-   - Update your `.env` file with this relay URL
-
-4. Initialize the application with default settings:
-   ```bash
-   bun run startup
-   ```
-   This will create:
-   - Default app settings
-   - User roles configuration
-   - Ban list
-   - Relay list
-
-### First Run
-
-When you first start the application:
-
-1. If no settings are found in the configured relay, you'll be automatically redirected to `/setup`
-2. The first user to complete the setup process becomes the administrator
-   - Skip this step if you've run the startup script, as it creates default admin users
-3. Complete the setup form to configure your marketplace settings
-   - Skip this if you've run the startup script and want to use the default configuration
-
-### Development Workflow
-
-1. Start the development server:
-
-   ```bash
-   bun dev:seed
-   ```
-
-   _start without seeding for a fresh start with no setup data_
-
-   ```bash
-   bun dev
-   ```
-
-2. In a separate terminal, run the route watcher:
-
-   ```bash
-   bun run watch-routes
-   ```
-
-3. Optional: Seed the relay with test data:
-   ```bash
-   bun seed
-   ```
-
-## React Query
-
-This project uses TanStack React Query (v5) for data fetching, caching, and state management. React Query helps with:
-
-- Fetching, caching, and updating server state in your React applications
-- Automatic refetching when data becomes stale
-- Loading and error states handling
-- Pagination and infinite scrolling
-
-In our implementation, query functions and options are defined in the `src/queries` directory, using a pattern that separates query key factories and query functions.
-
-Example:
-
-```tsx
-// Query key factory pattern for organized cache management
-export const postKeys = {
-	all: ['posts'] as const,
-	details: (id: string) => [...postKeys.all, id] as const,
-}
-
-// Query options for use in routes and components
-export const postsQueryOptions = queryOptions({
-	queryKey: postKeys.all,
-	queryFn: fetchPosts,
-})
-```
-
-## Routing and Prefetching
-
-This project uses TanStack Router for file-based routing with built-in prefetching capabilities:
-
-- File-based routing: Routes are defined in the `src/routes` directory
-- Dynamic routes: Parameters in file names (e.g., `posts.$postId.tsx`)
-- Automatic route tree generation
-
-Data prefetching is implemented via loader functions in route files:
-
-```tsx
-export const Route = createFileRoute('/posts/')({
-	loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(postsQueryOptions),
-	component: PostsRoute,
-})
-```
-
-The router is configured to prefetch data on "intent" (hovering over links) with zero stale time to ensure fresh data:
-
-```tsx
-const router = createRouter({
-	routeTree,
-	context: {
-		queryClient,
-		nostr: nostrService,
-	},
-	defaultPreload: 'intent',
-	defaultPreloadStaleTime: 0,
-})
-```
+Point `APP_RELAY_URL` at this relay in your `.env.local`. To populate it with test data, either run `bun seed` manually or use `bun dev:seed`, which seeds automatically as part of startup.
 
 ## Development Workflow
 
-### .env variables
-
-Set the .env variables by copying and renaming the `.env.example` file, then set your own values for the variables.
-
-### Development relay
-
-During development, you should spin up a relay to seed data and use it during the development cycle, you can use `nak serve` as a quick solution, or run another relay locally, then set it in your `.env` variables, and run `bun seed` to seed it.
-
-### watch-routes Command
-
-During development, you should run the `watch-routes` command in a separate terminal:
+A typical local dev session uses two terminals:
 
 ```bash
+# Terminal 1 — route watcher (regenerates src/routeTree.gen.ts on file changes)
 bun run watch-routes
+
+# Terminal 2 — dev server (seeded)
+bun dev:seed
 ```
 
-This command uses the TanStack Router CLI (`tsr watch`) to monitor your route files and automatically generate the route tree file (`src/routeTree.gen.ts`). This file connects all your route components into a coherent navigation structure.
-
-Without running this command, changes to route files or creating new routes won't be detected until you manually generate the route tree or restart the server.
+- **Routing** is file-based via TanStack Router. Without `watch-routes` running, new/changed routes in `src/routes/` won't be picked up until you regenerate the route tree.
+- **Formatting** — Prettier config: tabs, no semicolons, single quotes, 140 char width. Run `bun run format` before committing, or rely on the `format:check` gate.
+- **Testing** — write unit/integration tests with `bun:test`; cover user flows with Playwright E2E tests under `e2e/`. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full workflow.
 
 ## Releasing
 
-Staging deploys automatically after the `E2E Tests` workflow succeeds on `master`.
-Production deploys require the `production` environment approval and can be triggered
-either by pushing a `*-release` tag or by running the `Promote to Production`
-workflow, which creates the next release tag for you.
+Staging deploys automatically after the `E2E Tests` workflow succeeds on `master`. Production deploys require the `production` environment approval and can be triggered either by pushing a `*-release` tag or by running the `Promote to Production` workflow, which creates the next release tag for you.
 
 ### One-liner
 
@@ -191,3 +182,33 @@ git tag v0.2.9-release && git push origin v0.2.9-release
    ```
 4. Or run `Promote to Production` in GitHub Actions and choose `patch`, `minor`, or `major`
 5. The `Deploy to Production` workflow will build and deploy the selected tag after approval
+
+## Project Structure
+
+```
+.
+├── src/
+│   ├── routes/        # File-based routes (TanStack Router → routeTree.gen.ts)
+│   ├── components/    # React components; ui/ holds Radix/shadcn primitives
+│   ├── queries/       # React Query hooks + query-key factory
+│   ├── lib/stores/    # Global state stores (auth, cart, ndk, wallet, ui…)
+│   ├── lib/schemas/   # Zod validation schemas
+│   └── server/        # Backend event handling (NDK, validation, signing)
+├── contextvm/         # ContextVM currency conversion server
+├── e2e/               # Playwright tests + page objects (e2e/po/)
+├── scripts/           # Seed, startup, icon build, deploy, and data-gen scripts
+├── docs/              # Feature and architecture documentation
+├── public/            # Static assets
+└── styles/            # Global stylesheets
+```
+
+See [CLAUDE.md](./CLAUDE.md) for the architecture overview and development patterns (query-key factory, store pattern, route loaders, Zod validation).
+
+## Documentation
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — How to contribute (git workflow, code style, testing)
+- [CLAUDE.md](./CLAUDE.md) — Architecture overview and dev patterns for AI assistants and contributors
+- [docs/](./docs) — Feature documentation, ADRs, and workflow notes
+- [SPEC.md](./SPEC.md) — Marketplace protocol specification
+- [gamma_spec.md](./gamma_spec.md) — Extended protocol / data-model spec
+- [RELAY_PLAN.md](./RELAY_PLAN.md) — Relay strategy and configuration
