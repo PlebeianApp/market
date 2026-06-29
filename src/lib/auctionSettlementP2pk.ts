@@ -82,7 +82,7 @@ const requireCompressedTokenLockPubkey = (pubkey: string): string => {
 }
 
 const getChainLegLabel = (leg: AuctionSettlementP2pkChainLegPreflightInput, index: number): string =>
-	leg.bidEventId ? `Chain leg ${leg.bidEventId.slice(0, 8)}…` : `Chain leg ${index + 1}`
+	leg.bidEventId?.trim() ? `Chain leg ${leg.bidEventId.trim().slice(0, 8)}…` : `Chain leg ${index + 1}`
 
 export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPreflightInput): AuctionSettlementP2pkPreflightResult => {
 	const derivationPath = input.derivationPath?.trim()
@@ -165,11 +165,19 @@ export const preflightAuctionSettlementP2pkChain = (
 	}
 
 	const preflightedLegs: AuctionSettlementP2pkChainPreflightResult['legs'] = []
+	const seenBidEventIds = new Set<string>()
 	let totalAmount = 0
 
 	for (let index = 0; index < input.legs.length; index++) {
 		const leg = input.legs[index]
 		const label = getChainLegLabel(leg, index)
+		const bidEventId = leg.bidEventId?.trim()
+		if (bidEventId) {
+			if (seenBidEventIds.has(bidEventId)) {
+				throw new Error(`${label} reuses bid event ID ${bidEventId}`)
+			}
+			seenBidEventIds.add(bidEventId)
+		}
 		const mintUrl = leg.mintUrl?.trim()
 		if (!mintUrl) {
 			throw new Error(`${label} is missing its mint URL`)

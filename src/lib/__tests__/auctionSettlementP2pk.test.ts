@@ -148,6 +148,7 @@ describe('auction settlement P2PK preflight', () => {
 describe('auction settlement P2PK chain preflight', () => {
 	test('rejects chain leg token with no proofs', () => {
 		const fixture = makeFixture()
+		const expectedAmount = AUCTION_MIN_BID_LEG_SATS
 
 		expect(() =>
 			preflightAuctionSettlementP2pkChain({
@@ -160,7 +161,7 @@ describe('auction settlement P2PK chain preflight', () => {
 						derivationPath: fixture.derivationPath,
 						bidChildPubkey: fixture.childPubkey,
 						releaseChildPubkey: fixture.childPubkey,
-						expectedAmount: 10,
+						expectedAmount,
 					},
 				],
 			}),
@@ -169,6 +170,8 @@ describe('auction settlement P2PK chain preflight', () => {
 
 	test('rejects chain leg token whose proof sum does not equal expected legAmount', () => {
 		const fixture = makeFixture()
+		const expectedAmount = AUCTION_MIN_BID_LEG_SATS
+		const proofAmount = expectedAmount - 1
 
 		expect(() =>
 			preflightAuctionSettlementP2pkChain({
@@ -177,15 +180,15 @@ describe('auction settlement P2PK chain preflight', () => {
 					{
 						bidEventId: 'b'.repeat(64),
 						mintUrl: 'https://mint.example',
-						token: makeToken(makeP2pkSecret(fixture.childPubkey), 9),
+						token: makeToken(makeP2pkSecret(fixture.childPubkey), proofAmount),
 						derivationPath: fixture.derivationPath,
 						bidChildPubkey: fixture.childPubkey,
 						releaseChildPubkey: fixture.childPubkey,
-						expectedAmount: 10,
+						expectedAmount,
 					},
 				],
 			}),
-		).toThrow('token proof sum 9 sats does not equal expected leg amount 10 sats')
+		).toThrow(`token proof sum ${proofAmount} sats does not equal expected leg amount ${expectedAmount} sats`)
 	})
 
 	test('rejects chain leg below AUCTION_MIN_BID_LEG_SATS even when token sum matches', () => {
@@ -255,6 +258,8 @@ describe('auction settlement P2PK chain preflight', () => {
 	test('rejects chain if any leg has a mismatched P2PK lock pubkey', () => {
 		const first = makeFixture('7/11/13/17/19')
 		const second = makeFixture('2/3/5/7/11')
+		const expectedAmount = AUCTION_MIN_BID_LEG_SATS
+		const secondLegAmount = expectedAmount + 5
 
 		expect(() =>
 			preflightAuctionSettlementP2pkChain({
@@ -263,29 +268,63 @@ describe('auction settlement P2PK chain preflight', () => {
 					{
 						bidEventId: 'c'.repeat(64),
 						mintUrl: 'https://mint.example',
-						token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+						token: makeToken(makeP2pkSecret(first.childPubkey), expectedAmount),
 						derivationPath: first.derivationPath,
 						bidChildPubkey: first.childPubkey,
 						releaseChildPubkey: first.childPubkey,
-						expectedAmount: 10,
+						expectedAmount,
 					},
 					{
 						bidEventId: 'd'.repeat(64),
 						mintUrl: 'https://mint.example',
-						token: makeToken(makeP2pkSecret(first.childPubkey), 15),
+						token: makeToken(makeP2pkSecret(first.childPubkey), secondLegAmount),
 						derivationPath: second.derivationPath,
 						bidChildPubkey: second.childPubkey,
 						releaseChildPubkey: second.childPubkey,
-						expectedAmount: 15,
+						expectedAmount: secondLegAmount,
 					},
 				],
 			}),
 		).toThrow('Winner token P2PK lock pubkey does not match auction p2pk_xpub + derivation path')
 	})
 
+	test('rejects duplicate bid event IDs in a settlement chain', () => {
+		const first = makeFixture('7/11/13/17/19')
+		const second = makeFixture('2/3/5/7/11')
+		const duplicateBidEventId = '5'.repeat(64)
+
+		expect(() =>
+			preflightAuctionSettlementP2pkChain({
+				auctionP2pkXpub: first.xpub,
+				legs: [
+					{
+						bidEventId: duplicateBidEventId,
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(first.childPubkey), AUCTION_MIN_BID_LEG_SATS),
+						derivationPath: first.derivationPath,
+						bidChildPubkey: first.childPubkey,
+						releaseChildPubkey: first.childPubkey,
+						expectedAmount: AUCTION_MIN_BID_LEG_SATS,
+					},
+					{
+						bidEventId: duplicateBidEventId,
+						mintUrl: 'https://mint.example',
+						token: makeToken(makeP2pkSecret(second.childPubkey), AUCTION_MIN_BID_LEG_SATS),
+						derivationPath: second.derivationPath,
+						bidChildPubkey: second.childPubkey,
+						releaseChildPubkey: second.childPubkey,
+						expectedAmount: AUCTION_MIN_BID_LEG_SATS,
+					},
+				],
+			}),
+		).toThrow(`Chain leg ${duplicateBidEventId.slice(0, 8)}… reuses bid event ID ${duplicateBidEventId}`)
+	})
+
 	test('accepts a multi-leg chain when all structural checks pass', () => {
 		const first = makeFixture('7/11/13/17/19')
 		const second = makeFixture('2/3/5/7/11')
+		const firstLegAmount = AUCTION_MIN_BID_LEG_SATS
+		const secondLegAmount = AUCTION_MIN_BID_LEG_SATS + 5
 
 		const result = preflightAuctionSettlementP2pkChain({
 			auctionP2pkXpub: first.xpub,
@@ -293,32 +332,34 @@ describe('auction settlement P2PK chain preflight', () => {
 				{
 					bidEventId: 'e'.repeat(64),
 					mintUrl: 'https://mint.example',
-					token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+					token: makeToken(makeP2pkSecret(first.childPubkey), firstLegAmount),
 					derivationPath: first.derivationPath,
 					bidChildPubkey: first.childPubkey,
 					releaseChildPubkey: first.childPubkey,
-					expectedAmount: 10,
+					expectedAmount: firstLegAmount,
 				},
 				{
 					bidEventId: 'f'.repeat(64),
 					mintUrl: 'https://mint.example',
-					token: makeToken(makeP2pkSecret(second.childPubkey), 15),
+					token: makeToken(makeP2pkSecret(second.childPubkey), secondLegAmount),
 					derivationPath: second.derivationPath,
 					bidChildPubkey: second.childPubkey,
 					releaseChildPubkey: second.childPubkey,
-					expectedAmount: 15,
+					expectedAmount: secondLegAmount,
 				},
 			],
 		})
 
-		expect(result.totalAmount).toBe(25)
+		expect(result.totalAmount).toBe(firstLegAmount + secondLegAmount)
 		expect(result.legs).toHaveLength(2)
-		expect(result.legs.map((leg) => leg.tokenAmount)).toEqual([10, 15])
+		expect(result.legs.map((leg) => leg.tokenAmount)).toEqual([firstLegAmount, secondLegAmount])
 	})
 
 	test('preflight failure happens before a caller would redeem any leg', () => {
 		const first = makeFixture('7/11/13/17/19')
 		const second = makeFixture('2/3/5/7/11')
+		const expectedAmount = AUCTION_MIN_BID_LEG_SATS
+		const proofAmount = expectedAmount - 1
 		let wouldRedeem = false
 
 		expect(() => {
@@ -328,25 +369,25 @@ describe('auction settlement P2PK chain preflight', () => {
 					{
 						bidEventId: '1'.repeat(64),
 						mintUrl: 'https://mint.example',
-						token: makeToken(makeP2pkSecret(first.childPubkey), 10),
+						token: makeToken(makeP2pkSecret(first.childPubkey), expectedAmount),
 						derivationPath: first.derivationPath,
 						bidChildPubkey: first.childPubkey,
 						releaseChildPubkey: first.childPubkey,
-						expectedAmount: 10,
+						expectedAmount,
 					},
 					{
 						bidEventId: '2'.repeat(64),
 						mintUrl: 'https://mint.example',
-						token: makeToken(makeP2pkSecret(second.childPubkey), 9),
+						token: makeToken(makeP2pkSecret(second.childPubkey), proofAmount),
 						derivationPath: second.derivationPath,
 						bidChildPubkey: second.childPubkey,
 						releaseChildPubkey: second.childPubkey,
-						expectedAmount: 10,
+						expectedAmount,
 					},
 				],
 			})
 			wouldRedeem = true
-		}).toThrow('token proof sum 9 sats does not equal expected leg amount 10 sats')
+		}).toThrow(`token proof sum ${proofAmount} sats does not equal expected leg amount ${expectedAmount} sats`)
 
 		expect(wouldRedeem).toBe(false)
 	})
