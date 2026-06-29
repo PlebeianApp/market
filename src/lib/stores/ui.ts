@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
+export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation' | 'wallet'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms' | 'nsfw-confirmation'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -41,6 +41,7 @@ export interface UIState {
 	selectedCurrency: SupportedCurrency
 	conversationPubkey: string | null // Track which conversation to open
 	showNSFWContent: boolean // Whether to show NSFW/adult content
+	walletPage?: string | null
 }
 
 const getSelectedCurrency = (): SupportedCurrency => {
@@ -60,6 +61,7 @@ const initialState: UIState = {
 		createProduct: false,
 		createCollection: false,
 		conversation: false,
+		wallet: false,
 	},
 	conversationPubkey: null,
 	dialogs: {
@@ -380,6 +382,18 @@ export const uiActions = {
 				...state.dialogs,
 				'nsfw-confirmation': true,
 			},
+		}))
+	},
+
+	openWalletPage: (page?: string | null) => {
+		uiStore.setState((state) => ({
+			...state,
+			drawers: {
+				...state.drawers,
+				wallet: true,
+			},
+			walletPage: page ?? null,
+			activeElement: 'drawer-wallet',
 		}))
 	},
 }

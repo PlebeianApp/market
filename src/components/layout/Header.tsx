@@ -2,9 +2,7 @@ import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { notificationStore } from '@/lib/stores/notifications'
@@ -147,21 +145,14 @@ const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((pro
 
 function WalletButton() {
 	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<TooltipButton
-					tooltip="Wallet"
-					className="relative p-2 btn-border-highlight w-11 h-10 hover:[&>svg]:text-secondary"
-					data-testid="wallet-button"
-				>
-					<Wallet className="size-4" />
-				</TooltipButton>
-			</PopoverTrigger>
-
-			<PopoverContent className="bg-primary rounded-lg w-[calc(100vw-2rem)] md:w-96" align="end">
-				<Nip60Wallet />
-			</PopoverContent>
-		</Popover>
+		<TooltipButton
+			tooltip="Wallet"
+			className="relative p-2 btn-border-highlight w-11 h-10 hover:[&>svg]:text-secondary"
+			data-testid="wallet-button"
+			onClick={() => uiActions.openWalletPage('wallet')}
+		>
+			<Wallet className="size-4" />
+		</TooltipButton>
 	)
 }
 

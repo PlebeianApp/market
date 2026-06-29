@@ -185,17 +185,17 @@ export function Nip60Wallet() {
 
 	// Button appearance class definitions
 
-	const classNameGhost = 'hover:bg-white/10 text-gray-400 hover:text-white'
-	const classNameSubtle = 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'
-	const classNameMuted = 'bg-white/10 hover:bg-white/20 text-white'
-	const classNameActive = 'bg-white/20 text-white'
+	const classNameGhost = 'hover:bg-accent text-muted-foreground hover:text-foreground'
+	const classNameSubtle = 'bg-accent/50 hover:bg-accent text-muted-foreground hover:text-foreground'
+	const classNameMuted = 'bg-accent hover:bg-accent/80 text-foreground'
+	const classNameActive = 'bg-accent text-foreground font-medium'
 	const classNameSuccess = 'bg-green-600 hover:bg-green-700 text-white'
 	const classNameWarning = 'bg-orange-600 hover:bg-orange-700 text-white'
-	const classNameDestructive = 'bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300'
+	const classNameDestructive = 'bg-transparent hover:bg-red-50 text-red-500 hover:text-red-600'
 
 	if (!isAuthenticated) {
 		return (
-			<div className="bg-primary p-4 rounded-lg text-gray-400 text-center">
+			<div className="p-6 text-muted-foreground text-center flex items-center justify-center min-h-[200px]">
 				<p>Please log in to view your wallet</p>
 			</div>
 		)
@@ -203,15 +203,15 @@ export function Nip60Wallet() {
 
 	if (status === 'idle' || status === 'initializing') {
 		return (
-			<div className="flex justify-center items-center bg-primary p-4 rounded-lg">
-				<Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+			<div className="flex items-center justify-center p-6 min-h-[200px]">
+				<Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
 			</div>
 		)
 	}
 
 	if (status === 'error') {
 		return (
-			<div className="bg-primary p-4 rounded-lg text-red-400 text-center">
+			<div className="p-6 text-destructive text-center flex items-center justify-center min-h-[200px]">
 				<p>{error}</p>
 			</div>
 		)
@@ -219,8 +219,8 @@ export function Nip60Wallet() {
 
 	if (status === 'no_wallet') {
 		return (
-			<div className="bg-primary p-4 rounded-lg w-80 text-center">
-				<p className="mb-4 text-gray-400">No Cashu wallet found</p>
+			<div className="p-6 text-center flex flex-col items-center justify-center min-h-[200px] gap-4">
+				<p className="text-muted-foreground">No Cashu wallet found</p>
 				<Button onClick={handleCreateWallet} disabled={isCreating} variant="secondary">
 					{isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
 					Create Wallet
@@ -230,15 +230,15 @@ export function Nip60Wallet() {
 	}
 
 	return (
-		<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
+		<div className="w-full overflow-hidden p-4">
 			<div className="relative mb-4 text-center">
 				<div className="top-0 right-0 absolute flex gap-1">
 					<Button className={classNameGhost} size="icon" onClick={handleRefresh} disabled={isRefreshing} title="Refresh & sync wallet">
 						<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
 					</Button>
 				</div>
-				<p className="mb-1 text-gray-400 text-sm">Balance</p>
-				<p className="font-bold text-white text-2xl">{balance.toLocaleString()} sats</p>
+				<p className="mb-1 text-muted-foreground text-base font-medium">Balance</p>
+				<p className="font-bold text-foreground text-5xl">{balance.toLocaleString()} sats</p>
 			</div>
 
 			{/* Action Buttons */}
@@ -263,17 +263,17 @@ export function Nip60Wallet() {
 
 			{/* Default Mint Selector */}
 			<div className="mb-2 pt-2 overflow-hidden">
-				<p className="mb-2 font-medium text-gray-300 text-sm">Default Mint</p>
+				<p className="mb-2 font-medium text-foreground text-sm">Default Mint</p>
 				{mints.length > 0 ? (
 					<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
-						<SelectTrigger className="bg-white/10 hover:bg-white/15 border-white/20 w-full text-white">
+						<SelectTrigger className="w-full">
 							<SelectValue placeholder="Select a default mint">
 								{defaultMint ? (
 									<span className="flex items-center gap-2 truncate">
 										<Star className="fill-current w-4 h-4 text-yellow-500 shrink-0" />
 										<span className="truncate">{getMintHostname(defaultMint)}</span>
 										{mintBalances[defaultMint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
+											<span className="text-muted-foreground shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
 										)}
 									</span>
 								) : (
@@ -281,14 +281,14 @@ export function Nip60Wallet() {
 								)}
 							</SelectValue>
 						</SelectTrigger>
-						<SelectContent className="bg-primary border-white/20 max-w-[calc(100vw-2rem)]">
+						<SelectContent className="max-w-[calc(100vw-2rem)]">
 							{mints.map((mint) => (
-								<SelectItem key={mint} value={mint} className="hover:bg-white/10 focus:bg-white/10 text-white focus:text-white">
+								<SelectItem key={mint} value={mint}>
 									<div className="flex items-center gap-2">
 										<Landmark className="w-4 h-4 shrink-0" />
 										<span className="truncate">{getMintHostname(mint)}</span>
 										{mintBalances[mint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[mint].toLocaleString()})</span>
+											<span className="text-muted-foreground shrink-0">({mintBalances[mint].toLocaleString()})</span>
 										)}
 									</div>
 								</SelectItem>
@@ -296,7 +296,7 @@ export function Nip60Wallet() {
 						</SelectContent>
 					</Select>
 				) : (
-					<p className="text-gray-400 text-sm">No mints configured</p>
+					<p className="text-muted-foreground text-sm">No mints configured</p>
 				)}
 			</div>
 
@@ -346,14 +346,16 @@ export function Nip60Wallet() {
 
 				{/* Content panels */}
 				{openSection === 'mints' && (
-					<div className="space-y-2 pt-2 border-white/10 border-t overflow-hidden">
+					<div className="space-y-2 pt-2 border-t overflow-hidden">
 						{mints.map((mint) => (
 							<div key={mint} className="flex justify-between items-center gap-2 text-sm">
-								<span className="min-w-0 text-gray-300 truncate" title={mint}>
+								<span className="min-w-0 text-foreground truncate" title={mint}>
 									{getMintHostname(mint)}
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
-									{mintBalances[mint] !== undefined && <span className="text-gray-400 text-xs">{mintBalances[mint].toLocaleString()}</span>}
+									{mintBalances[mint] !== undefined && (
+										<span className="text-muted-foreground text-xs">{mintBalances[mint].toLocaleString()}</span>
+									)}
 									<Button className={cn(classNameGhost, 'w-6 h-6')} size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint">
 										<X className="w-3 h-3" />
 									</Button>
@@ -367,7 +369,7 @@ export function Nip60Wallet() {
 								onChange={(e) => setNewMintUrl(e.target.value)}
 								onKeyDown={(e) => e.key === 'Enter' && handleAddMint()}
 								placeholder="https://mint.example.com"
-								className="flex-1 bg-white/10 border-white/20 min-w-0 h-8 text-white placeholder:text-gray-500 text-sm"
+								className="flex-1 min-w-0 h-8 text-sm"
 							/>
 							<Button className={cn(classNameMuted, 'px-2 h-8 shrink-0')} size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()}>
 								<Plus className="w-4 h-4" />
@@ -381,9 +383,9 @@ export function Nip60Wallet() {
 				)}
 
 				{openSection === 'transactions' && (
-					<div className="pt-2 border-white/10 border-t overflow-hidden">
+					<div className="pt-2 border-t overflow-hidden">
 						{transactions.length > 0 ? (
-							<div className="space-y-2 max-h-48 overflow-y-auto">
+							<div className="space-y-2">
 								{transactions.map((tx) => (
 									<div key={tx.id} className="flex justify-between items-center gap-2 text-sm">
 										<div className="flex items-center gap-2 min-w-0">
@@ -392,7 +394,7 @@ export function Nip60Wallet() {
 											) : (
 												<ArrowUpRight className="w-4 h-4 text-red-400 shrink-0" />
 											)}
-											<span className="text-gray-400 truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
+											<span className="text-muted-foreground truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
 										</div>
 										<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-400' : 'text-red-400'}`}>
 											{tx.direction === 'in' ? '+' : '-'}
@@ -402,24 +404,24 @@ export function Nip60Wallet() {
 								))}
 							</div>
 						) : (
-							<p className="text-gray-400 text-sm">No transactions yet</p>
+							<p className="text-muted-foreground text-sm">No transactions yet</p>
 						)}
 					</div>
 				)}
 
 				{openSection === 'proofs' && (
-					<div className="space-y-2 pt-2 border-white/10 border-t max-h-48 overflow-x-hidden overflow-y-auto">
+					<div className="space-y-2 pt-2 border-t overflow-x-hidden">
 						{proofsByMint.size === 0 ? (
-							<p className="text-gray-400 text-sm">No proofs in wallet</p>
+							<p className="text-muted-foreground text-sm">No proofs in wallet</p>
 						) : (
 							Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
 								<Collapsible key={mint} open={expandedMints.has(mint)} onOpenChange={() => toggleMintExpanded(mint)}>
-									<div className="bg-white/5 p-2 rounded-md overflow-hidden">
+									<div className="bg-muted/50 p-2 rounded-md overflow-hidden">
 										<CollapsibleTrigger asChild>
 											<Button className={cn(classNameGhost, 'justify-start gap-2 px-1 py-1 w-full h-auto overflow-hidden')} size="sm">
 												<ChevronRight className="w-3 h-3 [[data-state=open]>&]:rotate-90 transition-transform shrink-0" />
-												<span className="flex-1 min-w-0 font-medium text-white text-left truncate">{getMintHostname(mint)}</span>
-												<span className="text-gray-400 text-xs whitespace-nowrap shrink-0">
+												<span className="flex-1 min-w-0 font-medium text-foreground text-left truncate">{getMintHostname(mint)}</span>
+												<span className="text-muted-foreground text-xs whitespace-nowrap shrink-0">
 													{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
 												</span>
 											</Button>
@@ -429,12 +431,12 @@ export function Nip60Wallet() {
 												{proofs.map((proof, idx) => (
 													<div
 														key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
-														className="flex justify-between items-center gap-2 bg-white/10 px-2 py-1 rounded text-xs"
+														className="flex justify-between items-center gap-2 bg-muted px-2 py-1 rounded text-xs"
 													>
-														<span className="min-w-0 font-mono text-gray-400 truncate" title={`Keyset: ${proof.id}`}>
+														<span className="min-w-0 font-mono text-muted-foreground truncate" title={`Keyset: ${proof.id}`}>
 															{proof.id.slice(0, 8)}...
 														</span>
-														<span className="font-medium text-white shrink-0">{proof.amount}</span>
+														<span className="font-medium text-foreground shrink-0">{proof.amount}</span>
 													</div>
 												))}
 											</div>
@@ -447,12 +449,12 @@ export function Nip60Wallet() {
 				)}
 
 				{openSection === 'pending' && (
-					<div className="space-y-2 pt-2 border-white/10 border-t max-h-48 overflow-y-auto">
+					<div className="space-y-2 pt-2 border-t">
 						{activePendingTokens.map((token) => (
-							<div key={token.id} className="flex justify-between items-center gap-2 bg-white/5 p-2 rounded-lg">
+							<div key={token.id} className="flex justify-between items-center gap-2 bg-muted/50 p-2 rounded-lg">
 								<div className="min-w-0">
-									<p className="font-medium text-white text-sm">{token.amount.toLocaleString()} sats</p>
-									<p className="text-gray-400 text-xs truncate">
+									<p className="font-medium text-foreground text-sm">{token.amount.toLocaleString()} sats</p>
+									<p className="text-muted-foreground text-xs truncate">
 										{getMintHostname(token.mintUrl)} • {new Date(token.createdAt).toLocaleDateString()}
 									</p>
 								</div>
