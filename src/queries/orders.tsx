@@ -4,6 +4,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { orderKeys } from './queryKeyFactory'
+import { isValidATag } from '@/lib/utils/coords'
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -19,6 +20,32 @@ export type OrderWithRelatedEvents = {
 	latestPaymentRequest?: NDKEvent
 	latestPaymentReceipt?: NDKEvent
 	latestMessage?: NDKEvent
+}
+
+/**
+ * Extract auction coordinates from an order if it is an auction order.
+ * Returns null if the order is not an auction or if coordinates are malformed.
+ */
+export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelatedEvents): string | null => {
+	const orderEvent = 'order' in order ? order.order : order
+
+	if (!orderEvent?.tags) return null
+
+	const auctionTag = orderEvent.tags.find((t) => t.at(0) === 'a' && typeof t.at(1) === 'string' && t.at(1)?.startsWith('30408'))
+
+	const coords = auctionTag?.at(1)
+
+	if (!coords || !isValidATag(coords)) return null
+
+	return coords
+}
+
+/**
+ * Check if an order is associated with an auction.
+ * Auction orders contain an 'a' tag pointing to kind 30408 (auction event).
+ */
+export const isAuctionOrder = (order: NDKEvent | OrderWithRelatedEvents): boolean => {
+	return !!getAuctionCoordinatesFromOrder(order)
 }
 
 /**
