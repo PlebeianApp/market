@@ -505,7 +505,30 @@ export const cartActions = {
 		await cartActions.fetchAndSetSellerShippingOptions()
 	},
 
-	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null) => {
+	// Merges a guest (local) cart with the authenticated user's remote cart.
+	// Guest products are the source of truth: all guest items are kept, quantities for
+	// overlapping products are summed with remote, and guest shipping selections are always
+	// preserved. Products that exist only in remote are intentionally ignored.
+	mergeGuestWithRemote: (guest: NormalizedCart, remote: NormalizedCart): NormalizedCart => {
+		const products: Record<string, CartProduct> = {}
+
+		for (const [id, guestProduct] of Object.entries(guest.products)) {
+			const remoteProduct = remote.products[id]
+			products[id] = {
+				...guestProduct,
+				amount: remoteProduct ? guestProduct.amount + remoteProduct.amount : guestProduct.amount,
+			}
+		}
+
+		return {
+			sellers: { ...guest.sellers },
+			products,
+			orders: { ...guest.orders },
+			invoices: { ...guest.invoices },
+		}
+	},
+
+	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null, wasLoggedOut: boolean = false) => {
 		if (!pubkey || !signer || !ndk) return
 
 		clearRemotePublishTimeout()
@@ -516,6 +539,61 @@ export const cartActions = {
 		}))
 
 		try {
+			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
+
+			if (wasLoggedOut && localHasItems) {
+				// Guest session with items: preserve local cart, sum quantities for any products
+				// that also exist in remote, then publish the result under the user's pubkey.
+				// Products that exist only in remote are not added.
+				const remoteSnapshot = await cartSyncDependencies.fetchLatestCartSnapshot(pubkey)
+
+				if (remoteSnapshot) {
+					const normalizedRemote = normalizePersistedCart(remoteSnapshot)
+					const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}
+					const liveShipping: Record<string, { shippingRef: string; sellerPubkey: string }> = {}
+
+					for (const item of normalizedRemote.items) {
+						const productCoords = parseCoordinateRef(item.productRef, '30402')
+						if (!productCoords) continue
+
+						const productEvent = await cartSyncDependencies.getProductEvent(productCoords.identifier, productCoords.pubkey)
+						const productDTag = getProductId(productEvent)
+						if (!productEvent || !productDTag || productEvent.pubkey !== productCoords.pubkey) continue
+
+						liveProducts[item.productRef] = {
+							productRef: item.productRef,
+							sellerPubkey: productEvent.pubkey,
+							productId: productDTag,
+							shippingRefs: productEvent.tags.filter((tag) => tag[0] === 'shipping_option' && tag[1]).map((tag) => tag[1]),
+						}
+
+						if (item.shippingRef && !liveShipping[item.shippingRef]) {
+							const shippingCoords = parseCoordinateRef(item.shippingRef, String(SHIPPING_KIND))
+							if (!shippingCoords) continue
+							const shippingEvent = await cartSyncDependencies.getShippingEvent(item.shippingRef)
+							if (!shippingEvent || shippingEvent.pubkey !== shippingCoords.pubkey) continue
+							liveShipping[item.shippingRef] = { shippingRef: item.shippingRef, sellerPubkey: shippingEvent.pubkey }
+						}
+					}
+
+					const rehydrated = rehydrateCartFromLiveData(normalizedRemote, liveProducts, liveShipping)
+					if (Object.keys(rehydrated.cart.products).length > 0) {
+						const mergedCart = cartActions.mergeGuestWithRemote(cartStore.state.cart, rehydrated.cart)
+						await cartActions.applyRemoteCartLocally(mergedCart, cartSyncDependencies.now())
+					}
+				}
+
+				cartStore.setState((state) => ({
+					...state,
+					hasRemoteCartHydrated: true,
+					isReconcilingRemoteCart: false,
+					suppressRemotePublish: false,
+				}))
+				cartActions.scheduleRemotePublish()
+				return
+			}
+
+			// Auto-login or empty local cart: fetch remote and apply if it is newer
 			const remoteSnapshot = await cartSyncDependencies.fetchLatestCartSnapshot(pubkey)
 			if (!remoteSnapshot) {
 				cartStore.setState((state) => ({
@@ -529,16 +607,8 @@ export const cartActions = {
 
 			const normalizedRemote = normalizePersistedCart(remoteSnapshot)
 			const localUpdatedAt = cartStore.state.lastCartIntentUpdatedAt
-			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
 
-			let shouldAdoptRemote = false
-			if (!localHasItems) {
-				shouldAdoptRemote = true
-			} else if (localUpdatedAt && localUpdatedAt > 0) {
-				shouldAdoptRemote = normalizedRemote.updatedAt > localUpdatedAt
-			} else {
-				shouldAdoptRemote = false
-			}
+			const shouldAdoptRemote = !localHasItems || !localUpdatedAt || normalizedRemote.updatedAt > localUpdatedAt
 
 			if (shouldAdoptRemote) {
 				const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}
