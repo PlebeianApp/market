@@ -3,7 +3,7 @@
 
 Why this exists
 ---------------
-PR #1066 deployed a strfry relay on vps2 (market-agg.orangesync.tech) gated by
+PR #1066 deployed a strfry relay on an operator host (market-agg.example.com) gated by
 a write-policy. But strfry only stores events that are *published to it*. This
 daemon actively scrapes market-relevant events from upstream Nostr relays and
 re-publishes them into the local strfry so the relay mirrors a complete view of
