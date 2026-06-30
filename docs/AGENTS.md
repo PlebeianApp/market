@@ -3,6 +3,7 @@
 ## Documentation Architecture
 
 ### Core Documentation Types
+
 1. **Architectural Decision Records (ADRs)** - Formal decision documentation in `docs/adr/`
 2. **Maintainer Guides** - Security and operations guidance in `docs/maintainer/`
 3. **LLM/Codex Guides** - AI assistant documentation in `docs/llm/`
@@ -11,6 +12,7 @@
 6. **Handover Documentation** - Project transition materials in `docs/handover/`
 
 ### Documentation Strategy
+
 1. **Layered Approach** - Root documentation provides overview, subdirectories provide detail
 2. **Maintainer-Focused** - Emphasis on security, operations, and architectural guidance
 3. **Protocol-Centric** - Strong focus on Nostr protocol implementation details
@@ -19,11 +21,13 @@
 ## Current Documentation Structure
 
 ### ADR System
+
 1. **Formal Decision Process** - Structured ADR format for major architectural decisions
 2. **Workflow Boundaries** - Example ADR for add product workflow stabilization
 3. **Decision Tracking** - Status tracking (Proposed, Accepted, etc.)
 
 ### Technical Specifications
+
 1. **Lightning Payment Flow** - Detailed payment processing documentation
 2. **Zap Purchase Manager** - NIP-57 zap receipt handling
 3. **Vanity URLs** - Custom URL handling and NIP-05 integration
@@ -31,11 +35,13 @@
 5. **Relay Configuration** - Nostr relay setup and management
 
 ### Security Documentation
+
 1. **Security Operations Brief** - Maintainer security guidance
 2. **Threat Model** - Security risk analysis and mitigation
 3. **Terms and Conditions** - Legal documentation
 
 ### AI/LLM Integration
+
 1. **Launch Pad** - AI assistant usage guidance
 2. **Command Safety** - Safe command execution for AI assistants
 3. **Agent Rules** - AI agent operational constraints

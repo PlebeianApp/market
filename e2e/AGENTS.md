@@ -3,12 +3,14 @@
 ## End-to-End Testing Architecture
 
 ### Core Purpose
+
 1. **Full Application Testing** - Test the entire application stack from UI to Nostr relay
 2. **User Journey Validation** - Verify complete user workflows and experiences
 3. **Integration Testing** - Test interactions between all system components
 4. **Regression Prevention** - Catch breaking changes before deployment
 
 ### Technology Stack
+
 1. **Playwright** - Cross-browser testing framework for web applications
 2. **TypeScript** - Strongly typed testing with modern JavaScript features
 3. **Nostr Tools** - Direct Nostr protocol interaction for relay monitoring
@@ -16,6 +18,7 @@
 5. **nak** - Local Nostr relay for test environment isolation
 
 ### Testing Architecture Layers
+
 1. **Infrastructure Layer** - Local relay and application server management
 2. **Data Layer** - Scenario-based test data seeding
 3. **Auth Layer** - Authentication fixture injection and management
@@ -26,24 +29,28 @@
 ## Design Patterns
 
 ### Scenario-Based Testing
+
 1. **Cumulative Scenarios** - Build test data in layers (none → base → merchant → marketplace)
 2. **Idempotent Seeding** - Safe to run multiple times without duplication
 3. **Per-Worker Caching** - Efficient test execution with shared data setup
 4. **Nostr Tools Integration** - Direct relay communication avoiding NDK lifecycle issues
 
 ### Authentication Mocking
+
 1. **window.nostr Mock** - Browser-side NIP-07 implementation injection
 2. **Node.js Signing Bridge** - Exposed functions for event signing in Node.js
 3. **T&C Pre-Acceptance** - Automatic terms and conditions acceptance
 4. **Multi-Auth Method Support** - Extension, private key, NIP-46 mocking
 
 ### Locator Strategy
+
 1. **Role-Based Selection** - Prioritize semantic HTML roles and labels
 2. **Content-Based Matching** - Text content and visible elements first
 3. **Data Test ID Fallback** - Last resort for complex dynamic elements
 4. **Accessible UI Requirement** - Tests drive accessibility improvements
 
 ### Relay Monitoring
+
 1. **WebSocket Frame Capture** - Raw WebSocket traffic interception
 2. **Event Parsing and Storage** - Typed Nostr event handling
 3. **Generic Waiting Support** - waitForEvent with filtering capabilities

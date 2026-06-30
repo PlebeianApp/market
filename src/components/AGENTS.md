@@ -3,6 +3,7 @@
 ## Component Architecture
 
 ### Core Purpose
+
 1. **UI Component Library** - Reusable UI components following shadcn/ui patterns
 2. **Feature Components** - Domain-specific components for marketplace functionality
 3. **Layout Components** - Page structure and navigation components
@@ -10,6 +11,7 @@
 5. **Data Display Components** - Product, user, and content presentation
 
 ### Technology Stack
+
 1. **React 19** - Latest React features and patterns
 2. **shadcn/ui** - Component library built on Radix UI primitives
 3. **Tailwind CSS** - Utility-first styling with variants
@@ -17,6 +19,7 @@
 5. **Lucide React** - Icon library integration
 
 ### Component Categories
+
 1. **UI Primitives** - Low-level components in `src/components/ui/`
 2. **Data Components** - Product cards, user cards, collection displays
 3. **Form Components** - Input controls, selectors, search
@@ -27,6 +30,7 @@
 ## Design Patterns
 
 ### Component Structure
+
 1. **Props Interface** - Explicit TypeScript interfaces for component props
 2. **State Management** - React hooks for local state and side effects
 3. **Query Integration** - TanStack Query hooks for data fetching
@@ -34,6 +38,7 @@
 5. **Event Handling** - Consistent event handler patterns with preventDefault/stopPropagation
 
 ### Styling Approach
+
 1. **Tailwind Variants** - class-variance-authority for component variants
 2. **Responsive Design** - Mobile-first responsive utilities
 3. **Dark Mode Support** - Built-in dark mode styling
@@ -41,6 +46,7 @@
 5. **Design Tokens** - Consistent spacing, colors, and typography
 
 ### Data Flow Patterns
+
 1. **Query-Based Components** - Components that fetch their own data
 2. **Props-Based Components** - Components that receive data as props
 3. **Store Integration** - Components that interact with global state

@@ -3,18 +3,21 @@
 ## Publishing Architecture
 
 ### Core Purpose
+
 1. **Event Publishing** - Nostr event creation and signing for marketplace operations
 2. **Data Validation** - Input validation and sanitization before event creation
 3. **Mutation Management** - TanStack Query mutation hooks for state management
 4. **Cache Invalidation** - Query cache management after successful operations
 
 ### Technology Stack
+
 1. **Nostr Development Kit (NDK)** - Core Nostr protocol implementation
 2. **TanStack Query** - Server state management and mutation handling
 3. **TypeScript** - Strong typing for event creation and validation
 4. **React Hooks** - Integration with React component lifecycle
 
 ### Publishing Categories
+
 1. **Product Operations** - Product creation, update, and deletion
 2. **Collection Management** - Collection creation and management
 3. **Order Processing** - Order creation and status updates
@@ -26,6 +29,7 @@
 ## Design Patterns
 
 ### Event Creation Patterns
+
 1. **Structured Event Building** - Consistent Nostr event construction
 2. **Tag Management** - Standardized tag creation and formatting
 3. **Content Validation** - Pre-publishing data validation and sanitization
@@ -33,6 +37,7 @@
 5. **Coordinate Handling** - Proper a-tag and naddr reference management
 
 ### Mutation Patterns
+
 1. **Hook-Based Mutations** - TanStack Query mutation hook abstraction
 2. **Validation Integration** - Input validation before mutation execution
 3. **Success Handling** - Cache invalidation and UI feedback on success
@@ -40,6 +45,7 @@
 5. **Loading State Management** - Consistent loading state patterns
 
 ### Data Validation Patterns
+
 1. **Form Data Validation** - Structured form data validation
 2. **Schema Compliance** - Nostr event schema compliance checking
 3. **Business Rule Validation** - Marketplace-specific business rules

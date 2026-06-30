@@ -3,18 +3,21 @@
 ## Query Architecture
 
 ### Core Purpose
+
 1. **Data Fetching Layer** - Abstraction over Nostr event fetching and caching
 2. **Query Key Management** - Consistent caching and invalidation strategies
 3. **React Query Integration** - TanStack Query hooks for server state management
 4. **Data Transformation** - Extraction and parsing of structured data from Nostr events
 
 ### Technology Stack
+
 1. **TanStack Query** - Server state management and caching
 2. **Nostr Development Kit (NDK)** - Nostr protocol implementation
 3. **Zod** - Schema validation and type inference
 4. **TypeScript** - Strong typing for query functions and results
 
 ### Query Organization
+
 1. **Entity-Based Files** - Separate files for products, profiles, orders, etc.
 2. **Query Key Factories** - Centralized cache key management
 3. **Data Fetching Functions** - Low-level event fetching utilities
@@ -24,6 +27,7 @@
 ## Design Patterns
 
 ### Query Structure
+
 1. **Query Key Factory Pattern** - Consistent cache key generation
 2. **Data Fetching Functions** - Reusable event fetching logic
 3. **Query Options Pattern** - Standardized query configurations
@@ -31,6 +35,7 @@
 5. **Data Transformation Layer** - Structured data extraction from events
 
 ### Caching Strategy
+
 1. **Stale-While-Revalidate** - Immediate cache return with background refresh
 2. **Query Key Hierarchies** - Nested cache invalidation patterns
 3. **Selective Refetching** - Granular cache updates
@@ -38,6 +43,7 @@
 5. **Timeout Handling** - Graceful degradation for slow relays
 
 ### Error Handling
+
 1. **Graceful Fallbacks** - Default values for missing data
 2. **Timeout Management** - Bounded query execution
 3. **Network Resilience** - Retry and recovery patterns

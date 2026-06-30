@@ -3,18 +3,21 @@
 ## Hook Architecture
 
 ### Core Purpose
+
 1. **Custom React Hooks** - Reusable logic encapsulation for React components
 2. **State Management Integration** - Bridge between React components and application stores
 3. **Data Synchronization** - Real-time data synchronization with backend systems
 4. **Business Logic Abstraction** - Complex logic encapsulation for component consumption
 
 ### Technology Stack
+
 1. **React Hooks** - Built-in and custom React hook patterns
 2. **TanStack Query** - Server state management and caching
 3. **Custom Stores** - Application state management integration
 4. **TypeScript** - Strong typing for hook parameters and return values
 
 ### Hook Categories
+
 1. **Permission Hooks** - User role and entity permission checking
 2. **Data Sync Hooks** - Real-time data synchronization with stores
 3. **UI Hooks** - Responsive design and user interaction patterns
@@ -24,6 +27,7 @@
 ## Design Patterns
 
 ### Hook Structure
+
 1. **Single Responsibility** - Each hook addresses one specific concern
 2. **Memoization Patterns** - Efficient computation caching with useMemo
 3. **Effect Management** - Proper useEffect cleanup and dependency management
@@ -31,6 +35,7 @@
 5. **Loading State Management** - Consistent loading and error state patterns
 
 ### Data Integration Patterns
+
 1. **Query Integration** - TanStack Query hooks for server state
 2. **Store Synchronization** - Real-time store updates from backend data
 3. **Event Subscription** - WebSocket and notification monitoring
@@ -38,6 +43,7 @@
 5. **Data Transformation** - Structured data extraction and formatting
 
 ### Performance Optimization
+
 1. **Lazy Loading** - Dynamic import and code splitting
 2. **Debouncing** - Rate limiting for expensive operations
 3. **Caching** - Memoization and query cache utilization

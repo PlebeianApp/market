@@ -3,6 +3,7 @@
 ## CI/CD Pipeline Architecture
 
 ### Core Workflow Structure
+
 1. **Unit and Integration Tests** (`ci-unit.yml`) - Automated testing on PRs and pushes
 2. **End-to-End Tests** (`e2e.yml`) - Browser-based testing with Playwright
 3. **Code Formatting** (`prettier.yml`) - Automated code style checking
@@ -11,12 +12,14 @@
 6. **Specialized Deployments** (`deploy-auctionsdev.yml`, `deploy-relay.yml`) - Specific environment deployments
 
 ### Testing Strategy
+
 1. **Unit Tests** - Run with `bun run test:unit` command
 2. **Integration Tests** - Run with local relay and currency server
 3. **End-to-End Tests** - Playwright tests in browser environment
 4. **Code Quality** - Prettier formatting checks
 
 ### Deployment Strategy
+
 1. **Staging Deployment** - Automatic after successful E2E tests on master
 2. **Production Deployment** - Manual approval required
 3. **Specialized Environments** - Separate workflows for specific components
@@ -24,12 +27,14 @@
 ## GitHub Actions Implementation
 
 ### Test Workflows
+
 1. **Ubuntu Latest Runner** - All tests run on Ubuntu environment
 2. **Bun Setup** - Uses oven-sh/setup-bun action
 3. **Go Setup** - For local relay (nak) in integration tests
 4. **Dependency Management** - Frozen lockfile installation
 
 ### Deployment Workflows
+
 1. **Build Phase** - Artifact creation with compiled assets
 2. **Deploy Phase** - SSH-based deployment to remote servers
 3. **Environment Management** - PM2 process management

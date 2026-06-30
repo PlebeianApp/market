@@ -19,16 +19,16 @@ Bitcoin Lightning Network.
 
 ### Projects in This Monorepo
 
-| Directory | Project | Purpose |
-|-----------|---------|---------|
-| `src/` | **Marketplace Client** | React 19 SPA. The user-facing marketplace. Built with TanStack Router (file-based routing), TanStack Query (server state), NDK (Nostr protocol), Tailwind CSS v4 + shadcn/ui (UI layer). Runs on the Bun runtime. |
-| `contextvm/` | **ContextVM Services** | Independently deployed backend nodes that serve specialized services over the Nostr protocol: BTC/fiat currency conversion, multi-source price aggregation with median calculation, and SQLite-backed caching with TTL. Deployed separately from the client. |
-| `e2e/` | **E2E Test Suite** | Playwright-based end-to-end testing. Uses scenario-based cumulative data seeding, multi-method auth flow testing, and an isolated local relay (nak) for deterministic test environments. |
-| `docs/` | **Documentation & Specs** | Nostr NIPs used, marketplace spec details, architecture references. Start here for protocol-level context. |
-| `scripts/` | **Utility Scripts** | Seeding, startup, and miscellaneous tooling. |
-| `deploy-simple/` | **Deployment** | Deployment files and scripts. |
-| `.github/` | **CI/CD** | GitHub Actions workflows for staging and production environments. |
-| `public/` | **Static Assets** | Published app assets, copied into build output. |
+| Directory        | Project                   | Purpose                                                                                                                                                                                                                                                      |
+| ---------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/`           | **Marketplace Client**    | React 19 SPA. The user-facing marketplace. Built with TanStack Router (file-based routing), TanStack Query (server state), NDK (Nostr protocol), Tailwind CSS v4 + shadcn/ui (UI layer). Runs on the Bun runtime.                                            |
+| `contextvm/`     | **ContextVM Services**    | Independently deployed backend nodes that serve specialized services over the Nostr protocol: BTC/fiat currency conversion, multi-source price aggregation with median calculation, and SQLite-backed caching with TTL. Deployed separately from the client. |
+| `e2e/`           | **E2E Test Suite**        | Playwright-based end-to-end testing. Uses scenario-based cumulative data seeding, multi-method auth flow testing, and an isolated local relay (nak) for deterministic test environments.                                                                     |
+| `docs/`          | **Documentation & Specs** | Nostr NIPs used, marketplace spec details, architecture references. Start here for protocol-level context.                                                                                                                                                   |
+| `scripts/`       | **Utility Scripts**       | Seeding, startup, and miscellaneous tooling.                                                                                                                                                                                                                 |
+| `deploy-simple/` | **Deployment**            | Deployment files and scripts.                                                                                                                                                                                                                                |
+| `.github/`       | **CI/CD**                 | GitHub Actions workflows for staging and production environments.                                                                                                                                                                                            |
+| `public/`        | **Static Assets**         | Published app assets, copied into build output.                                                                                                                                                                                                              |
 
 Each subdirectory listed above should have its own `AGENTS.md` with
 project-specific design decisions, constraints, and instructions. Always read
@@ -87,7 +87,7 @@ PR.
 4. **Centralized server location is ambiguous.** The centralized admin server
    is referenced in deployment descriptions but does not have a clearly defined
    directory boundary — it may share code with the client in `src/` but is
-   deployed as a separate component. Server logic exists in `src/index.tsx` 
+   deployed as a separate component. Server logic exists in `src/index.tsx`
    alongside client code without clear separation.
 
 5. **Monorepo has no formal workspace tool.** Multiple independent projects
@@ -100,22 +100,22 @@ PR.
    but this is not systematically tested or enforced. The application is
    heavily React-based with client-side routing.
 
-7. **Architecture boundary violations occur in practice.** While the architecture 
-   prohibits direct cross-project imports, the codebase shows instances where 
-   `src/index.tsx` imports from `contextvm` utilities and client-side code 
+7. **Architecture boundary violations occur in practice.** While the architecture
+   prohibits direct cross-project imports, the codebase shows instances where
+   `src/index.tsx` imports from `contextvm` utilities and client-side code
    references server-side logic patterns.
 
-8. **Nostr event publishing bypasses NDK abstraction.** Despite the requirement 
-   that all Nostr event publishing must go through the NDK abstraction layer, 
-   the codebase includes direct WebSocket event handling in `src/index.tsx` 
+8. **Nostr event publishing bypasses NDK abstraction.** Despite the requirement
+   that all Nostr event publishing must go through the NDK abstraction layer,
+   the codebase includes direct WebSocket event handling in `src/index.tsx`
    and mixed use of NDK and direct nostr-tools usage.
 
-9. **Data privacy practices are inconsistent.** User identifiers and authentication 
-   state are persisted in localStorage without encryption, despite the requirement 
+9. **Data privacy practices are inconsistent.** User identifiers and authentication
+   state are persisted in localStorage without encryption, despite the requirement
    to treat all user identifiers as PII. Test credentials are stored in source code.
 
-10. **Error handling patterns are inconsistent.** Error handling varies across 
-    modules with mixed approaches to try/catch vs query error states, and ContextVM 
+10. **Error handling patterns are inconsistent.** Error handling varies across
+    modules with mixed approaches to try/catch vs query error states, and ContextVM
     services lack the required correlation ID tracking for traceability.
 
 ---
@@ -310,15 +310,19 @@ When creating a new `AGENTS.md` in a subdirectory, follow this structure:
 > Brief one-line purpose of what this directory contains and achieves.
 
 ## Context
+
 - What this module/project does and why it exists.
 - Key design decisions specific to this scope.
 - Pointer to relevant specs, configs, or parent AGENTS.md for deeper context.
 
 ## Constraints (specific to this directory, tightening parent rules)
+
 - [Architecture rules specific to this module]
 - [Patterns that must be followed]
 - [Anti-patterns that must be avoided]
 
 ## Instructions
+
 - [How to read, modify, and review code in this directory]
 - [Role-specific notes if the directory has unique workflow requirements]
+```

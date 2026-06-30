@@ -3,12 +3,14 @@
 ## Scripting Architecture
 
 ### Core Purpose
+
 1. **Data Seeding** - Populate Nostr relays with test data for development
 2. **Migration Tools** - Copy events between relays for data migration
 3. **Deployment Automation** - Automate deployment processes
 4. **Utility Functions** - Various helper scripts for development tasks
 
 ### Technology Stack
+
 1. **Bun Runtime** - All scripts written for Bun execution environment
 2. **TypeScript** - Strongly typed scripting with modern JavaScript features
 3. **Nostr Development Kit (NDK)** - Core library for Nostr interactions
@@ -16,6 +18,7 @@
 5. **Shell Scripts** - Bash scripts for deployment automation
 
 ### Script Categories
+
 1. **Seeding Scripts** - `seed.ts` and related generation scripts
 2. **Migration Scripts** - `migrate-relay.ts` for relay data transfer
 3. **Deployment Scripts** - Shell scripts for deployment automation
@@ -25,18 +28,21 @@
 ## Design Patterns
 
 ### Data Generation Approach
+
 1. **Modular Generation** - Separate scripts for different entity types (users, products, orders, etc.)
 2. **Faker Integration** - Realistic data generation with Faker.js
 3. **Nostr Event Creation** - Direct NDK event creation and publishing
 4. **Relationship Management** - Proper linking between related entities
 
 ### Configuration Management
+
 1. **Environment Variables** - Centralized configuration through env vars
 2. **Fixture Data** - Predefined test user data in `lib/fixtures.ts`
 3. **Runtime Detection** - Bun environment detection for local relay forcing
 4. **Timestamp Management** - Dynamic timestamp generation for realistic data
 
 ### Error Handling
+
 1. **Graceful Failures** - Continue seeding when individual events fail
 2. **Detailed Logging** - Comprehensive console output during seeding
 3. **Exit Codes** - Proper process exit codes for success/failure

@@ -3,18 +3,21 @@
 ## Routing Architecture
 
 ### Core Purpose
+
 1. **Page-Level Routing** - File-based routing using TanStack Router
 2. **Dashboard Organization** - Nested route structure for admin/dashboard areas
 3. **Product Catalog** - Public marketplace browsing and search routes
 4. **User Journeys** - Complete user workflows from browsing to checkout
 
 ### Technology Stack
+
 1. **TanStack Router** - File-based routing with nested layouts
 2. **React 19** - Latest React features and patterns
 3. **TypeScript** - Strong typing for route parameters and loaders
 4. **Query Integration** - TanStack Query hooks for data fetching
 
 ### Route Organization
+
 1. **Public Routes** - Marketplace browsing and product viewing
 2. **Dashboard Routes** - Protected admin and seller functionality
 3. **Authentication Routes** - Login and user management
@@ -24,6 +27,7 @@
 ## Design Patterns
 
 ### Route Structure
+
 1. **File-Based Routing** - Direct mapping of file structure to URLs
 2. **Nested Layouts** - Shared layouts for dashboard and authenticated areas
 3. **Route Loaders** - Data preloading and parameter extraction
@@ -31,6 +35,7 @@
 5. **Error Boundaries** - Graceful error handling per route
 
 ### Data Loading Patterns
+
 1. **Query Integration** - TanStack Query hooks for server state
 2. **Loader Functions** - Route-level data loading and parameter validation
 3. **Suspense Boundaries** - Loading state management
@@ -38,6 +43,7 @@
 5. **Cache Management** - Query cache invalidation and refetching
 
 ### Authentication Protection
+
 1. **Route Guards** - Protected route access control
 2. **Conditional Rendering** - Role-based UI visibility
 3. **Redirect Patterns** - Login flow and session management

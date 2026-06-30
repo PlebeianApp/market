@@ -3,6 +3,7 @@
 ## Library Architecture
 
 ### Core Purpose
+
 1. **Shared Utilities** - Common functions and helpers used across the application
 2. **State Management** - Client-side state stores using TanStack Store
 3. **Nostr Integration** - Core Nostr protocol integration and event handling
@@ -11,6 +12,7 @@
 6. **Business Logic** - Core marketplace domain logic and workflows
 
 ### Technology Stack
+
 1. **TanStack Store** - Client state management library
 2. **Nostr Development Kit (NDK)** - Nostr protocol implementation
 3. **Zod** - Schema validation and type inference
@@ -18,6 +20,7 @@
 5. **Tailwind CSS** - Utility-first styling helpers
 
 ### Library Organization
+
 1. **Stores** - State management modules for different domain areas
 2. **Utilities** - Helper functions and common utilities
 3. **Constants** - Configuration values and system constants
@@ -28,6 +31,7 @@
 ## Design Patterns
 
 ### State Management
+
 1. **Store Pattern** - Centralized state management with TanStack Store
 2. **Action Pattern** - State mutation functions with clear side effects
 3. **Hook Pattern** - React hook abstractions for store consumption
@@ -35,6 +39,7 @@
 5. **Authentication Pattern** - Multi-method authentication state management
 
 ### Nostr Integration
+
 1. **NDK Abstraction** - Wrapper around Nostr Development Kit
 2. **Relay Management** - Multi-relay connection and write strategies
 3. **Event Publishing** - Stage-aware event publishing restrictions
@@ -42,6 +47,7 @@
 5. **Signer Management** - Multiple authentication method support
 
 ### Data Validation
+
 1. **Zod Schemas** - Runtime schema validation and type inference
 2. **Query Key Factories** - Consistent TanStack Query key generation
 3. **Data Transformation** - Structured data extraction from Nostr events

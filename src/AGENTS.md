@@ -1,15 +1,19 @@
 # src/ Development Guidelines
 
 ## Routing
+
 Routes are file-based using TanStack Router. Place route files in `src/routes/` using `createFileRoute`. The dashboard uses a `_dashboard-layout` layout route pattern.
 
 ## Server State Management
+
 All relay queries use TanStack Query. Implement queries and mutations through hooks located in `src/queries/`.
 
 ## Client State Management
+
 Client state uses a custom Store class with setState method. There are 13 stores (authStore, ndkStore, cartStore, nip60Store, etc.). This is a hand-rolled observable pattern, not using Zustand or Jotai.
 
 ## Styling
+
 Styling uses Tailwind CSS with shadcn/ui components. Component library is in `src/components/ui/` with Radix primitives wrapped with Tailwind variants.
 
 # Comprehensive Design Decisions Overview
@@ -98,4 +102,3 @@ These are acknowledged inconsistencies with the parent directory AGENTS.md desig
 5. **Utility Function Testing**:
    - Utility functions in `src/lib/utils/` and `src/lib/nostr/` lack comprehensive test coverage
    - Core logic functions may have edge cases that aren't tested
-
