@@ -87,7 +87,8 @@ PR.
 4. **Centralized server location is ambiguous.** The centralized admin server
    is referenced in deployment descriptions but does not have a clearly defined
    directory boundary — it may share code with the client in `src/` but is
-   deployed as a separate component.
+   deployed as a separate component. Server logic exists in `src/index.tsx` 
+   alongside client code without clear separation.
 
 5. **Monorepo has no formal workspace tool.** Multiple independent projects
    coexist in the same repository without a monorepo manager (e.g., Turborepo,
@@ -96,7 +97,26 @@ PR.
 
 6. **Progressive enhancement claims are aspirational.** The architecture states
    graceful degradation when JavaScript is disabled or relays are unavailable,
-   but this is not systematically tested or enforced.
+   but this is not systematically tested or enforced. The application is
+   heavily React-based with client-side routing.
+
+7. **Architecture boundary violations occur in practice.** While the architecture 
+   prohibits direct cross-project imports, the codebase shows instances where 
+   `src/index.tsx` imports from `contextvm` utilities and client-side code 
+   references server-side logic patterns.
+
+8. **Nostr event publishing bypasses NDK abstraction.** Despite the requirement 
+   that all Nostr event publishing must go through the NDK abstraction layer, 
+   the codebase includes direct WebSocket event handling in `src/index.tsx` 
+   and mixed use of NDK and direct nostr-tools usage.
+
+9. **Data privacy practices are inconsistent.** User identifiers and authentication 
+   state are persisted in localStorage without encryption, despite the requirement 
+   to treat all user identifiers as PII. Test credentials are stored in source code.
+
+10. **Error handling patterns are inconsistent.** Error handling varies across 
+    modules with mixed approaches to try/catch vs query error states, and ContextVM 
+    services lack the required correlation ID tracking for traceability.
 
 ---
 
