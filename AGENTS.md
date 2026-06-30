@@ -1,335 +1,304 @@
-# Decentralized Nostr Marketplace - Plebeian Market
-
-**Nostr** (Notes and Other Stuff Transmitted by Relays) doesn't use a traditional server architecture, instead opting for a variable list of relays as back-ends.
-
-The app uses NIP-99 and Gamma markets as its spec. Auctions are a new spec only found in Plebeian.
-
-Centralized server for handling tasks relating to the app itself like admin, featured, blacklisting, NIP-05 and custom URLs (Vanity URLs).
-
-ContextVMs are deployed separately and serve clients over nostr: currency conversion, live events and auction bid validation.
-
-All app data stored decentralized on Nostr relays. Own relay is also deployed in CI/CD.
-
-# Architecture Details
-
-## Data Flow
-- Client application communicates via WebSocket to Nostr relays for marketplace data
-- Real-time event handling through WebSocket connections to relays
-- Centralized server handles administrative functions and metadata
-- ContextVM nodes provide specialized backend services over Nostr protocol
-- All user-generated content stored as Nostr events on relays
-
-## Deployment Model
-- Application deployed as static files (bun build process)
-- Centralized server component for admin/featured functions
-- ContextVM nodes deployed independently for backend services
-- Own relay infrastructure deployed through CI/CD pipeline
-- Staging and production environments with GitHub Actions
-
-# File Context
-
-- `src/`: Source for the client and server
-- `contextvm/`: Source for **ContextVM** nodes for backend services deployed independently over Nostr
-- `e2e/`: End-to-end testing with Playwright
-- `.github/`: GitHub Actions for CI/CD
-- `scripts/`: various scripts
-- `public/`: published app assets
-- `deploy-simple/`: deployment files and scripts
-- `docs/`: various documentation and spec
-- `styles/`: client app styles
-
-# App Runtime
-
-- JS Runtime is **bun**: `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig.json`
-- Shadcn component libs in `components.json`
-- Prettier for code formatting: `.prettierrc` and `.prettierignore`
-- Git for source control: `.git/` & `.gitignore`
-- `.depcheckrc` for dependency analysis
-
-# Main App Libs
-
-- React 19 for UI
-- TanStack Router for file-based routing
-- TanStack Query for data fetching & caching
-- NDK and nostr-tools for nostr
-- Tailwind CSS v4 for styling
-- Shadcn UI for components
-
-# ADR File Structure Architecture
-
-Layered documentation hierarchy with AGENTS.md files in each directory. Root file contains link to subdirectory documentation. Each subdirectory has own AGENTS.md with decisions specific to that scope. Parent decisions inform child directory analysis. Always read AGENTS.md file in directory and also all parent directories.
-
-# Roles
-
-Use ADR and AGENTS.md to help with roles:
-- **Product Manager**: Ensure issue spec conforms to AGENTS.md OR suggest changes to AGENTS.md in issue spec.
-- **Senior Developer**: Always read AGENTS.md and follow the spec closely.
-- **Maintainer/PR Reviewer**: Ensure all files and file content conform to AGENTS.md.
-
-## Project Architecture & Build System
-
-### Core Technology Stack
-1. **Bun Runtime** - Used as the primary JavaScript runtime and build tool
-2. **TypeScript** - Strict type checking with modern configuration
-3. **React 19** - Latest React version with JSX runtime
-4. **TanStack Router** - File-based routing system
-5. **TanStack Query** - Server state management
-6. **Tailwind CSS v4** - Utility-first CSS framework
-7. **shadcn/ui** - Component library built on Radix UI primitives
-
-### Build Process
-1. **Custom Build Script** (`build.ts`) - Handles compilation with Tailwind plugin
-2. **Bun Bundler** - Used for asset compilation and optimization
-3. **HTML Entry Points** - Scans for HTML files in src/ as entry points
-4. **Public Assets** - Static files copied from public/ directory during build
-
-## Configuration Files
-
-### TypeScript Configuration
-1. **Strict Mode** - Enabled with strict null checks
-2. **Modern Module Resolution** - Using "bundler" mode
-3. **Path Aliases** - Configured for clean imports (@/* maps to src/*)
-
-### Package Management
-1. **Bun Package Manager** - Used for dependency management and scripts
-2. **Private Package** - Marked as private in package.json
-3. **ES Module Format** - Using ESM format throughout
-
-## Script Configuration
-
-### Development Scripts
-1. **dev** - Hot reloading development server
-2. **dev:seed** - Development with automatic seeding
-3. **watch-routes** - Automatic route tree generation watching
-
-### Production Scripts
-1. **build** - Production build with route generation
-2. **start** - Production server startup
-
-### Testing Scripts
-1. **test:unit** - Unit test runner with specific file filtering
-2. **test:e2e** - End-to-end testing with Playwright
-3. **test:integration** - Integration test runner
-
-### Utility Scripts
-1. **seed** - Data seeding script
-2. **startup** - Initial setup script
-3. **format** - Code formatting with Prettier
-
-## Contradictory Design Decisions
-
-1. **Multiple Environments** - Scripts exist for local, staging, and production but mixing patterns:
-   - `dev`, `dev:seed`, `dev:local-only` for development
-   - `start`, `start:local-only`, `start:production`, `start:staging` for running
-   - Inconsistent naming and purpose documentation
-
-2. **Testing Strategy Inconsistency**:
-   - Unit tests, integration tests, and E2E tests exist
-   - But test organization and coverage is inconsistent
-   - No clear testing pyramid documented
-
-3. **Build Configuration**:
-   - Custom build script with CLI argument parsing
-   - But also relies on default Bun build behavior
-   - Some manual file copying logic in build script
-
-## Code Reuse Opportunities
-
-1. **Script Parameter Parsing** - The CLI argument parsing in build.ts could be extracted for reuse
-2. **File Operations** - Common file operations across scripts could be unified
-3. **Configuration Loading** - Environment variable loading patterns could be standardized
-4. **Error Handling** - Consistent error handling patterns across scripts
-
-## Test Coverage Gaps
-
-1. **Build Script Testing** - The custom build.ts script lacks dedicated tests
-2. **Configuration File Validation** - No validation tests for package.json, tsconfig.json, etc.
-3. **Script Integration Testing** - Many scripts lack integration tests
-4. **CI/CD Pipeline Testing** - No tests for the GitHub Actions workflows
-
-## Dependencies Analysis
-
-### Production Dependencies
-1. **Nostr Libraries** - @nostr-dev-kit/ndk, nostr-tools for Nostr protocol
-2. **Wallet Integration** - Lightning and Cashu wallet support
-3. **UI Components** - Radix UI, Tailwind components, icons
-4. **State Management** - TanStack Query and custom stores
-5. **Form Handling** - @tanstack/react-form
-
-### Development Dependencies
-1. **Testing** - Playwright for E2E, testing utilities for unit tests
-2. **Build Tools** - Tailwind CSS, SVGO for optimization
-3. **Development Utilities** - Faker.js for seeding data
-
-## Project Structure Observations
-
-1. **Monorepo-like Structure** - Contains multiple logical components:
-   - Client application (src/)
-   - ContextVM nodes (contextvm/)
-   - Documentation (docs/)
-   - Deployment scripts (deploy-simple/)
-   - End-to-end tests (e2e/)
-   - Scripts (scripts/)
-
-2. **Decentralized Architecture** - Multiple components working with Nostr relays:
-   - Client-side marketplace
-   - Server-side admin functions
-   - ContextVM backend services
-   - Custom relay infrastructure
-
-# Project Architecture Overview
-
-This section provides a comprehensive overview of the entire project architecture, referencing the detailed AGENTS.md files in each subdirectory.
-
-## Core Architecture Components
-
-### Client Application (`src/`)
-The main marketplace application built with React 19, featuring:
-- **File-based Routing**: TanStack Router for page navigation
-- **Component Architecture**: Shadcn UI components with Tailwind CSS styling
-- **State Management**: TanStack Store for client state with localStorage persistence
-- **Nostr Integration**: NDK for decentralized data access and publishing
-- **Query Management**: TanStack Query for server state and caching
-- See `src/AGENTS.md` for detailed design decisions
-
-### ContextVM Services (`contextvm/`)
-Specialized backend services deployed independently over Nostr:
-- **Currency Conversion**: BTC/fiat exchange rates via MCP protocol
-- **Model Context Protocol**: AI-assisted development workflows
-- **Price Aggregation**: Multi-source rate collection and median calculation
-- **Caching Layer**: SQLite-based persistent caching with TTL expiration
-- See `contextvm/AGENTS.md` for detailed design decisions
-
-### End-to-End Testing (`e2e/`)
-Comprehensive testing infrastructure with Playwright:
-- **Scenario-Based Testing**: Cumulative test data seeding
-- **Auth Flow Testing**: Multi-method authentication validation
-- **Relay Monitoring**: WebSocket traffic capture and validation
-- **Local Relay Testing**: Isolated test environment with nak relay
-- See `e2e/AGENTS.md` for detailed design decisions
-
-### Component Library (`src/components/`)
-Reusable UI components following shadcn/ui patterns:
-- **UI Primitives**: Low-level components built on Radix UI
-- **Feature Components**: Marketplace-specific data display components
-- **Auth Components**: Multi-method authentication UI flows
-- **Layout Components**: Page structure and navigation components
-- See `src/components/AGENTS.md` for detailed design decisions
-
-### Data Layer (`src/queries/`)
-Data fetching and caching abstraction layer:
-- **Query Key Management**: Consistent cache key generation
-- **React Query Integration**: Server state management patterns
-- **Data Transformation**: Structured data extraction from Nostr events
-- **Schema Validation**: Zod schemas for type safety and validation
-- See `src/queries/AGENTS.md` for detailed design decisions
-
-### Business Logic (`src/lib/`)
-Shared utilities and core application logic:
-- **State Management**: Client-side store implementations
-- **Nostr Integration**: Core NDK abstraction and relay management
-- **Data Validation**: Schema validation and input sanitization
-- **Utility Functions**: Common helper functions and utilities
-- See `src/lib/AGENTS.md` for detailed design decisions
-
-### Routing System (`src/routes/`)
-File-based routing with nested layouts:
-- **Public Routes**: Marketplace browsing and product viewing
-- **Dashboard Routes**: Protected admin and seller functionality
-- **Authentication Routes**: Login and user management flows
-- **Route Loaders**: Data preloading and parameter validation
-- See `src/routes/AGENTS.md` for detailed design decisions
-
-### Custom Hooks (`src/hooks/`)
-Reusable React hook abstractions:
-- **Permission Hooks**: User role and entity permission checking
-- **Data Sync Hooks**: Real-time data synchronization with stores
-- **UI Hooks**: Responsive design and user interaction patterns
-- **Domain Hooks**: Marketplace-specific business logic encapsulation
-- See `src/hooks/AGENTS.md` for detailed design decisions
-
-### Event Publishing (`src/publish/`)
-Nostr event creation and publishing utilities:
-- **Event Creation**: Structured Nostr event building patterns
-- **Data Validation**: Pre-publishing validation and sanitization
-- **Mutation Management**: TanStack Query mutation hooks
-- **Cache Invalidation**: Query cache management after operations
-- See `src/publish/AGENTS.md` for detailed design decisions
-
-## Architectural Design Principles
-
-### Decentralization First
-All user-generated content is stored as Nostr events on relays, ensuring:
-- No central point of failure
-- User data ownership and portability
-- Censorship resistance
-- Global availability and redundancy
-
-### Progressive Enhancement
-The application gracefully degrades when:
-- Relays are slow or unavailable
-- Network connectivity is limited
-- JavaScript is disabled (basic functionality)
-- Feature support varies across browsers
-
-### Security by Design
-Multiple layers of security protection:
-- Client-side private key management
-- Multi-method authentication support
-- Content filtering and moderation
-- Secure communication protocols
-
-### Performance Optimization
-Efficient resource usage through:
-- Client-side caching strategies
-- Lazy loading and code splitting
-- Efficient data fetching patterns
-- Relay connection optimization
-
-## Integration Points
-
-### Nostr Protocol Integration
-Full implementation of relevant NIPs:
-- NIP-07: Browser extension communication
-- NIP-46: Remote signing (NIP-46)
-- NIP-99: Classified listings
-- Custom extensions for marketplace features
-
-### Bitcoin Lightning Network
-Native payment integration:
-- Lightning Network payments via LNURL
-- Zap receipt monitoring and validation
-- Multi-wallet support (NWC, private key)
-- Automatic wallet selection and balance monitoring
-
-### AI-Assisted Development
-ContextVM integration for enhanced productivity:
-- Model Context Protocol for tool integration
-- AI-assisted code generation and testing
-- Automated workflow assistance
-- Smart data analysis and insights
-
-## Deployment and Operations
-
-### Environment Management
-Consistent deployment across environments:
-- Development: Local relay and dev server
-- Staging: Dedicated staging infrastructure
-- Production: Public relay and production deployment
-- Testing: Isolated e2e test environments
-
-### Monitoring and Observability
-Comprehensive system visibility:
-- Relay performance monitoring
-- User behavior analytics
-- Error tracking and reporting
-- Performance metrics collection
-
-### Scalability Considerations
-Designed for growth and expansion:
-- Horizontal scaling capabilities
-- Efficient data loading and caching
-- Relay selection optimization
-- Load balancing and distribution
-
-This architecture represents a modern, decentralized marketplace that leverages the strengths of the Nostr protocol while providing a seamless user experience through careful design and implementation.
+# AGENTS.md — Plebeian Market
+
+> This file is the **source of design truth** for this monorepo. It is not a
+> description of what the code does — it is a prescription of what the code must
+> be. If the code and this file disagree, both are wrong until reconciled.
+
+---
+
+## Context
+
+### What This Project Is
+
+Plebeian Market is a decentralized marketplace built on the Nostr protocol.
+Buyers and sellers transact without a central authority: all marketplace data
+(listings, profiles, reviews) is stored as Nostr events on relays. A small
+centralized server handles non-marketplace concerns only — admin moderation,
+featured listings, NIP-05 verification, and vanity URLs. Payments flow over the
+Bitcoin Lightning Network.
+
+### Projects in This Monorepo
+
+| Directory | Project | Purpose |
+|-----------|---------|---------|
+| `src/` | **Marketplace Client** | React 19 SPA. The user-facing marketplace. Built with TanStack Router (file-based routing), TanStack Query (server state), NDK (Nostr protocol), Tailwind CSS v4 + shadcn/ui (UI layer). Runs on the Bun runtime. |
+| `contextvm/` | **ContextVM Services** | Independently deployed backend nodes that serve specialized services over the Nostr protocol: BTC/fiat currency conversion, multi-source price aggregation with median calculation, and SQLite-backed caching with TTL. Deployed separately from the client. |
+| `e2e/` | **E2E Test Suite** | Playwright-based end-to-end testing. Uses scenario-based cumulative data seeding, multi-method auth flow testing, and an isolated local relay (nak) for deterministic test environments. |
+| `docs/` | **Documentation & Specs** | Nostr NIPs used, marketplace spec details, architecture references. Start here for protocol-level context. |
+| `scripts/` | **Utility Scripts** | Seeding, startup, and miscellaneous tooling. |
+| `deploy-simple/` | **Deployment** | Deployment files and scripts. |
+| `.github/` | **CI/CD** | GitHub Actions workflows for staging and production environments. |
+| `public/` | **Static Assets** | Published app assets, copied into build output. |
+
+Each subdirectory listed above should have its own `AGENTS.md` with
+project-specific design decisions, constraints, and instructions. Always read
+the `AGENTS.md` in the directory you are working in **and** every parent
+directory up to this root file.
+
+### Technology Stack
+
+- **Runtime**: Bun (package manager, dev server, bundler)
+- **Language**: TypeScript (strict mode, ESM, bundler module resolution)
+- **Client Framework**: React 19
+- **Routing**: TanStack Router (file-based, with `watch-routes` for generation)
+- **Server State**: TanStack Query
+- **Client State**: TanStack Store with localStorage persistence
+- **Nostr**: NDK + nostr-tools
+- **Styling**: Tailwind CSS v4 + shadcn/ui (Radix UI primitives)
+- **Testing**: Playwright (e2e), unit/integration runners via Bun
+- **Formatting**: Prettier (`.prettierrc`)
+- **Path Aliases**: `@/*` maps to `src/*`
+
+For commands, scripts, and dependency versions, see `package.json`.
+For TypeScript configuration, see `tsconfig.json`. For Bun configuration, see
+`bunfig.toml`.
+
+### Key Domain Concepts
+
+- **Nostr Relay**: A WebSocket server that stores and forwards Nostr events. This project connects to multiple relays; one is self-hosted and deployed via CI/CD.
+- **Nostr Event**: The atomic data unit — a signed JSON object published to relays. All marketplace data (listings, bids, profiles) is encoded as events.
+- **NIP**: Nostr Implementation Possibility — a specification document defining a feature of the Nostr protocol. Relevant NIPs: NIP-07 (browser extension signing), NIP-46 (remote signing), NIP-99 (classified listings).
+- **ContextVM**: A self-deployed node that provides backend services (price feeds, caching) over the Nostr protocol rather than a traditional HTTP API.
+- **Outbox Pattern**: Domain events are written to a database table first, then published to relays by a separate process — never published directly in the request path.
+- **LNURL / NWC / Zap**: Bitcoin Lightning Network payment protocols used for marketplace transactions.
+
+### Known Design Inconsistencies (Current State)
+
+These are **not bugs**. They are the current, acknowledged state of the
+codebase. They are documented here so that every agent and human understands
+them as the baseline. Improving any of these requires a deliberate change to
+both the relevant `AGENTS.md` file and the code — simultaneously, in the same
+PR.
+
+1. **Environment script naming is inconsistent.** Development scripts (`dev`,
+   `dev:seed`, `dev:local-only`) and start scripts (`start`, `start:local-only`,
+   `start:production`, `start:staging`) follow different naming conventions and
+   lack unified documentation of their purpose and differences.
+
+2. **Testing strategy is undocumented.** Unit, integration, and e2e tests all
+   exist but there is no documented testing pyramid, no coverage thresholds
+   defined, and test organization is inconsistent across projects.
+
+3. **Build process is partially custom.** `build.ts` uses custom CLI argument
+   parsing and manual file copying logic while also relying on default Bun
+   bundler behavior. The boundary between custom and default behavior is not
+   clearly defined.
+
+4. **Centralized server location is ambiguous.** The centralized admin server
+   is referenced in deployment descriptions but does not have a clearly defined
+   directory boundary — it may share code with the client in `src/` but is
+   deployed as a separate component.
+
+5. **Monorepo has no formal workspace tool.** Multiple independent projects
+   coexist in the same repository without a monorepo manager (e.g., Turborepo,
+   Nx). Dependency sharing, build ordering, and cross-project tooling are
+   handled ad hoc.
+
+6. **Progressive enhancement claims are aspirational.** The architecture states
+   graceful degradation when JavaScript is disabled or relays are unavailable,
+   but this is not systematically tested or enforced.
+
+---
+
+## Instructions
+
+### AGENTS.md Protocol — Read This First
+
+1. **AGENTS.md is the source of design truth.** Every design decision lives in
+   an `AGENTS.md` file. If a decision is not in an `AGENTS.md` file, it does not
+   exist as far as agents are concerned.
+
+2. **Read recursively.** Before working in any directory, read the `AGENTS.md`
+   in that directory **and** every `AGENTS.md` in every parent directory up to
+   this root file. Parent rules inform child directory analysis. Child
+   `AGENTS.md` files may add stricter constraints but **never relax** parent
+   constraints.
+
+3. **Code and AGENTS.md must stay in sync.** If a PR changes code without
+   updating the relevant `AGENTS.md`, or changes `AGENTS.md` without updating
+   the code, the PR is incomplete and **must not be merged**. Design truth and
+   implementation truth are the same truth.
+
+4. **Inconsistencies are acknowledged, not hidden.** The known inconsistencies
+   listed above are the current design. They exist intentionally in this file
+   as documented debt. Do not silently "fix" them by changing code alone — a
+   change to resolve an inconsistency must update `AGENTS.md` to reflect the new
+   intended design and must be called out explicitly in the PR description.
+
+5. **AGENTS.md changes are architecture changes.** Modifying an `AGENTS.md`
+   file is equivalent to modifying the architecture. Treat it with the same
+   scrutiny as a database schema migration.
+
+### Universal Constraints
+
+These apply across **all** projects in this monorepo unless a subdirectory
+`AGENTS.md` explicitly tightens them.
+
+#### Architecture Boundaries
+
+- No direct cross-project imports. The client (`src/`) must not import from
+  `contextvm/` or `e2e/`. Shared types and utilities should be extracted
+  explicitly, not imported sideways.
+- The centralized admin server (wherever its code currently resides) must not
+  contain marketplace business logic. Its scope is limited to: admin/moderation
+  actions, featured listing management, NIP-05 verification, and vanity URL
+  routing.
+- ContextVM nodes communicate over the Nostr protocol only. They do not expose
+  HTTP endpoints for client consumption.
+- All Nostr event publishing must go through the NDK abstraction layer — never
+  construct raw events bypassing validation and signing.
+
+#### Data Handling and Privacy
+
+- Treat all user identifiers, contact fields, and payment data as PII. Never
+  log them.
+- No customer or seller data in logs, metrics, or error messages.
+- All marketplace data must be stored as Nostr events on relays — do not
+  persist marketplace data in a traditional database without an explicit
+  documented reason in the relevant `AGENTS.md`.
+
+#### Nostr Protocol Rules
+
+- Respect NIP-07 (browser extension signing), NIP-46 (remote signing), and
+  NIP-99 (classified listings) conventions. Do not invent custom event kinds
+  without documenting them in `docs/`.
+- Relay connections must handle disconnection and reconnection gracefully.
+  Never assume a relay is permanently available.
+- Event validation (schema, signature) must happen before publishing and after
+  receiving. Use Zod schemas in the data layer (`src/queries/`).
+
+#### Error Handling
+
+- Never swallow errors silently. Return typed failures or propagate them.
+- Retry logic for relay operations must be bounded with exponential backoff.
+- Error responses from ContextVM services must include a correlation ID for
+  traceability.
+
+#### Testing
+
+- Every behavior change must include corresponding tests.
+- E2E tests use cumulative scenario seeding — do not create isolated test data
+  that breaks the cumulative sequence without updating the seed scripts.
+- Run `make lint && make test && make integration-test` (or the equivalent
+  npm/bun scripts from `package.json`) before considering work complete.
+
+#### Security
+
+- Secrets must be passed via vault or environment variables — never committed
+  in files.
+- Private keys are managed client-side only. The centralized server must never
+  hold user private keys.
+- No new network egress paths without updating the allowlist and documenting in
+  the relevant `AGENTS.md`.
+
+### Role-Specific Instructions
+
+#### For Product Managers
+
+- Before writing or refining an issue spec, read the `AGENTS.md` in the
+  target directory and all parent directories. The spec must conform to the
+  stated design. If it doesn't, you have two options: adjust the spec to fit
+  the current design, or propose an `AGENTS.md` change as part of the issue.
+- Issue specs that require architectural changes must explicitly call out which
+  `AGENTS.md` files need to be modified and why.
+- Reference known inconsistencies (by number) if your issue touches one. State
+  whether the issue intends to resolve the inconsistency or work around it.
+
+#### For Designers (UI/UX)
+
+- The design system is shadcn/ui + Tailwind CSS v4. New components must follow
+  existing component patterns in `src/components/`. See
+  `src/components/AGENTS.md` for specifics.
+- Feature designs must map to the TanStack Router file-based routing structure
+  in `src/routes/`. If a design implies a new route, that route must be
+  documented in `src/routes/AGENTS.md`.
+- Designs involving data display must account for Nostr's eventual-consistency
+  model — data may arrive late or not at all. Design loading, empty, and error
+  states for all data-driven views.
+- Authentication flows involve multiple methods (NIP-07 extension, NIP-46
+  remote signing). Designs must account for all supported auth methods, not
+  just one.
+
+#### For Developers (Coders)
+
+- **Read before you write.** Read the `AGENTS.md` in the directory you're
+  working in and every parent directory. Understand the constraints before
+  touching code.
+- **Update as you go.** If your change introduces a new pattern, modifies an
+  existing pattern, or shifts an architectural boundary, update the relevant
+  `AGENTS.md` in the same PR.
+- **Follow existing patterns.** If a directory has an established
+  implementation pattern (e.g., how queries are structured in `src/queries/`,
+  how events are published in `src/publish/`), follow it. Deviation requires an
+  `AGENTS.md` update documenting why and what the new pattern is.
+- **No silent inconsistency resolution.** If you discover code that violates
+  an `AGENTS.md` rule, flag it — do not quietly fix it without updating the
+  documentation. Conversely, if `AGENTS.md` describes behavior the code doesn't
+  implement, flag that too.
+- **Respect the Bun runtime.** Use Bun-compatible APIs. Do not introduce Node.js
+  built-ins that Bun doesn't support without verifying compatibility.
+
+#### For Reviewers / Maintainers (PR Reviewers)
+
+- **Verify AGENTS.md sync.** The first check on every PR: does the code match
+  the `AGENTS.md` files, and do the `AGENTS.md` files match the code? If one
+  changed without the other, request changes.
+- **Verify constraint adherence.** Check that submitted code respects all
+  applicable universal constraints and subdirectory-specific constraints.
+- **Flag pattern deviations explicitly.** If the PR introduces a pattern that
+  differs from what the directory's `AGENTS.md` describes, the PR must either
+  update the `AGENTS.md` or revert to the documented pattern. There is no third
+  option.
+- **Inconsistency awareness.** If the PR touches a known inconsistency area,
+  verify the PR description addresses it — either working within the current
+  state or deliberately resolving it with matching `AGENTS.md` changes.
+- **Reject PRs that bypass the protocol.** A PR that changes code behavior
+  without touching `AGENTS.md`, or changes `AGENTS.md` without touching code, is
+  incomplete.
+
+#### For Auditors
+
+- **Periodic reconciliation.** Audit each `AGENTS.md` against the actual code
+  in its directory. Report mismatches as issues — either the code has drifted
+  from the design or the design was never implemented.
+- **Constraint compliance review.** Systematically verify that the universal
+  constraints (architecture boundaries, data handling, Nostr rules, error
+  handling, testing, security) are being followed across all projects.
+- **Inconsistency tracking.** Track the known inconsistencies over time. Each
+  should eventually be resolved or explicitly accepted as permanent design.
+  Report any new inconsistencies discovered during audit.
+
+### Definition of Done
+
+A task is complete when **all** of the following are true:
+
+1. Code changes follow all applicable `AGENTS.md` constraints.
+2. All affected `AGENTS.md` files are updated to reflect the changes.
+3. Code and `AGENTS.md` are in sync — no divergence.
+4. Tests are written or updated for behavior changes.
+5. `package.json` scripts for linting and testing pass locally.
+6. The PR description references any known inconsistencies touched.
+7. A reviewer has confirmed items 1–6.
+
+### Subdirectory AGENTS.md Template
+
+When creating a new `AGENTS.md` in a subdirectory, follow this structure:
+
+```markdown
+# AGENTS.md — [Directory Name]
+
+> Brief one-line purpose of what this directory contains and achieves.
+
+## Context
+- What this module/project does and why it exists.
+- Key design decisions specific to this scope.
+- Pointer to relevant specs, configs, or parent AGENTS.md for deeper context.
+
+## Constraints (specific to this directory, tightening parent rules)
+- [Architecture rules specific to this module]
+- [Patterns that must be followed]
+- [Anti-patterns that must be avoided]
+
+## Instructions
+- [How to read, modify, and review code in this directory]
+- [Role-specific notes if the directory has unique workflow requirements]
