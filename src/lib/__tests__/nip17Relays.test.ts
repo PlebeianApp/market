@@ -47,6 +47,7 @@ describe('NIP-17 DM relay resolution', () => {
 			['relay', ' wss://Relay.Example.com/ '],
 			['relay', 'wss://relay.example.com'],
 			['relay', 'ws://localhost:7777/'],
+			['relay', 'wss://relay.example.com/nostr/'],
 			['relay', 'https://not-a-relay.example'],
 			['relay', ''],
 			['relay'],
@@ -54,7 +55,7 @@ describe('NIP-17 DM relay resolution', () => {
 			['relay', 'not a url'],
 		])
 
-		expect(parseNip17DmRelays(event)).toEqual(['wss://relay.example.com', 'ws://localhost:7777'])
+		expect(parseNip17DmRelays(event)).toEqual(['wss://relay.example.com', 'ws://localhost:7777', 'wss://relay.example.com/nostr/'])
 	})
 
 	test('selects the latest kind 10050 event for the requested pubkey', () => {

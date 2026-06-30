@@ -143,7 +143,11 @@ function normalizeRelayUrl(value: string | undefined): string | undefined {
 		url.hostname = url.hostname.toLowerCase()
 
 		const normalized = url.toString()
-		return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized
+		if (url.pathname === '/' && !url.search && !url.hash) {
+			return normalized.slice(0, -1)
+		}
+
+		return normalized
 	} catch {
 		return undefined
 	}
