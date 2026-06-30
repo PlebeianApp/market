@@ -169,7 +169,7 @@ Should Plebeian use strict kind 10050-only behavior, meaning send fails/skips wh
 
 Spec-strict behavior is kind `10050` only. A fallback may improve UX, but it must be documented as repo-local compatibility behavior rather than strict NIP-17 behavior.
 
-### Decision 8: Place new tests under src/lib/__tests__
+### Decision 8: Place new tests under `src/lib/__tests__`
 
 The normal unit script only discovers tests under:
 
@@ -400,7 +400,6 @@ Order rumor tests should prove:
 1. Should strict NIP-17 behavior fail/skip when the recipient has no kind `10050` relay list?
 
 2. If not, what exact fallback is approved?
-
    - app/default relays
    - kind `10002` / NIP-65 relay list
    - both
