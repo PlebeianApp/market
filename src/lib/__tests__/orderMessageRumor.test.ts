@@ -186,18 +186,29 @@ describe('order message rumors', () => {
 		expect(() => assertOrderMessageRumor(chat)).not.toThrow()
 	})
 
-	test('rejects payment request rumors without payment methods', () => {
-		expect(() =>
-			createPaymentRequestRumor({
-				merchantPubkey: SELLER_PUBKEY,
-				buyerPubkey: BUYER_PUBKEY,
-				orderId: 'order-123',
-				amountSats: 2100,
-				paymentMethods: [] as never,
-				content: 'Payment details pending',
-				createdAt: CREATED_AT,
-			}),
-		).toThrow('Payment request rumors require at least one payment method')
+	test('creates a pending payment request rumor without payment methods', () => {
+		const rumor = createPaymentRequestRumor({
+			merchantPubkey: SELLER_PUBKEY,
+			buyerPubkey: BUYER_PUBKEY,
+			orderId: 'order-123',
+			amountSats: 2100,
+			paymentMethods: [],
+			content: 'Payment details pending',
+			createdAt: CREATED_AT,
+		})
+
+		expectUnsignedCanonicalRumor(rumor)
+		assertOrderMessageRumor(rumor)
+
+		expect(rumor.kind).toBe(ORDER_PROCESS_KIND)
+		expect(rumor.pubkey).toBe(SELLER_PUBKEY)
+		expect(tagValue(rumor.tags, 'p')).toBe(BUYER_PUBKEY)
+		expect(tagValue(rumor.tags, 'subject')).toBe('order-payment')
+		expect(tagValue(rumor.tags, 'type')).toBe(ORDER_MESSAGE_TYPE.PAYMENT_REQUEST)
+		expect(tagValue(rumor.tags, 'order')).toBe('order-123')
+		expect(tagValue(rumor.tags, 'amount')).toBe('2100')
+		expect(tagValues(rumor.tags, 'payment')).toEqual([])
+		expect(rumor.content).toBe('Payment details pending')
 	})
 
 	test('rejects invalid order message rumors', () => {
