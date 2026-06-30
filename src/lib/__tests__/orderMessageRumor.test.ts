@@ -186,6 +186,20 @@ describe('order message rumors', () => {
 		expect(() => assertOrderMessageRumor(chat)).not.toThrow()
 	})
 
+	test('rejects payment request rumors without payment methods', () => {
+		expect(() =>
+			createPaymentRequestRumor({
+				merchantPubkey: SELLER_PUBKEY,
+				buyerPubkey: BUYER_PUBKEY,
+				orderId: 'order-123',
+				amountSats: 2100,
+				paymentMethods: [] as never,
+				content: 'Payment details pending',
+				createdAt: CREATED_AT,
+			}),
+		).toThrow('Payment request rumors require at least one payment method')
+	})
+
 	test('rejects invalid order message rumors', () => {
 		const valid = createOrderCreationRumor({
 			buyerPubkey: BUYER_PUBKEY,

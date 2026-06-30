@@ -15,6 +15,7 @@ import {
 } from '../schemas/order'
 
 type PaymentMedium = 'lightning' | 'bitcoin' | 'fiat' | 'other'
+type NonEmptyArray<T> = [T, ...T[]]
 
 export type OrderMessageRumor = {
 	id: string
@@ -58,7 +59,7 @@ export type CreatePaymentRequestRumorParams = {
 	buyerPubkey: string
 	orderId: string
 	amountSats: number
-	paymentMethods: PaymentMethodInput[]
+	paymentMethods: NonEmptyArray<PaymentMethodInput>
 	expirationTime?: number
 	content?: string
 	createdAt?: number
@@ -130,6 +131,10 @@ export function createOrderCreationRumor(params: CreateOrderCreationRumorParams)
 }
 
 export function createPaymentRequestRumor(params: CreatePaymentRequestRumorParams): OrderMessageRumor {
+	if (params.paymentMethods.length === 0) {
+		throw new Error('Payment request rumors require at least one payment method')
+	}
+
 	const tags: string[][] = [
 		['p', params.buyerPubkey],
 		['subject', 'order-payment'],
