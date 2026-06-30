@@ -22,6 +22,18 @@ Styling uses Tailwind CSS with shadcn/ui components. Component library is in `sr
 4. **Component library** using shadcn/ui with Tailwind CSS (`src/components/ui/`)
 5. **Hook-based logic extraction** for reusable behaviors (`src/hooks/`)
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Architecture Boundary Violations (#7)**: This directory contains direct WebSocket event handling in `src/index.tsx` that publishes events directly using `nostr-tools/Relay.connect()` and `relay.publish()` instead of going through the NDK abstraction layer. Additionally, there are imports and usage patterns that mix client and server logic.
+
+2. **Nostr Event Publishing Inconsistencies (#8)**: Despite the parent requirement that all Nostr event publishing must go through the NDK abstraction layer, `src/index.tsx` contains direct WebSocket event handling with `Relay.connect()` and direct event publishing that bypasses NDK validation and signing.
+
+3. **Data Privacy Issues (#9)**: User identifiers and authentication state including private keys are persisted in localStorage without encryption in `src/lib/stores/auth.ts` and other files, despite the parent requirement to treat all user identifiers as PII.
+
+4. **Error Handling Inconsistencies (#10)**: Error handling varies across modules with mixed approaches to try/catch vs query error states, and ContextVM services lack the required correlation ID tracking for traceability as required by parent AGENTS.md.
+
 ## Contradictory Design Decisions
 
 1. **State Management Inconsistency**:

@@ -35,6 +35,16 @@
 3. **Environment Management** - PM2 process management
 4. **Rollback Capability** - Automatic rollback on deployment failure
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Security Issues (#9)**: GitHub Actions workflows store secrets in GitHub Actions secrets rather than using proper vault solutions, and environment files may contain unencrypted sensitive data, violating the parent requirement for secure credential management.
+
+2. **Test Coverage Gaps**: Workflows lack performance testing, security scanning, and accessibility testing as required by comprehensive testing standards.
+
+3. **Infrastructure as Code Limitations**: No proper infrastructure as code implementation, relying on manual SSH deployment rather than declarative infrastructure management.
+
 ## Contradictory Design Decisions
 
 1. **Multiple Deployment Targets**:

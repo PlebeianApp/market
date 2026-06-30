@@ -46,6 +46,18 @@
 4. **Input Sanitization** - Data cleaning and normalization
 5. **Error Message Formatting** - User-friendly error messaging
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Nostr Event Publishing Inconsistencies (#8)**: Despite the parent requirement that all Nostr event publishing must go through the NDK abstraction layer, several publish functions in this directory submit events through direct WebSocket interfaces via `submitAppSettings` utility function, bypassing proper NDK validation and signing.
+
+2. **Architecture Boundary Violations (#7)**: Some publishing functions in this directory directly interface with WebSocket connections and server-side logic patterns rather than going through proper abstraction layers, violating the architectural boundaries.
+
+3. **Credential Management Issues**: The publishing functions use direct signer usage in publish functions without proper secure credential handling, violating the parent's security constraints.
+
+4. **Error Handling Inconsistencies (#10)**: Error handling in publishing mutations varies with mixed toast-based feedback and lacks the correlation ID tracking required for traceability.
+
 ## Contradictory Design Decisions
 
 1. **Validation Strategy**:

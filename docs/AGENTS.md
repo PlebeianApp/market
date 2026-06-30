@@ -40,6 +40,14 @@
 2. **Command Safety** - Safe command execution for AI assistants
 3. **Agent Rules** - AI agent operational constraints
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Architecture Boundary Violations (#7)**: Documentation discusses ContextVM integration and cross-project imports, acknowledging the architectural boundary violations in the codebase rather than enforcing proper separation.
+
+2. **Security Documentation Gaps**: While security documentation exists, it doesn't adequately address the specific security violations identified in the parent AGENTS.md (private keys in localStorage, credential management issues, etc.).
+
 ## Contradictory Design Decisions
 
 1. **Documentation Organization**:

@@ -48,6 +48,18 @@
 4. **Input Validation** - Client-side input validation utilities
 5. **Error Handling** - Consistent error handling patterns
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Architecture Boundary Violations (#7)**: This directory contains the NDK store (`ndk.ts`) that imports from `contextvm` utilities and implements direct WebSocket event handling that bypasses proper architectural boundaries. The `ndkActions` function `publishEvent` contains logic that directly handles WebSocket connections and event publishing.
+
+2. **Nostr Event Publishing Inconsistencies (#8)**: Despite the parent requirement that all Nostr event publishing must go through the NDK abstraction layer, the `ndkActions.publishEvent` function and related utilities include direct event handling and WebSocket connection logic that bypasses the required NDK abstraction.
+
+3. **Data Privacy Issues (#9)**: Authentication stores in this directory persist private keys and sensitive user data in localStorage without encryption in `src/lib/stores/auth.ts`, violating the parent requirement to treat all user identifiers as PII.
+
+4. **Error Handling Inconsistencies (#10)**: Error handling varies across modules with mixed approaches to try/catch vs query error states, and ContextVM services lack the required correlation ID tracking for traceability.
+
 ## Contradictory Design Decisions
 
 1. **State Management**:

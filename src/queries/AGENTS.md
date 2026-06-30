@@ -44,6 +44,18 @@
 4. **Blacklist Filtering** - Event filtering for blocked content
 5. **Deletion Tracking** - Local deletion state management
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Architecture Boundary Violations (#7)**: This directory contains the `external.tsx` file that directly imports and uses ContextVM client utilities (`PlebianCurrencyClient`), creating cross-project imports that violate the architectural boundaries. The ContextVM client connects directly to relays and bypasses proper abstraction layers.
+
+2. **Nostr Event Publishing Inconsistencies (#8)**: While queries should only fetch data, some query functions may trigger event publishing through side effects or cache invalidation that bypasses the required NDK abstraction.
+
+3. **Data Privacy Issues (#9)**: Query functions store deletion tracking and other sensitive data in localStorage without encryption, treating user identifiers as PII in violation of parent requirements.
+
+4. **Error Handling Inconsistencies (#10)**: ContextVM service calls in `external.tsx` lack correlation ID tracking for traceability, and error handling varies across query files without standardized approaches to try/catch vs query error states.
+
 ## Contradictory Design Decisions
 
 1. **Query Organization**:

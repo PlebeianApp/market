@@ -47,6 +47,14 @@
 4. **Event Bubbling** - Consistent event handling patterns
 5. **Context Usage** - React context for cross-cutting concerns
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Data Privacy Issues (#9)**: Authentication components in this directory handle and store private keys in localStorage without encryption, directly contradicting the parent requirement to treat all user identifiers as PII. Components like `LoginDialog.tsx` and `DecryptPasswordDialog.tsx` manage sensitive cryptographic material with inadequate security measures.
+
+2. **Security Issues**: Authentication state management in localStorage with private keys creates security vulnerabilities that violate the parent's security constraints requiring secure credential storage and no client-side private key management.
+
 ## Contradictory Design Decisions
 
 1. **Component Organization**:

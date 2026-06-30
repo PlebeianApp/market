@@ -42,6 +42,16 @@
 3. **Exit Codes** - Proper process exit codes for success/failure
 4. **Validation** - Environment variable validation before execution
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Security Issues (#9)**: Scripts use fixed test private keys stored in `lib/fixtures.ts`, violating the parent requirement that secrets must be passed via vault or environment variables and never committed in files.
+
+2. **Architecture Boundary Violations (#7)**: Scripts directly use `nostr-tools/Relay.connect()` and direct event publishing instead of going through the required NDK abstraction layer.
+
+3. **Data Privacy Issues**: Generated test data may contain realistic PII without proper sanitization or encryption, violating privacy requirements.
+
 ## Contradictory Design Decisions
 
 1. **Environment Configuration**:

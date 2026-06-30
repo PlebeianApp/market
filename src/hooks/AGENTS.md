@@ -44,6 +44,16 @@
 4. **Selective Updates** - Granular state updates and re-renders
 5. **Background Processing** - Non-blocking operation handling
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Architecture Boundary Violations (#7)**: Some hooks in this directory access and manipulate state that crosses architectural boundaries, particularly hooks that directly interact with relay connections and WebSocket monitoring that should be handled at a lower level.
+
+2. **Data Privacy Issues (#9)**: Hooks may handle PII data without proper encryption or security measures, and there's inconsistent treatment of sensitive user data across different hook implementations.
+
+3. **Error Handling Inconsistencies (#10)**: Error handling varies across hooks with mixed approaches to try/catch vs query error states, lacking the standardized correlation ID tracking required for traceability.
+
 ## Contradictory Design Decisions
 
 1. **Hook Organization**:

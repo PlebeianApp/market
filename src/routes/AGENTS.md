@@ -44,6 +44,16 @@
 4. **Permission Checking** - Entity-level permission validation
 5. **Admin Access Control** - Multi-level admin authorization
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Data Privacy Issues (#9)**: Route components may handle and display PII data without proper encryption or security measures, and authentication state management in route guards treats user identifiers without adequate privacy protection.
+
+2. **Error Handling Inconsistencies (#10)**: Error handling in route loaders and components varies with mixed approaches to try/catch vs query error states, lacking the standardized correlation ID tracking required for traceability.
+
+3. **Security Issues**: Route protection patterns use client-side permission checking only, without server-side authorization validation, creating potential privilege escalation vulnerabilities.
+
 ## Contradictory Design Decisions
 
 1. **Route Organization**:

@@ -49,6 +49,14 @@
 3. **Generic Waiting Support** - waitForEvent with filtering capabilities
 4. **Direction Awareness** - Sent vs received event differentiation
 
+## Known Design Inconsistencies with Parent AGENTS.md
+
+These are acknowledged inconsistencies with the parent directory AGENTS.md design:
+
+1. **Security Issues (#9)**: Test credential management uses fixed test private keys stored directly in source code (`src/lib/fixtures.ts`), violating the parent requirement that secrets must be passed via vault or environment variables and never committed in files.
+
+2. **Architecture Boundary Violations (#7)**: Test infrastructure directly imports and uses `nostr-tools/Relay` to connect to relays, bypassing the NDK abstraction layer required by the parent AGENTS.md design.
+
 ## Contradictory Design Decisions
 
 1. **Infrastructure Management**:
