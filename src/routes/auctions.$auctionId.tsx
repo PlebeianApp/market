@@ -862,6 +862,7 @@ function AuctionDetailRoute() {
 									auctionRootEventId={auctionRootEventId || auctionId}
 									auctionCoordinates={auctionCoordinates}
 									currentUserPubkey={activeUserPubkey}
+									isEnded={ended}
 									className="max-h-[500px]"
 								/>
 
