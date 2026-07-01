@@ -84,6 +84,14 @@ const requireCompressedTokenLockPubkey = (pubkey: string): string => {
 const getChainLegLabel = (leg: AuctionSettlementP2pkChainLegPreflightInput, index: number): string =>
 	leg.bidEventId?.trim() ? `Chain leg ${leg.bidEventId.trim().slice(0, 8)}…` : `Chain leg ${index + 1}`
 
+export const addAuctionSettlementProofAmount = (tokenAmount: number, proofAmount: number): number => {
+	const nextAmount = tokenAmount + proofAmount
+	if (!Number.isSafeInteger(nextAmount)) {
+		throw new Error('Winner token proof sum is malformed')
+	}
+	return nextAmount
+}
+
 export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPreflightInput): AuctionSettlementP2pkPreflightResult => {
 	const derivationPath = input.derivationPath?.trim()
 	if (!derivationPath) {
@@ -138,7 +146,7 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 		if (!Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
 			throw new Error('Winner token proof amount is malformed')
 		}
-		tokenAmount += proof.amount
+		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proof.amount)
 		const proofLockPubkey = requireCompressedTokenLockPubkey(extractP2pkLockPubkeyFromSecret(proof.secret))
 		if (proofLockPubkey !== derivedChildPubkey) {
 			throw new Error('Winner token P2PK lock pubkey does not match auction p2pk_xpub + derivation path')

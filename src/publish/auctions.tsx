@@ -456,8 +456,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
 	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path derivation')
-	if (!Number.isFinite(formData.amount) || formData.amount < AUCTION_MIN_BID_SATS) {
-		throw new Error(`Bid amount must be at least ${AUCTION_MIN_BID_SATS} sats`)
+	if (!Number.isSafeInteger(formData.amount) || formData.amount < AUCTION_MIN_BID_SATS) {
+		throw new Error(`Bid amount must be an integer of at least ${AUCTION_MIN_BID_SATS} sats`)
 	}
 	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
 		throw new Error('Auction start time is required for bidding')
@@ -497,8 +497,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		throw new Error(`Rebid (${formData.amount} sats) must exceed your previous bid on this auction (${prevLeg.amount} sats)`)
 	}
 	const legLockAmount = formData.amount - prevLegAmount
-	if (legLockAmount < AUCTION_MIN_BID_LEG_SATS) {
-		throw new Error(`Bid raise must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
+	if (!Number.isSafeInteger(legLockAmount) || legLockAmount < AUCTION_MIN_BID_LEG_SATS) {
+		throw new Error(`Bid raise must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
 	}
 
 	// Step 2/3 — generate path + derive child pubkey locally. Fresh per

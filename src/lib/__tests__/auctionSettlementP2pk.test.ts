@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { HDKey } from '@scure/bip32'
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
-import { preflightAuctionSettlementP2pk, preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
+import {
+	addAuctionSettlementProofAmount,
+	preflightAuctionSettlementP2pk,
+	preflightAuctionSettlementP2pkChain,
+} from '@/lib/auctionSettlementP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 
 const makeFixture = (derivationPath = '7/11/13/17/19') => {
@@ -142,6 +146,10 @@ describe('auction settlement P2PK preflight', () => {
 				token: makeToken(makeP2pkSecret(fixture.childPubkeyXOnly)),
 			}),
 		).toThrow('Winner token P2PK lock pubkey is not compressed; cannot settle this bid safely')
+	})
+
+	test('rejects unsafe accumulated proof sums', () => {
+		expect(() => addAuctionSettlementProofAmount(Number.MAX_SAFE_INTEGER, 1)).toThrow('Winner token proof sum is malformed')
 	})
 })
 
