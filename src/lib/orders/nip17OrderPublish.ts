@@ -33,6 +33,11 @@ export type PublishNip17OrderMessageResult = {
 export async function publishNip17OrderMessage(params: PublishNip17OrderMessageParams): Promise<PublishNip17OrderMessageResult> {
 	assertOrderMessageRumor(params.rumor)
 
+	const rumorRecipientPubkey = getOrderRumorRecipientPubkey(params.rumor)
+	if (rumorRecipientPubkey !== params.recipientPubkey) {
+		throw new Error('NIP-17 order rumor recipient does not match recipientPubkey')
+	}
+
 	const signerPubkey = await getSignerPubkey(params.signer)
 	if (signerPubkey !== params.rumor.pubkey) {
 		throw new Error('NIP-17 order rumor pubkey does not match signer pubkey')
@@ -97,6 +102,16 @@ async function getSignerPubkey(signer: NDKSigner): Promise<string> {
 	const user = await signer.user()
 	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
 	return user.pubkey
+}
+
+function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string {
+	const recipientTags = rumor.tags.filter((tag) => tag[0] === 'p')
+
+	if (recipientTags.length !== 1 || typeof recipientTags[0]?.[1] !== 'string' || recipientTags[0][1].length === 0) {
+		throw new Error('NIP-17 order rumor must have exactly one recipient p tag')
+	}
+
+	return recipientTags[0][1]
 }
 
 function publishResultHasRelayDetails(result: unknown): boolean {

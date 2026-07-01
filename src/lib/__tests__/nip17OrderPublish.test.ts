@@ -205,4 +205,71 @@ describe('NIP-17 order publish boundary', () => {
 		expect(calls).toHaveLength(1)
 		expect(calls[0]?.target).toBe('recipient')
 	})
+	test('fails closed without publishing when the rumor recipient does not match recipientPubkey', async () => {
+		const senderPrivateKey = generateSecretKey()
+		const senderPubkey = getPublicKey(senderPrivateKey)
+		const intendedRecipientPubkey = getPublicKey(generateSecretKey())
+		const wrongRecipientPubkey = getPublicKey(generateSecretKey())
+		const calls: PublishCall[] = []
+
+		const rumor = createOrderCreationRumor({
+			buyerPubkey: senderPubkey,
+			merchantPubkey: intendedRecipientPubkey,
+			orderId: ORDER_SENTINEL,
+			amountSats: 2100,
+			items: [{ productRef: `30402:${intendedRecipientPubkey}:${PRODUCT_SENTINEL}`, quantity: 1 }],
+			createdAt: 123456,
+		})
+
+		await expect(
+			publishNip17OrderMessage({
+				rumor,
+				signer: createSigner(senderPrivateKey),
+				recipientPubkey: wrongRecipientPubkey,
+				recipientRelayEvents: [relayListEvent(wrongRecipientPubkey, ['wss://wrong-recipient.example'])],
+				senderRelayEvents: [relayListEvent(senderPubkey, ['wss://sender.example'])],
+				publishGiftWrap: async ({ target, relays, giftWrap }) => {
+					calls.push({ target, relays, giftWrap })
+					return new Set(relays)
+				},
+			}),
+		).rejects.toThrow('NIP-17 order rumor recipient does not match recipientPubkey')
+
+		expect(calls).toHaveLength(0)
+	})
+
+	test('fails closed without publishing when the rumor has a malformed extra recipient p tag', async () => {
+		const senderPrivateKey = generateSecretKey()
+		const senderPubkey = getPublicKey(senderPrivateKey)
+		const recipientPubkey = getPublicKey(generateSecretKey())
+		const calls: PublishCall[] = []
+
+		const rumor = createOrderCreationRumor({
+			buyerPubkey: senderPubkey,
+			merchantPubkey: recipientPubkey,
+			orderId: ORDER_SENTINEL,
+			amountSats: 2100,
+			items: [{ productRef: `30402:${recipientPubkey}:${PRODUCT_SENTINEL}`, quantity: 1 }],
+			createdAt: 123456,
+		})
+
+		await expect(
+			publishNip17OrderMessage({
+				rumor: {
+					...rumor,
+					tags: [...rumor.tags, ['p', '']],
+				},
+				signer: createSigner(senderPrivateKey),
+				recipientPubkey,
+				recipientRelayEvents: [relayListEvent(recipientPubkey, ['wss://recipient.example'])],
+				senderRelayEvents: [relayListEvent(senderPubkey, ['wss://sender.example'])],
+				publishGiftWrap: async ({ target, relays, giftWrap }) => {
+					calls.push({ target, relays, giftWrap })
+					return new Set(relays)
+				},
+			}),
+		).rejects.toThrow('Invalid order message rumor')
+
+		expect(calls).toHaveLength(0)
+	})
 })
