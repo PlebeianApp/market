@@ -1,5 +1,10 @@
 # scripts/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** human-only
+- **Sensitive Surface:** Deploy, seed, key, wallet tooling; deploy-staging.sh, encrypt_test_wallet.ts, gen_wallets.ts — high blast radius
+
 ## Scripting Architecture
 
 ### Core Purpose

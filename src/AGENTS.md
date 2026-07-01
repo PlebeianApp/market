@@ -1,5 +1,10 @@
 # src/ Development Guidelines
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** UI + client logic mixed; contains unextracted server code per inconsistency #4
+
 ## Routing
 
 Routes are file-based using TanStack Router. Place route files in `src/routes/` using `createFileRoute`. The dashboard uses a `_dashboard-layout` layout route pattern.

@@ -1,5 +1,10 @@
 # e2e/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** Test infrastructure; global-setup.ts and seed-relay.ts touch relay state and auth flow
+
 ## End-to-End Testing Architecture
 
 ### Core Purpose

@@ -1,5 +1,10 @@
 # src/hooks/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** UI behavior hooks; no signing or custody logic
+
 ## Hook Architecture
 
 ### Core Purpose

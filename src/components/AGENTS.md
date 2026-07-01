@@ -1,5 +1,10 @@
 # src/components/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** UI components using shadcn/ui + Tailwind; XSS surface in content rendering
+
 ## Component Architecture
 
 ### Core Purpose

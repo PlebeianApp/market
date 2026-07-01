@@ -1,5 +1,10 @@
 # .github Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** human-only
+- **Sensitive Surface:** CI/CD supply chain; SSH deploy secrets (#996 H5: unpinned bun, H7: password SSH); workflows control production deployment
+
 ## CI/CD Pipeline Architecture
 
 ### Core Workflow Structure
