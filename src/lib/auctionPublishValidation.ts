@@ -3,6 +3,7 @@ import {
 	type ProductShippingSelection,
 	type ProductShippingSelectionInput,
 } from './utils/productShippingSelections'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from './auction/constants'
 
 export const AUCTION_MIN_DURATION_SECONDS = 60
 
@@ -136,22 +137,27 @@ const parseNonNegativeInteger = (
 	return parsed
 }
 
-const parsePositiveInteger = (
+const parseIntegerAtLeast = (
 	value: string | number | null | undefined,
 	field: AuctionPublishValidationField,
 	label: string,
+	minimumSats: number,
 	issues: AuctionPublishValidationIssue[],
 ): number | undefined => {
-	const parsed = parseNonNegativeInteger(value, field, label, issues)
-	// `if (!parsed) return` was the prior bug: falsy on 0 means the
-	// "must be > 0" check below was never reached for `bidIncrement: '0'`
-	// (the validator returned undefined silently, the form thought it
-	// was valid, and 0-sat increments slipped through). Distinguish
-	// "couldn't parse" (undefined) from "parsed as 0" explicitly.
-	if (parsed === undefined) return
+	const text = toTrimmedString(value)
+	if (!SIGNED_INTEGER_PATTERN.test(text)) {
+		issues.push({ field, message: 'Please enter a valid number.' })
+		return
+	}
 
-	if (parsed <= 0) {
-		issues.push({ field, message: `${label} must be greater than 0` })
+	const parsed = Number(text)
+	if (!Number.isSafeInteger(parsed)) {
+		issues.push({ field, message: 'Please enter a valid number.' })
+		return
+	}
+
+	if (parsed < minimumSats) {
+		issues.push({ field, message: `${label} must be at least ${minimumSats} sats` })
 		return
 	}
 
@@ -233,8 +239,8 @@ const normalizeAuctionPublishInput = (
 		issues.push({ field: 'description', message: 'Auction description is required' })
 	}
 
-	const startingBid = parseNonNegativeInteger(input.startingBid, 'startingBid', 'Starting bid', issues)
-	const bidIncrement = parsePositiveInteger(input.bidIncrement, 'bidIncrement', 'Bid increment', issues)
+	const startingBid = parseIntegerAtLeast(input.startingBid, 'startingBid', 'Starting bid', AUCTION_MIN_BID_SATS, issues)
+	const bidIncrement = parseIntegerAtLeast(input.bidIncrement, 'bidIncrement', 'Bid increment', AUCTION_MIN_BID_LEG_SATS, issues)
 
 	// AUCTIONS.md §4.1: the `reserve` tag is required, with `0` meaning
 	// "no reserve". Default missing/empty input to 0 so the published

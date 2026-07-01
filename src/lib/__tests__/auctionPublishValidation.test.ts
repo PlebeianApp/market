@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 
 const NOW_SECONDS = 1_800_000_000
 
@@ -37,8 +38,16 @@ describe('auction publish validation', () => {
 		expect(() => validate({ reserve: '99' })).toThrow('Reserve must be greater than or equal to the starting bid')
 	})
 
-	test('invalid bid increment is rejected', () => {
-		expect(() => validate({ bidIncrement: '0' })).toThrow('Bid increment must be greater than 0')
+	test('starting bid below auction minimum is rejected', () => {
+		expect(() => validate({ startingBid: String(AUCTION_MIN_BID_SATS - 1) })).toThrow(
+			`Starting bid must be at least ${AUCTION_MIN_BID_SATS} sats`,
+		)
+	})
+
+	test('bid increment below bid-leg minimum is rejected', () => {
+		expect(() => validate({ bidIncrement: String(AUCTION_MIN_BID_LEG_SATS - 1) })).toThrow(
+			`Bid increment must be at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
+		)
 	})
 
 	test('end time at or before max start/current time is rejected', () => {

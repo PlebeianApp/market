@@ -33,6 +33,7 @@ import {
 	type AuctionSettlementGracePreset,
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
@@ -52,7 +53,7 @@ const INITIAL_FORM: AuctionFormData = {
 	summary: '',
 	description: '',
 	startingBid: '',
-	bidIncrement: '1',
+	bidIncrement: String(AUCTION_MIN_BID_LEG_SATS),
 	reserve: undefined,
 	startAt: '',
 	endAt: '',
@@ -1108,7 +1109,8 @@ function AuctionTabContent({
 					<Input
 						id="auction-starting-bid"
 						type="number"
-						min="0"
+						min={AUCTION_MIN_BID_SATS}
+						step="1"
 						value={formData.startingBid}
 						onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
 					/>
@@ -1121,7 +1123,8 @@ function AuctionTabContent({
 					<Input
 						id="auction-bid-increment"
 						type="number"
-						min="1"
+						min={AUCTION_MIN_BID_LEG_SATS}
+						step="1"
 						value={formData.bidIncrement}
 						onFocus={(e) => e.target.select()}
 						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value.replace(/^0+(\d)/, '$1') }))}
