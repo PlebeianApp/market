@@ -88,6 +88,12 @@ export interface ValidateBidInput {
 	 * "no prior bid" → starting_bid is the baseline.
 	 */
 	currentTopBid?: number
+	/**
+	 * For a `prev_bid` continuation, the bidder's own replacement-chain
+	 * delta (`bid.amount - previous bid amount`). Supplied by callers
+	 * that hold the per-auction bid graph.
+	 */
+	bidChainLegAmount?: number
 	/** Optional validator policy hook. */
 	policy?: PolicyHook
 }
@@ -140,7 +146,7 @@ export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: nu
  * module docstring on short-circuiting.
  */
 export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
-	const { auction, bid, observedAt, nut7State, currentTopBid = 0, policy } = input
+	const { auction, bid, observedAt, nut7State, currentTopBid = 0, bidChainLegAmount, policy } = input
 
 	// --- Step 1: cross-event reference integrity -----------------------------
 
@@ -244,6 +250,22 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 			claim: 'bid_invalid',
 			reason: inCurveWindow ? 'under_curve' : 'under_increment',
 			detail: `amount=${bid.amount} < required=${minRequired} (top_bid=${currentTopBid}, t=${effectiveT})`,
+		}
+	}
+	if (bid.prevBidId) {
+		if (bidChainLegAmount === undefined) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'replacement_chain_invalid',
+				detail: `prev_bid=${bid.prevBidId} context unavailable for replacement-chain validation`,
+			}
+		}
+		if (!Number.isSafeInteger(bidChainLegAmount) || bidChainLegAmount < AUCTION_MIN_BID_LEG_SATS) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'under_increment',
+				detail: `replacement-chain delta=${bidChainLegAmount} must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
+			}
 		}
 	}
 

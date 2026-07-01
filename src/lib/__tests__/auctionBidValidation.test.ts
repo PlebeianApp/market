@@ -101,6 +101,7 @@ interface BidOverrides {
 	auctionCoordinate?: string
 	sellerPubkey?: string
 	lockSecrets?: string[]
+	prevBidId?: string
 }
 
 const buildLockSecret = (params: { childPubkey: string; locktime: number; refundPubkey: string }): string => {
@@ -151,6 +152,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
 		status: 'locked',
+		prevBidId: overrides.prevBidId,
 	}
 }
 
@@ -418,6 +420,74 @@ describe('validateBid — amount and floor', () => {
 		const bid = buildBid(auction, { amount: currentTopBid + AUCTION_MIN_BID_LEG_SATS })
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent', currentTopBid })
 		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('rejects rebid when own replacement-chain delta is below AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS - 1
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+			expect(verdict.detail).toMatch(/replacement-chain delta/)
+		}
+	})
+
+	test('accepts rebid when own replacement-chain delta equals AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('rejects rebid when previous-bid context is missing', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const bid = buildBid(auction, {
+			amount: AUCTION_MIN_BID_SATS + AUCTION_MIN_BID_LEG_SATS,
+			prevBidId: '3'.repeat(64),
+		})
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent', currentTopBid: 0 })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('replacement_chain_invalid')
+		}
+	})
+
+	test('rejects rebid when replacement-chain delta is not a safe integer', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS + 0.5
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+		}
 	})
 
 	test('curve behavior applies on top of the minimum baseline', () => {

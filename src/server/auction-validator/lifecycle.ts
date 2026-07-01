@@ -148,12 +148,22 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 		observedAt: bidState.observedAt,
 		nut7State,
 		currentTopBid,
+		bidChainLegAmount: deriveBidChainLegAmount(auctionState, bidState),
 	})
 
 	// validateBid returns a strict union; widen it for the publisher.
 	if (verdict.claim === 'valid_bid_placed') return { claim: 'valid_bid_placed' }
 	if (verdict.claim === 'bid_pending_review') return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
 	return { claim: 'bid_invalid', reason: verdict.reason, detail: verdict.detail }
+}
+
+const deriveBidChainLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number | undefined => {
+	const prevBidId = bidState.bid.prevBidId?.trim()
+	if (!prevBidId) return undefined
+	const previousBidState = auctionState.bids.get(prevBidId)
+	if (!previousBidState) return undefined
+	if (previousBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) return undefined
+	return bidState.bid.amount - previousBidState.bid.amount
 }
 
 // ============================================================================
