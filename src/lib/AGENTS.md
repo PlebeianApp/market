@@ -1,5 +1,10 @@
 # src/lib/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** human-only
+- **Sensitive Surface:** Parent of nostr/, stores/, wallet/, payments/, schemas/ — signing, custody, trust boundaries (#996 H8: unencrypted localStorage)
+
 ## Library Architecture
 
 ### Core Purpose

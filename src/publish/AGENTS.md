@@ -1,5 +1,10 @@
 # src/publish/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** human-only
+- **Sensitive Surface:** Write-side event construction + signing for all marketplace entities; bypasses NDK validation per inconsistency #8
+
 ## Publishing Architecture
 
 ### Core Purpose

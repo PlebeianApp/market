@@ -120,6 +120,32 @@ PR.
 
 ---
 
+## Bot Governance Taxonomy
+
+Every directory in this repository has a **governance class** that determines
+what level of automation is appropriate and what approval is required before
+merging changes. Each subdirectory `AGENTS.md` must declare its class.
+
+| Class                              | Typical Scope                                                                 | Approval Model                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| **bot-safe**                       | Docs, formatting, dead code removal, low-risk dep bumps, test fixture cleanup | Bot prepares, auto-merges after CI passes        |
+| **bot-reviewed-human-approve**     | UI work, moderate refactors, non-critical feature changes                     | Bot proposes, human approves                     |
+| **human-only**                     | Secrets, key handling, signing, payment settlement, trust boundaries          | Human review required, no automated PRs          |
+| **architecture-decision-required** | Cross-package dependency changes, major restructures, root config             | Explicit architectural approval from maintainers |
+
+### Class Inheritance
+
+A child directory's governance class must be **at least as restrictive** as its
+parent's. The restriction ordering is:
+
+`human-only` > `bot-reviewed-human-approve` > `bot-safe`
+
+The `architecture-decision-required` class is orthogonal — it is triggered by
+_scope_ (cross-cutting changes such as root config or cross-package deps) and
+always takes precedence regardless of the directory's base class.
+
+_(Taxonomy adapted from @ChiefmonkeyArt's audit report.)_
+
 ## Instructions
 
 ### AGENTS.md Protocol — Read This First
@@ -156,6 +182,9 @@ These apply across **all** projects in this monorepo unless a subdirectory
 
 #### Architecture Boundaries
 
+- **Governance class inheritance.** A child directory's governance class must be
+  at least as restrictive as its parent's (`human-only` > `bot-reviewed-human-approve`
+  > `bot-safe`; `architecture-decision-required` is orthogonal and always wins).
 - No direct cross-project imports. The client (`src/`) must not import from
   `contextvm/` or `e2e/`. Shared types and utilities should be extracted
   explicitly, not imported sideways.
@@ -275,6 +304,10 @@ These apply across **all** projects in this monorepo unless a subdirectory
 - **Reject PRs that bypass the protocol.** A PR that changes code behavior
   without touching `AGENTS.md`, or changes `AGENTS.md` without touching code, is
   incomplete.
+- **Enforce governance class.** If a PR touches a `human-only` directory and was
+  prepared by automation, require explicit human review and block auto-merge. If
+  it touches an `architecture-decision-required` path, require maintainer
+  architectural sign-off before approval.
 
 #### For Auditors
 
@@ -308,6 +341,11 @@ When creating a new `AGENTS.md` in a subdirectory, follow this structure:
 # AGENTS.md — [Directory Name]
 
 > Brief one-line purpose of what this directory contains and achieves.
+
+## Governance
+
+- **Class:** [bot-safe | bot-reviewed-human-approve | human-only | architecture-decision-required]
+- **Sensitive Surface:** [What makes this directory this class — specific files, trust boundaries, security findings]
 
 ## Context
 

@@ -1,5 +1,10 @@
 # src/routes/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** UI routing layer; no protocol or payment logic
+
 ## Routing Architecture
 
 ### Core Purpose

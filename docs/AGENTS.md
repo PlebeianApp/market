@@ -1,5 +1,10 @@
 # docs/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-safe
+- **Sensitive Surface:** Specifications and reference docs only; pure prose, no executable code
+
 ## Documentation Architecture
 
 ### Core Documentation Types

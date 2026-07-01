@@ -1,5 +1,10 @@
 # src/queries/ Directory Design Decisions Overview
 
+## Governance
+
+- **Class:** bot-reviewed-human-approve
+- **Sensitive Surface:** Read-side relay parsing; parse bugs surface forged data but no write capability
+
 ## Query Architecture
 
 ### Core Purpose
