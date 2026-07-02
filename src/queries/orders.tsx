@@ -4,7 +4,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { orderKeys } from './queryKeyFactory'
-import { isValidATag } from '@/lib/utils/coords'
+import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -31,9 +31,19 @@ export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelate
 
 	if (!orderEvent?.tags) return null
 
-	const auctionTag = orderEvent.tags.find((t) => t.at(0) === 'a' && typeof t.at(1) === 'string' && t.at(1)?.startsWith('30408'))
+	const auctionTag = orderEvent.tags.find((t) => t.at(0) === 'a' && typeof t.at(1) === 'string')
 
 	const coords = auctionTag?.at(1)
+
+	if (!coords) return null
+
+	// Parse the coordinate and check for exact kind === 30408
+	try {
+		const parsedCoords = getCoordsFromATag(coords)
+		if (parsedCoords.kind !== 30408) return null
+	} catch {
+		return null
+	}
 
 	if (!coords || !isValidATag(coords)) return null
 

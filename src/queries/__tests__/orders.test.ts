@@ -76,6 +76,19 @@ describe('auctionOrders utilities', () => {
 
 			expect(getAuctionCoordinatesFromOrder(orderWithRelatedEvents)).toBe(auctionCoords)
 		})
+
+		test('returns null for malformed auction coordinates with wrong kind', () => {
+			const order = createMockOrderEvent([
+				['p', 'seller-pubkey'],
+				['type', '1'],
+				['order', 'order-id'],
+				['amount', '1000'],
+				['a', '304080:seller-pubkey:not-an-auction'], // Wrong kind
+				['item', '30408:seller-pubkey:auction-id', '1'],
+			])
+
+			expect(getAuctionCoordinatesFromOrder(order)).toBeNull()
+		})
 	})
 
 	describe('isAuctionOrder', () => {
