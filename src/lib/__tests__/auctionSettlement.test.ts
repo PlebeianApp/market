@@ -18,6 +18,7 @@ import {
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { HDKey } from '@scure/bip32'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
+import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../auction/constants'
 
 const makeBid = (params: {
 	id: string
@@ -739,7 +740,7 @@ describe('enhanced auctionSettlement validation', () => {
 		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_AUCTION_XPUB, VALID_DERIVATION_PATH)
 
 		const bidEvent = {
-			id: 'bid123',
+			id: 'bcc9ba78e0d723ec397224a893f7eb64edecdbc5fe1ae9ca98c07d17c9fa8ba7',
 			pubkey: BUYER_PUBKEY,
 			tags: [
 				['a', AUCTION_COORDINATE],
@@ -749,36 +750,56 @@ describe('enhanced auctionSettlement validation', () => {
 		} as NDKEvent
 
 		const pathRelease = {
+			id: '5d269b05756eeac7b780a284c32241480ad6f6cdad581f7bb98d821e95734555',
 			pubkey: BUYER_PUBKEY,
+			kind: 1025, // Path Release Kind
 			tags: [
 				['a', AUCTION_COORDINATE],
 				['p', SELLER_PUBKEY],
 				['derivation_path', VALID_DERIVATION_PATH],
 				['child_pubkey', childPubkey],
 				['release_reason', 'settlement'],
-				['e', 'bid123'],
+				['e', bidEvent.id],
 			],
 		} as NDKEvent
 
 		const settlement = {
+			id: 'f80a95f6a422e479255a5499b2bd5d2bbb6dbd118860a29459336b20ea05f455',
 			pubkey: SELLER_PUBKEY,
+			kind: 1024,
 			tags: [
 				['a', AUCTION_COORDINATE],
 				['winner', BUYER_PUBKEY],
 				['final_amount', '1000'],
 				['status', 'settled'],
-				['winning_bid', 'bid123'],
-				['path_release', 'path123'],
+				['winning_bid', bidEvent.id],
+				['path_release', pathRelease.id],
 			],
 		} as NDKEvent
 
 		const auctionEvent = {
-			id: 'auction123',
+			id: '139c2ea6671eb11022c62a4ee6fe4b8a2c73b0967c276f6d088256b1dc1fdd7c',
 			pubkey: SELLER_PUBKEY,
 			tags: [
 				['d', 'test-auction'],
 				['p2pk_xpub', REAL_AUCTION_XPUB],
-				// ... other required tags for full validation
+				['title', 'Test Auction Item'],
+				['auction_type', 'english'],
+				['start_at', '1000'],
+				['end_at', '2000'],
+				['max_end_at', '2100'],
+				['settlement_grace', '3600'],
+				['min_bid_curve', 'exponential:5.0'],
+				['currency', 'SAT'],
+				['price', '1000', 'SAT'],
+				['starting_bid', '1000', 'SAT'],
+				['bid_increment', '100'],
+				['reserve', '500'],
+				['mint', 'https://mint.example.com'],
+				['key_scheme', 'hd_p2pk'],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['schema', 'auction_v1'],
+				['extension_rule', 'none'],
 			],
 		} as NDKEvent
 
@@ -786,6 +807,8 @@ describe('enhanced auctionSettlement validation', () => {
 
 		const order = makeOrder({ buyerPubkey: BUYER_PUBKEY, sellerPubkey: SELLER_PUBKEY })
 		const result = validateAuctionSettlementEvents([settlement], [pathRelease], AUCTION_COORDINATE, order, auctionEvent, bidEvents)
+
+		console.log(result)
 
 		// Everything should validate correctly
 		expect(result.state).toBe('fully_validated_settled')
