@@ -61,16 +61,16 @@ export async function publishNip17OrderMessage(params: PublishNip17OrderMessageP
 	})
 
 	await publishReadyGiftWrap({
-		target: 'recipient',
-		relays: relayTargets.recipient.relays,
-		giftWrap: wraps.recipient.giftWrap,
+		target: 'sender',
+		relays: relayTargets.sender.relays,
+		giftWrap: wraps.sender.giftWrap,
 		publishGiftWrap: params.publishGiftWrap,
 	})
 
 	await publishReadyGiftWrap({
-		target: 'sender',
-		relays: relayTargets.sender.relays,
-		giftWrap: wraps.sender.giftWrap,
+		target: 'recipient',
+		relays: relayTargets.recipient.relays,
+		giftWrap: wraps.recipient.giftWrap,
 		publishGiftWrap: params.publishGiftWrap,
 	})
 

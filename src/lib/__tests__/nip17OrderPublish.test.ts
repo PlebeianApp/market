@@ -92,6 +92,8 @@ describe('NIP-17 order publish boundary', () => {
 		expect(result.rumorId).toBe(rumor.id)
 		expect(result.relayTargets.ready).toBe(true)
 		expect(calls).toHaveLength(2)
+		expect(calls[0]?.target).toBe('sender')
+		expect(calls[1]?.target).toBe('recipient')
 
 		const recipientCall = calls.find((call) => call.target === 'recipient')
 		const senderCall = calls.find((call) => call.target === 'sender')
@@ -173,7 +175,7 @@ describe('NIP-17 order publish boundary', () => {
 
 		expect(calls).toHaveLength(0)
 	})
-	test('fails when a gift wrap publish returns no relay success', async () => {
+	test('fails before recipient delivery when sender self-wrap publish returns no relay success', async () => {
 		const senderPrivateKey = generateSecretKey()
 		const senderPubkey = getPublicKey(senderPrivateKey)
 		const recipientPubkey = getPublicKey(generateSecretKey())
@@ -200,10 +202,10 @@ describe('NIP-17 order publish boundary', () => {
 					return new Set()
 				},
 			}),
-		).rejects.toThrow('NIP-17 recipient gift wrap could not be published')
+		).rejects.toThrow('NIP-17 sender gift wrap could not be published')
 
 		expect(calls).toHaveLength(1)
-		expect(calls[0]?.target).toBe('recipient')
+		expect(calls[0]?.target).toBe('sender')
 	})
 	test('fails closed without publishing when the rumor recipient does not match recipientPubkey', async () => {
 		const senderPrivateKey = generateSecretKey()
