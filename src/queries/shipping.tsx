@@ -6,6 +6,7 @@ import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { injectOrderEventIntoCache } from './orderCacheHelpers'
 import { orderKeys, shippingKeys } from './queryKeyFactory'
 
 // Re-export shippingKeys for use in other files
@@ -439,7 +440,7 @@ export type ShippingUpdateParams = {
 /**
  * Updates the shipping status of an order on the Nostr network
  */
-export const updateShippingStatus = async (params: ShippingUpdateParams): Promise<string> => {
+export const updateShippingStatus = async (params: ShippingUpdateParams): Promise<NDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -505,7 +506,7 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
 
-	return event.id
+	return event
 }
 
 /**
@@ -518,8 +519,15 @@ export const useUpdateShippingStatusMutation = () => {
 
 	return useMutation({
 		mutationFn: updateShippingStatus,
-		onSuccess: async (eventId, params) => {
-			// Show toast first for immediate feedback
+		onSuccess: async (event, params) => {
+			// Inject the published shipping event directly into the cache.
+			// invalidateQueries alone returns stale data because relays haven't echoed
+			// the event yet (1-5s propagation delay). Fixes #772, #1103.
+			queryClient.setQueriesData({ queryKey: orderKeys.all }, (old) =>
+				injectOrderEventIntoCache(old as any, event),
+			)
+
+			// Show toast for immediate feedback
 			toast.success(`Order shipping status updated to ${params.status}`)
 
 			// Call the onSuccess callback if provided (for client-side refresh)
@@ -528,7 +536,7 @@ export const useUpdateShippingStatusMutation = () => {
 				return // Exit early if the client is handling the refresh
 			}
 
-			// Invalidate all relevant queries
+			// Background reconciliation
 			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
 
@@ -538,9 +546,6 @@ export const useUpdateShippingStatusMutation = () => {
 				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(currentUserPubkey) })
 				await queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(currentUserPubkey) })
 			}
-
-			// Trigger a refetch to show updated status before the mutation fully settles.
-			await queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
 		},
 		onError: (error) => {
 			console.error('Failed to update shipping status:', error)

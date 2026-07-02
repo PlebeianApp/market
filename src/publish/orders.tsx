@@ -1,5 +1,6 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND, ORDER_STATUS } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
+import { injectOrderEventIntoCache } from '@/queries/orderCacheHelpers'
 import { orderKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKTag } from '@nostr-dev-kit/ndk'
@@ -263,7 +264,15 @@ export const useUpdateOrderStatusMutation = () => {
 	return useMutation({
 		mutationFn: updateOrderStatus,
 		onSuccess: async (event, params) => {
-			// Show toast first for immediate feedback
+			// PART 2 (CRITICAL): Inject the published event directly into the cache.
+			// invalidateQueries alone returns stale data because relays haven't echoed
+			// the event yet (1-5s propagation delay). This fixes the "button pressed but
+			// nothing updates" bug (#772, #1103).
+			queryClient.setQueriesData({ queryKey: orderKeys.all }, (old) =>
+				injectOrderEventIntoCache(old as any, event),
+			)
+
+			// Show toast for immediate feedback
 			toast.success(`Order status updated to ${params.status}`)
 
 			// Call the onSuccess callback if provided (for client-side refresh)
@@ -272,7 +281,7 @@ export const useUpdateOrderStatusMutation = () => {
 				return // Exit early if the client is handling the refresh
 			}
 
-			// Invalidate all relevant queries
+			// Background reconciliation — will eventually fetch authoritative data
 			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
 
@@ -282,9 +291,6 @@ export const useUpdateOrderStatusMutation = () => {
 				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(currentUserPubkey) })
 				await queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(currentUserPubkey) })
 			}
-
-			// Trigger a refetch to show updated status before the mutation fully settles.
-			await queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
 		},
 		onError: (error) => {
 			console.error('Failed to update order status:', error)
@@ -305,7 +311,7 @@ export type PaymentReceiptParams = {
 /**
  * Creates a payment receipt for an order on the Nostr network
  */
-export const createPaymentReceipt = async (params: PaymentReceiptParams): Promise<string> => {
+export const createPaymentReceipt = async (params: PaymentReceiptParams): Promise<NDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -348,7 +354,7 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
 
-	return event.id
+	return event
 }
 
 /**
@@ -361,11 +367,14 @@ export const useCreatePaymentReceiptMutation = () => {
 
 	return useMutation({
 		mutationFn: createPaymentReceipt,
-		onSuccess: async (_, params) => {
-			// Invalidate all order queries
-			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+		onSuccess: async (event, params) => {
+			// Inject the published receipt directly into the cache for instant UI update.
+			queryClient.setQueriesData({ queryKey: orderKeys.all }, (old) =>
+				injectOrderEventIntoCache(old as any, event),
+			)
 
-			// Invalidate the specific order details
+			// Invalidate all order queries for background reconciliation
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
 
 			// If we have the current user's pubkey, invalidate buyer and seller specific queries

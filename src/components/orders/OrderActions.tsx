@@ -8,7 +8,7 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey, isAuctionOrder } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
+import { Ban, Check, CheckCircle, Clock, Loader2, Package, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -113,31 +113,51 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 				<div className="flex gap-3">
 					{canCancel && (
 						<Button variant="outline" onClick={() => setIsCancelOpen(true)} disabled={updateOrderStatus.isPending}>
-							<X className="w-4 h-4 mr-2" /> Cancel Order
+							{updateOrderStatus.isPending ? (
+								<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+							) : (
+								<><X className="w-4 h-4 mr-2" /> Cancel Order</>
+							)}
 						</Button>
 					)}
 
 					{canConfirm && (
 						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending}>
-							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
+							{updateOrderStatus.isPending ? (
+								<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+							) : (
+								<><Check className="w-4 h-4 mr-2" /> Confirm Payment Received</>
+							)}
 						</Button>
 					)}
 
 					{canProcess && (
 						<Button onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)} disabled={updateOrderStatus.isPending}>
-							<Package className="w-4 h-4 mr-2" /> Process Order
+							{updateOrderStatus.isPending ? (
+								<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+							) : (
+								<><Package className="w-4 h-4 mr-2" /> Process Order</>
+							)}
 						</Button>
 					)}
 
 					{canShip && (
 						<Button onClick={() => setIsShippingOpen(true)} disabled={updateShippingStatus.isPending}>
-							<Truck className="w-4 h-4 mr-2" /> Mark As Shipped
+							{updateShippingStatus.isPending ? (
+								<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+							) : (
+								<><Truck className="w-4 h-4 mr-2" /> Mark As Shipped</>
+							)}
 						</Button>
 					)}
 
 					{canReceive && (
 						<Button onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)} disabled={updateOrderStatus.isPending}>
-							<CheckCircle className="w-4 h-4 mr-2" /> I've Received This Item
+							{updateOrderStatus.isPending ? (
+								<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+							) : (
+								<><CheckCircle className="w-4 h-4 mr-2" /> I've Received This Item</>
+							)}
 						</Button>
 					)}
 				</div>
