@@ -377,6 +377,14 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 - `key_scheme`: MUST match the auction `key_scheme`.
 - `status`: `locked` at publish time.
 
+> **Note — `status` is write-once.** The `status` tag on kind `1023`
+> is written once at publish time (`locked`) and represents only the
+> initial lock state. It is **not** updated as the auction progresses.
+> The bidder status shown to users (`winning`, `outbid`, `won`,
+> `was_outbid`) is a **client-computed derived value** computed locally
+> from the bid chain — it never appears as a tag on any event. See
+> `src/lib/auctionBidderStatus.ts` and issue #1040.
+
 ### Optional tags
 
 - `prev_bid`: previous bid event id from the same bidder on this
@@ -825,6 +833,25 @@ interface BidderAggregateReputation {
 This is purely advisory; compliant clients MAY use it to gate
 high-stakes bidding, or ignore it entirely. v1 ships the schema; the
 specific weighting/aggregation policy is up to each validator.
+
+## 4.5 Kind `1026` Auction Fallback Offer (regular event)
+
+Signed by the **seller**. Emitted when the winning bidder has griefed
+(withheld the path) and the seller elects to settle with a lower
+bidder via the fallback chain (§8 / §9). A kind-1025 path release from
+the accepting bidder references the offer via its `fallback_offer` tag
+(§4.3.1).
+
+### Tags
+
+- `e`: `<auction_root_event_id>`
+- `p`: `<fallback_bidder_pubkey>` — the bidder being offered settlement.
+- `amount`: the settlement amount offered, in sats.
+- `status`: offer lifecycle value, e.g. `offered`, `accepted`, `declined`.
+
+> Kind `1026` is already referenced from the settlement flow (§4.3.1
+> `fallback_offer`, §9 fallback mechanics); this subsection documents
+> its event model within the §4 event catalogue.
 
 ---
 
@@ -1733,7 +1760,7 @@ Keep these generic fields from day 1:
 - `auction_type`: `english | dutch | sealed_first_price | sealed_second_price`
 - `bid_visibility`: `open | commit_reveal`
 - `price_rule`: `highest_wins | lowest_wins`
-- `extension_rule`: `none | anti_sniping:<window_seconds>:<extension_seconds>`
+- `min_bid_curve`: anti-snipe floor curve applied in `(end_at, max_end_at]` (see §4.1)
 - `max_end_at`: hard upper bound for any auction with anti-sniping
 - `vadium_ratio_bps`: deposit ratio
 - `settlement_policy`: lock/payout strategy identifier
@@ -1750,146 +1777,90 @@ V1 MUST enforce:
 
 ## 11. Implementation Notes for This Repo
 
-> **Note.** This section still reflects the superseded
-> `cashu_p2pk_path_oracle_v1` implementation. It will be rewritten in
-> place as the bidder-held-path implementation lands (issue/branch:
-> `auctions/p2pk-buyer-path-custody-v1`). Until then, treat any
-> reference to `request_path`, `submit_bid_token`,
-> `request_settlement`, `get_auction_state`, kind 30410, or
-> `path_issuer` below as historical context for the migration, not as
-> normative implementation guidance.
+The `cashu_p2pk_bidder_path_v1` scheme is implemented entirely client-side
+in the app. There is **no path oracle, no CVM coordinator, no
+kind-30410 registry, no `src/server/auction/` directory, and no NIP-44
+envelopes to a third party.** Bidders generate derivation paths locally;
+the seller holds the xpriv; validators (auditors) hold neither and only
+emit reputation events. The earlier `cashu_p2pk_path_oracle_v1`
+implementation notes that previously lived here are obsolete and have
+been removed.
 
-- Integrate bid lock generation with existing NIP-60 wallet path; the
-  `lockAuctionBidFunds` function accepts a pre-resolved `lockPubkey`
-  (child pubkey from a `request_path` response) rather than an xpub-
-  generated path.
-- Add auction schema validators similar to existing `src/lib/schemas/*`.
-- Keep a local index keyed by `auction_root_event_id`.
-- Persist immutable root snapshot and enforce on updates.
-- Store bidder-side grant receipts in `localStorage` so the bidder can
-  audit after the fact.
-- The path issuer runs as a **ContextVM server** (`contextvm/server.ts`)
-  that:
-  - announces itself via CEP-6 (kinds 11316–11320) with CEP-15 schema
-    hashes for the four `english_auction_path_oracle_v1` tools;
-  - registers the four MCP tools (`request_path`, `submit_bid_token`,
-    `request_settlement`, `get_auction_state`) on the same MCP server
-    process as any other ContextVM tools the deployment exposes;
-  - sets `injectClientPubkey: true` so each tool handler receives the
-    authenticated caller pubkey from the wrapping kind-25910 / 1059
-    signer;
-  - persists registry state as kind 30410 events (encrypted to the
-    issuer's own pubkey via NIP-44).
-- Tool handlers re-use the transport-agnostic domain modules in
-  `src/server/auction/{registry,loadAuction,grants,settlement}.ts`,
-  parameterized through an `AuctionContext` (NDK + signer + issuer
-  pubkey + state store).
-- **Issuer-private durable state** lives in a `bun:sqlite` database at
-  `AUCTION_STATE_PATH` (default: `./contextvm/data/auction-state.sqlite`),
-  encapsulated by `src/server/auction/state-store.ts`. Today it carries
-  the §7.5.1 rate-limit window and the path-request dedup table —
-  state that doesn't belong on a relay but must survive process
-  restarts so a misbehaving bidder can't reset their counters by
-  triggering a reload.
-- The kind `30410` registry on Nostr remains the canonical store for
-  granted paths. SQLite is for issuer-private observations. On restart,
-  the registry rebuilds from relay replay; the SQLite tables persist
-  unchanged.
-- Bidder-side typed clients are generated via [ctxcn](https://github.com/ContextVM/ctxcn)
-  pointed at the deployed facilitator's pubkey. Generated artefacts live
-  under `src/lib/ctxcn-clients/`. The dev seed (`bun dev:seed`) spawns
-  the CVM server first, waits for the ready signal, then runs
-  `scripts/seed.ts` — every seeded bid calls `request_path` against the
-  live server so the registry on the dev relay has real entries.
-- **Seller-side oracle discovery** lives in
-  `src/queries/auctionOracles.ts` and the
-  `<AuctionOracleSelector>` component in
-  `src/components/sheet-contents/auctions/`. The query subscribes to
-  `kind 11317` (`TOOLS_LIST_KIND`) filtered on
-  `#k = io.contextvm/common-schema`, then accepts any author whose
-  `i` tags cover one of the four `english_auction_path_oracle_v1`
-  tool names (`request_path`, `submit_bid_token`, `request_settlement`,
-  `get_auction_state`). Authors are enriched with their kind-11316
-  server-info announcement (name / about / website / picture). The
-  app's configured default oracle is always included as a fallback so
-  the form has something to pre-select before discovery resolves —
-  it's marked `source: 'configured'` until a matching announcement
-  is observed, at which point the discovered record (with fresher
-  metadata) takes over.
-- The CVM server announces in every environment
-  (`isAnnouncedServer: true`), but **what relays the announcements
-  reach is stage-gated** in `contextvm/server.ts` via
-  `getOperationalRelays()` + `getBootstrapRelayUrls()`. The matrix:
+### 11.0 Module map
 
-  | Stage (`APP_STAGE`)                               | Operational relays                                                                                                                        | Announcement bootstrap relays                                                                                                    |
-  | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-  | `production`                                      | `APP_RELAY_URL` (`wss://relay.plebeian.market`) + `wss://relay.contextvm.org` + `wss://relay2.contextvm.org`                              | SDK default (`damus.io` / `primal.net` / `nos.lol` / `snort.social` / `nostr.mom` / `nostr.oxtr.dev`)                            |
-  | `staging` (covers both `auctionsdev` + `staging`) | `APP_RELAY_URL` only (`wss://relay.staging.plebeian.market`). **No** public CEP-15 relays. Throws at startup if `APP_RELAY_URL` is unset. | `[]` — announcements confined to the staging relay                                                                               |
-  | `development`                                     | `APP_RELAY_URL` only (default `ws://localhost:10547`)                                                                                     | `[]` — confined to localhost (the SDK's local-relay auto-skip would also cover this; explicit `[]` defends against config drift) |
+The protocol logic is split across small, focused modules under
+`src/lib/`. Each module owns one concern:
 
-  `bootstrapRelayUrls: []` (vs. `undefined`) sets the SDK's
-  `hasExplicitBootstrapRelayUrls=true`, which disables the
-  `DEFAULT_BOOTSTRAP_RELAY_URLS` fallback inside
-  `getDiscoverabilityPublishRelayUrls`. Without that, staging
-  announcements would silently land on the public Nostr discovery
-  relays even though the operational pool is staging-only.
+- `src/lib/auction/` — protocol core:
+  - `constants.ts` — protocol constants (event kinds, tag names, preset values).
+  - `events.ts` — typed auction event shapes (listing, bid, settlement, verdict).
+  - `tagBuilders.ts` — tag-array constructors for each event kind.
+  - `validation.ts` — pure validation pipeline for bid / auditor rules
+    (side-effect-free functions).
+  - `bidderRecords.ts` — bidder-side local record shapes (path, proofs,
+    refund keys).
+- `src/lib/auctionPathOracle.ts` — local derivation-path generation
+  (bidder-side only). `generateAuctionDerivationPath()` produces a
+  high-entropy path (~155 bits). Despite the legacy name there is **no
+  oracle process**; this is pure client-side path generation.
+- `src/lib/auctionHd.ts` — HD key derivation from wallet keys
+  (`derive(p2pk_xpub, path)` via `@scure/bip32`).
+- `src/lib/auctionP2pk.ts` — P2PK secret parsing and pubkey
+  normalization (x-only <-> compressed secp256k1 hex).
+- `src/lib/auctionSettlement.ts` — settlement resolution: winner
+  determination, fallback chain, and tie-break logic. Bid-window
+  validation via `getAuctionWindowValidBids(auctionEvent, bids)`.
+- `src/lib/auctionSettlementP2pk.ts` — preflight validation of
+  settlement tokens (`preflightAuctionSettlementP2pk`) before the seller
+  attempts redemption.
+- `src/lib/auctionBidderStatus.ts` — client-side bidder-status
+  derivation. Computes `winning` / `outbid` / `won` / `was_outbid` from
+  the bid chain. These are derived values, never event tags (see the
+  §4.2 status note and issue #1040).
+- `src/lib/auctionMintSelection.ts` — mint selection for bidding
+  (delta-aware across a rebid chain).
+- `src/lib/auctionMintSync.ts` — mint-list synchronization utility.
+- `src/lib/auctionPublishValidation.ts` — form validation for auction
+  creation (anti-snipe presets, settlement-grace presets).
+- `src/lib/auctionCountdownLabels.ts` — UI countdown formatting helpers.
+- `src/lib/schemas/auction/` — Zod schemas parsing raw `NDKEvent`s into
+  the typed shapes in `events.ts`
+  (`auctionEvent.ts`, `bidEvent.ts`, `settlementEvents.ts`,
+  `validatorEvents.ts`, `tagAccess.ts`, `common.ts`).
 
-- Announcements (kinds 11316/11317/11318/11319/11320 + relay-list 10002) are published exactly once per server start — `start()` calls
-  `publishPublicAnnouncements()` on connect, then never again unless
-  the process restarts. The PM2 staging deploy restarts the
-  `market-contextvm-staging` process on each release, so each deploy
-  re-emits a fresh announcement set; the relay's addressable-event
-  semantics (replaceable by `(pubkey, kind, d-tag)`) collapse them
-  to a single live record per kind. There is no auto-deletion on
-  shutdown — the SDK's `deleteAnnouncement(reason)` exists but is
-  not wired to `close()`.
-- **Auctionsdev runs its own parallel CVM server.** The
-  `auctions/**` feature lives independently of `master` for weeks at a
-  time, so `deploy-auctionsdev.yml` deploys **two** PM2 apps onto the
-  staging host: `market-auctionsdev` (the web app) and
-  `market-contextvm-auctionsdev` (a dedicated CVM server). The
-  auctionsdev CVM uses a separate `CVM_SERVER_KEY` (GitHub secret
-  `AUCTIONSDEV_CVM_SERVER_KEY`, falling back to
-  `STAGING_CVM_SERVER_KEY` if unset) — so it has its own pubkey and
-  publishes its own kind-11316/11317 announcements on
-  `wss://relay.staging.plebeian.market` alongside whatever
-  `market-contextvm-staging` (deployed from `master`) is broadcasting.
-  The auctionsdev oracle picker shows both; the auctionsdev oracle is
-  pre-selected because that's what the auctionsdev web app's
-  `/api/config.cvmServerPubkey` resolves to.
+### Key differences from the old (path-oracle) section 11
 
-  Required GitHub secret to give auctionsdev a distinct identity:
-
-  ```
-  AUCTIONSDEV_CVM_SERVER_KEY=<new 32-byte hex private key>
-  ```
-
-  Both PM2 apps share the same `cwd`
-  (`/home/deployer/market-auctionsdev`) and `.env`, so changes to
-  `contextvm/server.ts`, the auction-domain modules, or the
-  `auction-state.sqlite` schema take effect on auctionsdev as soon as
-  the `auctions/*` branch is pushed — no master merge required.
+- **No CVM oracle tools.** Bidders generate paths locally via
+  `auctionPathOracle.ts`.
+- **No `kind-30410` registry.** No NIP-44 encrypted envelopes to an oracle.
+- **No `src/server/auction/` directory.** (A `src/server/auction-validator/`
+  directory does exist for the auditor / validator role — that is the
+  passive relay-subscribing, reputation-issuing process described in
+  §4.4, **not** a path issuer. It holds no key material and no paths.)
+- **Path generation is `src/lib/auctionPathOracle.ts`**, pure client-side.
+- **The validator is `src/lib/auction/validation.ts`** — pure functions,
+  side-effect-free. The server-side validator process
+  (`src/server/auction-validator/`) subscribes to relays, re-runs these
+  rules, NUT-7-checks mint state, and emits kind-30440 verdicts.
 
 ### 11.0.1 Browser-side relay matrix
 
-The browser's relay choices follow the same stage gating as the CVM
-server. The build inlines `process.env.NODE_ENV='production'` for both
-staging and prod deploys, so we read the canonical stage from
-`/api/config` (`configStore.state.config.stage`) at runtime.
+The browser's relay choices follow the same stage gating as the server.
+The build inlines `process.env.NODE_ENV='production'` for both staging
+and prod deploys, so the canonical stage is read from `/api/config`
+(`configStore.state.config.stage`) at runtime.
 
-| Stage         | Currency client (`getCurrencyClient` in `src/queries/external.tsx`)                                                                                          | Auction-oracle picker (`fetchAuctionOracleDirectory` in `src/queries/auctionOracles.ts`)  |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `production`  | App relay (`wss://relay.plebeian.market`) + `PUBLIC_CVM_RELAYS` (`relay.contextvm.org` / `relay2.contextvm.org`) — global discoverability of the BTC oracle. | App relay only (via `relayUrls` + `exclusiveRelay`). The prod CVM server announces there. |
-| `staging`     | App relay only (`wss://relay.staging.plebeian.market`). `getCurrencyServerRelays('staging') === []`.                                                         | App relay only.                                                                           |
-| `development` | App relay only (`ws://localhost:10547`). `getCurrencyServerRelays('development') === []`.                                                                    | App relay only.                                                                           |
+> **Note.** Specific relay URLs are environment-configurable via
+> `APP_RELAY_URL` and related env vars (`PUBLIC_CVM_RELAYS`, etc.). See
+> PR #1062. The placeholders below (`<app-relay>`, `<public-cvm-relays>`)
+> stand in for those env-resolved values; concrete relay URLs are never
+> baked into this spec.
 
-`fetchAuctionOracleDirectory` passes `exclusiveRelay: true` to NDK
-so the discovery query ignores any kind-11317 events arriving from
-relays that NDK happens to be connected to for general traffic
-(`DEFAULT_PUBLIC_RELAYS` like `damus.io` / `nos.lol` are in NDK's pool
-but never speak for auction oracles). Without this, a stray
-prod-CVM announcement on `damus.io` would show up in the staging
-picker.
+| Stage         | Currency client (`getCurrencyClient` in `src/queries/external.tsx`)                     |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `production`  | `<app-relay>` + `<public-cvm-relays>` — global discoverability of the BTC oracle.        |
+| `staging`     | `<app-relay>` only. `getCurrencyServerRelays('staging') === []`.                         |
+| `development` | `<app-relay>` only (default localhost). `getCurrencyServerRelays('development') === []`. |
 
 ## 11.1 Platform / issuer responsibilities
 
@@ -1903,7 +1874,9 @@ picker.
 
 ## 11.2 Gamma spec integration
 
-Unchanged from prior drafts:
+Auction listings (kind `30408`) extend the product listing shape defined
+in `gamma_spec.md` (kind `30402`). See `gamma_spec.md` §3 for shared
+field semantics. Unchanged from prior drafts:
 
 - Auction events reuse product-shaped tags from `gamma_spec.md` §3.
 - Post-auction communication uses the existing encrypted order flow (kind
@@ -2076,158 +2049,111 @@ vs. `cashu_p2pk_path_oracle_v1` (superseded):
 
 ---
 
-## 15. Implementation Appendix (Cashu Examples)
+## 15. Implementation Appendix (Bidder-Held-Path Flow)
 
-> **Note.** Code samples below were written for the superseded
-> `cashu_p2pk_path_oracle_v1` scheme — they show the bidder receiving
-> a `lockPubkey` from an oracle and sending the token to the oracle via
-> NIP-17. The bidder-held-path scheme replaces that flow entirely:
-> the bidder generates the path locally, computes `lockPubkey =
-derive(auction.p2pk_xpub, path)`, and publishes `lock_secret` +
-> `proof_y` on the public kind-1023 bid event (no NIP-17, no oracle).
-> The lock construction in §5.3/5.4 is otherwise unchanged. This
-> appendix will be rewritten alongside the implementation; treat it as
-> migration reference until then.
+The snippets below illustrate the actual `cashu_p2pk_bidder_path_v1`
+bidder flow. The live implementation lives in the `src/lib/auction*`
+modules (see §11.0); these samples are trimmed for clarity — consult the
+source for production details.
 
-### 15.1 Create bid lock + commitment (bidder, 1-of-1)
+### 15.1 The bidder flow (no oracle)
+
+The bidder never contacts an oracle. The full lock-and-publish sequence:
+
+1. **Generate path** — `generateAuctionDerivationPath()` from
+   `src/lib/auctionPathOracle.ts` (bidder-side, ~155 bits entropy).
+2. **Derive child pubkey** — `derive(auction.p2pk_xpub, path)` using
+   `HDKey` from `@scure/bip32` (`src/lib/auctionHd.ts`).
+3. **Lock funds** — `wallet.send(amount, existingProofs, { p2pk: {
+   pubkey: childPubkey, locktime, refundKeys: [refundPubkey] } })`.
+4. **Publish kind `1023`** — with `lock_secret` (one per proof) and
+   `proof_y` tags, **publicly** on relays — **not** via NIP-17 to an
+   oracle.
+5. **No oracle involvement anywhere.** The path stays bidder-private
+   until settlement (kind `1025`).
+
+### 15.2 Generate path + derive child pubkey (bidder)
 
 ```ts
-import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
-import { sha256 } from '@noble/hashes/sha256.js'
+import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
+import { HDKey } from '@scure/bip32'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
-type CreateBidInput = {
-	mintUrl: string
-	bidAmount: number
-	auctionRootEventId: string
-	sellerPubkey: string
-	lockPubkey: string // child pubkey granted by path issuer
-	refundPubkey: string
-	locktime: number
-	existingProofs: Proof[]
-}
+// 1. Bidder generates a high-entropy path locally.
+const path = generateAuctionDerivationPath()
 
-export async function createLockedBid(input: CreateBidInput) {
-	const mint = new CashuMint(input.mintUrl)
-	const wallet = new CashuWallet(mint)
-	await wallet.loadMint()
-
-	const { send: lockedProofs, keep: changeProofs } = await wallet.send(input.bidAmount, input.existingProofs, {
-		includeDleq: true,
-		p2pk: {
-			pubkey: input.lockPubkey,
-			locktime: input.locktime,
-			refundKeys: [input.refundPubkey],
-		},
-	})
-
-	const cashuToken = getEncodedToken({ mint: input.mintUrl, proofs: lockedProofs })
-	const bidNonce = crypto.randomUUID()
-
-	const privatePayload = {
-		auction_root_event_id: input.auctionRootEventId,
-		amount: input.bidAmount,
-		mint: input.mintUrl,
-		cashu_token: cashuToken,
-		refund_pubkey: input.refundPubkey,
-		lock_script_descriptor: {
-			pubkey: input.lockPubkey,
-			locktime: input.locktime,
-		},
-		nonce: bidNonce,
-	}
-
-	const commitment = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(privatePayload))))
-
-	const publicBidTags = [
-		['e', input.auctionRootEventId],
-		['p', input.sellerPubkey],
-		['amount', String(input.bidAmount)],
-		['currency', 'SAT'],
-		['mint', input.mintUrl],
-		['commitment', commitment],
-		['locktime', String(input.locktime)],
-		['refund_pubkey', input.refundPubkey],
-		['child_pubkey', input.lockPubkey],
-		['bid_nonce', bidNonce],
-	]
-
-	return { publicBidTags, privatePayload, changeProofs }
-}
+// 2. Derive the child pubkey from the seller's published xpub.
+const parent = HDKey.fromExtendedKey(auction.p2pk_xpub)
+const child = parent.derive(path) // public-side derivation only
+const childPubkey = bytesToHex(child.publicKey) // compressed secp256k1 hex
 ```
 
-### 15.2 Verify an `auction_path_grant_v1` before locking (bidder)
+### 15.3 Lock bid funds (bidder, 1-of-1 P2PK)
 
 ```ts
-import { HDKey } from '@scure/bip32'
+import { CashuMint, CashuWallet } from '@cashu/cashu-ts'
+import type { Proof } from '@cashu/cashu-ts'
 
-export function verifyAuctionPathGrant(params: {
-	grant: { xpub: string; derivationPath: string; childPubkey: string }
-	expectedXpub: string
-	expectedIssuer: string
-	grantIssuer: string
-}): void {
-	if (params.grantIssuer !== params.expectedIssuer) {
-		throw new Error('Path grant issuer mismatch')
-	}
-	if (params.grant.xpub !== params.expectedXpub) {
-		throw new Error('Path grant xpub mismatch')
-	}
-	const derived = HDKey.fromExtendedKey(params.grant.xpub).derive(params.grant.derivationPath).publicKey
-	if (!derived) {
-		throw new Error('Failed to derive child pubkey')
-	}
-	const hex = Array.from(derived)
-		.map((byte) => byte.toString(16).padStart(2, '0'))
-		.join('')
-	if (hex !== params.grant.childPubkey.toLowerCase()) {
-		throw new Error('Path grant child pubkey does not match xpub+path derivation')
-	}
-}
+const mint = new CashuMint(mintUrl)
+const wallet = new CashuWallet(mint)
+await wallet.loadMint()
+
+const { send: lockedProofs } = await wallet.send(bidAmount, existingProofs, {
+  includeDleq: true,
+  p2pk: {
+    pubkey: childPubkey,        // = derive(auction.p2pk_xpub, path)
+    locktime,                   // = auction.max_end_at + auction.settlement_grace
+    refundKeys: [refundPubkey], // bidder refund branch
+  },
+})
+
+// lockedProofs[].secret holds the NUT-10 P2PK lock script (pubkey,
+// locktime, refund) — publishable in cleartext via the `lock_secret` tag.
 ```
 
-### 15.3 Claim winning bid (seller, 1-of-1)
+### 15.4 Claim winning bid (seller, after path release)
 
 ```ts
 import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
+// seller derives child privkey from seller_xpriv + the released path
 export async function claimWinningBid(
-	mintUrl: string,
-	lockedProofs: Proof[],
-	spendingPrivkey: string, // seller-derived child privkey from released path
+  mintUrl: string,
+  lockedProofs: Proof[],
+  spendingPrivkey: string, // = derive(seller_xpriv, path).privateKey
 ) {
-	const mint = new CashuMint(mintUrl)
-	const wallet = new CashuWallet(mint)
-	await wallet.loadMint()
-
-	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey })
+  const mint = new CashuMint(mintUrl)
+  const wallet = new CashuWallet(mint)
+  await wallet.loadMint()
+  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey })
 }
 ```
 
-### 15.4 Reclaim losing bid after locktime (bidder)
+### 15.5 Reclaim losing bid after locktime (bidder)
 
 ```ts
 import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
 export async function reclaimExpiredBid(
-	mintUrl: string,
-	lockedProofs: Proof[],
-	refundPrivkey: string, // key matching refund_pubkey
+  mintUrl: string,
+  lockedProofs: Proof[],
+  refundPrivkey: string, // key matching refund_pubkey
 ) {
-	const mint = new CashuMint(mintUrl)
-	const wallet = new CashuWallet(mint)
-	await wallet.loadMint()
-
-	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey })
+  const mint = new CashuMint(mintUrl)
+  const wallet = new CashuWallet(mint)
+  await wallet.loadMint()
+  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey })
 }
 ```
 
-### 15.5 Non-negotiable safety rules
+### 15.6 Non-negotiable safety rules
 
 - NEVER publish `cashu_token` or raw proofs in kind `1023` public
   tags/content.
-- NEVER publish `derivation_path` in kind `1023` public tags/content.
-- ALWAYS verify `HDKey(xpub).derive(path).publicKey == childPubkey` on
-  the bidder side before locking funds (§5.6).
-- ALWAYS reject bids whose `child_pubkey` was not granted by the
-  auction's `path_issuer` on the issuer / settlement side.
+- NEVER publish `derivation_path` in kind `1023` public tags/content
+  (it appears only in the kind-1025 path release, after `max_end_at`).
+- ALWAYS verify `HDKey(auction.p2pk_xpub).derive(path).publicKey ==
+  childPubkey` on the bidder side before locking funds (§5.6).
+- ALWAYS run settlement preflight (`preflightAuctionSettlementP2pk`,
+  `src/lib/auctionSettlementP2pk.ts`) before the seller attempts
+  redemption.
