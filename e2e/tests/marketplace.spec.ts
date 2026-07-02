@@ -74,50 +74,20 @@ async function openCart(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: select shipping for all sellers in the cart
-// ---------------------------------------------------------------------------
-
-async function selectShippingForAllSellers(page: Page): Promise<void> {
-	// Each seller group has its own ShippingSelector (Radix Select).
-	// Wait for shipping selectors to be visible.
-	const cartDialog = page.getByRole('dialog', { name: /your cart/i })
-	const shippingTriggers = cartDialog.getByText('Select shipping method')
-
-	// Wait for at least one shipping trigger to appear
-	await expect(shippingTriggers.first()).toBeVisible({ timeout: 10_000 })
-
-	// Count how many need selecting
-	const count = await shippingTriggers.count()
-
-	for (let i = 0; i < count; i++) {
-		// Click the first remaining unselected trigger
-		const trigger = cartDialog.getByText('Select shipping method').first()
-		await trigger.click()
-
-		// Select Digital Delivery (free, available for both sellers)
-		const option = page.getByRole('option', { name: /digital delivery/i })
-		await expect(option).toBeVisible({ timeout: 5_000 })
-		await option.click()
-
-		// Wait for the select to close before clicking the next one
-		await page.waitForTimeout(500)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Helper: navigate through checkout steps to the payment step
 // ---------------------------------------------------------------------------
 
 /**
  * After clicking Checkout in the cart, the checkout flow goes through:
- * 1. Shipping Address step (even for digital delivery)
+ * 1. Shipping Address step — select a shipping method per product (sidebar),
+ *    then fill the (digital-delivery) contact and submit "Continue to Review".
  * 2. Order Summary step
  * 3. Payment step (invoices)
  *
- * This helper navigates through shipping and summary to reach payment.
- * For digital delivery, the shipping form requires no address fields but
- * we must wait for the async shipping-type detection to complete before
- * the form's submit button becomes enabled.
+ * Post-redesign (#1045): shipping methods are no longer chosen in the cart.
+ * They are selected on the checkout sidebar, one "Select shipping method"
+ * trigger per product. This helper selects Digital Delivery (free) for every
+ * product before submitting the shipping form.
  */
 async function proceedToPaymentStep(page: Page): Promise<void> {
 	// Wait for checkout page to load (shipping step appears first)
@@ -132,7 +102,20 @@ async function proceedToPaymentStep(page: Page): Promise<void> {
 			.isVisible()
 			.catch(() => false)
 	) {
-		// Wait for the async shipping-type check to complete.
+		// 1a. Select a shipping method for each product on the checkout sidebar.
+		// The redesign renders one "Select shipping method" trigger per product.
+		const methodTriggers = page.getByText('Select shipping method')
+		await expect(methodTriggers.first()).toBeVisible({ timeout: 15_000 })
+		const methodCount = await methodTriggers.count()
+		for (let i = 0; i < methodCount; i++) {
+			await page.getByText('Select shipping method').first().click()
+			const option = page.getByRole('option', { name: /digital delivery/i })
+			await expect(option).toBeVisible({ timeout: 5_000 })
+			await option.click()
+			await page.waitForTimeout(500)
+		}
+
+		// 1b. Wait for the async shipping-type check to complete.
 		// For digital delivery, the "Digital Delivery" notice appears once
 		// the form detects all items use digital shipping (noAddressRequired = true).
 		// This also enables the submit button by removing required field validators.
@@ -228,41 +211,47 @@ test.describe('Multi-Merchant Cart', () => {
 		await expect(cartDialog.getByText('Bitcoin Hardware Wallet')).toBeVisible()
 		await expect(cartDialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// There should be seller group containers (border + shadow cards)
-		// with separate shipping selectors for each seller
-		const shippingTriggers = cartDialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(2, { timeout: 10_000 })
+		// Post-redesign (#1045): shipping selection moved from the cart to the
+		// checkout sidebar. The cart defers shipping — each product renders a
+		// "Select shipping at checkout" notice (exact), one per product.
+		const shippingNotices = cartDialog.getByText('Select shipping at checkout', { exact: true })
+		await expect(shippingNotices).toHaveCount(2, { timeout: 10_000 })
 	})
 
-	test('cart requires shipping per seller before checkout', async ({ newUserPage }) => {
+	test('checkout requires a shipping method for every product before review', async ({ newUserPage }) => {
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
 
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
 
-		// Warning should show that shipping is missing
-		await expect(newUserPage.getByText(/please select shipping options for/i)).toBeVisible({ timeout: 10_000 })
-
-		// Checkout button should be disabled
+		// Post-redesign (#1045): the cart defers shipping to checkout. The cart
+		// shows a banner prompting the buyer, and the Checkout button is always
+		// enabled (the shipping gate now lives on the checkout page).
+		await expect(cartDialog.getByText(/Select shipping at checkout for 2 items\./)).toBeVisible({ timeout: 10_000 })
 		const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
-		await expect(checkoutButton).toBeDisabled()
+		await expect(checkoutButton).toBeEnabled()
+		await checkoutButton.click()
 
-		// Select shipping for first seller only
-		const firstTrigger = cartDialog.getByText('Select shipping method').first()
-		await firstTrigger.click()
+		// On the checkout shipping step, "Continue to Review" stays disabled until
+		// every product has a shipping method selected.
+		await expect(newUserPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 30_000 })
+		const continueButton = newUserPage.locator('button[form="shipping-form"]')
+		await expect(continueButton).toBeDisabled()
+
+		// Select a method for the first product only.
+		await newUserPage.getByText('Select shipping method').first().click()
 		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
 		await newUserPage.waitForTimeout(500)
 
-		// Checkout should still be disabled (second seller missing)
-		await expect(checkoutButton).toBeDisabled()
+		// Still disabled — the second product has no method yet.
+		await expect(continueButton).toBeDisabled()
 
-		// Select shipping for second seller
-		const secondTrigger = cartDialog.getByText('Select shipping method').first()
-		await secondTrigger.click()
+		// Select a method for the second product.
+		await newUserPage.getByText('Select shipping method').first().click()
 		await newUserPage.getByRole('option', { name: /digital delivery/i }).click()
 
-		// Now checkout should be enabled
-		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
+		// Now "Continue to Review" is enabled.
+		await expect(continueButton).toBeEnabled({ timeout: 5_000 })
 	})
 })
 
@@ -307,7 +296,6 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
-		await selectShippingForAllSellers(newUserPage)
 
 		// Click checkout
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
@@ -316,6 +304,8 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await checkoutButton.click()
 
 		// Navigate through shipping → summary → payment
+		// (proceedToPaymentStep selects a shipping method per product on the
+		// checkout sidebar — post-redesign, #1045.)
 		await proceedToPaymentStep(newUserPage)
 
 		// With 2 sellers × (1 merchant + 1 V4V) = 4 invoices.
@@ -334,13 +324,14 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 
 		await addProductsFromBothSellers(newUserPage)
 		await openCart(newUserPage)
-		await selectShippingForAllSellers(newUserPage)
 
 		// Checkout
 		const cartDialog = newUserPage.getByRole('dialog', { name: /your cart/i })
 		await cartDialog.getByRole('button', { name: /^checkout$/i }).click()
 
 		// Navigate through shipping → summary → payment
+		// (proceedToPaymentStep selects a shipping method per product on the
+		// checkout sidebar — post-redesign, #1045.)
 		await proceedToPaymentStep(newUserPage)
 
 		// Pay all 4 invoices using WebLN
