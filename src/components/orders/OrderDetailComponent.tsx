@@ -6,9 +6,9 @@ import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
 import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
-import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { auctionByATagQueryOptions, usePrivateAuctionClaimForOrder } from '@/queries/auctions'
-import { getAuctionCoordinatesFromOrder, type OrderWithRelatedEvents } from '@/queries/orders'
+import { getAuctionCoordinatesFromOrder, getOrderStatus, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
@@ -279,9 +279,10 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Get status styles for coloring the header
 	const { headerBgColor } = getStatusStyles(order)
+	const statusExplanation = getStatusMessaging(order, isBuyer)
 
 	// Get order status from latest status update or default to pending
-	const orderStatus = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.[1] || 'pending'
+	const orderStatus = getOrderStatus(order)
 
 	// Get product references and quantities from order
 	const orderItems = getOrderItems(orderEvent)
@@ -464,45 +465,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Status helpers
 	const { bgColor: statusBadgeBgColor, iconName, label: statusLabel } = getStatusStyles(order)
-
-	// Helper to determine status explanation based on order state
-	const statusExplanation = useMemo(() => {
-		if (isBuyer) {
-			switch (orderStatus) {
-				case 'pending':
-					return 'Awaiting seller confirmation of your payment.'
-				case 'confirmed':
-					return 'Order has been confirmed. The seller will confirm that they are processing the item(s) for shipment.'
-				case 'processing':
-					return 'Your item is being prepared for shipment. The seller will confirm once the item(s) are on the way.'
-				case 'shipped':
-					return 'Your item(s) are on the way. Click "Received" once the package arrives to complete the order.'
-				case 'completed':
-					return 'Order completed successfully!'
-				case 'cancelled':
-					return 'This order has been cancelled.'
-				default:
-					return 'Awaiting action from the seller.'
-			}
-		}
-
-		switch (orderStatus) {
-			case 'pending':
-				return 'Verify the payment was received and shipping information was provided before pressing "Confirm".'
-			case 'confirmed':
-				return 'Order has been confirmed by seller. Mark as "Processing" to confirm you are preparing the item(s) for shipment.'
-			case 'processing':
-				return 'Item is ready for shipment. Mark as shipped when you send it to the buyer. Include a shipment tracking number if available.'
-			case 'shipped':
-				return 'Waiting for the buyer to confirm receipt.'
-			case 'completed':
-				return 'Order completed successfully.'
-			case 'cancelled':
-				return 'This order has been cancelled.'
-			default:
-				return 'No pending actions required.'
-		}
-	}, [orderStatus, isBuyer])
 
 	const headerTitle = isAuctionOrder && auctionData ? `Auction: ${getAuctionTitle(auctionData)}` : `Products (${products.length} unique)`
 	const headerSubText = isAuctionOrder ? undefined : `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`

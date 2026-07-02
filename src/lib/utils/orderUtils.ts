@@ -112,6 +112,46 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 	}
 }
 
+export const getStatusMessaging = (order: OrderWithRelatedEvents, isBuyer: boolean) => {
+	const status = getOrderStatus(order)
+
+	if (isBuyer) {
+		switch (status) {
+			case 'pending':
+				return 'Awaiting seller confirmation of your payment.'
+			case 'confirmed':
+				return 'Order has been confirmed. The seller will confirm that they are processing the item(s) for shipment.'
+			case 'processing':
+				return 'Your item is being prepared for shipment. The seller will confirm once the item(s) are on the way.'
+			case 'shipped':
+				return 'Your item(s) are on the way. Click "Received" once the package arrives to complete the order.'
+			case 'completed':
+				return 'Order completed successfully!'
+			case 'cancelled':
+				return 'This order has been cancelled.'
+			default:
+				return 'Awaiting action from the seller.'
+		}
+	}
+
+	switch (status) {
+		case 'pending':
+			return 'Verify the payment was received and shipping information was provided before pressing "Confirm".'
+		case 'confirmed':
+			return 'Order has been confirmed by seller. Mark as "Processing" to confirm you are preparing the item(s) for shipment.'
+		case 'processing':
+			return 'Item is ready for shipment. Mark as shipped when you send it to the buyer. Include a shipment tracking number if available.'
+		case 'shipped':
+			return 'Waiting for the buyer to confirm receipt.'
+		case 'completed':
+			return 'Order completed successfully.'
+		case 'cancelled':
+			return 'This order has been cancelled.'
+		default:
+			return 'No pending actions required.'
+	}
+}
+
 export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 	const status = getOrderStatus(order)
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')

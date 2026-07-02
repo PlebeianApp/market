@@ -24,6 +24,9 @@ export const ORDER_STATUS = {
 	CANCELLED: 'cancelled',
 } as const
 
+// Export explicit enum values type
+export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS]
+
 // Shipping status values
 export const SHIPPING_STATUS = {
 	PROCESSING: 'processing',
@@ -31,6 +34,11 @@ export const SHIPPING_STATUS = {
 	DELIVERED: 'delivered',
 	EXCEPTION: 'exception',
 } as const
+
+// Export explicit enum values type
+export type ShippingStatus = (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS]
+
+export type OrderShippingStatus = OrderStatus | ShippingStatus
 
 // ===============================
 // 1. Order Creation (Kind: 16, type: 1)
