@@ -7,6 +7,7 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
+import { computeEnableOutbox } from '@/lib/outbox-policy'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -292,11 +293,13 @@ export const ndkActions = {
 		const explicitRelays = getRelayUrls(relays)
 		// @ts-ignore - Bun.env is available in Bun runtime
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+		// @ts-ignore - Bun.env is available in Bun runtime
+		const disableOutbox = typeof Bun !== 'undefined' && Bun.env?.NEXT_PUBLIC_DISABLE_OUTBOX === 'true'
 		const stage = getCurrentStage()
 
-		// Disable outbox model for staging, development, and local-only mode
-		// This prevents NDK from discovering and connecting to additional relays
-		const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
+		// Outbox model: off in staging/development and local-relay-only mode.
+		// `disableOutbox` lets production turn it off via env without a redeploy (#1046).
+		const enableOutbox = computeEnableOutbox({ stage, localRelayOnly, disableOutbox })
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
