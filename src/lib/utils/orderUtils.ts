@@ -1,6 +1,6 @@
-import { ORDER_STATUS } from '../schemas/order'
+import { ORDER_STATUS, SHIPPING_STATUS } from '../schemas/order'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getOrderStatus } from '@/queries/orders'
+import { getShippingStatus, getOrderStatus } from '@/queries/orders'
 
 // Invoice-related types for order utility functions
 export interface InvoiceData {
@@ -114,49 +114,50 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 
 export const getStatusMessaging = (order: OrderWithRelatedEvents, isBuyer: boolean) => {
 	const status = getOrderStatus(order)
+	const shipping = getShippingStatus(order)
 
 	if (isBuyer) {
+		if (status === ORDER_STATUS.PROCESSING && shipping === SHIPPING_STATUS.SHIPPED) {
+			return 'Your item(s) are on the way. Click "Received" once the package arrives to complete the order.'
+		}
+
 		switch (status) {
-			case 'pending':
+			case ORDER_STATUS.PENDING:
 				return 'Awaiting seller confirmation of your payment.'
-			case 'confirmed':
+			case ORDER_STATUS.CONFIRMED:
 				return 'Order has been confirmed. The seller will confirm that they are processing the item(s) for shipment.'
-			case 'processing':
+			case ORDER_STATUS.PROCESSING:
 				return 'Your item is being prepared for shipment. The seller will confirm once the item(s) are on the way.'
-			case 'shipped':
-				return 'Your item(s) are on the way. Click "Received" once the package arrives to complete the order.'
-			case 'completed':
+			case ORDER_STATUS.COMPLETED:
 				return 'Order completed successfully!'
-			case 'cancelled':
+			case ORDER_STATUS.CANCELLED:
 				return 'This order has been cancelled.'
-			default:
-				return 'Awaiting action from the seller.'
 		}
 	}
 
+	if (status === ORDER_STATUS.PROCESSING && shipping === SHIPPING_STATUS.SHIPPED) {
+		return 'Waiting for the buyer to confirm reception of the order.'
+	}
+
 	switch (status) {
-		case 'pending':
+		case ORDER_STATUS.PENDING:
 			return 'Verify the payment was received and shipping information was provided before pressing "Confirm".'
-		case 'confirmed':
-			return 'Order has been confirmed by seller. Mark as "Processing" to confirm you are preparing the item(s) for shipment.'
-		case 'processing':
-			return 'Item is ready for shipment. Mark as shipped when you send it to the buyer. Include a shipment tracking number if available.'
-		case 'shipped':
-			return 'Waiting for the buyer to confirm receipt.'
-		case 'completed':
-			return 'Order completed successfully.'
-		case 'cancelled':
+		case ORDER_STATUS.CONFIRMED:
+			return 'Order has been confirmed. Press "Process Order" to confirm you are preparing the item(s) for shipment.'
+		case ORDER_STATUS.PROCESSING:
+			return 'Item is getting ready for shipment. Mark as shipped when you send it to the buyer. Include a shipment tracking number if available.'
+		case ORDER_STATUS.COMPLETED:
+			return 'Order completed successfully. The buyer confirmed they received the order.'
+		case ORDER_STATUS.CANCELLED:
 			return 'This order has been cancelled.'
-		default:
-			return 'No pending actions required.'
 	}
 }
 
 export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 	const status = getOrderStatus(order)
-	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+	const shipping = getShippingStatus(order)
 
-	if (status === ORDER_STATUS.PROCESSING && hasBeenShipped) {
+	if (status === ORDER_STATUS.PROCESSING && shipping === SHIPPING_STATUS.SHIPPED) {
 		return {
 			bgColor: 'bg-orange-100',
 			headerBgColor: 'bg-orange-100/30',
@@ -167,6 +168,14 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 	}
 
 	switch (status) {
+		case ORDER_STATUS.PENDING:
+			return {
+				bgColor: 'bg-gray-100',
+				headerBgColor: 'bg-gray-100/30',
+				textColor: 'text-gray-800',
+				iconName: 'clock',
+				label: 'Pending',
+			}
 		case ORDER_STATUS.CONFIRMED:
 			return {
 				bgColor: 'bg-blue-100',
@@ -198,15 +207,6 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 				textColor: 'text-red-800',
 				iconName: 'cross',
 				label: 'Cancelled',
-			}
-		case ORDER_STATUS.PENDING:
-		default:
-			return {
-				bgColor: 'bg-gray-100',
-				headerBgColor: 'bg-gray-100/30',
-				textColor: 'text-gray-800',
-				iconName: 'clock',
-				label: 'Pending',
 			}
 	}
 }

@@ -4,8 +4,9 @@ import {
 	ORDER_PROCESS_KIND,
 	ORDER_STATUS,
 	PAYMENT_RECEIPT_KIND,
-	type OrderShippingStatus,
+	SHIPPING_STATUS,
 	type OrderStatus,
+	type ShippingStatus,
 } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
@@ -861,7 +862,7 @@ export const useOrderById = (orderId: string) => {
 export const getOrderStatus = (order: OrderWithRelatedEvents): OrderStatus => {
 	// NOTE: We assume that OrderWithRelatedEvents has a `statusUpdates` event list property (of length N) that is sorted
 	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestStatus` references the latest
-	// event (at index 0) from this list.
+	// status event (at index 0) from this list.
 
 	const status = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.at(1)
 
@@ -873,9 +874,18 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): OrderStatus => {
 	return ORDER_STATUS.PENDING
 }
 
-export const getOrderShippingStatus = (order: OrderWithRelatedEvents): OrderShippingStatus => {
-	const status = getOrderStatus(order)
+export const getShippingStatus = (order: OrderWithRelatedEvents): ShippingStatus | null => {
+	// NOTE: We assume that OrderWithRelatedEvents has a `shippingUpdates` event list property (of length N) that is sorted
+	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestShipping` references the latest
+	// shipping event (at index 0) from this list.
+
 	const shipping = order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.at(1)
+
+	if (shipping && Object.values(SHIPPING_STATUS).includes(shipping as any)) {
+		return shipping as ShippingStatus
+	}
+
+	return null
 }
 
 /**

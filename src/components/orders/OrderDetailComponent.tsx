@@ -278,11 +278,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const deliveryContact = orderEvent.tags.find((tag) => tag[0] === 'email')?.[1]
 
 	// Get status styles for coloring the header
-	const { headerBgColor } = getStatusStyles(order)
-	const statusExplanation = getStatusMessaging(order, isBuyer)
-
-	// Get order status from latest status update or default to pending
-	const orderStatus = getOrderStatus(order)
+	const { headerBgColor } = useMemo(() => getStatusStyles(order), [order.latestStatus, order.latestShipping])
+	const statusExplanation = useMemo(() => getStatusMessaging(order, isBuyer), [order.latestStatus, order.latestShipping, isBuyer])
 
 	// Get product references and quantities from order
 	const orderItems = getOrderItems(orderEvent)

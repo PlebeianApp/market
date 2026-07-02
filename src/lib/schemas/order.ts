@@ -38,8 +38,6 @@ export const SHIPPING_STATUS = {
 // Export explicit enum values type
 export type ShippingStatus = (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS]
 
-export type OrderShippingStatus = OrderStatus | ShippingStatus
-
 // ===============================
 // 1. Order Creation (Kind: 16, type: 1)
 // ===============================
