@@ -4,6 +4,23 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { compressImage, isCompressibleImage, formatFileSize, getCompressionStats } from '@/lib/image-compression'
+
+const COMPRESSED_IMAGE_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+}
+
+function isImageUploadDebugEnabled(): boolean {
+  return typeof process !== 'undefined' && process.env?.IMAGE_UPLOAD_DEBUG === 'true'
+}
+
+function withMimeExtension(fileName: string, mimeType: string): string {
+  const extension = COMPRESSED_IMAGE_EXTENSIONS[mimeType.toLowerCase()] ?? '.jpg'
+  return fileName.match(/\.[^/.]+$/) ? fileName.replace(/\.[^/.]+$/, extension) : `${fileName}${extension}`
+}
 
 interface ImageUploaderProps {
   src: string | null
@@ -42,22 +59,70 @@ export function ImageUploader({
   const [inputValue, setInputValue] = useState(initialUrl || '')
   const [hasInteracted, setHasInteracted] = useState(false)
   const [selectedServer, setSelectedServer] = useState<string>(BLOSSOM_SERVERS[0].url)
+  const [compressionStatus, setCompressionStatus] = useState<string | null>(null)
   const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   async function performBlossomUpload(file: File) {
     setIsLoading(true)
+    const debug = isImageUploadDebugEnabled()
+
     try {
-      const result = await uploadFileToBlossom(file, {
+      // Step 1: Compress image if it's compressible
+      let fileToUpload = file
+      if (isCompressibleImage(file)) {
+        try {
+          setCompressionStatus(`Compressing image (${formatFileSize(file.size)})...`)
+          
+          const compressedBlob = await compressImage(file, {
+            maxSizeMB: 2,
+            quality: 0.7,
+            maxWidth: 1600,
+            maxHeight: 1600,
+            mimeType: undefined, // Let it auto-select optimal format
+            debug,
+          })
+
+          if (compressedBlob.size < file.size) {
+            fileToUpload = new File([compressedBlob], withMimeExtension(file.name, compressedBlob.type), {
+              type: compressedBlob.type,
+              lastModified: file.lastModified,
+            })
+
+            if (debug) {
+              const stats = getCompressionStats(file.size, compressedBlob.size)
+              console.debug(
+                `[ImageUpload] Compression complete: ${formatFileSize(file.size)} -> ${formatFileSize(compressedBlob.size)} (${stats.savingsPercent}% smaller, format: ${compressedBlob.type})`,
+              )
+            }
+          } else if (debug) {
+            console.debug(
+              `[ImageUpload] Compression skipped: compressed result (${formatFileSize(compressedBlob.size)}) was not smaller than original (${formatFileSize(file.size)})`,
+            )
+          }
+          
+          setCompressionStatus(null)
+        } catch (compressionError) {
+          console.warn('[ImageUpload] Compression failed, using original file:', compressionError)
+          setCompressionStatus(null)
+          // Continue with original file if compression fails
+        }
+      }
+
+      // Step 2: Upload to Blossom
+      setIsLoading(true)
+      const result = await uploadFileToBlossom(fileToUpload, {
         preferredServer: selectedServer,
         onProgress: (progress) => {
           const pct = Math.round((progress.loaded / progress.total) * 100)
-          console.log(`Upload progress: ${pct}%`)
+          if (debug) {
+            console.debug(`[ImageUpload] Upload progress: ${pct}%`)
+          }
         },
         onError: (error, serverUrl) => {
-          console.error(`Upload error on ${serverUrl}:`, error)
+          console.error(`[ImageUpload] Upload error on ${serverUrl}:`, error)
         },
         maxRetries: 3,
-        debug: false,
+        debug,
       })
 
       // Update the input value with the uploaded URL
@@ -72,11 +137,12 @@ export function ImageUploader({
 
       toast.success('Image uploaded successfully')
     } catch (err: any) {
-      console.error('Upload error:', err)
+      console.error('[ImageUpload] Upload error:', err)
       toast.error(err.message || 'Upload failed')
       throw err
     } finally {
       setIsLoading(false)
+      setCompressionStatus(null)
     }
   }
 
@@ -384,9 +450,19 @@ export function ImageUploader({
         )}
 
         {isLoading && (
-          <div className="flex flex-row items-center gap-2">
-            <div className="border-2 border-primary border-t-transparent rounded-full w-4 h-4 animate-spin"></div>
-            <p className="text-sm">Uploading...</p>
+          <div className="flex flex-col gap-2">
+            {compressionStatus && (
+              <div className="flex flex-row items-center gap-2">
+                <div className="border-2 border-primary border-t-transparent rounded-full w-4 h-4 animate-spin"></div>
+                <p className="text-sm">{compressionStatus}</p>
+              </div>
+            )}
+            {!compressionStatus && (
+              <div className="flex flex-row items-center gap-2">
+                <div className="border-2 border-primary border-t-transparent rounded-full w-4 h-4 animate-spin"></div>
+                <p className="text-sm">Uploading...</p>
+              </div>
+            )}
           </div>
         )}
       </div>
