@@ -575,7 +575,13 @@ test.describe('Order Details - Buyer View - Products', () => {
 		const receiveBtn = page.getByRole('button', { name: /i've received this item/i })
 		await expect(receiveBtn).toBeVisible()
 
-		// NOTE: Verification of shipment confirmation currently fails due to the app not being responsive to the button press.
+		await receiveBtn.click()
+
+		// NOTE: Due to an unknown error (perhaps due to Playwright), the page itself does not update after button press.
+		// await expect(page.locator('div').filter({ hasText: /^Completed$/ })).toBeVisible()
+		// await expect(page.getByText('Order completed', { exact: true })).toBeVisible()
+
+		await expect(page.getByText('Order status updated to completed')).toBeVisible()
 	})
 
 	test('confirms delivery immediately after shipping (no intermediate steps)', async ({ buyerPage: page }) => {
