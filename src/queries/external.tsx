@@ -63,6 +63,14 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 		const client = await getCurrencyClient()
 		if (!client) return null
 
+		// Issue #901: if every CVM relay is already known-dead (health tracked by
+		// RelayLiveness inside the client), skip straight to the Yadio HTTPS
+		// fallback instead of making the user wait out the call timeout.
+		if (client.allRelaysUnhealthy()) {
+			console.info('All ContextVM relays unhealthy — skipping to Yadio fallback')
+			return null
+		}
+
 		const startedAt = Date.now()
 		console.info(`ContextVM BTC fetch starting (timeout ${CONTEXTVM_CALL_TIMEOUT}ms)`)
 		const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), CONTEXTVM_CALL_TIMEOUT))
