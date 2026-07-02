@@ -341,11 +341,17 @@ test.describe('Authentication', () => {
 				await page.locator('[data-testid="connect-bunker-button"]').click()
 				await expect(page.getByText(/Invalid pubkey/)).toBeVisible()
 
-				// Test: missing secret
-				const fakePk = 'a'.repeat(64)
-				await page.locator('[data-testid="bunker-url-input"]').fill(`bunker://${fakePk}?relay=wss://relay.test`)
+				// Test: 64 characters but not valid hex
+				const nonHexPk = 'g'.repeat(64)
+				await page.locator('[data-testid="bunker-url-input"]').fill(`bunker://${nonHexPk}?relay=wss://r.test&secret=s`)
 				await page.locator('[data-testid="connect-bunker-button"]').click()
-				await expect(page.getByText(/secret/i)).toBeVisible()
+				await expect(page.getByText(/Invalid pubkey/)).toBeVisible()
+
+				// Test: missing relay parameter
+				const fakePk = 'a'.repeat(64)
+				await page.locator('[data-testid="bunker-url-input"]').fill(`bunker://${fakePk}`)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+				await expect(page.getByText(/relay/i)).toBeVisible()
 			} finally {
 				await context.close()
 			}
@@ -437,6 +443,110 @@ test.describe('Authentication', () => {
 
 				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
 				expect(signerKey).toBeTruthy()
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
+		test('secretless bunker URL shows auth challenge and completes with NIP-46 mock', async ({ browser }) => {
+			test.setTimeout(60_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser2.sk)
+			const authUrl = 'https://signer.test/approve?session=secretless'
+
+			try {
+				await mock.startSignerLoop(RELAY_URL, {
+					requireAuthForSecretless: true,
+					authUrl,
+					authAckDelayMs: 1500,
+				})
+
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+
+				// Navigate to N-Connect → Bunker URL tab
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+
+				const bunkerUrl = `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}`
+				await page.locator('[data-testid="bunker-url-input"]').fill(bunkerUrl)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				await expect(page.locator('[data-testid="bunker-auth-challenge"]')).toBeVisible()
+				await expect(page.locator('[data-testid="bunker-auth-url-link"]')).toHaveAttribute('href', authUrl)
+
+				await expectAuthenticated(page)
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
+		test('allows IPv6 loopback HTTP signer auth challenge URL in dev/test', async ({ browser }) => {
+			test.setTimeout(60_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser2.sk)
+			const authUrl = 'http://[::1]:3000/approve?session=secretless'
+
+			try {
+				await mock.startSignerLoop(RELAY_URL, {
+					requireAuthForSecretless: true,
+					authUrl,
+					authAckDelayMs: 5_000,
+				})
+
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+
+				// Navigate to N-Connect → Bunker URL tab
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+
+				const bunkerUrl = `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}`
+				await page.locator('[data-testid="bunker-url-input"]').fill(bunkerUrl)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				await expect(page.locator('[data-testid="bunker-auth-challenge"]')).toBeVisible()
+				await expect(page.locator('[data-testid="bunker-auth-url-link"]')).toHaveAttribute('href', authUrl)
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
+		test('does not render unsafe signer auth challenge URL as clickable', async ({ browser }) => {
+			test.setTimeout(60_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser2.sk)
+			const unsafeAuthUrl = 'javascript:alert(1)'
+
+			try {
+				await mock.startSignerLoop(RELAY_URL, {
+					requireAuthForSecretless: true,
+					authUrl: unsafeAuthUrl,
+					authAckDelayMs: 5_000,
+				})
+
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+
+				// Navigate to N-Connect → Bunker URL tab
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+
+				const bunkerUrl = `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}`
+				await page.locator('[data-testid="bunker-url-input"]').fill(bunkerUrl)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				await expect(page.locator('[data-testid="login-dialog"]').getByText(/unsafe approval URL/i)).toBeVisible()
+				await expect(page.locator('[data-testid="bunker-auth-url-link"]')).toHaveCount(0)
 			} finally {
 				mock.close()
 				await context.close()
