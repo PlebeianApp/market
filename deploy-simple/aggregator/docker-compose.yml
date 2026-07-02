@@ -1,0 +1,70 @@
+# Market Aggregator Relay (strfry) + Scraper daemon
+#
+# Two services, one image:
+#   strfry-market-agg  — strfry relay, WoT-gated by write-policy.py, serving
+#                        market-relevant events from a single fast endpoint.
+#   scraper            — long-lived daemon that scrapes upstream relays
+#                        (damus/nos.lol/plebeian + discovered relays) for the
+#                        root npub's market network and re-publishes events into
+#                        strfry. Also maintains the WoT allowlist the write-policy
+#                        gates on.
+#
+# Example deployment: host (market-agg.example.com:7780 -> container :7777).
+# Replace with your own host/port — the URL surfaced to the app is configured
+# via NEXT_PUBLIC_MARKET_AGG_RELAY, not hardcoded here.
+# See: deploy-simple/aggregator/strfry.conf      for relay config
+# See: deploy-simple/aggregator/write-policy.py  for the WoT + market-kind gate
+# See: deploy-simple/aggregator/scraper.py       for the scraping daemon
+
+services:
+  strfry-market-agg:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strfry-market-agg:local
+    container_name: market-agg-relay
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:7780:7777'
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - ./db:/strfry-db
+      - ./write-policy.py:/opt/strfry-agg/write-policy.py:ro
+      # state is read-only here: strfry only reads the allowlist the scraper writes.
+      - ./state:/opt/strfry-agg/state:ro
+    environment:
+      - STRFRY_AGG_ALLOWED=/opt/strfry-agg/state/allowed.npubs
+      # Root npub hex (c03rad0r) — bootstrap trust anchor
+      - STRFRY_AGG_ROOT_HEX=c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9
+    networks:
+      - default
+
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: strfry-market-agg:local
+    container_name: market-agg-scraper
+    command: python3 /opt/strfry-agg/scraper.py
+    depends_on:
+      - strfry-market-agg
+    restart: unless-stopped
+    volumes:
+      - ./scraper.py:/opt/strfry-agg/scraper.py:ro
+      - ./write-policy.py:/opt/strfry-agg/write-policy.py:ro
+      # state is read-WRITE here: the scraper writes allowed.npubs that strfry reads.
+      - ./state:/opt/strfry-agg/state
+    environment:
+      # Root npub hex (c03rad0r) whose follow graph defines personal mode.
+      - ROOT_HEX=c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9
+      # Reach strfry over the internal docker network by service name.
+      - STRFRY_URL=ws://strfry-market-agg:7777
+      - SEED_RELAYS=wss://relay.plebeian.market,wss://relay.damus.io,wss://nos.lol
+      - MAX_PUBKEYS=2000
+      - PRUNE_AGE_DAYS=30
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
