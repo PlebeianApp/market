@@ -17,9 +17,11 @@ import {
 	getAuctionRootEventId,
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
+	getAuctionBidCountFromBids,
 	getBidAmount,
 } from '@/queries/auctions'
-import { computeAuctionBidFloor, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
+import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
@@ -129,6 +131,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const notStarted = startAt > 0 && countdown.now < startAt
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const hasPriorBids = bidsCount > 0
+	const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
 	const signedInBidderPubkey = isAuthenticated ? user?.pubkey || currentUserPubkey || '' : ''
 	const hasSignedInBidder = !!signedInBidderPubkey
 	const isNip60Ready = nip60Status === 'ready'
@@ -149,6 +154,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// Ref to store the last computed curve floor value
 	const lastCurveFloorRef = useRef<number>(0)
 
+	const flatFloor = hasPriorBids ? currentPrice + bidStep : Math.max(startingBid, AUCTION_MIN_BID_SATS)
+	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
+
 	const curveFloor = useMemo(() => {
 		// Only update the curve floor if the auction hasn't ended
 		// This prevents the minBid value from changing after the auction ends
@@ -157,16 +165,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return lastCurveFloorRef.current
 		}
 
-		const computedFloor = computeAuctionBidFloor(auction, currentPrice, countdown.now)
+		const multiplier = computeAuctionFloorMultiplier({
+			atSeconds: countdown.now,
+			endAt,
+			maxEndAt: biddingCutoffAt,
+			shape: auctionCurve.shape,
+			peakMultiplier: auctionCurve.peakMultiplier,
+		})
+		const computedFloor = Math.max(0, Math.ceil(flatFloor * multiplier))
 		// Store the computed value for use when auction ends
 		lastCurveFloorRef.current = computedFloor
 		return computedFloor
-	}, [auction, currentPrice, countdown.now, ended])
+	}, [auctionCurve, biddingCutoffAt, countdown.now, endAt, ended, flatFloor])
 
-	const flatFloor = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const minBid = Math.max(flatFloor, curveFloor)
 	const inCurveWindow = countdown.now > endAt && countdown.now < biddingCutoffAt
-	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
@@ -232,11 +245,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		// Check for invalid result
 		if (!Number.isFinite(parsedBidAmount)) return ''
 
-		if (parsedBidAmount === currentPrice + bidIncrement) return 'inc1'
+		if (parsedBidAmount === minBid) return 'inc1'
 
 		// Only return these values as selected if the options are showing.
 		if (!compact) {
-			if (parsedBidAmount === currentPrice + bidIncrement * 2) return 'inc2'
+			if (parsedBidAmount === minBid + bidStep) return 'inc2'
 			if (parsedBidAmount === Math.max(currentPrice * 2, minBid)) return 'mult2'
 		}
 
@@ -261,7 +274,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
-			toast.error(`Bid must be at least ${minBid.toLocaleString()} sats`)
+			toast.error(
+				hasPriorBids
+					? `Minimum raise is ${bidStep.toLocaleString()} sats; bid at least ${minBid.toLocaleString()} sats`
+					: `Minimum bid is ${minBid.toLocaleString()} sats`,
+			)
 			return null
 		}
 
@@ -415,7 +432,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			{/* Anti-snipe curve banner — visible only when we're inside
 			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
 			    Tells the bidder why the floor is higher than they'd expect
-			    from the flat `currentPrice + bidIncrement`. AUCTIONS.md §6.1. */}
+			    from the flat minimum bid / raise. AUCTIONS.md §6.1. */}
 			{!ended && inCurveWindow && auctionCurve.shape !== 'none' && (
 				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
 					<p className="font-semibold">Anti-snipe window — minimum bid rising</p>
@@ -465,7 +482,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							<InputGroupInput
 								type="number"
 								min={minBid}
-								step={Math.max(1, bidIncrement)}
+								step={bidStep}
 								value={bidAmountInput}
 								onChange={(e) => setBidAmountInput(e.target.value)}
 								placeholder={`Min: ${minBid.toLocaleString()}`}
@@ -484,9 +501,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							onValueChange={(val) => {
 								if (!val) return
 								if (val === 'inc1') {
-									setBidAmountInput(String(currentPrice + bidIncrement))
+									setBidAmountInput(String(minBid))
 								} else if (val === 'inc2') {
-									setBidAmountInput(String(currentPrice + bidIncrement * 2))
+									setBidAmountInput(String(minBid + bidStep))
 								} else if (val === 'mult2') {
 									setBidAmountInput(String(Math.max(currentPrice * 2, minBid)))
 								} else if (val === 'edit') {
@@ -499,7 +516,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								value="inc1"
 								variant="outline"
 								size="sm"
-								tooltip="Minimum Bid Increment"
+								tooltip={hasPriorBids ? 'Minimum Raise' : 'Minimum Bid'}
 								disabled={isDisabledInput}
 								className={cn('cursor-pointer flex')}
 							>
@@ -510,11 +527,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								value="inc2"
 								variant="outline"
 								size="sm"
-								tooltip="2x Minimum Bid Increment"
+								tooltip="Minimum bid plus one raise"
 								disabled={isDisabledInput}
 								className="flex cursor-pointer"
 							>
-								{(minBid + bidIncrement).toLocaleString()} sats
+								{(minBid + bidStep).toLocaleString()} sats
 							</TooltipToggleGroupItem>
 							<TooltipToggleGroupItem
 								value="mult2"

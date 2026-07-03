@@ -60,6 +60,12 @@ export const BIDDER_AGGREGATE_REPUTATION_KIND = 30442 as unknown as AuctionKind
 
 // ---------- Floor / curve / clock tolerances -----------------------------
 
+/** Project-level minimum cumulative bid amount. Keeps tiny bids above Cashu mint-fee / proof edge cases. */
+export const AUCTION_MIN_BID_SATS = 10
+
+/** Minimum amount any bid-chain leg must lock. Applies to rebid deltas. */
+export const AUCTION_MIN_BID_LEG_SATS = AUCTION_MIN_BID_SATS
+
 /**
  * Server-side lag tolerance for the bid floor computation — see §6.1.
  *

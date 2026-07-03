@@ -28,6 +28,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 import { AuctionBidder } from './AuctionBidder'
 import { cn } from '@/lib/utils'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 
 const bidderStatusClassName = (status: AuctionBidderStatusKind): string => {
 	switch (status) {
@@ -93,9 +94,9 @@ export function AuctionCard({
 	)
 
 	const minBid = useMemo(() => {
-		const floorBid = currentPrice + Math.max(1, bidIncrement)
-		return Math.max(startingBid, floorBid)
-	}, [bidIncrement, currentPrice, startingBid])
+		const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
+		return bidsCount > 0 ? currentPrice + bidStep : Math.max(startingBid, AUCTION_MIN_BID_SATS)
+	}, [bidIncrement, bidsCount, currentPrice, startingBid])
 
 	useEffect(() => {
 		const checkIfOwnAuction = async () => {

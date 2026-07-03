@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { validateBid } from '../auction/validation'
+import { computeBidFloor, validateBid } from '../auction/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '../auction/events'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 
 // =============================================================================
 // Fixture helpers
@@ -100,6 +101,7 @@ interface BidOverrides {
 	auctionCoordinate?: string
 	sellerPubkey?: string
 	lockSecrets?: string[]
+	prevBidId?: string
 }
 
 const buildLockSecret = (params: { childPubkey: string; locktime: number; refundPubkey: string }): string => {
@@ -150,6 +152,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
 		status: 'locked',
+		prevBidId: overrides.prevBidId,
 	}
 }
 
@@ -383,6 +386,124 @@ describe('validateBid — lock secret structure', () => {
 // =============================================================================
 
 describe('validateBid — amount and floor', () => {
+	test('rejects first bid below AUCTION_MIN_BID_SATS', () => {
+		const auction = buildAuction({ startingBid: 1, bidIncrement: 1 })
+		const bid = buildBid(auction, { amount: AUCTION_MIN_BID_SATS - 1 })
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+		}
+	})
+
+	test('accepts first bid exactly AUCTION_MIN_BID_SATS', () => {
+		const auction = buildAuction({ startingBid: 1, bidIncrement: 1 })
+		const bid = buildBid(auction, { amount: AUCTION_MIN_BID_SATS })
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
+		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('rejects subsequent bid when raise is below AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: 1, bidIncrement: 1 })
+		const currentTopBid = 100
+		const bid = buildBid(auction, { amount: currentTopBid + AUCTION_MIN_BID_LEG_SATS - 1 })
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent', currentTopBid })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+		}
+	})
+
+	test('accepts subsequent bid when raise equals AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: 1, bidIncrement: 1 })
+		const currentTopBid = 100
+		const bid = buildBid(auction, { amount: currentTopBid + AUCTION_MIN_BID_LEG_SATS })
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent', currentTopBid })
+		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('rejects rebid when own replacement-chain delta is below AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS - 1
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+			expect(verdict.detail).toMatch(/replacement-chain delta/)
+		}
+	})
+
+	test('accepts rebid when own replacement-chain delta equals AUCTION_MIN_BID_LEG_SATS', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('rejects rebid when previous-bid context is missing', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const bid = buildBid(auction, {
+			amount: AUCTION_MIN_BID_SATS + AUCTION_MIN_BID_LEG_SATS,
+			prevBidId: '3'.repeat(64),
+		})
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent', currentTopBid: 0 })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('replacement_chain_invalid')
+		}
+	})
+
+	test('rejects rebid when replacement-chain delta is not a safe integer', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBidAmount = AUCTION_MIN_BID_SATS
+		const rebidAmount = previousBidAmount + AUCTION_MIN_BID_LEG_SATS + 0.5
+		const bid = buildBid(auction, { amount: rebidAmount, prevBidId: '3'.repeat(64) })
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainLegAmount: rebidAmount - previousBidAmount,
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('under_increment')
+		}
+	})
+
+	test('curve behavior applies on top of the minimum baseline', () => {
+		const auction = buildAuction({
+			startAt: 1_000,
+			endAt: 2_000,
+			maxEndAt: 2_100,
+			startingBid: 1,
+			bidIncrement: 1,
+			minBidCurve: { shape: 'linear', peakMultiplier: 2, raw: 'linear:2' },
+		})
+
+		expect(computeBidFloor({ auction, topBid: 0, atSeconds: auction.maxEndAt })).toBe(AUCTION_MIN_BID_SATS * 2)
+		expect(computeBidFloor({ auction, topBid: 100, atSeconds: auction.maxEndAt })).toBe((100 + AUCTION_MIN_BID_LEG_SATS) * 2)
+	})
+
 	test('under_increment when amount < starting_bid (no prior bid)', () => {
 		const auction = buildAuction({ startingBid: 5_000 })
 		const bid = buildBid(auction, { amount: 4_000 })

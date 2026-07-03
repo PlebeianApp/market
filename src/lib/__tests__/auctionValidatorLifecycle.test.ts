@@ -11,6 +11,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent } from '../auction/events'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 import {
 	deriveVerdict,
 	assignCloseRoles,
@@ -125,6 +126,7 @@ const buildBid = (
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
 		status: 'locked',
+		prevBidId: overrides.prevBidId,
 	}
 }
 
@@ -232,6 +234,22 @@ describe('deriveVerdict — pre-close', () => {
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
 		expect(v.claim).toBe('valid_bid_placed')
+	})
+
+	test('rebid with sub-minimum own delta cannot become valid_bid_placed', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const previousBid = buildBid(auction, { id: 'a'.repeat(64), amount: AUCTION_MIN_BID_SATS })
+		const rebidAmount = AUCTION_MIN_BID_SATS + AUCTION_MIN_BID_LEG_SATS - 1
+		const rebid = buildBid(auction, { id: 'b'.repeat(64), amount: rebidAmount, prevBidId: previousBid.id })
+		const auctionState = buildAuctionState(auction)
+		auctionState.bids.set(previousBid.id, buildBidState(previousBid, previousBid.createdAt, { currentClaim: 'bid_pending_review' }))
+		const rebidState = buildBidState(rebid, rebid.createdAt)
+		auctionState.bids.set(rebid.id, rebidState)
+		recordNut7State(rebidState, rebid.proofYs[0], 'unspent', rebid.createdAt)
+
+		const v = deriveVerdict({ auctionState, bidState: rebidState, now: rebid.createdAt, currentTopBid: 0 })
+		expect(v.claim).toBe('bid_invalid')
+		expect(v.reason).toBe('under_increment')
 	})
 })
 
