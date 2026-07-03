@@ -1,104 +1,41 @@
-# src/ Development Guidelines
+# AGENTS.md — src
 
-## Routing
+This directory follows the repository-level AGENTS.md.
 
-Routes are file-based using TanStack Router. Place route files in `src/routes/` using `createFileRoute`. The dashboard uses a `_dashboard-layout` layout route pattern.
+## Context
 
-## Server State Management
+`src/` contains the React 19 marketplace application, TanStack Router routes,
+TanStack Query data access, publish/mutation helpers, shared library code,
+components, hooks, and the current Bun server entry area.
 
-All relay queries use TanStack Query. Implement queries and mutations through hooks located in `src/queries/`.
+## Constraints
 
-## Client State Management
+- Keep client UI/form state, query/cache state, relay connection state,
+  signed-event state, payment state, local storage state, and backend/service
+  state separate.
+- Do not hide Nostr protocol rules inside UI components. Event kind, tags,
+  author, signature assumptions, relay behavior, and addressable coordinates
+  belong in explicit data/publish/query layers.
+- Do not collapse payment state into a single `paid` boolean when the flow
+  distinguishes wallet acknowledgement, settlement/proof, receipt publication,
+  merchant confirmation, refund/failure, or fulfillment.
+- Treat persisted identifiers, contact fields, wallet/payment details, and auth
+  state as sensitive. Do not log them.
+- Preserve TanStack Router file-based route conventions and current Bun runtime
+  assumptions.
 
-Client state uses a custom Store class with setState method. There are 13 stores (authStore, ndkStore, cartStore, nip60Store, etc.). This is a hand-rolled observable pattern, not using Zustand or Jotai.
+## Instructions
 
-## Styling
+- For route work, also read `src/routes/AGENTS.md`.
+- For data fetching, also read `src/queries/AGENTS.md`.
+- For publishing or mutations, also read `src/publish/AGENTS.md`.
+- For shared utilities, stores, Nostr helpers, wallets, or payments, also read
+  `src/lib/AGENTS.md`.
+- For UI components and hooks, also read the matching child AGENTS file.
 
-Styling uses Tailwind CSS with shadcn/ui components. Component library is in `src/components/ui/` with Radix primitives wrapped with Tailwind variants.
+## Safe Checks
 
-# Comprehensive Design Decisions Overview
-
-## Core Architecture Patterns
-
-1. **File-based routing** with TanStack Router (`src/routes/`) using `createFileRoute`
-2. **Query-based data fetching** with TanStack Query (`src/queries/`) for all relay interactions
-3. **Custom Store pattern** for client state management (13 different stores in `src/lib/stores/`)
-4. **Component library** using shadcn/ui with Tailwind CSS (`src/components/ui/`)
-5. **Hook-based logic extraction** for reusable behaviors (`src/hooks/`)
-
-## Known Design Inconsistencies with Parent AGENTS.md
-
-These are acknowledged inconsistencies with the parent directory AGENTS.md design:
-
-1. **Architecture Boundary Violations (#7)**: This directory contains direct WebSocket event handling in `src/index.tsx` that publishes events directly using `nostr-tools/Relay.connect()` and `relay.publish()` instead of going through the NDK abstraction layer. Additionally, there are imports and usage patterns that mix client and server logic.
-
-2. **Nostr Event Publishing Inconsistencies (#8)**: Despite the parent requirement that all Nostr event publishing must go through the NDK abstraction layer, `src/index.tsx` contains direct WebSocket event handling with `Relay.connect()` and direct event publishing that bypasses NDK validation and signing.
-
-3. **Data Privacy Issues (#9)**: User identifiers and authentication state including private keys are persisted in localStorage without encryption in `src/lib/stores/auth.ts` and other files, despite the parent requirement to treat all user identifiers as PII.
-
-4. **Error Handling Inconsistencies (#10)**: Error handling varies across modules with mixed approaches to try/catch vs query error states, and ContextVM services lack the required correlation ID tracking for traceability as required by parent AGENTS.md.
-
-## Contradictory Design Decisions
-
-1. **State Management Inconsistency**:
-   - Custom Store pattern is used for client state
-   - React Query is used for server state
-   - BUT some components manage local state with useState/useReducer directly
-
-2. **Component Structure Inconsistency**:
-   - Some components are in `src/components/` directory directly
-   - Others are in feature-specific subdirectories (`src/components/auth/`, `src/components/checkout/`, etc.)
-   - UI primitives are in `src/components/ui/`
-
-3. **Test Coverage Inconsistency**:
-   - Some stores have tests (`src/lib/stores/cart.test.ts`, `src/lib/stores/product-navigation.test.ts`, `src/lib/stores/product-session.test.ts`)
-   - Some queries have tests (`src/queries/__tests__/`)
-   - BUT most components and hooks lack dedicated test files
-
-4. **Query Organization**:
-   - Queries are organized by entity type in `src/queries/`
-   - BUT some logic is duplicated across query files (e.g., error handling patterns)
-
-## Code Reuse Opportunities
-
-1. **Error Handling Patterns**:
-   - Many query files implement similar error handling
-   - Could extract common error handling into reusable utilities
-
-2. **Loading States**:
-   - Components frequently implement similar loading skeletons
-   - Could create more generic loading components
-
-3. **Form Handling**:
-   - Multiple components implement form validation
-   - Could standardize form handling with a common approach
-
-4. **Nostr Event Processing**:
-   - Multiple stores and queries process Nostr events similarly
-   - Could extract common Nostr processing logic
-
-5. **Pagination Patterns**:
-   - Several query files implement infinite scroll pagination
-   - Could standardize pagination handling
-
-## Test Coverage Gaps
-
-1. **Component Testing**:
-   - Most components in `src/components/` lack dedicated test files
-   - No comprehensive component testing strategy documented
-
-2. **Hook Testing**:
-   - Hooks in `src/hooks/` have no dedicated test files
-   - Critical hooks like `useV4VManager.ts` and `useNotificationMonitor.ts` are untested
-
-3. **Store Testing**:
-   - Only 3 out of 13 stores have test files (`cart.test.ts`, `product-navigation.test.ts`, `product-session.test.ts`)
-   - Critical stores like `auth.ts`, `ndk.ts`, `wallet.ts` lack tests
-
-4. **Route Testing**:
-   - Route components in `src/routes/` have no dedicated test files
-   - No integration testing for route loading states or error boundaries
-
-5. **Utility Function Testing**:
-   - Utility functions in `src/lib/utils/` and `src/lib/nostr/` lack comprehensive test coverage
-   - Core logic functions may have edge cases that aren't tested
+- `git diff --check`
+- `bun run format:check`
+- For behavior changes, run `bun run test:unit` and `bun run test:integration`
+  when relevant and authorized.
