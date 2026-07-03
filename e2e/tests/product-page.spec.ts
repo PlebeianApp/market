@@ -559,7 +559,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await expect(reactionBtn.getByText('1')).toBeVisible()
 	})
 
-	test.skip('should allow adding reaction to a comment', async ({ buyerPage }) => {
+	test('should allow adding reaction to a comment', async ({ buyerPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
 		await seedExistingComment()
 		await buyerPage.goto(`/products/${currentProductId}`)
