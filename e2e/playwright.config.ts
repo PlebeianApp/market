@@ -57,6 +57,10 @@ export default defineConfig({
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
+						// Pass through the Nostr backend selector so the e2e
+						// benchmark A/B comparison (scripts/e2e-benchmark.sh)
+						// actually reaches the dev server's io.ts adapter switch.
+						NOSTR_BACKEND: process.env.NOSTR_BACKEND || 'ndk',
 					},
 				},
 			],
