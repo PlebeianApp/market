@@ -364,9 +364,11 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await proceedToPaymentStep(newUserPage)
 
 		// Pay all 4 invoices using WebLN
-		const webLnButton = newUserPage.getByRole('button', { name: 'Pay with WebLN' })
-
 		for (let i = 0; i < 4; i++) {
+			// Re-query the button each iteration — multiple WebLN buttons
+			// exist in the DOM (one per invoice) and the clicked one may
+			// become stale after state transitions.
+			const webLnButton = newUserPage.getByRole('button', { name: 'Pay with WebLN' }).first()
 			await expect(webLnButton).toBeVisible({ timeout: 30_000 })
 			await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
 			await webLnButton.click()
