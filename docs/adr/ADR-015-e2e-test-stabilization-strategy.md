@@ -13,6 +13,7 @@ Proposed
 ## Scope
 
 This ADR defines the strategy for:
+
 1. Unskipping e2e tests that can now pass reliably after the auth/cart/marketplace fixes
 2. Migrating all remaining `networkidle` wait strategies to `domcontentloaded`
 3. Establishing a repeatable validation protocol for future test unskipping
@@ -132,18 +133,21 @@ Migrate the 3 remaining `networkidle` calls. Each is a straightforward replace-a
 ### Phase 2: Unskip Simple Tests (MEDIUM RISK)
 
 Tests that have straightforward flows and were skipped due to issues now fixed:
+
 - shipping-special.spec.ts (2 tests) — digital delivery + local pickup
 - product-page.spec.ts (1 test) — comment reaction
 
 ### Phase 3: Unskip Payment-Dependent Tests (MEDIUM-HIGH RISK)
 
 Tests that use the checkout→payment flow. Need the "Invoices" heading fix propagated:
+
 - payments.spec.ts (2 tests) — mocked Lightning checkout + defer invoice
 - marketplace.spec.ts (1 test) — multi-seller invoice count
 
 ### Phase 4: Unskip Complex Flow Tests (HIGH RISK)
 
 Full lifecycle tests with many failure points. Each needs individual validation:
+
 - checkout.spec.ts (1 test) — full purchase with shipping
 - order-lifecycle.spec.ts (2 tests) — partial payment + full lifecycle
 - order-messaging.spec.ts (1 test) — post-checkout messaging
@@ -151,6 +155,7 @@ Full lifecycle tests with many failure points. Each needs individual validation:
 ### Phase 5: Relay-Dependent Tests (DEFERRED)
 
 Tests that query relay events are inherently timing-dependent. These stay skipped until a relay-aware retry fixture is built:
+
 - payments.spec.ts (1 test) — "checkout publishes order events to relay"
 - The 4 cart.spec.ts relay timing failures
 - The 4 pii-exposure-remediation.spec.ts relay propagation failures
@@ -158,12 +163,14 @@ Tests that query relay events are inherently timing-dependent. These stay skippe
 ## Consequences
 
 **Positive:**
+
 - Predictable test suite — no mystery skips
 - Clear protocol for future unskipping
 - networkidle migration eliminates a class of false-positive timeouts
 - Documentation prevents regression to old patterns
 
 **Negative:**
+
 - Some tests remain skipped (relay-dependent) until infrastructure work
 - networkidle migration requires per-test element selector identification
 - Validation protocol (3 runs + cold restart) adds time to unskip work
