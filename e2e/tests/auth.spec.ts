@@ -105,7 +105,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 
 				// Should NOT be auto-logged in
 				await openLoginDialog(page)
@@ -135,7 +135,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Switch to Private Key tab
@@ -185,7 +185,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Switch to Private Key tab
@@ -233,7 +233,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Switch to Private Key tab — should show stored key UI
@@ -271,7 +271,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Switch to Private Key tab — should show stored key UI
@@ -342,7 +342,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Navigate to N-Connect → Bunker URL tab
@@ -385,7 +385,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Navigate to N-Connect → QR Code tab
@@ -439,7 +439,7 @@ test.describe('Authentication', () => {
 				const cleanup = await mock.startSignerLoop(RELAY_URL)
 
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				// Navigate to N-Connect → Bunker URL tab
@@ -580,7 +580,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 
 				// Login via extension dialog
 				await openLoginDialog(page)
@@ -589,7 +589,7 @@ test.describe('Authentication', () => {
 
 				// Reload
 				await page.reload()
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 
 				// Should still be authenticated (auto-login via extension)
 				await expectAuthenticated(page)
@@ -678,7 +678,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 
 				// Login via extension
 				await openLoginDialog(page)
@@ -703,7 +703,7 @@ test.describe('Authentication', () => {
 
 				// Reload — should NOT auto-login
 				await page.reload()
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await expectNotAuthenticated(page)
 			} finally {
 				await context.close()
