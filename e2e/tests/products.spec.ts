@@ -56,7 +56,8 @@ async function createFreshUserPage(browser: Browser) {
 
 	const page = await context.newPage()
 	await page.goto('/')
-	await page.waitForLoadState('networkidle')
+	// Wait for DOM ready — NDK WebSocket prevents networkidle from ever firing (ADR-015)
+	await page.waitForLoadState('domcontentloaded')
 	await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
 
 	return { context, page }
