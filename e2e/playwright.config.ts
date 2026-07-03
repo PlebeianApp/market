@@ -57,10 +57,11 @@ export default defineConfig({
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
-						// Pass through the Nostr backend selector so the e2e
-						// benchmark A/B comparison (scripts/e2e-benchmark.sh)
-						// actually reaches the dev server's io.ts adapter switch.
+						// Pass through env vars that the dev server needs but
+						// the explicit env block above would otherwise mask.
 						NOSTR_BACKEND: process.env.NOSTR_BACKEND || 'ndk',
+						CVM_SERVER_KEY: process.env.CVM_SERVER_KEY || '',
+						CVM_SERVER_PUBKEY: process.env.CVM_SERVER_PUBKEY || '',
 					},
 				},
 			],
