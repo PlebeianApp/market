@@ -67,7 +67,7 @@ async function openLoginDialog(page: Page) {
 	// React's dialog system can leave overlay divs in the DOM after
 	// unmounting (e.g. from stored-key decrypt prompt auto-open/close).
 	await page.evaluate(() => {
-		document.querySelectorAll('[data-slot="dialog-overlay"]').forEach(el => el.remove())
+		document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el) => el.remove())
 	})
 
 	const loginButton = page.locator('[data-testid="login-button"]').first()

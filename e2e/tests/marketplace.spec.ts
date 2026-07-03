@@ -185,10 +185,9 @@ async function proceedToPaymentStep(page: Page): Promise<void> {
 	// Wait for the payment step — the heading may be "Invoices" or
 	// "Payment" depending on the cart UI version (#1045 redesign).
 	// Use a flexible locator that matches either.
-	await expect(
-		page.getByText('Invoices', { exact: true })
-			.or(page.getByRole('heading', { name: /payment|invoice/i }))
-	).toBeVisible({ timeout: 30_000 })
+	await expect(page.getByText('Invoices', { exact: true }).or(page.getByRole('heading', { name: /payment|invoice/i }))).toBeVisible({
+		timeout: 30_000,
+	})
 }
 
 // ---------------------------------------------------------------------------

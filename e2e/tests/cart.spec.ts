@@ -40,9 +40,7 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 
 /** Open the cart drawer via the basket icon in the header. */
 async function openCart(page: Page): Promise<void> {
-	const cartButton = page
-		.getByRole('button')
-		.filter({ has: page.locator('.i-basket') })
+	const cartButton = page.getByRole('button').filter({ has: page.locator('.i-basket') })
 	await expect(cartButton).toBeVisible({ timeout: 10_000 })
 	// Use JS click — the basket button is wrapped in a tooltip that
 	// intercepts pointer events (same pattern as the auth login button).
