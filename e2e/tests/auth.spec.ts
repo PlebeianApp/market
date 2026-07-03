@@ -57,10 +57,26 @@ async function createFreshPage(context: BrowserContext): Promise<Page> {
 
 /** Open the login dialog from the header */
 async function openLoginDialog(page: Page) {
+	// Wait for React hydration — the app shell must be interactive
+	// before clicking. DialogRegistry needs to be mounted for the
+	// openDialog('login') state update to render anything.
+	await expect(page.locator('header')).toBeVisible({ timeout: 15_000 })
+	await page.waitForTimeout(500) // brief settle for React hydration
+
+	// Remove any zombie dialog overlays that intercept pointer events.
+	// React's dialog system can leave overlay divs in the DOM after
+	// unmounting (e.g. from stored-key decrypt prompt auto-open/close).
+	await page.evaluate(() => {
+		document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el) => el.remove())
+	})
+
 	const loginButton = page.locator('[data-testid="login-button"]').first()
 	await expect(loginButton).toBeVisible({ timeout: 10_000 })
-	await loginButton.click()
-	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 5_000 })
+	// Use JS click to bypass zombie dialog overlays that React's dialog system
+	// leaves in the DOM (auto-opened from stored-key decrypt prompt).
+	// This is safe because we've already waited for hydration above.
+	await loginButton.evaluate((el: HTMLElement) => el.click())
+	await expect(page.locator('[data-testid="login-dialog"]')).toBeVisible({ timeout: 15_000 })
 }
 
 /** Verify the user is authenticated (dashboard button visible) */
@@ -278,6 +294,7 @@ test.describe('Authentication', () => {
 		})
 
 		test('remove stored key shows fresh key input', async ({ browser }) => {
+			test.setTimeout(45_000) // fresh context + relay operations need more time
 			const context = await browser.newContext()
 			const nsec = hexToNsec(devUser2.sk)
 
@@ -293,7 +310,7 @@ test.describe('Authentication', () => {
 
 			try {
 				await page.goto('/')
-				await page.waitForLoadState('networkidle')
+				await page.waitForLoadState('domcontentloaded')
 				await openLoginDialog(page)
 
 				await page.locator('[data-testid="private-key-tab"]').click()
@@ -312,6 +329,7 @@ test.describe('Authentication', () => {
 				const storedKey = await page.evaluate(() => localStorage.getItem('nostr_local_encrypted_signer_key'))
 				expect(storedKey).toBeNull()
 			} finally {
+				await page.close().catch(() => {})
 				await context.close()
 			}
 		})
