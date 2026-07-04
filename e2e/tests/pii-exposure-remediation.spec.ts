@@ -140,7 +140,7 @@ async function deleteAllKind16Events(userSk: string, userPk: string) {
 // Helper function to check for PII exposure modal by looking for header text
 async function waitForPIIModal(page: Page, timeout: number = 5000) {
 	try {
-		await expect(page.getByRole('heading').filter({ hasText: 'Personal Information Leak Detected' })).toBeVisible({ timeout })
+		await expect(page.getByRole('heading').filter({ hasText: 'personal data may be exposed' })).toBeVisible({ timeout })
 
 		return true
 	} catch {
@@ -150,7 +150,7 @@ async function waitForPIIModal(page: Page, timeout: number = 5000) {
 
 // Helper function to check if PII modal is visible
 async function isPIIModalVisible(page: Page) {
-	const headerText = await page.locator('h2').filter({ hasText: 'Personal Information Leak Detected' }).count()
+	const headerText = await page.locator('h2').filter({ hasText: 'personal data may be exposed' }).count()
 	return headerText > 0
 }
 
