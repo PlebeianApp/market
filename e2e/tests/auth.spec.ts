@@ -63,9 +63,14 @@ async function openLoginDialog(page: Page) {
 	await expect(page.locator('header')).toBeVisible({ timeout: 15_000 })
 	await page.waitForTimeout(500) // brief settle for React hydration
 
+	// Dismiss PII exposure modal if present (accumulated events from prior tests)
+	const dismissButton = page.getByRole('button', { name: /dismiss warning/i })
+	if (await dismissButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+		await dismissButton.click()
+		await expect(dismissButton).not.toBeVisible({ timeout: 5000 })
+	}
+
 	// Remove any zombie dialog overlays that intercept pointer events.
-	// React's dialog system can leave overlay divs in the DOM after
-	// unmounting (e.g. from stored-key decrypt prompt auto-open/close).
 	await page.evaluate(() => {
 		document.querySelectorAll('[data-slot="dialog-overlay"]').forEach((el) => el.remove())
 	})
