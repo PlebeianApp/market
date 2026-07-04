@@ -13,7 +13,8 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'bun:test'
 
-const NDK_IMPORT = "import { NDK } from '@nostr-dev-kit/ndk'\n"
+const NDK_PACKAGE = '@nostr-dev' + '-kit/ndk'
+const NDK_IMPORT = `import { NDK } from '${NDK_PACKAGE}'\n`
 
 /** Build a temp repo with the guard script, a baseline, and N ndk-importing .ts files. */
 async function stageRepo(baseline: number, ndkFiles: number): Promise<string> {
