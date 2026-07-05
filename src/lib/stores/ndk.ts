@@ -669,8 +669,8 @@ export const ndkActions = {
 	 * @param event The NDKEvent to publish (must already be signed)
 	 * @returns Promise resolving to the set of relays the event was published to
 	 */
-	publishEvent: async (event: NDKEvent): Promise<Set<any>> => {
-		const relaySet = getWriteRelaySet()
+	publishEvent: async (event: NDKEvent, relaySet?: NDKRelaySet): Promise<Set<any>> => {
+		relaySet ??= getWriteRelaySet()
 		return event.publish(relaySet)
 	},
 

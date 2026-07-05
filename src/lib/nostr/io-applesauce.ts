@@ -70,12 +70,31 @@ export const applesauceIo: NostrIo = {
 		const urls = relayUrls(opts?.relayUrls)
 		if (urls.length === 0) return () => {}
 		const filters = asFilters(filter)
-		const subscription = getPool()
+		let subscription: { unsubscribe(): void } | undefined
+		let stopAfterSubscribe = false
+		let stopped = false
+		const stop = () => {
+			if (stopped) return
+			stopped = true
+			subscription?.unsubscribe()
+		}
+		subscription = getPool()
 			.subscription(urls, filters, { resubscribe: false })
 			.subscribe((message) => {
-				if (message !== 'EOSE') onEvent(message as NostrEvent)
+				if (message === 'EOSE') {
+					if (opts?.closeOnEose) {
+						if (subscription) stop()
+						else {
+							stopped = true
+							stopAfterSubscribe = true
+						}
+					}
+					return
+				}
+				if (!stopped) onEvent(message as NostrEvent)
 			})
-		return () => subscription.unsubscribe()
+		if (stopAfterSubscribe) subscription.unsubscribe()
+		return stop
 	},
 
 	async publish(event, opts?: PublishOptions) {
