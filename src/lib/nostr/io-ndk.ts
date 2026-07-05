@@ -5,7 +5,7 @@
  * library-agnostic seam. It is the default adapter during the migration and
  * is deleted in Wave D once every caller has flipped to `io-applesauce.ts`.
  */
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
@@ -18,8 +18,11 @@ function toRaw(event: NDKEvent): NostrEvent {
 
 export const ndkIo: NostrIo = {
 	async fetchEvents(filter, opts?: FetchOptions) {
+		const ndk = ndkStore.state.ndk
+		const relaySet = opts?.relayUrls?.length && ndk ? NDKRelaySet.fromRelayUrls(opts.relayUrls, ndk) : undefined
 		const events = await ndkActions.fetchEventsWithTimeout(filter as NostrFilter[], {
 			timeoutMs: opts?.timeoutMs,
+			relaySet,
 		})
 		return Array.from(events).map(toRaw)
 	},
@@ -27,10 +30,14 @@ export const ndkIo: NostrIo = {
 	subscribe(filter, onEvent, opts?: SubscribeOptions) {
 		const ndk = ndkStore.state.ndk
 		if (!ndk) return () => {}
-		const subscription = ndk.subscribe(filter as NostrFilter[], {
+		const relaySet = opts?.relayUrls?.length ? NDKRelaySet.fromRelayUrls(opts.relayUrls, ndk) : undefined
+		const subscriptionOpts = {
 			closeOnEose: opts?.closeOnEose ?? false,
 			onEvent: (event: NDKEvent) => onEvent(toRaw(event)),
-		})
+		}
+		const subscription = relaySet
+			? ndk.subscribe(filter as NostrFilter[], subscriptionOpts, relaySet)
+			: ndk.subscribe(filter as NostrFilter[], subscriptionOpts)
 		return () => {
 			subscription.stop()
 		}
