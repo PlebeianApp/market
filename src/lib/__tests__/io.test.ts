@@ -21,10 +21,38 @@ const stubRawEvent = {
 const stubRawEvent2 = { ...stubRawEvent, id: 'evt-2' }
 const stubNdkEvent = { rawEvent: () => stubRawEvent }
 
+function normalizeTestRelayUrl(url: string): string {
+	return url.endsWith('/') ? url : `${url}/`
+}
+
+function makeMockNdk(relayUrls: string[] = []) {
+	const relays = new Map(
+		relayUrls.map((url) => {
+			const relay = { url: normalizeTestRelayUrl(url), status: 5, connect: mock(() => {}) }
+			return [relay.url, relay] as const
+		}),
+	)
+	return {
+		subscribe: mock(() => ({ stop: mock(() => {}) })),
+		pool: {
+			relays,
+			useTemporaryRelay: mock((relay: { url: string }) => {
+				relays.set(relay.url, relay as never)
+			}),
+		},
+		debug: { extend: () => () => {} },
+	}
+}
+
+function relaySetUrls(relaySet: unknown): string[] {
+	return Array.from((relaySet as { relays: Set<{ url: string }> }).relays).map((relay) => relay.url)
+}
+
 const mockNdkStore = {
 	state: {
-		ndk: null as { subscribe: (filter: unknown, opts: unknown) => { stop: () => void } } | null,
+		ndk: null as ReturnType<typeof makeMockNdk> | null,
 		explicitRelayUrls: [] as string[],
+		writeRelayUrls: [] as string[],
 	},
 }
 const mockNdkActions = {
@@ -33,8 +61,10 @@ const mockNdkActions = {
 	getSigner: () => undefined,
 	getUser: mock(async () => null as { pubkey: string } | null),
 }
+const mockGetWriteRelays = mock(() => mockNdkStore.state.writeRelayUrls)
 
 mock.module('@/lib/stores/ndk', () => ({
+	getWriteRelays: mockGetWriteRelays,
 	ndkActions: mockNdkActions,
 	ndkStore: mockNdkStore,
 }))
@@ -87,10 +117,12 @@ function makeStubIo(overrides: Partial<NostrIo> = {}): NostrIo {
 function resetNdkState() {
 	mockNdkStore.state.ndk = null
 	mockNdkStore.state.explicitRelayUrls = []
+	mockNdkStore.state.writeRelayUrls = []
 	mockNdkActions.getUser.mockImplementation(async () => null)
 	mockNdkActions.fetchEventsWithTimeout.mockImplementation(async () => new Set([stubNdkEvent]))
 	mockNdkActions.fetchEventsWithTimeout.mockClear()
 	mockNdkActions.publishEvent.mockClear()
+	mockGetWriteRelays.mockClear()
 }
 
 describe('nostr io seam', () => {
@@ -163,14 +195,14 @@ describe('ndk bridge adapter (io-ndk)', () => {
 
 	test('subscribe relays converted raw events and closeOnEose defaults to false', () => {
 		const stopFn = mock(() => {})
-		mockNdkStore.state.ndk = {
-			subscribe: mock((filter, opts) => {
-				// Default closeOnEose must be false per the SubscribeOptions contract.
-				expect((opts as { closeOnEose: boolean }).closeOnEose).toBe(false)
-				;(opts as { onEvent: (e: unknown) => void }).onEvent(stubNdkEvent)
-				return { stop: stopFn }
-			}),
-		}
+		const ndk = makeMockNdk()
+		ndk.subscribe.mockImplementation((filter, opts) => {
+			// Default closeOnEose must be false per the SubscribeOptions contract.
+			expect((opts as { closeOnEose: boolean }).closeOnEose).toBe(false)
+			;(opts as { onEvent: (e: unknown) => void }).onEvent(stubNdkEvent)
+			return { stop: stopFn }
+		})
+		mockNdkStore.state.ndk = ndk
 
 		const seen: unknown[] = []
 		const stop = ndkIo.subscribe({ kinds: [1] }, (event) => seen.push(event))
@@ -179,6 +211,29 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		expect(seen).toEqual([stubRawEvent])
 		stop()
 		expect(stopFn).toHaveBeenCalledTimes(1)
+	})
+
+	test('fetchEvents forwards timeoutMs and relayUrls as an NDK relay set', async () => {
+		mockNdkStore.state.ndk = makeMockNdk(['wss://read.example'])
+		await ndkIo.fetchEvents({ kinds: [1] }, { timeoutMs: 1234, relayUrls: ['wss://read.example'] })
+
+		const [[filter, opts]] = mockNdkActions.fetchEventsWithTimeout.mock.calls
+		expect(filter).toEqual({ kinds: [1] })
+		expect((opts as { timeoutMs: number }).timeoutMs).toBe(1234)
+		expect(relaySetUrls((opts as { relaySet: unknown }).relaySet)).toEqual(['wss://read.example/'])
+	})
+
+	test('subscribe passes an NDK relay set when relayUrls are provided', () => {
+		const ndk = makeMockNdk(['wss://sub.example'])
+		mockNdkStore.state.ndk = ndk
+
+		const stop = ndkIo.subscribe({ kinds: [1] }, () => {}, { relayUrls: ['wss://sub.example'] })
+
+		const [[filter, opts, relaySet]] = ndk.subscribe.mock.calls
+		expect(filter).toEqual({ kinds: [1] })
+		expect((opts as { closeOnEose: boolean }).closeOnEose).toBe(false)
+		expect(relaySetUrls(relaySet)).toEqual(['wss://sub.example/'])
+		stop()
 	})
 
 	test('publish throws "NDK not initialized" when the singleton is absent', async () => {
@@ -274,15 +329,22 @@ describe('applesauce adapter (io-applesauce)', () => {
 	})
 
 	test('publish throws when no relays are configured', async () => {
-		mockNdkStore.state.explicitRelayUrls = []
+		mockNdkStore.state.writeRelayUrls = []
 		await expect(applesauceIo.publish(stubRawEvent as never)).rejects.toThrow('No relays configured for publish')
 	})
 
-	test('publish forwards the event to the relay pool when relays are configured', async () => {
-		mockNdkStore.state.explicitRelayUrls = ['wss://relay.example']
+	test('publish forwards the event to the relay pool using write relays by default', async () => {
+		mockNdkStore.state.writeRelayUrls = ['wss://write.example']
 		poolPublishController = mock(async () => undefined)
 		await applesauceIo.publish(stubRawEvent as never)
-		expect(poolPublishController).toHaveBeenCalledWith(['wss://relay.example'], stubRawEvent)
+		expect(poolPublishController).toHaveBeenCalledWith(['wss://write.example'], stubRawEvent)
+	})
+
+	test('publish honors explicit relayUrls over write relays', async () => {
+		mockNdkStore.state.writeRelayUrls = ['wss://write.example']
+		poolPublishController = mock(async () => undefined)
+		await applesauceIo.publish(stubRawEvent as never, { relayUrls: ['wss://override.example'] })
+		expect(poolPublishController).toHaveBeenCalledWith(['wss://override.example'], stubRawEvent)
 	})
 
 	test('sign throws the explicit Wave A3 not-wired error', async () => {
