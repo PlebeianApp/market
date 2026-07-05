@@ -59,6 +59,13 @@ describe('NDK footprint guard (scripts/check-ndk-footprint.sh)', () => {
 		expect(r.stdout).toContain('OK')
 	})
 
+	test('exits 0 and prints OK when baseline and footprint are zero', async () => {
+		const r = runGuard(await stage(0, 0))
+		expect(r.exitCode).toBe(0)
+		expect(r.stdout).toContain('NDK footprint: 0 file(s)')
+		expect(r.stdout).toContain('OK')
+	})
+
 	test('fails (exit 1) with an error annotation when footprint exceeds the baseline', async () => {
 		const r = runGuard(await stage(0, 2))
 		expect(r.exitCode).toBe(1)

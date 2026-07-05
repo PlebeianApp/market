@@ -15,7 +15,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="$ROOT/scripts/ndk-baseline.txt"
 BASELINE="$(head -n1 "$BASELINE_FILE" | tr -dc '0-9')"
 
-CURRENT="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/contextvm" 2>/dev/null | wc -l | tr -d ' ')"
+matches="$(grep -rl "@nostr-dev-kit" --include="*.ts" --include="*.tsx" "$ROOT/src" "$ROOT/contextvm" 2>/dev/null || true)"
+if [ -z "$matches" ]; then
+	CURRENT="0"
+else
+	CURRENT="$(printf '%s\n' "$matches" | wc -l | tr -d ' ')"
+fi
 
 echo "NDK footprint: $CURRENT file(s) import @nostr-dev-kit (baseline: $BASELINE)"
 

@@ -13,8 +13,8 @@
 import { RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
-import { ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, SubscribeOptions } from './io'
+import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
 
 let pool: RelayPool | null = null
 
@@ -27,6 +27,11 @@ function getPool(): RelayPool {
 function relayUrls(override?: string[]): string[] {
 	if (override && override.length > 0) return override
 	return ndkStore.state.explicitRelayUrls
+}
+
+function writeRelayUrls(override?: string[]): string[] {
+	if (override && override.length > 0) return override
+	return getWriteRelays()
 }
 
 function asFilters(filter: NostrFilter | NostrFilter[]): NostrFilter[] {
@@ -73,8 +78,8 @@ export const applesauceIo: NostrIo = {
 		return () => subscription.unsubscribe()
 	},
 
-	async publish(event) {
-		const urls = relayUrls()
+	async publish(event, opts?: PublishOptions) {
+		const urls = writeRelayUrls(opts?.relayUrls)
 		if (urls.length === 0) throw new Error('No relays configured for publish')
 		await getPool().publish(urls, event)
 	},
