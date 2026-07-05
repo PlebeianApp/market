@@ -242,6 +242,33 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		expect(mockNdkActions.publishEvent).not.toHaveBeenCalled()
 	})
 
+	test('publish passes an NDK relay set when relayUrls are provided', async () => {
+		mockNdkStore.state.ndk = makeMockNdk(['wss://publish.example'])
+		await ndkIo.publish(stubRawEvent as never, { relayUrls: ['wss://publish.example'] })
+
+		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
+		expect((event as { rawEvent(): unknown }).rawEvent()).toEqual(stubRawEvent)
+		expect(relaySetUrls(relaySet)).toEqual(['wss://publish.example/'])
+	})
+
+	test('publish preserves default write-relay behavior when relayUrls are omitted', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+		await ndkIo.publish(stubRawEvent as never)
+
+		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
+		expect((event as { rawEvent(): unknown }).rawEvent()).toEqual(stubRawEvent)
+		expect(relaySet).toBeUndefined()
+	})
+
+	test('publish treats empty relayUrls as no override', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+		await ndkIo.publish(stubRawEvent as never, { relayUrls: [] })
+
+		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
+		expect((event as { rawEvent(): unknown }).rawEvent()).toEqual(stubRawEvent)
+		expect(relaySet).toBeUndefined()
+	})
+
 	test('sign throws "NDK not initialized" without an NDK instance', async () => {
 		mockNdkStore.state.ndk = null
 		await expect(ndkIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow('NDK not initialized')
@@ -324,6 +351,41 @@ describe('applesauce adapter (io-applesauce)', () => {
 		const stop = applesauceIo.subscribe({ kinds: [1] }, (e) => seen.push(e), { relayUrls: ['wss://relay.example'] })
 
 		expect(seen).toEqual([stubRawEvent, stubRawEvent2])
+		stop()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
+	})
+
+	test('subscribe with closeOnEose unsubscribes on EOSE without forwarding it', () => {
+		const unsubscribe = mock(() => {})
+		const onEvent = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb('EOSE')
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, {
+			closeOnEose: true,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEvent).not.toHaveBeenCalled()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
+		stop()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
+	})
+
+	test('subscribe without closeOnEose skips EOSE and stays active until cleanup', () => {
+		const unsubscribe = mock(() => {})
+		const onEvent = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb('EOSE')
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, { relayUrls: ['wss://relay.example'] })
+
+		expect(onEvent).not.toHaveBeenCalled()
+		expect(unsubscribe).not.toHaveBeenCalled()
 		stop()
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
