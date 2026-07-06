@@ -1,8 +1,8 @@
 name: NDK Footprint Guard
 
 # Prevents new @nostr-dev-kit usage while the NDK -> applesauce migration
-# (docs/ndk-to-applesauce-migration-plan.md) is in progress. New relay I/O
-# must route through src/lib/nostr/io.ts instead.
+# (docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md) is in
+# progress. New relay I/O must route through src/lib/nostr/io.ts instead.
 
 on:
   push:

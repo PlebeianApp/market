@@ -23,7 +23,7 @@ components, hooks, and the current Bun server entry area.
   state as sensitive. Do not log them.
 - Preserve TanStack Router file-based route conventions and current Bun runtime
   assumptions.
-- As of [ADR-0003: Strangler-Fig Pattern for Nostr I/O Migration (NDK → Applesauce)](../docs/adr/ADR-0003-nostr-io-migration-ndk-to-applesauce.md), no new `@nostr-dev-kit` or `applesauce-*` imports; route all Nostr relay I/O through `src/lib/nostr/io.ts` instead.
+- As of [ADR-0002: Strangler-Fig Pattern for Nostr I/O Migration (NDK → Applesauce)](../docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md), no new `@nostr-dev-kit` or `applesauce-*` imports; route all Nostr relay I/O through `src/lib/nostr/io.ts` instead.
 
 ## Instructions
 

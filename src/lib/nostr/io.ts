@@ -1,6 +1,7 @@
 /**
  * Library-agnostic Nostr I/O port — the "seam" of the NDK -> applesauce
- * strangler-fig migration (see `docs/ndk-to-applesauce-migration-plan.md`).
+ * strangler-fig migration (see
+ * `docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md`).
  *
  * Every event that flows through this port is a raw nostr-tools event
  * (applesauce has no wrapper class), so migrating a module is mostly about
