@@ -1,1 +1,3 @@
-import '@nostr-dev-kit/ndk'
+import { ndkIo } from './lib/nostr/io-ndk'
+
+const test = ndkIo.getUser()
