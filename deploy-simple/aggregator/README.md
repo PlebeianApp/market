@@ -70,6 +70,7 @@ NEXT_PUBLIC_MARKET_AGG_RELAY=wss://relay.plebeian.market
 ## Consolidated from
 
 This PR consolidates three prior PRs into one:
+
 - #1066 — app-side wiring (constants.ts + ndk.ts)
 - #1091 — Khatru relay Go implementation (Option A, approved by @Franchovy)
 - #1092 — Python scraper daemon + write-policy + tests (108 tests)

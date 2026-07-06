@@ -41,13 +41,13 @@ process — there is no separate strfry cache relay and no Python policy plugin.
 
 ## Files
 
-| File          | Purpose                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| `main.go`     | Relay bootstrap: SQLite store, RejectEvent gate, scraper goroutine, HTTP |
-| `config.go`   | Environment-variable configuration + npub decoding                       |
-| `scraper.go`  | Relay-graph discovery + market-kind subscription → local store           |
-| `policy/`     | Pure-Go dual-mode gate (ported from `../write-policy.py`) + unit tests   |
-| `go.mod`      | Go module: khatru, go-nostr, eventstore/sqlite3                          |
+| File         | Purpose                                                                  |
+| ------------ | ------------------------------------------------------------------------ |
+| `main.go`    | Relay bootstrap: SQLite store, RejectEvent gate, scraper goroutine, HTTP |
+| `config.go`  | Environment-variable configuration + npub decoding                       |
+| `scraper.go` | Relay-graph discovery + market-kind subscription → local store           |
+| `policy/`    | Pure-Go dual-mode gate (ported from `../write-policy.py`) + unit tests   |
+| `go.mod`     | Go module: khatru, go-nostr, eventstore/sqlite3                          |
 
 ## Build
 
