@@ -186,11 +186,14 @@ There is intentionally no product reference (`a` tag) in v1.
   reputation events (kind 30440); they MUST NOT use the opinions of
   unlisted validators when deciding whether bids count for _this_
   auction. At least one `auditors` tag is REQUIRED.
+
+### Optional auction tags
+
 - `min_bid_curve`: anti-snipe floor curve applied in `(end_at, max_end_at]`.
   Format `<shape>:<peak_multiplier>` where `shape ∈ {none, linear,
 exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   Floor computed as `baseline × multiplier(t)`:
-  - `baseline = top_bid === 0 ? starting_bid : top_bid + bid_increment`
+  - `baseline = top_bid === 0 ? reserve : top_bid + bid_increment`
   - `multiplier(t) = 1` when `t ≤ end_at` or `shape = none`
   - `multiplier(t) = peak_multiplier` when `t ≥ max_end_at`
   - In `(end_at, max_end_at)` with `t_norm = (t - end_at) / (max_end_at - end_at)`:
@@ -202,9 +205,6 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
       kind-30440 verdicts (a bid below the curve floor is marked
       `bid_invalid` with `reason=under_curve`); compliant bidder clients
       apply the same computation locally to warn before publishing.
-
-### Optional auction tags
-
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
 - `auditor_quorum`: integer N. When present and ≥2, a bid is considered
@@ -534,6 +534,15 @@ Required tags:
   - `voluntary_late` — bidder griefed past `settlement_grace` but is
     making good now (paths may still be valid if the proof hasn't
     been refunded yet; see §8).
+- `cashu_token`: serialized Cashu token (`cashuA…` / `cashuB…`) wrapping
+  the bid leg's full locked proofs (`{amount, secret, C, id}` per proof).
+  REQUIRED for the seller to redeem: the kind-1023 bid event publishes
+  only `lock_secret` + `proof_y`, so the seller has no way to recover
+  the proofs' `C` value otherwise. Proofs are P2PK-locked to
+  `derive(p2pk_xpub, derivation_path)` — only the seller (who holds
+  `seller_xpriv`) can spend them, so publishing the token publicly is
+  safe. MAY be omitted only on synthetic / non-redeemable releases (e.g.
+  seed fixtures); compliant settlers will refuse to redeem without it.
 
 Optional tags:
 
@@ -541,15 +550,6 @@ Optional tags:
   responding to (e.g. the validator's `won_pending_settlement` event).
 - `fallback_offer`: kind-1026 event id this release is accepting (set
   on `release_reason=fallback_settlement`).
-- `cashu_token`: serialized Cashu token (`cashuA…` / `cashuB…`) wrapping
-  the bid leg's full locked proofs (`{amount, secret, C, id}` per proof).
-  REQUIRED in practice for the seller to redeem: the kind-1023 bid event
-  publishes only `lock_secret` + `proof_y`, so the seller has no way to
-  recover the proofs' `C` value otherwise. Proofs are P2PK-locked to
-  `derive(p2pk_xpub, derivation_path)` — only the seller (who holds
-  `seller_xpriv`) can spend them, so publishing the token publicly is
-  safe. Omit only on synthetic / non-redeemable releases (e.g. seed
-  fixtures); compliant settlers will refuse to redeem without it.
 - `content` (event body): MAY contain a short human note.
 
 ### Chain releases
@@ -777,6 +777,16 @@ Post-close (terminal):
   the legitimate settlement. Strongest negative.
 - `cancelled` — auction was cancelled by the seller; bid refunds at
   locktime.
+
+Seller-side and off-protocol (optional):
+
+- `griefed_seller` — optional inverse-side reputation mark emitted by
+  validators when a seller fails to respond to a valid path release
+  within `settlement_grace`. See §8.2.
+- `settled_lockless` — optional acknowledgment of an off-protocol
+  resolution after the bidder has already refunded (e.g. a fresh Cashu
+  payment outside the auction protocol). Requires a seller attestation
+  of receipt. See §8.4.
 
 Common `reason` values for `bid_invalid`:
 
@@ -1107,10 +1117,10 @@ before attempting on-mint redemption.
 stateDiagram-v2
     [*] --> Draft
     Draft --> Active: start_at reached
-    Active --> Closing: effective_end_at reached
-    Closing --> Settled: issuer releases winner path + seller redeems + settlement emitted
-    Closing --> ReserveNotMet: top bid < reserve (issuer refuses release)
-    Closing --> Cancelled: policy/admin cancel before first valid bid
+    Active --> Closing: end_at reached
+    Closing --> Settled: bidder releases path + seller redeems + settlement emitted
+    Closing --> ReserveNotMet: top bid < reserve
+    Closing --> Cancelled: policy/admin cancel (discouraged after first valid bid per §8.2)
     Settled --> [*]
     ReserveNotMet --> [*]
     Cancelled --> [*]
@@ -1125,7 +1135,7 @@ Deterministic close input set:
 
 ## 6.0 The three timestamps (structural invariant)
 
-Every path-oracle auction is parameterised by three monotonically ordered
+Every bidder-held-path auction is parameterised by three monotonically ordered
 timestamps. Implementations MUST treat each as a separate concern; collapsing
 any two of them into one is unsafe.
 
@@ -1181,7 +1191,7 @@ bidder clients run the same formula locally to warn the user before
 publishing.
 
 ```text
-baseline(top_bid)      = top_bid === 0 ? starting_bid : top_bid + bid_increment
+baseline(top_bid)      = top_bid === 0 ? reserve : top_bid + bid_increment
 multiplier(t):
   if t ≤ end_at OR shape = none:   return 1
   if t ≥ max_end_at:                return peak_multiplier
@@ -1530,6 +1540,13 @@ Validators publish their answer as a `won_pending_settlement` /
 
 ### 8.3 Fallback to second-highest bid
 
+> **`safety_margin`** (default: 300 seconds) — validator-configured margin
+> subtracted from `locktime` to determine the cascade deadline for fallback
+> bidders. Ensures the fallback bidder has enough time to release their path
+> and the seller to redeem before the locktime refund window opens. MAY be
+> overridden per-deployment but SHOULD be ≥ `max_skew_sec` to account for
+> clock drift.
+
 Triggered when `fallback_delay_sec` elapses past `max_end_at`
 without a valid kind-1025 from the current top bidder. Validators
 emit `griefed_pending_fallback` to signal the seller's UI.
@@ -1856,8 +1873,8 @@ and prod deploys, so the canonical stage is read from `/api/config`
 > stand in for those env-resolved values; concrete relay URLs are never
 > baked into this spec.
 
-| Stage         | Currency client (`getCurrencyClient` in `src/queries/external.tsx`)                     |
-| ------------- | --------------------------------------------------------------------------------------- |
+| Stage         | Currency client (`getCurrencyClient` in `src/queries/external.tsx`)                      |
+| ------------- | ---------------------------------------------------------------------------------------- |
 | `production`  | `<app-relay>` + `<public-cvm-relays>` — global discoverability of the BTC oracle.        |
 | `staging`     | `<app-relay>` only. `getCurrencyServerRelays('staging') === []`.                         |
 | `development` | `<app-relay>` only (default localhost). `getCurrencyServerRelays('development') === []`. |
@@ -1866,11 +1883,13 @@ and prod deploys, so the canonical stage is read from `/api/config`
 
 - Maintain pinned canonical root event ID for each auction.
 - Enforce immutable auction mechanics after first valid bid.
-- Compute `effective_end_at` deterministically and expose it in UI.
-- Re-verify candidate winning bid proofs shortly before release.
-- Refuse to release paths unless reserve, timing, and bid-validity rules
-  are satisfied.
+- Compute `max_end_at` deterministically and expose it in UI.
 - Track settlement deadlines and alert seller on pending close.
+
+Note: in the bidder-held-path scheme, the platform does NOT release paths
+or hold bidder funds. The bidder generates and releases the path; the seller
+redeems directly at the mint. The platform's role is limited to event
+indexing, UI surfacing, and optional validator/auditor services.
 
 ## 11.2 Gamma spec integration
 
@@ -1889,22 +1908,18 @@ field semantics. Unchanged from prior drafts:
 ## 12. Open Decisions Before Spec Merge
 
 1. Confirm kind mapping (`30408` listing, `1023` bid, `1024` settlement,
-   `30410` path registry) for initial implementation.
+   `1025` path release) for initial implementation.
 2. Canonical default `settlement_grace` value (v1 default: 3600).
-3. Grant expiry window (how long an `auction_path_grant_v1` is valid
-   before the bidder must re-request).
-4. Exact refund transport UX:
+3. Exact refund transport UX:
    - direct token push to loser (issuer-side)
    - loser pull/claim endpoint
    - locktime self-redeem only
-5. Whether v1 allows seller cancel after first valid bid (recommended: no).
-6. Mint outage policy:
+4. Whether v1 allows seller cancel after first valid bid (recommended: no).
+5. Mint outage policy:
    - strict reject vs tentative accept for unverified bids.
-7. Cross-mint bids:
+6. Cross-mint bids:
    - single mint per bid (simpler) vs multi-mint per bid (complex).
-8. Minimum auction duration and anti-spam defaults.
-9. Federated issuers: whether `path_issuer` may be a non-app pubkey and
-   how audit guarantees change in that case.
+7. Minimum auction duration and anti-spam defaults.
 
 ---
 
@@ -2065,7 +2080,7 @@ The bidder never contacts an oracle. The full lock-and-publish sequence:
 2. **Derive child pubkey** — `derive(auction.p2pk_xpub, path)` using
    `HDKey` from `@scure/bip32` (`src/lib/auctionHd.ts`).
 3. **Lock funds** — `wallet.send(amount, existingProofs, { p2pk: {
-   pubkey: childPubkey, locktime, refundKeys: [refundPubkey] } })`.
+pubkey: childPubkey, locktime, refundKeys: [refundPubkey] } })`.
 4. **Publish kind `1023`** — with `lock_secret` (one per proof) and
    `proof_y` tags, **publicly** on relays — **not** via NIP-17 to an
    oracle.
@@ -2099,12 +2114,12 @@ const wallet = new CashuWallet(mint)
 await wallet.loadMint()
 
 const { send: lockedProofs } = await wallet.send(bidAmount, existingProofs, {
-  includeDleq: true,
-  p2pk: {
-    pubkey: childPubkey,        // = derive(auction.p2pk_xpub, path)
-    locktime,                   // = auction.max_end_at + auction.settlement_grace
-    refundKeys: [refundPubkey], // bidder refund branch
-  },
+	includeDleq: true,
+	p2pk: {
+		pubkey: childPubkey, // = derive(auction.p2pk_xpub, path)
+		locktime, // = auction.max_end_at + auction.settlement_grace
+		refundKeys: [refundPubkey], // bidder refund branch
+	},
 })
 
 // lockedProofs[].secret holds the NUT-10 P2PK lock script (pubkey,
@@ -2118,14 +2133,14 @@ import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
 // seller derives child privkey from seller_xpriv + the released path
 export async function claimWinningBid(
-  mintUrl: string,
-  lockedProofs: Proof[],
-  spendingPrivkey: string, // = derive(seller_xpriv, path).privateKey
+	mintUrl: string,
+	lockedProofs: Proof[],
+	spendingPrivkey: string, // = derive(seller_xpriv, path).privateKey
 ) {
-  const mint = new CashuMint(mintUrl)
-  const wallet = new CashuWallet(mint)
-  await wallet.loadMint()
-  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey })
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
+	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey })
 }
 ```
 
@@ -2135,14 +2150,14 @@ export async function claimWinningBid(
 import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
 export async function reclaimExpiredBid(
-  mintUrl: string,
-  lockedProofs: Proof[],
-  refundPrivkey: string, // key matching refund_pubkey
+	mintUrl: string,
+	lockedProofs: Proof[],
+	refundPrivkey: string, // key matching refund_pubkey
 ) {
-  const mint = new CashuMint(mintUrl)
-  const wallet = new CashuWallet(mint)
-  await wallet.loadMint()
-  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey })
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
+	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey })
 }
 ```
 
@@ -2153,7 +2168,7 @@ export async function reclaimExpiredBid(
 - NEVER publish `derivation_path` in kind `1023` public tags/content
   (it appears only in the kind-1025 path release, after `max_end_at`).
 - ALWAYS verify `HDKey(auction.p2pk_xpub).derive(path).publicKey ==
-  childPubkey` on the bidder side before locking funds (§5.6).
+childPubkey` on the bidder side before locking funds (§5.6).
 - ALWAYS run settlement preflight (`preflightAuctionSettlementP2pk`,
   `src/lib/auctionSettlementP2pk.ts`) before the seller attempts
   redemption.
