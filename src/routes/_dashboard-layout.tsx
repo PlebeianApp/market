@@ -122,6 +122,8 @@ function getNotificationCount(
 	unseenMessages: number,
 	unseenPurchases: number,
 	unseenAuctionBids: number,
+	unseenAuctionLive: number,
+	unseenAuctionSettlementBegins: number,
 	unseenBidUpdates: number,
 ): number {
 	if (path === '/dashboard/sales/sales') {
@@ -134,7 +136,7 @@ function getNotificationCount(
 		return unseenPurchases
 	}
 	if (path === '/dashboard/products/auctions') {
-		return unseenAuctionBids
+		return unseenAuctionBids + unseenAuctionLive + unseenAuctionSettlementBegins
 	}
 	if (path === '/dashboard/products/bids') {
 		return unseenBidUpdates
@@ -170,7 +172,15 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
+	const {
+		unseenOrders,
+		unseenMessages,
+		unseenPurchases,
+		unseenAuctionBids,
+		unseenAuctionLive,
+		unseenAuctionSettlementBegins,
+		unseenBidUpdates,
+	} = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 	// Admin checking
@@ -338,6 +348,8 @@ function DashboardLayout() {
 													unseenMessages,
 													unseenPurchases,
 													unseenAuctionBids,
+													unseenAuctionLive,
+													unseenAuctionSettlementBegins,
 													unseenBidUpdates,
 												)
 												return (

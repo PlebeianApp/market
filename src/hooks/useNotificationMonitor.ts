@@ -8,8 +8,10 @@ import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/li
 import {
 	fetchAuctionBidsByBidder,
 	fetchAuctionsByPubkey,
+	getAuctionBiddingCutoffAt,
 	getAuctionId,
 	getAuctionRootEventId,
+	getAuctionStartAt,
 	getBidAmount,
 	getBidAuctionCoordinates,
 	getBidAuctionEventId,
@@ -18,6 +20,7 @@ import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
+const AUCTION_LIFECYCLE_POLL_INTERVAL_MS = 60000
 const IGNORED_AUCTION_BID_STATUSES = new Set(['cancelled', 'canceled', 'rejected', 'failed', 'expired', 'refunded', 'reclaimed', 'claimed'])
 
 const uniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean)))
@@ -47,6 +50,56 @@ const getAuctionCoordinate = (auction: NDKEvent): string => {
 const getEventAuctionRootId = (event: NDKEvent): string => getBidAuctionEventId(event)
 
 const getEventAuctionCoordinate = (event: NDKEvent): string => getBidAuctionCoordinates(event)
+
+const isScheduledAuction = (auction: NDKEvent): boolean => {
+	const startAt = getAuctionStartAt(auction)
+	const createdAt = auction.created_at ?? 0
+	return startAt > 0 && startAt > createdAt
+}
+
+const collectSellerAuctionLifecycleNotifications = (
+	sellerAuctions: NDKEvent[],
+	lastSeenAuctionLive: number,
+	lastSeenAuctionSettlementBegins: number,
+	seenAuctionLiveEventIds: Set<string>,
+	seenAuctionSettlementBeginsEventIds: Set<string>,
+): {
+	liveEvents: NDKEvent[]
+	settlementBeginsEvents: NDKEvent[]
+} => {
+	const now = Math.floor(Date.now() / 1000)
+	const liveEvents: NDKEvent[] = []
+	const settlementBeginsEvents: NDKEvent[] = []
+
+	for (const auction of sellerAuctions) {
+		if (!auction.id) continue
+
+		const startAt = getAuctionStartAt(auction)
+		const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+		const scheduledAuction = isScheduledAuction(auction)
+
+		if (
+			scheduledAuction &&
+			!seenAuctionLiveEventIds.has(auction.id) &&
+			startAt > lastSeenAuctionLive &&
+			now >= startAt &&
+			(biddingCutoffAt <= 0 || now < biddingCutoffAt)
+		) {
+			liveEvents.push(auction)
+		}
+
+		if (
+			!seenAuctionSettlementBeginsEventIds.has(auction.id) &&
+			biddingCutoffAt > 0 &&
+			biddingCutoffAt > lastSeenAuctionSettlementBegins &&
+			now >= biddingCutoffAt
+		) {
+			settlementBeginsEvents.push(auction)
+		}
+	}
+
+	return { liveEvents, settlementBeginsEvents }
+}
 
 const getAuctionBidStatus = (event: NDKEvent): string =>
 	event.tags
@@ -134,8 +187,11 @@ export const useNotificationMonitor = () => {
 		let isCancelled = false
 		const subscriptionSince = Math.floor(Date.now() / 1000)
 		const seenAuctionEventIds = new Set<string>()
+		const seenAuctionLiveEventIds = new Set<string>()
+		const seenAuctionSettlementBeginsEventIds = new Set<string>()
 		const seenBidEventIds = new Set<string>()
 		const seenSettlementEventIds = new Set<string>()
+		let auctionLifecyclePollId: number | null = null
 
 		// Mark as monitoring to prevent duplicate subscriptions
 		isMonitoringRef.current = true
@@ -271,6 +327,20 @@ export const useNotificationMonitor = () => {
 				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
 				const sellerAuctionRootEventIds = uniqueStrings(sellerAuctions.map((auction) => getAuctionRootEventId(auction) || auction.id))
 				const sellerAuctionCoordinates = uniqueStrings(sellerAuctions.map(getAuctionCoordinate))
+				const { liveEvents: initialAuctionLiveEvents, settlementBeginsEvents: initialAuctionSettlementBeginsEvents } =
+					collectSellerAuctionLifecycleNotifications(
+						sellerAuctions,
+						notificationActions.getLastSeenAuctionLive(),
+						notificationActions.getLastSeenAuctionSettlementBegins(),
+						seenAuctionLiveEventIds,
+						seenAuctionSettlementBeginsEventIds,
+					)
+				for (const auction of initialAuctionLiveEvents) {
+					if (auction.id) seenAuctionLiveEventIds.add(auction.id)
+				}
+				for (const auction of initialAuctionSettlementBeginsEvents) {
+					if (auction.id) seenAuctionSettlementBeginsEventIds.add(auction.id)
+				}
 				const sellerBidEvents = await fetchTaggedAuctionEvents({
 					kind: AUCTION_BID_KIND,
 					auctionRootEventIds: sellerAuctionRootEventIds,
@@ -337,6 +407,8 @@ export const useNotificationMonitor = () => {
 					purchaseCount: newPurchaseUpdates.length,
 					conversationCounts,
 					auctionBidCount: newSellerBidEvents.length,
+					auctionLiveCount: initialAuctionLiveEvents.length,
+					auctionSettlementBeginsCount: initialAuctionSettlementBeginsEvents.length,
 					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
 				})
 
@@ -345,6 +417,8 @@ export const useNotificationMonitor = () => {
 					messages: totalUnseenMessages,
 					purchases: newPurchaseUpdates.length,
 					auctionBids: newSellerBidEvents.length,
+					auctionLive: initialAuctionLiveEvents.length,
+					auctionSettlementBegins: initialAuctionSettlementBeginsEvents.length,
 					bidUpdates: newHigherBidEvents.length + newSettlementEvents.length,
 					conversations: Object.keys(conversationCounts).length,
 				})
@@ -417,6 +491,33 @@ export const useNotificationMonitor = () => {
 				})
 
 				console.log('[NotificationMonitor] Subscriptions active:', subscriptionsRef.current.length)
+
+				auctionLifecyclePollId = window.setInterval(async () => {
+					try {
+						const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
+						const { liveEvents, settlementBeginsEvents } = collectSellerAuctionLifecycleNotifications(
+							sellerAuctions,
+							notificationActions.getLastSeenAuctionLive(),
+							notificationActions.getLastSeenAuctionSettlementBegins(),
+							seenAuctionLiveEventIds,
+							seenAuctionSettlementBeginsEventIds,
+						)
+
+						for (const auction of liveEvents) {
+							if (!auction.id) continue
+							seenAuctionLiveEventIds.add(auction.id)
+							notificationActions.incrementUnseenAuctionLive()
+						}
+
+						for (const auction of settlementBeginsEvents) {
+							if (!auction.id) continue
+							seenAuctionSettlementBeginsEventIds.add(auction.id)
+							notificationActions.incrementUnseenAuctionSettlementBegins()
+						}
+					} catch (error) {
+						console.error('[NotificationMonitor] Failed to poll auction lifecycle notifications:', error)
+					}
+				}, AUCTION_LIFECYCLE_POLL_INTERVAL_MS)
 			} catch (error) {
 				console.error('[NotificationMonitor] Failed to initialize notifications:', error)
 			}
@@ -521,6 +622,9 @@ export const useNotificationMonitor = () => {
 		return () => {
 			console.log('[NotificationMonitor] Stopping notification monitoring')
 			isCancelled = true
+			if (auctionLifecyclePollId) {
+				window.clearInterval(auctionLifecyclePollId)
+			}
 			subscriptionsRef.current.forEach((sub) => {
 				sub.stop()
 			})

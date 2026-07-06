@@ -293,6 +293,8 @@ function AuctionsOverviewComponent() {
 	useEffect(() => {
 		if (isAuthenticated && user?.pubkey) {
 			notificationActions.markAuctionBidsSeen()
+			notificationActions.markAuctionLiveSeen()
+			notificationActions.markAuctionSettlementBeginsSeen()
 		}
 	}, [isAuthenticated, user?.pubkey])
 
