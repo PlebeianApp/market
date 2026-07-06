@@ -69,6 +69,15 @@ already exists.
   canonical public review context. Do not require beads sync, commits, pushes,
   or GitHub updates unless explicitly authorized.
 
+## NDK to Applesauce Wave 0
+
+- New relay I/O should route through `src/lib/nostr/io.ts`.
+- The NDK footprint guard tracks literal `@nostr-dev-kit` usage under `src/` and
+  `contextvm/`.
+- NDK remains the default adapter in Wave 0.
+- Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
+  or broad rewrite instructions.
+
 ## Safe Checks
 
 For docs-only changes:
