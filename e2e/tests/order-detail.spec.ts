@@ -1,4 +1,3 @@
-import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
 import { devUser1, devUser2 } from '@/lib/fixtures'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { finalizeEvent, Relay, type EventTemplate, type VerifiedEvent } from 'nostr-tools'
@@ -405,7 +404,8 @@ test.describe('Order Details - Buyer View - Products', () => {
 		// await expect(page.locator('div').filter({ hasText: /^Completed$/ })).toBeVisible()
 		// await expect(page.getByText('Order completed', { exact: true })).toBeVisible()
 
-		await expect(page.getByText('Order status updated to completed')).toBeVisible()
+		// Check notification appears
+		await expect(page.getByRole('listitem').getByText('Order status updated to completed')).toBeVisible()
 	})
 
 	test('confirms delivery immediately after shipping (no intermediate steps)', async ({ buyerPage: page }) => {
