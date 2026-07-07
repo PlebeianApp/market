@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import { AvatarUser } from '@/components/AvatarUser'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
@@ -100,24 +101,30 @@ function TopBidBox({ auction, bids }: { auction: NDKEvent; bids: NDKEvent[] }) {
 
 	if (!topBid) {
 		return (
-			<div className="rounded-xl border px-4 py-3">
-				<p className="text-sm text-muted-foreground">No bids yet</p>
+			<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-4">
+				<p className="text-sm text-zinc-500">No bids yet. Winning bid will appear here.</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className="rounded-xl border px-4 py-3">
+		<div className="rounded-xl border-2 border-emerald-300 bg-emerald-100 px-4 py-4">
 			<div>
-				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+				<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">
 					<span>Top bid:</span>
 					<span>{formatTimeAgo(topBid.created_at ?? 0)}</span>
 				</div>
-				<p className="text-xl font-bold">{getBidAmount(topBid).toLocaleString()} sats</p>
+				<p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">{getBidAmount(topBid).toLocaleString()} sats</p>
 			</div>
-			<div className="mt-2 flex items-center gap-2">
-				<AvatarUser pubkey={topBid.pubkey} colored deterministicFallbackText className="w-6 h-6" />
-				<span className="text-sm font-medium truncate max-w-32">{bidderName || topBid.pubkey.slice(0, 8)}</span>
+			<div className="mt-2 flex items-center justify-between gap-2">
+				<Badge className="border-emerald-300 bg-white text-emerald-800 hover:bg-white">Winning bid</Badge>
+
+				<div className="flex items-center gap-2">
+					<Link to="/profile/$profileId" params={{ profileId: topBid.pubkey }}>
+						<AvatarUser pubkey={topBid.pubkey} colored deterministicFallbackText className="w-6 h-6" />
+					</Link>
+					<span className="text-sm font-medium truncate max-w-32">{bidderName || topBid.pubkey.slice(0, 8)}</span>
+				</div>
 			</div>
 		</div>
 	)
@@ -214,7 +221,9 @@ function AuctionListItem({
 				</div>
 
 				<div className="flex w-full shrink-0 flex-col items-end gap-3 lg:w-64">
-					<span className={cn('inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}>{status}</span>
+					<span className={cn('inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}>
+						{status}
+					</span>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
 						<ActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
