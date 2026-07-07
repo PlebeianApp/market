@@ -5,7 +5,7 @@ import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Event } from 'nostr-tools'
+import { verifyEvent, type Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 
@@ -66,13 +66,23 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
 type OrdersNdk = NonNullable<ReturnType<typeof ndkActions.getNDK>>
 
+function rehydrateVerifiedNdkEvent(ndk: OrdersNdk, event: Event): NDKEvent | null {
+	try {
+		if (!verifyEvent(event)) return null
+		return new NDKEvent(ndk, event)
+	} catch {
+		return null
+	}
+}
+
 async function fetchNdkEventSet(ndk: OrdersNdk, filter: NDKFilter | NDKFilter[]): Promise<Set<NDKEvent>> {
 	const rawEvents = await applesauceIo.fetchEvents(filter as NostrFilter | NostrFilter[])
-	const uniqueRawEvents = new Map<string, (typeof rawEvents)[number]>()
+	const eventsById = new Map<string, NDKEvent>()
 	for (const event of rawEvents) {
-		if (!uniqueRawEvents.has(event.id)) uniqueRawEvents.set(event.id, event)
+		const ndkEvent = rehydrateVerifiedNdkEvent(ndk, event)
+		if (ndkEvent && !eventsById.has(ndkEvent.id)) eventsById.set(ndkEvent.id, ndkEvent)
 	}
-	return new Set(Array.from(uniqueRawEvents.values(), (event) => new NDKEvent(ndk, event)))
+	return new Set(eventsById.values())
 }
 
 function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
@@ -992,7 +1002,8 @@ export function subscribeToOrderUpdates(params: {
 	return applesauceIo.subscribe(
 		relatedEventsFilter,
 		(rawEvent) => {
-			const newEvent = new NDKEvent(ndk, rawEvent)
+			const newEvent = rehydrateVerifiedNdkEvent(ndk, rawEvent)
+			if (!newEvent) return
 			const taggedOrderId = newEvent.tags.find((tag) => tag[0] === 'order')?.[1]
 			const matchesRouteId = newEvent.id === orderId || taggedOrderId === orderId
 			const matchesFetchedOrder = !!taggedOrderId && (taggedOrderId === logicalOrderId || taggedOrderId === fetchedOrderEventId)

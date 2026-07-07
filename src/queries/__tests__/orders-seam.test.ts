@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { finalizeEvent } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools/pure'
 
 import { applesauceIo } from '@/lib/nostr/io'
@@ -16,17 +17,33 @@ const realFetchEvents = applesauceIo.fetchEvents
 const realSubscribe = applesauceIo.subscribe
 const realGetNDK = ndkActions.getNDK
 
+const TEST_SECRET_KEY = new Uint8Array(32).fill(1)
+
 function rawEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
+	const event = finalizeEvent(
+		{
+			created_at: overrides.created_at ?? 1_700_000_000,
+			kind: overrides.kind ?? ORDER_PROCESS_KIND,
+			tags: overrides.tags ?? [],
+			content: overrides.content ?? '',
+		},
+		TEST_SECRET_KEY,
+	)
+
 	return {
-		id: '0'.repeat(64),
-		pubkey: BUYER_PUBKEY,
-		created_at: 1_700_000_000,
-		kind: ORDER_PROCESS_KIND,
-		tags: [],
-		content: '',
-		sig: '3'.repeat(128),
-		...overrides,
+		...event,
+		...(overrides.id !== undefined ? { id: overrides.id } : {}),
+		...(overrides.pubkey !== undefined ? { pubkey: overrides.pubkey } : {}),
+		...(overrides.sig !== undefined ? { sig: overrides.sig } : {}),
 	}
+}
+
+function forgeEvent(event: NostrEvent, overrides: Partial<NostrEvent>): NostrEvent {
+	const forged = { ...event, ...overrides }
+	for (const symbol of Object.getOwnPropertySymbols(forged)) {
+		delete (forged as Record<PropertyKey, unknown>)[symbol]
+	}
+	return forged as NostrEvent
 }
 
 function stubNdk() {
@@ -42,15 +59,15 @@ afterEach(() => {
 })
 
 describe('orders relay reads use the Wave A1b seam flip', () => {
-	test('fetchSellerPrivateOrderGiftWraps routes through applesauceIo.fetchEvents, dedupes mirrored raw events, and rehydrates NDKEvents', async () => {
+	test('fetchSellerPrivateOrderGiftWraps routes through applesauceIo.fetchEvents, skips invalid raw events, dedupes mirrored raw events, and rehydrates NDKEvents', async () => {
 		const giftWrap = rawEvent({
-			id: 'a'.repeat(64),
 			kind: GIFT_WRAP_KIND,
 			tags: [['p', SELLER_PUBKEY]],
 			content: 'encrypted-private-order-details',
 		})
 		const mirroredGiftWrap = { ...giftWrap }
-		const fetchEvents = mock(async () => [giftWrap, mirroredGiftWrap])
+		const forgedGiftWrap = forgeEvent(giftWrap, { content: 'tampered-private-order-details' })
+		const fetchEvents = mock(async () => [giftWrap, mirroredGiftWrap, forgedGiftWrap])
 		applesauceIo.fetchEvents = fetchEvents as typeof applesauceIo.fetchEvents
 		;(ndkActions as { getNDK: () => unknown }).getNDK = () => stubNdk()
 
@@ -64,7 +81,15 @@ describe('orders relay reads use the Wave A1b seam flip', () => {
 		})
 		expect(result).toHaveLength(1)
 		expect(typeof result[0].rawEvent).toBe('function')
-		expect(result[0].rawEvent()).toEqual(giftWrap)
+		expect(result[0].rawEvent()).toMatchObject({
+			id: giftWrap.id,
+			pubkey: giftWrap.pubkey,
+			created_at: giftWrap.created_at,
+			kind: giftWrap.kind,
+			tags: giftWrap.tags,
+			content: giftWrap.content,
+			sig: giftWrap.sig,
+		})
 	})
 
 	test('NDK initialization guard short-circuits before touching the seam', async () => {
@@ -102,15 +127,17 @@ describe('orders relay reads use the Wave A1b seam flip', () => {
 		})
 		expect(subscribe.mock.calls[0][2]).toEqual({ closeOnEose: false })
 
+		onEvent?.(forgeEvent(rawEvent({ tags: [['order', 'logical-order-id']] }), { content: 'tampered-subscription-event' }))
+		expect(onMatchedEvent).not.toHaveBeenCalled()
+
 		onEvent?.(
 			rawEvent({
-				id: 'b'.repeat(64),
 				tags: [['order', 'logical-order-id']],
 			}),
 		)
 		expect(onMatchedEvent).toHaveBeenCalledTimes(1)
 
-		onEvent?.(rawEvent({ id: 'c'.repeat(64), tags: [['order', 'unrelated-order']] }))
+		onEvent?.(rawEvent({ tags: [['order', 'unrelated-order']] }))
 		expect(onMatchedEvent).toHaveBeenCalledTimes(1)
 
 		cleanup()
