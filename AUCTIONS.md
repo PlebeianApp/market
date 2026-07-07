@@ -2,7 +2,7 @@
 
 > **Status (this branch).** This document specifies the
 > `cashu_p2pk_bidder_path_v1` scheme — the **bidder-held-path** design.
-> Earlier drafts on `master` described a path-oracle scheme
+> Earlier drafts on `auctions/p2pk-path-oracle-via-cvm-v1` described a path-oracle scheme
 > (`cashu_p2pk_path_oracle_v1`) where a CVM coordinator held the
 > derivation path; that scheme is **superseded** by what's below. The
 > overarching pivot: no third party ever holds key material or
