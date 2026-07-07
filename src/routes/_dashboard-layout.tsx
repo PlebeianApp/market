@@ -122,7 +122,10 @@ function getNotificationCount(
 	unseenMessages: number,
 	unseenPurchases: number,
 	unseenAuctionBids: number,
-	unseenAuctionLive: number,
+	unseenAuctionLiveChatComments: number,
+	unseenAuctionThreadComments: number,
+	unseenProductThreadComments: number,
+	unseenScheduledAuctionsNowLive: number,
 	unseenAuctionSettlementBegins: number,
 	unseenBidUpdates: number,
 ): number {
@@ -136,7 +139,16 @@ function getNotificationCount(
 		return unseenPurchases
 	}
 	if (path === '/dashboard/products/auctions') {
-		return unseenAuctionBids + unseenAuctionLive + unseenAuctionSettlementBegins
+		return (
+			unseenAuctionBids +
+			unseenAuctionLiveChatComments +
+			unseenAuctionThreadComments +
+			unseenScheduledAuctionsNowLive +
+			unseenAuctionSettlementBegins
+		)
+	}
+	if (path === '/dashboard/products/products') {
+		return unseenProductThreadComments
 	}
 	if (path === '/dashboard/products/bids') {
 		return unseenBidUpdates
@@ -177,7 +189,10 @@ function DashboardLayout() {
 		unseenMessages,
 		unseenPurchases,
 		unseenAuctionBids,
-		unseenAuctionLive,
+		unseenAuctionComments: unseenAuctionLiveChatComments,
+		unseenAuctionEventComments: unseenAuctionThreadComments,
+		unseenProductComments: unseenProductThreadComments,
+		unseenAuctionLive: unseenScheduledAuctionsNowLive,
 		unseenAuctionSettlementBegins,
 		unseenBidUpdates,
 	} = useStore(notificationStore)
@@ -348,7 +363,10 @@ function DashboardLayout() {
 													unseenMessages,
 													unseenPurchases,
 													unseenAuctionBids,
-													unseenAuctionLive,
+													unseenAuctionLiveChatComments,
+													unseenAuctionThreadComments,
+													unseenProductThreadComments,
+													unseenScheduledAuctionsNowLive,
 													unseenAuctionSettlementBegins,
 													unseenBidUpdates,
 												)

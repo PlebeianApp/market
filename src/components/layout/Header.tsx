@@ -206,7 +206,10 @@ export function Header() {
 		unseenMessages,
 		unseenPurchases,
 		unseenAuctionBids,
-		unseenAuctionLive,
+		unseenAuctionComments: unseenAuctionLiveChatComments,
+		unseenAuctionEventComments: unseenAuctionThreadComments,
+		unseenProductComments: unseenProductThreadComments,
+		unseenAuctionLive: unseenScheduledAuctionsNowLive,
 		unseenAuctionSettlementBegins,
 		unseenBidUpdates,
 	} = useStore(notificationStore)
@@ -221,7 +224,10 @@ export function Header() {
 		unseenMessages +
 		unseenPurchases +
 		unseenAuctionBids +
-		unseenAuctionLive +
+		unseenAuctionLiveChatComments +
+		unseenAuctionThreadComments +
+		unseenProductThreadComments +
+		unseenScheduledAuctionsNowLive +
 		unseenAuctionSettlementBegins +
 		unseenBidUpdates
 
