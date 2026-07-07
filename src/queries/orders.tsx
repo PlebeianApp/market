@@ -17,7 +17,6 @@ import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
-import { fetchProduct, fetchProductByATag } from './products'
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -1232,83 +1231,4 @@ function isHexPubkey(value: string): boolean {
 export const formatSats = (amount?: string): string => {
 	if (!amount) return '-'
 	return `${parseInt(amount).toLocaleString()} sats`
-}
-
-/**
- * Check if an order contains items that require stock updates (physical products)
- * @param order The order to check
- * @returns Promise that resolves to true if the order has physical items that need stock updates
- */
-export const orderRequiresStockUpdate = async (order: OrderWithRelatedEvents): Promise<boolean> => {
-	// Extract item references from the order
-	const itemTags = order.order.tags.filter((tag) => tag[0] === 'item')
-
-	// If no items, no stock update needed
-	if (itemTags.length === 0) return false
-
-	// Check each item to see if it's a physical product that requires stock management
-	for (const itemTag of itemTags) {
-		const productRef = itemTag[1] // Format: 30402:pubkey:dtag (or 30402:pubkey:eventId for legacy)
-		const quantity = parseInt(itemTag[2] || '1')
-
-		// Skip if no quantity
-		if (quantity <= 0) continue
-
-		try {
-			// Parse the product reference
-			const [kind, pubkey, identifier] = productRef.split(':')
-
-			if (kind !== '30402' || !pubkey || !identifier) {
-				console.warn('Invalid product reference:', productRef)
-				continue
-			}
-
-			let productEvent: NDKEvent | null = null
-
-			// First, try to fetch by d-tag (new format)
-			productEvent = await fetchProductByATag(pubkey, identifier)
-
-			// If not found and identifier looks like an event ID (64 hex chars), try fetching by event ID
-			if (!productEvent && /^[a-f0-9]{64}$/i.test(identifier)) {
-				try {
-					productEvent = await fetchProduct(identifier)
-					// Verify the product belongs to the expected seller
-					if (productEvent && productEvent.pubkey !== pubkey) {
-						console.warn('Product pubkey mismatch, ignoring:', productRef)
-						productEvent = null
-					}
-				} catch (error) {
-					console.warn('Failed to fetch product by event ID:', identifier)
-				}
-			}
-
-			if (!productEvent) {
-				console.warn('Product not found:', productRef)
-				// If we can't determine the product type, default to requiring stock update for safety
-				return true
-			}
-
-			// Check product type - physical products need stock updates
-			// Format: ["type", "simple|variable|variation", "digital|physical"]
-			const typeTag = productEvent.tags.find((t) => t[0] === 'type')
-
-			// If no type tag, default to physical (older products might not have this tag)
-			if (!typeTag) {
-				return true
-			}
-
-			// Check if it's a physical product (second element of type tag)
-			const productType = typeTag[2] // "digital" or "physical"
-			if (productType === 'physical') {
-				return true
-			}
-		} catch (error) {
-			console.warn('Error checking product type for stock update:', productRef, error)
-			// If we can't determine the product type, default to requiring stock update
-			return true
-		}
-	}
-
-	// No physical products found that require stock updates
-	return false
 }
