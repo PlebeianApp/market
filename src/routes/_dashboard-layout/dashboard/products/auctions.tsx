@@ -1,6 +1,5 @@
 import { cn } from '@/lib/utils'
-import { AuctionCountdown } from '@/components/AuctionCountdown'
-import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { AvatarUser } from '@/components/AvatarUser'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
@@ -11,27 +10,30 @@ import {
 	auctionsByPubkeyQueryOptions,
 	getAuctionBiddingCutoffAt,
 	getAuctionBidCountFromBids,
-	getAuctionCurrentPriceFromBids,
 	getAuctionId,
 	getAuctionImages,
-	getAuctionReserve,
 	getAuctionRootEventId,
-	getAuctionSettlementStatus,
 	getAuctionStartAt,
-	getAuctionStartingBid,
 	getAuctionSummary,
 	getAuctionTitle,
+	getAuctionTopBidFromBids,
+	getBidAmount,
 	useAuctionBids,
 	useAuctionBidsForList,
+	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
+import { useComments } from '@/queries/comments'
+import { useLiveActivity, useLiveChatMessages } from '@/queries/liveChat'
+import { getOrderId } from '@/queries/orders'
+import { useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
+import { Clock, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	auctionSortOptionValues,
@@ -40,17 +42,30 @@ import {
 	useFilteredAuctions,
 	type AuctionSortOption,
 } from '@/lib/utils/auctions'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
 
-function formatAuctionStatus(startAt: number, endAt: number, now: number): string {
-	if (endAt > 0 && now >= endAt) return 'Ended'
+type AuctionStatus = 'Scheduled' | 'Live' | 'Settlement' | 'Ended'
+
+function formatAuctionStatus(startAt: number, biddingCutoffAt: number, settlementLocked: boolean, now: number): AuctionStatus {
 	if (startAt > 0 && now < startAt) return 'Scheduled'
+	if (biddingCutoffAt > 0 && now >= biddingCutoffAt) return settlementLocked ? 'Ended' : 'Settlement'
 	return 'Live'
 }
 
 function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
-	return new Date(timestamp * 1000).toLocaleString()
+	return new Date(timestamp * 1000).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatTimeAgo(timestamp: number): string {
+	if (!timestamp) return ''
+	const diffSeconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp)
+	if (diffSeconds < 60) return 'just now'
+	const diffMinutes = Math.floor(diffSeconds / 60)
+	if (diffMinutes < 60) return `${diffMinutes} min${diffMinutes === 1 ? '' : 's'} ago`
+	const diffHours = Math.floor(diffMinutes / 60)
+	if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+	const diffDays = Math.floor(diffHours / 24)
+	return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
 const getAuctionCoordinates = (auction: NDKEvent): string => {
@@ -58,117 +73,51 @@ const getAuctionCoordinates = (auction: NDKEvent): string => {
 	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 }
 
-/**
- * Compact body for a seller's auction row. The auction detail route is the
- * one place to look at the full thing; this collapsible deliberately keeps
- * only the "what's the headline state" essentials plus the inline settlement
- * action so a seller can close ended auctions without a navigation hop.
- * Anything that resembles tech-debt (event IDs, mint URLs, settlement-policy
- * strings, etc.) lives on the detail route behind accordions.
- */
-function AuctionListBody({
-	auction,
-	onPublishSettlement,
-	isSettling,
-}: {
-	auction: NDKEvent
-	onPublishSettlement: () => void
-	isSettling: boolean
-}) {
-	const summary = getAuctionSummary(auction) || auction.content || 'No description'
-	const images = getAuctionImages(auction)
-	const startingBid = getAuctionStartingBid(auction)
-	const reserve = getAuctionReserve(auction)
-	const auctionRootEventId = getAuctionRootEventId(auction)
-	const auctionCoordinates = getAuctionCoordinates(auction)
-	const startAt = getAuctionStartAt(auction)
+const STATUS_BADGE_STYLES: Record<AuctionStatus, string> = {
+	Scheduled: 'border-sky-400 text-sky-700 bg-sky-50',
+	Live: 'border-emerald-400 text-emerald-700 bg-emerald-50',
+	Settlement: 'border-sky-400 text-sky-700 bg-sky-50',
+	Ended: 'border-zinc-300 text-zinc-500 bg-zinc-50',
+}
 
-	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
-	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
-	const ended = status === 'Ended'
-	const currentBid = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+function ActivityRow({ header, unit, count, newCount }: { header: string; unit: string; count: number; newCount: number }) {
+	return (
+		<div className="space-y-0.5">
+			<p className="text-xs text-muted-foreground">{header}</p>
+			<p className="text-sm">
+				<span className="font-semibold">
+					{count} {count === 1 ? unit : `${unit}s`}
+				</span>
+				{newCount > 0 && <span className="ml-2 text-pink-600 font-semibold">{newCount} New</span>}
+			</p>
+		</div>
+	)
+}
 
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auction.id, 5, auctionCoordinates)
-	const latestSettlement = settlementsQuery.data?.[0] ?? null
-	const settlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
-	const settlementLocked = !!latestSettlement
-	const reserveMet = currentBid >= reserve
+function TopBidBox({ auction, bids }: { auction: NDKEvent; bids: NDKEvent[] }) {
+	const topBid = getAuctionTopBidFromBids(auction, bids)
+	const { data: bidderName } = useProfileName(topBid?.pubkey ?? '')
 
-	const settlementHelper = settlementLocked
-		? `Settlement already published (${settlementStatus.replace(/_/g, ' ')}).`
-		: !ended
-			? 'Settlement unlocks once the auction ends.'
-			: bidsCount === 0
-				? 'No bids — settlement will record reserve_not_met.'
-				: reserveMet
-					? `Settlement will record settled at ${currentBid.toLocaleString()} sats.`
-					: 'Top bid is below reserve — settlement will record reserve_not_met.'
+	if (!topBid) {
+		return (
+			<div className="rounded-xl border px-4 py-3">
+				<p className="text-sm text-muted-foreground">No bids yet</p>
+			</div>
+		)
+	}
 
 	return (
-		<div className="block p-4 bg-gray-50 border-t">
-			<div className="space-y-4">
-				{images.length > 0 && (
-					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
-						<img src={images[0][1]} alt="Auction image" className="w-full h-full object-cover" />
-					</div>
-				)}
-				<div>
-					<p className="text-sm text-gray-600 mb-1">Summary:</p>
-					<p className="text-sm">{summary}</p>
+		<div className="rounded-xl border px-4 py-3">
+			<div>
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					<span>Top bid:</span>
+					<span>{formatTimeAgo(topBid.created_at ?? 0)}</span>
 				</div>
-				<div className="grid grid-cols-2 gap-2 text-sm">
-					<p className="text-gray-600">
-						Status:{' '}
-						<span
-							className={`font-medium ${status === 'Live' ? 'text-green-600' : status === 'Scheduled' ? 'text-blue-600' : 'text-zinc-600'}`}
-						>
-							{status}
-						</span>
-					</p>
-					<p className="text-gray-600">
-						Bids: <span className="font-medium">{bidsCount}</span>
-					</p>
-					<p className="text-gray-600">
-						Starting bid: <span className="font-medium">{startingBid.toLocaleString()} sats</span>
-					</p>
-					<p className="text-gray-600">
-						Current bid: <span className="font-medium">{currentBid.toLocaleString()} sats</span>
-					</p>
-					<p className="text-gray-600">
-						Reserve: <span className="font-medium">{reserve.toLocaleString()} sats</span>
-					</p>
-					<p className="text-gray-600 col-span-2">
-						Bidding ends: <span className="font-medium">{formatMaybeDate(biddingCutoffAt)}</span>
-					</p>
-				</div>
-
-				<div className="rounded-md border bg-white px-3 py-3 space-y-2">
-					<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Settlement</p>
-					<p className="text-xs text-gray-600">{settlementHelper}</p>
-					<Button className="w-full" size="sm" onClick={onPublishSettlement} disabled={!ended || settlementLocked || isSettling}>
-						{isSettling ? (
-							<>
-								<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-								Publishing…
-							</>
-						) : (
-							'Publish Settlement'
-						)}
-					</Button>
-				</div>
-
-				<div className="flex flex-wrap items-center gap-2 pt-1">
-					<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: auction.id }}>
-						<Button variant="outline" size="sm" className="gap-2">
-							<Eye className="w-3.5 h-3.5" />
-							View Auction
-						</Button>
-					</Link>
-				</div>
+				<p className="text-xl font-bold">{getBidAmount(topBid).toLocaleString()} sats</p>
+			</div>
+			<div className="mt-2 flex items-center gap-2">
+				<AvatarUser pubkey={topBid.pubkey} colored deterministicFallbackText className="w-6 h-6" />
+				<span className="text-sm font-medium truncate max-w-32">{bidderName || topBid.pubkey.slice(0, 8)}</span>
 			</div>
 		</div>
 	)
@@ -176,96 +125,113 @@ function AuctionListBody({
 
 function AuctionListItem({
 	auction,
-	isExpanded,
-	onToggleExpanded,
 	onManage,
 	onPublishSettlement,
 	isSettling,
 }: {
 	auction: NDKEvent
-	isExpanded: boolean
-	onToggleExpanded: () => void
 	onManage: () => void
 	onPublishSettlement: () => void
 	isSettling: boolean
 }) {
-	const startAt = getAuctionStartAt(auction)
-	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
+	const summary = getAuctionSummary(auction) || auction.content || 'No description'
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
+	const startAt = getAuctionStartAt(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
+	const auctionCoordinates = getAuctionCoordinates(auction)
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+	const now = Math.floor(Date.now() / 1000)
 
-	const breakpoint = useBreakpoint()
+	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const newBidsCount = bids.filter((bid) => (bid.created_at ?? 0) > notificationActions.getLastSeenAuctionBids()).length
 
-	const triggerContent = (
-		<div className="flex items-center gap-3">
-			{thumbnailUrl ? (
-				<img src={thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-			) : (
-				<div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
-					<Gavel className="w-5 h-5 text-gray-400" />
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auction.id, 5, auctionCoordinates)
+	const latestSettlement = settlementsQuery.data?.[0] ?? null
+	const settlementLocked = !!latestSettlement
+
+	const status = formatAuctionStatus(startAt, biddingCutoffAt, settlementLocked, now)
+
+	const commentsQuery = useComments(auction)
+	const comments = commentsQuery.data ?? []
+	const newCommentsCount = comments.filter((comment) => comment.createdAt > notificationActions.getLastSeenAuctionEventComments()).length
+
+	const liveActivityQuery = useLiveActivity(auction)
+	const liveActivityCoord = liveActivityQuery.data?.coord ?? ''
+	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
+	const chatMessages = chatQuery.data ?? []
+	const newChatCount = chatMessages.filter((message) => message.createdAt > notificationActions.getLastSeenAuctionComments()).length
+
+	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
+	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
+
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-background p-6 shadow-md">
+			<div className="flex flex-col gap-6 lg:flex-row">
+				<div className="flex shrink-0 items-start gap-3 lg:flex-col">
+					{thumbnailUrl ? (
+						<img src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 rounded-xl object-cover lg:h-32 lg:w-32" />
+					) : (
+						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-zinc-100 lg:h-32 lg:w-32">
+							<Gavel className="h-8 w-8 text-zinc-400" />
+						</div>
+					)}
+					<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: auction.id }} className="lg:w-32">
+						<Button variant="outline" size="sm" className="w-full gap-2">
+							<ExternalLink className="h-3.5 w-3.5" />
+							Open Auction
+						</Button>
+					</Link>
+					{status === 'Scheduled' && (
+						<Button variant="ghost" size="sm" className="gap-2" onClick={onManage}>
+							<Pencil className="h-3.5 w-3.5" />
+							Manage
+						</Button>
+					)}
 				</div>
-			)}
-			<div className="min-w-0 flex-1">
-				<div className="flex items-start justify-between gap-3 min-w-0">
-					<p className="font-semibold text-sm truncate text-foreground">{getAuctionTitle(auction)}</p>
+
+				<div className="flex-1 min-w-0 space-y-4">
+					<div className="min-w-0">
+						<h3 className="text-lg font-semibold text-foreground truncate">{getAuctionTitle(auction)}</h3>
+						<p className="text-sm text-muted-foreground truncate">{summary}</p>
+						<p className="mt-1 text-xs text-muted-foreground">Created: {formatMaybeDate(auction.created_at ?? 0)}</p>
+					</div>
+
+					<TopBidBox auction={auction} bids={bids} />
+
+					{status === 'Settlement' && (
+						<Button className="w-full bg-pink-600 hover:bg-pink-700 text-white" onClick={onPublishSettlement} disabled={isSettling}>
+							{isSettling ? (
+								<>
+									<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+									Publishing…
+								</>
+							) : (
+								'Publish Settlement'
+							)}
+						</Button>
+					)}
+
+					{status === 'Ended' && orderId && (
+						<Link to="/dashboard/orders/$orderId" params={{ orderId }}>
+							<Button className="w-full bg-neutral-800 hover:bg-neutral-700 text-white">Go to Order Page</Button>
+						</Link>
+					)}
 				</div>
-				<div className="mt-2 flex flex-wrap items-center gap-2">
-					<span
-						className={cn(
-							'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium',
-							status === 'Live'
-								? 'bg-emerald-100 text-emerald-800'
-								: status === 'Scheduled'
-									? 'bg-sky-100 text-sky-800'
-									: 'bg-zinc-100 text-zinc-800',
-						)}
-					>
-						{status}
-					</span>
+
+				<div className="flex w-full shrink-0 flex-col items-end gap-3 lg:w-64">
+					<span className={cn('inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}>{status}</span>
+					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
+						<ActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
+						<ActivityRow header="Comments" unit="Comment" count={comments.length} newCount={newCommentsCount} />
+						<ActivityRow header="Live Chat" unit="Message" count={chatMessages.length} newCount={newChatCount} />
+					</div>
 				</div>
 			</div>
 		</div>
-	)
-
-	const actions = (
-		<>
-			{breakpoint !== 'sm' && (
-				<div className="min-w-64">
-					<AuctionCountdown auction={auction} />
-				</div>
-			)}
-			<Link
-				to="/dashboard/products/auctions/$auctionId"
-				params={{ auctionId: auction.id }}
-				onClick={(e) => e.stopPropagation()}
-				aria-label={`Open auction route for ${getAuctionTitle(auction)}`}
-			>
-				<Button variant="ghost" size="sm">
-					<Eye className="w-4 h-4" />
-				</Button>
-			</Link>
-			{status === 'Scheduled' && (
-				<Button
-					variant="ghost"
-					size="sm"
-					onClick={(e) => {
-						e.stopPropagation()
-						onManage()
-					}}
-					aria-label={`Manage ${getAuctionTitle(auction)}`}
-				>
-					<Pencil className="w-4 h-4" />
-				</Button>
-			)}
-		</>
-	)
-
-	return (
-		<DashboardListItem isOpen={isExpanded} onOpenChange={onToggleExpanded} triggerContent={triggerContent} actions={actions} icon={false}>
-			<AuctionListBody auction={auction} onPublishSettlement={onPublishSettlement} isSettling={isSettling} />
-		</DashboardListItem>
 	)
 }
 
@@ -277,7 +243,6 @@ function AuctionsOverviewComponent() {
 	const { user, isAuthenticated } = useStore(authStore)
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
-	const [expandedAuction, setExpandedAuction] = useState<string | null>(null)
 	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
@@ -444,8 +409,6 @@ function AuctionsOverviewComponent() {
 								<li key={auction.id}>
 									<AuctionListItem
 										auction={auction}
-										isExpanded={expandedAuction === auction.id}
-										onToggleExpanded={() => setExpandedAuction((prev) => (prev === auction.id ? null : auction.id))}
 										onManage={() => handleManageAuction(auction.id)}
 										onPublishSettlement={() => void handlePublishSettlement(auction)}
 										isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
