@@ -13,6 +13,9 @@ export interface NotificationState {
 	unseenMessages: number // New messages in conversations
 	unseenPurchases: number // Updates to orders where user is buyer
 	unseenAuctionBids: number // New bids on auctions where user is seller
+	unseenAuctionComments: number // New live-chat comments on seller auctions
+	unseenAuctionEventComments: number // New NIP-22 comments on seller auctions
+	unseenProductComments: number // New NIP-22 comments on seller products
 	unseenAuctionLive: number // Scheduled auctions that just went live
 	unseenAuctionSettlementBegins: number // Scheduled auctions that just ended
 	unseenBidUpdates: number // New higher bids / settlements on auctions where user is bidder
@@ -23,6 +26,9 @@ export interface NotificationState {
 		orders: number
 		purchases: number
 		auctionBids: number
+		auctionComments: number
+		auctionEventComments: number
+		productComments: number
 		auctionLive: number
 		auctionSettlementBegins: number
 		bidUpdates: number
@@ -70,6 +76,9 @@ const createInitialState = (): NotificationState => {
 		unseenMessages: 0,
 		unseenPurchases: 0,
 		unseenAuctionBids: 0,
+		unseenAuctionComments: 0,
+		unseenAuctionEventComments: 0,
+		unseenProductComments: 0,
 		unseenAuctionLive: 0,
 		unseenAuctionSettlementBegins: 0,
 		unseenBidUpdates: 0,
@@ -78,6 +87,9 @@ const createInitialState = (): NotificationState => {
 			orders: stored.lastSeenTimestamps?.orders || 0,
 			purchases: stored.lastSeenTimestamps?.purchases || 0,
 			auctionBids: stored.lastSeenTimestamps?.auctionBids || 0,
+			auctionComments: stored.lastSeenTimestamps?.auctionComments || 0,
+			auctionEventComments: stored.lastSeenTimestamps?.auctionEventComments || 0,
+			productComments: stored.lastSeenTimestamps?.productComments || 0,
 			auctionLive: stored.lastSeenTimestamps?.auctionLive || 0,
 			auctionSettlementBegins: stored.lastSeenTimestamps?.auctionSettlementBegins || 0,
 			bidUpdates: stored.lastSeenTimestamps?.bidUpdates || 0,
@@ -140,6 +152,36 @@ export const notificationActions = {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenAuctionBids: Math.max(0, count),
+		}))
+	},
+
+	/**
+	 * Update unseen seller auction live-chat comment count
+	 */
+	setUnseenAuctionComments: (count: number) => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenAuctionComments: Math.max(0, count),
+		}))
+	},
+
+	/**
+	 * Update unseen seller auction thread comment count
+	 */
+	setUnseenAuctionEventComments: (count: number) => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenAuctionEventComments: Math.max(0, count),
+		}))
+	},
+
+	/**
+	 * Update unseen seller product comment count
+	 */
+	setUnseenProductComments: (count: number) => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenProductComments: Math.max(0, count),
 		}))
 	},
 
@@ -227,6 +269,36 @@ export const notificationActions = {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenAuctionBids: state.unseenAuctionBids + 1,
+		}))
+	},
+
+	/**
+	 * Increment unseen seller auction live-chat comment count
+	 */
+	incrementUnseenAuctionComments: () => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenAuctionComments: state.unseenAuctionComments + 1,
+		}))
+	},
+
+	/**
+	 * Increment unseen seller auction thread comment count
+	 */
+	incrementUnseenAuctionEventComments: () => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenAuctionEventComments: state.unseenAuctionEventComments + 1,
+		}))
+	},
+
+	/**
+	 * Increment unseen seller product comment count
+	 */
+	incrementUnseenProductComments: () => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenProductComments: state.unseenProductComments + 1,
 		}))
 	},
 
@@ -377,6 +449,63 @@ export const notificationActions = {
 	},
 
 	/**
+	 * Mark seller auction live-chat comment notifications as seen
+	 */
+	markAuctionCommentsSeen: () => {
+		const now = Math.floor(Date.now() / 1000)
+		notificationStore.setState((state) => {
+			const newState = {
+				...state,
+				unseenAuctionComments: 0,
+				lastSeenTimestamps: {
+					...state.lastSeenTimestamps,
+					auctionComments: now,
+				},
+			}
+			saveToStorage(newState)
+			return newState
+		})
+	},
+
+	/**
+	 * Mark seller auction thread comment notifications as seen
+	 */
+	markAuctionEventCommentsSeen: () => {
+		const now = Math.floor(Date.now() / 1000)
+		notificationStore.setState((state) => {
+			const newState = {
+				...state,
+				unseenAuctionEventComments: 0,
+				lastSeenTimestamps: {
+					...state.lastSeenTimestamps,
+					auctionEventComments: now,
+				},
+			}
+			saveToStorage(newState)
+			return newState
+		})
+	},
+
+	/**
+	 * Mark seller product comment notifications as seen
+	 */
+	markProductCommentsSeen: () => {
+		const now = Math.floor(Date.now() / 1000)
+		notificationStore.setState((state) => {
+			const newState = {
+				...state,
+				unseenProductComments: 0,
+				lastSeenTimestamps: {
+					...state.lastSeenTimestamps,
+					productComments: now,
+				},
+			}
+			saveToStorage(newState)
+			return newState
+		})
+	},
+
+	/**
 	 * Mark scheduled-auction-live notifications as seen
 	 */
 	markAuctionLiveSeen: () => {
@@ -462,6 +591,27 @@ export const notificationActions = {
 	},
 
 	/**
+	 * Get last seen timestamp for seller auction live-chat comments
+	 */
+	getLastSeenAuctionComments: (): number => {
+		return notificationStore.state.lastSeenTimestamps.auctionComments
+	},
+
+	/**
+	 * Get last seen timestamp for seller auction thread comments
+	 */
+	getLastSeenAuctionEventComments: (): number => {
+		return notificationStore.state.lastSeenTimestamps.auctionEventComments
+	},
+
+	/**
+	 * Get last seen timestamp for seller product comments
+	 */
+	getLastSeenProductComments: (): number => {
+		return notificationStore.state.lastSeenTimestamps.productComments
+	},
+
+	/**
 	 * Get last seen timestamp for scheduled-auction-live notifications
 	 */
 	getLastSeenAuctionLive: (): number => {
@@ -501,6 +651,9 @@ export const notificationActions = {
 		purchaseCount: number
 		conversationCounts: ConversationNotifications
 		auctionBidCount?: number
+		auctionCommentCount?: number
+		auctionEventCommentCount?: number
+		productCommentCount?: number
 		auctionLiveCount?: number
 		auctionSettlementBeginsCount?: number
 		bidUpdateCount?: number
@@ -511,6 +664,9 @@ export const notificationActions = {
 			unseenMessages: data.messageCount,
 			unseenPurchases: data.purchaseCount,
 			unseenAuctionBids: data.auctionBidCount ?? 0,
+			unseenAuctionComments: data.auctionCommentCount ?? 0,
+			unseenAuctionEventComments: data.auctionEventCommentCount ?? 0,
+			unseenProductComments: data.productCommentCount ?? 0,
 			unseenAuctionLive: data.auctionLiveCount ?? 0,
 			unseenAuctionSettlementBegins: data.auctionSettlementBeginsCount ?? 0,
 			unseenBidUpdates: data.bidUpdateCount ?? 0,
