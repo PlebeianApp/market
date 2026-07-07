@@ -31,9 +31,9 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
+import { Clock, ExternalLink, Gavel, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	auctionSortOptionValues,
@@ -125,12 +125,10 @@ function TopBidBox({ auction, bids }: { auction: NDKEvent; bids: NDKEvent[] }) {
 
 function AuctionListItem({
 	auction,
-	onManage,
 	onPublishSettlement,
 	isSettling,
 }: {
 	auction: NDKEvent
-	onManage: () => void
 	onPublishSettlement: () => void
 	isSettling: boolean
 }) {
@@ -184,12 +182,6 @@ function AuctionListItem({
 							Open Auction
 						</Button>
 					</Link>
-					{status === 'Scheduled' && (
-						<Button variant="ghost" size="sm" className="gap-2" onClick={onManage}>
-							<Pencil className="h-3.5 w-3.5" />
-							Manage
-						</Button>
-					)}
 				</div>
 
 				<div className="flex-1 min-w-0 space-y-4">
@@ -241,7 +233,6 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 
 function AuctionsOverviewComponent() {
 	const { user, isAuthenticated } = useStore(authStore)
-	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
 	const settlementMutation = usePublishAuctionSettlementMutation()
@@ -301,13 +292,6 @@ function AuctionsOverviewComponent() {
 
 	const handleCreateAuction = () => {
 		uiActions.openDrawer('createAuction')
-	}
-
-	const handleManageAuction = (auctionEventId: string) => {
-		navigate({
-			to: '/dashboard/products/auctions/$auctionId',
-			params: { auctionId: auctionEventId },
-		})
 	}
 
 	if (!isAuthenticated || !user) {
@@ -409,7 +393,6 @@ function AuctionsOverviewComponent() {
 								<li key={auction.id}>
 									<AuctionListItem
 										auction={auction}
-										onManage={() => handleManageAuction(auction.id)}
 										onPublishSettlement={() => void handlePublishSettlement(auction)}
 										isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
 									/>
