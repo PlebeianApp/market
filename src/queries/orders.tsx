@@ -70,6 +70,7 @@ async function fetchNdkEventSet(ndk: OrdersNdk, filter: NDKFilter | NDKFilter[])
 	const rawEvents = await applesauceIo.fetchEvents(filter as NostrFilter | NostrFilter[])
 	const uniqueRawEvents = new Map<string, (typeof rawEvents)[number]>()
 	for (const event of rawEvents) {
+		if (!uniqueRawEvents.has(event.id)) uniqueRawEvents.set(event.id, event)
 	}
 	return new Set(Array.from(uniqueRawEvents.values(), (event) => new NDKEvent(ndk, event)))
 }
