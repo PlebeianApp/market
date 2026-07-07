@@ -695,6 +695,12 @@ export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: N
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
 
+export const getAuctionTopBidFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | null => {
+	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
+	if (validBids.length === 0) return null
+	return validBids.reduce((top, bid) => (getBidAmount(bid) > getBidAmount(top) ? bid : top), validBids[0])
+}
+
 export const getAuctionSettlementStatus = (settlementEvent: NDKEvent | null): AuctionSettlementStatus => {
 	if (!settlementEvent) return 'unknown'
 	const status = settlementEvent.tags.find((tag) => tag[0] === 'status')?.[1]
