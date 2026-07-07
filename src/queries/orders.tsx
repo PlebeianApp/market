@@ -75,6 +75,16 @@ async function fetchNdkEventSet(ndk: OrdersNdk, filter: NDKFilter | NDKFilter[])
 	return new Set(Array.from(uniqueRawEvents.values(), (event) => new NDKEvent(ndk, event)))
 }
 
+function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
+	const eventsById = new Map<string, NDKEvent>()
+	for (const eventSet of eventSets) {
+		for (const event of eventSet) {
+			if (!eventsById.has(event.id)) eventsById.set(event.id, event)
+		}
+	}
+	return new Set(eventsById.values())
+}
+
 export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Promise<NDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -277,7 +287,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	])
 
 	// Combine and deduplicate
-	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
 
 	// Filter events by order ID programmatically
 	const relatedEvents = new Set<NDKEvent>(
@@ -478,7 +488,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
-	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
 
 	const relatedEvents = new Set<NDKEvent>(
 		Array.from(allEvents).filter((event) => {
@@ -664,7 +674,7 @@ export const fetchOrdersBySeller = async (
 		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
-	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
 
 	const relatedEvents = new Set<NDKEvent>(
 		Array.from(allEvents).filter((event) => {
@@ -880,7 +890,7 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
 	])
 
-	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
 
 	// Filter events by order ID programmatically
 	const relatedEvents = new Set<NDKEvent>(
