@@ -68,7 +68,10 @@ type OrdersNdk = NonNullable<ReturnType<typeof ndkActions.getNDK>>
 
 async function fetchNdkEventSet(ndk: OrdersNdk, filter: NDKFilter | NDKFilter[]): Promise<Set<NDKEvent>> {
 	const rawEvents = await applesauceIo.fetchEvents(filter as NostrFilter | NostrFilter[])
-	return new Set(rawEvents.map((event) => new NDKEvent(ndk, event)))
+	const uniqueRawEvents = new Map<string, (typeof rawEvents)[number]>()
+	for (const event of rawEvents) {
+	}
+	return new Set(Array.from(uniqueRawEvents.values(), (event) => new NDKEvent(ndk, event)))
 }
 
 export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Promise<NDKEvent[]> => {

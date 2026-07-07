@@ -42,14 +42,15 @@ afterEach(() => {
 })
 
 describe('orders relay reads use the Wave A1b seam flip', () => {
-	test('fetchSellerPrivateOrderGiftWraps routes through applesauceIo.fetchEvents and rehydrates NDKEvents', async () => {
+	test('fetchSellerPrivateOrderGiftWraps routes through applesauceIo.fetchEvents, dedupes mirrored raw events, and rehydrates NDKEvents', async () => {
 		const giftWrap = rawEvent({
 			id: 'a'.repeat(64),
 			kind: GIFT_WRAP_KIND,
 			tags: [['p', SELLER_PUBKEY]],
 			content: 'encrypted-private-order-details',
 		})
-		const fetchEvents = mock(async () => [giftWrap])
+		const mirroredGiftWrap = { ...giftWrap }
+		const fetchEvents = mock(async () => [giftWrap, mirroredGiftWrap])
 		applesauceIo.fetchEvents = fetchEvents as typeof applesauceIo.fetchEvents
 		;(ndkActions as { getNDK: () => unknown }).getNDK = () => stubNdk()
 
