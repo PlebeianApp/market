@@ -105,36 +105,49 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	}
 
 	return (
-		<div className={cn('space-y-3', className)}>
+		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
 			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex gap-3">
+				<div className="flex flex-wrap gap-2">
 					{canCancel && (
-						<Button variant="outline" onClick={() => setIsCancelOpen(true)} disabled={updateOrderStatus.isPending}>
+						<Button
+							variant="outline"
+							onClick={() => setIsCancelOpen(true)}
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
+						>
 							<X className="w-4 h-4 mr-2" /> Cancel Order
 						</Button>
 					)}
 
 					{canConfirm && (
-						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending}>
+						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending} className="w-full sm:w-auto">
 							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
 						</Button>
 					)}
 
 					{canProcess && (
-						<Button onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)} disabled={updateOrderStatus.isPending}>
+						<Button
+							onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
+						>
 							<Package className="w-4 h-4 mr-2" /> Process Order
 						</Button>
 					)}
 
 					{canShip && (
-						<Button onClick={() => setIsShippingOpen(true)} disabled={updateShippingStatus.isPending}>
+						<Button onClick={() => setIsShippingOpen(true)} disabled={updateShippingStatus.isPending} className="w-full sm:w-auto">
 							<Truck className="w-4 h-4 mr-2" /> Mark As Shipped
 						</Button>
 					)}
 
 					{canReceive && (
-						<Button onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)} disabled={updateOrderStatus.isPending}>
+						<Button
+							onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
+						>
 							<CheckCircle className="w-4 h-4 mr-2" /> I've Received This Item
 						</Button>
 					)}
@@ -143,7 +156,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 			{/* Final State Indicators */}
 			{!canCancel && !canConfirm && !canProcess && !canShip && !canReceive && (
-				<div className="flex items-center gap-2 text-sm text-muted-foreground">
+				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
 					{status === ORDER_STATUS.COMPLETED ? (
 						<>
 							<CheckCircle className="w-4 h-4 text-green-600" />

@@ -51,7 +51,7 @@ const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 		if (!currentUserPubkey) return null
 
 		return (
-			<div onClick={(e) => e.stopPropagation()}>
+			<div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
 				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
 			</div>
 		)
@@ -69,7 +69,7 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 		if (!currentUserPubkey) return null
 
 		return (
-			<div onClick={(e) => e.stopPropagation()}>
+			<div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
 				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
 			</div>
 		)
@@ -133,4 +133,8 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
+	{
+		...salesActionsColumn,
+		header: 'Actions',
+	},
 ]
