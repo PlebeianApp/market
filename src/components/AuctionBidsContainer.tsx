@@ -1,5 +1,5 @@
 // src/components/auction/LatestBidsContainer.tsx
-import { getBidAmount, getBidMint, getBidStatus, useStreamingAuctionBids } from '@/queries/auctions'
+import { getBidAmount, getBidMint, useStreamingAuctionBids } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { cn } from '@/lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
@@ -42,14 +42,6 @@ const toneLabelClassName: Record<BidTone, string> = {
 	green: 'text-emerald-800',
 	pink: 'text-pink-600',
 	white: 'text-zinc-500',
-}
-
-const toneBadgeClassName: Record<BidTone, string> = {
-	blue: 'border-sky-300 bg-white text-sky-700',
-	orange: 'border-amber-300 bg-white text-amber-800',
-	green: 'border-emerald-300 bg-white text-emerald-800',
-	pink: 'border-pink-300 bg-white text-pink-700',
-	white: 'border-zinc-300 bg-white text-zinc-700',
 }
 
 function formatBidRecordedAt(bidEvent: NDKEvent): string {
@@ -145,9 +137,6 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 								{!topBidIsOwn && hasOwnBids && (
 									<Badge className="border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-100">Outbid</Badge>
 								)}
-								<Badge variant="outline" className={toneBadgeClassName[topBidTone]}>
-									{getBidStatus(topBid)}
-								</Badge>
 							</div>
 						</div>
 					</div>
@@ -196,9 +185,6 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 										</div>
 										<div className="flex items-center gap-2">
 											{isOwnBid && <Badge className="border-pink-400 bg-pink-100 text-pink-700 hover:bg-pink-100">Your Bid</Badge>}
-											<Badge variant="outline" className={toneBadgeClassName[tone]}>
-												{getBidStatus(bidEvent)}
-											</Badge>
 										</div>
 									</div>
 
