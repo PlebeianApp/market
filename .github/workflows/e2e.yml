@@ -229,9 +229,11 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
+        env:
+          TEST_GREP: ${{ inputs.test_grep }}
         run: |
-          if [ -n "${{ inputs.test_grep }}" ]; then
-            bun run test:e2e -- --grep "${{ inputs.test_grep }}"
+          if [ -n "$TEST_GREP" ]; then
+            bun run test:e2e -- --grep "$TEST_GREP"
           else
             bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
           fi
