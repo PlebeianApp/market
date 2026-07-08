@@ -31,7 +31,7 @@ export function mergeOrderMessages(params: MergeOrderMessagesParams): MergedOrde
 	for (const event of params.legacyEvents) {
 		if (!isValidLegacyOrderMessageEvent(event)) continue
 
-		const key = `legacy-raw:${event.id}`
+		const key = event.id
 		if (recordsByKey.has(key)) continue
 
 		recordsByKey.set(key, {
@@ -51,8 +51,9 @@ export function mergeOrderMessages(params: MergeOrderMessagesParams): MergedOrde
 		const rumor = message.rumor
 		if (!isOrderMessageKind(rumor.kind)) continue
 
-		const key = `nip17:${rumor.id}`
-		if (recordsByKey.has(key)) continue
+		const key = rumor.id
+		const existing = recordsByKey.get(key)
+		if (existing?.transport === 'nip17') continue
 
 		recordsByKey.set(key, {
 			transport: 'nip17',

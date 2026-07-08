@@ -255,6 +255,32 @@ describe('mergeOrderMessages', () => {
 		expect(records[0]?.direction).toBe('received')
 	})
 
+	test('dedupes identical legacy raw and NIP-17 messages by canonical event id', () => {
+		const rumor = createOrderCreationRumor({
+			buyerPubkey,
+			merchantPubkey: sellerPubkey,
+			orderId: 'order-merge-dedupe-cross-transport',
+			amountSats: 1000,
+			items: [{ productRef: `30402:${sellerPubkey}:coffee`, quantity: 1 }],
+			createdAt: 100,
+		})
+		const legacy = signedRumor(rumor, buyerPrivateKey)
+
+		expect(legacy.id).toBe(rumor.id)
+
+		const records = mergeOrderMessages({
+			legacyEvents: [legacy],
+			nip17Messages: [nip17Message(rumor)],
+			activeUserPubkey: sellerPubkey,
+		})
+
+		expect(records).toHaveLength(1)
+		expect(records[0]?.id).toBe(rumor.id)
+		expect(records[0]?.transport).toBe('nip17')
+		expect(records[0]?.nip17Message?.rumor.id).toBe(rumor.id)
+		expect(records[0]?.legacyEvent).toBeUndefined()
+	})
+
 	test('preserves legacy and NIP-17 records when cross-transport identity is not proven identical', () => {
 		const legacy = legacyOrderCreationEvent('order-merge-cross-transport-legacy', 100)
 		const rumor = createOrderCreationRumor({
