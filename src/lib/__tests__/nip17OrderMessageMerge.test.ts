@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getEventHash, type Event } from 'nostr-tools'
+import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
 import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND } from '../schemas/order'
 import { mergeOrderMessages, type MergedOrderMessageRecord } from '../orders/nip17OrderMessageMerge'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
@@ -10,9 +10,12 @@ import {
 	type OrderMessageRumor,
 } from '../orders/orderMessageRumor'
 
-const buyerPubkey = 'b'.repeat(64)
-const sellerPubkey = 'c'.repeat(64)
-const otherPubkey = 'd'.repeat(64)
+const buyerPrivateKey = generateSecretKey()
+const sellerPrivateKey = generateSecretKey()
+const otherPrivateKey = generateSecretKey()
+const buyerPubkey = getPublicKey(buyerPrivateKey)
+const sellerPubkey = getPublicKey(sellerPrivateKey)
+const otherPubkey = getPublicKey(otherPrivateKey)
 
 function event(params: Omit<Event, 'id' | 'sig'> & { id?: string; sig?: string }): Event {
 	const unsigned = {
@@ -30,11 +33,16 @@ function event(params: Omit<Event, 'id' | 'sig'> & { id?: string; sig?: string }
 	}
 }
 
-function signedRumor(rumor: OrderMessageRumor, sig = 'f'.repeat(128)): Event {
-	return {
-		...rumor,
-		sig,
-	}
+function signedRumor(rumor: OrderMessageRumor, privateKey: Uint8Array): Event {
+	return finalizeEvent(
+		{
+			kind: rumor.kind,
+			created_at: rumor.created_at,
+			tags: rumor.tags,
+			content: rumor.content,
+		},
+		privateKey,
+	)
 }
 
 function nip17Message(
@@ -76,24 +84,28 @@ function legacyOrderCreationEvent(orderId: string, createdAt: number): Event {
 			items: [{ productRef: `30402:${sellerPubkey}:coffee`, quantity: 1 }],
 			createdAt,
 		}),
+		buyerPrivateKey,
 	)
 }
 
 function legacyChatEvent(params: {
 	subject: string
-	senderPubkey: string
+	senderPrivateKey: Uint8Array
 	recipientPubkey: string
 	createdAt: number
 	content?: string
 }): Event {
+	const senderPubkey = getPublicKey(params.senderPrivateKey)
+
 	return signedRumor(
 		createOrderChatRumor({
-			senderPubkey: params.senderPubkey,
+			senderPubkey,
 			recipientPubkey: params.recipientPubkey,
 			subject: params.subject,
 			content: params.content ?? params.subject,
 			createdAt: params.createdAt,
 		}),
+		params.senderPrivateKey,
 	)
 }
 
@@ -146,7 +158,7 @@ describe('mergeOrderMessages', () => {
 
 	test('dedupes duplicate validated legacy events by event id', () => {
 		const first = legacyOrderCreationEvent('order-dedupe-legacy', 100)
-		const duplicate = signedRumor(first, 'e'.repeat(128))
+		const duplicate = { ...first }
 
 		const records = mergeOrderMessages({
 			legacyEvents: [first, duplicate],
@@ -154,7 +166,7 @@ describe('mergeOrderMessages', () => {
 		})
 
 		expect(records).toHaveLength(1)
-		expect(records[0]?.legacyEvent?.sig).toBe('f'.repeat(128))
+		expect(records[0]?.legacyEvent?.sig).toBe(first.sig)
 	})
 
 	test('dedupes duplicate NIP-17 messages by inner rumor id', () => {
@@ -202,19 +214,19 @@ describe('mergeOrderMessages', () => {
 	test('computes legacy sent, received, and unknown directions without throwing', () => {
 		const sent = legacyChatEvent({
 			subject: 'order-sent',
-			senderPubkey: buyerPubkey,
+			senderPrivateKey: buyerPrivateKey,
 			recipientPubkey: sellerPubkey,
 			createdAt: 100,
 		})
 		const received = legacyChatEvent({
 			subject: 'order-received',
-			senderPubkey: sellerPubkey,
+			senderPrivateKey: sellerPrivateKey,
 			recipientPubkey: buyerPubkey,
 			createdAt: 101,
 		})
 		const unknown = legacyChatEvent({
 			subject: 'order-unknown',
-			senderPubkey: otherPubkey,
+			senderPrivateKey: otherPrivateKey,
 			recipientPubkey: sellerPubkey,
 			createdAt: 102,
 		})
@@ -246,13 +258,15 @@ describe('mergeOrderMessages', () => {
 	})
 
 	test('ignores malformed legacy order process events', () => {
-		const malformed = event({
-			kind: ORDER_PROCESS_KIND,
-			pubkey: buyerPubkey,
-			created_at: 100,
-			tags: [['p', sellerPubkey]],
-			content: 'missing type and order tags',
-		})
+		const malformed = finalizeEvent(
+			{
+				kind: ORDER_PROCESS_KIND,
+				created_at: 100,
+				tags: [['p', sellerPubkey]],
+				content: 'missing type and order tags',
+			},
+			buyerPrivateKey,
+		)
 
 		const records = mergeOrderMessages({
 			legacyEvents: [malformed],
@@ -263,13 +277,15 @@ describe('mergeOrderMessages', () => {
 	})
 
 	test('ignores legacy general communication without subject context', () => {
-		const genericDm = event({
-			kind: ORDER_GENERAL_KIND,
-			pubkey: buyerPubkey,
-			created_at: 100,
-			tags: [['p', sellerPubkey]],
-			content: 'generic public DM',
-		})
+		const genericDm = finalizeEvent(
+			{
+				kind: ORDER_GENERAL_KIND,
+				created_at: 100,
+				tags: [['p', sellerPubkey]],
+				content: 'generic public DM',
+			},
+			buyerPrivateKey,
+		)
 
 		const records = mergeOrderMessages({
 			legacyEvents: [genericDm],
@@ -284,6 +300,21 @@ describe('mergeOrderMessages', () => {
 		const tampered = {
 			...valid,
 			id: '0'.repeat(64),
+		}
+
+		const records = mergeOrderMessages({
+			legacyEvents: [tampered],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('ignores legacy events with invalid signatures', () => {
+		const valid = legacyOrderCreationEvent('order-invalid-signature', 100)
+		const tampered = {
+			...valid,
+			sig: '0'.repeat(128),
 		}
 
 		const records = mergeOrderMessages({

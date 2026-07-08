@@ -1,4 +1,4 @@
-import type { Event } from 'nostr-tools'
+import { verifyEvent, type Event } from 'nostr-tools'
 import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 import type { UnwrappedNip17OrderMessage } from './nip17OrderRead'
@@ -74,13 +74,25 @@ export function mergeOrderMessages(params: MergeOrderMessagesParams): MergedOrde
 function isValidLegacyOrderMessageEvent(event: Event): event is Event & { kind: OrderMessageKind } {
 	if (!isOrderMessageKind(event.kind)) return false
 
-	const rumorCandidate: OrderMessageRumor = {
+	const eventForVerification: Event = {
 		id: event.id,
 		pubkey: event.pubkey,
 		created_at: event.created_at,
 		kind: event.kind,
 		tags: event.tags,
 		content: event.content,
+		sig: event.sig,
+	}
+
+	if (!verifyEvent(eventForVerification)) return false
+
+	const rumorCandidate: OrderMessageRumor = {
+		id: eventForVerification.id,
+		pubkey: eventForVerification.pubkey,
+		created_at: eventForVerification.created_at,
+		kind: eventForVerification.kind,
+		tags: eventForVerification.tags,
+		content: eventForVerification.content,
 	}
 
 	try {
