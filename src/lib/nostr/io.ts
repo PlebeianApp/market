@@ -18,6 +18,9 @@ import type { Filter } from 'nostr-tools'
 
 import { ndkIo } from './io-ndk'
 
+export { applesauceIo } from './io-applesauce'
+export { ndkIo }
+
 export type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 export type NostrFilter = Filter
 
