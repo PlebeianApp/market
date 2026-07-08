@@ -2,10 +2,17 @@ import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATU
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
+import {
+	fetchNdkEventSet,
+	mergeNdkEventSetsById,
+	rehydrateVerifiedNdkEvent,
+	type NDKEvent,
+	type NDKFilter,
+	type NDKSigner,
+} from '@/lib/nostr/ndk-events'
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { verifyEvent, type Event } from 'nostr-tools'
+import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
 
@@ -66,35 +73,6 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
 
 type OrdersNdk = NonNullable<ReturnType<typeof ndkActions.getNDK>>
 
-function rehydrateVerifiedNdkEvent(ndk: OrdersNdk, event: Event): NDKEvent | null {
-	try {
-		if (!verifyEvent(event)) return null
-		return new NDKEvent(ndk, event)
-	} catch {
-		return null
-	}
-}
-
-async function fetchNdkEventSet(ndk: OrdersNdk, filter: NDKFilter | NDKFilter[]): Promise<Set<NDKEvent>> {
-	const rawEvents = await applesauceIo.fetchEvents(filter as NostrFilter | NostrFilter[])
-	const eventsById = new Map<string, NDKEvent>()
-	for (const event of rawEvents) {
-		const ndkEvent = rehydrateVerifiedNdkEvent(ndk, event)
-		if (ndkEvent && !eventsById.has(ndkEvent.id)) eventsById.set(ndkEvent.id, ndkEvent)
-	}
-	return new Set(eventsById.values())
-}
-
-function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
-	const eventsById = new Map<string, NDKEvent>()
-	for (const eventSet of eventSets) {
-		for (const event of eventSet) {
-			if (!eventsById.has(event.id)) eventsById.set(event.id, event)
-		}
-	}
-	return new Set(eventsById.values())
-}
-
 export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Promise<NDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -105,7 +83,7 @@ export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Pr
 		limit: 500,
 	}
 
-	return Array.from(await fetchNdkEventSet(ndk, giftWrapFilter))
+	return Array.from(await fetchNdkEventSet(applesauceIo, ndk, giftWrapFilter))
 }
 
 export const decryptSellerPrivateOrderGiftWraps = async (params: {
@@ -237,8 +215,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	}
 
 	const [ordersSent, ordersReceived] = await Promise.all([
-		fetchNdkEventSet(ndk, orderCreationFilter),
-		fetchNdkEventSet(ndk, orderReceivedFilter),
+		fetchNdkEventSet(applesauceIo, ndk, orderCreationFilter),
+		fetchNdkEventSet(applesauceIo, ndk, orderReceivedFilter),
 	])
 
 	// Filter for ORDER_CREATION type programmatically (since relays reject multi-character tags)
@@ -292,8 +270,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 	// Fetch events from both filters in parallel
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
-		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[1]),
 	])
 
 	// Combine and deduplicate
@@ -448,7 +426,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 		limit: 100,
 	}
 
-	const allOrders = await fetchNdkEventSet(ndk, orderCreationFilter)
+	const allOrders = await fetchNdkEventSet(applesauceIo, ndk, orderCreationFilter)
 
 	// Filter for ORDER_CREATION type programmatically
 	const orders = new Set<NDKEvent>(
@@ -494,8 +472,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
-		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
@@ -635,7 +613,7 @@ export const fetchOrdersBySeller = async (
 		limit: 100,
 	}
 
-	const allOrders = await fetchNdkEventSet(ndk, orderReceivedFilter)
+	const allOrders = await fetchNdkEventSet(applesauceIo, ndk, orderReceivedFilter)
 
 	// Filter for ORDER_CREATION type programmatically
 	const orders = new Set<NDKEvent>(
@@ -680,8 +658,8 @@ export const fetchOrdersBySeller = async (
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
-		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
@@ -850,7 +828,7 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 		orderFilter.ids = [orderId]
 	}
 
-	const allOrderEvents = await fetchNdkEventSet(ndk, orderFilter)
+	const allOrderEvents = await fetchNdkEventSet(applesauceIo, ndk, orderFilter)
 
 	// Filter programmatically for ORDER_CREATION type and matching order ID
 	const matchingOrders = Array.from(allOrderEvents).filter((event) => {
@@ -896,8 +874,8 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 	]
 
 	const [eventsByAuthors, eventsByMentions] = await Promise.all([
-		fetchNdkEventSet(ndk, relatedEventsFilters[0]),
-		fetchNdkEventSet(ndk, relatedEventsFilters[1]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[0]),
+		fetchNdkEventSet(applesauceIo, ndk, relatedEventsFilters[1]),
 	])
 
 	const allEvents = mergeNdkEventSetsById(eventsByAuthors, eventsByMentions)
