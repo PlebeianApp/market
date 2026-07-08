@@ -98,7 +98,7 @@ function hasLegacyOrderMessageShape(event: Event & { kind: OrderMessageKind }): 
 			hasNonEmptyTag(event, 'p') &&
 			hasNonEmptyTag(event, 'subject') &&
 			hasNonEmptyTag(event, 'order') &&
-			hasNonEmptyTag(event, 'payment') &&
+			hasPaymentProofTag(event) &&
 			hasNonEmptyTag(event, 'amount')
 		)
 	}
@@ -130,6 +130,22 @@ function hasItemTag(event: Event): boolean {
 	return event.tags.some(
 		(tag) => tag[0] === 'item' && typeof tag[1] === 'string' && tag[1].length > 0 && typeof tag[2] === 'string' && tag[2].length > 0,
 	)
+}
+
+function hasPaymentProofTag(event: Event): boolean {
+	return event.tags.some(
+		(tag) =>
+			tag[0] === 'payment' &&
+			isPaymentMedium(tag[1]) &&
+			typeof tag[2] === 'string' &&
+			tag[2].length > 0 &&
+			typeof tag[3] === 'string' &&
+			tag[3].length > 0,
+	)
+}
+
+function isPaymentMedium(value: unknown): value is 'lightning' | 'bitcoin' | 'fiat' | 'other' {
+	return value === 'lightning' || value === 'bitcoin' || value === 'fiat' || value === 'other'
 }
 
 function isOrderMessageKind(kind: number): kind is OrderMessageKind {

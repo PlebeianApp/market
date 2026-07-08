@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '../schemas/order'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
 import { mergeOrderMessages, type MergedOrderMessageRecord } from '../orders/nip17OrderMessageMerge'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
 import {
@@ -303,6 +303,54 @@ describe('mergeOrderMessages', () => {
 		})
 
 		expect(records.map((record) => record.direction)).toEqual(['sent', 'received', 'unknown'])
+	})
+
+	test('preserves legacy payment receipts with full payment proof tags', () => {
+		const receipt = signedLegacyEvent({
+			kind: PAYMENT_RECEIPT_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Payment confirmation',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-receipt'],
+				['order', 'legacy-receipt-full-proof'],
+				['payment', 'lightning', 'lnbc-test', 'preimage-test'],
+				['amount', '1000'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [receipt],
+			nip17Messages: [],
+			activeUserPubkey: sellerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${receipt.id}`])
+		expect(records[0]?.direction).toBe('received')
+	})
+
+	test('ignores legacy payment receipts without full payment proof tags', () => {
+		const receipt = signedLegacyEvent({
+			kind: PAYMENT_RECEIPT_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Payment confirmation',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-receipt'],
+				['order', 'legacy-receipt-missing-proof'],
+				['payment', 'lightning'],
+				['amount', '1000'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [receipt],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
 	})
 
 	test('ignores unsupported legacy event kinds', () => {
