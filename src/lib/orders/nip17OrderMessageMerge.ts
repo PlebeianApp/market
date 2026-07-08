@@ -1,6 +1,5 @@
 import { verifyEvent, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
-import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
 import type { UnwrappedNip17OrderMessage } from './nip17OrderRead'
 
 export type OrderMessageTransport = 'legacy-raw' | 'nip17'
@@ -74,7 +73,7 @@ export function mergeOrderMessages(params: MergeOrderMessagesParams): MergedOrde
 function isValidLegacyOrderMessageEvent(event: Event): event is Event & { kind: OrderMessageKind } {
 	if (!isOrderMessageKind(event.kind)) return false
 
-	const eventForVerification: Event = {
+	const eventForVerification: Event & { kind: OrderMessageKind } = {
 		id: event.id,
 		pubkey: event.pubkey,
 		created_at: event.created_at,
@@ -86,26 +85,51 @@ function isValidLegacyOrderMessageEvent(event: Event): event is Event & { kind: 
 
 	if (!verifyEvent(eventForVerification)) return false
 
-	const rumorCandidate: OrderMessageRumor = {
-		id: eventForVerification.id,
-		pubkey: eventForVerification.pubkey,
-		created_at: eventForVerification.created_at,
-		kind: eventForVerification.kind,
-		tags: eventForVerification.tags,
-		content: eventForVerification.content,
+	return hasLegacyOrderMessageShape(eventForVerification)
+}
+
+function hasLegacyOrderMessageShape(event: Event & { kind: OrderMessageKind }): boolean {
+	if (event.kind === ORDER_GENERAL_KIND) {
+		return hasNonEmptyTag(event, 'p') && hasNonEmptyTag(event, 'subject')
 	}
 
-	try {
-		assertOrderMessageRumor(rumorCandidate)
-	} catch {
+	if (event.kind === PAYMENT_RECEIPT_KIND) {
+		return (
+			hasNonEmptyTag(event, 'p') &&
+			hasNonEmptyTag(event, 'subject') &&
+			hasNonEmptyTag(event, 'order') &&
+			hasNonEmptyTag(event, 'payment') &&
+			hasNonEmptyTag(event, 'amount')
+		)
+	}
+
+	return hasLegacyOrderProcessShape(event)
+}
+
+function hasLegacyOrderProcessShape(event: Event): boolean {
+	if (!hasNonEmptyTag(event, 'p') || !hasNonEmptyTag(event, 'subject') || !hasNonEmptyTag(event, 'order')) {
 		return false
 	}
 
-	if (event.kind === ORDER_GENERAL_KIND && !hasNonEmptyTag(event, 'subject')) {
-		return false
-	}
+	const messageType = event.tags.find((tag) => tag[0] === 'type')?.[1]
 
-	return true
+	switch (messageType) {
+		case ORDER_MESSAGE_TYPE.ORDER_CREATION:
+			return hasNonEmptyTag(event, 'amount') && hasItemTag(event)
+		case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+			return hasNonEmptyTag(event, 'amount')
+		case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+		case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+			return hasNonEmptyTag(event, 'status')
+		default:
+			return false
+	}
+}
+
+function hasItemTag(event: Event): boolean {
+	return event.tags.some(
+		(tag) => tag[0] === 'item' && typeof tag[1] === 'string' && tag[1].length > 0 && typeof tag[2] === 'string' && tag[2].length > 0,
+	)
 }
 
 function isOrderMessageKind(kind: number): kind is OrderMessageKind {

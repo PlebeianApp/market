@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND } from '../schemas/order'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '../schemas/order'
 import { mergeOrderMessages, type MergedOrderMessageRecord } from '../orders/nip17OrderMessageMerge'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
 import {
@@ -42,6 +42,18 @@ function signedRumor(rumor: OrderMessageRumor, privateKey: Uint8Array): Event {
 			content: rumor.content,
 		},
 		privateKey,
+	)
+}
+
+function signedLegacyEvent(params: { kind: number; createdAt: number; tags: string[][]; content: string; privateKey: Uint8Array }): Event {
+	return finalizeEvent(
+		{
+			kind: params.kind,
+			created_at: params.createdAt,
+			tags: params.tags,
+			content: params.content,
+		},
+		params.privateKey,
 	)
 }
 
@@ -134,6 +146,59 @@ describe('mergeOrderMessages', () => {
 		expect(ids(records)).toEqual([`legacy-raw:${legacy.id}`, `nip17:${rumor.id}`])
 		expect(records[0]?.direction).toBe('received')
 		expect(records[1]?.direction).toBe('received')
+	})
+
+	test('preserves current raw legacy order creation events with decimal amount tags', () => {
+		const legacy = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Order created',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-info'],
+				['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+				['order', 'legacy-decimal-amount'],
+				['amount', '1000.00'],
+				['item', `30402:${sellerPubkey}:coffee`, '1'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [legacy],
+			nip17Messages: [],
+			activeUserPubkey: sellerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${legacy.id}`])
+		expect(records[0]?.direction).toBe('received')
+	})
+
+	test('preserves current raw legacy payment requests with recipient tags', () => {
+		const legacy = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Payment request for your order',
+			tags: [
+				['p', buyerPubkey],
+				['recipient', sellerPubkey],
+				['subject', 'order-payment'],
+				['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
+				['order', 'legacy-payment-request'],
+				['amount', '1000'],
+				['payment', 'lightning', 'lnbc-test'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [legacy],
+			nip17Messages: [],
+			activeUserPubkey: buyerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${legacy.id}`])
+		expect(records[0]?.direction).toBe('received')
 	})
 
 	test('sorts deterministically by createdAt, transport, then id', () => {
