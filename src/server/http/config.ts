@@ -2,7 +2,7 @@ import {
 	determineStage,
 	getAppPublicKeyOrThrow,
 	getAppSettings,
-	getCvmServerPublicKey,
+	resolveCvmServerPubkey,
 	isEventHandlerReady,
 	NIP46_RELAY_URL,
 	RELAY_URL,
@@ -18,7 +18,7 @@ export const configRoutes: BunRoutes = {
 				nip46Relay: NIP46_RELAY_URL,
 				appSettings: getAppSettings(),
 				appPublicKey: getAppPublicKeyOrThrow(),
-				cvmServerPubkey: getCvmServerPublicKey(),
+				cvmServerPubkey: resolveCvmServerPubkey(),
 				needsSetup: !getAppSettings(),
 				serverReady: isEventHandlerReady(),
 			})

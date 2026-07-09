@@ -1,5 +1,10 @@
 import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
+import { hexToBytes } from 'nostr-tools/utils'
+
+function isValidHexPubkey(value: string): boolean {
+	return /^[0-9a-fA-F]{64}$/.test(value)
+}
 
 /**
  * Process-level mutable state and environment for the auction issuer / Bun
@@ -33,103 +38,30 @@ export function setAppPublicKey(value: string): void {
 	APP_PUBLIC_KEY = value
 }
 
-export const CVM_ORACLE_DEFAULT_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
-
 /**
- * Pure, testable CVM oracle pubkey resolution logic.
+ * Resolves the CVM server pubkey using a consistent fallback order
+ * (most specific to least specific):
  *
- * WHY THIS EXISTS AS A SEPARATE FUNCTION:
+ *   1. Service-specific pubkey (CVM_CURRENCY_SERVER_PUBLIC_KEY / CURRENCY_SERVER_PUBKEY)
+ *   2. General CVM pubkey (CVM_SERVER_PUBLIC_KEY / CVM_SERVER_PUBKEY)
+ *   3. Derive from CVM private key (CVM_SERVER_KEY)
+ *   4. Throw — NO hardcoded fallback
  *
- * The production `getCvmServerPublicKey()` reads env vars and caches the result
- * in a module-level variable. This makes it impossible to test different
- * configurations in the same process (bun:test runs all test files in one
- * process, and the module cache persists across files).
- *
- * By extracting the resolution logic into a pure function with explicit
- * parameters, we can test every code path without env var manipulation or
- * module cache tricks.
- *
- * Priority:
- *   1. explicitPubkey  — CVM_SERVER_PUBKEY env var (operator override)
- *   2. serverKey       — CVM_SERVER_KEY env var (derive pubkey from private key)
- *   3. Hardcoded default — the real ContextVM oracle on relay.contextvm.org
- *
- * **Self-detection guard**: if (2) derives a pubkey that matches the app's own
- * pubkey (from APP_PRIVATE_KEY), the CVM client would send encrypted BTC-price
- * requests *to itself* — no oracle server is listening under that key on any
- * relay, so every request times out after 5-20s and the cascade of failed
- * gift-wrap publishes gets the app rate-limited ("you are noting too much").
- *
- * This happened in production when `.env` had `CVM_SERVER_KEY` set to the same
- * test key as `APP_PRIVATE_KEY`. The guard catches this misconfiguration and
- * falls back to the real oracle pubkey with a loud warning.
- *
- * @returns The resolved pubkey and whether a self-detection warning was emitted.
+ * Per Franchovy's review on #975: "currency → public → private"
  */
-export function resolveCvmServerPubkey(options: { explicitPubkey?: string; serverKey?: string; appPrivateKey?: string }): {
-	pubkey: string
-	selfDetected: boolean
-} {
-	// Priority 1: explicit pubkey override (CVM_SERVER_PUBKEY env var).
-	// If the operator explicitly sets this, we trust it — even if it matches
-	// the app's own pubkey. They may be running a local CVM oracle under the
-	// same key intentionally (e.g., in a test environment with a mock oracle).
-	if (options.explicitPubkey) {
-		return { pubkey: options.explicitPubkey, selfDetected: false }
+export function resolveCvmServerPubkey(): string {
+	const servicePubkey = process.env.CVM_CURRENCY_SERVER_PUBLIC_KEY || process.env.CURRENCY_SERVER_PUBKEY
+	if (servicePubkey && isValidHexPubkey(servicePubkey)) return servicePubkey
+
+	const generalPubkey = process.env.CVM_SERVER_PUBLIC_KEY || process.env.CVM_SERVER_PUBKEY
+	if (generalPubkey && isValidHexPubkey(generalPubkey)) return generalPubkey
+
+	const privateKey = process.env.CVM_SERVER_KEY
+	if (privateKey && isValidHexPubkey(privateKey)) {
+		return getPublicKey(hexToBytes(privateKey))
 	}
 
-	// Priority 2: derive from private key (CVM_SERVER_KEY env var).
-	if (options.serverKey && /^[0-9a-fA-F]{64}$/.test(options.serverKey)) {
-		const derivedPubkey = getPublicKey(new Uint8Array(Buffer.from(options.serverKey, 'hex')))
-
-		// Self-detection: if CVM_SERVER_KEY derives to the app's own pubkey,
-		// the CVM client would talk to itself and every request would timeout.
-		//
-		// This was a production outage: CVM_SERVER_KEY and APP_PRIVATE_KEY were
-		// both set to the test key "0000...0001" in .env. The CVM client sent
-		// encrypted BTC price requests to itself on relay.damus.io, causing:
-		//   - 19 parallel requests × 5-20s timeouts per page load
-		//   - Flood of gift-wrap publishes → "you are noting too much" rate-limit
-		//   - All requests fell back to Yadio (slower, no oracle benefits)
-		if (options.appPrivateKey) {
-			const appPubkey = getPublicKey(new Uint8Array(Buffer.from(options.appPrivateKey, 'hex')))
-			if (derivedPubkey === appPubkey) {
-				return { pubkey: CVM_ORACLE_DEFAULT_PUBKEY, selfDetected: true }
-			}
-		}
-
-		return { pubkey: derivedPubkey, selfDetected: false }
-	}
-
-	// Priority 3: hardcoded default — the real ContextVM oracle.
-	// This is the expected production value when no CVM env vars are set.
-	return { pubkey: CVM_ORACLE_DEFAULT_PUBKEY, selfDetected: false }
-}
-
-/**
- * Production wrapper: reads env vars, delegates to resolveCvmServerPubkey(),
- * and caches the result in a module-level variable.
- */
-export function getCvmServerPublicKey(): string {
-	if (CVM_SERVER_PUBKEY) return CVM_SERVER_PUBKEY
-
-	const { pubkey, selfDetected } = resolveCvmServerPubkey({
-		explicitPubkey: process.env.CVM_SERVER_PUBKEY,
-		serverKey: process.env.CVM_SERVER_KEY,
-		appPrivateKey: APP_PRIVATE_KEY,
-	})
-
-	if (selfDetected) {
-		console.error(
-			`[CVM] CVM_SERVER_KEY derives to the app's own pubkey (${pubkey.slice(0, 12)}...). ` +
-				`The CVM client would send requests to itself — no oracle would respond. ` +
-				`Falling back to the default oracle pubkey (${CVM_ORACLE_DEFAULT_PUBKEY.slice(0, 12)}...). ` +
-				`Remove CVM_SERVER_KEY from .env to suppress this warning.`,
-		)
-	}
-
-	CVM_SERVER_PUBKEY = pubkey
-	return CVM_SERVER_PUBKEY
+	throw new Error('No CVM server pubkey available. Set CVM_SERVER_PUBLIC_KEY or CVM_SERVER_KEY in your environment.')
 }
 
 export function getAppSettings() {
