@@ -17,7 +17,7 @@ const DERIVED_SERVER_PUBKEY = (() => {
 	if (!key) throw new Error('CVM_SERVER_KEY required')
 	return getPublicKey(new Uint8Array(Buffer.from(key, 'hex')))
 })()
-const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))
+const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays('production')]))
 
 describe('PlebianCurrencyClient integration', () => {
 	let client: PlebianCurrencyClient | undefined
