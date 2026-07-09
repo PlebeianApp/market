@@ -116,8 +116,7 @@ export type AuctionEventInput = z.infer<typeof AuctionEventSchema>
  * without try/catch.
  */
 export type ParseAuctionEventResult =
-	| { ok: true; value: ParsedAuctionEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+	{ ok: true; value: ParsedAuctionEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
 /**
  * Parse a raw kind-30408 NDKEvent into a {@link ParsedAuctionEvent}.

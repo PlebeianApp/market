@@ -636,9 +636,7 @@ interface Product {
 	category: string
 }
 
-const products: Product[] = [
-	/* ... */
-]
+const products: Product[] = [/* ... */]
 
 const query = new QueryBuilder<Product>()
 	.where((p) => p.category === 'electronics')

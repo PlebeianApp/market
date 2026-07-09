@@ -178,10 +178,7 @@ interface User {
 type FetchState<T> = { status: 'idle' } | { status: 'loading' } | { status: 'success'; data: T } | { status: 'error'; error: Error }
 
 type FetchAction<T> =
-	| { type: 'FETCH_START' }
-	| { type: 'FETCH_SUCCESS'; payload: T }
-	| { type: 'FETCH_ERROR'; error: Error }
-	| { type: 'RESET' }
+	{ type: 'FETCH_START' } | { type: 'FETCH_SUCCESS'; payload: T } | { type: 'FETCH_ERROR'; error: Error } | { type: 'RESET' }
 
 function fetchReducer<T>(state: FetchState<T>, action: FetchAction<T>): FetchState<T> {
 	switch (action.type) {

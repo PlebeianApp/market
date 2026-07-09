@@ -73,8 +73,7 @@ export const ValidatorVerdictEventSchema = z
 export type ValidatorVerdictEventInput = z.infer<typeof ValidatorVerdictEventSchema>
 
 export type ParseValidatorVerdictResult =
-	| { ok: true; value: ParsedValidatorVerdictEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+	{ ok: true; value: ParsedValidatorVerdictEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parseValidatorVerdictEvent = (event: NDKEvent): ParseValidatorVerdictResult => {
 	if (event.kind !== VALIDATOR_VERDICT_KIND) {
@@ -144,8 +143,7 @@ export const ValidatorPolicyDocumentSchema = z.object({
 }) satisfies z.ZodType<ValidatorPolicyDocument>
 
 export type ParseValidatorPolicyResult =
-	| { ok: true; value: ParsedValidatorPolicyEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+	{ ok: true; value: ParsedValidatorPolicyEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parseValidatorPolicyEvent = (event: NDKEvent): ParseValidatorPolicyResult => {
 	if (event.kind !== VALIDATOR_POLICY_KIND) {
@@ -207,8 +205,7 @@ export const BidderAggregateDocumentSchema = z.object({
 }) satisfies z.ZodType<BidderAggregateReputationDocument>
 
 export type ParseBidderAggregateResult =
-	| { ok: true; value: ParsedBidderAggregateReputationEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+	{ ok: true; value: ParsedBidderAggregateReputationEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parseBidderAggregateEvent = (event: NDKEvent): ParseBidderAggregateResult => {
 	if (event.kind !== BIDDER_AGGREGATE_REPUTATION_KIND) {

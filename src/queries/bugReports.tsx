@@ -40,15 +40,13 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 	const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
 	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
 	const bugReports = Array.from(events)
-		.map(
-			(event): BugReport => ({
-				id: event.id,
-				pubkey: event.pubkey,
-				content: event.content,
-				createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-				event,
-			}),
-		)
+		.map((event): BugReport => ({
+			id: event.id,
+			pubkey: event.pubkey,
+			content: event.content,
+			createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+			event,
+		}))
 		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
 
 	return bugReports
