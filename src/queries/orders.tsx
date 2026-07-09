@@ -1,4 +1,13 @@
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
+import {
+	ORDER_GENERAL_KIND,
+	ORDER_MESSAGE_TYPE,
+	ORDER_PROCESS_KIND,
+	ORDER_STATUS,
+	PAYMENT_RECEIPT_KIND,
+	SHIPPING_STATUS,
+	type OrderStatus,
+	type ShippingStatus,
+} from '@/lib/schemas/order'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
@@ -15,6 +24,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Event } from 'nostr-tools'
 import { useEffect, useMemo } from 'react'
 import { orderKeys } from './queryKeyFactory'
+import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -1050,30 +1060,33 @@ export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {})
 /**
  * Get the current status of an order based on its related events
  */
-export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
-	// Deep clone the status updates to avoid modifying the original
-	const statusUpdates = [...order.statusUpdates]
-	const shippingUpdates = [...order.shippingUpdates]
+export const getOrderStatus = (order: OrderWithRelatedEvents): OrderStatus => {
+	// NOTE: We assume that OrderWithRelatedEvents has a `statusUpdates` event list property (of length N) that is sorted
+	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestStatus` references the latest
+	// status event (at index 0) from this list.
 
-	// Shipping updates no longer directly set order status.
-	// Order status is determined solely by explicit status update events (Type 3).
+	const status = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.at(1)
 
-	// Next, check status updates if no shipping rules applied
-	if (statusUpdates.length > 0) {
-		// Re-sort to ensure newest first
-		statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		const latestStatusUpdate = statusUpdates[0]
-		const statusTag = latestStatusUpdate.tags.find((tag) => tag[0] === 'status')
-
-		if (statusTag?.[1]) {
-			return statusTag[1]
-		}
+	if (status && Object.values(ORDER_STATUS).includes(status as any)) {
+		return status as OrderStatus
 	}
-
-	// Do not infer confirmation from payment receipts. Merchant must explicitly confirm via status update.
 
 	// Default to pending if no other status is found
 	return ORDER_STATUS.PENDING
+}
+
+export const getShippingStatus = (order: OrderWithRelatedEvents): ShippingStatus | null => {
+	// NOTE: We assume that OrderWithRelatedEvents has a `shippingUpdates` event list property (of length N) that is sorted
+	// from latest event (at index 0) to oldest event (at index N - 1). Similarly, we assume `latestShipping` references the latest
+	// shipping event (at index 0) from this list.
+
+	const shipping = order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.at(1)
+
+	if (shipping && Object.values(SHIPPING_STATUS).includes(shipping as any)) {
+		return shipping as ShippingStatus
+	}
+
+	return null
 }
 
 /**
