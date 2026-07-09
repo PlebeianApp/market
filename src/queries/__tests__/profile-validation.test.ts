@@ -4,7 +4,7 @@ import { nip19 } from 'nostr-tools'
 import { isValidHexKey } from '../../lib/utils'
 import { getProfileIdentifierValidationError, validateProfileIdentifier } from '../../lib/utils/profileValidation'
 
-const VALID_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const VALID_HEX = 'a'.repeat(64)
 const VALID_NPUB = nip19.npubEncode(VALID_HEX)
 const VALID_NPROFILE = nip19.nprofileEncode({
 	pubkey: VALID_HEX,
