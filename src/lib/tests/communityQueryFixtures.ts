@@ -23,7 +23,10 @@ type CommunityFixtureSuccessStep<T> = {
 }
 
 export type CommunityQueryFixtureStep<T> =
-	CommunityFixturePendingStep | CommunityFixtureErrorStep | CommunityFixtureEmptyStep | CommunityFixtureSuccessStep<T>
+	| CommunityFixturePendingStep
+	| CommunityFixtureErrorStep
+	| CommunityFixtureEmptyStep
+	| CommunityFixtureSuccessStep<T>
 
 type CommunityQueryFixtureMap = Partial<
 	Record<CommunityQueryName, CommunityQueryFixtureStep<unknown> | CommunityQueryFixtureStep<unknown>[]>

@@ -23,7 +23,8 @@ export {
 }
 
 export type AuctionExtensionRule =
-	{ kind: 'none'; raw: string } | { kind: 'anti_sniping'; raw: string; windowSeconds: number; extensionSeconds: number }
+	| { kind: 'none'; raw: string }
+	| { kind: 'anti_sniping'; raw: string; windowSeconds: number; extensionSeconds: number }
 
 export type AuctionBidChainGroup = {
 	bidderPubkey: string

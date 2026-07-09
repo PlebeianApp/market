@@ -66,7 +66,8 @@ export const PathReleaseEventSchema = z.object({
 export type PathReleaseEventInput = z.infer<typeof PathReleaseEventSchema>
 
 export type ParsePathReleaseEventResult =
-	{ ok: true; value: ParsedPathReleaseEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
+	| { ok: true; value: ParsedPathReleaseEvent }
+	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parsePathReleaseEvent = (event: NDKEvent): ParsePathReleaseEventResult => {
 	if (event.kind !== AUCTION_PATH_RELEASE_KIND) {
@@ -144,7 +145,8 @@ export const SettlementEventSchema = z
 export type SettlementEventInput = z.infer<typeof SettlementEventSchema>
 
 export type ParseSettlementEventResult =
-	{ ok: true; value: ParsedSettlementEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
+	| { ok: true; value: ParsedSettlementEvent }
+	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
 export const parseSettlementEvent = (event: NDKEvent): ParseSettlementEventResult => {
 	if (event.kind !== AUCTION_SETTLEMENT_KIND) {
