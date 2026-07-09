@@ -1,11 +1,9 @@
 name: Deploy to Staging
 
 on:
-  workflow_run:
-    workflows:
-      - E2E Tests
-    types:
-      - completed
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 env:
