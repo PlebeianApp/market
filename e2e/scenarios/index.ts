@@ -5,6 +5,7 @@ import WebSocket from 'ws'
 import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { isAddressableKind } from 'nostr-tools/kinds'
+import { v4 as uuidv4 } from 'uuid'
 
 useWebSocketImplementation(WebSocket)
 
@@ -649,4 +650,227 @@ export async function seedAuction(
 
 	console.log(`    Published auction: ${opts.title ?? auctionId}`)
 	return event
+}
+
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
+
+export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
+export type OrderType = 'product'
+
+export interface SeededOrderResult {
+	orderEvent: VerifiedEvent
+	orderId: string
+	productEvent?: VerifiedEvent
+}
+
+/**
+ * Master seeding function to create orders in specific states.
+ * Handles Product (Invoice flow).
+ */
+export async function seedOrder(type: OrderType, stage: OrderStage): Promise<SeededOrderResult> {
+	let relay: Relay | null = null
+
+	try {
+		relay = await Relay.connect(RELAY_URL)
+		const buyerSkBytes = hexToBytes(devUser2.sk)
+		const sellerSkBytes = hexToBytes(devUser1.sk)
+
+		const orderId = uuidv4()
+		const now = Math.floor(Date.now() / 1000)
+
+		let productEvent: VerifiedEvent | undefined
+		let itemTagValue = ''
+		let orderAmount = '1000'
+		const shippingOptionCoords = '30406:' + devUser1.pk + ':shippingdtag123'
+
+		// 1. Create the underlying item (Product)
+		if (type === 'product') {
+			const productId = `prod_${now}_${uuidv4().slice(0, 8)}`
+			productEvent = finalizeEvent(
+				{
+					kind: 30402,
+					created_at: now,
+					content: 'Test Product Description',
+					tags: [
+						['d', productId],
+						['title', 'Test Product'],
+						['price', '1000', 'SAT'],
+						['stock', '10'],
+						['type', 'simple', 'physical'],
+						['image', 'https://thisisatestimage.com/img'],
+						['shipping_option', shippingOptionCoords, '0'],
+						['t', 'bitcoin'],
+					],
+				},
+				sellerSkBytes,
+			)
+			await relay.publish(productEvent)
+			itemTagValue = `30402:${devUser1.pk}:${productId}`
+		}
+
+		// 2. Construct Base Tags Array (MUTABLE)
+		// FIX: Build tags array as a mutable variable first
+		const baseTags: string[][] = [
+			['p', devUser1.pk], // Seller
+			['subject', `Order #${orderId}`],
+			['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+			['order', orderId],
+			['amount', orderAmount],
+			['item', itemTagValue, '1'],
+		]
+
+		// 3. Create Order Event Data Object
+		const orderEventData: EventTemplate = {
+			kind: ORDER_PROCESS_KIND,
+			created_at: now,
+			content: `Test ${type} order for ${itemTagValue}`,
+			tags: baseTags, // Mutable tags array passed here
+		}
+
+		const orderEvent = finalizeEvent(orderEventData, buyerSkBytes)
+		await relay.publish(orderEvent)
+
+		// 4. Seed Additional Events Based on Stage
+		const advanceStage = async () => {
+			if (!relay) throw new Error('Seed method error: Relay initialization failed!')
+
+			// Stage: Pending Payment (Base case - just the order creation exists)
+			if (stage === 'pending-payment') return
+
+			// Common to all: Status Update to 'confirmed'
+			if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+				const statusUpdate = finalizeEvent(
+					{
+						kind: ORDER_PROCESS_KIND,
+						created_at: now + 10,
+						content: 'Order confirmed',
+						tags: [
+							['p', devUser1.pk],
+							['subject', `Order #${orderId}`],
+							['type', '3'], // Status update
+							['order', orderId],
+							['status', ORDER_STATUS.CONFIRMED],
+						],
+					},
+					sellerSkBytes,
+				)
+				await relay.publish(statusUpdate)
+			}
+
+			// Stage: Processing
+			if (['processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+				const processingUpdate = finalizeEvent(
+					{
+						kind: ORDER_PROCESS_KIND,
+						created_at: now + 20,
+						content: 'Order is being prepared',
+						tags: [
+							['p', devUser1.pk],
+							['subject', `Order #${orderId}`],
+							['type', '3'],
+							['order', orderId],
+							['status', ORDER_STATUS.PROCESSING],
+						],
+					},
+					sellerSkBytes,
+				)
+				await relay.publish(processingUpdate)
+			}
+
+			// Stage: Shipped (Adds Shipping Update)
+			if (['shipped', 'delivered', 'completed'].includes(stage)) {
+				const shippingUpdate = finalizeEvent(
+					{
+						kind: ORDER_PROCESS_KIND,
+						created_at: now + 30,
+						content: 'Order shipped via TestCarrier',
+						tags: [
+							['p', devUser1.pk],
+							['subject', `Order #${orderId}`],
+							['type', '4'], // Shipping update
+							['order', orderId],
+							['status', SHIPPING_STATUS.SHIPPED],
+							['tracking', 'TRK123456'],
+							['carrier', 'TestCarrier'],
+						],
+					},
+					sellerSkBytes,
+				)
+				await relay.publish(shippingUpdate)
+			}
+
+			// Stage: Delivered (Final Status Update for Delivery)
+			if (['delivered', 'completed'].includes(stage)) {
+				const deliveredUpdate = finalizeEvent(
+					{
+						kind: ORDER_PROCESS_KIND,
+						created_at: now + 40,
+						content: 'Order delivered',
+						tags: [
+							['p', devUser1.pk],
+							['subject', `Order #${orderId}`],
+							['type', '3'],
+							['order', orderId],
+							['status', ORDER_STATUS.COMPLETED],
+						],
+					},
+					sellerSkBytes,
+				)
+				await relay.publish(deliveredUpdate)
+			}
+
+			// Payment Logic: DIFFERS by Type
+			if (type === 'product') {
+				// Product Flow: Payment Requests (Invoices) -> Receipt
+				if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+					// Merchant sends Payment Request
+					const paymentRequest = finalizeEvent(
+						{
+							kind: ORDER_PROCESS_KIND,
+							created_at: now + 5,
+							content: 'Please pay invoice',
+							tags: [
+								['p', devUser2.pk],
+								['subject', `Payment for Order #${orderId}`],
+								['type', '2'], // Payment request
+								['order', orderId],
+								['amount', '1000'],
+								['payment', 'lightning', 'lnbc100n1p...'], // Mock Bolt11
+							],
+						},
+						sellerSkBytes,
+					)
+					await relay.publish(paymentRequest)
+
+					// Buyer sends Receipt
+					if (['processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+						const receipt = finalizeEvent(
+							{
+								kind: PAYMENT_RECEIPT_KIND,
+								created_at: now + 8,
+								content: 'Payment made',
+								tags: [
+									['p', devUser1.pk],
+									['subject', `Receipt for Order #${orderId}`],
+									['order', orderId],
+									['amount', '1000'],
+									['payment', 'lightning', 'lnbc100n1p...', 'preimage123'],
+								],
+							},
+							buyerSkBytes,
+						)
+						await relay.publish(receipt)
+					}
+				}
+			}
+		}
+
+		await advanceStage()
+
+		return { orderEvent, orderId, productEvent }
+	} finally {
+		if (relay) {
+			relay.close()
+		}
+	}
 }

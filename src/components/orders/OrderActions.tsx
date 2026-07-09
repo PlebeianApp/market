@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
-import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
@@ -20,11 +19,10 @@ import { StockUpdateDialog } from './StockUpdateDialog'
 interface OrderActionsProps {
 	order: OrderWithRelatedEvents
 	userPubkey: string
-	variant?: 'primary' | 'outline' | 'ghost' | 'link' | 'secondary' | 'destructive'
 	className?: string
 }
 
-export function OrderActions({ order, userPubkey, variant = 'outline', className = '' }: OrderActionsProps) {
+export function OrderActions({ order, userPubkey, className = '' }: OrderActionsProps) {
 	const [cancelReason, setCancelReason] = useState('')
 	const [isCancelOpen, setIsCancelOpen] = useState(false)
 
@@ -47,8 +45,6 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	// Determine which actions are allowed based on role and current status
 	const canCancel = status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
-
-	// Check if the order has been shipped
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
 
 	// Seller actions
@@ -60,7 +56,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
-		const orderEventId = order.order.id // Use actual event ID, not the order tag UUID
+		const orderEventId = order.order.id
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
@@ -86,14 +82,12 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	}
 
 	const handleShipped = () => {
-		const orderEventId = order.order.id // Use actual event ID, not the order tag UUID
+		const orderEventId = order.order.id
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
 
-		// Send ONLY a shipping update (Type 4) per gamma spec
-		// Order status remains PROCESSING, shipping status becomes SHIPPED
 		updateShippingStatus.mutate({
 			orderEventId,
 			status: SHIPPING_STATUS.SHIPPED,
@@ -103,231 +97,170 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 		setIsShippingOpen(false)
 		setTrackingNumber('')
-
-		// After marking as shipped, open the stock update dialog
 		setIsStockUpdateOpen(true)
 	}
 
 	if (!isBuyer && !isSeller) {
-		return null // Don't show actions if user is neither buyer nor seller
-	}
-
-	const handleStockUpdateComplete = () => {
-		// Stock has been updated, dialog can close
-		// No need to update order status - shipping status is already set
-	}
-
-	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
-
-	const renderStatusIcon = () => {
-		switch (iconName) {
-			case 'truck':
-				return <Truck className="w-4 h-4" />
-			case 'tick':
-				return <Check className="w-4 h-4" />
-			case 'clock':
-				return <Clock className="w-4 h-4" />
-			case 'cross':
-				return <X className="w-4 h-4" />
-			default:
-				return null
-		}
-	}
-
-	// Determine the next action based on role and status
-	const getNextAction = () => {
-		if (isSeller) {
-			if (canConfirm) return { label: 'Confirm', icon: Check, action: () => setIsPaymentConfirmOpen(true) }
-			if (canProcess) return { label: 'Process', icon: Package, action: () => handleStatusUpdate(ORDER_STATUS.PROCESSING) }
-			if (canShip) return { label: 'Ship', icon: Truck, action: () => setIsShippingOpen(true) }
-		}
-		if (isBuyer && canReceive) {
-			return { label: 'Received', icon: CheckCircle, action: () => handleStatusUpdate(ORDER_STATUS.COMPLETED) }
-		}
 		return null
 	}
 
-	const nextAction = getNextAction()
-	const isLoading = updateOrderStatus.isPending || updateShippingStatus.isPending
-	const breakpoint = useBreakpoint()
-	const badgeIconOnly = breakpoint === 'sm'
-
 	return (
-		<div className={cn('flex justify-between items-center gap-2 w-full', className)}>
-			{/* Cancel Button (Left) - Icon only */}
-			{canCancel ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
+		<div className={cn('space-y-3 w-full mx-2', className)}>
+			{/* Primary Action Button */}
+			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
+				<div className="flex flex-wrap gap-2">
+					{canCancel && (
 						<Button
 							variant="outline"
-							size="icon"
 							onClick={() => setIsCancelOpen(true)}
-							disabled={isLoading}
-							className="hover:bg-destructive/10 border-destructive/50 w-8 h-8 text-destructive hover:text-destructive shrink-0"
-							aria-label="Cancel order"
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
 						>
-							<X className="w-4 h-4" />
+							<X className="w-4 h-4 mr-2" /> Cancel Order
 						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">Cancel order</TooltipContent>
-				</Tooltip>
-			) : (
-				<div className="w-8 h-8 shrink-0" />
-			)}
+					)}
 
-			{/* Status Badge (Center) */}
-			{badgeIconOnly ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<div className={cn('flex justify-center items-center p-1 rounded-md w-8', bgColor, textColor)}>{renderStatusIcon()}</div>
-					</TooltipTrigger>
-					<TooltipContent side="bottom" className="capitalize">
-						{label}
-					</TooltipContent>
-				</Tooltip>
-			) : (
-				<div className={cn('flex justify-center items-center gap-1.5 px-2 py-1 rounded-md w-[7rem]', bgColor, textColor)}>
-					{renderStatusIcon()}
-					<span className="font-medium text-xs capitalize whitespace-nowrap">{label}</span>
+					{canConfirm && (
+						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending} className="w-full sm:w-auto">
+							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
+						</Button>
+					)}
+
+					{canProcess && (
+						<Button
+							onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
+						>
+							<Package className="w-4 h-4 mr-2" /> Process Order
+						</Button>
+					)}
+
+					{canShip && (
+						<Button onClick={() => setIsShippingOpen(true)} disabled={updateShippingStatus.isPending} className="w-full sm:w-auto">
+							<Truck className="w-4 h-4 mr-2" /> Mark As Shipped
+						</Button>
+					)}
+
+					{canReceive && (
+						<Button
+							onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}
+							disabled={updateOrderStatus.isPending}
+							className="w-full sm:w-auto"
+						>
+							<CheckCircle className="w-4 h-4 mr-2" /> I've Received This Item
+						</Button>
+					)}
 				</div>
 			)}
 
-			{/* Next Action Button (Right) - icon only with tooltip */}
-			{nextAction ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
-							variant="default"
-							size="icon"
-							onClick={nextAction.action}
-							disabled={isLoading}
-							className="w-8 h-8 shrink-0"
-							aria-label={nextAction.label}
-						>
-							<nextAction.icon className="w-4 h-4" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">{nextAction.label}</TooltipContent>
-				</Tooltip>
-			) : status === ORDER_STATUS.COMPLETED ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-green-600 shrink-0" aria-label="Done">
-							<CheckCircle className="w-4 h-4" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">Done</TooltipContent>
-				</Tooltip>
-			) : status === ORDER_STATUS.CANCELLED ? (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-muted-foreground shrink-0" aria-label="Cancelled">
-							<Ban className="w-4 h-4" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">Cancelled</TooltipContent>
-				</Tooltip>
-			) : (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-muted-foreground shrink-0" aria-label="Waiting">
-							<Clock className="w-4 h-4" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">Waiting</TooltipContent>
-				</Tooltip>
+			{/* Final State Indicators */}
+			{!canCancel && !canConfirm && !canProcess && !canShip && !canReceive && (
+				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+					{status === ORDER_STATUS.COMPLETED ? (
+						<>
+							<CheckCircle className="w-4 h-4 text-green-600" />
+							<span>Order completed</span>
+						</>
+					) : status === ORDER_STATUS.CANCELLED ? (
+						<>
+							<Ban className="w-4 h-4 text-red-600" />
+							<span>Order cancelled</span>
+						</>
+					) : (
+						<>
+							<Clock className="w-4 h-4 text-yellow-600" />
+							<span>Awaiting action from other party</span>
+						</>
+					)}
+				</div>
 			)}
 
-			{/* Payment Confirmation dialog */}
+			{/* Payment Confirmation Dialog */}
 			<Dialog open={isPaymentConfirmOpen} onOpenChange={setIsPaymentConfirmOpen}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Confirm Payment Received</DialogTitle>
-						<DialogDescription className="break-words">
-							Please confirm that you have received payment for this order with the Order Payment details below before proceeding.
-						</DialogDescription>
+						<DialogDescription>Please verify that you have received payment before confirming this order.</DialogDescription>
 					</DialogHeader>
-
 					<div className="space-y-2 py-4">
-						<p className="text-muted-foreground text-sm">
-							By confirming, you acknowledge that the payment has been received and you are ready to process this order.
+						<p className="text-sm text-gray-600">
+							By clicking confirm, you acknowledge the funds have been received and you will now process the order.
 						</p>
 					</div>
-
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setIsPaymentConfirmOpen(false)}>
-							Back
+							Cancel
 						</Button>
-						<Button onClick={handleConfirmOrder}>Confirm Payment Received</Button>
+						<Button onClick={handleConfirmOrder}>Confirm Payment</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
-			{/* Shipping dialog */}
+			{/* Shipping Dialog */}
 			<Dialog open={isShippingOpen} onOpenChange={setIsShippingOpen}>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Shipping Information</DialogTitle>
-						<DialogDescription className="break-words">Add tracking information for this shipment</DialogDescription>
+						<DialogTitle>Mark Order As Shipped</DialogTitle>
+						<DialogDescription>Add tracking information if available</DialogDescription>
 					</DialogHeader>
-
-					<div className="space-y-2 py-4">
-						<Label htmlFor="tracking">Add Tracking URL</Label>
-						<Input
-							id="tracking"
-							value={trackingNumber}
-							onChange={(e) => setTrackingNumber(e.target.value)}
-							placeholder="Enter tracking URL"
-						/>
+					<div className="space-y-4 py-4">
+						<div>
+							<Label htmlFor="tracking">Tracking URL (Optional)</Label>
+							<Input
+								id="tracking"
+								value={trackingNumber}
+								onChange={(e) => setTrackingNumber(e.target.value)}
+								placeholder="https://carrier.com/track/..."
+							/>
+						</div>
 					</div>
-
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setIsShippingOpen(false)}>
 							Cancel
 						</Button>
-						<Button onClick={handleShipped}>Save</Button>
+						<Button onClick={handleShipped}>Mark As Shipped</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
-			{/* Cancel dialog */}
+			{/* Cancel Dialog */}
 			<Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Cancel Order</DialogTitle>
-						<DialogDescription className="break-words">
-							Are you sure you want to cancel this order? This action cannot be undone.
-						</DialogDescription>
+						<DialogTitle>Cancel This Order</DialogTitle>
+						<DialogDescription>This cannot be undone. Please confirm you want to proceed.</DialogDescription>
 					</DialogHeader>
-
-					<div className="space-y-2 py-4">
-						<Label htmlFor="reason">Reason (Optional)</Label>
+					<div className="space-y-4 py-4">
+						<Label htmlFor="reason">Cancellation Reason (Optional)</Label>
 						<Textarea
 							id="reason"
 							value={cancelReason}
 							onChange={(e) => setCancelReason(e.target.value)}
-							placeholder="Enter reason for cancellation"
+							placeholder="Why are you cancelling?"
+							rows={3}
 						/>
 					</div>
-
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setIsCancelOpen(false)}>
-							Back
+							Cancel
 						</Button>
 						<Button variant="destructive" onClick={handleCancel}>
-							Confirm Cancellation
+							Yes, Cancel Order
 						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
-			{/* Stock Update Dialog */}
-			<StockUpdateDialog
-				open={isStockUpdateOpen}
-				onOpenChange={setIsStockUpdateOpen}
-				order={order}
-				onComplete={handleStockUpdateComplete}
-			/>
+			{/* Stock Update Dialog - only for product orders */}
+			{
+				<StockUpdateDialog
+					open={isStockUpdateOpen}
+					onOpenChange={setIsStockUpdateOpen}
+					order={order}
+					onComplete={() => {}} // No-op: no additional actions needed.
+				/>
+			}
 		</div>
 	)
 }

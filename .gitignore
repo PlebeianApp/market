@@ -20,11 +20,8 @@ _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env*
+!.env*.example
 
 # caches
 .eslintcache
@@ -51,3 +48,7 @@ test-results
 __pycache__/
 
 .opencode/
+contextvm/
+
+# Encrypted test wallet material
+scripts/encrypted_test_wallet.json

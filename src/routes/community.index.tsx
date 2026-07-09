@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQueries, useSuspenseQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
@@ -67,24 +68,18 @@ function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) 
 
 export const Route = createFileRoute('/community/')({
 	component: CommunityRoute,
-	errorComponent: ({ error }) => (
-		<div className="flex flex-col justify-center items-center gap-4 px-4 min-h-[50vh] text-center">
-			<h2 className="font-semibold text-xl">Unable to load collections</h2>
-			<p className="max-w-md text-muted-foreground">
-				{error instanceof Error ? error.message : 'There was a problem connecting to relays. Please try again.'}
-			</p>
-			<Button variant="secondary" onClick={() => window.location.reload()}>
-				Retry
-			</Button>
-		</div>
-	),
 })
 
 function CommunityRoute() {
-	const collectionsQuery = useSuspenseQuery(collectionsQueryOptions)
-	const collections = collectionsQuery.data
+	const collectionsQuery = useQuery(collectionsQueryOptions)
+	const collections = collectionsQuery.data || []
+	const isLoadingCollections = collectionsQuery.isLoading
+	const collectionsError = collectionsQuery.error
 
-	const { data: merchantPubkeys = [], isLoading: isLoadingMerchants } = useV4VMerchants()
+	const merchantsQuery = useV4VMerchants()
+	const merchantPubkeys = merchantsQuery.data || []
+	const isLoadingMerchants = merchantsQuery.isLoading
+	const merchantsError = merchantsQuery.error
 
 	// Subscribe to blacklist store for reactive updates when blacklist changes
 	useStore(blacklistStore)
@@ -267,10 +262,11 @@ function CommunityRoute() {
 	)
 
 	return (
-		<div>
+		<div data-testid="community-page">
 			{isHomepageSlide ? (
 				// Homepage hero styling with random collection background
 				<div
+					data-testid="community-hero"
 					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -286,6 +282,7 @@ function CommunityRoute() {
 			) : (
 				// Collection hero styling (existing collection page style)
 				<div
+					data-testid="community-hero"
 					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
@@ -301,21 +298,113 @@ function CommunityRoute() {
 			)}
 
 			<div className="flex flex-col gap-12 px-4 py-4">
-				<ItemGrid title="Collections">
-					{collections.map((collection) => (
-						<CollectionCard key={collection.id} collection={collection} />
-					))}
-				</ItemGrid>
-				<ItemGrid title="Merchants" cols={2} smCols={2} lgCols={2} xlCols={3} gap={16}>
-					{isLoadingMerchants ? (
-						<div className="col-span-full py-8 text-gray-500 text-center">Loading merchants...</div>
-					) : filteredMerchantPubkeys.length === 0 ? (
-						<div className="col-span-full py-8 text-gray-500 text-center">No merchants found</div>
-					) : (
-						filteredMerchantPubkeys.map((pubkey) => <FeaturedUserCard key={pubkey} userPubkey={pubkey} />)
-					)}
-				</ItemGrid>
+				<section aria-label="Community collections" data-testid="community-collections-section">
+					<ItemGrid title="Collections">
+						{isLoadingCollections ? (
+							<CollectionSkeletons count={12} />
+						) : collectionsError ? (
+							<CollectionsError error={collectionsError as Error} onRetry={() => collectionsQuery.refetch()} />
+						) : collections.length === 0 ? (
+							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-collections-empty">
+								No collections found
+							</div>
+						) : (
+							collections.map((collection) => (
+								<div key={collection.id} data-testid="community-collection-card">
+									<CollectionCard collection={collection} />
+								</div>
+							))
+						)}
+					</ItemGrid>
+				</section>
+				<section aria-label="Community merchants" data-testid="community-merchants-section">
+					<ItemGrid title="Merchants" cols={2} smCols={2} lgCols={2} xlCols={3} gap={16}>
+						{isLoadingMerchants ? (
+							<MerchantSkeletons count={6} />
+						) : merchantsError ? (
+							<MerchantsError error={merchantsError as Error} onRetry={() => merchantsQuery.refetch()} />
+						) : filteredMerchantPubkeys.length === 0 ? (
+							<div className="col-span-full py-8 text-gray-500 text-center" data-testid="community-merchants-empty">
+								No merchants found
+							</div>
+						) : (
+							filteredMerchantPubkeys.map((pubkey) => (
+								<div key={pubkey} data-testid="community-merchant-card">
+									<FeaturedUserCard userPubkey={pubkey} />
+								</div>
+							))
+						)}
+					</ItemGrid>
+				</section>
 			</div>
+		</div>
+	)
+}
+
+// Skeleton loading component for collections grid
+function CollectionSkeletons({ count = 12 }: { count?: number }) {
+	return (
+		<>
+			{Array.from({ length: count }).map((_, i) => (
+				<div key={i} className="flex flex-col gap-3" data-testid="community-collections-skeleton">
+					<Skeleton className="h-40 w-full rounded-lg" />
+					<Skeleton className="h-4 w-full" />
+					<Skeleton className="h-3 w-1/2" />
+				</div>
+			))}
+		</>
+	)
+}
+
+// Skeleton loading component for merchants grid
+function MerchantSkeletons({ count = 6 }: { count?: number }) {
+	return (
+		<>
+			{Array.from({ length: count }).map((_, i) => (
+				<div key={i} className="flex flex-col gap-3" data-testid="community-merchants-skeleton">
+					<Skeleton className="h-40 w-full rounded-lg" />
+					<Skeleton className="h-4 w-full" />
+					<Skeleton className="h-3 w-3/4" />
+				</div>
+			))}
+		</>
+	)
+}
+
+// Render error state for collections
+function CollectionsError({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+	if (!error) return null
+	return (
+		<div
+			className="col-span-full flex flex-col justify-center items-center gap-4 px-4 py-12 text-center"
+			data-testid="community-collections-error"
+		>
+			<h3 className="font-semibold text-lg">Unable to load collections</h3>
+			<p className="max-w-md text-muted-foreground">
+				{error instanceof Error ? error.message : 'There was a problem connecting to relays.'}
+			</p>
+			<Button variant="secondary" size="sm" onClick={onRetry} data-testid="community-collections-retry">
+				Retry
+			</Button>
+		</div>
+	)
+}
+
+// Render error state for merchants
+function MerchantsError({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+	if (!error) return null
+	return (
+		<div
+			className="col-span-full flex flex-col justify-center items-center gap-4 px-4 py-12 text-center"
+			data-testid="community-merchants-error"
+		>
+			<h3 className="font-semibold text-lg">Unable to load merchants</h3>
+			<p className="max-w-md text-muted-foreground">
+				{error instanceof Error ? error.message : 'There was a problem connecting to relays.'}
+			</p>
+			<Button variant="secondary" size="sm" onClick={onRetry} data-testid="community-merchants-retry">
+				Retry
+			</Button>
 		</div>
 	)
 }

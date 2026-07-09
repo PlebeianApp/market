@@ -22,6 +22,12 @@ import { v2 as nip44 } from 'nostr-tools/nip44'
 import WebSocket from 'ws'
 import { RELAY_URL } from '../test-config'
 
+interface SignerLoopOptions {
+	requireAuthForSecretless?: boolean
+	authUrl?: string
+	authAckDelayMs?: number
+}
+
 export class Nip46Mock {
 	/** Hex secret key of the "remote signer" user */
 	readonly sk: string
@@ -30,6 +36,7 @@ export class Nip46Mock {
 
 	private ws: WebSocket | null = null
 	private subId: string | null = null
+	private isClosed = false
 
 	// ─── Unified message dispatch ─────────────────────────────
 	// Single handler attached once — routes messages to the right callback.
@@ -94,10 +101,8 @@ export class Nip46Mock {
 			case 'EVENT':
 				if (msg[1] === this.subId) {
 					const event = msg[2]
-					if (this.eventHandler) {
-						this.eventHandler(event).catch((e) => {
-							console.error(`[NIP46-MOCK] Handler error:`, e)
-						})
+					if (this.eventHandler && !this.isClosed) {
+						void this.dispatchEventHandler(event)
 					} else {
 						// Buffer events that arrive before the handler is set
 						this.bufferedEvents.push(event)
@@ -141,9 +146,21 @@ export class Nip46Mock {
 		// Process any events that arrived before the handler was set
 		const buffered = this.bufferedEvents.splice(0)
 		for (const event of buffered) {
-			handler(event).catch((e) => {
-				console.error(`[NIP46-MOCK] Handler error (buffered):`, e)
-			})
+			void this.dispatchEventHandler(event)
+		}
+	}
+
+	private async dispatchEventHandler(event: any): Promise<void> {
+		if (this.isClosed || !this.eventHandler) {
+			return
+		}
+
+		try {
+			await this.eventHandler(event)
+		} catch (e) {
+			if (!this.isClosed) {
+				console.error(`[NIP46-MOCK] Handler error:`, e)
+			}
 		}
 	}
 
@@ -230,7 +247,7 @@ export class Nip46Mock {
 	 *
 	 * Returns a cleanup function.
 	 */
-	async startSignerLoop(relayUrl?: string): Promise<() => void> {
+	async startSignerLoop(relayUrl?: string, options: SignerLoopOptions = {}): Promise<() => void> {
 		await this.connectAndSubscribe(relayUrl || RELAY_URL)
 
 		this.setEventHandler(async (event) => {
@@ -238,7 +255,7 @@ export class Nip46Mock {
 			const msg = JSON.parse(decrypted)
 
 			if (msg.method) {
-				await this.handleSignerRequest(event.pubkey, msg)
+				await this.handleSignerRequest(event.pubkey, msg, options)
 			}
 		})
 
@@ -247,11 +264,19 @@ export class Nip46Mock {
 
 	// ─── Internals ─────────────────────────────────────────────
 
-	private async handleSignerRequest(senderPubkey: string, request: any): Promise<void> {
+	private async handleSignerRequest(senderPubkey: string, request: any, options: SignerLoopOptions = {}): Promise<void> {
 		let response: any
 
 		switch (request.method) {
 			case 'connect':
+				if (options.requireAuthForSecretless && !request.params?.[1]) {
+					await this.sendEncrypted(senderPubkey, {
+						id: request.id,
+						result: 'auth_url',
+						error: options.authUrl || 'https://signer.test/approve',
+					})
+					await new Promise((resolve) => setTimeout(resolve, options.authAckDelayMs ?? 250))
+				}
 				response = { id: request.id, result: 'ack' }
 				break
 
@@ -320,6 +345,8 @@ export class Nip46Mock {
 	}
 
 	close(): void {
+		this.isClosed = true
+
 		if (this.ws && this.subId) {
 			try {
 				if (this.ws.readyState === WebSocket.OPEN) {

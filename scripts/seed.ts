@@ -48,8 +48,6 @@ import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { NDKCashuWallet } from '@nostr-dev-kit/wallet'
 
-config()
-
 // Force local relay only mode to prevent connecting to public relays during seeding
 // This must be set before ndkActions.initialize() is called
 // @ts-ignore - Bun.env is available in Bun runtime

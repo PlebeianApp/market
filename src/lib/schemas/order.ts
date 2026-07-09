@@ -24,6 +24,9 @@ export const ORDER_STATUS = {
 	CANCELLED: 'cancelled',
 } as const
 
+// Export explicit enum values type
+export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS]
+
 // Shipping status values
 export const SHIPPING_STATUS = {
 	PROCESSING: 'processing',
@@ -31,6 +34,9 @@ export const SHIPPING_STATUS = {
 	DELIVERED: 'delivered',
 	EXCEPTION: 'exception',
 } as const
+
+// Export explicit enum values type
+export type ShippingStatus = (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS]
 
 // ===============================
 // 1. Order Creation (Kind: 16, type: 1)
@@ -141,18 +147,19 @@ export const PaymentRequestSchema = z.object({
 		)
 		.refine(
 			(tags) => {
-				// Verify required tags are present
+				// Verify required tags are present. Payment method tags are optional for
+				// pending/manual payment setup where a seller or V4V recipient has not
+				// configured payment details yet.
 				return (
 					tags.some((tag) => tag[0] === 'p') &&
 					tags.some((tag) => tag[0] === 'subject') &&
 					tags.some((tag) => tag[0] === 'type' && tag[1] === ORDER_MESSAGE_TYPE.PAYMENT_REQUEST) &&
 					tags.some((tag) => tag[0] === 'order') &&
-					tags.some((tag) => tag[0] === 'amount') &&
-					tags.some((tag) => tag[0] === 'payment')
+					tags.some((tag) => tag[0] === 'amount')
 				)
 			},
 			{
-				message: 'Missing required tags: p, subject, type, order, amount, payment',
+				message: 'Missing required tags: p, subject, type, order, amount',
 			},
 		),
 })
