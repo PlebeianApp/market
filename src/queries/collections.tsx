@@ -317,9 +317,11 @@ const useCollectionsSubscription = (queryKey: readonly unknown[], filter?: NDKFi
 
 		subscription.on('event', (event) => {
 			const eventTime = event.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
+			// Always invalidate queries for real-time updates after EOSE
+			if (receivedEose) {
 				void queryClient.invalidateQueries({ queryKey })
 			}
+			// Track latest event time for potential future optimizations
 			if (eventTime > latestEventTime) {
 				latestEventTime = eventTime
 			}
@@ -327,6 +329,8 @@ const useCollectionsSubscription = (queryKey: readonly unknown[], filter?: NDKFi
 
 		subscription.on('eose', () => {
 			receivedEose = true
+			// Invalidate queries one final time to ensure we have all initial data
+			void queryClient.invalidateQueries({ queryKey })
 		})
 
 		return () => {
@@ -360,9 +364,11 @@ const useCollectionsByPubkeySubscription = (pubkey: string, queryKey: readonly u
 
 		subscription.on('event', (event) => {
 			const eventTime = event.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
+			// Always invalidate queries for real-time updates after EOSE
+			if (receivedEose) {
 				void queryClient.invalidateQueries({ queryKey })
 			}
+			// Track latest event time for potential future optimizations
 			if (eventTime > latestEventTime) {
 				latestEventTime = eventTime
 			}
@@ -370,6 +376,8 @@ const useCollectionsByPubkeySubscription = (pubkey: string, queryKey: readonly u
 
 		subscription.on('eose', () => {
 			receivedEose = true
+			// Invalidate queries one final time to ensure we have all initial data
+			void queryClient.invalidateQueries({ queryKey })
 		})
 
 		return () => {
