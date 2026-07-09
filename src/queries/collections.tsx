@@ -2,9 +2,8 @@ import { CollectionImageTagSchema, CollectionSummaryTagSchema, CollectionTitleTa
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKKind } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
-import { useEffect } from 'react'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
@@ -290,96 +289,6 @@ export const getCollectionCoordinates = (event: NDKEvent): string => {
 
 // --- REACT QUERY OPTIONS ---
 
-// --- REAL-TIME SUBSCRIPTIONS ---
-
-const useCollectionsSubscription = (queryKey: readonly unknown[], filter?: NDKFilter) => {
-	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-
-	useEffect(() => {
-		if (!ndk) return
-
-		let latestEventTime = 0
-		let receivedEose = false
-
-		const subscription = ndk.subscribe(
-			{
-				...filter,
-				kinds: [30405 as NDKKind], // Collections
-				limit: filter?.limit ?? 50,
-			},
-			{
-				closeOnEose: false,
-				relaySet: ndkActions.getRelaySet(),
-				exclusiveRelay: true, // Reject stale copies from other relays in the pool
-			},
-		)
-
-		subscription.on('event', (event) => {
-			const eventTime = event.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
-				void queryClient.invalidateQueries({ queryKey })
-			}
-			if (eventTime > latestEventTime) {
-				latestEventTime = eventTime
-			}
-		})
-
-		subscription.on('eose', () => {
-			receivedEose = true
-		})
-
-		return () => {
-			subscription.stop()
-		}
-	}, [ndk, queryClient, queryKey, filter])
-}
-
-const useCollectionsByPubkeySubscription = (pubkey: string, queryKey: readonly unknown[]) => {
-	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-
-	useEffect(() => {
-		if (!pubkey || !ndk) return
-
-		let latestEventTime = 0
-		let receivedEose = false
-
-		const subscription = ndk.subscribe(
-			{
-				kinds: [30405 as NDKKind], // Collections
-				authors: [pubkey],
-				limit: 50,
-			},
-			{
-				closeOnEose: false,
-				relaySet: ndkActions.getRelaySet(),
-				exclusiveRelay: true, // Reject stale copies from other relays in the pool
-			},
-		)
-
-		subscription.on('event', (event) => {
-			const eventTime = event.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
-				void queryClient.invalidateQueries({ queryKey })
-			}
-			if (eventTime > latestEventTime) {
-				latestEventTime = eventTime
-			}
-		})
-
-		subscription.on('eose', () => {
-			receivedEose = true
-		})
-
-		return () => {
-			subscription.stop()
-		}
-	}, [pubkey, ndk, queryClient, queryKey])
-}
-
-// --- REACT QUERY OPTIONS ---
-
 export const collectionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: collectionKeys.details(id),
@@ -419,7 +328,7 @@ export const collectionByATagQueryOptions = (pubkey: string, dTag: string) =>
 export const collectionsQueryOptions = queryOptions({
 	queryKey: collectionsKeys.all,
 	queryFn: fetchCollections,
-	retry: (failureCount: number) => !hasCommunityQueryFixture('collections') && failureCount < 3,
+	retry: (failureCount) => !hasCommunityQueryFixture('collections') && failureCount < 3,
 	staleTime: 30000, // Consider fresh for 30 seconds
 	refetchOnMount: 'always', // Always refetch to pick up deletions
 })
@@ -438,26 +347,11 @@ export const collectionsByPubkeyQueryOptions = (pubkey: string) =>
 // --- HOOKS ---
 
 /**
- * Hook to get all collections with real-time updates
- */
-export const useCollections = () => {
-	const queryKey = collectionsKeys.all
-	useCollectionsSubscription(queryKey)
-	
-	return useQuery({
-		...collectionsQueryOptions,
-	})
-}
-
-/**
- * Hook to get collections by pubkey with real-time updates
+ * Hook to get collections by pubkey
  * @param pubkey User's pubkey
  * @returns Query result with an array of collection events
  */
 export const useCollectionsByPubkey = (pubkey: string) => {
-	const queryKey = collectionsKeys.byPubkey(pubkey)
-	useCollectionsByPubkeySubscription(pubkey, queryKey)
-	
 	return useQuery({
 		...collectionsByPubkeyQueryOptions(pubkey),
 	})
