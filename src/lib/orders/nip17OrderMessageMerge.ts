@@ -148,12 +148,7 @@ function hasItemTag(event: Event): boolean {
 function hasPaymentProofTag(event: Event): boolean {
 	return event.tags.some(
 		(tag) =>
-			tag[0] === 'payment' &&
-			isPaymentMedium(tag[1]) &&
-			typeof tag[2] === 'string' &&
-			tag[2].length > 0 &&
-			typeof tag[3] === 'string' &&
-			tag[3].length > 0,
+			tag[0] === 'payment' && isPaymentMedium(tag[1]) && typeof tag[2] === 'string' && tag[2].length > 0 && typeof tag[3] === 'string',
 	)
 }
 

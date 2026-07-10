@@ -363,6 +363,31 @@ describe('mergeOrderMessages', () => {
 		expect(records[0]?.direction).toBe('received')
 	})
 
+	test('preserves legacy payment receipts with empty proof fields', () => {
+		const receipt = signedLegacyEvent({
+			kind: PAYMENT_RECEIPT_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Payment confirmation',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-receipt'],
+				['order', 'legacy-receipt-empty-proof'],
+				['payment', 'lightning', 'lnbc-test', ''],
+				['amount', '1000'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [receipt],
+			nip17Messages: [],
+			activeUserPubkey: sellerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${receipt.id}`])
+		expect(records[0]?.direction).toBe('received')
+	})
+
 	test('ignores legacy payment receipts without full payment proof tags', () => {
 		const receipt = signedLegacyEvent({
 			kind: PAYMENT_RECEIPT_KIND,
