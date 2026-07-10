@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
@@ -19,27 +20,28 @@ import {
 	getAuctionSettlementGrace,
 	getAuctionMaxEndAt,
 	getBidAmount,
+	getAuctionRootEventId,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
-import { Clock, CheckCircle, Ban, Truck, Package } from 'lucide-react'
-import { ORDER_STATUS } from '@/lib/schemas/order'
+import { Clock, CheckCircle, Ban, Truck, Package, Gavel, Trophy } from 'lucide-react'
+import { AuctionClaimDialog } from './AuctionClaimDialog'
 
 interface AuctionSettlementProps {
 	auction: NDKEvent
 	bids: NDKEvent[]
 	className?: string
-	onAction?: () => void
 }
 
-export function AuctionSettlement({ auction, bids, className, onAction }: AuctionSettlementProps) {
+export function AuctionSettlement({ auction, bids, className }: AuctionSettlementProps) {
 	const { user } = useStore(authStore)
 	const currentUserPubkey = user?.pubkey
+	const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false)
 
 	// Get auction identifiers
 	const auctionDTag = auction.tags.find((t) => t[0] === 'd')?.[1] || ''
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
-	const auctionRootEventId = auction.tags.find((t) => t[0] === 'auction_root_event_id')?.[1] || auction.id
+	const auctionRootEventId = getAuctionRootEventId(auction) || auction.id
 
 	// Fetch settlement-related data
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId, 10, auctionCoordinates)
@@ -130,7 +132,6 @@ export function AuctionSettlement({ auction, bids, className, onAction }: Auctio
 			toast.success('Path release published — seller can now redeem')
 			void result.pathReleaseEventId
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId) })
-			onAction?.()
 		} catch (err) {
 			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
 		} finally {
@@ -149,134 +150,235 @@ export function AuctionSettlement({ auction, bids, className, onAction }: Auctio
 				status: desiredStatus,
 				winningBidEventId: desiredStatus ? undefined : topBid?.id,
 			})
-			onAction?.()
 		} catch {
 			// Toast handled in mutation hook.
 		}
 	}
 
-	// Determine what to display
+	// Determine state and content
+	let state: {
+		icon: ReactElement | null
+		title: string
+		message: string
+		buttonTitle: string
+		buttonAction: (event: React.MouseEvent) => void
+		theme: string
+		showButton: boolean
+	} = {
+		icon: null,
+		title: '',
+		message: '',
+		buttonTitle: '',
+		buttonAction: () => {},
+		theme: 'default', // 'action', 'waiting', 'completed'
+		showButton: false,
+	}
+
 	if (latestSettlement) {
 		if (settlementStatus === 'settled') {
 			if (isWinner) {
 				if (hasClaimOrder) {
-					return (
-						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-							<CheckCircle className="w-4 h-4 text-green-600" />
-							<span>Order completed</span>
-						</div>
-					)
+					state = {
+						icon: <CheckCircle className="w-5 h-5 text-green-600" />,
+						title: 'Order Submitted',
+						message: 'Your shipping address has been submitted to the seller.',
+						buttonTitle: 'View Order',
+						buttonAction: () => console.log('Navigate to order'),
+						theme: 'completed',
+						showButton: true,
+					}
 				} else {
-					return (
-						<Button onClick={() => onAction?.()} className={className}>
-							Submit Shipping Address
-						</Button>
-					)
+					state = {
+						icon: <Truck className="w-5 h-5 text-amber-600" />,
+						title: 'Shipping Address Needed',
+						message: 'Submit your address for the seller to begin the shipping process.',
+						buttonTitle: 'Submit Shipping Address',
+						buttonAction: () => setIsClaimDialogOpen(true),
+						theme: 'action',
+						showButton: true,
+					}
 				}
 			} else if (isSeller) {
 				if (hasClaimOrder) {
-					return (
-						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-							<Clock className="w-4 h-4 text-yellow-600" />
-							<span>Awaiting shipping details from winner</span>
-						</div>
-					)
+					state = {
+						icon: <Clock className="w-5 h-5 text-blue-600" />,
+						title: 'Awaiting Shipment',
+						message: 'Waiting for you to process and ship the item to the winner.',
+						buttonTitle: '',
+						buttonAction: () => {},
+						theme: 'waiting',
+						showButton: false,
+					}
 				} else {
-					return (
-						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-							<Clock className="w-4 h-4 text-yellow-600" />
-							<span>Awaiting action from winner</span>
-						</div>
-					)
+					state = {
+						icon: <Clock className="w-5 h-5 text-blue-600" />,
+						title: 'Awaiting Action',
+						message: 'Awaiting shipping details from winner.',
+						buttonTitle: '',
+						buttonAction: () => {},
+						theme: 'waiting',
+						showButton: false,
+					}
 				}
 			}
 		} else if (settlementStatus === 'reserve_not_met') {
 			// Check if refund is ready
 			if (now >= settlementLocktimeAt && settlementLocktimeAt > 0) {
-				return (
-					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-						<CheckCircle className="w-4 h-4 text-green-600" />
-						<span>Refund ready to claim</span>
-					</div>
-				)
+				state = {
+					icon: <CheckCircle className="w-5 h-5 text-green-600" />,
+					title: 'Refund Ready',
+					message: 'You can now claim your refund.',
+					buttonTitle: 'Claim Refund',
+					buttonAction: () => console.log('Claim refund'),
+					theme: 'completed',
+					showButton: true,
+				}
 			} else {
-				return (
-					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-						<Clock className="w-4 h-4 text-yellow-600" />
-						<span>Refund pending</span>
-					</div>
-				)
+				state = {
+					icon: <Clock className="w-5 h-5 text-blue-600" />,
+					title: 'Refund Pending',
+					message: 'Refund window opens soon.',
+					buttonTitle: '',
+					buttonAction: () => {},
+					theme: 'waiting',
+					showButton: false,
+				}
 			}
 		}
 	}
 
 	// If auction hasn't ended yet
-	if (!ended) {
+	if (!ended && state.theme === 'default') {
 		return null
 	}
 
 	// If settlement window has expired
-	if (settlementWindowExpired) {
-		return (
-			<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-				<Ban className="w-4 h-4 text-red-600" />
-				<span>Settlement window expired</span>
-			</div>
-		)
+	if (settlementWindowExpired && state.theme === 'default') {
+		state = {
+			icon: <Ban className="w-5 h-5 text-red-600" />,
+			title: 'Settlement Expired',
+			message: 'Settlement window has passed.',
+			buttonTitle: '',
+			buttonAction: () => {},
+			theme: 'completed',
+			showButton: false,
+		}
 	}
 
 	// Seller perspective
-	if (isSeller) {
+	if (isSeller && state.theme === 'default') {
 		if (hasPathReleaseForTopBid && !latestSettlement) {
-			return (
-				<Button onClick={() => void handleSubmitSettlement()} disabled={settlementMutation.isPending} className={className}>
-					{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
-				</Button>
-			)
+			state = {
+				icon: <Gavel className="w-5 h-5 text-amber-600" />,
+				title: 'Settlement Ready',
+				message: 'Complete settlement by publishing the settlement event.',
+				buttonTitle: 'Publish Settlement',
+				buttonAction: () => void handleSubmitSettlement(),
+				theme: 'action',
+				showButton: true,
+			}
 		} else if (!hasPathReleaseForTopBid) {
-			return (
-				<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-					<Clock className="w-4 h-4 text-yellow-600" />
-					<span>Awaiting path release from winner</span>
-				</div>
-			)
+			state = {
+				icon: <Clock className="w-5 h-5 text-blue-600" />,
+				title: 'Awaiting Path Release',
+				message: 'Waiting for the winning bidder to release their path.',
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'waiting',
+				showButton: false,
+			}
 		}
 	}
 
 	// Bidder perspective
-	if (!isSeller && currentUserPubkey) {
+	if (!isSeller && currentUserPubkey && state.theme === 'default') {
 		if (isMyBidTop) {
 			if (myAlreadyReleased) {
-				return (
-					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-						<Clock className="w-4 h-4 text-yellow-600" />
-						<span>Awaiting settlement from seller</span>
-					</div>
-				)
+				state = {
+					icon: <Clock className="w-5 h-5 text-blue-600" />,
+					title: 'Awaiting Settlement',
+					message: 'Waiting for seller to complete settlement.',
+					buttonTitle: '',
+					buttonAction: () => {},
+					theme: 'waiting',
+					showButton: false,
+				}
 			} else if (!myBidderRecord) {
-				return (
-					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-						<Ban className="w-4 h-4 text-red-600" />
-						<span>Local bidder record missing</span>
-					</div>
-				)
+				state = {
+					icon: <Ban className="w-5 h-5 text-red-600" />,
+					title: 'Local Record Missing',
+					message: 'Cannot release path from this device. The bid was placed elsewhere.',
+					buttonTitle: '',
+					buttonAction: () => {},
+					theme: 'completed',
+					showButton: false,
+				}
 			} else {
-				return (
-					<Button onClick={() => void handleReleasePath()} disabled={isReleasing} className={className}>
-						{isReleasing ? 'Releasing…' : 'Release Path & Settle'}
-					</Button>
-				)
+				state = {
+					icon: <Package className="w-5 h-5 text-amber-600" />,
+					title: 'Settlement Pending',
+					message: 'Release your path to complete settlement.',
+					buttonTitle: 'Release Path',
+					buttonAction: () => void handleReleasePath(),
+					theme: 'action',
+					showButton: true,
+				}
 			}
 		} else if (isWinner) {
-			return (
-				<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
-					<Clock className="w-4 h-4 text-yellow-600" />
-					<span>Awaiting action from seller</span>
-				</div>
-			)
+			state = {
+				icon: <Clock className="w-5 h-5 text-blue-600" />,
+				title: 'Awaiting Action',
+				message: 'Awaiting action from seller.',
+				buttonTitle: '',
+				buttonAction: () => {},
+				theme: 'waiting',
+				showButton: false,
+			}
 		}
 	}
 
 	// Default state
-	return null
+	if (state.theme === 'default') {
+		return null
+	}
+
+	// Theme classes
+	const themeClasses = {
+		action: 'border-amber-200 bg-amber-50',
+		waiting: 'border-blue-200 bg-blue-50',
+		completed: 'border-green-200 bg-green-50',
+		default: '',
+	}
+
+	return (
+		<>
+			<Card className={cn('p-4', themeClasses[state.theme as keyof typeof themeClasses], className)}>
+				<div className="flex items-start gap-3">
+					<div className="mt-0.5">{state.icon}</div>
+					<div className="flex-1">
+						<h3 className="font-semibold text-foreground">{state.title}</h3>
+						<p className="text-sm text-muted-foreground mt-1">{state.message}</p>
+						{state.showButton && (
+							<Button onClick={state.buttonAction} disabled={isReleasing || settlementMutation.isPending} className="mt-3" size="sm">
+								{isReleasing || settlementMutation.isPending ? 'Processing...' : state.buttonTitle}
+							</Button>
+						)}
+					</div>
+				</div>
+			</Card>
+
+			{/* Shipping Address Dialog */}
+			{isWinner && latestSettlement && auction && (
+				<AuctionClaimDialog
+					open={isClaimDialogOpen}
+					onOpenChange={setIsClaimDialogOpen}
+					auctionEventId={auctionRootEventId}
+					auctionCoordinates={auctionCoordinates}
+					settlementEventId={latestSettlement.id}
+					sellerPubkey={auction.pubkey}
+					finalAmount={settlementFinalAmount}
+				/>
+			)}
+		</>
+	)
 }
