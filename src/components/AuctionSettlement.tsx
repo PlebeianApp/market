@@ -26,6 +26,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { Clock, CheckCircle, Ban, Truck, Package, Gavel, Trophy } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
+import { useNavigate } from '@tanstack/react-router'
 
 interface AuctionSettlementProps {
 	auction: NDKEvent
@@ -37,6 +38,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const { user } = useStore(authStore)
 	const currentUserPubkey = user?.pubkey
 	const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false)
+	const navigate = useNavigate()
 
 	// Get auction identifiers
 	const auctionDTag = auction.tags.find((t) => t[0] === 'd')?.[1] || ''
@@ -206,12 +208,17 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	// Winner banner - shown to the auction winner after settlement
 	else if (isWinner && settlementStatus === 'settled') {
 		if (hasClaimOrder) {
+			const orderId = claimOrders.at(0)?.id
+			const action = orderId
+				? () => navigate({ to: `/dashboard/orders/${claimOrders.at(0)?.id}` })
+				: () => toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
+
 			state = {
 				icon: <CheckCircle className="w-5 h-5 text-emerald-300" />,
 				title: 'You won this auction!',
 				message: `Shipping details submitted — awaiting seller. Final price: ${settlementFinalAmount.toLocaleString()} sats`,
 				buttonTitle: 'View Order',
-				buttonAction: () => console.log('Navigate to order'),
+				buttonAction: action,
 				theme: 'completed',
 				showButton: true,
 				bidAmount: settlementFinalAmount,
@@ -232,12 +239,17 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	// Seller side - check if winner has submitted shipping details
 	else if (isSeller && settlementStatus === 'settled' && settlementWinner) {
 		if (hasClaimOrder) {
+			const orderId = claimOrders.at(0)?.id
+			const action = orderId
+				? () => navigate({ to: `/dashboard/orders/${claimOrders.at(0)?.id}` })
+				: () => toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
+
 			state = {
 				icon: <Truck className="w-5 h-5 text-emerald-300" />,
 				title: 'Order Received',
 				message: 'Winner has submitted shipping details. Process and ship the item.',
 				buttonTitle: 'View Order',
-				buttonAction: () => console.log('Navigate to order'),
+				buttonAction: action,
 				theme: 'completed',
 				showButton: true,
 				bidAmount: 0,
