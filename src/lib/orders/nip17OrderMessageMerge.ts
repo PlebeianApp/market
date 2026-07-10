@@ -91,7 +91,11 @@ function isValidLegacyOrderMessageEvent(event: Event): event is Event & { kind: 
 		sig: event.sig,
 	}
 
-	if (!verifyEvent(eventForVerification)) return false
+	try {
+		if (!verifyEvent(eventForVerification)) return false
+	} catch {
+		return false
+	}
 
 	return hasLegacyOrderMessageShape(eventForVerification)
 }

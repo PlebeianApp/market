@@ -597,6 +597,20 @@ describe('mergeOrderMessages', () => {
 		expect(records).toEqual([])
 	})
 
+	test('ignores malformed legacy events that throw during verification', () => {
+		const malformed = {
+			...legacyOrderCreationEvent('order-malformed-verify-throw', 100),
+			tags: undefined as unknown as string[][],
+		}
+
+		const records = mergeOrderMessages({
+			legacyEvents: [malformed],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
 	test('ignores legacy events with invalid signatures', () => {
 		const valid = legacyOrderCreationEvent('order-invalid-signature', 100)
 		const tampered = {
