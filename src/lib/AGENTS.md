@@ -26,6 +26,10 @@ shared types.
   new shared abstractions.
 - Keep low-level helpers side-effect-light unless their name and tests make the
   side effect obvious.
+- `src/lib/orders/nip17OrderMessageMerge.ts` is a read-side migration helper for
+  building combined order timelines from legacy raw order events and
+  already-unwrapped NIP-17 order messages. Do not treat it as a publish,
+  signing, unwrap, relay I/O, or required order-read boundary.
 - For payment changes, preserve lifecycle distinctions such as attempted,
   acknowledged, settled/proven, receipt published, merchant confirmed, failed,
   refunded, and fulfilled.

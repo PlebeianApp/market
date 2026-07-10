@@ -1,10 +1,10 @@
 import { verifyEvent, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '../schemas/order'
 import type { UnwrappedNip17OrderMessage } from './nip17OrderRead'
 
 export type OrderMessageTransport = 'legacy-raw' | 'nip17'
 export type OrderMessageDirection = 'sent' | 'received' | 'unknown'
-export type OrderMessageKind = typeof ORDER_GENERAL_KIND | typeof ORDER_PROCESS_KIND | typeof PAYMENT_RECEIPT_KIND
+export type OrderMessageKind = 14 | 16 | 17
 
 export type MergedOrderMessageRecord = {
 	transport: OrderMessageTransport
@@ -120,8 +120,9 @@ function hasLegacyOrderProcessShape(event: Event): boolean {
 		case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
 			return hasNonEmptyTag(event, 'amount')
 		case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
-		case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
 			return hasNonEmptyTag(event, 'status')
+		case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+			return hasKnownShippingStatusTag(event)
 		default:
 			return false
 	}
@@ -142,6 +143,19 @@ function hasPaymentProofTag(event: Event): boolean {
 			tag[2].length > 0 &&
 			typeof tag[3] === 'string' &&
 			tag[3].length > 0,
+	)
+}
+
+function hasKnownShippingStatusTag(event: Event): boolean {
+	return event.tags.some((tag) => tag[0] === 'status' && isShippingStatus(tag[1]))
+}
+
+function isShippingStatus(value: unknown): value is (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS] {
+	return (
+		value === SHIPPING_STATUS.PROCESSING ||
+		value === SHIPPING_STATUS.SHIPPED ||
+		value === SHIPPING_STATUS.DELIVERED ||
+		value === SHIPPING_STATUS.EXCEPTION
 	)
 }
 

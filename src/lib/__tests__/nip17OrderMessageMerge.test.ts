@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '../schemas/order'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '../schemas/order'
 import { mergeOrderMessages, type MergedOrderMessageRecord } from '../orders/nip17OrderMessageMerge'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
 import {
@@ -374,6 +374,99 @@ describe('mergeOrderMessages', () => {
 		const records = mergeOrderMessages({
 			legacyEvents: [receipt],
 			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('preserves legacy shipping updates with known status tags', () => {
+		const shipping = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Shipping update',
+			tags: [
+				['p', buyerPubkey],
+				['subject', 'shipping-info'],
+				['type', ORDER_MESSAGE_TYPE.SHIPPING_UPDATE],
+				['order', 'legacy-shipping-valid-status'],
+				['status', SHIPPING_STATUS.SHIPPED],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [shipping],
+			nip17Messages: [],
+			activeUserPubkey: buyerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${shipping.id}`])
+		expect(records[0]?.direction).toBe('received')
+	})
+
+	test('ignores legacy shipping updates with unknown status tags', () => {
+		const shipping = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Shipping update',
+			tags: [
+				['p', buyerPubkey],
+				['subject', 'shipping-info'],
+				['type', ORDER_MESSAGE_TYPE.SHIPPING_UPDATE],
+				['order', 'legacy-shipping-invalid-status'],
+				['status', 'teleported'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [shipping],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('ignores legacy payment requests missing amount tags', () => {
+		const paymentRequest = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Payment request for your order',
+			tags: [
+				['p', buyerPubkey],
+				['recipient', sellerPubkey],
+				['subject', 'order-payment'],
+				['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
+				['order', 'legacy-payment-request-missing-amount'],
+				['payment', 'lightning', 'lnbc-test'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [paymentRequest],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('ignores NIP-17 messages with non-order rumor kinds', () => {
+		const unsignedReaction = {
+			kind: 7,
+			pubkey: buyerPubkey,
+			created_at: 100,
+			tags: [],
+			content: '+',
+		}
+		const reactionRumor: OrderMessageRumor = {
+			...unsignedReaction,
+			id: getEventHash(unsignedReaction),
+		}
+
+		const records = mergeOrderMessages({
+			legacyEvents: [],
+			nip17Messages: [nip17Message(reactionRumor)],
 		})
 
 		expect(records).toEqual([])
