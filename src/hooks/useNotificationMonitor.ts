@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND, parseLiveActivity } from '@/lib/nip53'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {
@@ -23,6 +23,7 @@ import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
 const AUCTION_LIFECYCLE_POLL_INTERVAL_MS = 60000
+const SUBSCRIPTION_LOOKBACK_SECONDS = 300
 const IGNORED_AUCTION_BID_STATUSES = new Set(['cancelled', 'canceled', 'rejected', 'failed', 'expired', 'refunded', 'reclaimed', 'claimed'])
 const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]
 const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]
@@ -270,6 +271,7 @@ const fetchSellerAuctionCommentEvents = async ({
 export const useNotificationMonitor = () => {
 	const { user } = useStore(authStore)
 	const { isInitialized } = useStore(notificationStore)
+	const ndk = useStore(ndkStore, (state) => state.ndk)
 	const subscriptionsRef = useRef<NDKSubscription[]>([])
 	const isMonitoringRef = useRef(false)
 
@@ -279,11 +281,12 @@ export const useNotificationMonitor = () => {
 			return
 		}
 
-		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 
 		let isCancelled = false
-		const subscriptionSince = Math.floor(Date.now() / 1000)
+		// Nostr events use publisher-provided timestamps, so a small lookback avoids
+		// missing fresh events when peer clocks drift behind local time.
+		const subscriptionSince = Math.max(0, Math.floor(Date.now() / 1000) - SUBSCRIPTION_LOOKBACK_SECONDS)
 		const seenAuctionEventIds = new Set<string>()
 		const seenAuctionCommentEventIds = new Set<string>()
 		const seenAuctionEventCommentIds = new Set<string>()
@@ -923,5 +926,5 @@ export const useNotificationMonitor = () => {
 			subscriptionsRef.current = []
 			isMonitoringRef.current = false
 		}
-	}, [user?.pubkey, isInitialized])
+	}, [user?.pubkey, isInitialized, ndk])
 }
