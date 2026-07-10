@@ -1087,18 +1087,6 @@ function AuctionDetailRoute() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
-
-			{isWinner && latestSettlement && auction && (
-				<AuctionClaimDialog
-					open={claimDialogOpen}
-					onOpenChange={setClaimDialogOpen}
-					auctionEventId={auctionRootEventId || auction.id}
-					auctionCoordinates={auctionCoordinates}
-					settlementEventId={latestSettlement.id}
-					sellerPubkey={auction.pubkey}
-					finalAmount={settlementFinalAmount}
-				/>
-			)}
 		</div>
 	)
 }

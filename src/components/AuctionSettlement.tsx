@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { authStore } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
@@ -23,6 +22,8 @@ import {
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
+import { Clock, CheckCircle, Ban, Truck, Package } from 'lucide-react'
+import { ORDER_STATUS } from '@/lib/schemas/order'
 
 interface AuctionSettlementProps {
 	auction: NDKEvent
@@ -113,161 +114,6 @@ export function AuctionSettlement({ auction, bids, className, onAction }: Auctio
 	}, [pathReleases, myTopBidEvent])
 	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
 
-	// Determine settlement state
-	const settlementState = useMemo(() => {
-		// Check if settlement is already published
-		if (latestSettlement) {
-			if (settlementStatus === 'settled') {
-				if (isWinner) {
-					if (hasClaimOrder) {
-						return {
-							step: 'order_tracking',
-							label: 'Order Submitted',
-							description: 'Your shipping address has been submitted',
-							action: 'View Order',
-							variant: 'success',
-						}
-					} else {
-						return {
-							step: 'shipping_address_needed',
-							label: 'Submit Shipping Address',
-							description: 'Please submit your shipping address to proceed',
-							action: 'Submit Address',
-							variant: 'info',
-						}
-					}
-				} else if (isSeller) {
-					return {
-						step: 'shipping_address_needed',
-						label: 'Shipping Address Needed',
-						description: 'Winner needs to submit shipping address',
-						action: null,
-						variant: 'info',
-					}
-				}
-			} else if (settlementStatus === 'reserve_not_met') {
-				// Check if refund is ready
-				if (now >= settlementLocktimeAt && settlementLocktimeAt > 0) {
-					return {
-						step: 'refund_ready',
-						label: 'Refund Ready',
-						description: 'You can now claim your refund',
-						action: 'Claim Refund',
-						variant: 'success',
-					}
-				} else {
-					return {
-						step: 'refund_pending',
-						label: 'Refund Pending',
-						description: 'Refund window opens soon',
-						action: null,
-						variant: 'warning',
-					}
-				}
-			}
-		}
-
-		// If auction hasn't ended yet
-		if (!ended) {
-			return {
-				step: 'auction_active',
-				label: 'Auction Active',
-				description: 'Bidding is still open',
-				action: null,
-				variant: 'default',
-			}
-		}
-
-		// If settlement window has expired
-		if (settlementWindowExpired) {
-			return {
-				step: 'settlement_expired',
-				label: 'Settlement Expired',
-				description: 'Settlement window has passed',
-				action: null,
-				variant: 'destructive',
-			}
-		}
-
-		// Seller perspective
-		if (isSeller) {
-			if (hasPathReleaseForTopBid && !latestSettlement) {
-				return {
-					step: 'settlement_pending_seller',
-					label: 'Settlement Pending',
-					description: 'Please complete settlement by publishing settlement event',
-					action: 'Complete Settlement',
-					variant: 'warning',
-				}
-			} else if (!hasPathReleaseForTopBid) {
-				return {
-					step: 'settlement_pending_bidder',
-					label: 'Settlement Pending from Bidder',
-					description: 'Waiting for the winning bidder to release their path',
-					action: null,
-					variant: 'warning',
-				}
-			}
-		}
-
-		// Bidder perspective
-		if (!isSeller && currentUserPubkey) {
-			if (isMyBidTop) {
-				if (myAlreadyReleased) {
-					return {
-						step: 'settlement_pending_seller',
-						label: 'Settlement Pending from Seller',
-						description: 'Waiting for seller to complete settlement',
-						action: null,
-						variant: 'warning',
-					}
-				} else if (!myBidderRecord) {
-					return {
-						step: 'local_record_missing',
-						label: 'Local Bidder Record Missing',
-						description: 'Cannot release path from this device',
-						action: null,
-						variant: 'destructive',
-					}
-				} else {
-					return {
-						step: 'settlement_pending_bidder',
-						label: 'Settlement Pending',
-						description: 'Please release your path to complete settlement',
-						action: 'Release Path',
-						variant: 'warning',
-					}
-				}
-			}
-		}
-
-		// Default state
-		return {
-			step: 'settlement_pending_unknown',
-			label: 'Settlement Pending',
-			description: 'Waiting for settlement to be completed',
-			action: null,
-			variant: 'default',
-		}
-	}, [
-		latestSettlement,
-		settlementStatus,
-		isWinner,
-		hasClaimOrder,
-		isSeller,
-		hasPathReleaseForTopBid,
-		ended,
-		settlementWindowExpired,
-		isMyBidTop,
-		myAlreadyReleased,
-		myBidderRecord,
-		currentUserPubkey,
-		now,
-		settlementLocktimeAt,
-	])
-
-	console.log(settlementState)
-
 	// Handle actions
 	const queryClient = useQueryClient()
 	const settlementMutation = usePublishAuctionSettlementMutation()
@@ -309,49 +155,128 @@ export function AuctionSettlement({ auction, bids, className, onAction }: Auctio
 		}
 	}
 
-	// Don't show anything if there's no settlement state to display
-	if (settlementState.step === 'auction_active' || settlementState.step === 'settlement_pending_unknown') {
+	// Determine what to display
+	if (latestSettlement) {
+		if (settlementStatus === 'settled') {
+			if (isWinner) {
+				if (hasClaimOrder) {
+					return (
+						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+							<CheckCircle className="w-4 h-4 text-green-600" />
+							<span>Order completed</span>
+						</div>
+					)
+				} else {
+					return (
+						<Button onClick={() => onAction?.()} className={className}>
+							Submit Shipping Address
+						</Button>
+					)
+				}
+			} else if (isSeller) {
+				if (hasClaimOrder) {
+					return (
+						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+							<Clock className="w-4 h-4 text-yellow-600" />
+							<span>Awaiting shipping details from winner</span>
+						</div>
+					)
+				} else {
+					return (
+						<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+							<Clock className="w-4 h-4 text-yellow-600" />
+							<span>Awaiting action from winner</span>
+						</div>
+					)
+				}
+			}
+		} else if (settlementStatus === 'reserve_not_met') {
+			// Check if refund is ready
+			if (now >= settlementLocktimeAt && settlementLocktimeAt > 0) {
+				return (
+					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+						<CheckCircle className="w-4 h-4 text-green-600" />
+						<span>Refund ready to claim</span>
+					</div>
+				)
+			} else {
+				return (
+					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+						<Clock className="w-4 h-4 text-yellow-600" />
+						<span>Refund pending</span>
+					</div>
+				)
+			}
+		}
+	}
+
+	// If auction hasn't ended yet
+	if (!ended) {
 		return null
 	}
 
-	// Render the settlement status button
-	return (
-		<div className={cn('w-full mb-2', className)}>
-			<Button
-				variant={settlementState.variant === 'warning' ? 'destructive' : settlementState.variant === 'success' ? 'default' : 'secondary'}
-				className={cn(
-					'w-full py-2 px-3 text-sm font-medium justify-between',
-					settlementState.variant === 'warning' && 'bg-pink-500 hover:bg-pink-600 text-white',
-					settlementState.variant === 'success' && 'bg-emerald-500 hover:bg-emerald-600 text-white',
-					settlementState.variant === 'info' && 'bg-blue-500 hover:bg-blue-600 text-white',
-					settlementState.variant === 'destructive' && 'bg-red-500 hover:bg-red-600 text-white',
-				)}
-				onClick={() => {
-					if (settlementState.action === 'Release Path' && !isReleasing) {
-						void handleReleasePath()
-					} else if (settlementState.action === 'Complete Settlement') {
-						void handleSubmitSettlement()
-					} else if (settlementState.action) {
-						onAction?.()
-					}
-				}}
-				disabled={isReleasing}
-			>
-				<span className="flex items-center gap-2">
-					<span className="font-semibold">{settlementState.label}</span>
-					<span className="text-xs opacity-90">{settlementState.description}</span>
-				</span>
-				{settlementState.action && settlementState.action !== 'Release Path' && (
-					<Badge variant="outline" className="ml-2 text-xs bg-white/20 text-white border-white/30">
-						{settlementState.action}
-					</Badge>
-				)}
-				{settlementState.action === 'Release Path' && isReleasing && (
-					<Badge variant="outline" className="ml-2 text-xs bg-white/20 text-white border-white/30">
-						Releasing...
-					</Badge>
-				)}
-			</Button>
-		</div>
-	)
+	// If settlement window has expired
+	if (settlementWindowExpired) {
+		return (
+			<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+				<Ban className="w-4 h-4 text-red-600" />
+				<span>Settlement window expired</span>
+			</div>
+		)
+	}
+
+	// Seller perspective
+	if (isSeller) {
+		if (hasPathReleaseForTopBid && !latestSettlement) {
+			return (
+				<Button onClick={() => void handleSubmitSettlement()} disabled={settlementMutation.isPending} className={className}>
+					{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
+				</Button>
+			)
+		} else if (!hasPathReleaseForTopBid) {
+			return (
+				<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+					<Clock className="w-4 h-4 text-yellow-600" />
+					<span>Awaiting path release from winner</span>
+				</div>
+			)
+		}
+	}
+
+	// Bidder perspective
+	if (!isSeller && currentUserPubkey) {
+		if (isMyBidTop) {
+			if (myAlreadyReleased) {
+				return (
+					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+						<Clock className="w-4 h-4 text-yellow-600" />
+						<span>Awaiting settlement from seller</span>
+					</div>
+				)
+			} else if (!myBidderRecord) {
+				return (
+					<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+						<Ban className="w-4 h-4 text-red-600" />
+						<span>Local bidder record missing</span>
+					</div>
+				)
+			} else {
+				return (
+					<Button onClick={() => void handleReleasePath()} disabled={isReleasing} className={className}>
+						{isReleasing ? 'Releasing…' : 'Release Path & Settle'}
+					</Button>
+				)
+			}
+		} else if (isWinner) {
+			return (
+				<div className={cn('flex items-center gap-2 text-sm text-muted-foreground flex-wrap', className)}>
+					<Clock className="w-4 h-4 text-yellow-600" />
+					<span>Awaiting action from seller</span>
+				</div>
+			)
+		}
+	}
+
+	// Default state
+	return null
 }
