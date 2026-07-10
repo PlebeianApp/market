@@ -79,6 +79,7 @@ import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
+import { AuctionSettlement } from '@/components/AuctionSettlement'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -750,6 +751,7 @@ function AuctionDetailRoute() {
 								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(biddingCutoffAt, false)}</span>}
 							</div>
 							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+							<AuctionSettlement auction={auction} bids={bids} className="mt-2" />
 						</div>
 					</div>
 				</div>
