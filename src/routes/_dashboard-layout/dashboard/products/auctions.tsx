@@ -48,7 +48,8 @@ type AuctionStatus = 'Scheduled' | 'Live' | 'Settlement' | 'Ended'
 
 function formatAuctionStatus(startAt: number, biddingCutoffAt: number, settlementLocked: boolean, now: number): AuctionStatus {
 	if (startAt > 0 && now < startAt) return 'Scheduled'
-	if (biddingCutoffAt > 0 && now >= biddingCutoffAt) return settlementLocked ? 'Ended' : 'Settlement'
+	if (settlementLocked) return 'Ended'
+	if (biddingCutoffAt > 0 && now >= biddingCutoffAt) return 'Settlement'
 	return 'Live'
 }
 
