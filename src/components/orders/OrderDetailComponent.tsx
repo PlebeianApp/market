@@ -530,16 +530,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</CardContent>
 				</Card>
 
-				{/* Buyer Information Card */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Buyer</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<UserCard pubkey={buyerPubkey} size="md" subtitle="nip-05" />
-					</CardContent>
-				</Card>
-
 				{canViewLegacyBuyerContact && deliveryContact && (
 					<Card>
 						<CardHeader>
