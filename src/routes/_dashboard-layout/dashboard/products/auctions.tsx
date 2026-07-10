@@ -162,7 +162,7 @@ function AuctionListItem({
 
 	const commentsQuery = useComments(auction)
 	const comments = commentsQuery.data ?? []
-	const newCommentsCount = comments.filter((comment) => comment.createdAt > lastSeenTimestamps.auctionEventComments).length
+	const newCommentsCount = comments.filter((comment) => comment.createdAt > notificationActions.getLastSeenAuctionEventComments()).length
 	const liveActivityQuery = useLiveActivity(auction)
 	const liveActivityCoord = liveActivityQuery.data?.coord ?? ''
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
