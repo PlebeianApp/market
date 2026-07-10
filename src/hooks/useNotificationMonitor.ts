@@ -6,7 +6,6 @@ import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND, parseLiveActivity } from '@/lib/nip
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
-import { toast } from 'sonner'
 import {
 	fetchAuctionBidsByBidder,
 	fetchAuctionsByPubkey,
