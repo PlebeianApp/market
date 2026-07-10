@@ -74,6 +74,12 @@ disable host key checking.
 
 Use this before any cleanup:
 
+A helper script is also available for the same read-only inventory:
+
+    scripts/ops/relay-disk-report.sh market-relay-staging
+
+The script requires a local SSH config alias and does not perform cleanup.
+
     ssh market-relay-staging '
     set -u
 
