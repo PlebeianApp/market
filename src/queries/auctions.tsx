@@ -714,6 +714,21 @@ export const getAuctionSettlementFinalAmount = (settlementEvent: NDKEvent | null
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
+export const getAuctionTopBidValid = (auction: NDKEvent | null, bids: NDKEvent[]) => {
+	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
+	if (validBids.length === 0) return null
+
+	return [...validBids]
+		.sort((a, b) => {
+			const amountDelta = getBidAmount(b) - getBidAmount(a)
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (a.created_at || 0) - (b.created_at || 0)
+			if (timeDelta !== 0) return timeDelta
+			return a.id.localeCompare(b.id)
+		})
+		.at(0)
+}
+
 export const isNSFWAuction = (event: NDKEvent | null): boolean => {
 	if (!event) return false
 	return event.tags.find((t) => t[0] === 'content-warning')?.[1] === 'nsfw'

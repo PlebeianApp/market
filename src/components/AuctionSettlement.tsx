@@ -21,6 +21,7 @@ import {
 	getAuctionMaxEndAt,
 	getBidAmount,
 	getAuctionRootEventId,
+	getAuctionTopBidValid,
 } from '@/queries/auctions'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { Clock, CheckCircle, Ban, Truck, Package, Gavel, Trophy } from 'lucide-react'
@@ -72,19 +73,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const ended = maxEndAt > 0 && now >= maxEndAt
 
 	// Get top bid info
-	const validBids = getAuctionWindowValidBids(auction, bids)
-	const topBid = useMemo(() => {
-		if (validBids.length === 0) return null
-		return [...validBids]
-			.sort((a, b) => {
-				const amountDelta = getBidAmount(b) - getBidAmount(a)
-				if (amountDelta !== 0) return amountDelta
-				const timeDelta = (b.created_at || 0) - (a.created_at || 0)
-				if (timeDelta !== 0) return timeDelta
-				return b.id.localeCompare(a.id)
-			})
-			.at(0)
-	}, [validBids])
+	const topBid = useMemo(() => getAuctionTopBidValid(auction, bids), [auction, bids])
 
 	const reserve = auction.tags.find((t) => t[0] === 'reserve')?.[1]
 		? parseInt(auction.tags.find((t) => t[0] === 'reserve')?.[1] || '0', 10)
