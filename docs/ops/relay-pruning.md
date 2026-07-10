@@ -47,8 +47,12 @@ These are safer first targets when disk is tight:
 - Docker volumes
 - Docker images
 - Docker build cache
+- Docker storage under `/var/lib/docker`
 - relay raw data
 - relay search index
+
+Do not manually delete files under `/var/lib/docker`. Use Docker-aware
+inspection and cleanup commands only after confirming what is unused.
 
 ## Read-Only Disk Inventory
 
@@ -74,6 +78,7 @@ Use this before any cleanup:
     set -u
 
     df -hT
+    df -i
 
     sudo du -xhd1 /var/lib 2>/dev/null | sort -h | tail -30 || true
     sudo du -sh \
@@ -88,6 +93,11 @@ Use this before any cleanup:
 
     docker system df || true
     sudo journalctl --disk-usage || true
+    if command -v lsof >/dev/null 2>&1; then
+      sudo lsof +L1 2>/dev/null | sort -k7 -n | tail -20 || true
+    else
+      echo "lsof not installed; skipping deleted-open-file check"
+    fi
     sudo systemctl status market-relay --no-pager || true
     '
 
@@ -112,7 +122,7 @@ Prefer this order:
 3. Failed deploy leftovers in `/tmp`.
 4. Stale deploy staging files in `/home/deployer`.
 5. Old non-live release directories after validating live symlinks.
-6. Docker inspection, not blind volume pruning.
+6. Docker inspection with Docker-aware commands, not manual deletion.
 7. Search index reset or rebuild only after explicit verification.
 8. Raw event retention policy only after explicit maintainer agreement.
 
@@ -124,6 +134,10 @@ Before any relay-data pruning, take a protocol-level backup of market events whe
     bun run deploy-simple/scripts/market-events/backup.ts --stage production
 
 These backups cover market-scoped events, not necessarily every raw relay event.
+
+Do not write large backups to the same nearly-full disk. Before backing up relay
+data, confirm that the destination is off-box or on a separate partition and has
+enough free space for the expected backup size.
 
 For full raw relay backups, maintainers must define a separate off-box backup
 procedure. Do not copy large raw databases onto the same nearly-full disk.
@@ -139,6 +153,7 @@ Before allowing it, maintainers must verify:
 - the service restart or rebuild sequence is documented
 - the rollback procedure is documented
 - enough free disk exists for the rebuild
+- rebuild time and expected downtime are estimated on representative data
 - the expected downtime is acceptable
 
 Until then, search-index deletion requires explicit maintainer approval.
