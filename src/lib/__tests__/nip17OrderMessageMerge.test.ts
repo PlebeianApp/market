@@ -459,6 +459,92 @@ describe('mergeOrderMessages', () => {
 		expect(records).toEqual([])
 	})
 
+	test('ignores legacy order creation events with non-numeric amounts or quantities', () => {
+		const invalidAmount = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Order created',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-info'],
+				['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+				['order', 'legacy-invalid-amount'],
+				['amount', 'abc'],
+				['item', `30402:${sellerPubkey}:coffee`, '1'],
+			],
+		})
+		const invalidQuantity = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 101,
+			privateKey: buyerPrivateKey,
+			content: 'Order created',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-info'],
+				['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+				['order', 'legacy-invalid-quantity'],
+				['amount', '1000.00'],
+				['item', `30402:${sellerPubkey}:coffee`, 'many'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [invalidAmount, invalidQuantity],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('ignores legacy payment requests with non-numeric amount tags', () => {
+		const paymentRequest = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Payment request for your order',
+			tags: [
+				['p', buyerPubkey],
+				['recipient', sellerPubkey],
+				['subject', 'order-payment'],
+				['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
+				['order', 'legacy-payment-request-invalid-amount'],
+				['amount', 'abc'],
+				['payment', 'lightning', 'lnbc-test'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [paymentRequest],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('ignores legacy payment receipts with non-numeric amount tags', () => {
+		const receipt = signedLegacyEvent({
+			kind: PAYMENT_RECEIPT_KIND,
+			createdAt: 100,
+			privateKey: buyerPrivateKey,
+			content: 'Payment confirmation',
+			tags: [
+				['p', sellerPubkey],
+				['subject', 'order-receipt'],
+				['order', 'legacy-receipt-invalid-amount'],
+				['payment', 'lightning', 'lnbc-test', ''],
+				['amount', 'abc'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [receipt],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
 	test('preserves legacy shipping updates with known status tags', () => {
 		const shipping = signedLegacyEvent({
 			kind: ORDER_PROCESS_KIND,

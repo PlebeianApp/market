@@ -111,7 +111,7 @@ function hasLegacyOrderMessageShape(event: Event & { kind: OrderMessageKind }): 
 			hasNonEmptyTag(event, 'subject') &&
 			hasNonEmptyTag(event, 'order') &&
 			hasPaymentProofTag(event) &&
-			hasNonEmptyTag(event, 'amount')
+			hasNumericAmountTag(event)
 		)
 	}
 
@@ -127,9 +127,9 @@ function hasLegacyOrderProcessShape(event: Event): boolean {
 
 	switch (messageType) {
 		case ORDER_MESSAGE_TYPE.ORDER_CREATION:
-			return hasNonEmptyTag(event, 'amount') && hasItemTag(event)
+			return hasNumericAmountTag(event) && hasItemTag(event)
 		case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
-			return hasNonEmptyTag(event, 'amount')
+			return hasNumericAmountTag(event)
 		case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
 			return hasKnownOrderStatusTag(event)
 		case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
@@ -140,9 +140,19 @@ function hasLegacyOrderProcessShape(event: Event): boolean {
 }
 
 function hasItemTag(event: Event): boolean {
-	return event.tags.some(
-		(tag) => tag[0] === 'item' && typeof tag[1] === 'string' && tag[1].length > 0 && typeof tag[2] === 'string' && tag[2].length > 0,
-	)
+	return event.tags.some((tag) => tag[0] === 'item' && typeof tag[1] === 'string' && tag[1].length > 0 && isIntegerString(tag[2]))
+}
+
+function hasNumericAmountTag(event: Event): boolean {
+	return event.tags.some((tag) => tag[0] === 'amount' && isDecimalString(tag[1]))
+}
+
+function isDecimalString(value: unknown): value is string {
+	return typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value)
+}
+
+function isIntegerString(value: unknown): value is string {
+	return typeof value === 'string' && /^\d+$/.test(value)
 }
 
 function hasPaymentProofTag(event: Event): boolean {
