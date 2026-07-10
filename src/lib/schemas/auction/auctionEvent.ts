@@ -78,7 +78,7 @@ export const AuctionEventSchema = z
 		startAt: unixSeconds,
 		endAt: unixSeconds,
 		maxEndAt: unixSeconds,
-		settlementGrace: nonNegativeInt,
+		settlementGrace: positiveInt,
 		currency: z.literal('SAT', { message: 'currency must be SAT' }),
 		reserve: nonNegativeInt,
 		startingBid: nonNegativeInt,
