@@ -167,7 +167,7 @@ function AuctionListItem({
 	const liveActivityCoord = liveActivityQuery.data?.coord ?? ''
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
 	const chatMessages = chatQuery.data ?? []
-	const newChatCount = chatMessages.filter((message) => message.createdAt > notificationActions.getLastSeenAuctionComments()).length
+	const newChatCount = chatMessages.filter((message) => message.createdAt > lastSeenTimestamps.auctionComments).length
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
