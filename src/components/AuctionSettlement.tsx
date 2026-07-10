@@ -344,9 +344,9 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 
 	// Theme classes
 	const themeClasses = {
-		action: 'border-amber-200 bg-amber-50',
-		waiting: 'border-blue-200 bg-blue-50',
-		completed: 'border-green-200 bg-green-50',
+		action: 'border-amber-100 bg-amber-50/30',
+		waiting: 'border-blue-100 bg-blue-50/30',
+		completed: 'border-green-100 bg-green-50/30',
 		default: '',
 	}
 
