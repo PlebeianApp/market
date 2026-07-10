@@ -23,6 +23,10 @@ interface AuthState {
 	needsMigration: boolean
 }
 
+interface Nip46LoginOptions {
+	onAuthUrl?: (url: string) => void
+}
+
 const initialState: AuthState = {
 	user: null,
 	isAuthenticated: false,
@@ -241,13 +245,22 @@ export const authActions = {
 		}
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner) => {
+	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+
+			if (options?.onAuthUrl) {
+				signer.on('authUrl', (url) => {
+					if (typeof url === 'string' && url.length > 0) {
+						options.onAuthUrl?.(url)
+					}
+				})
+			}
+
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 			// Kick off the post-signer onboarding pipeline (relay list,

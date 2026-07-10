@@ -30,7 +30,8 @@
 		"dev:contextvm-server": "bun run contextvm/server.ts",
 		"test:unit": "bun test $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
-		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)"
+		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)",
+		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {
 		"@cashu/cashu-ts": "^2.1",
@@ -56,6 +57,8 @@
 		"@tanstack/react-table": "^8.21.3",
 		"@tanstack/store": "^0.11.0",
 		"@yudiel/react-qr-scanner": "^2.6.0",
+		"applesauce-core": "^5.2.0",
+		"applesauce-relay": "^5.2.0",
 		"bitcoinjs-lib": "^7.0.1",
 		"bs58check": "^4.0.0",
 		"bun-plugin-tailwind": "^0.1.2",

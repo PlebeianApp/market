@@ -23,8 +23,10 @@ export const auctionKeys = {
 export const orderKeys = {
 	all: ['orders'] as const,
 	details: (id: string) => [...orderKeys.all, id] as const,
+	detailsWithPrivate: (id: string) => [...orderKeys.details(id), 'privateDetails'] as const,
 	byPubkey: (pubkey: string) => [...orderKeys.all, 'byPubkey', pubkey] as const,
 	bySeller: (pubkey: string) => [...orderKeys.all, 'bySeller', pubkey] as const,
+	bySellerWithPrivate: (pubkey: string) => [...orderKeys.bySeller(pubkey), 'privateDetails'] as const,
 	byBuyer: (pubkey: string) => [...orderKeys.all, 'byBuyer', pubkey] as const,
 } as const
 

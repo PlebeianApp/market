@@ -12,7 +12,6 @@ import {
 } from '@/publish/featured'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
-import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
 import { faker } from '@faker-js/faker'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
@@ -47,8 +46,7 @@ import { createUserNwcWallets } from './gen_wallets'
 import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { NDKCashuWallet } from '@nostr-dev-kit/wallet'
-
-config()
+import { resolveCvmServerPubkey } from '@/lib/cvm-identity'
 
 // Force local relay only mode to prevent connecting to public relays during seeding
 // This must be set before ndkActions.initialize() is called
@@ -148,21 +146,6 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 	}
 }
 
-/**
- * Derive the running CVM server's pubkey from `CVM_SERVER_KEY`. Seeded
- * auctions advertise this as their `path_issuer` so seeded bidders
- * (and the dev UI) talk to the same server that's actually listening.
- */
-function getSeedCvmServerPubkey(): string {
-	const explicit = process.env.CVM_SERVER_PUBKEY?.trim()
-	if (explicit) return explicit
-	const key = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
-	if (!/^[0-9a-fA-F]{64}$/.test(key)) {
-		throw new Error('CVM_SERVER_KEY is not a valid 32-byte hex string')
-	}
-	return getPublicKey(new Uint8Array(Buffer.from(key, 'hex')))
-}
-
 function getSeedCvmRelays(): string[] {
 	const appRelay = process.env.APP_RELAY_URL || 'ws://localhost:10547'
 	return [appRelay]
@@ -176,7 +159,7 @@ async function seedData() {
 	const AUCTIONS_PER_USER = 5
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
-	const CVM_SERVER_PUBKEY = getSeedCvmServerPubkey()
+	const CVM_SERVER_PUBKEY = resolveCvmServerPubkey()
 	const CVM_RELAYS = getSeedCvmRelays()
 	console.log(`Seed will route auctions to CVM path_issuer = ${CVM_SERVER_PUBKEY}`)
 	console.log(`Seed will use CVM relays = ${CVM_RELAYS.join(', ')}`)

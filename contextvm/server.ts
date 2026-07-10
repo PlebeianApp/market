@@ -16,7 +16,11 @@ import { dirname } from 'node:path'
 // process in Phase 4 — it doesn't register MCP tools, it just
 // subscribes to relays and publishes.
 
-const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
+const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY
+if (!SERVER_PRIVATE_KEY) {
+	console.error('CVM_SERVER_KEY environment variable is required. Set it and restart.')
+	process.exit(1)
+}
 
 type DeployStage = 'production' | 'staging' | 'development'
 

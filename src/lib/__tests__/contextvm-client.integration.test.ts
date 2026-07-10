@@ -2,15 +2,21 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
 import { PlebianCurrencyClient } from '../ctxcn-client'
 import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@/lib/constants'
+import { resolveCvmServerPubkey } from '../cvm-identity'
 
 const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://localhost:10547'
-const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
-const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRIVATE_KEY, 'hex')))
-const SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
-// Pass `'production'` so the test exercises the same relay-set the prod
-// browser would actually compose — public CVM relays alongside the local
-// app relay. Earlier this test relied on `process.env.NODE_ENV` leaking
-// into the helper; the helper now takes the stage as an argument.
+const SERVER_PUBKEY = (() => {
+	try {
+		return resolveCvmServerPubkey()
+	} catch {
+		throw new Error('CVM_SERVER_KEY or CVM_SERVER_PUBKEY environment variable is required for integration tests')
+	}
+})()
+const DERIVED_SERVER_PUBKEY = (() => {
+	const key = process.env.CVM_SERVER_KEY
+	if (!key) throw new Error('CVM_SERVER_KEY required')
+	return getPublicKey(new Uint8Array(Buffer.from(key, 'hex')))
+})()
 const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays('production')]))
 
 describe('PlebianCurrencyClient integration', () => {
@@ -29,9 +35,6 @@ describe('PlebianCurrencyClient integration', () => {
 	})
 
 	test('wires the browser/runtime config used by the CTXCN path', () => {
-		// The real end-to-end CTXCN happy path was validated in the browser:
-		// request queued -> published -> response received -> BTC fetch succeeded.
-		// We keep the Bun test harness to a lightweight config smoke test.
 		expect(SERVER_PUBKEY).toBe(DERIVED_SERVER_PUBKEY)
 		expect(RELAYS).toContain('ws://localhost:10547')
 		expect(RELAYS.length).toBeGreaterThan(0)

@@ -7,13 +7,10 @@
  * `src/server/` so this file stays a glance-able overview.
  */
 
-import { config } from 'dotenv'
 import index from './index.html'
 import { buildServer, initializeAppSettings, startEventHandlerInitialization } from './server'
 
 import.meta.hot.accept()
-
-config()
 
 // `serve()` requires the runtime singletons (NDK, app pubkey, app settings,
 // bid-token listener) to be ready before any handler runs. We can't use

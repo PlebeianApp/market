@@ -6,7 +6,7 @@ import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
 import { getCoordsFromATag } from '@/lib/utils/coords'
-import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
@@ -23,13 +23,29 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { format } from 'date-fns'
-import { CreditCard, Download, MapPin, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import {
+	Ban,
+	Check,
+	CreditCard,
+	Download,
+	MapPin,
+	MessageSquare,
+	Package,
+	Receipt,
+	Truck,
+	CheckCircle,
+	Clock,
+	AlertTriangle,
+	ArrowRightLeft,
+	X,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
-import { Separator } from '../ui/separator'
 import { OrderActions } from './OrderActions'
+import { PrivateOrderDetailsCard } from './PrivateOrderDetailsCard'
 import { TimelineEventCard } from './TimelineEventCard'
+import type { ComponentType, SVGProps } from 'react'
 
 // Imported helpers and components
 import { getOrderId, getOrderItems, getSellerPubkey, getShippingRef, getTotalAmount } from './orderDetailHelpers'
@@ -46,6 +62,7 @@ import {
 	TrackingInfoDisplay,
 	V4VRecipientsCard,
 } from './detail'
+import { UserCard } from '@/components/UserCard'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -74,6 +91,30 @@ function privateAuctionClaimUnavailableMessage(status?: string, reason?: string)
 	return 'Private auction claim details are not available from the encrypted claim path yet.'
 }
 
+// Map status icon names to Lucide components
+const STATUS_ICON_MAP: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
+	truck: Truck,
+	tick: Check,
+	check: Check,
+	clock: Clock,
+	cross: X,
+	ban: Ban,
+	circle: CheckCircle,
+}
+
+// Custom size classes for consistent rendering
+const ICON_SIZE_CLASSES = 'w-4 h-4'
+
+function renderStatusIcon(iconName?: string | null, className?: string) {
+	if (!iconName) return null
+
+	const IconComponent = STATUS_ICON_MAP[iconName]
+
+	if (!IconComponent) return null
+
+	return <IconComponent className={cn(ICON_SIZE_CLASSES, className)} />
+}
+
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -99,6 +140,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const sellerPubkey = getSellerPubkey(orderEvent)
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
+	const canViewLegacyBuyerContact = isBuyer
 	const canViewBuyerContact = isBuyer || isOrderSeller
 	const auctionClaimFields = getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
 	const privateAuctionClaimQuery = usePrivateAuctionClaimForOrder(orderEvent, isOrderSeller && !!auctionClaimFields)
@@ -109,14 +151,17 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Extract shipping information
 	const shippingRef = getShippingRef(orderEvent)
-	const shippingAddress = orderEvent.tags.find((tag) => tag[0] === 'address')?.[1]
-	const deliveryContact = orderEvent.tags.find((tag) => tag[0] === 'email')?.[1]
+	const shippingAddress = isBuyer ? orderEvent.tags.find((tag) => tag[0] === 'address')?.[1] : undefined
+	const deliveryContact = isBuyer ? orderEvent.tags.find((tag) => tag[0] === 'email')?.[1] : undefined
 
 	// Get status styles for coloring the header
-	const { headerBgColor } = getStatusStyles(order)
-
-	// Get order status from latest status update or default to pending
-	const orderStatus = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.[1] || 'pending'
+	const {
+		headerBgColor,
+		bgColor: statusBadgeBgColor,
+		iconName,
+		label: statusLabel,
+	} = useMemo(() => getStatusStyles(order), [order.latestStatus, order.latestShipping]) ?? {}
+	const statusExplanation = useMemo(() => getStatusMessaging(order, isBuyer), [order.latestStatus, order.latestShipping, isBuyer])
 
 	// Get product references and quantities from order
 	const orderItems = getOrderItems(orderEvent)
@@ -221,6 +266,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isPickupService = shippingOption ? getShippingService(shippingOption)?.[1] === 'pickup' : false
 	const isDigitalService = shippingOption ? getShippingService(shippingOption)?.[1] === 'digital' : false
 	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
+	const shouldShowPrivateDetailsUnavailable = isOrderSeller && Boolean(shippingOption) && !isPickupService && !order.privateOrderDetails
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
 
@@ -283,46 +329,71 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		})),
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
+	const headerTitle = `Products (${products.length} unique)`
+	const headerSubText = `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
+
 	return (
 		<div className="container mx-auto px-4 py-4">
 			<div className="space-y-6">
 				{/* Order Header */}
+				{/* === ORDER HEADER === */}
 				<Card>
 					<CardHeader className="p-0">
 						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
-							<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-								<div className="flex items-center space-x-2">
-									<Package className="w-5 h-5 text-gray-500" />
+							<div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+								<div className="flex items-center space-x-3">
+									<div className={`p-2 rounded-lg ${'bg-blue-100'}`}>
+										<Package className="w-5 h-5 text-blue-700" />
+									</div>
 									<div>
-										<p className="text-sm text-gray-500">Products</p>
-										<p className="font-semibold">
-											{orderItems.reduce((total, item) => total + item.quantity, 0)} items ({products.length} unique)
-										</p>
+										<p className="text-sm font-medium text-gray-900">{'Products'}</p>
+										<h2 className="font-semibold truncate max-w-[300px] text-gray-800" title={headerTitle}>
+											{headerTitle}
+										</h2>
+										{headerSubText && <p className="text-xs text-gray-600 mt-0.5">{headerSubText}</p>}
 									</div>
 								</div>
-								<OrderActions order={order} userPubkey={user?.pubkey || ''} />
+							</div>
+
+							<div className="border-t border-white/20 pt-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold text-gray-900" />
+									<DetailField
+										label="Date:"
+										value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
+										valueClassName="text-gray-900"
+									/>
+								</div>
 							</div>
 						</div>
 					</CardHeader>
+
 					<CardContent className="pt-4">
-						<div className="text-sm">
-							<span className="text-muted-foreground">Order ID: </span>
-							<span className="font-medium break-all">{orderId || 'N/A'}</span>
+						{/* STATUS SECTION - Separated from actions */}
+						<div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+							<div className="flex items-center gap-2 mb-2">
+								<div className={`p-1.5 rounded-md ${statusBadgeBgColor}`}>{renderStatusIcon(iconName)}</div>
+								<span className="font-semibold text-gray-900 capitalize">{statusLabel}</span>
+							</div>
+							<p className="text-sm text-gray-700 ml-9">{statusExplanation || 'No pending actions required.'}</p>
 						</div>
-						<Separator className="my-4" />
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
-							<DetailField
-								label="Date:"
-								value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
-							/>
-							<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
-							<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
-						</div>
+
+						{/* ORDER ACTIONS - Now at the bottom with labels */}
+						<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 					</CardContent>
 				</Card>
 
-				{canViewBuyerContact && deliveryContact && (
+				{/* Buyer Information Card */}
+				<Card>
+					<CardHeader>
+						<CardTitle>Buyer</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<UserCard pubkey={buyerPubkey} size="md" subtitle="nip-05" />
+					</CardContent>
+				</Card>
+
+				{canViewLegacyBuyerContact && deliveryContact && (
 					<Card>
 						<CardHeader>
 							<CardTitle>Buyer Contact</CardTitle>
@@ -386,25 +457,31 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardContent>
 					</Card>
 				)}
+				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
 
 				{/* Products */}
 				{products.length > 0 && (
 					<Card>
 						<CardHeader>
-							<CardTitle>Products</CardTitle>
+							<CardTitle>{'Products'}</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid grid-cols-1 gap-4">
 								{products.map((product) => {
 									const lookupId = getProductId(product) || product.id
 									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
+
 									return (
 										<div key={product.id} className="p-4 border rounded-lg">
-											<ProductCard product={product} />
-											<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-												<span className="text-sm text-gray-500">Quantity</span>
-												<span className="text-lg font-semibold">{quantity}</span>
-											</div>
+											{
+												<div>
+													<ProductCard product={product} />
+													<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+														<span className="text-sm text-gray-500">Quantity</span>
+														<span className="text-lg font-semibold">{quantity}</span>
+													</div>
+												</div>
+											}
 										</div>
 									)
 								})}
@@ -452,7 +529,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 								{!isPickupService && !isDigitalService && shippingAddress && <DeliveryAddressDisplay shippingAddress={shippingAddress} />}
 
-								{/* Tracking Information */}
 								<TrackingInfoDisplay
 									trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
 									carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
@@ -469,60 +545,60 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</Card>
 				)}
 
-				{/* Payment Processing */}
-				{totalInvoices > 0 && (
-					<Card>
-						<CardHeader className="p-0">
-							<div className="bg-gray-50 p-4 rounded-t-xl">
-								<div className="flex items-start gap-2">
-									<CreditCard className="w-5 h-5" />
-									<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-										<CardTitle>Payment Details</CardTitle>
-										<span className="text-muted-foreground">({totalInvoices} invoices)</span>
+				{/* --- PAYMENT SECTION --- */}
+				{
+					/* For Products: Show Invoice Logic */
+					<>
+						{totalInvoices > 0 && (
+							<Card>
+								<CardHeader className="p-0">
+									<div className="bg-gray-50 p-4 rounded-t-xl">
+										<div className="flex items-start gap-2">
+											<CreditCard className="w-5 h-5" />
+											<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+												<CardTitle>Payment Details</CardTitle>
+												<span className="text-muted-foreground">({totalInvoices} invoices)</span>
+											</div>
+										</div>
+										<div className="my-3 border-b border-gray-300 sm:hidden" />
+										<PaymentSummary enrichedInvoices={enrichedInvoices} />
 									</div>
-								</div>
-								<div className="my-3 border-b border-gray-300 sm:hidden" />
-								<PaymentSummary enrichedInvoices={enrichedInvoices} />
-							</div>
-						</CardHeader>
-						<CardContent className="space-y-4 pt-4">
-							{/* Incomplete invoices banner */}
-							{isBuyer && incompleteInvoices.length > 0 && (
-								<IncompleteInvoicesBanner
-									count={incompleteInvoices.length}
-									onRefresh={() => {
-										toast.info('Refreshing payment status for all incomplete invoices...')
-									}}
-								/>
-							)}
+								</CardHeader>
+								<CardContent className="space-y-4 pt-4">
+									{isBuyer && incompleteInvoices.length > 0 && (
+										<IncompleteInvoicesBanner
+											count={incompleteInvoices.length}
+											onRefresh={() => {
+												toast.info('Refreshing payment status for all incomplete invoices...')
+											}}
+										/>
+									)}
 
-							{/* Payment Progress */}
-							<PaymentProgressBar paidCount={paidInvoices.length} totalCount={totalInvoices} progressPercent={paymentProgress} />
+									<PaymentProgressBar paidCount={paidInvoices.length} totalCount={totalInvoices} progressPercent={paymentProgress} />
 
-							{/* Individual invoice cards */}
-							<div className="grid gap-3">
-								{enrichedInvoices.map((invoice, index) => (
-									<InvoiceCard
-										key={invoice.id}
-										invoice={invoice}
-										index={index}
-										totalInvoices={enrichedInvoices.length}
-										isBuyer={isBuyer}
-										isGenerating={generatingInvoices.has(invoice.id)}
-										onPay={(inv) => openPaymentDialog([inv])}
-										onGenerateNew={handleGenerateNewInvoice}
-									/>
-								))}
-							</div>
+									<div className="grid gap-3">
+										{enrichedInvoices.map((invoice, index) => (
+											<InvoiceCard
+												key={invoice.id}
+												invoice={invoice}
+												index={index}
+												totalInvoices={enrichedInvoices.length}
+												isBuyer={isBuyer}
+												isGenerating={generatingInvoices.has(invoice.id)}
+												onPay={(inv) => openPaymentDialog([inv])}
+												onGenerateNew={handleGenerateNewInvoice}
+											/>
+										))}
+									</div>
 
-							{/* V4V Information */}
-							{sellerV4VShares.length > 0 && <V4VRecipientsCard shares={sellerV4VShares} />}
-						</CardContent>
-					</Card>
-				)}
+									{sellerV4VShares.length > 0 && <V4VRecipientsCard shares={sellerV4VShares} />}
+								</CardContent>
+							</Card>
+						)}
 
-				{/* No payment requests card */}
-				{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
+						{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
+					</>
+				}
 
 				{/* Order Timeline */}
 				{allEvents.length > 0 && (

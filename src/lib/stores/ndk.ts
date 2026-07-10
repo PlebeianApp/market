@@ -346,12 +346,12 @@ export const ndkActions = {
 	 */
 	fetchEventsWithTimeout: async (
 		filters: NDKFilter | NDKFilter[],
-		opts?: NDKSubscriptionOptions & { timeoutMs?: number },
+		opts?: NDKSubscriptionOptions & { timeoutMs?: number; relaySet?: NDKRelaySet },
 	): Promise<Set<NDKEvent>> => {
 		const ndk = ndkStore.state.ndk
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const { timeoutMs = 8000, ...subOpts } = opts ?? {}
+		const { timeoutMs = 8000, relaySet, ...subOpts } = opts ?? {}
 
 		return await new Promise<Set<NDKEvent>>((resolve) => {
 			const events = new Map<string, NDKEvent>()
@@ -366,7 +366,7 @@ export const ndkActions = {
 				resolve(new Set(events.values()))
 			}
 
-			const subscription = ndk.subscribe(filters, {
+			const subscriptionOpts = {
 				...subOpts,
 				closeOnEose: true,
 				onEvent: (event) => {
@@ -384,7 +384,9 @@ export const ndkActions = {
 				},
 				onEose: () => finalize(subscription),
 				onClose: () => finalize(subscription),
-			})
+			}
+
+			const subscription = relaySet ? ndk.subscribe(filters, subscriptionOpts, relaySet) : ndk.subscribe(filters, subscriptionOpts)
 
 			timer = setTimeout(() => finalize(subscription), timeoutMs)
 		})
@@ -902,8 +904,8 @@ export const ndkActions = {
 	 * @param event The NDKEvent to publish (must already be signed)
 	 * @returns Promise resolving to the set of relays the event was published to
 	 */
-	publishEvent: async (event: NDKEvent): Promise<Set<any>> => {
-		const relaySet = getWriteRelaySet()
+	publishEvent: async (event: NDKEvent, relaySet?: NDKRelaySet): Promise<Set<any>> => {
+		relaySet ??= getWriteRelaySet()
 		return event.publish(relaySet)
 	},
 
