@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getAuctionCoordinatesFromOrder, isAuctionOrder } from '@/queries/orders'
 
 // Mock NDKEvent for testing

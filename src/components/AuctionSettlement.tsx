@@ -22,11 +22,11 @@ import {
 	getBidAmount,
 	getAuctionRootEventId,
 } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { Clock, CheckCircle, Ban, Truck, Package, Gavel, Trophy } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 interface AuctionSettlementProps {
 	auction: NDKEvent
