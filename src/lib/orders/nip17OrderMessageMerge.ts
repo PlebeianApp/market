@@ -1,5 +1,12 @@
 import { verifyEvent, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '../schemas/order'
+import {
+	ORDER_GENERAL_KIND,
+	ORDER_MESSAGE_TYPE,
+	ORDER_PROCESS_KIND,
+	ORDER_STATUS,
+	PAYMENT_RECEIPT_KIND,
+	SHIPPING_STATUS,
+} from '../schemas/order'
 import type { UnwrappedNip17OrderMessage } from './nip17OrderRead'
 
 export type OrderMessageTransport = 'legacy-raw' | 'nip17'
@@ -120,7 +127,7 @@ function hasLegacyOrderProcessShape(event: Event): boolean {
 		case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
 			return hasNonEmptyTag(event, 'amount')
 		case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
-			return hasNonEmptyTag(event, 'status')
+			return hasKnownOrderStatusTag(event)
 		case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
 			return hasKnownShippingStatusTag(event)
 		default:
@@ -143,6 +150,20 @@ function hasPaymentProofTag(event: Event): boolean {
 			tag[2].length > 0 &&
 			typeof tag[3] === 'string' &&
 			tag[3].length > 0,
+	)
+}
+
+function hasKnownOrderStatusTag(event: Event): boolean {
+	return event.tags.some((tag) => tag[0] === 'status' && isOrderStatus(tag[1]))
+}
+
+function isOrderStatus(value: unknown): value is (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS] {
+	return (
+		value === ORDER_STATUS.PENDING ||
+		value === ORDER_STATUS.CONFIRMED ||
+		value === ORDER_STATUS.PROCESSING ||
+		value === ORDER_STATUS.COMPLETED ||
+		value === ORDER_STATUS.CANCELLED
 	)
 }
 

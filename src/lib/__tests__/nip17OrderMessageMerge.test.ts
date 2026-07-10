@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '../schemas/order'
+import {
+	ORDER_GENERAL_KIND,
+	ORDER_MESSAGE_TYPE,
+	ORDER_PROCESS_KIND,
+	ORDER_STATUS,
+	PAYMENT_RECEIPT_KIND,
+	SHIPPING_STATUS,
+} from '../schemas/order'
 import { mergeOrderMessages, type MergedOrderMessageRecord } from '../orders/nip17OrderMessageMerge'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
 import {
@@ -373,6 +380,54 @@ describe('mergeOrderMessages', () => {
 
 		const records = mergeOrderMessages({
 			legacyEvents: [receipt],
+			nip17Messages: [],
+		})
+
+		expect(records).toEqual([])
+	})
+
+	test('preserves legacy order status updates with known status tags', () => {
+		const status = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Order confirmed',
+			tags: [
+				['p', buyerPubkey],
+				['subject', 'order-status'],
+				['type', ORDER_MESSAGE_TYPE.STATUS_UPDATE],
+				['order', 'legacy-order-valid-status'],
+				['status', ORDER_STATUS.CONFIRMED],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [status],
+			nip17Messages: [],
+			activeUserPubkey: buyerPubkey,
+		})
+
+		expect(ids(records)).toEqual([`legacy-raw:${status.id}`])
+		expect(records[0]?.direction).toBe('received')
+	})
+
+	test('ignores legacy order status updates with unknown status tags', () => {
+		const status = signedLegacyEvent({
+			kind: ORDER_PROCESS_KIND,
+			createdAt: 100,
+			privateKey: sellerPrivateKey,
+			content: 'Order status update',
+			tags: [
+				['p', buyerPubkey],
+				['subject', 'order-status'],
+				['type', ORDER_MESSAGE_TYPE.STATUS_UPDATE],
+				['order', 'legacy-order-invalid-status'],
+				['status', 'teleported'],
+			],
+		})
+
+		const records = mergeOrderMessages({
+			legacyEvents: [status],
 			nip17Messages: [],
 		})
 
