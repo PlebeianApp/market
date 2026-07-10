@@ -45,7 +45,6 @@ import {
 	getAuctionType,
 	getBidAmount,
 	getBidMint,
-	getBidStatus,
 	useAuctionBids,
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
@@ -575,9 +574,6 @@ function DashboardAuctionDetailRoute() {
 																	Top bid
 																</Badge>
 															)}
-															<Badge className="border-zinc-200 bg-zinc-100 text-zinc-700" variant="outline">
-																{getBidStatus(bidEvent)}
-															</Badge>
 														</div>
 													</div>
 
