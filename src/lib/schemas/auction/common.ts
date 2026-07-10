@@ -34,4 +34,6 @@ export const nonNegativeInt = z.number().int().nonnegative()
 export const positiveInt = z.number().int().positive()
 
 /** BIP-32 derivation path, e.g. `m/123/456/789/1011/1213`. */
-export const bip32Path = z.string().regex(/^m(\/\d+'?)+$/, 'Must be a BIP-32 derivation path (e.g. m/12/34/...)')
+export const bip32Path = z
+	.string()
+	.regex(/^m(\/\d+'?)+$/, 'Invalid derivation path format. Must be a BIP-32 derivation path (e.g. m/12/34/...)')
