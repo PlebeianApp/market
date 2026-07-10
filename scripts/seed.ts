@@ -12,7 +12,6 @@ import {
 } from '@/publish/featured'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
-import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
 import { faker } from '@faker-js/faker'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
