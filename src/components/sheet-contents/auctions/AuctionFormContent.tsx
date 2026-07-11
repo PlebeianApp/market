@@ -57,11 +57,9 @@ const INITIAL_FORM: AuctionFormData = {
 	reserve: undefined,
 	startAt: '',
 	endAt: '',
-	// Anti-snipe defaults: no window, no curve, 1h settlement grace.
-	// Defaults are conservative — sellers must opt into the curve
-	// explicitly. AUCTIONS.md §6.1.
-	antiSnipeWindowMinutes: 0,
-	minBidCurveShape: 'none',
+	// Anti-snipe defaults: 5-minute window, linear curve, 2x peak, 1h settlement grace.
+	antiSnipeWindowMinutes: 5,
+	minBidCurveShape: 'linear',
 	minBidCurvePeakMultiplier: 2,
 	settlementGracePreset: '1h',
 	mainCategory: '',
