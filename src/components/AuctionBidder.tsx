@@ -1,6 +1,5 @@
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ToggleGroup } from '@/components/ui/toggle-group'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
@@ -26,7 +25,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
-import { Pencil, Plus, Minus, X, CircleX, TheaterIcon } from 'lucide-react'
+import { CircleX } from 'lucide-react'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
@@ -191,7 +190,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
-	const [isEditing, setIsEditing] = useState(false)
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
@@ -240,23 +238,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
 	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
-	// Determine which toggle is active based on current input
-	const getSelectedValue = () => {
-		// Check for invalid result
-		if (!Number.isFinite(parsedBidAmount)) return ''
-
-		if (parsedBidAmount === minBid) return 'inc1'
-
-		// Only return these values as selected if the options are showing.
-		if (!compact) {
-			if (parsedBidAmount === minBid + bidStep) return 'inc2'
-			if (parsedBidAmount === Math.max(currentPrice * 2, minBid)) return 'mult2'
-		}
-
-		// For custom values, the "edit" is selected (when shown).
-		return 'edit'
-	}
-
 	// Button text logic
 	const buttonText = useMemo(() => {
 		if (isOwnAuction) return 'Your Auction'
@@ -264,8 +245,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (notStarted) return 'Bidding not started'
 		if (bidMutation.isPending) return 'Submitting...'
 		if (!hasSignedInBidder) return 'Sign in to bid'
-		const selectedValue = getSelectedValue()
-		if (compact || selectedValue === 'edit' || selectedValue === 'mult2') return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
+		if (compact) return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
 		return 'Place Bid'
 	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
@@ -340,7 +320,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		try {
 			await bidMutation.mutateAsync(bidData)
 			toast.success('Bid placed successfully')
-			setIsEditing(false)
 			onBidSuccess?.()
 		} catch {
 			// Error handled by mutation
@@ -475,90 +454,23 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			)}
 			{/* Main Action Area */}
 			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center')}>
-				{!compact &&
-					(isEditing ? (
-						// EDIT MODE: Input Field
-						<InputGroup className="grow w-auto">
-							<InputGroupInput
-								type="number"
-								min={minBid}
-								step={bidStep}
-								value={bidAmountInput}
-								onChange={(e) => setBidAmountInput(e.target.value)}
-								placeholder={`Min: ${minBid.toLocaleString()}`}
-								disabled={isDisabledInput}
-								autoFocus
-							/>
-							<InputGroupAddon align="inline-end">
-								<CircleX onClick={() => setIsEditing(false)} className="size-4 cursor-pointer" />
-							</InputGroupAddon>
-						</InputGroup>
-					) : (
-						// QUICK ACTION MODE: Toggle Group
-						<ToggleGroup
-							type="single"
-							value={getSelectedValue()}
-							onValueChange={(val) => {
-								if (!val) return
-								if (val === 'inc1') {
-									setBidAmountInput(String(minBid))
-								} else if (val === 'inc2') {
-									setBidAmountInput(String(minBid + bidStep))
-								} else if (val === 'mult2') {
-									setBidAmountInput(String(Math.max(currentPrice * 2, minBid)))
-								} else if (val === 'edit') {
-									setIsEditing(true)
-								}
-							}}
-							className={cn('flex w-auto')}
-						>
-							<TooltipToggleGroupItem
-								value="inc1"
-								variant="outline"
-								size="sm"
-								tooltip={hasPriorBids ? 'Minimum Raise' : 'Minimum Bid'}
-								disabled={isDisabledInput}
-								className={cn('cursor-pointer flex')}
-							>
-								{minBid.toLocaleString()} sats
-							</TooltipToggleGroupItem>
-
-							<TooltipToggleGroupItem
-								value="inc2"
-								variant="outline"
-								size="sm"
-								tooltip="Minimum bid plus one raise"
-								disabled={isDisabledInput}
-								className="flex cursor-pointer"
-							>
-								{(minBid + bidStep).toLocaleString()} sats
-							</TooltipToggleGroupItem>
-							<TooltipToggleGroupItem
-								value="mult2"
-								variant="outline"
-								size="sm"
-								tooltip="2x Current Bid"
-								disabled={isDisabledInput}
-								className="flex cursor-pointer"
-							>
-								<X className="size-3 mr-1" /> 2
-							</TooltipToggleGroupItem>
-							<TooltipToggleGroupItem
-								value="edit"
-								variant="outline"
-								size="sm"
-								onClick={() => setIsEditing(true) /* Enforce on-click behavior */}
-								tooltip={
-									getSelectedValue() === 'edit' ? 'Custom Bid: ' + bidAmountInput.toLocaleString() + ' SATS' : 'Customize Bid Amount'
-								}
-								disabled={isDisabledInput}
-								className="flex cursor-pointer"
-								title="Customize bid"
-							>
-								<Pencil className="h-3 w-3" />
-							</TooltipToggleGroupItem>
-						</ToggleGroup>
-					))}
+				{!compact && (
+					<InputGroup className="grow w-auto">
+						<InputGroupInput
+							type="number"
+							min={minBid}
+							step={bidStep}
+							value={bidAmountInput}
+							onChange={(e) => setBidAmountInput(e.target.value)}
+							placeholder={`Min: ${minBid.toLocaleString()}`}
+							disabled={isDisabledInput}
+							autoFocus
+						/>
+						<InputGroupAddon align="inline-end">
+							<CircleX onClick={() => setBidAmountInput(String(minBid))} className="size-4 cursor-pointer" />
+						</InputGroupAddon>
+					</InputGroup>
+				)}
 
 				{/* Place Bid Button */}
 				<Button
