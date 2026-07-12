@@ -1,5 +1,5 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { type NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
@@ -18,20 +18,20 @@ const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
 import { getAuctionId } from './auctions'
 import { configStore } from '@/lib/stores/config'
 
-export const fetchLiveActivity = async (auctionEvent: NDKEvent): Promise<LiveActivity | null> => {
-	const dTag = getAuctionId(auctionEvent)
+export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity | null> => {
+	const dTag = getAuctionId(event)
 	if (!dTag) return null
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return null
 
-	const auctionCoord = `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}`
+	const coord = `${AUCTION_KIND}:${event.pubkey}:${dTag}`
 
 	const cvmServerPubkey = configStore.state.config.cvmServerPubkey
 
 	const filter: NDKFilter = {
 		kinds: [LIVE_ACTIVITY_KIND_NDK],
-		'#a': [auctionCoord],
+		'#a': [coord],
 		limit: 10,
 	}
 
@@ -73,49 +73,22 @@ export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<
 		.sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export const useLiveActivity = (auctionEvent: NDKEvent | null) => {
-	const dTag = auctionEvent ? getAuctionId(auctionEvent) : ''
-	const auctionCoord = auctionEvent && dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
+export interface UseLiveActivityOptions {
+	refetchInterval?: number
+}
+
+export const useLiveActivity = (event: NDKEvent | null, options?: UseLiveActivityOptions) => {
+	const dTag = event ? getAuctionId(event) : ''
+	const coord = event && dTag ? `${AUCTION_KIND}:${event.pubkey}:${dTag}` : ''
 
 	return useQuery(
 		queryOptions({
-			queryKey: liveActivityKeys.byCoord(auctionCoord),
-			queryFn: () => (auctionEvent ? fetchLiveActivity(auctionEvent) : null),
-			enabled: !!auctionEvent && !!dTag,
-			// Poll faster (15s) while an auction is planned and approaching its
-			// start time, so the live chat activates promptly when the auction
-			// goes live instead of waiting up to 60s. (PR #1019 review.)
-			refetchInterval: (query) => pickLiveActivityRefetchMs(auctionEvent, query.state.data?.status),
+			queryKey: liveActivityKeys.byCoord(coord),
+			queryFn: () => (event ? fetchLiveActivity(event) : null),
+			enabled: !!event && !!dTag,
+			refetchInterval: options?.refetchInterval ?? 60_000,
 		}),
 	)
-}
-
-const LIVE_ACTIVITY_FAST_REFETCH_MS = 15_000
-const LIVE_ACTIVITY_DEFAULT_REFETCH_MS = 60_000
-const NEAR_START_WINDOW_S = 10 * 60
-
-function getAuctionStartsAt(auctionEvent: NDKEvent | null): number {
-	const raw = auctionEvent?.tags.find((t) => t[0] === 'start_at')?.[1]
-	const parsed = raw ? parseInt(raw, 10) : 0
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-function pickLiveActivityRefetchMs(auctionEvent: NDKEvent | null, status?: string): number {
-	// Once we know it's planned, poll fast to catch the live transition.
-	if (status === 'planned') return LIVE_ACTIVITY_FAST_REFETCH_MS
-
-	// Before the first response (or if status is unknown), poll fast when the
-	// auction's start time is within the near-start window — this is exactly
-	// the window where the planned->live transition is about to happen.
-	const startsAt = getAuctionStartsAt(auctionEvent)
-	if (startsAt > 0) {
-		const nowS = Math.floor(Date.now() / 1000)
-		if (nowS >= startsAt - NEAR_START_WINDOW_S && nowS < startsAt + NEAR_START_WINDOW_S) {
-			return LIVE_ACTIVITY_FAST_REFETCH_MS
-		}
-	}
-
-	return LIVE_ACTIVITY_DEFAULT_REFETCH_MS
 }
 
 export const useLiveChatMessages = (liveActivityCoord: string, isActive: boolean) => {
