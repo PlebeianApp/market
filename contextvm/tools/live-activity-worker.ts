@@ -1,6 +1,6 @@
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { NostrSigner } from '@contextvm/sdk'
-import type { NostrEvent, EventTemplate, Filter } from 'nostr-tools'
+import { nip19, type NostrEvent, type EventTemplate, type Filter } from 'nostr-tools'
 import {
 	LIVE_ACTIVITY_KIND,
 	LIVE_CHAT_KIND,
@@ -127,8 +127,9 @@ async function openBidSubscription(
 				const amountTag = bidEvent.tags.find((t) => t[0] === 'amount')?.[1]
 				const amount = amountTag ? parseInt(amountTag, 10) : 0
 				const formattedAmount = amount.toLocaleString()
-				const bidderNpub = `npub1${bidEvent.pubkey.slice(0, 12)}…`
-				await publishCommentatorMessage(ctx, liveActivityCoord, `🔵 New bid from ${bidderNpub}: ${formattedAmount} sats`)
+				const bidderNpub = nip19.npubEncode(bidEvent.pubkey)
+				const bidderDisplay = `${bidderNpub.slice(0, 9)}..${bidderNpub.slice(-6)}`
+				await publishCommentatorMessage(ctx, liveActivityCoord, `🔵 New bid from ${bidderDisplay}: ${formattedAmount} sats`)
 			} catch (err) {
 				console.error('[live-activity-worker] Failed to publish commentator message:', err)
 			}

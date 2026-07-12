@@ -31,15 +31,18 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const { user } = useStore(authStore)
 	const dTag = getAuctionId(auctionEvent)
 
-	const liveActivityQuery = useLiveActivity(auctionEvent)
-	const liveActivity = liveActivityQuery.data
-	const liveActivityCoord = liveActivity?.coord ?? ''
-
 	const startsAt = getAuctionStartAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
 	const status = deriveLiveActivityStatus(startsAt, maxEndAt)
 	const isLive = status === 'live'
 	const canChat = isLive
+
+	// Poll faster (15s) while planned so the live chat activates promptly
+	// when the auction starts, instead of waiting up to 60s.
+	const liveActivityRefetchMs = status === 'planned' ? 15_000 : 60_000
+	const liveActivityQuery = useLiveActivity(auctionEvent, { refetchInterval: liveActivityRefetchMs })
+	const liveActivity = liveActivityQuery.data
+	const liveActivityCoord = liveActivity?.coord ?? ''
 
 	const chatQuery = useLiveChatMessages(liveActivityCoord, isLive)
 	const messages = chatQuery.data ?? []
