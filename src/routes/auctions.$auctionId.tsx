@@ -57,11 +57,9 @@ import {
 	getAuctionType,
 	isNSFWAuction,
 	useStreamingAuctionBids,
-	useAuctionClaimOrders,
-	useAuctionPathReleases,
-	useAuctionSettlements,
 	getAuctionSettlementGrace,
 } from '@/queries/auctions'
+import { useAuctionDetails } from '@/queries/auctions-composite'
 import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
 import { useProfileName } from '@/queries/profiles'
 import { useQueries } from '@tanstack/react-query'
@@ -452,16 +450,22 @@ function AuctionDetailRoute() {
 			.slice(0, 5)
 	}, [auctionId, sellerAuctionsQuery.data])
 
-	// Settlement and claim order state
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 10, auctionCoordinates)
-	const latestSettlement = (settlementsQuery.data ?? [])[0] || null
+	// Settlement, claim order, and path release state — fetched as one parallel query
+	const auctionDetailsQuery = useAuctionDetails(
+		auctionRootEventId || auctionId,
+		{
+			settlementLimit: 10,
+			pathReleaseLimit: 200,
+		},
+		auctionCoordinates,
+	)
+	const latestSettlement = (auctionDetailsQuery.data?.settlements ?? [])[0] || null
 	const settlementStatus = getAuctionSettlementStatus(latestSettlement)
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
 	const settlementFinalAmount = getAuctionSettlementFinalAmount(latestSettlement)
 	const isWinner = !!(currentUserPubkey && settlementWinner && currentUserPubkey === settlementWinner)
 
-	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
-	const claimOrders = claimOrdersQuery.data ?? []
+	const claimOrders = auctionDetailsQuery.data?.claimOrders ?? []
 	const hasClaimOrder = claimOrders.some((order) => order.pubkey === currentUserPubkey)
 
 	// -- Bidder-held-path settlement state -------------------------------
@@ -470,8 +474,7 @@ function AuctionDetailRoute() {
 	// "Release path / Settle" button when the current user is the top
 	// bidder, the auction has ended, and they haven't already released
 	// (no kind-1025 from them on this auction yet).
-	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
-	const pathReleases = pathReleasesQuery.data ?? []
+	const pathReleases = auctionDetailsQuery.data?.pathReleases ?? []
 	const queryClient = useQueryClient()
 
 	const myTopBidEvent = useMemo(() => {
