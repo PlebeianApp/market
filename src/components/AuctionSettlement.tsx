@@ -64,6 +64,18 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const isWinner = currentUserPubkey && settlementWinner === currentUserPubkey
 	const hasClaimOrder = claimOrders.some((order) => order.pubkey === (isSeller ? settlementWinner : currentUserPubkey))
 
+	// Task 1: Replace boolean hasClaimOrder check with matchedClaimOrder constant
+	const matchedClaimOrder = useMemo(() => {
+		if (isSeller && settlementWinner) {
+			// Seller view - look for order from the winner
+			return claimOrders.find((order) => order.pubkey === settlementWinner) ?? null
+		} else if (!isSeller && currentUserPubkey) {
+			// Buyer view - look for order from the current user
+			return claimOrders.find((order) => order.pubkey === currentUserPubkey) ?? null
+		}
+		return null
+	}, [claimOrders, isSeller, settlementWinner, currentUserPubkey])
+
 	// Get auction timing info
 	const maxEndAt = getAuctionMaxEndAt(auction)
 	const settlementGrace = getAuctionSettlementGrace(auction)
@@ -196,11 +208,15 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	}
 	// Winner banner - shown to the auction winner after settlement
 	else if (isWinner && settlementStatus === 'settled') {
-		if (hasClaimOrder) {
-			const orderId = claimOrders.at(0)?.id
-			const action = orderId
-				? () => navigate({ to: `/dashboard/orders/${claimOrders.at(0)?.id}` })
-				: () => toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
+		// Task 1: Update navigation logic to use matchedClaimOrder?.id for the route
+		if (matchedClaimOrder) {
+			const action = () => {
+				if (matchedClaimOrder.id) {
+					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
+				} else {
+					toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
+				}
+			}
 
 			state = {
 				icon: <CheckCircle className="w-5 h-5 text-emerald-300" />,
@@ -227,11 +243,15 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	}
 	// Seller side - check if winner has submitted shipping details
 	else if (isSeller && settlementStatus === 'settled' && settlementWinner) {
-		if (hasClaimOrder) {
-			const orderId = claimOrders.at(0)?.id
-			const action = orderId
-				? () => navigate({ to: `/dashboard/orders/${claimOrders.at(0)?.id}` })
-				: () => toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
+		// Task 1: Update navigation logic to use matchedClaimOrder?.id for the route
+		if (matchedClaimOrder) {
+			const action = () => {
+				if (matchedClaimOrder.id) {
+					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
+				} else {
+					toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
+				}
+			}
 
 			state = {
 				icon: <Truck className="w-5 h-5 text-emerald-300" />,
@@ -260,14 +280,15 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	else if (latestSettlement && settlementStatus === 'reserve_not_met') {
 		// Check if refund is ready
 		if (now >= settlementLocktimeAt && settlementLocktimeAt > 0) {
+			// Task 2: Remove the "Claim Refund" button and replace with static informational message
 			state = {
 				icon: <CheckCircle className="w-5 h-5 text-green-300" />,
 				title: 'Refund Ready',
-				message: 'You can now claim your refund.',
-				buttonTitle: 'Claim Refund',
-				buttonAction: () => console.log('Claim refund'),
+				message: 'Refund window opened - verify the unlocked funds have returned to your wallet.',
+				buttonTitle: '',
+				buttonAction: () => {},
 				theme: 'completed',
-				showButton: true,
+				showButton: false, // Task 2: Ensure showButton is set to false
 				bidAmount: 0,
 			}
 		} else {

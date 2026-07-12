@@ -156,20 +156,24 @@ function AuctionSettlementStatus({
 		statusIcon = <ArrowRightLeft className="w-5 h-5 text-blue-600" />
 		statusColor = 'bg-blue-50 border-blue-200'
 		textColor = 'text-blue-900'
-		description = 'The buyer has released their payment. Waiting for the seller to confirm.'
+		// Task 3: Simplify payment state language - Funds Released
+		description = 'The buyer has sent the payment. Waiting for the seller to confirm receipt.'
 	} else if (hasSettlement && !hasPathRelease) {
 		statusText = 'Seller Confirmed'
 		statusIcon = <CheckCircle className="w-5 h-5 text-purple-600" />
 		statusColor = 'bg-purple-50 border-purple-200'
 		textColor = 'text-purple-900'
-		description = 'The seller has confirmed the sale. Waiting for the buyer to release payment.'
+		// Task 3: Simplify payment state language - Seller Confirmed
+		description = "The seller has confirmed the sale. Waiting for the buyer's payment to arrive."
 	} else if (hasSettlement && hasPathRelease) {
 		if (settlementStatus === 'settled') {
 			statusText = 'Settled'
 			statusIcon = <CheckCircle className="w-5 h-5 text-green-600" />
 			statusColor = 'bg-green-50 border-green-200'
 			textColor = 'text-green-900'
-			description = `The auction has been completed for ${getAuctionSettlementFinalAmount(settlement).toLocaleString()} sats. You should see the transferred funds in your wallet.`
+			// Task 3: Simplify payment state language - Settled
+			description =
+				'The auction is complete! The payment has been sent and the seller has confirmed. Funds should be in your wallet shortly.'
 		} else if (settlementStatus === 'reserve_not_met') {
 			statusText = 'Reserve Not Met'
 			statusIcon = <AlertTriangle className="w-5 h-5 text-red-600" />
