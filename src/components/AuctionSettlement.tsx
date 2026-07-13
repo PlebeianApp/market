@@ -356,16 +356,17 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			bidAmount: 0,
 		}
 	}
-	// Bidder local record missing
-	else if (!isSeller && isMyBidTop && !myBidderRecord) {
+	// Bidder local record missing - prompt for refresh page (addresses NIP-60 wallet bug failing to refresh wallet state)
+	else if (!isSeller && isMyBidTop && !myBidderRecord && ended) {
 		state = {
 			icon: <Ban className="w-5 h-5 text-red-300" />,
 			title: 'Local Record Missing',
-			message: 'Cannot release path from this device. The bid was placed elsewhere.',
-			buttonTitle: '',
-			buttonAction: () => {},
+			message:
+				'Cannot find the release path for the bid. Refreshing the page to reload wallet data may help - otherwise the bid may have been placed from another browser or device.',
+			buttonTitle: 'Refresh Page',
+			buttonAction: () => window.location.reload(),
 			theme: 'completed',
-			showButton: false,
+			showButton: true,
 			bidAmount: 0,
 		}
 	}
