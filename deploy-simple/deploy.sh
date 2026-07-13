@@ -116,24 +116,30 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# SSH setup
+# SSH setup (key-based auth only — H3/H4 security hardening)
 # -----------------------------------------------------------------------------
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+# H4: do NOT disable host-key checking. accept-new trusts the first-seen host
+# key (recording it to a real known_hosts file) and FAILS on subsequent key
+# changes (MITM detection). To pre-seed the key non-interactively for a host:
+#   ssh-keyscan -H -p <port> <host> >> ~/.ssh/known_hosts
+KNOWN_HOSTS_FILE="${KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
+
+# H3: key-based authentication only. SSH_PASSWORD support removed — writing the
+# password to plaintext .env.deploy files is a security risk. Use SSH_KEY=<path>
+# or a key loaded into ssh-agent.
 if [[ -n "$SSH_KEY" ]]; then
-    SSH_CMD="ssh $SSH_OPTS -i $SSH_KEY -p $SSH_PORT $SSH_USER@$SSH_HOST"
-    SCP_CMD="scp $SSH_OPTS -i $SSH_KEY -P $SSH_PORT"
+	SSH_CMD="ssh $SSH_OPTS -i $SSH_KEY -p $SSH_PORT $SSH_USER@$SSH_HOST"
+	SCP_CMD="scp $SSH_OPTS -i $SSH_KEY -P $SSH_PORT"
 else
-    if [[ -n "$SSH_PASSWORD" ]]; then
-        if ! command -v sshpass &> /dev/null; then
-            echo "❌ sshpass not installed. Install it or use SSH_KEY for key-based auth."
-            exit 1
-        fi
-        SSH_CMD="sshpass -p $SSH_PASSWORD ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
-        SCP_CMD="sshpass -p $SSH_PASSWORD scp $SSH_OPTS -P $SSH_PORT"
-    else
-        SSH_CMD="ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
-        SCP_CMD="scp $SSH_OPTS -P $SSH_PORT"
-    fi
+	# Fall back to ssh-agent / default keys. Verify something is available.
+	if ! ssh-add -l &>/dev/null && [[ ! -f "$HOME/.ssh/id_rsa" && ! -f "$HOME/.ssh/id_ed25519" ]]; then
+		echo "❌ No SSH key available. Set SSH_KEY=<path> or load an ssh-agent."
+		echo "   Password-based SSH is no longer supported (H3 security hardening)."
+		exit 1
+	fi
+	SSH_CMD="ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@$SSH_HOST"
+	SCP_CMD="scp $SSH_OPTS -P $SSH_PORT"
 fi
 
 run_ssh() { $SSH_CMD "$@"; }
@@ -383,7 +389,6 @@ SSH_HOST=$SSH_HOST
 SSH_PORT=$SSH_PORT
 SSH_USER=$SSH_USER
 ${SSH_KEY:+SSH_KEY=$SSH_KEY}
-${SSH_PASSWORD:+SSH_PASSWORD=$SSH_PASSWORD}
 APP_PORT=$APP_PORT
 PM2_APP_NAME=$PM2_APP_NAME
 REMOTE_APP_DIR=$REMOTE_APP_DIR

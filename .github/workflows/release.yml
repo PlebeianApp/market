@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -56,7 +56,7 @@ jobs:
           echo "Deploying version: $TAG"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -81,7 +81,7 @@ jobs:
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deploy-package
           path: deploy-package/
@@ -95,12 +95,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: refs/tags/${{ needs.build.outputs.version }}
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: deploy-package
           path: deploy-package/
@@ -170,7 +170,7 @@ jobs:
           EOF
 
       - name: Prepare server directories
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -183,7 +183,7 @@ jobs:
             rm -rf /tmp/deploy-package
 
       - name: Upload files to tmp
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -193,7 +193,7 @@ jobs:
           strip_components: 1
 
       - name: Upload Caddyfile
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -203,7 +203,7 @@ jobs:
           strip_components: 2
 
       - name: Move files to release directory
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -213,7 +213,7 @@ jobs:
             sudo chown -R $USER:$USER /opt/releases/${{ needs.build.outputs.release_name }}
 
       - name: Activate release
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -286,7 +286,7 @@ jobs:
           echo "✅ Production deployment complete"
 
       - name: Verify relay is still running
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}

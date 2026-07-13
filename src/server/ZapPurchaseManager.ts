@@ -1,5 +1,6 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
+import { verifyEvent, type Event } from 'nostr-tools/pure'
 import type { EventSigner } from './EventSigner'
 
 export interface PricingTier {
@@ -285,6 +286,14 @@ export abstract class ZapPurchaseManager<TEntry extends ZapPurchaseEntry> {
 		}
 		if (!zapRequest.sig) {
 			throw new ZapInvoiceError('zapRequest must be signed', 400)
+		}
+
+		// H2: Cryptographically verify the zap request signature before trusting its
+		// pubkey/tags. Without this a malicious client could forge a zapRequest with
+		// any pubkey and arbitrary tags. verifyEvent() fails closed on malformed or
+		// unsigned events (missing id/kind/created_at/content → returns false).
+		if (!verifyEvent(zapRequest as unknown as Event)) {
+			throw new ZapInvoiceError('zapRequest signature verification failed', 400)
 		}
 
 		// Validate zap request tags

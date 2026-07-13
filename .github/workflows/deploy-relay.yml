@@ -30,14 +30,14 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set relay version
         id: version
         run: echo "relay_version=${GITHUB_SHA::12}" >> $GITHUB_OUTPUT
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.25'
 
@@ -71,7 +71,7 @@ jobs:
           cp deploy-simple/caddyfiles/Caddyfile.production relay-package/Caddyfile.production
 
       - name: Upload relay artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: relay-package
           path: relay-package/
@@ -86,13 +86,13 @@ jobs:
 
     steps:
       - name: Download relay artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: relay-package
           path: relay-package/
 
       - name: Prepare staging relay dir
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
@@ -102,7 +102,7 @@ jobs:
             mkdir -p /tmp/relay-deploy
 
       - name: Upload staging relay package
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
@@ -112,7 +112,7 @@ jobs:
           strip_components: 1
 
       - name: Install relay on staging
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
@@ -154,13 +154,13 @@ jobs:
 
     steps:
       - name: Download relay artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: relay-package
           path: relay-package/
 
       - name: Prepare production relay dir
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -170,7 +170,7 @@ jobs:
             mkdir -p /tmp/relay-deploy
 
       - name: Upload production relay package
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
@@ -180,7 +180,7 @@ jobs:
           strip_components: 1
 
       - name: Install relay on production
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
