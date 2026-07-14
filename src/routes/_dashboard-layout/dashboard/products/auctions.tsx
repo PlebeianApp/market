@@ -35,8 +35,8 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, ExternalLink, Gavel, Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { CheckCheck, Clock, ExternalLink, Gavel, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import {
 	auctionSortOptionValues,
 	defaultAuctionFilters,
@@ -174,6 +174,15 @@ function AuctionListItem({
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
 	const chatMessages = chatQuery.data ?? []
 	const newChatCount = chatMessages.filter((message) => message.createdAt > notificationActions.getLastSeenAuctionComments()).length
+	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0
+
+	const handleMarkActivitySeen = () => {
+		notificationActions.markAuctionBidsSeen()
+		notificationActions.markAuctionCommentsSeen()
+		notificationActions.markAuctionEventCommentsSeen()
+		notificationActions.markAuctionLiveSeen()
+		notificationActions.markAuctionSettlementBeginsSeen()
+	}
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
@@ -250,7 +259,20 @@ function AuctionListItem({
 						</span>
 					</div>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
+						<div className="flex items-center justify-between gap-3">
+							<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={handleMarkActivitySeen}
+								disabled={!hasNewActivity}
+								className="h-7 rounded-md border border-zinc-300 bg-white px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground hover:bg-zinc-100 hover:text-foreground"
+							>
+								<CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
+								Mark as seen
+							</Button>
+						</div>
 						<ActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
 						<ActivityRow header="Comments" unit="Comment" count={comments.length} newCount={newCommentsCount} />
 						<ActivityRow header="Live Chat" unit="Message" count={chatMessages.length} newCount={newChatCount} />
@@ -279,16 +301,6 @@ function AuctionsOverviewComponent() {
 	})
 
 	useDashboardTitle(isOnChildRoute ? 'Auction Details' : 'Auctions')
-
-	useEffect(() => {
-		if (isAuthenticated && user?.pubkey) {
-			notificationActions.markAuctionBidsSeen()
-			notificationActions.markAuctionCommentsSeen()
-			notificationActions.markAuctionEventCommentsSeen()
-			notificationActions.markAuctionLiveSeen()
-			notificationActions.markAuctionSettlementBeginsSeen()
-		}
-	}, [isAuthenticated, user?.pubkey])
 
 	const {
 		data: auctions,
