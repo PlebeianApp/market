@@ -4,6 +4,8 @@ import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
+import { LIVE_ACTIVITY_KIND } from '@/lib/nip53'
+import { configStore } from '@/lib/stores/config'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {
 	fetchAuctionBidsByBidder,
@@ -15,6 +17,9 @@ import {
 	getBidAuctionEventId,
 } from '@/queries/auctions'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
+
+type NDKKind = NonNullable<NDKFilter['kinds']>[number]
+const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
 
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
@@ -64,16 +69,19 @@ const makeTaggedAuctionFilters = ({
 	auctionRootEventIds,
 	auctionCoordinates,
 	since,
+	authors,
 }: {
-	kind: NonNullable<NDKFilter['kinds']>[number]
+	kind: NDKKind
 	auctionRootEventIds: string[]
 	auctionCoordinates: string[]
 	since?: number
+	authors?: string[]
 }): NDKFilter[] => {
 	const filters: NDKFilter[] = []
 	const baseFilter = {
 		kinds: [kind],
 		limit: AUCTION_MONITOR_LIMIT,
+		...(authors && authors.length > 0 ? { authors } : {}),
 		...(typeof since === 'number' ? { since } : {}),
 	}
 
@@ -94,18 +102,32 @@ const makeTaggedAuctionFilters = ({
 	return filters
 }
 
+const getTrustedAuthorsForKind = (kind: NDKKind): string[] | undefined => {
+	if (kind !== LIVE_ACTIVITY_KIND_NDK) return undefined
+
+	const cvmServerPubkey = configStore.state.config.cvmServerPubkey?.trim()
+	return cvmServerPubkey ? [cvmServerPubkey] : undefined
+}
+
 const fetchTaggedAuctionEvents = async ({
 	kind,
 	auctionRootEventIds,
 	auctionCoordinates,
 	since,
 }: {
-	kind: NonNullable<NDKFilter['kinds']>[number]
+	kind: NDKKind
 	auctionRootEventIds: string[]
 	auctionCoordinates: string[]
 	since?: number
 }): Promise<NDKEvent[]> => {
-	const filters = makeTaggedAuctionFilters({ kind, auctionRootEventIds, auctionCoordinates, since })
+	const trustedAuthors = getTrustedAuthorsForKind(kind)
+	const filters = makeTaggedAuctionFilters({
+		kind,
+		auctionRootEventIds,
+		auctionCoordinates,
+		since,
+		authors: trustedAuthors,
+	})
 	if (filters.length === 0) return []
 
 	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
@@ -174,16 +196,19 @@ export const useNotificationMonitor = () => {
 			values,
 			onEvent,
 		}: {
-			kind: NonNullable<NDKFilter['kinds']>[number]
+			kind: NDKKind
 			tagName: '#e' | '#a'
 			values: string[]
 			onEvent: (event: NDKEvent) => void
 		}) => {
 			if (isCancelled || values.length === 0) return
 
+			const trustedAuthors = getTrustedAuthorsForKind(kind)
+
 			const filter = {
 				kinds: [kind],
 				[tagName]: values,
+				...(trustedAuthors ? { authors: trustedAuthors } : {}),
 				since: subscriptionSince,
 			} as NDKFilter
 
