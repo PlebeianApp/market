@@ -60,7 +60,13 @@ function formatAuctionStatus(startAt: number, biddingCutoffAt: number, settlemen
 
 function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
-	return new Date(timestamp * 1000).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+	return new Date(timestamp * 1000).toLocaleString('en-US', {
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		month: 'long',
+		year: 'numeric',
+	})
 }
 
 function formatTimeAgo(timestamp: number): string {
