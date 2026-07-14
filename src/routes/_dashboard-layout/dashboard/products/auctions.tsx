@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
-import { notificationActions } from '@/lib/stores/notifications'
+import { notificationActions, notificationStore } from '@/lib/stores/notifications'
 import { uiActions } from '@/lib/stores/ui'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
@@ -36,7 +36,7 @@ import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
+import { useSelector } from '@tanstack/react-store'
 import { CheckCheck, Clock, ExternalLink, Gavel, Hourglass, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
@@ -264,10 +264,17 @@ function AuctionListItem({
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
+	const {
+		lastSeenTimestamps: {
+			auctionBids: lastSeenAuctionBids,
+			auctionComments: lastSeenAuctionComments,
+			auctionEventComments: lastSeenAuctionEventComments,
+		},
+	} = useSelector(notificationStore)
 
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const topBid = getAuctionTopBidFromBids(auction, bids)
-	const newBidsCount = bids.filter((bid) => (bid.created_at ?? 0) > notificationActions.getLastSeenAuctionBids()).length
+	const newBidsCount = bids.filter((bid) => (bid.created_at ?? 0) > lastSeenAuctionBids).length
 
 	const settlementLocked = !!latestSettlement
 
@@ -291,12 +298,12 @@ function AuctionListItem({
 
 	const commentsQuery = useComments(auction)
 	const comments = commentsQuery.data ?? []
-	const newCommentsCount = comments.filter((comment) => comment.createdAt > notificationActions.getLastSeenAuctionEventComments()).length
+	const newCommentsCount = comments.filter((comment) => comment.createdAt > lastSeenAuctionEventComments).length
 	const liveActivityQuery = useLiveActivity(auction)
 	const liveActivityCoord = liveActivityQuery.data?.coord ?? ''
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
 	const chatMessages = chatQuery.data ?? []
-	const newChatCount = chatMessages.filter((message) => message.createdAt > notificationActions.getLastSeenAuctionComments()).length
+	const newChatCount = chatMessages.filter((message) => message.createdAt > lastSeenAuctionComments).length
 	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0
 
 	const handleMarkActivitySeen = () => {
@@ -439,7 +446,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 })
 
 function AuctionsOverviewComponent() {
-	const { user, isAuthenticated } = useStore(authStore)
+	const { user, isAuthenticated } = useSelector(authStore)
 	const matchRoute = useMatchRoute()
 	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
 	const settlementMutation = usePublishAuctionSettlementMutation()
