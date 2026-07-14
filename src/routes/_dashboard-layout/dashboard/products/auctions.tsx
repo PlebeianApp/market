@@ -117,15 +117,6 @@ function ActivityRow({ header, unit, count, newCount }: { header: string; unit: 
 	)
 }
 
-function TechnicalDataRow({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
-			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
-		</div>
-	)
-}
-
 function TopBidBox({
 	auction,
 	bids,
