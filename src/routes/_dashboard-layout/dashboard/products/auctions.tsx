@@ -39,7 +39,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CheckCheck, Clock, ExternalLink, Gavel, Loader2 } from 'lucide-react'
+import { CheckCheck, Clock, ExternalLink, Gavel, Hourglass, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
 	auctionSortOptionValues,
@@ -131,6 +131,7 @@ function TopBidBox({
 	showReleasePathReceived,
 	showSettlementGrieved,
 	showSettlementGrievedNoRelease,
+	showWaitingForShippingMethod,
 	settlementSecondsLeft,
 	settlementDeadlineAt,
 }: {
@@ -143,6 +144,7 @@ function TopBidBox({
 	showReleasePathReceived: boolean
 	showSettlementGrieved: boolean
 	showSettlementGrievedNoRelease: boolean
+	showWaitingForShippingMethod: boolean
 	settlementSecondsLeft: number
 	settlementDeadlineAt: number
 }) {
@@ -226,6 +228,17 @@ function TopBidBox({
 									Bid was not settled. It was grieved because release path was not published.
 								</div>
 							)}
+							{showWaitingForShippingMethod && (
+								<Button
+									type="button"
+									variant="outline"
+									disabled
+									className="w-full justify-start gap-2 border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-50"
+								>
+									<Hourglass className="h-4 w-4" aria-hidden="true" />
+									Waiting for bidder shipping method
+								</Button>
+							)}
 						</AccordionContent>
 					</AccordionItem>
 				</Accordion>
@@ -277,7 +290,6 @@ function AuctionListItem({
 	const releasePathReceived = status === 'Settlement' && winnerReleasedPath && !settlementGraceExpired
 	const settlementGrieved = status === 'Settlement' && settlementGraceExpired && !latestSettlement && winnerReleasedPath
 	const settlementGrievedNoRelease = status === 'Settlement' && settlementGraceExpired && !latestSettlement && !winnerReleasedPath
-	const showReleasePathDetails = waitingForReleasePath || releasePathReceived || settlementGrieved || settlementGrievedNoRelease
 	const canPublishSettlementNow = status === 'Settlement' && !settlementGraceExpired && (!topBid || winnerReleasedPath)
 
 	const commentsQuery = useComments(auction)
@@ -300,6 +312,9 @@ function AuctionListItem({
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
+	const waitingForShippingMethod = status === 'Ended' && !!latestSettlement && winnerReleasedPath && !orderId
+	const showReleasePathDetails =
+		waitingForReleasePath || releasePathReceived || settlementGrieved || settlementGrievedNoRelease || waitingForShippingMethod
 
 	return (
 		<div className="rounded-lg border border-zinc-200 bg-background p-6 shadow-md">
@@ -342,6 +357,7 @@ function AuctionListItem({
 						showReleasePathReceived={releasePathReceived}
 						showSettlementGrieved={settlementGrieved}
 						showSettlementGrievedNoRelease={settlementGrievedNoRelease}
+						showWaitingForShippingMethod={waitingForShippingMethod}
 						settlementSecondsLeft={settlementSecondsLeft}
 						settlementDeadlineAt={settlementDeadlineAt}
 					/>
@@ -367,6 +383,18 @@ function AuctionListItem({
 						<Link to="/dashboard/orders/$orderId" params={{ orderId }} className="mt-auto w-full">
 							<Button className="w-full bg-neutral-800 hover:bg-neutral-700 text-white">Go to Order Page</Button>
 						</Link>
+					)}
+
+					{waitingForShippingMethod && (
+						<Button
+							type="button"
+							variant="outline"
+							disabled
+							className="mt-2 w-full justify-start gap-2 border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-50"
+						>
+							<Hourglass className="h-4 w-4" aria-hidden="true" />
+							Waiting for shipping method
+						</Button>
 					)}
 				</div>
 
