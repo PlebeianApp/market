@@ -284,7 +284,9 @@ function AuctionListItem({
 	const pathReleases = pathReleasesQuery.data ?? []
 
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, settlementLocked, now)
-	const isSettlementPhase = status === 'Settlement' || status === 'Ended'
+	const hasBids = bidsCount > 0
+	const badgeStatus: AuctionStatus = status === 'Settlement' && !hasBids ? 'Ended' : status
+	const isSettlementPhase = (status === 'Settlement' || status === 'Ended') && hasBids
 	const settlementGraceSeconds = getAuctionSettlementGrace(auction)
 	const settlementDeadlineAt = biddingCutoffAt > 0 ? biddingCutoffAt + settlementGraceSeconds : 0
 	const settlementSecondsLeft = settlementDeadlineAt > 0 ? Math.max(0, settlementDeadlineAt - now) : 0
@@ -292,11 +294,12 @@ function AuctionListItem({
 	const winnerReleasedPath = !!(
 		topBid && pathReleases.some((pathRelease) => pathRelease.tags.find((tag) => tag[0] === 'e')?.[1] === topBid.id)
 	)
-	const waitingForReleasePath = status === 'Settlement' && !!topBid && !winnerReleasedPath && !settlementGraceExpired
-	const releasePathReceived = status === 'Settlement' && winnerReleasedPath && !settlementGraceExpired
-	const settlementGrieved = status === 'Settlement' && settlementGraceExpired && !latestSettlement && winnerReleasedPath
-	const settlementGrievedNoRelease = status === 'Settlement' && settlementGraceExpired && !latestSettlement && !winnerReleasedPath
-	const canPublishSettlementNow = status === 'Settlement' && !settlementGraceExpired && (!topBid || winnerReleasedPath)
+	const waitingForReleasePath = status === 'Settlement' && hasBids && !!topBid && !winnerReleasedPath && !settlementGraceExpired
+	const releasePathReceived = status === 'Settlement' && hasBids && winnerReleasedPath && !settlementGraceExpired
+	const settlementGrieved = status === 'Settlement' && hasBids && settlementGraceExpired && !latestSettlement && winnerReleasedPath
+	const settlementGrievedNoRelease =
+		status === 'Settlement' && hasBids && settlementGraceExpired && !latestSettlement && !winnerReleasedPath
+	const canPublishSettlementNow = status === 'Settlement' && hasBids && !settlementGraceExpired && (!topBid || winnerReleasedPath)
 
 	const commentsQuery = useComments(auction)
 	const comments = commentsQuery.data ?? []
@@ -368,7 +371,7 @@ function AuctionListItem({
 						settlementDeadlineAt={settlementDeadlineAt}
 					/>
 
-					{status !== 'Ended' && (
+					{status !== 'Ended' && hasBids && (
 						<Button
 							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700 disabled:border disabled:border-zinc-300 disabled:bg-zinc-200 disabled:text-zinc-500"
 							onClick={onPublishSettlement}
@@ -412,10 +415,10 @@ function AuctionListItem({
 						<span
 							className={cn(
 								'inline-flex w-fit whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium',
-								STATUS_BADGE_STYLES[status],
+								STATUS_BADGE_STYLES[badgeStatus],
 							)}
 						>
-							{status}
+							{badgeStatus}
 						</span>
 					</div>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
