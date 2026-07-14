@@ -202,7 +202,7 @@ function AuctionListItem({
 					<TopBidBox auction={auction} bids={bids} />
 
 					{status === 'Settlement' && (
-						<Button className="w-full bg-pink-600 hover:bg-pink-700 text-white" onClick={onPublishSettlement} disabled={isSettling}>
+						<Button className="w-full bg-neutral-800 hover:bg-neutral-700 text-white" onClick={onPublishSettlement} disabled={isSettling}>
 							{isSettling ? (
 								<>
 									<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
@@ -227,7 +227,10 @@ function AuctionListItem({
 							<AuctionCountdown auction={auction} bids={bids} />
 						</div>
 						<span
-							className={cn('inline-flex w-fit whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}
+							className={cn(
+								'inline-flex w-fit whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium',
+								STATUS_BADGE_STYLES[status],
+							)}
 						>
 							{status}
 						</span>
