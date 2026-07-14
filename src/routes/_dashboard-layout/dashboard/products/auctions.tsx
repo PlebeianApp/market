@@ -97,7 +97,17 @@ function ActivityRow({ header, unit, count, newCount }: { header: string; unit: 
 	)
 }
 
-function TopBidBox({ auction, bids, className }: { auction: NDKEvent; bids: NDKEvent[]; className?: string }) {
+function TopBidBox({
+	auction,
+	bids,
+	className,
+	isSettlementPhase,
+}: {
+	auction: NDKEvent
+	bids: NDKEvent[]
+	className?: string
+	isSettlementPhase: boolean
+}) {
 	const topBid = getAuctionTopBidFromBids(auction, bids)
 	const { data: bidderName } = useProfileName(topBid?.pubkey ?? '')
 
@@ -115,16 +125,34 @@ function TopBidBox({ auction, bids, className }: { auction: NDKEvent; bids: NDKE
 	}
 
 	return (
-		<div className={cn('h-full min-h-32 rounded-xl border-2 border-emerald-300 bg-emerald-100 px-4 py-4', className)}>
+		<div
+			className={cn(
+				'h-full min-h-32 rounded-xl border-2 px-4 py-4',
+				isSettlementPhase ? 'border-emerald-300 bg-emerald-100' : 'border-zinc-300 bg-zinc-100',
+				className,
+			)}
+		>
 			<div>
-				<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">
+				<div
+					className={cn(
+						'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]',
+						isSettlementPhase ? 'text-emerald-800' : 'text-zinc-700',
+					)}
+				>
 					<span>Top bid:</span>
 					<span>{formatTimeAgo(topBid.created_at ?? 0)}</span>
 				</div>
 				<p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">{getBidAmount(topBid).toLocaleString()} sats</p>
 			</div>
 			<div className="mt-2 flex items-center justify-between gap-2">
-				<Badge className="border-emerald-300 bg-white text-emerald-800 hover:bg-white">Winning bid</Badge>
+				<Badge
+					className={cn(
+						'bg-white hover:bg-white',
+						isSettlementPhase ? 'border-emerald-300 text-emerald-800' : 'border-zinc-300 text-zinc-700',
+					)}
+				>
+					{isSettlementPhase ? 'Winning bid' : 'Current top bid'}
+				</Badge>
 
 				<div className="flex items-center gap-2">
 					<Link to="/profile/$profileId" params={{ profileId: topBid.pubkey }}>
@@ -165,6 +193,7 @@ function AuctionListItem({
 	const settlementLocked = !!latestSettlement
 
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, settlementLocked, now)
+	const isSettlementPhase = status === 'Settlement' || status === 'Ended'
 
 	const commentsQuery = useComments(auction)
 	const comments = commentsQuery.data ?? []
@@ -218,13 +247,13 @@ function AuctionListItem({
 						<p className="mt-1 text-xs text-muted-foreground">Created: {formatMaybeDate(auction.created_at ?? 0)}</p>
 					</div>
 
-					<TopBidBox auction={auction} bids={bids} className="flex-1" />
+					<TopBidBox auction={auction} bids={bids} className="flex-1" isSettlementPhase={isSettlementPhase} />
 
-					{status === 'Settlement' && (
+					{status !== 'Ended' && (
 						<Button
-							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700"
+							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700 disabled:border disabled:border-zinc-300 disabled:bg-zinc-200 disabled:text-zinc-500"
 							onClick={onPublishSettlement}
-							disabled={isSettling}
+							disabled={status !== 'Settlement' || isSettling}
 						>
 							{isSettling ? (
 								<>
