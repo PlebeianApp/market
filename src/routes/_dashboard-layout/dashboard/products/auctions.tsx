@@ -97,20 +97,25 @@ function ActivityRow({ header, unit, count, newCount }: { header: string; unit: 
 	)
 }
 
-function TopBidBox({ auction, bids }: { auction: NDKEvent; bids: NDKEvent[] }) {
+function TopBidBox({ auction, bids, className }: { auction: NDKEvent; bids: NDKEvent[]; className?: string }) {
 	const topBid = getAuctionTopBidFromBids(auction, bids)
 	const { data: bidderName } = useProfileName(topBid?.pubkey ?? '')
 
 	if (!topBid) {
 		return (
-			<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-4">
-				<p className="text-sm text-zinc-500">No bids yet. Winning bid will appear here.</p>
+			<div
+				className={cn(
+					'flex h-full min-h-32 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-4',
+					className,
+				)}
+			>
+				<p className="text-center text-sm text-zinc-500">No bids yet. Winning bid will appear here.</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className="rounded-xl border-2 border-emerald-300 bg-emerald-100 px-4 py-4">
+		<div className={cn('h-full min-h-32 rounded-xl border-2 border-emerald-300 bg-emerald-100 px-4 py-4', className)}>
 			<div>
 				<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">
 					<span>Top bid:</span>
@@ -192,17 +197,21 @@ function AuctionListItem({
 					</Link>
 				</div>
 
-				<div className="flex-1 min-w-0 space-y-4 lg:max-w-[28rem]">
+				<div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[28rem]">
 					<div className="min-w-0">
 						<h3 className="text-lg font-semibold text-foreground truncate">{getAuctionTitle(auction)}</h3>
 						<p className="text-sm text-muted-foreground truncate">{summary}</p>
 						<p className="mt-1 text-xs text-muted-foreground">Created: {formatMaybeDate(auction.created_at ?? 0)}</p>
 					</div>
 
-					<TopBidBox auction={auction} bids={bids} />
+					<TopBidBox auction={auction} bids={bids} className="flex-1" />
 
 					{status === 'Settlement' && (
-						<Button className="w-full bg-neutral-800 hover:bg-neutral-700 text-white" onClick={onPublishSettlement} disabled={isSettling}>
+						<Button
+							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700"
+							onClick={onPublishSettlement}
+							disabled={isSettling}
+						>
 							{isSettling ? (
 								<>
 									<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
@@ -215,7 +224,7 @@ function AuctionListItem({
 					)}
 
 					{status === 'Ended' && orderId && (
-						<Link to="/dashboard/orders/$orderId" params={{ orderId }}>
+						<Link to="/dashboard/orders/$orderId" params={{ orderId }} className="mt-auto w-full">
 							<Button className="w-full bg-neutral-800 hover:bg-neutral-700 text-white">Go to Order Page</Button>
 						</Link>
 					)}
