@@ -22,7 +22,6 @@ import {
 	getAuctionTitle,
 	getAuctionTopBidFromBids,
 	getBidAmount,
-	getBidMint,
 	useAuctionBids,
 	useAuctionBidsForList,
 	useAuctionClaimOrders,
