@@ -181,16 +181,21 @@ function AuctionListItem({
 	return (
 		<div className="rounded-lg border border-zinc-200 bg-background p-6 shadow-md">
 			<div className="flex flex-col gap-6 lg:flex-row">
-				<div className="flex shrink-0 items-start gap-3 lg:flex-col">
+				<div className="flex shrink-0 items-center gap-3 lg:flex-col lg:items-center">
 					{thumbnailUrl ? (
-						<img src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 rounded-xl object-cover lg:h-32 lg:w-32" />
+						<div className="overflow-hidden rounded-xl border border-white/60 bg-zinc-100 p-1 shadow-sm ring-1 ring-zinc-200/70">
+							<img src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 object-cover lg:h-32 lg:w-32" />
+						</div>
 					) : (
-						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-zinc-100 lg:h-32 lg:w-32">
+						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 shadow-sm ring-1 ring-zinc-200/70 lg:h-32 lg:w-32">
 							<Gavel className="h-8 w-8 text-zinc-400" />
 						</div>
 					)}
-					<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: auction.id }} className="lg:w-32">
-						<Button variant="outline" size="sm" className="w-full gap-2">
+					<Link to="/auctions/$auctionId" params={{ auctionId: auction.id }} className="w-24 lg:w-32">
+						<Button
+							size="sm"
+							className="w-full gap-2 rounded-xl border border-zinc-300 bg-neutral-800 text-white shadow-sm hover:bg-neutral-700"
+						>
 							<ExternalLink className="h-3.5 w-3.5" />
 							Open Auction
 						</Button>
