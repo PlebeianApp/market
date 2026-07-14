@@ -4,7 +4,7 @@ import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
-import { LIVE_ACTIVITY_KIND } from '@/lib/nip53'
+import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@/lib/nip53'
 import { configStore } from '@/lib/stores/config'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {
@@ -20,6 +20,7 @@ import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 
 type NDKKind = NonNullable<NDKFilter['kinds']>[number]
 const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
+const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
 
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
@@ -52,6 +53,11 @@ const getAuctionCoordinate = (auction: NDKEvent): string => {
 const getEventAuctionRootId = (event: NDKEvent): string => getBidAuctionEventId(event)
 
 const getEventAuctionCoordinate = (event: NDKEvent): string => getBidAuctionCoordinates(event)
+
+const getAddressableEventCoordinate = (event: NDKEvent): string => {
+	const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+	return dTag ? `${event.kind}:${event.pubkey}:${dTag}` : ''
+}
 
 const getAuctionBidStatus = (event: NDKEvent): string =>
 	event.tags
@@ -156,6 +162,7 @@ export const useNotificationMonitor = () => {
 		let isCancelled = false
 		const subscriptionSince = Math.floor(Date.now() / 1000)
 		const seenAuctionEventIds = new Set<string>()
+		const seenAuctionCommentEventIds = new Set<string>()
 		const seenBidEventIds = new Set<string>()
 		const seenSettlementEventIds = new Set<string>()
 
@@ -187,6 +194,11 @@ export const useNotificationMonitor = () => {
 
 		const isNewBidUpdate = (event: NDKEvent): boolean => {
 			const lastSeen = notificationActions.getLastSeenBidUpdates()
+			return (event.created_at || 0) > lastSeen
+		}
+
+		const isNewAuctionComment = (event: NDKEvent): boolean => {
+			const lastSeen = notificationActions.getLastSeenAuctionComments()
 			return (event.created_at || 0) > lastSeen
 		}
 
@@ -302,10 +314,29 @@ export const useNotificationMonitor = () => {
 					auctionCoordinates: sellerAuctionCoordinates,
 					since: notificationActions.getLastSeenAuctionBids() + 1,
 				})
+				const sellerLiveActivityEvents = await fetchTaggedAuctionEvents({
+					kind: LIVE_ACTIVITY_KIND_NDK,
+					auctionRootEventIds: [],
+					auctionCoordinates: sellerAuctionCoordinates,
+				})
+				const sellerLiveActivityCoords = uniqueStrings(
+					sellerLiveActivityEvents.map((event) => getAddressableEventCoordinate(event)).filter(Boolean),
+				)
+				const sellerLiveChatEvents = await fetchTaggedAuctionEvents({
+					kind: LIVE_CHAT_KIND_NDK,
+					auctionRootEventIds: [],
+					auctionCoordinates: sellerLiveActivityCoords,
+					since: notificationActions.getLastSeenAuctionComments() + 1,
+				})
 
 				const newSellerBidEvents = sellerBidEvents.filter((event) => {
 					seenAuctionEventIds.add(event.id)
 					return event.pubkey !== user.pubkey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event)
+				})
+
+				const newSellerLiveChatEvents = sellerLiveChatEvents.filter((event) => {
+					seenAuctionCommentEventIds.add(event.id)
+					return event.pubkey !== user.pubkey && isNewAuctionComment(event)
 				})
 
 				const ownBidEvents = await fetchAuctionBidsByBidder(user.pubkey, 500)
@@ -362,6 +393,7 @@ export const useNotificationMonitor = () => {
 					purchaseCount: newPurchaseUpdates.length,
 					conversationCounts,
 					auctionBidCount: newSellerBidEvents.length,
+					auctionCommentCount: newSellerLiveChatEvents.length,
 					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
 				})
 
@@ -370,6 +402,7 @@ export const useNotificationMonitor = () => {
 					messages: totalUnseenMessages,
 					purchases: newPurchaseUpdates.length,
 					auctionBids: newSellerBidEvents.length,
+					auctionComments: newSellerLiveChatEvents.length,
 					bidUpdates: newHigherBidEvents.length + newSettlementEvents.length,
 					conversations: Object.keys(conversationCounts).length,
 				})
@@ -393,6 +426,15 @@ export const useNotificationMonitor = () => {
 
 					console.log('[NotificationMonitor] New higher bid on watched auction:', event.id)
 					notificationActions.incrementUnseenBidUpdates()
+				}
+
+				const handleSellerLiveChatEvent = (event: NDKEvent) => {
+					if (!event.id || seenAuctionCommentEventIds.has(event.id)) return
+					seenAuctionCommentEventIds.add(event.id)
+					if (event.pubkey === user.pubkey || !isNewAuctionComment(event)) return
+
+					console.log('[NotificationMonitor] New live chat comment on seller auction:', event.id)
+					notificationActions.incrementUnseenAuctionComments()
 				}
 
 				const handleWatchedSettlementEvent = (event: NDKEvent) => {
@@ -439,6 +481,12 @@ export const useNotificationMonitor = () => {
 					tagName: '#a',
 					values: watchedAuctionCoordinates,
 					onEvent: handleWatchedSettlementEvent,
+				})
+				subscribeToTaggedAuctionEvents({
+					kind: LIVE_CHAT_KIND_NDK,
+					tagName: '#a',
+					values: sellerLiveActivityCoords,
+					onEvent: handleSellerLiveChatEvent,
 				})
 
 				console.log('[NotificationMonitor] Subscriptions active:', subscriptionsRef.current.length)
