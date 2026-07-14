@@ -12,9 +12,13 @@ export const auctionKeys = {
 	all: ['auctions'] as const,
 	details: (id: string) => [...auctionKeys.all, id] as const,
 	bids: (auctionId: string) => [...auctionKeys.all, 'bids', auctionId] as const,
+	bidsForList: (auctionIds: string[]) => [...auctionKeys.all, 'bids', 'forList', auctionIds] as const,
 	byBidder: (pubkey: string) => [...auctionKeys.all, 'byBidder', pubkey] as const,
 	settlements: (auctionId: string) => [...auctionKeys.all, 'settlements', auctionId] as const,
+	settlementsForList: (auctionIds: string[], auctionCoordinates: string[]) =>
+		[...auctionKeys.all, 'settlements', 'forList', auctionIds, auctionCoordinates] as const,
 	pathReleases: (auctionId: string) => [...auctionKeys.all, 'pathReleases', auctionId] as const,
+	pathReleasesForList: (auctionCoordinates: string[]) => [...auctionKeys.all, 'pathReleases', 'forList', auctionCoordinates] as const,
 	verdicts: (auctionId: string) => [...auctionKeys.all, 'verdicts', auctionId] as const,
 	byPubkey: (pubkey: string) => [...auctionKeys.all, 'byPubkey', pubkey] as const,
 	byATag: (pubkey: string, dTag: string) => [...auctionKeys.all, 'byATag', pubkey, dTag] as const,

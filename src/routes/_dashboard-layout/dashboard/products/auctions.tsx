@@ -22,11 +22,10 @@ import {
 	getAuctionTitle,
 	getAuctionTopBidFromBids,
 	getBidAmount,
-	useAuctionBids,
 	useAuctionBidsForList,
 	useAuctionClaimOrders,
-	useAuctionPathReleases,
-	useAuctionSettlements,
+	useAuctionPathReleasesForList,
+	useAuctionSettlementsForList,
 } from '@/queries/auctions'
 import { useComments } from '@/queries/comments'
 import { useLiveActivity, useLiveChatMessages } from '@/queries/liveChat'
@@ -245,10 +244,16 @@ function TopBidBox({
 
 function AuctionListItem({
 	auction,
+	bids,
+	latestSettlement,
+	pathReleases,
 	onPublishSettlement,
 	isSettling,
 }: {
 	auction: NDKEvent
+	bids: NDKEvent[]
+	latestSettlement: NDKEvent | null
+	pathReleases: NDKEvent[]
 	onPublishSettlement: () => void
 	isSettling: boolean
 }) {
@@ -256,22 +261,15 @@ function AuctionListItem({
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 	const startAt = getAuctionStartAt(auction)
-	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
 
-	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const topBid = getAuctionTopBidFromBids(auction, bids)
 	const newBidsCount = bids.filter((bid) => (bid.created_at ?? 0) > notificationActions.getLastSeenAuctionBids()).length
 
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auction.id, 5, auctionCoordinates)
-	const latestSettlement = settlementsQuery.data?.[0] ?? null
 	const settlementLocked = !!latestSettlement
-	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auction.id, 200, auctionCoordinates)
-	const pathReleases = pathReleasesQuery.data ?? []
 
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, settlementLocked, now)
 	const hasBids = bidsCount > 0
@@ -468,7 +466,10 @@ function AuctionsOverviewComponent() {
 		() => (auctions ?? []).map((auction) => getAuctionRootEventId(auction) || auction.id),
 		[auctions],
 	)
+	const auctionCoordinatesForList = useMemo(() => (auctions ?? []).map((auction) => getAuctionCoordinates(auction)), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
+	const { data: settlementsByAuctionKey } = useAuctionSettlementsForList(auctionRootEventIdsForBids, auctionCoordinatesForList, 5)
+	const { data: pathReleasesByAuctionCoordinate } = useAuctionPathReleasesForList(auctionCoordinatesForList, 200)
 	const sortedAuctions = useFilteredAuctions({ auctions: auctions ?? [], filters: { sort: sort }, bidsByAuctionId, tag: undefined })
 
 	const handlePublishSettlement = async (auction: NDKEvent) => {
@@ -590,11 +591,25 @@ function AuctionsOverviewComponent() {
 						<ul ref={animationParent} className="flex flex-col gap-4 mt-4">
 							{sortedAuctions.map((auction) => (
 								<li key={auction.id}>
-									<AuctionListItem
-										auction={auction}
-										onPublishSettlement={() => void handlePublishSettlement(auction)}
-										isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
-									/>
+									{(() => {
+										const auctionRootEventId = getAuctionRootEventId(auction) || auction.id
+										const auctionCoordinates = getAuctionCoordinates(auction)
+										const bids = bidsByAuctionId?.get(auctionRootEventId) ?? []
+										const latestSettlement =
+											settlementsByAuctionKey?.get(auctionRootEventId)?.[0] ?? settlementsByAuctionKey?.get(auctionCoordinates)?.[0] ?? null
+										const pathReleases = pathReleasesByAuctionCoordinate?.get(auctionCoordinates) ?? []
+
+										return (
+											<AuctionListItem
+												auction={auction}
+												bids={bids}
+												latestSettlement={latestSettlement}
+												pathReleases={pathReleases}
+												onPublishSettlement={() => void handlePublishSettlement(auction)}
+												isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
+											/>
+										)
+									})()}
 								</li>
 							))}
 						</ul>

@@ -45,6 +45,7 @@ const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES = 5
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_WINDOW_SECONDS = 60 * 60 * 24
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_POST_MARKER_GRACE_SECONDS = 5 * 60
+const AUCTION_LIST_FILTER_CHUNK_SIZE = 80
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
 	if (typeof localStorage === 'undefined') return new Map()
@@ -103,6 +104,16 @@ const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
 		eventsById.set(event.id, event)
 	}
 	return Array.from(eventsById.values())
+}
+
+const toStableUniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean))).sort()
+
+const chunkStrings = (values: string[], size: number): string[][] => {
+	const chunks: string[][] = []
+	for (let index = 0; index < values.length; index += size) {
+		chunks.push(values.slice(index, index + size))
+	}
+	return chunks
 }
 
 const cloneAuctionEventWithRootId = (
@@ -272,6 +283,116 @@ export const fetchAuctionBidsForList = async (auctionRootEventIds: string[], lim
 	return byAuctionId
 }
 
+/**
+ * Batch-fetch settlements for a list of auctions and group results by both
+ * root event id (`#e`) and coordinate (`#a`).
+ */
+export const fetchAuctionSettlementsForList = async (
+	auctionRootEventIds: string[],
+	auctionCoordinates: string[],
+	limit: number = 200,
+): Promise<Map<string, NDKEvent[]>> => {
+	const ids = toStableUniqueStrings(auctionRootEventIds)
+	const coordinates = toStableUniqueStrings(auctionCoordinates)
+	if (ids.length === 0 && coordinates.length === 0) return new Map()
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return new Map()
+
+	const filters: NDKFilter[] = []
+	for (const idChunk of chunkStrings(ids, AUCTION_LIST_FILTER_CHUNK_SIZE)) {
+		filters.push({
+			kinds: [AUCTION_SETTLEMENT_KIND],
+			'#e': idChunk,
+			limit,
+		})
+	}
+	for (const coordinateChunk of chunkStrings(coordinates, AUCTION_LIST_FILTER_CHUNK_SIZE)) {
+		filters.push({
+			kinds: [AUCTION_SETTLEMENT_KIND],
+			'#a': coordinateChunk,
+			limit,
+		})
+	}
+
+	if (filters.length === 0) return new Map()
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const settlements = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort(
+		(a, b) => (b.created_at || 0) - (a.created_at || 0),
+	)
+
+	const byAuction = new Map<string, NDKEvent[]>()
+	for (const id of ids) byAuction.set(id, [])
+	for (const coordinate of coordinates) byAuction.set(coordinate, [])
+
+	for (const settlement of settlements) {
+		const rootIds = settlement.tags.filter((tag) => tag[0] === 'e' && !!tag[1]).map((tag) => tag[1])
+		const coords = settlement.tags.filter((tag) => tag[0] === 'a' && !!tag[1]).map((tag) => tag[1])
+		for (const rootId of rootIds) {
+			const bucket = byAuction.get(rootId)
+			if (bucket) bucket.push(settlement)
+		}
+		for (const coord of coords) {
+			const bucket = byAuction.get(coord)
+			if (bucket) bucket.push(settlement)
+		}
+	}
+
+	byAuction.forEach((bucket, key) => {
+		const dedupedBucket = dedupeEventsById(bucket).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		byAuction.set(key, dedupedBucket)
+	})
+
+	return byAuction
+}
+
+/**
+ * Batch-fetch path releases for a list of auction coordinates.
+ */
+export const fetchAuctionPathReleasesForList = async (
+	auctionCoordinates: string[],
+	limit: number = 200,
+): Promise<Map<string, NDKEvent[]>> => {
+	const coordinates = toStableUniqueStrings(auctionCoordinates)
+	if (coordinates.length === 0) return new Map()
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return new Map()
+
+	const filters: NDKFilter[] = []
+	for (const coordinateChunk of chunkStrings(coordinates, AUCTION_LIST_FILTER_CHUNK_SIZE)) {
+		filters.push({
+			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+			'#a': coordinateChunk,
+			limit,
+		})
+	}
+
+	if (filters.length === 0) return new Map()
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const releases = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+	const byCoordinate = new Map<string, NDKEvent[]>()
+	for (const coordinate of coordinates) byCoordinate.set(coordinate, [])
+
+	for (const release of releases) {
+		const releaseCoordinates = release.tags.filter((tag) => tag[0] === 'a' && !!tag[1]).map((tag) => tag[1])
+		for (const releaseCoordinate of releaseCoordinates) {
+			const bucket = byCoordinate.get(releaseCoordinate)
+			if (bucket) bucket.push(release)
+		}
+	}
+
+	byCoordinate.forEach((bucket, key) => {
+		const dedupedBucket = dedupeEventsById(bucket)
+			.filter((event) => isAuctionPathReleaseForCoordinate(event, key))
+			.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		byCoordinate.set(key, dedupedBucket)
+	})
+
+	return byCoordinate
+}
+
 export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) => {
 	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
@@ -351,6 +472,8 @@ export const fetchAuctionPathReleases = async (
 ): Promise<NDKEvent[]> => {
 	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
 	if (!filter) return []
+	const coordinate = filter['#a']?.[0]
+	if (!coordinate) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
@@ -358,7 +481,7 @@ export const fetchAuctionPathReleases = async (
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events))
-		.filter((event) => isAuctionPathReleaseForCoordinate(event, filter['#a'][0]))
+		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
@@ -439,11 +562,34 @@ export const auctionByATagQueryOptions = (pubkey: string, dTag: string) =>
  * — list pages don't need second-level freshness for every card.
  */
 export const auctionBidsForListQueryOptions = (auctionRootEventIds: string[], limit: number = 1000) => {
-	const stableKey = Array.from(new Set(auctionRootEventIds.filter(Boolean))).sort()
+	const stableKey = toStableUniqueStrings(auctionRootEventIds)
 	return queryOptions({
-		queryKey: [...auctionKeys.all, 'bids', 'forList', stableKey],
+		queryKey: auctionKeys.bidsForList(stableKey),
 		queryFn: () => fetchAuctionBidsForList(stableKey, limit),
 		enabled: stableKey.length > 0,
+		staleTime: 15000,
+		refetchInterval: 15000,
+	})
+}
+
+export const auctionSettlementsForListQueryOptions = (auctionRootEventIds: string[], auctionCoordinates: string[], limit: number = 200) => {
+	const stableRootIds = toStableUniqueStrings(auctionRootEventIds)
+	const stableCoordinates = toStableUniqueStrings(auctionCoordinates)
+	return queryOptions({
+		queryKey: auctionKeys.settlementsForList(stableRootIds, stableCoordinates),
+		queryFn: () => fetchAuctionSettlementsForList(stableRootIds, stableCoordinates, limit),
+		enabled: stableRootIds.length > 0 || stableCoordinates.length > 0,
+		staleTime: 15000,
+		refetchInterval: 15000,
+	})
+}
+
+export const auctionPathReleasesForListQueryOptions = (auctionCoordinates: string[], limit: number = 200) => {
+	const stableCoordinates = toStableUniqueStrings(auctionCoordinates)
+	return queryOptions({
+		queryKey: auctionKeys.pathReleasesForList(stableCoordinates),
+		queryFn: () => fetchAuctionPathReleasesForList(stableCoordinates, limit),
+		enabled: stableCoordinates.length > 0,
 		staleTime: 15000,
 		refetchInterval: 15000,
 	})
@@ -456,6 +602,16 @@ export const auctionBidsForListQueryOptions = (auctionRootEventIds: string[], li
 export const useAuctionBidsForList = (auctionRootEventIds: string[], limit: number = 1000) =>
 	useQuery({
 		...auctionBidsForListQueryOptions(auctionRootEventIds, limit),
+	})
+
+export const useAuctionSettlementsForList = (auctionRootEventIds: string[], auctionCoordinates: string[], limit: number = 200) =>
+	useQuery({
+		...auctionSettlementsForListQueryOptions(auctionRootEventIds, auctionCoordinates, limit),
+	})
+
+export const useAuctionPathReleasesForList = (auctionCoordinates: string[], limit: number = 200) =>
+	useQuery({
+		...auctionPathReleasesForListQueryOptions(auctionCoordinates, limit),
 	})
 
 export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
