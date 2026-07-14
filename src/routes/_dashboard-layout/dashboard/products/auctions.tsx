@@ -3,6 +3,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
@@ -15,14 +16,17 @@ import {
 	getAuctionId,
 	getAuctionImages,
 	getAuctionRootEventId,
+	getAuctionSettlementGrace,
 	getAuctionStartAt,
 	getAuctionSummary,
 	getAuctionTitle,
 	getAuctionTopBidFromBids,
 	getBidAmount,
+	getBidMint,
 	useAuctionBids,
 	useAuctionBidsForList,
 	useAuctionClaimOrders,
+	useAuctionPathReleases,
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import { useComments } from '@/queries/comments'
@@ -71,6 +75,17 @@ function formatTimeAgo(timestamp: number): string {
 	return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
+function formatTimeLeft(seconds: number): string {
+	if (seconds <= 0) return 'Expired'
+	const days = Math.floor(seconds / 86400)
+	if (days > 0) return `${days} day${days === 1 ? '' : 's'}`
+	const hours = Math.floor(seconds / 3600)
+	if (hours > 0) return `${hours} hour${hours === 1 ? '' : 's'}`
+	const minutes = Math.floor(seconds / 60)
+	if (minutes > 0) return `${minutes} min${minutes === 1 ? '' : 's'}`
+	return `${seconds} sec${seconds === 1 ? '' : 's'}`
+}
+
 const getAuctionCoordinates = (auction: NDKEvent): string => {
 	const auctionDTag = getAuctionId(auction)
 	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
@@ -97,16 +112,39 @@ function ActivityRow({ header, unit, count, newCount }: { header: string; unit: 
 	)
 }
 
+function TechnicalDataRow({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
+		</div>
+	)
+}
+
 function TopBidBox({
 	auction,
 	bids,
 	className,
 	isSettlementPhase,
+	showReleasePathDetails,
+	showWaitingForReleasePath,
+	showReleasePathReceived,
+	showSettlementGrieved,
+	showSettlementGrievedNoRelease,
+	settlementSecondsLeft,
+	settlementDeadlineAt,
 }: {
 	auction: NDKEvent
 	bids: NDKEvent[]
 	className?: string
 	isSettlementPhase: boolean
+	showReleasePathDetails: boolean
+	showWaitingForReleasePath: boolean
+	showReleasePathReceived: boolean
+	showSettlementGrieved: boolean
+	showSettlementGrievedNoRelease: boolean
+	settlementSecondsLeft: number
+	settlementDeadlineAt: number
 }) {
 	const topBid = getAuctionTopBidFromBids(auction, bids)
 	const { data: bidderName } = useProfileName(topBid?.pubkey ?? '')
@@ -161,6 +199,37 @@ function TopBidBox({
 					<span className="text-sm font-medium truncate max-w-32">{bidderName || topBid.pubkey.slice(0, 8)}</span>
 				</div>
 			</div>
+			{showReleasePathDetails && (
+				<Accordion type="single" collapsible className="mt-3 rounded-xl border border-zinc-200 bg-white px-4">
+					<AccordionItem value={`release-details-${topBid.id}`} className="border-none">
+						<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">Settlement details</AccordionTrigger>
+						<AccordionContent className="space-y-3 pb-4">
+							{showWaitingForReleasePath && (
+								<div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+									<div className="font-medium">Waiting for release path</div>
+									<div className="mt-1">Bidder must publish the release path before settlement can be published.</div>
+								</div>
+							)}
+							{showReleasePathReceived && (
+								<div className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+									<div className="font-medium">Release path received</div>
+									<div className="mt-1">{formatTimeLeft(settlementSecondsLeft)} to publish settlement</div>
+								</div>
+							)}
+							{showSettlementGrieved && (
+								<div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+									Bid was not settled. It was grieved after release path.
+								</div>
+							)}
+							{showSettlementGrievedNoRelease && (
+								<div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+									Bid was not settled. It was grieved because release path was not published.
+								</div>
+							)}
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
+			)}
 		</div>
 	)
 }
@@ -186,14 +255,30 @@ function AuctionListItem({
 	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const topBid = getAuctionTopBidFromBids(auction, bids)
 	const newBidsCount = bids.filter((bid) => (bid.created_at ?? 0) > notificationActions.getLastSeenAuctionBids()).length
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auction.id, 5, auctionCoordinates)
 	const latestSettlement = settlementsQuery.data?.[0] ?? null
 	const settlementLocked = !!latestSettlement
+	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auction.id, 200, auctionCoordinates)
+	const pathReleases = pathReleasesQuery.data ?? []
 
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, settlementLocked, now)
 	const isSettlementPhase = status === 'Settlement' || status === 'Ended'
+	const settlementGraceSeconds = getAuctionSettlementGrace(auction)
+	const settlementDeadlineAt = biddingCutoffAt > 0 ? biddingCutoffAt + settlementGraceSeconds : 0
+	const settlementSecondsLeft = settlementDeadlineAt > 0 ? Math.max(0, settlementDeadlineAt - now) : 0
+	const settlementGraceExpired = settlementDeadlineAt > 0 && now >= settlementDeadlineAt && !latestSettlement
+	const winnerReleasedPath = !!(
+		topBid && pathReleases.some((pathRelease) => pathRelease.tags.find((tag) => tag[0] === 'e')?.[1] === topBid.id)
+	)
+	const waitingForReleasePath = status === 'Settlement' && !!topBid && !winnerReleasedPath && !settlementGraceExpired
+	const releasePathReceived = status === 'Settlement' && winnerReleasedPath && !settlementGraceExpired
+	const settlementGrieved = status === 'Settlement' && settlementGraceExpired && !latestSettlement && winnerReleasedPath
+	const settlementGrievedNoRelease = status === 'Settlement' && settlementGraceExpired && !latestSettlement && !winnerReleasedPath
+	const showReleasePathDetails = waitingForReleasePath || releasePathReceived || settlementGrieved || settlementGrievedNoRelease
+	const canPublishSettlementNow = status === 'Settlement' && !settlementGraceExpired && (!topBid || winnerReleasedPath)
 
 	const commentsQuery = useComments(auction)
 	const comments = commentsQuery.data ?? []
@@ -247,13 +332,25 @@ function AuctionListItem({
 						<p className="mt-1 text-xs text-muted-foreground">Created: {formatMaybeDate(auction.created_at ?? 0)}</p>
 					</div>
 
-					<TopBidBox auction={auction} bids={bids} className="flex-1" isSettlementPhase={isSettlementPhase} />
+					<TopBidBox
+						auction={auction}
+						bids={bids}
+						className="flex-1"
+						isSettlementPhase={isSettlementPhase}
+						showReleasePathDetails={showReleasePathDetails}
+						showWaitingForReleasePath={waitingForReleasePath}
+						showReleasePathReceived={releasePathReceived}
+						showSettlementGrieved={settlementGrieved}
+						showSettlementGrievedNoRelease={settlementGrievedNoRelease}
+						settlementSecondsLeft={settlementSecondsLeft}
+						settlementDeadlineAt={settlementDeadlineAt}
+					/>
 
 					{status !== 'Ended' && (
 						<Button
 							className="mt-auto w-full bg-neutral-800 text-white hover:bg-neutral-700 disabled:border disabled:border-zinc-300 disabled:bg-zinc-200 disabled:text-zinc-500"
 							onClick={onPublishSettlement}
-							disabled={status !== 'Settlement' || isSettling}
+							disabled={!canPublishSettlementNow || isSettling}
 						>
 							{isSettling ? (
 								<>
