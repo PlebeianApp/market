@@ -261,16 +261,36 @@ function AuctionListItem({
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 	const startAt = getAuctionStartAt(auction)
+	const auctionNotificationKey =
+		getAuctionRootEventId(auction) || (getAuctionId(auction) ? `30408:${auction.pubkey}:${getAuctionId(auction)}` : auction.id)
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const now = Math.floor(Date.now() / 1000)
 	const {
 		lastSeenTimestamps: {
-			auctionBids: lastSeenAuctionBids,
-			auctionComments: lastSeenAuctionComments,
-			auctionEventComments: lastSeenAuctionEventComments,
+			auctionBids: lastSeenAuctionBidsGlobal,
+			auctionBidsByAuction,
+			auctionComments: lastSeenAuctionCommentsGlobal,
+			auctionCommentsByAuction,
+			auctionEventComments: lastSeenAuctionEventCommentsGlobal,
+			auctionEventCommentsByAuction,
+			auctionLive: lastSeenAuctionLiveGlobal,
+			auctionLiveByAuction,
+			auctionSettlementBegins: lastSeenAuctionSettlementBeginsGlobal,
+			auctionSettlementBeginsByAuction,
 		},
 	} = useSelector(notificationStore)
+	const lastSeenAuctionBids = Math.max(lastSeenAuctionBidsGlobal, auctionBidsByAuction[auctionNotificationKey] || 0)
+	const lastSeenAuctionComments = Math.max(lastSeenAuctionCommentsGlobal, auctionCommentsByAuction[auctionNotificationKey] || 0)
+	const lastSeenAuctionEventComments = Math.max(
+		lastSeenAuctionEventCommentsGlobal,
+		auctionEventCommentsByAuction[auctionNotificationKey] || 0,
+	)
+	const lastSeenAuctionLive = Math.max(lastSeenAuctionLiveGlobal, auctionLiveByAuction[auctionNotificationKey] || 0)
+	const lastSeenAuctionSettlementBegins = Math.max(
+		lastSeenAuctionSettlementBeginsGlobal,
+		auctionSettlementBeginsByAuction[auctionNotificationKey] || 0,
+	)
 
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const topBid = getAuctionTopBidFromBids(auction, bids)
@@ -304,14 +324,16 @@ function AuctionListItem({
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
 	const chatMessages = chatQuery.data ?? []
 	const newChatCount = chatMessages.filter((message) => message.createdAt > lastSeenAuctionComments).length
-	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0
+	const hasNewLiveStatus = startAt > 0 && startAt <= now && startAt > lastSeenAuctionLive
+	const hasNewSettlementStatus = biddingCutoffAt > 0 && biddingCutoffAt <= now && biddingCutoffAt > lastSeenAuctionSettlementBegins
+	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0 || hasNewLiveStatus || hasNewSettlementStatus
 
 	const handleMarkActivitySeen = () => {
-		notificationActions.markAuctionBidsSeen()
-		notificationActions.markAuctionCommentsSeen()
-		notificationActions.markAuctionEventCommentsSeen()
-		notificationActions.markAuctionLiveSeen()
-		notificationActions.markAuctionSettlementBeginsSeen()
+		notificationActions.markAuctionBidsSeen(auctionNotificationKey, newBidsCount)
+		notificationActions.markAuctionCommentsSeen(auctionNotificationKey, newChatCount)
+		notificationActions.markAuctionEventCommentsSeen(auctionNotificationKey, newCommentsCount)
+		notificationActions.markAuctionLiveSeen(auctionNotificationKey, hasNewLiveStatus ? 1 : 0)
+		notificationActions.markAuctionSettlementBeginsSeen(auctionNotificationKey, hasNewSettlementStatus ? 1 : 0)
 	}
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)

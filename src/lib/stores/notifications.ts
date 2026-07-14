@@ -5,6 +5,17 @@ export type NotificationType = 'order' | 'message' | 'order-update'
 
 // Per-conversation unseen count
 export type ConversationNotifications = Record<string, number> // pubkey -> count
+export type ScopedLastSeenTimestamps = Record<string, number>
+
+const getScopedLastSeen = (globalTimestamp: number, scopedTimestamps: ScopedLastSeenTimestamps, key?: string): number => {
+	if (!key) return globalTimestamp
+	return Math.max(globalTimestamp, scopedTimestamps[key] || 0)
+}
+
+const decrementUnseenCount = (currentCount: number, clearedCount?: number): number => {
+	if (typeof clearedCount !== 'number') return currentCount
+	return Math.max(0, currentCount - Math.max(0, clearedCount))
+}
 
 // Notification state interface
 export interface NotificationState {
@@ -26,11 +37,17 @@ export interface NotificationState {
 		orders: number
 		purchases: number
 		auctionBids: number
+		auctionBidsByAuction: ScopedLastSeenTimestamps
 		auctionComments: number
+		auctionCommentsByAuction: ScopedLastSeenTimestamps
 		auctionEventComments: number
+		auctionEventCommentsByAuction: ScopedLastSeenTimestamps
 		productComments: number
+		productCommentsByProduct: ScopedLastSeenTimestamps
 		auctionLive: number
+		auctionLiveByAuction: ScopedLastSeenTimestamps
 		auctionSettlementBegins: number
+		auctionSettlementBeginsByAuction: ScopedLastSeenTimestamps
 		bidUpdates: number
 		messages: Record<string, number> // pubkey -> timestamp
 	}
@@ -87,11 +104,17 @@ const createInitialState = (): NotificationState => {
 			orders: stored.lastSeenTimestamps?.orders || 0,
 			purchases: stored.lastSeenTimestamps?.purchases || 0,
 			auctionBids: stored.lastSeenTimestamps?.auctionBids || 0,
+			auctionBidsByAuction: stored.lastSeenTimestamps?.auctionBidsByAuction || {},
 			auctionComments: stored.lastSeenTimestamps?.auctionComments || 0,
+			auctionCommentsByAuction: stored.lastSeenTimestamps?.auctionCommentsByAuction || {},
 			auctionEventComments: stored.lastSeenTimestamps?.auctionEventComments || 0,
+			auctionEventCommentsByAuction: stored.lastSeenTimestamps?.auctionEventCommentsByAuction || {},
 			productComments: stored.lastSeenTimestamps?.productComments || 0,
+			productCommentsByProduct: stored.lastSeenTimestamps?.productCommentsByProduct || {},
 			auctionLive: stored.lastSeenTimestamps?.auctionLive || 0,
+			auctionLiveByAuction: stored.lastSeenTimestamps?.auctionLiveByAuction || {},
 			auctionSettlementBegins: stored.lastSeenTimestamps?.auctionSettlementBegins || 0,
+			auctionSettlementBeginsByAuction: stored.lastSeenTimestamps?.auctionSettlementBeginsByAuction || {},
 			bidUpdates: stored.lastSeenTimestamps?.bidUpdates || 0,
 			messages: stored.lastSeenTimestamps?.messages || {},
 		},
@@ -432,15 +455,21 @@ export const notificationActions = {
 	/**
 	 * Mark seller auction bid notifications as seen
 	 */
-	markAuctionBidsSeen: () => {
+	markAuctionBidsSeen: (auctionKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenAuctionBids: 0,
+				unseenAuctionBids: auctionKey ? decrementUnseenCount(state.unseenAuctionBids, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					auctionBids: now,
+					auctionBids: auctionKey ? state.lastSeenTimestamps.auctionBids : now,
+					auctionBidsByAuction: auctionKey
+						? {
+								...state.lastSeenTimestamps.auctionBidsByAuction,
+								[auctionKey]: now,
+							}
+						: state.lastSeenTimestamps.auctionBidsByAuction,
 				},
 			}
 			saveToStorage(newState)
@@ -451,15 +480,21 @@ export const notificationActions = {
 	/**
 	 * Mark seller auction live-chat comment notifications as seen
 	 */
-	markAuctionCommentsSeen: () => {
+	markAuctionCommentsSeen: (auctionKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenAuctionComments: 0,
+				unseenAuctionComments: auctionKey ? decrementUnseenCount(state.unseenAuctionComments, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					auctionComments: now,
+					auctionComments: auctionKey ? state.lastSeenTimestamps.auctionComments : now,
+					auctionCommentsByAuction: auctionKey
+						? {
+								...state.lastSeenTimestamps.auctionCommentsByAuction,
+								[auctionKey]: now,
+							}
+						: state.lastSeenTimestamps.auctionCommentsByAuction,
 				},
 			}
 			saveToStorage(newState)
@@ -470,15 +505,21 @@ export const notificationActions = {
 	/**
 	 * Mark seller auction thread comment notifications as seen
 	 */
-	markAuctionEventCommentsSeen: () => {
+	markAuctionEventCommentsSeen: (auctionKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenAuctionEventComments: 0,
+				unseenAuctionEventComments: auctionKey ? decrementUnseenCount(state.unseenAuctionEventComments, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					auctionEventComments: now,
+					auctionEventComments: auctionKey ? state.lastSeenTimestamps.auctionEventComments : now,
+					auctionEventCommentsByAuction: auctionKey
+						? {
+								...state.lastSeenTimestamps.auctionEventCommentsByAuction,
+								[auctionKey]: now,
+							}
+						: state.lastSeenTimestamps.auctionEventCommentsByAuction,
 				},
 			}
 			saveToStorage(newState)
@@ -489,15 +530,21 @@ export const notificationActions = {
 	/**
 	 * Mark seller product comment notifications as seen
 	 */
-	markProductCommentsSeen: () => {
+	markProductCommentsSeen: (productKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenProductComments: 0,
+				unseenProductComments: productKey ? decrementUnseenCount(state.unseenProductComments, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					productComments: now,
+					productComments: productKey ? state.lastSeenTimestamps.productComments : now,
+					productCommentsByProduct: productKey
+						? {
+								...state.lastSeenTimestamps.productCommentsByProduct,
+								[productKey]: now,
+							}
+						: state.lastSeenTimestamps.productCommentsByProduct,
 				},
 			}
 			saveToStorage(newState)
@@ -508,15 +555,21 @@ export const notificationActions = {
 	/**
 	 * Mark scheduled-auction-live notifications as seen
 	 */
-	markAuctionLiveSeen: () => {
+	markAuctionLiveSeen: (auctionKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenAuctionLive: 0,
+				unseenAuctionLive: auctionKey ? decrementUnseenCount(state.unseenAuctionLive, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					auctionLive: now,
+					auctionLive: auctionKey ? state.lastSeenTimestamps.auctionLive : now,
+					auctionLiveByAuction: auctionKey
+						? {
+								...state.lastSeenTimestamps.auctionLiveByAuction,
+								[auctionKey]: now,
+							}
+						: state.lastSeenTimestamps.auctionLiveByAuction,
 				},
 			}
 			saveToStorage(newState)
@@ -527,15 +580,21 @@ export const notificationActions = {
 	/**
 	 * Mark auction-ended / settlement-begins notifications as seen
 	 */
-	markAuctionSettlementBeginsSeen: () => {
+	markAuctionSettlementBeginsSeen: (auctionKey?: string, clearedCount?: number) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
 			const newState = {
 				...state,
-				unseenAuctionSettlementBegins: 0,
+				unseenAuctionSettlementBegins: auctionKey ? decrementUnseenCount(state.unseenAuctionSettlementBegins, clearedCount) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
-					auctionSettlementBegins: now,
+					auctionSettlementBegins: auctionKey ? state.lastSeenTimestamps.auctionSettlementBegins : now,
+					auctionSettlementBeginsByAuction: auctionKey
+						? {
+								...state.lastSeenTimestamps.auctionSettlementBeginsByAuction,
+								[auctionKey]: now,
+							}
+						: state.lastSeenTimestamps.auctionSettlementBeginsByAuction,
 				},
 			}
 			saveToStorage(newState)
@@ -586,43 +645,67 @@ export const notificationActions = {
 	/**
 	 * Get last seen timestamp for seller auction bids
 	 */
-	getLastSeenAuctionBids: (): number => {
-		return notificationStore.state.lastSeenTimestamps.auctionBids
+	getLastSeenAuctionBids: (auctionKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.auctionBids,
+			notificationStore.state.lastSeenTimestamps.auctionBidsByAuction,
+			auctionKey,
+		)
 	},
 
 	/**
 	 * Get last seen timestamp for seller auction live-chat comments
 	 */
-	getLastSeenAuctionComments: (): number => {
-		return notificationStore.state.lastSeenTimestamps.auctionComments
+	getLastSeenAuctionComments: (auctionKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.auctionComments,
+			notificationStore.state.lastSeenTimestamps.auctionCommentsByAuction,
+			auctionKey,
+		)
 	},
 
 	/**
 	 * Get last seen timestamp for seller auction thread comments
 	 */
-	getLastSeenAuctionEventComments: (): number => {
-		return notificationStore.state.lastSeenTimestamps.auctionEventComments
+	getLastSeenAuctionEventComments: (auctionKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.auctionEventComments,
+			notificationStore.state.lastSeenTimestamps.auctionEventCommentsByAuction,
+			auctionKey,
+		)
 	},
 
 	/**
 	 * Get last seen timestamp for seller product comments
 	 */
-	getLastSeenProductComments: (): number => {
-		return notificationStore.state.lastSeenTimestamps.productComments
+	getLastSeenProductComments: (productKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.productComments,
+			notificationStore.state.lastSeenTimestamps.productCommentsByProduct,
+			productKey,
+		)
 	},
 
 	/**
 	 * Get last seen timestamp for scheduled-auction-live notifications
 	 */
-	getLastSeenAuctionLive: (): number => {
-		return notificationStore.state.lastSeenTimestamps.auctionLive
+	getLastSeenAuctionLive: (auctionKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.auctionLive,
+			notificationStore.state.lastSeenTimestamps.auctionLiveByAuction,
+			auctionKey,
+		)
 	},
 
 	/**
 	 * Get last seen timestamp for auction-ended / settlement-begins notifications
 	 */
-	getLastSeenAuctionSettlementBegins: (): number => {
-		return notificationStore.state.lastSeenTimestamps.auctionSettlementBegins
+	getLastSeenAuctionSettlementBegins: (auctionKey?: string): number => {
+		return getScopedLastSeen(
+			notificationStore.state.lastSeenTimestamps.auctionSettlementBegins,
+			notificationStore.state.lastSeenTimestamps.auctionSettlementBeginsByAuction,
+			auctionKey,
+		)
 	},
 
 	/**
