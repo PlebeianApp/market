@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import { AvatarUser } from '@/components/AvatarUser'
+import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -167,7 +168,7 @@ function AuctionListItem({
 	const liveActivityCoord = liveActivityQuery.data?.coord ?? ''
 	const chatQuery = useLiveChatMessages(liveActivityCoord, status === 'Live')
 	const chatMessages = chatQuery.data ?? []
-	const newChatCount = chatMessages.filter((message) => message.createdAt > lastSeenTimestamps.auctionComments).length
+	const newChatCount = chatMessages.filter((message) => message.createdAt > notificationActions.getLastSeenAuctionComments()).length
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const orderId = claimOrdersQuery.data?.[0] ? getOrderId(claimOrdersQuery.data[0]) : undefined
@@ -191,7 +192,7 @@ function AuctionListItem({
 					</Link>
 				</div>
 
-				<div className="flex-1 min-w-0 space-y-4">
+				<div className="flex-1 min-w-0 space-y-4 lg:max-w-[28rem]">
 					<div className="min-w-0">
 						<h3 className="text-lg font-semibold text-foreground truncate">{getAuctionTitle(auction)}</h3>
 						<p className="text-sm text-muted-foreground truncate">{summary}</p>
@@ -220,10 +221,17 @@ function AuctionListItem({
 					)}
 				</div>
 
-				<div className="flex w-full shrink-0 flex-col items-end gap-3 lg:w-64">
-					<span className={cn('inline-flex w-fit rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}>
-						{status}
-					</span>
+				<div className="ml-auto flex w-full shrink-0 flex-col items-end gap-3 lg:w-[22rem]">
+					<div className="flex w-full items-center gap-2">
+						<div className="min-w-0 flex-1">
+							<AuctionCountdown auction={auction} bids={bids} />
+						</div>
+						<span
+							className={cn('inline-flex w-fit whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium', STATUS_BADGE_STYLES[status])}
+						>
+							{status}
+						</span>
+					</div>
 					<div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
 						<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
 						<ActivityRow header="Bids" unit="Bid" count={bidsCount} newCount={newBidsCount} />
