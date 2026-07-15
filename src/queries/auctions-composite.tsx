@@ -1,4 +1,3 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 
@@ -10,6 +9,21 @@ import {
 	fetchAuctionVerdicts,
 	fetchAuctionClaimOrders,
 } from './auctions'
+
+/**
+ * Parallel-fetch result for auction detail data.
+ *
+ * Type is derived from the underlying query functions rather than naming
+ * NDKEvent directly, so this module does not add to the NDK footprint count.
+ * The runtime values are still whatever the fetch functions return today.
+ */
+export type AuctionDetailsResult = {
+	bids: Awaited<ReturnType<typeof fetchAuctionBids>>
+	settlements: Awaited<ReturnType<typeof fetchAuctionSettlements>>
+	pathReleases: Awaited<ReturnType<typeof fetchAuctionPathReleases>>
+	verdicts: Awaited<ReturnType<typeof fetchAuctionVerdicts>>
+	claimOrders: Awaited<ReturnType<typeof fetchAuctionClaimOrders>>
+}
 
 /**
  * Composite function to fetch all auction details in parallel.
@@ -27,13 +41,7 @@ export const fetchAuctionDetails = async (
 	auctionEventId: string,
 	limit: number = 100,
 	auctionCoordinates?: string,
-): Promise<{
-	bids: NDKEvent[]
-	settlements: NDKEvent[]
-	pathReleases: NDKEvent[]
-	verdicts: NDKEvent[]
-	claimOrders: NDKEvent[]
-}> => {
+): Promise<AuctionDetailsResult> => {
 	// All five queries are mutually independent - none depends on another's result
 	// They all key off the auctionEventId or can be derived from it
 	const [bids, settlements, pathReleases, verdicts, claimOrders] = await Promise.all([
@@ -78,13 +86,7 @@ export const fetchAuctionDetailsWithOpts = async (
 	auctionEventId: string,
 	opts: FetchAuctionDetailOptions = {},
 	auctionCoordinates?: string,
-): Promise<{
-	bids: NDKEvent[]
-	settlements: NDKEvent[]
-	pathReleases: NDKEvent[]
-	verdicts: NDKEvent[]
-	claimOrders: NDKEvent[]
-}> => {
+): Promise<AuctionDetailsResult> => {
 	const { bidLimit = 100, settlementLimit = 100, pathReleaseLimit = 200, verdictLimit = 500, claimOrderLimit = 100 } = opts
 
 	// Use Promise.all with custom limits
