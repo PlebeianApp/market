@@ -22,9 +22,9 @@ import {
 	getBidAmount,
 	getAuctionRootEventId,
 	getAuctionTopBidValid,
+	useAuctionWithRelatedEvents,
 } from '@/queries/auctions'
-import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
-import { Clock, CheckCircle, Ban, Truck, Package, Gavel, Trophy } from 'lucide-react'
+import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
@@ -46,6 +46,8 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const auctionRootEventId = getAuctionRootEventId(auction) || auction.id
 
+	const auctionWithRelatedEvents = useAuctionWithRelatedEvents(auctionRootEventId, auctionCoordinates)
+
 	// Fetch settlement-related data
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId, 10, auctionCoordinates)
 	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId, 200, auctionCoordinates)
@@ -62,9 +64,7 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 
 	const isSeller = currentUserPubkey === auction.pubkey
 	const isWinner = currentUserPubkey && settlementWinner === currentUserPubkey
-	const hasClaimOrder = claimOrders.some((order) => order.pubkey === (isSeller ? settlementWinner : currentUserPubkey))
 
-	// Task 1: Replace boolean hasClaimOrder check with matchedClaimOrder constant
 	const matchedClaimOrder = useMemo(() => {
 		if (isSeller && settlementWinner) {
 			// Seller view - look for order from the winner
@@ -206,12 +206,16 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 			bidAmount: 0,
 		}
 	}
+
 	// Winner banner - shown to the auction winner after settlement
 	else if (isWinner && settlementStatus === 'settled') {
 		// Task 1: Update navigation logic to use matchedClaimOrder?.id for the route
 		if (matchedClaimOrder) {
 			const action = () => {
 				if (matchedClaimOrder.id) {
+					const orderId = matchedClaimOrder.tags.find((t) => t[0] === 'order')?.[1]
+					console.log('Test: ', orderId === matchedClaimOrder.id)
+
 					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
 				} else {
 					toast.error('Issue with order id. Go to Dashboard -> Your Purchases to find the order.')
@@ -247,6 +251,9 @@ export function AuctionSettlement({ auction, bids, className }: AuctionSettlemen
 		if (matchedClaimOrder) {
 			const action = () => {
 				if (matchedClaimOrder.id) {
+					const orderId = matchedClaimOrder.tags.find((t) => t[0] === 'order')?.[1]
+					console.log('Test: ', orderId === matchedClaimOrder.id)
+
 					navigate({ to: `/dashboard/orders/${matchedClaimOrder.id}` })
 				} else {
 					toast.error('Issue with order id. Go to Dashboard -> Sales to find the order.')
