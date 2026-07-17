@@ -58,6 +58,10 @@ describe('notification store scoped last-seen behavior', () => {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenAuctionBids: 5,
+			unseenAuctionBidsByAuction: {
+				'auction-a': 2,
+				'auction-b': 3,
+			},
 			unseenAuctionComments: 4,
 			unseenAuctionEventComments: 3,
 			unseenAuctionLive: 2,
@@ -77,13 +81,17 @@ describe('notification store scoped last-seen behavior', () => {
 			},
 		}))
 
-		notificationActions.markAuctionBidsSeen('auction-a', 2)
+		notificationActions.markAuctionBidsSeen('auction-a')
 		notificationActions.markAuctionCommentsSeen('auction-a', 1)
 		notificationActions.markAuctionEventCommentsSeen('auction-a', 1)
 		notificationActions.markAuctionLiveSeen('auction-a', 1)
 		notificationActions.markAuctionSettlementBeginsSeen('auction-a', 1)
 
 		expect(notificationStore.state.unseenAuctionBids).toBe(3)
+		expect(notificationStore.state.unseenAuctionBidsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 3,
+		})
 		expect(notificationStore.state.unseenAuctionComments).toBe(3)
 		expect(notificationStore.state.unseenAuctionEventComments).toBe(2)
 		expect(notificationStore.state.unseenAuctionLive).toBe(1)
@@ -132,6 +140,10 @@ describe('notification store scoped last-seen behavior', () => {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenAuctionBids: 4,
+			unseenAuctionBidsByAuction: {
+				'auction-a': 1,
+				'auction-b': 3,
+			},
 			lastSeenTimestamps: {
 				...state.lastSeenTimestamps,
 				auctionBids: 10,
@@ -144,6 +156,7 @@ describe('notification store scoped last-seen behavior', () => {
 		notificationActions.markAuctionBidsSeen()
 
 		expect(notificationStore.state.unseenAuctionBids).toBe(0)
+		expect(notificationStore.state.unseenAuctionBidsByAuction).toEqual({})
 		expect(notificationStore.state.lastSeenTimestamps.auctionBids).toBe(fakeNowSeconds)
 		expect(notificationStore.state.lastSeenTimestamps.auctionBidsByAuction).toEqual({
 			'auction-a': 20,
@@ -237,5 +250,25 @@ describe('notification store scoped last-seen behavior', () => {
 		expect(notificationActions.getLastSeenProductComments('product-a')).toBe(300)
 		expect(notificationActions.getLastSeenProductComments('product-b')).toBe(325)
 		expect(notificationActions.getLastSeenProductComments()).toBe(300)
+	})
+
+	test('recalculate derives unseen auction bid aggregate from canonical scoped auction counts', () => {
+		notificationActions.recalculateFromEvents({
+			orderCount: 0,
+			messageCount: 0,
+			purchaseCount: 0,
+			conversationCounts: {},
+			auctionBidCount: 99,
+			auctionBidCountsByAuction: {
+				'auction-a': 1,
+				'auction-b': 2,
+			},
+		})
+
+		expect(notificationStore.state.unseenAuctionBidsByAuction).toEqual({
+			'auction-a': 1,
+			'auction-b': 2,
+		})
+		expect(notificationStore.state.unseenAuctionBids).toBe(3)
 	})
 })

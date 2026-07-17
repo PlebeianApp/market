@@ -6,6 +6,7 @@ export type NotificationType = 'order' | 'message' | 'order-update'
 // Per-conversation unseen count
 export type ConversationNotifications = Record<string, number> // pubkey -> count
 export type ScopedLastSeenTimestamps = Record<string, number>
+export type ScopedUnseenCounts = Record<string, number>
 
 const getScopedLastSeen = (globalTimestamp: number, scopedTimestamps: ScopedLastSeenTimestamps, key?: string): number => {
 	if (!key) return globalTimestamp
@@ -15,6 +16,10 @@ const getScopedLastSeen = (globalTimestamp: number, scopedTimestamps: ScopedLast
 const decrementUnseenCount = (currentCount: number, clearedCount?: number): number => {
 	if (typeof clearedCount !== 'number') return currentCount
 	return Math.max(0, currentCount - Math.max(0, clearedCount))
+}
+
+const sumScopedUnseenCounts = (counts: ScopedUnseenCounts): number => {
+	return Object.values(counts).reduce((sum, count) => sum + Math.max(0, count), 0)
 }
 
 // Notification state interface
@@ -31,6 +36,7 @@ export interface NotificationState {
 	unseenAuctionSettlementBegins: number // Scheduled auctions that just ended
 	unseenBidUpdates: number // New higher bids / settlements on auctions where user is bidder
 	unseenByConversation: ConversationNotifications
+	unseenAuctionBidsByAuction: ScopedUnseenCounts
 
 	// Last seen timestamps (unix timestamp in seconds)
 	lastSeenTimestamps: {
@@ -100,6 +106,7 @@ const createInitialState = (): NotificationState => {
 		unseenAuctionSettlementBegins: 0,
 		unseenBidUpdates: 0,
 		unseenByConversation: {},
+		unseenAuctionBidsByAuction: {},
 		lastSeenTimestamps: {
 			orders: stored.lastSeenTimestamps?.orders || 0,
 			purchases: stored.lastSeenTimestamps?.purchases || 0,
@@ -171,10 +178,11 @@ export const notificationActions = {
 	/**
 	 * Update unseen seller auction bid count
 	 */
-	setUnseenAuctionBids: (count: number) => {
+	setUnseenAuctionBids: (count: number, byAuction?: ScopedUnseenCounts) => {
 		notificationStore.setState((state) => ({
 			...state,
-			unseenAuctionBids: Math.max(0, count),
+			unseenAuctionBidsByAuction: byAuction ? { ...byAuction } : {},
+			unseenAuctionBids: byAuction ? sumScopedUnseenCounts(byAuction) : Math.max(0, count),
 		}))
 	},
 
@@ -288,10 +296,24 @@ export const notificationActions = {
 	/**
 	 * Increment unseen seller auction bid count
 	 */
-	incrementUnseenAuctionBids: () => {
+	incrementUnseenAuctionBids: (auctionKey?: string) => {
 		notificationStore.setState((state) => ({
-			...state,
-			unseenAuctionBids: state.unseenAuctionBids + 1,
+			...(auctionKey
+				? {
+						...state,
+						unseenAuctionBidsByAuction: {
+							...state.unseenAuctionBidsByAuction,
+							[auctionKey]: (state.unseenAuctionBidsByAuction[auctionKey] || 0) + 1,
+						},
+						unseenAuctionBids: sumScopedUnseenCounts({
+							...state.unseenAuctionBidsByAuction,
+							[auctionKey]: (state.unseenAuctionBidsByAuction[auctionKey] || 0) + 1,
+						}),
+					}
+				: {
+						...state,
+						unseenAuctionBids: state.unseenAuctionBids + 1,
+					}),
 		}))
 	},
 
@@ -455,12 +477,19 @@ export const notificationActions = {
 	/**
 	 * Mark seller auction bid notifications as seen
 	 */
-	markAuctionBidsSeen: (auctionKey?: string, clearedCount?: number) => {
+	markAuctionBidsSeen: (auctionKey?: string) => {
 		const now = Math.floor(Date.now() / 1000)
 		notificationStore.setState((state) => {
+			const nextUnseenAuctionBidsByAuction = auctionKey
+				? {
+						...state.unseenAuctionBidsByAuction,
+						[auctionKey]: 0,
+					}
+				: {}
 			const newState = {
 				...state,
-				unseenAuctionBids: auctionKey ? decrementUnseenCount(state.unseenAuctionBids, clearedCount) : 0,
+				unseenAuctionBidsByAuction: nextUnseenAuctionBidsByAuction,
+				unseenAuctionBids: auctionKey ? sumScopedUnseenCounts(nextUnseenAuctionBidsByAuction) : 0,
 				lastSeenTimestamps: {
 					...state.lastSeenTimestamps,
 					auctionBids: auctionKey ? state.lastSeenTimestamps.auctionBids : now,
@@ -734,6 +763,7 @@ export const notificationActions = {
 		purchaseCount: number
 		conversationCounts: ConversationNotifications
 		auctionBidCount?: number
+		auctionBidCountsByAuction?: ScopedUnseenCounts
 		auctionCommentCount?: number
 		auctionEventCommentCount?: number
 		productCommentCount?: number
@@ -741,20 +771,24 @@ export const notificationActions = {
 		auctionSettlementBeginsCount?: number
 		bidUpdateCount?: number
 	}) => {
-		notificationStore.setState((state) => ({
-			...state,
-			unseenOrders: data.orderCount,
-			unseenMessages: data.messageCount,
-			unseenPurchases: data.purchaseCount,
-			unseenAuctionBids: data.auctionBidCount ?? 0,
-			unseenAuctionComments: data.auctionCommentCount ?? 0,
-			unseenAuctionEventComments: data.auctionEventCommentCount ?? 0,
-			unseenProductComments: data.productCommentCount ?? 0,
-			unseenAuctionLive: data.auctionLiveCount ?? 0,
-			unseenAuctionSettlementBegins: data.auctionSettlementBeginsCount ?? 0,
-			unseenBidUpdates: data.bidUpdateCount ?? 0,
-			unseenByConversation: data.conversationCounts,
-		}))
+		notificationStore.setState((state) => {
+			const scopedBidCounts = data.auctionBidCountsByAuction ? { ...data.auctionBidCountsByAuction } : {}
+			return {
+				...state,
+				unseenOrders: data.orderCount,
+				unseenMessages: data.messageCount,
+				unseenPurchases: data.purchaseCount,
+				unseenAuctionBidsByAuction: scopedBidCounts,
+				unseenAuctionBids: data.auctionBidCountsByAuction ? sumScopedUnseenCounts(scopedBidCounts) : (data.auctionBidCount ?? 0),
+				unseenAuctionComments: data.auctionCommentCount ?? 0,
+				unseenAuctionEventComments: data.auctionEventCommentCount ?? 0,
+				unseenProductComments: data.productCommentCount ?? 0,
+				unseenAuctionLive: data.auctionLiveCount ?? 0,
+				unseenAuctionSettlementBegins: data.auctionSettlementBeginsCount ?? 0,
+				unseenBidUpdates: data.bidUpdateCount ?? 0,
+				unseenByConversation: data.conversationCounts,
+			}
+		})
 	},
 }
 

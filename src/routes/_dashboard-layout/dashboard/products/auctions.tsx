@@ -329,7 +329,7 @@ function AuctionListItem({
 	const hasNewActivity = newBidsCount + newCommentsCount + newChatCount > 0 || hasNewLiveStatus || hasNewSettlementStatus
 
 	const handleMarkActivitySeen = () => {
-		notificationActions.markAuctionBidsSeen(auctionNotificationKey, newBidsCount)
+		notificationActions.markAuctionBidsSeen(auctionNotificationKey)
 		notificationActions.markAuctionCommentsSeen(auctionNotificationKey, newChatCount)
 		notificationActions.markAuctionEventCommentsSeen(auctionNotificationKey, newCommentsCount)
 		notificationActions.markAuctionLiveSeen(auctionNotificationKey, hasNewLiveStatus ? 1 : 0)

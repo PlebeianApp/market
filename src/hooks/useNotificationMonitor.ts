@@ -549,8 +549,18 @@ export const useNotificationMonitor = () => {
 						sellerAuctionKeyByRootEventId,
 						sellerAuctionKeyByCoordinate,
 					])
-					return event.pubkey !== user.pubkey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event, auctionKey)
+					return event.pubkey !== user.pubkey && !!auctionKey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event, auctionKey)
 				})
+
+				const newSellerBidCountsByAuction = newSellerBidEvents.reduce<Record<string, number>>((counts, event) => {
+					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
+						sellerAuctionKeyByRootEventId,
+						sellerAuctionKeyByCoordinate,
+					])
+					if (!auctionKey) return counts
+					counts[auctionKey] = (counts[auctionKey] || 0) + 1
+					return counts
+				}, {})
 
 				const newSellerLiveChatEvents = sellerLiveChatEvents.filter((event) => {
 					seenAuctionCommentEventIds.add(event.id)
@@ -643,6 +653,7 @@ export const useNotificationMonitor = () => {
 					purchaseCount: newPurchaseUpdates.length,
 					conversationCounts,
 					auctionBidCount: newSellerBidEvents.length,
+					auctionBidCountsByAuction: newSellerBidCountsByAuction,
 					auctionCommentCount: newSellerLiveChatEvents.length,
 					auctionEventCommentCount: newSellerAuctionCommentEvents.length,
 					productCommentCount: newSellerProductCommentEvents.length,
@@ -675,10 +686,11 @@ export const useNotificationMonitor = () => {
 						sellerAuctionKeyByRootEventId,
 						sellerAuctionKeyByCoordinate,
 					])
-					if (event.pubkey === user.pubkey || !isCountableAuctionBidEvent(event) || !isNewAuctionBid(event, auctionKey)) return
+					if (event.pubkey === user.pubkey || !auctionKey || !isCountableAuctionBidEvent(event) || !isNewAuctionBid(event, auctionKey))
+						return
 
 					console.log('[NotificationMonitor] New auction bid received:', event.id)
-					notificationActions.incrementUnseenAuctionBids()
+					notificationActions.incrementUnseenAuctionBids(auctionKey)
 				}
 
 				const handleWatchedBidEvent = (event: NDKEvent) => {
