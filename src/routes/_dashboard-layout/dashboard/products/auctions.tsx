@@ -33,6 +33,7 @@ import { getOrderId } from '@/queries/orders'
 import { useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
@@ -93,6 +94,55 @@ function formatTimeLeft(seconds: number): string {
 const getAuctionCoordinates = (auction: NDKEvent): string => {
 	const auctionDTag = getAuctionId(auction)
 	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+}
+
+const compareEventRecencyDescending = (left: NDKEvent, right: NDKEvent): number => {
+	const createdAtDelta = (right.created_at || 0) - (left.created_at || 0)
+	if (createdAtDelta !== 0) return createdAtDelta
+	return right.id.localeCompare(left.id)
+}
+
+const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
+	const byId = new Map<string, NDKEvent>()
+	for (const event of events) {
+		if (!event?.id) continue
+		byId.set(event.id, event)
+	}
+	return Array.from(byId.values())
+}
+
+const isCanonicalSellerSettlementForAuction = (
+	event: NDKEvent,
+	auction: NDKEvent,
+	auctionRootEventId: string,
+	auctionCoordinates: string,
+): boolean => {
+	const parsed = parseSettlementEvent(event)
+	if (!parsed.ok) return false
+
+	const authorMatchesSeller = event.pubkey === auction.pubkey || parsed.value.sellerPubkey === auction.pubkey
+	if (!authorMatchesSeller) return false
+
+	const rootReferenceMatches = parsed.value.auctionRootEventId === auctionRootEventId
+	const coordinateReferenceMatches = parsed.value.auctionCoordinate === auctionCoordinates
+	return rootReferenceMatches || coordinateReferenceMatches
+}
+
+const resolveLatestCanonicalSettlementForAuction = (
+	auction: NDKEvent,
+	auctionRootEventId: string,
+	auctionCoordinates: string,
+	settlementsByAuctionKey?: Map<string, NDKEvent[]>,
+): NDKEvent | null => {
+	const events = dedupeEventsById([
+		...(settlementsByAuctionKey?.get(auctionRootEventId) ?? []),
+		...(settlementsByAuctionKey?.get(auctionCoordinates) ?? []),
+	])
+
+	const matching = events.filter((event) => isCanonicalSellerSettlementForAuction(event, auction, auctionRootEventId, auctionCoordinates))
+	if (matching.length === 0) return null
+
+	return [...matching].sort(compareEventRecencyDescending)[0] ?? null
 }
 
 const STATUS_BADGE_STYLES: Record<AuctionStatus, string> = {
@@ -624,8 +674,12 @@ function AuctionsOverviewComponent() {
 										const auctionRootEventId = getAuctionRootEventId(auction) || auction.id
 										const auctionCoordinates = getAuctionCoordinates(auction)
 										const bids = bidsByAuctionId?.get(auctionRootEventId) ?? []
-										const latestSettlement =
-											settlementsByAuctionKey?.get(auctionRootEventId)?.[0] ?? settlementsByAuctionKey?.get(auctionCoordinates)?.[0] ?? null
+										const latestSettlement = resolveLatestCanonicalSettlementForAuction(
+											auction,
+											auctionRootEventId,
+											auctionCoordinates,
+											settlementsByAuctionKey,
+										)
 										const pathReleases = pathReleasesByAuctionCoordinate?.get(auctionCoordinates) ?? []
 
 										return (
