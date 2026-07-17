@@ -410,7 +410,7 @@ export const useNotificationMonitor = () => {
 		// Initial fetch to calculate current unseen counts and set up auction-specific subscriptions
 		const initializeNotifications = async () => {
 			try {
-				const now = Math.floor(Date.now() / 1000)
+				const initializationStartedAt = Math.floor(Date.now() / 1000)
 				// Fetch recent orders where user is seller (recipient)
 				const orderFilter: NDKFilter = {
 					kinds: [ORDER_PROCESS_KIND],
@@ -588,14 +588,16 @@ export const useNotificationMonitor = () => {
 
 				const unseenAuctionLiveCount = sellerAuctions.filter((auction) => {
 					const startAt = getAuctionStartAt(auction)
-					return startAt > notificationActions.getLastSeenAuctionLive(getAuctionNotificationKey(auction)) && startAt <= now
+					return (
+						startAt > notificationActions.getLastSeenAuctionLive(getAuctionNotificationKey(auction)) && startAt <= initializationStartedAt
+					)
 				}).length
 
 				const unseenAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
 					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 					return (
 						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(getAuctionNotificationKey(auction)) &&
-						biddingCutoffAt <= now
+						biddingCutoffAt <= initializationStartedAt
 					)
 				}).length
 
@@ -646,6 +648,34 @@ export const useNotificationMonitor = () => {
 
 				if (isCancelled) return
 
+				// Reconcile lifecycle transitions that can happen while async initialization
+				// is still fetching relay data. This bounded window closes gaps where a
+				// transition can be missed by both initial counting and one-shot timer setup.
+				const initializationCompletedAt = Math.floor(Date.now() / 1000)
+				const reconciledAuctionLiveCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
+					if (!auctionKey) return false
+
+					const startAt = getAuctionStartAt(auction)
+					return (
+						startAt > initializationStartedAt &&
+						startAt <= initializationCompletedAt &&
+						startAt > notificationActions.getLastSeenAuctionLive(auctionKey)
+					)
+				}).length
+
+				const reconciledAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
+					if (!auctionKey) return false
+
+					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+					return (
+						biddingCutoffAt > initializationStartedAt &&
+						biddingCutoffAt <= initializationCompletedAt &&
+						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)
+					)
+				}).length
+
 				// Update store with initial counts
 				notificationActions.recalculateFromEvents({
 					orderCount: newOrders.length,
@@ -657,8 +687,8 @@ export const useNotificationMonitor = () => {
 					auctionCommentCount: newSellerLiveChatEvents.length,
 					auctionEventCommentCount: newSellerAuctionCommentEvents.length,
 					productCommentCount: newSellerProductCommentEvents.length,
-					auctionLiveCount: unseenAuctionLiveCount,
-					auctionSettlementBeginsCount: unseenAuctionSettlementBeginsCount,
+					auctionLiveCount: unseenAuctionLiveCount + reconciledAuctionLiveCount,
+					auctionSettlementBeginsCount: unseenAuctionSettlementBeginsCount + reconciledAuctionSettlementBeginsCount,
 					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
 				})
 
@@ -670,9 +700,12 @@ export const useNotificationMonitor = () => {
 					auctionComments: newSellerLiveChatEvents.length,
 					auctionEventComments: newSellerAuctionCommentEvents.length,
 					productComments: newSellerProductCommentEvents.length,
-					auctionLive: unseenAuctionLiveCount,
-					auctionSettlementBegins: unseenAuctionSettlementBeginsCount,
+					auctionLive: unseenAuctionLiveCount + reconciledAuctionLiveCount,
+					auctionSettlementBegins: unseenAuctionSettlementBeginsCount + reconciledAuctionSettlementBeginsCount,
 					bidUpdates: newHigherBidEvents.length + newSettlementEvents.length,
+					reconciledAuctionLive: reconciledAuctionLiveCount,
+					reconciledAuctionSettlementBegins: reconciledAuctionSettlementBeginsCount,
+					initializationWindowSeconds: Math.max(0, initializationCompletedAt - initializationStartedAt),
 					conversations: Object.keys(conversationCounts).length,
 				})
 
