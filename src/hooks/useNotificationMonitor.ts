@@ -280,6 +280,9 @@ export const useNotificationMonitor = () => {
 		const seenSettlementEventIds = new Set<string>()
 		const scheduledAuctionLiveKeys = new Set<string>()
 		const scheduledAuctionSettlementKeys = new Set<string>()
+		const subscribedSellerAuctionRootEventIds = new Set<string>()
+		const subscribedSellerAuctionCoordinates = new Set<string>()
+		const subscribedSellerLiveActivityCoordinates = new Set<string>()
 		const phaseTimeoutIds: number[] = []
 
 		// Mark as monitoring to prevent duplicate subscriptions
@@ -749,6 +752,80 @@ export const useNotificationMonitor = () => {
 					notificationActions.incrementUnseenAuctionComments()
 				}
 
+				const subscribeSellerLiveActivityCoordinate = (liveActivityCoordinate: string) => {
+					if (!liveActivityCoordinate || subscribedSellerLiveActivityCoordinates.has(liveActivityCoordinate)) return
+					subscribedSellerLiveActivityCoordinates.add(liveActivityCoordinate)
+
+					subscribeToTaggedAuctionEvents({
+						kind: LIVE_CHAT_KIND_NDK,
+						tagName: '#a',
+						values: [liveActivityCoordinate],
+						onEvent: handleSellerLiveChatEvent,
+					})
+				}
+
+				const handleSellerLiveActivityEvent = (event: NDKEvent) => {
+					const liveActivityCoordinate = getAddressableEventCoordinate(event)
+					if (!liveActivityCoordinate) return
+
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (!auctionKey) return
+
+					sellerAuctionKeyByLiveActivityCoordinate.set(liveActivityCoordinate, auctionKey)
+					subscribeSellerLiveActivityCoordinate(liveActivityCoordinate)
+				}
+
+				const subscribeSellerAuctionRootScope = (auctionRootEventId: string) => {
+					if (!auctionRootEventId || subscribedSellerAuctionRootEventIds.has(auctionRootEventId)) return
+					subscribedSellerAuctionRootEventIds.add(auctionRootEventId)
+
+					subscribeToTaggedAuctionEvents({
+						kind: AUCTION_BID_KIND,
+						tagName: '#e',
+						values: [auctionRootEventId],
+						onEvent: handleSellerBidEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#E',
+						values: [auctionRootEventId],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+				}
+
+				const subscribeSellerAuctionCoordinateScope = (auctionCoordinate: string) => {
+					if (!auctionCoordinate || subscribedSellerAuctionCoordinates.has(auctionCoordinate)) return
+					subscribedSellerAuctionCoordinates.add(auctionCoordinate)
+
+					subscribeToTaggedAuctionEvents({
+						kind: AUCTION_BID_KIND,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerBidEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#A',
+						values: [auctionCoordinate],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: LIVE_ACTIVITY_KIND_NDK,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerLiveActivityEvent,
+					})
+				}
+
 				const handleSellerAuctionCommentEvent = (event: NDKEvent) => {
 					if (!event.id || seenAuctionThreadCommentEventIds.has(event.id)) return
 					seenAuctionThreadCommentEventIds.add(event.id)
@@ -788,21 +865,39 @@ export const useNotificationMonitor = () => {
 
 				const handleOwnAuctionEvent = (event: NDKEvent) => {
 					if (event.pubkey !== user.pubkey) return
+
+					const auctionKey = getAuctionNotificationKey(event)
+					if (!auctionKey) return
+
+					const auctionRootEventId = getAuctionRootEventId(event) || event.id
+					const auctionCoordinate = getAuctionCoordinate(event)
+
+					sellerAuctionKeyByRootEventId.set(auctionRootEventId, auctionKey)
+					if (auctionCoordinate) sellerAuctionKeyByCoordinate.set(auctionCoordinate, auctionKey)
+
+					subscribeSellerAuctionRootScope(auctionRootEventId)
+					if (auctionCoordinate) {
+						subscribeSellerAuctionCoordinateScope(auctionCoordinate)
+
+						void fetchTaggedAuctionEvents({
+							kind: LIVE_ACTIVITY_KIND_NDK,
+							auctionRootEventIds: [],
+							auctionCoordinates: [auctionCoordinate],
+						})
+							.then((events) => {
+								events.forEach(handleSellerLiveActivityEvent)
+							})
+							.catch((error) => {
+								console.error('[NotificationMonitor] Failed to refresh live-activity scopes for new auction:', error)
+							})
+					}
+
 					scheduleAuctionPhaseNotification(event)
 				}
 
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#e',
-					values: sellerAuctionRootEventIds,
-					onEvent: handleSellerBidEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#a',
-					values: sellerAuctionCoordinates,
-					onEvent: handleSellerBidEvent,
-				})
+				sellerAuctionRootEventIds.forEach(subscribeSellerAuctionRootScope)
+				sellerAuctionCoordinates.forEach(subscribeSellerAuctionCoordinateScope)
+				sellerLiveActivityCoords.forEach(subscribeSellerLiveActivityCoordinate)
 				subscribeToTaggedAuctionEvents({
 					kind: AUCTION_BID_KIND,
 					tagName: '#e',
@@ -826,24 +921,6 @@ export const useNotificationMonitor = () => {
 					tagName: '#a',
 					values: watchedAuctionCoordinates,
 					onEvent: handleWatchedSettlementEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: COMMENT_KIND_NDK,
-					tagName: '#a',
-					values: sellerAuctionCoordinates,
-					onEvent: handleSellerAuctionCommentEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: COMMENT_KIND_NDK,
-					tagName: '#A',
-					values: sellerAuctionCoordinates,
-					onEvent: handleSellerAuctionCommentEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: COMMENT_KIND_NDK,
-					tagName: '#E',
-					values: sellerAuctionRootEventIds,
-					onEvent: handleSellerAuctionCommentEvent,
 				})
 				subscribeToTaggedAuctionEvents({
 					kind: COMMENT_KIND_NDK,
@@ -862,12 +939,6 @@ export const useNotificationMonitor = () => {
 					tagName: '#E',
 					values: sellerProductEventIds,
 					onEvent: handleSellerProductCommentEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: LIVE_CHAT_KIND_NDK,
-					tagName: '#a',
-					values: sellerLiveActivityCoords,
-					onEvent: handleSellerLiveChatEvent,
 				})
 
 				const auctionListingSubscription = ndk.subscribe(
