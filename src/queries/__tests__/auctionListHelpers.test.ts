@@ -28,6 +28,16 @@ mock.module('@/lib/stores/blacklist', () => ({
 }))
 
 mock.module('@/lib/stores/ndk', () => ({
+	getWriteRelays: () => [],
+	ndkStore: {
+		state: {
+			ndk: null,
+			zapNdk: null,
+			explicitRelayUrls: [],
+			writeRelayUrls: [],
+			signer: undefined,
+		},
+	},
 	ndkActions: {
 		getNDK: () => ({}),
 		fetchEventsWithTimeout: mock(async (filter: NDKFilter | NDKFilter[]) => {
