@@ -34,7 +34,7 @@ import {
 	type ValidatorClaim,
 	type ValidatorReason,
 } from './constants'
-import type { ParsedAuctionEvent, ParsedBidEvent } from './events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from './events'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 import { checkProofStateBatch } from '../cashu/nut7'
 
@@ -332,7 +332,7 @@ export const VALIDATE_BID_CLAIMS: readonly ValidatorClaim[] = ['valid_bid_placed
 // Auction Validation
 // ============================================================================
 
-export const validateAuctionImmutableTags = (rootAuctionEvent: ParsedAuctionEvent, latestAuctionEvent: ParsedAuctionEvent) => {
+export const validateAuctionImmutableTags = (rootAuctionEvent: ParsedAuctionEvent, latestAuctionEvent: ParsedAuctionEvent): boolean => {
 	const hasExactImmutableTagValues =
 		rootAuctionEvent.auctionType === latestAuctionEvent.auctionType &&
 		rootAuctionEvent.startAt === latestAuctionEvent.startAt &&
@@ -364,63 +364,44 @@ export const validateAuctionImmutableTags = (rootAuctionEvent: ParsedAuctionEven
  * This should eventually be expanded to use validator checks and quorum to mitigate this vulnerability.
  * No checks against the max bid amount are present locally as a bid can be valid but not the highest bid.
  */
-export const validateBidLocalOnly = (auction: ParsedAuctionEvent, bid: ParsedBidEvent): BidValidationVerdict => {
+export const validateBidLocalOnly = (auction: ParsedAuctionEvent, bid: ParsedBidEvent): boolean => {
 	// --- Step 1: cross-event reference integrity -----------------------------
 
 	if (bid.auctionRootEventId !== auction.rootEventId) {
-		return {
-			claim: 'bid_invalid',
-			reason: 'bad_lock',
-			detail: `bid references root ${bid.auctionRootEventId}, auction root is ${auction.rootEventId}`,
-		}
+		return false
 	}
 	if (bid.auctionCoordinate !== auction.coordinate) {
-		return {
-			claim: 'bid_invalid',
-			reason: 'bad_lock',
-			detail: `bid coordinate ${bid.auctionCoordinate} doesn't match auction ${auction.coordinate}`,
-		}
+		return false
 	}
 	if (bid.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
-		return { claim: 'bid_invalid', reason: 'bad_lock', detail: 'bid `p` tag does not match auction seller pubkey' }
+		return false
 	}
 
 	// --- Step 2: time-window checks ------------------------------------------
 
 	if (bid.createdAt < auction.startAt) {
-		return { claim: 'bid_invalid', reason: 'pre_start', detail: `created_at=${bid.createdAt} < start_at=${auction.startAt}` }
+		return false
 	}
 	if (bid.createdAt > auction.maxEndAt) {
-		return { claim: 'bid_invalid', reason: 'post_end', detail: `created_at=${bid.createdAt} > max_end_at=${auction.maxEndAt}` }
+		return false
 	}
 
 	// --- Step 3: mint allowlist ---------------------------------------------
 
 	if (!auction.mints.includes(bid.mint)) {
-		return {
-			claim: 'bid_invalid',
-			reason: 'unsupported_mint',
-			detail: `mint ${bid.mint} not in auction allowlist [${auction.mints.join(', ')}]`,
-		}
+		return false
 	}
 
 	// --- Step 4: lock secret structure --------------------------------------
 
 	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
 	if (bid.locktime !== expectedLocktime) {
-		return {
-			claim: 'bid_invalid',
-			reason: 'bad_lock',
-			detail: `bid locktime tag=${bid.locktime}, expected max_end_at+settlement_grace=${expectedLocktime}`,
-		}
+		return false
 	}
 	if (bid.lockSecrets.length !== bid.proofYs.length) {
-		return {
-			claim: 'bid_invalid',
-			reason: 'bad_lock',
-			detail: `lock_secret and proof_y tags must be parallel: ${bid.lockSecrets.length} vs ${bid.proofYs.length}`,
-		}
+		return false
 	}
+
 	// Validate every proof's secret independently. All MUST share the same
 	// lock parameters — the bidder split their input across multiple
 	// denominations but each output proof is its own P2PK lock with its
@@ -433,15 +414,49 @@ export const validateBidLocalOnly = (auction: ParsedAuctionEvent, bid: ParsedBid
 			expectedRefundPubkey: bid.refundPubkey,
 		})
 		if (!lockParse.ok) {
-			return {
-				claim: 'bid_invalid',
-				reason: 'bad_lock',
-				detail: `proof ${i + 1}/${bid.lockSecrets.length}: ${lockParse.reason}${lockParse.detail ? `: ${lockParse.detail}` : ''}`,
-			}
+			return false
 		}
 	}
 
+	// TODO: Get Validator approval of bid
+
+	// TODO: NUT-7 proof state
+
 	// --- Step 8: success ----------------------------------------------------
 
-	return { claim: 'valid_bid_placed' }
+	return true
+}
+
+export const validateSettlementEventLocalOnly = (auction: ParsedAuctionEvent, settlement: ParsedSettlementEvent): boolean => {
+	const isValidSettlementTarget =
+		settlement.auctionRootEventId === auction.rootEventId &&
+		settlement.auctionCoordinate === auction.coordinate &&
+		settlement.sellerPubkey === auction.sellerPubkey
+
+	if (!isValidSettlementTarget) return false
+
+	switch (settlement.status) {
+		case 'settled':
+			return !!settlement.finalAmount && !!settlement.winnerPubkey
+		case 'cancelled':
+		case 'griefed_no_fallback':
+		case 'reserve_not_met':
+			return false
+	}
+}
+
+export const validatePathReleaseLocalOnly = (
+	auction: ParsedAuctionEvent,
+	pathRelease: ParsedPathReleaseEvent,
+	winningBid: ParsedBidEvent,
+): boolean => {
+	const isValidPathReleaseTarget =
+		pathRelease.auctionCoordinate === auction.coordinate &&
+		pathRelease.sellerPubkey === auction.sellerPubkey &&
+		pathRelease.bidEventId === winningBid.id &&
+		pathRelease.bidderPubkey === winningBid.bidderPubkey
+
+	if (!isValidPathReleaseTarget) return false
+
+	return true
 }

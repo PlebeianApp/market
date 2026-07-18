@@ -34,11 +34,23 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@/lib/auction/events'
-import { validateAuctionImmutableTags, validateBidLocalOnly, validateSettlementEventLocalOnly } from '@/lib/auction/validation'
+import {
+	validateAuctionImmutableTags,
+	validateBid,
+	validateBidLocalOnly,
+	validatePathReleaseLocalOnly,
+	validateSettlementEventLocalOnly,
+} from '@/lib/auction/validation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { checkProofStateBatch } from '@/lib/cashu/nut7'
-import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
-import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseBidEvent, type ParseBidEventResult } from '@/lib/schemas/auction/bidEvent'
+import {
+	parsePathReleaseEvent,
+	parseSettlementEvent,
+	type ParsePathReleaseEventResult,
+	type ParseSettlementEventResult,
+} from '@/lib/schemas/auction/settlementEvents'
+import type z from 'zod'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -1000,17 +1012,16 @@ export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | u
 //
 
 export type AuctionWithRelatedEvents = {
-	auctionEvents: NDKEvent[]
-	bids: NDKEvent[]
-	settlements: NDKEvent[]
-	pathReleases: NDKEvent[]
-	claimOrders: NDKEvent[]
+	bids?: ParsedBidEvent[]
+	settlements?: ParsedSettlementEvent[]
+	pathReleases?: ParsedPathReleaseEvent[]
+	claimOrders?: NDKEvent[]
 
 	latestAuction: ParsedAuctionEvent // Latest auction event
-	topBid: ParsedBidEvent
-	settlement: ParsedSettlementEvent
-	pathRelease: ParsedPathReleaseEvent
-	claimOrder: NDKEvent
+	topBid?: ParsedBidEvent
+	settlement?: ParsedSettlementEvent
+	pathRelease?: ParsedPathReleaseEvent
+	claimOrder?: NDKEvent
 }
 
 const fetchAndValidateAuctionEvent = async (rootAuctionId: string, auctionCoordinates: string): Promise<ParsedAuctionEvent | null> => {
@@ -1037,79 +1048,89 @@ const fetchAndValidateAuctionEvent = async (rootAuctionId: string, auctionCoordi
 	return latestAuctionEventParsed
 }
 
-const fetchAndValidateAuctionBidEvents = async (auctionEvent: ParsedAuctionEvent, limit: number = 100) => {
-	const bidEvents = await fetchAuctionBids('', limit, auctionEvent.coordinate)
+type ParsedAuctionRelatedEvent = ParsedBidEvent | ParsedPathReleaseEvent | ParsedSettlementEvent
+type ParseResult<T> = { ok: true; value: T } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
-	const bidEventsParsed = bidEvents
+const fetchAndValidateRelatedAuctionEvent = async <T extends ParsedAuctionRelatedEvent>(
+	auctionEvent: ParsedAuctionEvent,
+	fetch: (auctionEvent: ParsedAuctionEvent) => Promise<NDKEvent[]>,
+	parse: (event: NDKEvent) => ParseResult<T>,
+	validate: (auctionEvent: ParsedAuctionEvent, event: T) => boolean,
+) => {
+	const relatedEvents = await fetch(auctionEvent)
+
+	return relatedEvents
 		.map((event) => {
-			const result = parseBidEvent(event)
+			const result = parse(event)
 			if (!result.ok) return
 
-			return result.value
+			return result.value as T
 		})
-		.filter(Boolean) as ParsedBidEvent[]
-
-	// Validate values locally
-	const bidEventsParsedValidated = bidEventsParsed.filter((bid) => validateBidLocalOnly(auctionEvent, bid))
-
-	// TODO: Get Validator approval of bid
-
-	// TODO: NUT-7 proof state
-
-	return bidEventsParsedValidated
+		.filter((event): event is T => event !== undefined && validate(auctionEvent, event))
 }
 
-const fetchAndValidateAuctionSettlementEvents = async (auctionEvent: ParsedAuctionEvent, limit: number = 100) => {
-	const settlementEvents = await fetchAuctionSettlements('', limit, auctionEvent.coordinate)
-
-	const settlementEventsParsed = settlementEvents
-		.map((event) => {
-			const result = parseSettlementEvent(event)
-			if (!result.ok) return
-
-			return result.value
-		})
-		.filter(Boolean) as ParsedSettlementEvent[]
-
-	const settlementEventsParsedValidated = settlementEventsParsed.filter((settlement) =>
-		validateSettlementEventLocalOnly(auctionEvent, settlement),
-	)
-
-	return settlementEventsParsedValidated
-
-	// Settlement event:
-	// - the event author equals the auction seller;
-	// - exact auction-root e and auction-coordinate a references;
-	// - a recognized settlement status with the fields required for that status;
-	// - winner and final-amount fields when the status is settled.
-}
-
-const fetchAndValidateAuctionPathReleaseEvents = async (auctionEvent: ParsedAuctionEvent, limit: number = 100) => {
-	const pathReleaseEvents = await fetchAuctionPathReleases('', limit, auctionEvent.coordinate)
-
-	// Path Release Event:
-	// - the exact auction-coordinate a reference;
-	// - the exact canonical winning-bid e reference;
-	// - the release author equals the referenced bid author;
-	// - the seller p reference equals the auction seller.
-}
-
-export const fetchAuctionRelatedEvents = async (rootAuctionId: string, limit: number = 500, auctionCoordinates: string) => {
-	if (!rootAuctionId || !auctionCoordinates) return []
+export const fetchAuctionRelatedEvents = async (
+	rootAuctionId: string,
+	limit: number = 500,
+	auctionCoordinates: string,
+): Promise<AuctionWithRelatedEvents | null> => {
+	if (!rootAuctionId || !auctionCoordinates) return null
 	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
+	if (!ndk) return null
 
 	const auctionEvent = await fetchAndValidateAuctionEvent(rootAuctionId, auctionCoordinates)
 
-	if (!auctionEvent) return
+	if (!auctionEvent) return null
 
-	const bids = await fetchAndValidateAuctionBidEvents(auctionEvent)
+	// Bid Events
+	const bids = await fetchAndValidateRelatedAuctionEvent(
+		auctionEvent,
+		() => fetchAuctionBids('', limit, auctionEvent.coordinate),
+		parseBidEvent,
+		validateBidLocalOnly,
+	)
 
-	// Needs additional fetch from validator for bid events. Must verify observed_at is correct
+	const highestBid = bids
+		.sort((a, b) => {
+			const amountDelta = b.amount - a.amount
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (a.createdAt || 0) - (b.createdAt || 0)
+			if (timeDelta !== 0) return timeDelta
+			return a.id.localeCompare(b.id)
+		})
+		.at(0)
 
-	const auctionWithRelatedEvents: AuctionWithRelatedEvents = {}
+	if (!bids || !highestBid)
+		return {
+			latestAuction: auctionEvent,
+		}
 
-	return auctionWithRelatedEvents
+	const [settlements, pathReleases] = await Promise.all([
+		// Settlement Events
+		fetchAndValidateRelatedAuctionEvent(
+			auctionEvent,
+			() => fetchAuctionSettlements('', limit, auctionEvent.coordinate),
+			parseSettlementEvent,
+			validateSettlementEventLocalOnly,
+		),
+		// Path Release Events
+		fetchAndValidateRelatedAuctionEvent(
+			auctionEvent,
+			() => fetchAuctionPathReleases('', limit, auctionEvent.coordinate),
+			parsePathReleaseEvent,
+			(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
+		),
+	])
+
+	return {
+		latestAuction: auctionEvent,
+		bids: bids,
+		topBid: highestBid,
+		settlements: settlements,
+		// settlement: settlements
+		pathReleases: pathReleases,
+		// pathRelease: pathReleases,
+	}
 }
 
 export const auctionWithRelatedEventsQueryOptions = (auctionRootId: string, auctionCoordinates: string, limit: number = 100) =>
