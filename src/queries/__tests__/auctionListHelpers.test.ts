@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
+import type { NostrFilter } from '@/lib/nostr/io'
 
-let fetchedRequests: Array<NDKFilter | NDKFilter[]> = []
-let relayEvents = new Set<NDKEvent>()
+let fetchedRequests: Array<NostrFilter | NostrFilter[]> = []
+let relayEvents = new Set<RelayEvent>()
 
 if (!('localStorage' in globalThis)) {
 	const items = new Map<string, string>()
@@ -40,7 +40,7 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 	ndkActions: {
 		getNDK: () => ({}),
-		fetchEventsWithTimeout: mock(async (filter: NDKFilter | NDKFilter[]) => {
+		fetchEventsWithTimeout: mock(async (filter: NostrFilter | NostrFilter[]) => {
 			fetchedRequests.push(filter)
 			return relayEvents
 		}),
@@ -49,7 +49,17 @@ mock.module('@/lib/stores/ndk', () => ({
 
 const { fetchAuctionSettlementsForList, fetchAuctionPathReleasesForList, getAuctionTopBidFromBids } = await import('@/queries/auctions')
 
-function makeAuctionEvent(params: { id: string; pubkey: string; dTag: string; rootId: string; startAt: number; endAt: number }): NDKEvent {
+type AuctionEventLike = NonNullable<Parameters<typeof getAuctionTopBidFromBids>[0]>
+type RelayEvent = AuctionEventLike
+
+function makeAuctionEvent(params: {
+	id: string
+	pubkey: string
+	dTag: string
+	rootId: string
+	startAt: number
+	endAt: number
+}): RelayEvent {
 	return {
 		id: params.id,
 		kind: AUCTION_KIND,
@@ -62,7 +72,7 @@ function makeAuctionEvent(params: { id: string; pubkey: string; dTag: string; ro
 			['start_at', String(params.startAt)],
 			['end_at', String(params.endAt)],
 		],
-	} as unknown as NDKEvent
+	} as RelayEvent
 }
 
 function makeBidEvent(params: {
@@ -72,7 +82,7 @@ function makeBidEvent(params: {
 	amount: number
 	createdAt: number
 	status?: string
-}): NDKEvent {
+}): Parameters<typeof getAuctionTopBidFromBids>[1][number] {
 	return {
 		id: params.id,
 		kind: 1023,
@@ -84,10 +94,10 @@ function makeBidEvent(params: {
 			['amount', String(params.amount)],
 			['status', params.status ?? 'active'],
 		],
-	} as unknown as NDKEvent
+	} as RelayEvent
 }
 
-function makeSettlementEvent(params: { id: string; createdAt: number; rootIds?: string[]; coordinates?: string[] }): NDKEvent {
+function makeSettlementEvent(params: { id: string; createdAt: number; rootIds?: string[]; coordinates?: string[] }): RelayEvent {
 	const tags: string[][] = []
 	for (const rootId of params.rootIds ?? []) tags.push(['e', rootId])
 	for (const coordinate of params.coordinates ?? []) tags.push(['a', coordinate])
@@ -99,10 +109,10 @@ function makeSettlementEvent(params: { id: string; createdAt: number; rootIds?: 
 		created_at: params.createdAt,
 		content: '',
 		tags,
-	} as unknown as NDKEvent
+	} as RelayEvent
 }
 
-function makePathReleaseEvent(params: { id: string; createdAt: number; coordinates: string[] }): NDKEvent {
+function makePathReleaseEvent(params: { id: string; createdAt: number; coordinates: string[] }): RelayEvent {
 	return {
 		id: params.id,
 		kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
@@ -110,7 +120,7 @@ function makePathReleaseEvent(params: { id: string; createdAt: number; coordinat
 		created_at: params.createdAt,
 		content: '',
 		tags: params.coordinates.map((coordinate) => ['a', coordinate]),
-	} as unknown as NDKEvent
+	} as RelayEvent
 }
 
 describe('fetchAuctionSettlementsForList', () => {
@@ -147,7 +157,7 @@ describe('fetchAuctionSettlementsForList', () => {
 		await fetchAuctionSettlementsForList(ids, coordinates, 77)
 
 		expect(fetchedRequests).toHaveLength(1)
-		const filterBatch = fetchedRequests[0] as NDKFilter[]
+		const filterBatch = fetchedRequests[0] as NostrFilter[]
 		expect(Array.isArray(filterBatch)).toBe(true)
 		expect(filterBatch).toHaveLength(4)
 		expect(filterBatch.every((filter) => filter.kinds?.includes(AUCTION_SETTLEMENT_KIND as never))).toBe(true)
