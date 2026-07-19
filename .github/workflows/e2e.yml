@@ -46,7 +46,7 @@ jobs:
           # does not exist, causing build failures.
           # Pinning to this pre-regression commit ensures the build uses the 
           # remote module source until the upstream issue is resolved.
-          git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
+          git clone https://github.com/fiatjaf/nak.git /tmp/nak
           cd /tmp/nak
           git checkout b65683886b58382890888fbdda90e5c2129df488
 
@@ -168,7 +168,7 @@ jobs:
           # does not exist, causing build failures.
           # Pinning to this pre-regression commit ensures the build uses the 
           # remote module source until the upstream issue is resolved.
-          git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
+          git clone https://github.com/fiatjaf/nak.git /tmp/nak
           cd /tmp/nak
           git checkout b65683886b58382890888fbdda90e5c2129df488
 
