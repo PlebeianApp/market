@@ -49,7 +49,6 @@ jobs:
           git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
           cd /tmp/nak
           git checkout b65683886b58382890888fbdda90e5c2129df488
-          
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -172,7 +171,7 @@ jobs:
           git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
           cd /tmp/nak
           git checkout b65683886b58382890888fbdda90e5c2129df488
-          
+
           GOBIN="$(go env GOPATH)/bin"
           mkdir -p "$GOBIN"
           go build -o "$GOBIN/nak" .
