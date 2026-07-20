@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools'
-import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '../schemas/order'
+import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, type Event } from 'nostr-tools'
+import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '../schemas/order'
 import { mergeOrderMessageReads, type LegacyOrderMessageEvent, type OrderMessageReadRecord } from '../orders/nip17OrderReadIntegration'
 import type { UnwrappedNip17OrderMessage } from '../orders/nip17OrderRead'
 import {
@@ -8,6 +8,7 @@ import {
 	createOrderCreationRumor,
 	createPaymentReceiptRumor,
 	createPaymentRequestRumor,
+	createShippingUpdateRumor,
 	createStatusUpdateRumor,
 	type OrderMessageRumor,
 } from '../orders/orderMessageRumor'
@@ -137,6 +138,30 @@ describe('NIP-17 order read integration helper', () => {
 		result.records.forEach(expectProtocolRecord)
 	})
 
+	test('accepts kind 14 messages without optional subject tags', () => {
+		const legacyRumor = createOrderChatRumor({
+			senderPubkey: BUYER_PUBKEY,
+			recipientPubkey: SELLER_PUBKEY,
+			content: 'Legacy message without a subject',
+			createdAt: CREATED_AT,
+		})
+		const nip17Rumor = createOrderChatRumor({
+			senderPubkey: BUYER_PUBKEY,
+			recipientPubkey: SELLER_PUBKEY,
+			content: 'NIP-17 message without a subject',
+			createdAt: CREATED_AT + 1,
+		})
+
+		const result = mergeOrderMessageReads({
+			legacyEvents: [legacyEventFromRumor(legacyRumor)],
+			nip17Messages: [unwrappedMessage(nip17Rumor)],
+		})
+
+		expect(result.records.map((record) => record.id)).toEqual([legacyRumor.id, nip17Rumor.id])
+		expect(result.records.map((record) => record.source)).toEqual(['legacy', 'nip17'])
+		expect(result.records.every((record) => record.tags.every((tag) => tag[0] !== 'subject'))).toBe(true)
+	})
+
 	test('rejects malformed legacy events', () => {
 		const valid = createPaymentRequestRumor({
 			merchantPubkey: SELLER_PUBKEY,
@@ -210,6 +235,24 @@ describe('NIP-17 order read integration helper', () => {
 		expect(result.records[0]?.tags).toContainEqual(['recipient', SELLER_PUBKEY])
 	})
 
+	test('rejects legacy payment requests without the required amount tag', () => {
+		const paymentRequest = createPaymentRequestRumor({
+			merchantPubkey: SELLER_PUBKEY,
+			buyerPubkey: BUYER_PUBKEY,
+			orderId: 'order-missing-amount',
+			amountSats: 2100,
+			paymentMethods: [{ type: 'lightning', details: 'lnbc-test' }],
+			createdAt: CREATED_AT,
+		})
+		const missingAmount = legacyEventFromRumor(paymentRequest, {
+			tags: paymentRequest.tags.filter((tag) => tag[0] !== 'amount'),
+		})
+
+		const result = mergeOrderMessageReads({ legacyEvents: [missingAmount] })
+
+		expect(result.records).toEqual([])
+	})
+
 	test('accepts legacy order creation fixed-two-decimal amount but keeps legacy tag validation narrow', () => {
 		const orderCreation = createOrderCreationRumor({
 			buyerPubkey: BUYER_PUBKEY,
@@ -258,6 +301,46 @@ describe('NIP-17 order read integration helper', () => {
 		for (const malformedDecimalEvent of malformedDecimalEvents) {
 			expect(result.records.map((record) => record.id)).not.toContain(malformedDecimalEvent.id)
 		}
+	})
+
+	test('accepts known legacy shipping statuses and rejects unknown values', () => {
+		const shippingUpdate = createShippingUpdateRumor({
+			senderPubkey: SELLER_PUBKEY,
+			recipientPubkey: BUYER_PUBKEY,
+			orderId: 'order-shipping-status',
+			status: SHIPPING_STATUS.SHIPPED,
+			createdAt: CREATED_AT,
+		})
+		const validShippingUpdate = legacyEventFromRumor(shippingUpdate)
+		const invalidShippingUpdate = legacyEventFromRumor(shippingUpdate, {
+			tags: shippingUpdate.tags.map((tag) => (tag[0] === 'status' ? ['status', 'teleported'] : tag)),
+		})
+
+		const result = mergeOrderMessageReads({
+			legacyEvents: [invalidShippingUpdate, validShippingUpdate],
+		})
+
+		expect(result.records).toHaveLength(1)
+		expect(result.records[0]?.id).toBe(validShippingUpdate.id)
+		expect(result.records[0]?.tags).toContainEqual(['status', SHIPPING_STATUS.SHIPPED])
+	})
+
+	test('preserves legacy empty-proof receipts as read data without deriving settlement', () => {
+		const receipt = createPaymentReceiptRumor({
+			buyerPubkey: BUYER_PUBKEY,
+			merchantPubkey: SELLER_PUBKEY,
+			orderId: 'order-empty-proof',
+			payment: { medium: 'lightning', reference: 'lnbc-test', proof: '' },
+			amountSats: 2100,
+			createdAt: CREATED_AT,
+		})
+
+		const result = mergeOrderMessageReads({ legacyEvents: [legacyEventFromRumor(receipt)] })
+
+		expect(result.records).toHaveLength(1)
+		expect(result.records[0]?.tags).toContainEqual(['payment', 'lightning', 'lnbc-test', ''])
+		expect('paid' in result.records[0]!).toBe(false)
+		expect('settled' in result.records[0]!).toBe(false)
 	})
 
 	test('normalizes unwrapped NIP-17 messages', () => {
@@ -367,6 +450,14 @@ describe('NIP-17 order read integration helper', () => {
 			...decimalOrderCreationRumor,
 			tags: orderCreationTagsWithAmount(decimalOrderCreationRumor, '12.50'),
 		})
+		const multiRecipientUnsigned = {
+			...validRumor,
+			tags: [...validRumor.tags, ['p', 'f'.repeat(64)]],
+		}
+		const multiRecipientRumor: OrderMessageRumor = {
+			...multiRecipientUnsigned,
+			id: getEventHash(multiRecipientUnsigned),
+		}
 
 		const result = mergeOrderMessageReads({
 			nip17Messages: [
@@ -382,6 +473,7 @@ describe('NIP-17 order read integration helper', () => {
 					counterpartyPubkey: 'e'.repeat(64),
 				}),
 				selfAddressedNip17,
+				unwrappedMessage(multiRecipientRumor),
 				unwrappedMessage({
 					...paymentRequestRumor,
 					tags: [...paymentRequestRumor.tags, ['recipient', SELLER_PUBKEY]],
@@ -395,6 +487,7 @@ describe('NIP-17 order read integration helper', () => {
 		expect(result.records[0]?.id).toBe(validRumor.id)
 		expect(result.records[0]?.source).toBe('nip17')
 		expect(result.records.map((record) => record.id)).not.toContain(selfAddressedNip17.rumor.id)
+		expect(result.records.map((record) => record.id)).not.toContain(multiRecipientRumor.id)
 		expect(result.records.map((record) => record.id)).not.toContain(decimalOrderCreationNip17.rumor.id)
 		expect(result.records[0]?.transport).toMatchObject({
 			direction: 'sent',
@@ -402,6 +495,26 @@ describe('NIP-17 order read integration helper', () => {
 			counterpartyPubkey: SELLER_PUBKEY,
 			recipientPubkey: SELLER_PUBKEY,
 		})
+	})
+
+	test('rejects already-unwrapped NIP-17 messages with non-order rumor kinds', () => {
+		const unsignedReaction = {
+			pubkey: BUYER_PUBKEY,
+			created_at: CREATED_AT,
+			kind: 7,
+			tags: [['p', SELLER_PUBKEY]],
+			content: '+',
+		}
+		const reactionRumor: OrderMessageRumor = {
+			...unsignedReaction,
+			id: getEventHash(unsignedReaction),
+		}
+
+		const result = mergeOrderMessageReads({
+			nip17Messages: [unwrappedMessage(reactionRumor)],
+		})
+
+		expect(result.records).toEqual([])
 	})
 
 	test('does not expose wrapper or gift-wrap tags as order-message tags', () => {
@@ -469,7 +582,7 @@ describe('NIP-17 order read integration helper', () => {
 		expect(result.records[0]?.tags).toEqual(rumor.tags)
 	})
 
-	test('dedupes duplicate NIP-17 messages by inner rumor id', () => {
+	test('dedupes duplicate NIP-17 wrappers and directions by inner rumor id', () => {
 		const rumor = createOrderChatRumor({
 			senderPubkey: BUYER_PUBKEY,
 			recipientPubkey: SELLER_PUBKEY,
@@ -481,7 +594,12 @@ describe('NIP-17 order read integration helper', () => {
 		const result = mergeOrderMessageReads({
 			nip17Messages: [
 				unwrappedMessage(rumor, { giftWrap: fakeEvent('wrap-a', [['p', USER_PUBKEY]]) }),
-				unwrappedMessage(rumor, { giftWrap: fakeEvent('wrap-b', [['p', USER_PUBKEY]]) }),
+				unwrappedMessage(rumor, {
+					giftWrap: fakeEvent('wrap-b', [['p', SELLER_PUBKEY]]),
+					direction: 'received',
+					userPubkey: SELLER_PUBKEY,
+					counterpartyPubkey: BUYER_PUBKEY,
+				}),
 			],
 		})
 

@@ -260,6 +260,8 @@ function tagsForLegacyOrderCreationSchemaValidation(tags: string[][]): string[][
 }
 
 function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string | null {
+	// NIP-17 supports group rooms, but Gamma's order flow uses one buyer/merchant
+	// counterparty; this two-party integration rejects multiple recipient p tags.
 	const recipientTags = rumor.tags.filter((tag) => tag[0] === 'p')
 	if (recipientTags.length !== 1) return null
 
