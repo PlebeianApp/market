@@ -1,0 +1,26 @@
+# market
+
+> To install dependencies:
+
+Project orientation for LLMs (see https://llmstxt.org/). Cross-link: AGENTS.md (workflow rules), HANDOVER.md (session state).
+
+## Stack
+
+Languages/build: npm/TS-JS.
+
+## Structure (top file types)
+
+- `.tsx`: 256 files
+- `.ts`: 221 files
+- `.md`: 106 files
+- `.svg`: 80 files
+- `.json`: 14 files
+- `.yml`: 9 files
+
+## Build & test
+
+- Inspect `Makefile` / `package.json` / `Cargo.toml` / `platformio.ini` for the canonical commands.
+
+## Optional
+
+- [README](./README.md): human readme
