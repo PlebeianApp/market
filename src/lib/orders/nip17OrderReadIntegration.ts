@@ -29,23 +29,35 @@ export type LegacyOrderMessageEvent = {
 	sig: string
 }
 
-export type OrderMessageReadRecord = {
-	source: OrderMessageReadSource
+type OrderMessageReadFields = {
 	id: string
 	pubkey: string
 	created_at: number
 	kind: number
 	tags: string[][]
 	content: string
-	transport?: {
-		rumorId?: string
-		giftWrapId?: string
-		direction?: 'sent' | 'received'
-		userPubkey?: string
-		counterpartyPubkey?: string
-		recipientPubkey?: string
-	}
 }
+
+export type OrderMessageReadTransport = {
+	rumorId: string
+	giftWrapId?: string
+	direction: 'sent' | 'received'
+	userPubkey: string
+	counterpartyPubkey: string
+	recipientPubkey: string
+}
+
+export type LegacyOrderMessageReadRecord = OrderMessageReadFields & {
+	source: 'legacy'
+	transport?: never
+}
+
+export type Nip17OrderMessageReadRecord = OrderMessageReadFields & {
+	source: 'nip17'
+	transport: OrderMessageReadTransport
+}
+
+export type OrderMessageReadRecord = LegacyOrderMessageReadRecord | Nip17OrderMessageReadRecord
 
 export type MergeOrderMessageReadsParams = {
 	legacyEvents?: unknown[]
@@ -79,7 +91,7 @@ export function mergeOrderMessageReads(params: MergeOrderMessageReadsParams): Me
 	}
 }
 
-function normalizeLegacyOrderMessage(value: unknown): OrderMessageReadRecord | null {
+function normalizeLegacyOrderMessage(value: unknown): LegacyOrderMessageReadRecord | null {
 	if (!isLegacyOrderMessageEvent(value)) return null
 	if (!isVerifiedLegacyOrderMessageEvent(value)) return null
 	if (!isSupportedOrderMessageKind(value.kind)) return null
@@ -96,7 +108,7 @@ function normalizeLegacyOrderMessage(value: unknown): OrderMessageReadRecord | n
 	}
 }
 
-function normalizeNip17OrderMessage(value: unknown): OrderMessageReadRecord | null {
+function normalizeNip17OrderMessage(value: unknown): Nip17OrderMessageReadRecord | null {
 	if (!isUnwrappedNip17OrderMessage(value)) return null
 
 	try {
@@ -143,6 +155,13 @@ function isLegacyOrderMessageEvent(value: unknown): value is LegacyOrderMessageE
 	return true
 }
 
+/**
+ * Authenticates canonical event bytes only: verifyEvent recomputes the event id
+ * and verifies the signature. It does not establish that the author is an
+ * expected participant for a particular order or apply an order-scoped time
+ * policy. Those checks require order context at the eventual integration
+ * boundary.
+ */
 function isVerifiedLegacyOrderMessageEvent(event: LegacyOrderMessageEvent): boolean {
 	try {
 		return verifyEvent({
@@ -269,10 +288,7 @@ function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string | null {
 	return nonEmptyString(recipientPubkey) ? recipientPubkey : null
 }
 
-function nip17TransportMetadata(
-	message: UnwrappedNip17OrderMessage,
-	rumor: OrderMessageRumor,
-): NonNullable<OrderMessageReadRecord['transport']> {
+function nip17TransportMetadata(message: UnwrappedNip17OrderMessage, rumor: OrderMessageRumor): OrderMessageReadTransport {
 	const giftWrapId = eventId(message.giftWrap)
 
 	return {

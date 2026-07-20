@@ -87,6 +87,12 @@ function unwrappedMessage(
 }
 
 function expectProtocolRecord(record: OrderMessageReadRecord): void {
+	if (record.source === 'nip17') {
+		expect(record.transport.rumorId).toBe(record.id)
+	} else {
+		expect(record.transport).toBeUndefined()
+	}
+
 	expect('sig' in record).toBe(false)
 	expect('giftWrap' in record).toBe(false)
 	expect('seal' in record).toBe(false)
