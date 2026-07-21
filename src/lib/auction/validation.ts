@@ -34,8 +34,9 @@ import {
 	type ValidatorClaim,
 	type ValidatorReason,
 } from './constants'
-import type { ParsedAuctionEvent, ParsedBidEvent } from './events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from './events'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
+import { checkProofStateBatch } from '../cashu/nut7'
 
 // ============================================================================
 // Public API
@@ -326,3 +327,136 @@ const clamp = (value: number, min: number, max: number): number => {
  * validator service rather than this module.
  */
 export const VALIDATE_BID_CLAIMS: readonly ValidatorClaim[] = ['valid_bid_placed', 'bid_invalid', 'bid_pending_review']
+
+// ============================================================================
+// Auction Validation
+// ============================================================================
+
+export const validateAuctionImmutableTags = (rootAuctionEvent: ParsedAuctionEvent, latestAuctionEvent: ParsedAuctionEvent): boolean => {
+	const hasExactImmutableTagValues =
+		rootAuctionEvent.auctionType === latestAuctionEvent.auctionType &&
+		rootAuctionEvent.startAt === latestAuctionEvent.startAt &&
+		rootAuctionEvent.endAt === latestAuctionEvent.endAt &&
+		rootAuctionEvent.currency === latestAuctionEvent.currency &&
+		rootAuctionEvent.p2pkXpub === latestAuctionEvent.p2pkXpub &&
+		rootAuctionEvent.auditorQuorum === latestAuctionEvent.auditorQuorum &&
+		rootAuctionEvent.maxEndAt === latestAuctionEvent.maxEndAt &&
+		rootAuctionEvent.settlementGrace === latestAuctionEvent.settlementGrace &&
+		rootAuctionEvent.minBidCurve === latestAuctionEvent.minBidCurve &&
+		rootAuctionEvent.settlementPolicy === latestAuctionEvent.settlementPolicy &&
+		rootAuctionEvent.keyScheme === latestAuctionEvent.keyScheme &&
+		rootAuctionEvent.reserve === latestAuctionEvent.reserve &&
+		rootAuctionEvent.bidIncrement === latestAuctionEvent.bidIncrement &&
+		rootAuctionEvent.maxSkewSec === latestAuctionEvent.maxSkewSec &&
+		rootAuctionEvent.mints.sort().join() === latestAuctionEvent.mints.sort().join() &&
+		rootAuctionEvent.auditors.sort().join() === latestAuctionEvent.auditors.sort().join()
+
+	return hasExactImmutableTagValues
+}
+
+// ============================================================================
+// Bid Validation - Client Side
+// ============================================================================
+
+/**
+ * Smaller client-side check to verify validity of bid events. Currently does not provide a full guarantee of bid
+ * validity as bids contain false `created_at` values and be placed after the auction end.
+ * This should eventually be expanded to use validator checks and quorum to mitigate this vulnerability.
+ * No checks against the max bid amount are present locally as a bid can be valid but not the highest bid.
+ */
+export const validateBidLocalOnly = (auction: ParsedAuctionEvent, bid: ParsedBidEvent): boolean => {
+	// --- Step 1: cross-event reference integrity -----------------------------
+
+	if (bid.auctionRootEventId !== auction.rootEventId) {
+		return false
+	}
+	if (bid.auctionCoordinate !== auction.coordinate) {
+		return false
+	}
+	if (bid.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
+		return false
+	}
+
+	// --- Step 2: time-window checks ------------------------------------------
+
+	if (bid.createdAt < auction.startAt) {
+		return false
+	}
+	if (bid.createdAt > auction.maxEndAt) {
+		return false
+	}
+
+	// --- Step 3: mint allowlist ---------------------------------------------
+
+	if (!auction.mints.includes(bid.mint)) {
+		return false
+	}
+
+	// --- Step 4: lock secret structure --------------------------------------
+
+	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
+	if (bid.locktime !== expectedLocktime) {
+		return false
+	}
+	if (bid.lockSecrets.length !== bid.proofYs.length) {
+		return false
+	}
+
+	// Validate every proof's secret independently. All MUST share the same
+	// lock parameters — the bidder split their input across multiple
+	// denominations but each output proof is its own P2PK lock with its
+	// own nonce. Reject the bid if any proof is malformed; we don't want
+	// validators to selectively trust subsets of a lock set.
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const lockParse = parseAuctionLockSecret(bid.lockSecrets[i], {
+			expectedLocktime,
+			expectedChildPubkey: bid.childPubkey,
+			expectedRefundPubkey: bid.refundPubkey,
+		})
+		if (!lockParse.ok) {
+			return false
+		}
+	}
+
+	// TODO: Get Validator approval of bid
+
+	// TODO: NUT-7 proof state
+
+	// --- Step 8: success ----------------------------------------------------
+
+	return true
+}
+
+export const validateSettlementEventLocalOnly = (auction: ParsedAuctionEvent, settlement: ParsedSettlementEvent): boolean => {
+	const isValidSettlementTarget =
+		settlement.auctionRootEventId === auction.rootEventId &&
+		settlement.auctionCoordinate === auction.coordinate &&
+		settlement.sellerPubkey === auction.sellerPubkey
+
+	if (!isValidSettlementTarget) return false
+
+	switch (settlement.status) {
+		case 'settled':
+			return !!settlement.finalAmount && !!settlement.winnerPubkey
+		case 'cancelled':
+		case 'griefed_no_fallback':
+		case 'reserve_not_met':
+			return false
+	}
+}
+
+export const validatePathReleaseLocalOnly = (
+	auction: ParsedAuctionEvent,
+	pathRelease: ParsedPathReleaseEvent,
+	winningBid: ParsedBidEvent,
+): boolean => {
+	const isValidPathReleaseTarget =
+		pathRelease.auctionCoordinate === auction.coordinate &&
+		pathRelease.sellerPubkey === auction.sellerPubkey &&
+		pathRelease.bidEventId === winningBid.id &&
+		pathRelease.bidderPubkey === winningBid.bidderPubkey
+
+	if (!isValidPathReleaseTarget) return false
+
+	return true
+}

@@ -79,6 +79,7 @@ import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
+import { AuctionSettlement } from '@/components/AuctionSettlement'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -750,72 +751,11 @@ function AuctionDetailRoute() {
 								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(biddingCutoffAt, false)}</span>}
 							</div>
 							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+							<AuctionSettlement auction={auction} bids={bids} className="mt-2" />
 						</div>
 					</div>
 				</div>
 			</div>
-
-			{/* Bidder settle action — shown to the top bidder once the auction ends
-			    so they can publish their kind-1025 path release. The seller can't
-			    redeem (and therefore can't publish kind-1024) until this lands. */}
-			{canReleaseNow && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
-						<div className="flex flex-wrap items-center justify-between gap-4">
-							<div className="flex items-center gap-3">
-								<div className="rounded-full bg-sky-100 p-2">
-									<Gavel className="h-5 w-5 text-sky-700" />
-								</div>
-								<div>
-									<h3 className="text-lg font-semibold text-sky-950">You won — release your path to settle</h3>
-									<p className="text-sm text-sky-800">
-										Bid: <span className="font-semibold">{getBidAmount(myTopBidEvent!).toLocaleString()} sats</span>. Publishing your
-										kind-1025 reveals the derivation path so the seller can redeem your locked proofs.
-									</p>
-								</div>
-							</div>
-							<Button onClick={() => void handleReleasePath()} disabled={isReleasing}>
-								{isReleasing ? 'Releasing…' : 'Release path & settle'}
-							</Button>
-						</div>
-					</div>
-				</div>
-			)}
-			{isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled' && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-						Path release published — waiting for seller to redeem and publish settlement.
-					</div>
-				</div>
-			)}
-
-			{/* Winner banner — shown to the auction winner after settlement */}
-			{isWinner && settlementStatus === 'settled' && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-						<div className="flex flex-wrap items-center justify-between gap-4">
-							<div className="flex items-center gap-3">
-								<div className="rounded-full bg-emerald-100 p-2">
-									<Trophy className="h-5 w-5 text-emerald-700" />
-								</div>
-								<div>
-									<h3 className="text-lg font-semibold text-emerald-950">You won this auction!</h3>
-									<p className="text-sm text-emerald-800">
-										Final price: <span className="font-semibold">{settlementFinalAmount.toLocaleString()} sats</span>
-									</p>
-								</div>
-							</div>
-							{hasClaimOrder ? (
-								<div className="rounded-lg border border-emerald-300 bg-background px-4 py-2 text-sm font-medium text-emerald-800">
-									Shipping details submitted — awaiting seller
-								</div>
-							) : (
-								<Button onClick={() => setClaimDialogOpen(true)}>Submit Shipping Address</Button>
-							)}
-						</div>
-					</div>
-				</div>
-			)}
 
 			<div className="mx-auto w-full max-w-7xl px-4 py-6">
 				<Tabs defaultValue="overview" className="w-full">
@@ -1085,18 +1025,6 @@ function AuctionDetailRoute() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
-
-			{isWinner && latestSettlement && auction && (
-				<AuctionClaimDialog
-					open={claimDialogOpen}
-					onOpenChange={setClaimDialogOpen}
-					auctionEventId={auctionRootEventId || auction.id}
-					auctionCoordinates={auctionCoordinates}
-					settlementEventId={latestSettlement.id}
-					sellerPubkey={auction.pubkey}
-					finalAmount={settlementFinalAmount}
-				/>
-			)}
 		</div>
 	)
 }

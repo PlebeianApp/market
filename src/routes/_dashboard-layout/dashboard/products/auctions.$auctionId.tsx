@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
-import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
+import { getAuctionBidAmount, getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
@@ -50,6 +50,7 @@ import {
 	useAuctionPathReleases,
 	useAuctionSettlements,
 	usePrivateAuctionClaimForOrder,
+	getAuctionTopBidValid,
 } from '@/queries/auctions'
 import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -258,19 +259,7 @@ function DashboardAuctionDetailRoute() {
 	const latestSettlement = settlements[0] || null
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
-	const topBid = useMemo(() => {
-		const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
-		if (validBids.length === 0) return null
-		return [...validBids]
-			.sort((a, b) => {
-				const amountDelta = getBidAmount(b) - getBidAmount(a)
-				if (amountDelta !== 0) return amountDelta
-				const timeDelta = (b.created_at || 0) - (a.created_at || 0)
-				if (timeDelta !== 0) return timeDelta
-				return b.id.localeCompare(a.id)
-			})
-			.at(0)
-	}, [auction, bids])
+	const topBid = useMemo(() => getAuctionTopBidValid(auction, bids), [auction, bids])
 
 	const bidsByNewest = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
