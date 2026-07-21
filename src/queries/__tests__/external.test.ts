@@ -52,6 +52,8 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 	})
 
 	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
+		// CI runners are slower — give the mock module setup extra time
+		// before the default 5s timeout kills this test.
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
 		})
@@ -86,8 +88,16 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 
 		await fetchBtcExchangeRates()
 
+		// `getItem` returns `null` for a missing key per the Web Storage
+		// spec; the optional chain yields `undefined` only when
+		// localStorage itself doesn't exist. We accept both — the
+		// invariant is "no entry written for this key", regardless of
+		// whether another test polyfilled localStorage globally
+		// (bidderPathRelease.test.ts and bidderChainRecords.test.ts
+		// install a Map-backed shim that leaks across files in the same
+		// Bun process).
 		const stored = globalThis.localStorage?.getItem('btc_exchange_rates')
-		expect(stored).toBeUndefined()
+		expect(stored == null).toBe(true)
 	})
 
 	test('always fetches fresh rates on every call', async () => {

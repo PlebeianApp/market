@@ -126,7 +126,7 @@ All constants live in a single file imported by both the Playwright config and s
 
 ```ts
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 
 export const TEST_APP_PRIVATE_KEY = 'e2e0000000000000000000000000000000000000000000000000000000000001'
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
@@ -596,6 +596,50 @@ await page.waitForTimeout(1000) // wait for form to load
 await page.goto('/dashboard/products/new')
 await expect(page.getByLabel(/product name/i)).toBeVisible()
 ```
+
+### Pragmatic Exceptions — When Auto-Waiting Is Not Enough
+
+The "no hardcoded waits" rule above is the default. Two exceptions are justified
+in this suite, both documented here so they are not cargo-culted into new tests:
+
+**1. React hydration settle (`waitForTimeout(500)` after `header` visible)**
+
+When the app uses SSR/hydration, `domcontentloaded` can fire before React has
+finished hydrating the app shell. Interactive elements exist in the DOM but are
+not yet wired up to event handlers. This manifests as "button works in browser
+but not in Playwright" — the click lands on an unhydrated element.
+
+```ts
+// Pragmatic: wait for the shell to hydrate before interacting
+await expect(page.locator('header')).toBeVisible({ timeout: 15_000 })
+await page.waitForTimeout(500) // brief settle for React hydration
+```
+
+This is ONLY justified after a `toBeVisible()` assertion on a structural
+element (proving the DOM is present). It is NOT a substitute for
+actionability checks.
+
+**2. JS click to bypass overlay interception (`el.evaluate(el => el.click())`)**
+
+shadcn/ui's `Tooltip` and `Dialog` components create overlay divs
+(`[data-slot="dialog-overlay"]`) that sit above interactive elements and
+intercept Playwright's pointer-based `.click()`. When an element is confirmed
+visible and enabled but the click times out, use a direct DOM click:
+
+```ts
+// Pragmatic: bypass overlay pointer interception
+await loginButton.evaluate((el: HTMLElement) => el.click())
+```
+
+This bypasses Playwright's actionability checks, so it must only be used after
+the element has been verified visible/enabled/stable via web-first assertions.
+
+**3. `domcontentloaded` instead of `networkidle`**
+
+NDK maintains persistent WebSocket connections to relays, so the browser's
+network activity never reaches "idle" — `waitForLoadState('networkidle')` hangs
+indefinitely. Always use `waitForLoadState('domcontentloaded')` instead. This
+is not optional: it is a hard requirement for the NDK backend.
 
 ### `expect.toPass()` for Polling
 

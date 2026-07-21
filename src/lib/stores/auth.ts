@@ -156,6 +156,11 @@ export const authActions = {
 			const signer = new NDKPrivateKeySigner(privateKey)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -204,6 +209,11 @@ export const authActions = {
 			const signer = new NDKNip07Signer()
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -253,6 +263,11 @@ export const authActions = {
 
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 			const user = await signer.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
@@ -284,6 +299,9 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()
+		// Tear down per-user state (NWC selection, NIP-60 wallet).
+		// Mirrors `runSignerOnboarding` on the login side.
+		ndkActions.clearSignerOnboarding()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)

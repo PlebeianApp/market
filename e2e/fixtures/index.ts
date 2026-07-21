@@ -4,6 +4,23 @@ import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 
+/**
+ * Dismiss the PII exposure modal if it appears.
+ *
+ * The PII scanner runs on page load when the user has kind-16 order events
+ * with PII tags (address, email, phone) on the relay. PII events from
+ * previous test runs accumulate on the reused relay and trigger the modal
+ * on subsequent page loads, blocking all clicks. This helper dismisses
+ * the modal so test interactions can proceed.
+ */
+async function dismissPIIModalIfPresent(page: Page): Promise<void> {
+	const dismissButton = page.getByRole('button', { name: /dismiss warning/i })
+	if (await dismissButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+		await dismissButton.click()
+		await expect(dismissButton).not.toBeVisible({ timeout: 5000 })
+	}
+}
+
 type TestFixtures = {
 	/** Page with devUser1 logged in (merchant / app owner) */
 	merchantPage: Page
@@ -42,9 +59,11 @@ export const test = base.extend<TestFixtures>({
 
 		// Navigate and wait for the app to load
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		// Give the auto-login a moment to complete
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		// Dismiss PII modal if accumulated PII events trigger it
+		await dismissPIIModalIfPresent(page)
 
 		await use(page)
 		await context.close()
@@ -58,8 +77,9 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await dismissPIIModalIfPresent(page)
 
 		await use(page)
 		await context.close()
@@ -73,8 +93,9 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await dismissPIIModalIfPresent(page)
 
 		await use(page)
 		await context.close()
@@ -87,7 +108,7 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		// Verify we are NOT logged in (check for login button visibility)
 		await expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })
 

@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
+export type DrawerType = 'cart' | 'createProduct' | 'createAuction' | 'createCollection' | 'conversation'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms' | 'nsfw-confirmation'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -58,6 +58,7 @@ const initialState: UIState = {
 	drawers: {
 		cart: false,
 		createProduct: false,
+		createAuction: false,
 		createCollection: false,
 		conversation: false,
 	},

@@ -23,8 +23,8 @@ async function gotoAdminRoute(page: Page, path: string) {
 		await page.goto(path)
 	}
 
-	// Wait for the page to be fully loaded
-	await page.waitForLoadState('networkidle')
+	// Wait for DOM ready — NDK WebSocket prevents networkidle from ever firing (ADR-015)
+	await page.waitForLoadState('domcontentloaded')
 }
 
 /**

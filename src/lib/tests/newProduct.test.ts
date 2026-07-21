@@ -5,12 +5,37 @@ import { devUser1 } from '@/lib/fixtures'
 import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
 import { fetchProduct, getProductTitle, getProductDescription, getProductPrice, getProductImages } from '@/queries/products'
 
-const RELAY_URL = process.env.APP_RELAY_URL
-if (!RELAY_URL) {
-	throw new Error('APP_RELAY_URL is not set')
+// Polyfill localStorage for bun test environment — the wallet store
+// (imported transitively via product store) accesses localStorage at
+// module load time.
+if (typeof globalThis.localStorage === 'undefined') {
+	class MemoryStorage {
+		private store = new Map<string, string>()
+		getItem(key: string) {
+			return this.store.has(key) ? this.store.get(key)! : null
+		}
+		setItem(key: string, value: string) {
+			this.store.set(key, value)
+		}
+		removeItem(key: string) {
+			this.store.delete(key)
+		}
+		clear() {
+			this.store.clear()
+		}
+	}
+	;(globalThis as any).localStorage = new MemoryStorage()
+	;(globalThis as any).sessionStorage = new MemoryStorage()
 }
 
-// Test product data
+// This is an integration test — it requires a live relay and dev server.
+// Only runs in CI where the relay infrastructure is started.
+// Outside CI, bun auto-loads .env.local which sets APP_RELAY_URL, so we
+// can't use that env var as a guard.
+const RELAY_URL = process.env.APP_RELAY_URL
+const describeOrSkip = process.env.CI ? describe : describe.skip
+
+// Test product data — includes shipping options required by publishProduct
 const TEST_PRODUCT = {
 	name: 'Test Product',
 	description: 'This is a test product description',
@@ -23,13 +48,19 @@ const TEST_PRODUCT = {
 	specs: [{ key: 'Weight', value: '5 kg' }],
 	images: [{ imageUrl: 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png', imageOrder: 0 }],
 	categories: [{ key: 'cat1', name: 'Bitcoin Miners', checked: true }],
+	shippings: [
+		{
+			shippingRef: `30406:${devUser1.pk}:ship:1`,
+			extraCost: '0',
+		},
+	],
 }
 
-describe('Product Publishing', () => {
+describeOrSkip('Product Publishing', () => {
 	// Set up test environment
 	beforeEach(async () => {
 		// Initialize NDK with test relay
-		ndkActions.initialize([RELAY_URL])
+		ndkActions.initialize([RELAY_URL!])
 		await ndkActions.connect()
 
 		// Reset product form state
