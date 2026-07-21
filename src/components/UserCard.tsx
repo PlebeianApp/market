@@ -1,13 +1,15 @@
-import { useProfile } from '@/queries/profiles'
+import { useProfile, getProfileName, getProfileNip05 } from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
 import { useState } from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Nip05Badge } from './Nip05Badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Link } from '@tanstack/react-router'
+import { nip19 } from 'nostr-tools'
+import { isValidHexKey, isValidNpub } from '@/lib/utils'
 
 interface UserCardProps {
-	pubkey: string
+	pubkey?: string
 	className?: string
 	/** Small: , Medium: , Large: User Profile */
 	size?: 'xs' | 'sm' | 'md' | 'lg'
@@ -15,23 +17,49 @@ interface UserCardProps {
 	onPress?: 'profile' | 'copy-npub' | 'none'
 }
 
+function encodeIdentifierToNpub(identifier: string | undefined): string | null {
+	const trimmedIdentifier = identifier?.trim()
+	if (!trimmedIdentifier) return null
+
+	if (isValidNpub(trimmedIdentifier)) {
+		return trimmedIdentifier
+	}
+
+	if (!isValidHexKey(trimmedIdentifier)) {
+		return null
+	}
+
+	return nip19.npubEncode(trimmedIdentifier)
+}
+
+function formatNpubForDisplay(npub: string): string {
+	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
+}
+
 export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
-	const { data: profileData } = useProfile(pubkey)
-	const { user } = profileData || {}
+	const safePubkey = pubkey?.trim() || undefined
+	const { data: profileData, isLoading } = useProfile(safePubkey)
+	const { profile, user } = profileData || {}
 
 	const breakpoint = useBreakpoint()
 	const compact = breakpoint === 'md' || breakpoint === 'sm'
 
-	const textDisplayNpub = user?.npub.slice(0, 9) + '..' + user?.npub.slice(-6)
-	const textTitle = user?.profile?.displayName ?? user?.profile?.name ?? textDisplayNpub
+	const profileDisplayName = getProfileName({ profile: profile ?? null }).trim() || null
+	const profileNip05 = getProfileNip05({ profile: profile ?? null })?.trim() || null
+	const userNpub = user?.npub?.trim()
+	const npub = userNpub && isValidNpub(userNpub) ? userNpub : encodeIdentifierToNpub(safePubkey)
+	const textDisplayNpub = npub ? formatNpubForDisplay(npub) : 'Unknown user'
+	const textTitle = isLoading ? 'Loading...' : (profileDisplayName ?? textDisplayNpub)
 
-	const showNip05AddressAfterBadge = user?.profile?.nip05 != null && !(subtitle === 'nip-05' || compact)
-	const showNip05AsSubtitle = user?.profile?.nip05 != null && (subtitle === 'nip-05' || compact)
-	const showNpubAsTitle = textTitle == textDisplayNpub
-	const showNpubAsSubtitle = !showNpubAsTitle && subtitle === 'npub'
+	const showNip05AddressAfterBadge = !isLoading && profileNip05 != null && !(subtitle === 'nip-05' || compact)
+	const showNip05AsSubtitle = !isLoading && profileNip05 != null && (subtitle === 'nip-05' || compact)
+	const showNpubAsTitle = !isLoading && profileDisplayName == null && npub != null
+	const showNpubAsSubtitle = !showNpubAsTitle && !isLoading && profileDisplayName != null && subtitle === 'npub' && npub != null
 	const showSubtitle = size !== 'xs'
 
-	const shouldCopyNpub = onPress !== 'none'
+	const onlyPrimaryTextShows = !showSubtitle || (!showNip05AsSubtitle && !showNpubAsSubtitle)
+	const disableSmallPrimaryCopy = (size === 'xs' || size === 'sm') && onlyPrimaryTextShows
+	const shouldCopyNpub = onPress !== 'none' && !isLoading && npub != null && !disableSmallPrimaryCopy
 
 	const classSizeAvatar = {
 		xs: 'h-6 w-6',
@@ -86,12 +114,12 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 				//event.stopPropagation()
 				event.preventDefault()
 
-				if (user?.npub == null) {
+				if (npub == null) {
 					return
 				}
 
 				// Copy npub to clipboard
-				navigator.clipboard.writeText(user?.npub)
+				navigator.clipboard.writeText(npub)
 
 				// Update tooltip to show copied state
 				setTextTooltip('Copied!')
@@ -121,7 +149,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	// Note: We pass in min-w-0 to ensure text (name, npub) truncates
 	const content = (
 		<div className={'flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap ' + classGapHorizontal}>
-			<AvatarUser pubkey={user?.pubkey} className={classSizeAvatar + ' min-w-0 ' + className} />
+			<AvatarUser pubkey={safePubkey} className={classSizeAvatar + ' min-w-0 ' + className} />
 			<div className={'flex flex-col min-w-0 ' + classGapVertical + ' ' + className}>
 				<div className={'flex items-center gap-1 min-w-0 overflow-hidden ' + className}>
 					{showNpubAsTitle ? (
@@ -133,14 +161,14 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 					) : (
 						<h2 className={classSizeName + ' truncate min-w-0 ' + className}>{textTitle}</h2>
 					)}
-					{user?.pubkey && (
-						<Nip05Badge pubkey={user.pubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
+					{safePubkey && profileNip05 && (
+						<Nip05Badge pubkey={safePubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
 					)}
 				</div>
 
 				{showSubtitle &&
 					(showNip05AsSubtitle ? (
-						<p className={classSizeNIP05 + ' text-gray-400 truncate ' + className}>{user?.profile?.nip05}</p>
+						<p className={classSizeNIP05 + ' text-gray-400 truncate ' + className}>{profileNip05}</p>
 					) : (
 						showNpubAsSubtitle &&
 						copyNpubWrapper(
@@ -156,8 +184,12 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 		</div>
 	)
 
-	if (onPress === 'profile') {
-		return <Link to={`/profile/${pubkey}`}>{content}</Link>
+	if (onPress === 'profile' && safePubkey) {
+		return (
+			<Link to="/profile/$profileId" params={{ profileId: safePubkey }}>
+				{content}
+			</Link>
+		)
 	} else {
 		return content
 	}
