@@ -122,6 +122,11 @@ function getNotificationCount(
 	unseenMessages: number,
 	unseenPurchases: number,
 	unseenAuctionBids: number,
+	unseenAuctionLiveChatComments: number,
+	unseenAuctionThreadComments: number,
+	unseenProductThreadComments: number,
+	unseenScheduledAuctionsNowLive: number,
+	unseenAuctionSettlementBegins: number,
 	unseenBidUpdates: number,
 ): number {
 	if (path === '/dashboard/sales/sales') {
@@ -134,7 +139,16 @@ function getNotificationCount(
 		return unseenPurchases
 	}
 	if (path === '/dashboard/products/auctions') {
-		return unseenAuctionBids
+		return (
+			unseenAuctionBids +
+			unseenAuctionLiveChatComments +
+			unseenAuctionThreadComments +
+			unseenScheduledAuctionsNowLive +
+			unseenAuctionSettlementBegins
+		)
+	}
+	if (path === '/dashboard/products/products') {
+		return unseenProductThreadComments
 	}
 	if (path === '/dashboard/products/bids') {
 		return unseenBidUpdates
@@ -170,7 +184,18 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
+	const {
+		unseenOrders,
+		unseenMessages,
+		unseenPurchases,
+		unseenAuctionBids,
+		unseenAuctionComments: unseenAuctionLiveChatComments,
+		unseenAuctionEventComments: unseenAuctionThreadComments,
+		unseenProductComments: unseenProductThreadComments,
+		unseenAuctionLive: unseenScheduledAuctionsNowLive,
+		unseenAuctionSettlementBegins,
+		unseenBidUpdates,
+	} = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 	// Admin checking
@@ -338,6 +363,11 @@ function DashboardLayout() {
 													unseenMessages,
 													unseenPurchases,
 													unseenAuctionBids,
+													unseenAuctionLiveChatComments,
+													unseenAuctionThreadComments,
+													unseenProductThreadComments,
+													unseenScheduledAuctionsNowLive,
+													unseenAuctionSettlementBegins,
 													unseenBidUpdates,
 												)
 												return (

@@ -4,17 +4,28 @@ import { authStore } from '@/lib/stores/auth'
 import { AUCTION_BID_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auctionSettlement'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions, notificationStore } from '@/lib/stores/notifications'
+import { LIVE_ACTIVITY_KIND, LIVE_CHAT_KIND } from '@/lib/nip53'
+import { configStore } from '@/lib/stores/config'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {
 	fetchAuctionBidsByBidder,
 	fetchAuctionsByPubkey,
+	getAuctionBiddingCutoffAt,
 	getAuctionId,
 	getAuctionRootEventId,
+	getAuctionStartAt,
 	getBidAmount,
 	getBidAuctionCoordinates,
 	getBidAuctionEventId,
 } from '@/queries/auctions'
+import { fetchProductsByPubkey, getProductCoordinates } from '@/queries/products'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
+
+type NDKKind = NonNullable<NDKFilter['kinds']>[number]
+const AUCTION_KIND_NDK = 30408 as NDKKind
+const COMMENT_KIND_NDK = 1111 as NDKKind
+const LIVE_ACTIVITY_KIND_NDK = LIVE_ACTIVITY_KIND as unknown as NDKKind
+const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
 
 const AUCTION_MONITOR_LIMIT = 500
 const AUCTION_FILTER_CHUNK_SIZE = 80
@@ -48,6 +59,27 @@ const getEventAuctionRootId = (event: NDKEvent): string => getBidAuctionEventId(
 
 const getEventAuctionCoordinate = (event: NDKEvent): string => getBidAuctionCoordinates(event)
 
+const getAddressableEventCoordinate = (event: NDKEvent): string => {
+	const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+	return dTag ? `${event.kind}:${event.pubkey}:${dTag}` : ''
+}
+
+const getTagValues = (event: NDKEvent, tagNames: string[]): string[] =>
+	event.tags.filter((tag) => tagNames.includes(tag[0]) && Boolean(tag[1])).map((tag) => tag[1])
+
+const resolveScopedKeyFromLookups = (values: string[], lookups: Array<Map<string, string>>): string => {
+	for (const value of values) {
+		for (const lookup of lookups) {
+			const scopedKey = lookup.get(value)
+			if (scopedKey) return scopedKey
+		}
+	}
+	return ''
+}
+
+const getAuctionNotificationKey = (auction: NDKEvent): string =>
+	getAuctionRootEventId(auction) || getAuctionCoordinate(auction) || auction.id
+
 const getAuctionBidStatus = (event: NDKEvent): string =>
 	event.tags
 		.find((tag) => tag[0] === 'status')?.[1]
@@ -64,16 +96,19 @@ const makeTaggedAuctionFilters = ({
 	auctionRootEventIds,
 	auctionCoordinates,
 	since,
+	authors,
 }: {
-	kind: NonNullable<NDKFilter['kinds']>[number]
+	kind: NDKKind
 	auctionRootEventIds: string[]
 	auctionCoordinates: string[]
 	since?: number
+	authors?: string[]
 }): NDKFilter[] => {
 	const filters: NDKFilter[] = []
 	const baseFilter = {
 		kinds: [kind],
 		limit: AUCTION_MONITOR_LIMIT,
+		...(authors && authors.length > 0 ? { authors } : {}),
 		...(typeof since === 'number' ? { since } : {}),
 	}
 
@@ -94,22 +129,126 @@ const makeTaggedAuctionFilters = ({
 	return filters
 }
 
+const makeTaggedValueFilters = ({
+	kind,
+	tagName,
+	values,
+	since,
+	authors,
+}: {
+	kind: NDKKind
+	tagName: '#a' | '#A' | '#e' | '#E'
+	values: string[]
+	since?: number
+	authors?: string[]
+}): NDKFilter[] => {
+	const filters: NDKFilter[] = []
+	const baseFilter = {
+		kinds: [kind],
+		limit: AUCTION_MONITOR_LIMIT,
+		...(authors && authors.length > 0 ? { authors } : {}),
+		...(typeof since === 'number' ? { since } : {}),
+	}
+
+	for (const valueChunk of chunkValues(uniqueStrings(values), AUCTION_FILTER_CHUNK_SIZE)) {
+		filters.push({
+			...baseFilter,
+			[tagName]: valueChunk,
+		})
+	}
+
+	return filters
+}
+
+const getTrustedAuthorsForKind = (kind: NDKKind): string[] | undefined => {
+	if (kind !== LIVE_ACTIVITY_KIND_NDK) return undefined
+
+	const cvmServerPubkey = configStore.state.config.cvmServerPubkey?.trim()
+	return cvmServerPubkey ? [cvmServerPubkey] : undefined
+}
+
 const fetchTaggedAuctionEvents = async ({
 	kind,
 	auctionRootEventIds,
 	auctionCoordinates,
 	since,
 }: {
-	kind: NonNullable<NDKFilter['kinds']>[number]
+	kind: NDKKind
 	auctionRootEventIds: string[]
 	auctionCoordinates: string[]
 	since?: number
 }): Promise<NDKEvent[]> => {
-	const filters = makeTaggedAuctionFilters({ kind, auctionRootEventIds, auctionCoordinates, since })
+	const trustedAuthors = getTrustedAuthorsForKind(kind)
+	const filters = makeTaggedAuctionFilters({
+		kind,
+		auctionRootEventIds,
+		auctionCoordinates,
+		since,
+		authors: trustedAuthors,
+	})
 	if (filters.length === 0) return []
 
 	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return dedupeEvents(Array.from(events))
+}
+
+const fetchTaggedEvents = async ({
+	kind,
+	tagName,
+	values,
+	since,
+	authors,
+}: {
+	kind: NDKKind
+	tagName: '#a' | '#A' | '#e' | '#E'
+	values: string[]
+	since?: number
+	authors?: string[]
+}): Promise<NDKEvent[]> => {
+	const filters = makeTaggedValueFilters({
+		kind,
+		tagName,
+		values,
+		since,
+		authors,
+	})
+	if (filters.length === 0) return []
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	return dedupeEvents(Array.from(events))
+}
+
+const fetchAddressableCommentEvents = async ({
+	targetEventIds,
+	targetCoordinates,
+	since,
+}: {
+	targetEventIds: string[]
+	targetCoordinates: string[]
+	since?: number
+}): Promise<NDKEvent[]> => {
+	const [byCoordinates, byUpperCoordinates, byUpperEventIds] = await Promise.all([
+		fetchTaggedEvents({
+			kind: COMMENT_KIND_NDK,
+			tagName: '#a',
+			values: targetCoordinates,
+			since,
+		}),
+		fetchTaggedEvents({
+			kind: COMMENT_KIND_NDK,
+			tagName: '#A',
+			values: targetCoordinates,
+			since,
+		}),
+		fetchTaggedEvents({
+			kind: COMMENT_KIND_NDK,
+			tagName: '#E',
+			values: targetEventIds,
+			since,
+		}),
+	])
+
+	return dedupeEvents([...byCoordinates, ...byUpperCoordinates, ...byUpperEventIds])
 }
 
 /**
@@ -134,8 +273,17 @@ export const useNotificationMonitor = () => {
 		let isCancelled = false
 		const subscriptionSince = Math.floor(Date.now() / 1000)
 		const seenAuctionEventIds = new Set<string>()
+		const seenAuctionCommentEventIds = new Set<string>()
+		const seenAuctionThreadCommentEventIds = new Set<string>()
 		const seenBidEventIds = new Set<string>()
+		const seenProductCommentEventIds = new Set<string>()
 		const seenSettlementEventIds = new Set<string>()
+		const scheduledAuctionLiveKeys = new Set<string>()
+		const scheduledAuctionSettlementKeys = new Set<string>()
+		const subscribedSellerAuctionRootEventIds = new Set<string>()
+		const subscribedSellerAuctionCoordinates = new Set<string>()
+		const subscribedSellerLiveActivityCoordinates = new Set<string>()
+		const phaseTimeoutIds: number[] = []
 
 		// Mark as monitoring to prevent duplicate subscriptions
 		isMonitoringRef.current = true
@@ -158,13 +306,28 @@ export const useNotificationMonitor = () => {
 			return (event.created_at || 0) > lastSeen
 		}
 
-		const isNewAuctionBid = (event: NDKEvent): boolean => {
-			const lastSeen = notificationActions.getLastSeenAuctionBids()
+		const isNewAuctionBid = (event: NDKEvent, auctionKey?: string): boolean => {
+			const lastSeen = notificationActions.getLastSeenAuctionBids(auctionKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
 		const isNewBidUpdate = (event: NDKEvent): boolean => {
 			const lastSeen = notificationActions.getLastSeenBidUpdates()
+			return (event.created_at || 0) > lastSeen
+		}
+
+		const isNewAuctionComment = (event: NDKEvent, auctionKey?: string): boolean => {
+			const lastSeen = notificationActions.getLastSeenAuctionComments(auctionKey)
+			return (event.created_at || 0) > lastSeen
+		}
+
+		const isNewAuctionEventComment = (event: NDKEvent, auctionKey?: string): boolean => {
+			const lastSeen = notificationActions.getLastSeenAuctionEventComments(auctionKey)
+			return (event.created_at || 0) > lastSeen
+		}
+
+		const isNewProductComment = (event: NDKEvent, productKey?: string): boolean => {
+			const lastSeen = notificationActions.getLastSeenProductComments(productKey)
 			return (event.created_at || 0) > lastSeen
 		}
 
@@ -174,25 +337,65 @@ export const useNotificationMonitor = () => {
 			values,
 			onEvent,
 		}: {
-			kind: NonNullable<NDKFilter['kinds']>[number]
-			tagName: '#e' | '#a'
+			kind: NDKKind
+			tagName: '#e' | '#a' | '#A' | '#E'
 			values: string[]
 			onEvent: (event: NDKEvent) => void
 		}) => {
 			if (isCancelled || values.length === 0) return
 
-			const filter = {
-				kinds: [kind],
-				[tagName]: values,
-				since: subscriptionSince,
-			} as NDKFilter
+			const trustedAuthors = getTrustedAuthorsForKind(kind)
 
-			const subscription = ndk.subscribe(filter, {
-				closeOnEose: false,
-			})
+			for (const valueChunk of chunkValues(uniqueStrings(values), AUCTION_FILTER_CHUNK_SIZE)) {
+				const filter = {
+					kinds: [kind],
+					[tagName]: valueChunk,
+					...(trustedAuthors ? { authors: trustedAuthors } : {}),
+					since: subscriptionSince,
+				} as NDKFilter
 
-			subscription.on('event', onEvent)
-			subscriptionsRef.current.push(subscription)
+				const subscription = ndk.subscribe(filter, {
+					closeOnEose: false,
+				})
+
+				subscription.on('event', onEvent)
+				subscriptionsRef.current.push(subscription)
+			}
+		}
+
+		const scheduleAuctionPhaseNotification = (auction: NDKEvent) => {
+			const auctionKey = getAuctionNotificationKey(auction)
+			if (!auctionKey) return
+
+			const scheduleAt = (runAt: number, scheduledKeys: Set<string>, callback: () => void) => {
+				if (!runAt || runAt <= Math.floor(Date.now() / 1000) || scheduledKeys.has(auctionKey)) return
+				scheduledKeys.add(auctionKey)
+				const timeoutId = window.setTimeout(
+					() => {
+						scheduledKeys.delete(auctionKey)
+						if (isCancelled) return
+						callback()
+					},
+					Math.max(0, runAt * 1000 - Date.now()),
+				)
+				phaseTimeoutIds.push(timeoutId)
+			}
+
+			const startAt = getAuctionStartAt(auction)
+			if (startAt > notificationActions.getLastSeenAuctionLive(auctionKey)) {
+				scheduleAt(startAt, scheduledAuctionLiveKeys, () => {
+					console.log('[NotificationMonitor] Seller auction went live:', auction.id)
+					notificationActions.incrementUnseenAuctionLive()
+				})
+			}
+
+			const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+			if (biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)) {
+				scheduleAt(biddingCutoffAt, scheduledAuctionSettlementKeys, () => {
+					console.log('[NotificationMonitor] Seller auction entered settlement:', auction.id)
+					notificationActions.incrementUnseenAuctionSettlementBegins()
+				})
+			}
 		}
 
 		const getHighestOwnBidAmountForAuction = (
@@ -210,6 +413,7 @@ export const useNotificationMonitor = () => {
 		// Initial fetch to calculate current unseen counts and set up auction-specific subscriptions
 		const initializeNotifications = async () => {
 			try {
+				const initializationStartedAt = Math.floor(Date.now() / 1000)
 				// Fetch recent orders where user is seller (recipient)
 				const orderFilter: NDKFilter = {
 					kinds: [ORDER_PROCESS_KIND],
@@ -269,19 +473,136 @@ export const useNotificationMonitor = () => {
 				})
 
 				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
+				const sellerProducts = await fetchProductsByPubkey(user.pubkey, true, 500)
+				const sellerAuctionKeyByRootEventId = new Map<string, string>()
+				const sellerAuctionKeyByCoordinate = new Map<string, string>()
+				const sellerProductKeyByEventId = new Map<string, string>()
+				const sellerProductKeyByCoordinate = new Map<string, string>()
+
+				for (const auction of sellerAuctions) {
+					const auctionKey = getAuctionNotificationKey(auction)
+					if (!auctionKey) continue
+
+					const rootEventId = getAuctionRootEventId(auction) || auction.id
+					const coordinate = getAuctionCoordinate(auction)
+					if (rootEventId) sellerAuctionKeyByRootEventId.set(rootEventId, auctionKey)
+					if (coordinate) sellerAuctionKeyByCoordinate.set(coordinate, auctionKey)
+				}
+
+				for (const product of sellerProducts) {
+					const productKey = getProductCoordinates(product) || product.id
+					if (!productKey) continue
+
+					sellerProductKeyByEventId.set(product.id, productKey)
+					const coordinate = getProductCoordinates(product)
+					if (coordinate) sellerProductKeyByCoordinate.set(coordinate, productKey)
+				}
+
 				const sellerAuctionRootEventIds = uniqueStrings(sellerAuctions.map((auction) => getAuctionRootEventId(auction) || auction.id))
 				const sellerAuctionCoordinates = uniqueStrings(sellerAuctions.map(getAuctionCoordinate))
+				const sellerProductEventIds = uniqueStrings(sellerProducts.map((product) => product.id))
+				const sellerProductCoordinates = uniqueStrings(sellerProducts.map(getProductCoordinates))
 				const sellerBidEvents = await fetchTaggedAuctionEvents({
 					kind: AUCTION_BID_KIND,
 					auctionRootEventIds: sellerAuctionRootEventIds,
 					auctionCoordinates: sellerAuctionCoordinates,
 					since: notificationActions.getLastSeenAuctionBids() + 1,
 				})
+				const sellerLiveActivityEvents = await fetchTaggedAuctionEvents({
+					kind: LIVE_ACTIVITY_KIND_NDK,
+					auctionRootEventIds: [],
+					auctionCoordinates: sellerAuctionCoordinates,
+				})
+				const sellerLiveActivityCoords = uniqueStrings(
+					sellerLiveActivityEvents.map((event) => getAddressableEventCoordinate(event)).filter(Boolean),
+				)
+				const sellerAuctionKeyByLiveActivityCoordinate = new Map<string, string>()
+				for (const event of sellerLiveActivityEvents) {
+					const liveActivityCoordinate = getAddressableEventCoordinate(event)
+					if (!liveActivityCoordinate) continue
+
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (auctionKey) sellerAuctionKeyByLiveActivityCoordinate.set(liveActivityCoordinate, auctionKey)
+				}
+				const sellerLiveChatEvents = await fetchTaggedAuctionEvents({
+					kind: LIVE_CHAT_KIND_NDK,
+					auctionRootEventIds: [],
+					auctionCoordinates: sellerLiveActivityCoords,
+					since: notificationActions.getLastSeenAuctionComments() + 1,
+				})
+				const [sellerAuctionCommentEvents, sellerProductCommentEvents] = await Promise.all([
+					fetchAddressableCommentEvents({
+						targetEventIds: sellerAuctionRootEventIds,
+						targetCoordinates: sellerAuctionCoordinates,
+						since: notificationActions.getLastSeenAuctionEventComments() + 1,
+					}),
+					fetchAddressableCommentEvents({
+						targetEventIds: sellerProductEventIds,
+						targetCoordinates: sellerProductCoordinates,
+						since: notificationActions.getLastSeenProductComments() + 1,
+					}),
+				])
 
 				const newSellerBidEvents = sellerBidEvents.filter((event) => {
 					seenAuctionEventIds.add(event.id)
-					return event.pubkey !== user.pubkey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event)
+					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
+						sellerAuctionKeyByRootEventId,
+						sellerAuctionKeyByCoordinate,
+					])
+					return event.pubkey !== user.pubkey && !!auctionKey && isCountableAuctionBidEvent(event) && isNewAuctionBid(event, auctionKey)
 				})
+
+				const newSellerBidCountsByAuction = newSellerBidEvents.reduce<Record<string, number>>((counts, event) => {
+					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
+						sellerAuctionKeyByRootEventId,
+						sellerAuctionKeyByCoordinate,
+					])
+					if (!auctionKey) return counts
+					counts[auctionKey] = (counts[auctionKey] || 0) + 1
+					return counts
+				}, {})
+
+				const newSellerLiveChatEvents = sellerLiveChatEvents.filter((event) => {
+					seenAuctionCommentEventIds.add(event.id)
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A']), [sellerAuctionKeyByLiveActivityCoordinate])
+					return event.pubkey !== user.pubkey && isNewAuctionComment(event, auctionKey)
+				})
+
+				const newSellerAuctionCommentEvents = sellerAuctionCommentEvents.filter((event) => {
+					seenAuctionThreadCommentEventIds.add(event.id)
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					return event.pubkey !== user.pubkey && isNewAuctionEventComment(event, auctionKey)
+				})
+
+				const newSellerProductCommentEvents = sellerProductCommentEvents.filter((event) => {
+					seenProductCommentEventIds.add(event.id)
+					const productKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerProductKeyByCoordinate,
+						sellerProductKeyByEventId,
+					])
+					return event.pubkey !== user.pubkey && isNewProductComment(event, productKey)
+				})
+
+				const unseenAuctionLiveCount = sellerAuctions.filter((auction) => {
+					const startAt = getAuctionStartAt(auction)
+					return (
+						startAt > notificationActions.getLastSeenAuctionLive(getAuctionNotificationKey(auction)) && startAt <= initializationStartedAt
+					)
+				}).length
+
+				const unseenAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
+					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+					return (
+						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(getAuctionNotificationKey(auction)) &&
+						biddingCutoffAt <= initializationStartedAt
+					)
+				}).length
 
 				const ownBidEvents = await fetchAuctionBidsByBidder(user.pubkey, 500)
 				const highestOwnBidByRootId = new Map<string, number>()
@@ -330,6 +651,34 @@ export const useNotificationMonitor = () => {
 
 				if (isCancelled) return
 
+				// Reconcile lifecycle transitions that can happen while async initialization
+				// is still fetching relay data. This bounded window closes gaps where a
+				// transition can be missed by both initial counting and one-shot timer setup.
+				const initializationCompletedAt = Math.floor(Date.now() / 1000)
+				const reconciledAuctionLiveCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
+					if (!auctionKey) return false
+
+					const startAt = getAuctionStartAt(auction)
+					return (
+						startAt > initializationStartedAt &&
+						startAt <= initializationCompletedAt &&
+						startAt > notificationActions.getLastSeenAuctionLive(auctionKey)
+					)
+				}).length
+
+				const reconciledAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
+					if (!auctionKey) return false
+
+					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+					return (
+						biddingCutoffAt > initializationStartedAt &&
+						biddingCutoffAt <= initializationCompletedAt &&
+						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)
+					)
+				}).length
+
 				// Update store with initial counts
 				notificationActions.recalculateFromEvents({
 					orderCount: newOrders.length,
@@ -337,6 +686,12 @@ export const useNotificationMonitor = () => {
 					purchaseCount: newPurchaseUpdates.length,
 					conversationCounts,
 					auctionBidCount: newSellerBidEvents.length,
+					auctionBidCountsByAuction: newSellerBidCountsByAuction,
+					auctionCommentCount: newSellerLiveChatEvents.length,
+					auctionEventCommentCount: newSellerAuctionCommentEvents.length,
+					productCommentCount: newSellerProductCommentEvents.length,
+					auctionLiveCount: unseenAuctionLiveCount + reconciledAuctionLiveCount,
+					auctionSettlementBeginsCount: unseenAuctionSettlementBeginsCount + reconciledAuctionSettlementBeginsCount,
 					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
 				})
 
@@ -345,17 +700,33 @@ export const useNotificationMonitor = () => {
 					messages: totalUnseenMessages,
 					purchases: newPurchaseUpdates.length,
 					auctionBids: newSellerBidEvents.length,
+					auctionComments: newSellerLiveChatEvents.length,
+					auctionEventComments: newSellerAuctionCommentEvents.length,
+					productComments: newSellerProductCommentEvents.length,
+					auctionLive: unseenAuctionLiveCount + reconciledAuctionLiveCount,
+					auctionSettlementBegins: unseenAuctionSettlementBeginsCount + reconciledAuctionSettlementBeginsCount,
 					bidUpdates: newHigherBidEvents.length + newSettlementEvents.length,
+					reconciledAuctionLive: reconciledAuctionLiveCount,
+					reconciledAuctionSettlementBegins: reconciledAuctionSettlementBeginsCount,
+					initializationWindowSeconds: Math.max(0, initializationCompletedAt - initializationStartedAt),
 					conversations: Object.keys(conversationCounts).length,
 				})
+
+				sellerAuctions.forEach(scheduleAuctionPhaseNotification)
 
 				const handleSellerBidEvent = (event: NDKEvent) => {
 					if (!event.id || seenAuctionEventIds.has(event.id)) return
 					seenAuctionEventIds.add(event.id)
-					if (event.pubkey === user.pubkey || !isCountableAuctionBidEvent(event) || !isNewAuctionBid(event)) return
+
+					const auctionKey = resolveScopedKeyFromLookups([getEventAuctionRootId(event), getEventAuctionCoordinate(event)].filter(Boolean), [
+						sellerAuctionKeyByRootEventId,
+						sellerAuctionKeyByCoordinate,
+					])
+					if (event.pubkey === user.pubkey || !auctionKey || !isCountableAuctionBidEvent(event) || !isNewAuctionBid(event, auctionKey))
+						return
 
 					console.log('[NotificationMonitor] New auction bid received:', event.id)
-					notificationActions.incrementUnseenAuctionBids()
+					notificationActions.incrementUnseenAuctionBids(auctionKey)
 				}
 
 				const handleWatchedBidEvent = (event: NDKEvent) => {
@@ -370,6 +741,119 @@ export const useNotificationMonitor = () => {
 					notificationActions.incrementUnseenBidUpdates()
 				}
 
+				const handleSellerLiveChatEvent = (event: NDKEvent) => {
+					if (!event.id || seenAuctionCommentEventIds.has(event.id)) return
+					seenAuctionCommentEventIds.add(event.id)
+
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A']), [sellerAuctionKeyByLiveActivityCoordinate])
+					if (event.pubkey === user.pubkey || !isNewAuctionComment(event, auctionKey)) return
+
+					console.log('[NotificationMonitor] New live chat comment on seller auction:', event.id)
+					notificationActions.incrementUnseenAuctionComments()
+				}
+
+				const subscribeSellerLiveActivityCoordinate = (liveActivityCoordinate: string) => {
+					if (!liveActivityCoordinate || subscribedSellerLiveActivityCoordinates.has(liveActivityCoordinate)) return
+					subscribedSellerLiveActivityCoordinates.add(liveActivityCoordinate)
+
+					subscribeToTaggedAuctionEvents({
+						kind: LIVE_CHAT_KIND_NDK,
+						tagName: '#a',
+						values: [liveActivityCoordinate],
+						onEvent: handleSellerLiveChatEvent,
+					})
+				}
+
+				const handleSellerLiveActivityEvent = (event: NDKEvent) => {
+					const liveActivityCoordinate = getAddressableEventCoordinate(event)
+					if (!liveActivityCoordinate) return
+
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (!auctionKey) return
+
+					sellerAuctionKeyByLiveActivityCoordinate.set(liveActivityCoordinate, auctionKey)
+					subscribeSellerLiveActivityCoordinate(liveActivityCoordinate)
+				}
+
+				const subscribeSellerAuctionRootScope = (auctionRootEventId: string) => {
+					if (!auctionRootEventId || subscribedSellerAuctionRootEventIds.has(auctionRootEventId)) return
+					subscribedSellerAuctionRootEventIds.add(auctionRootEventId)
+
+					subscribeToTaggedAuctionEvents({
+						kind: AUCTION_BID_KIND,
+						tagName: '#e',
+						values: [auctionRootEventId],
+						onEvent: handleSellerBidEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#E',
+						values: [auctionRootEventId],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+				}
+
+				const subscribeSellerAuctionCoordinateScope = (auctionCoordinate: string) => {
+					if (!auctionCoordinate || subscribedSellerAuctionCoordinates.has(auctionCoordinate)) return
+					subscribedSellerAuctionCoordinates.add(auctionCoordinate)
+
+					subscribeToTaggedAuctionEvents({
+						kind: AUCTION_BID_KIND,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerBidEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: COMMENT_KIND_NDK,
+						tagName: '#A',
+						values: [auctionCoordinate],
+						onEvent: handleSellerAuctionCommentEvent,
+					})
+					subscribeToTaggedAuctionEvents({
+						kind: LIVE_ACTIVITY_KIND_NDK,
+						tagName: '#a',
+						values: [auctionCoordinate],
+						onEvent: handleSellerLiveActivityEvent,
+					})
+				}
+
+				const handleSellerAuctionCommentEvent = (event: NDKEvent) => {
+					if (!event.id || seenAuctionThreadCommentEventIds.has(event.id)) return
+					seenAuctionThreadCommentEventIds.add(event.id)
+
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (event.pubkey === user.pubkey || !isNewAuctionEventComment(event, auctionKey)) return
+
+					console.log('[NotificationMonitor] New thread comment on seller auction:', event.id)
+					notificationActions.incrementUnseenAuctionEventComments()
+				}
+
+				const handleSellerProductCommentEvent = (event: NDKEvent) => {
+					if (!event.id || seenProductCommentEventIds.has(event.id)) return
+					seenProductCommentEventIds.add(event.id)
+
+					const productKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerProductKeyByCoordinate,
+						sellerProductKeyByEventId,
+					])
+					if (event.pubkey === user.pubkey || !isNewProductComment(event, productKey)) return
+
+					console.log('[NotificationMonitor] New thread comment on seller product:', event.id)
+					notificationActions.incrementUnseenProductComments()
+				}
+
 				const handleWatchedSettlementEvent = (event: NDKEvent) => {
 					if (!event.id || seenSettlementEventIds.has(event.id)) return
 					seenSettlementEventIds.add(event.id)
@@ -379,18 +863,41 @@ export const useNotificationMonitor = () => {
 					notificationActions.incrementUnseenBidUpdates()
 				}
 
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#e',
-					values: sellerAuctionRootEventIds,
-					onEvent: handleSellerBidEvent,
-				})
-				subscribeToTaggedAuctionEvents({
-					kind: AUCTION_BID_KIND,
-					tagName: '#a',
-					values: sellerAuctionCoordinates,
-					onEvent: handleSellerBidEvent,
-				})
+				const handleOwnAuctionEvent = (event: NDKEvent) => {
+					if (event.pubkey !== user.pubkey) return
+
+					const auctionKey = getAuctionNotificationKey(event)
+					if (!auctionKey) return
+
+					const auctionRootEventId = getAuctionRootEventId(event) || event.id
+					const auctionCoordinate = getAuctionCoordinate(event)
+
+					sellerAuctionKeyByRootEventId.set(auctionRootEventId, auctionKey)
+					if (auctionCoordinate) sellerAuctionKeyByCoordinate.set(auctionCoordinate, auctionKey)
+
+					subscribeSellerAuctionRootScope(auctionRootEventId)
+					if (auctionCoordinate) {
+						subscribeSellerAuctionCoordinateScope(auctionCoordinate)
+
+						void fetchTaggedAuctionEvents({
+							kind: LIVE_ACTIVITY_KIND_NDK,
+							auctionRootEventIds: [],
+							auctionCoordinates: [auctionCoordinate],
+						})
+							.then((events) => {
+								events.forEach(handleSellerLiveActivityEvent)
+							})
+							.catch((error) => {
+								console.error('[NotificationMonitor] Failed to refresh live-activity scopes for new auction:', error)
+							})
+					}
+
+					scheduleAuctionPhaseNotification(event)
+				}
+
+				sellerAuctionRootEventIds.forEach(subscribeSellerAuctionRootScope)
+				sellerAuctionCoordinates.forEach(subscribeSellerAuctionCoordinateScope)
+				sellerLiveActivityCoords.forEach(subscribeSellerLiveActivityCoordinate)
 				subscribeToTaggedAuctionEvents({
 					kind: AUCTION_BID_KIND,
 					tagName: '#e',
@@ -415,6 +922,38 @@ export const useNotificationMonitor = () => {
 					values: watchedAuctionCoordinates,
 					onEvent: handleWatchedSettlementEvent,
 				})
+				subscribeToTaggedAuctionEvents({
+					kind: COMMENT_KIND_NDK,
+					tagName: '#a',
+					values: sellerProductCoordinates,
+					onEvent: handleSellerProductCommentEvent,
+				})
+				subscribeToTaggedAuctionEvents({
+					kind: COMMENT_KIND_NDK,
+					tagName: '#A',
+					values: sellerProductCoordinates,
+					onEvent: handleSellerProductCommentEvent,
+				})
+				subscribeToTaggedAuctionEvents({
+					kind: COMMENT_KIND_NDK,
+					tagName: '#E',
+					values: sellerProductEventIds,
+					onEvent: handleSellerProductCommentEvent,
+				})
+
+				const auctionListingSubscription = ndk.subscribe(
+					{
+						kinds: [AUCTION_KIND_NDK],
+						authors: [user.pubkey],
+						since: subscriptionSince,
+					},
+					{
+						closeOnEose: false,
+					},
+				)
+
+				auctionListingSubscription.on('event', handleOwnAuctionEvent)
+				subscriptionsRef.current.push(auctionListingSubscription)
 
 				console.log('[NotificationMonitor] Subscriptions active:', subscriptionsRef.current.length)
 			} catch (error) {
@@ -521,6 +1060,7 @@ export const useNotificationMonitor = () => {
 		return () => {
 			console.log('[NotificationMonitor] Stopping notification monitoring')
 			isCancelled = true
+			phaseTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
 			subscriptionsRef.current.forEach((sub) => {
 				sub.stop()
 			})

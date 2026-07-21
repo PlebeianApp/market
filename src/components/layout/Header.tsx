@@ -201,14 +201,35 @@ export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const { mobileMenuOpen } = useStore(uiStore)
-	const { unseenOrders, unseenMessages, unseenPurchases, unseenAuctionBids, unseenBidUpdates } = useStore(notificationStore)
+	const {
+		unseenOrders,
+		unseenMessages,
+		unseenPurchases,
+		unseenAuctionBids,
+		unseenAuctionComments: unseenAuctionLiveChatComments,
+		unseenAuctionEventComments: unseenAuctionThreadComments,
+		unseenProductComments: unseenProductThreadComments,
+		unseenAuctionLive: unseenScheduledAuctionsNowLive,
+		unseenAuctionSettlementBegins,
+		unseenBidUpdates,
+	} = useStore(notificationStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Calculate total notification count for dashboard button
-	const totalNotifications = unseenOrders + unseenMessages + unseenPurchases + unseenAuctionBids + unseenBidUpdates
+	const totalNotifications =
+		unseenOrders +
+		unseenMessages +
+		unseenPurchases +
+		unseenAuctionBids +
+		unseenAuctionLiveChatComments +
+		unseenAuctionThreadComments +
+		unseenProductThreadComments +
+		unseenScheduledAuctionsNowLive +
+		unseenAuctionSettlementBegins +
+		unseenBidUpdates
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
