@@ -3,7 +3,7 @@ import { useState } from 'react'
 import * as AvatarPrimitive from '@radix-ui/react-avatar'
 
 import { cn } from '@/lib/utils'
-import { useProfile, getProfileName } from '@/queries/profiles'
+import { useProfile } from '@/queries/profiles'
 import { Spinner } from './ui/spinner'
 
 interface AvatarUserProps extends React.ComponentProps<typeof AvatarPrimitive.Root> {
@@ -16,7 +16,7 @@ function AvatarUser({ pubkey, className = '', ...props }: AvatarUserProps) {
 	const { data: profileData, isLoading: isProfileLoading } = useProfile(pubkey)
 	const { profile } = profileData ?? {}
 
-	const profileName = getProfileName({ profile: profile ?? null })
+	const profileName = (profile?.displayName || profile?.name || '').trim()
 	const profilePicture = typeof profile?.picture === 'string' ? profile.picture.trim() : ''
 	const [imageState, setImageState] = useState<{ src: string; status: ImageLoadingStatus }>({ src: '', status: 'idle' })
 	const imageStatus = profilePicture ? (imageState.src === profilePicture ? imageState.status : 'loading') : 'idle'

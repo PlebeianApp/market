@@ -1,4 +1,4 @@
-import { useProfile, getProfileName, getProfileNip05 } from '@/queries/profiles'
+import { useProfile, getProfileNip05 } from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
 import { useState } from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -44,7 +44,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	const breakpoint = useBreakpoint()
 	const compact = breakpoint === 'md' || breakpoint === 'sm'
 
-	const profileDisplayName = getProfileName({ profile: profile ?? null }).trim() || null
+	const profileDisplayName = (profile?.displayName || profile?.name || '').trim() || null
 	const profileNip05 = getProfileNip05({ profile: profile ?? null })?.trim() || null
 	const userNpub = user?.npub?.trim()
 	const npub = userNpub && isValidNpub(userNpub) ? userNpub : encodeIdentifierToNpub(safePubkey)
@@ -136,7 +136,9 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	const copyNpubWrapper = (child: React.ReactNode) =>
 		shouldCopyNpub ? (
 			<Tooltip open={forceShowTooltip == true ? forceShowTooltip : undefined}>
-				<TooltipTrigger className={'w-min ' + className}>{child}</TooltipTrigger>
+				<TooltipTrigger asChild className={'w-min ' + className}>
+					{child}
+				</TooltipTrigger>
 
 				<TooltipContent side="bottom" className="">
 					{textTooltip}
