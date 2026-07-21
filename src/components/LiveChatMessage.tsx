@@ -2,6 +2,7 @@ import type { LiveChatMessage } from '@/lib/nip53'
 import { UserCard } from '@/components/UserCard'
 import { ReactionsList } from '@/components/social/ReactionsList'
 import { configStore } from '@/lib/stores/config'
+import { useStore } from '@tanstack/react-store'
 import { cn } from '@/lib/utils'
 
 function formatRelativeTime(timestamp: number): string {
@@ -17,7 +18,7 @@ interface LiveChatMessageProps {
 }
 
 export function LiveChatMessageBubble({ message }: LiveChatMessageProps) {
-	const cvmPubkey = configStore.state.config.cvmServerPubkey
+	const cvmPubkey = useStore(configStore, (state) => state.config.cvmServerPubkey)
 	const isSystemMessage = message.authorPubkey === cvmPubkey
 
 	return (

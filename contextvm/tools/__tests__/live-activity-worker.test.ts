@@ -7,9 +7,12 @@ import {
 	getDedupMap,
 	summarizeBids,
 	buildAuctionEndMessage,
+	shortenNpub,
 	scheduleAuctionEnd,
 	clearEndTimers,
 	getEndTimers,
+	NEUTRAL_END_MESSAGE,
+	pollAndUpdateLiveActivities,
 } from '../live-activity-worker'
 import { AUCTION_KIND, buildLiveActivityDTag } from '../../../src/lib/nip53'
 
@@ -74,7 +77,9 @@ describe('live-activity-worker', () => {
 				status: 'live' as const,
 				currentParticipants: 5,
 				totalParticipants: 10,
+				totalBids: 3,
 				updatedAt: 1000,
+				commentatorDelivered: false,
 			})
 
 			expect(dedup.has(keyA)).toBe(true)
@@ -179,10 +184,31 @@ describe('live-activity-worker', () => {
 				totalBidders: 0,
 			})
 		})
+
+		test('NaN amount is excluded (not counted as a bid)', () => {
+			const bids = [
+				{ pubkey: 'a', amount: NaN },
+				{ pubkey: 'b', amount: 2000 },
+				{ pubkey: 'c', amount: Infinity },
+			]
+			const result = summarizeBids(bids)
+			expect(result.winnerPubkey).toBe('b')
+			expect(result.finalAmountSats).toBe(2000)
+			expect(result.totalBids).toBe(1)
+			expect(result.totalBidders).toBe(1)
+		})
+	})
+
+	describe('NEUTRAL_END_MESSAGE', () => {
+		test('is a neutral message without winner or price assertions', () => {
+			expect(NEUTRAL_END_MESSAGE).toBe('🏁 Bidding closed; settlement pending.')
+			expect(NEUTRAL_END_MESSAGE).not.toContain('Won by')
+			expect(NEUTRAL_END_MESSAGE).not.toContain('sats')
+		})
 	})
 
 	describe('buildAuctionEndMessage', () => {
-		test('includes winner, price, bid/bidder counts, and watchers', () => {
+		test('returns neutral settlement-pending message', () => {
 			const msg = buildAuctionEndMessage({
 				winnerPubkey: 'npub1abcdef',
 				finalAmountSats: 11000,
@@ -190,24 +216,12 @@ describe('live-activity-worker', () => {
 				totalBidders: 4,
 				watchers: 23,
 			})
-			expect(msg).toContain('Won by npub1abcdef')
-			expect(msg).toContain('11,000 sats')
-			expect(msg).toContain('7 bids from 4 bidders')
-			expect(msg).toContain('Watched by 23 users.')
+			expect(msg).toBe(NEUTRAL_END_MESSAGE)
+			expect(msg).not.toContain('Won by')
+			expect(msg).not.toContain('11,000 sats')
 		})
 
-		test('uses singular bid/bidder wording for a single bid', () => {
-			const msg = buildAuctionEndMessage({
-				winnerPubkey: 'xyz',
-				finalAmountSats: 500,
-				totalBids: 1,
-				totalBidders: 1,
-				watchers: 2,
-			})
-			expect(msg).toContain('1 bid from 1 bidder')
-		})
-
-		test('handles no-bids case gracefully', () => {
+		test('returns same neutral message for no-bids case', () => {
 			const msg = buildAuctionEndMessage({
 				winnerPubkey: null,
 				finalAmountSats: 0,
@@ -215,8 +229,24 @@ describe('live-activity-worker', () => {
 				totalBidders: 0,
 				watchers: 5,
 			})
-			expect(msg).toContain('No bids were placed')
-			expect(msg).toContain('Watched by 5 users.')
+			expect(msg).toBe(NEUTRAL_END_MESSAGE)
+			expect(msg).not.toContain('No bids were placed')
+		})
+	})
+
+	describe('shortenNpub', () => {
+		test('encodes hex pubkey to valid bech32 npub and truncates', () => {
+			const hex = 'a'.repeat(64)
+			const result = shortenNpub(hex)
+			expect(result.startsWith('npub1')).toBe(true)
+			expect(result).toContain('…')
+		})
+
+		test('passes through already-bech32 npub without re-encoding', () => {
+			const npub = 'npub1abcdef0123456789'
+			const result = shortenNpub(npub)
+			expect(result.startsWith('npub1')).toBe(true)
+			expect(result).toContain('…')
 		})
 	})
 
@@ -248,6 +278,35 @@ describe('live-activity-worker', () => {
 			const second = scheduleAuctionEnd(fakeCtx, 'k3', future)
 			expect(second).toBe(0)
 			expect(getEndTimers().size).toBe(1)
+		})
+	})
+
+	describe('single-flight guard (pollAndUpdateLiveActivities)', () => {
+		test('concurrent triggers share the same in-flight promise', async () => {
+			// Both calls should return the same promise object — the second
+			// call piggybacks on the first instead of running a duplicate poll.
+			// We use a mock ctx that returns no auctions so the poll resolves
+			// quickly. The key assertion is that both calls return the same
+			// stats object (same promise reference).
+			const mockCtx = {
+				relayPool: {
+					subscribe: () => Promise.resolve(() => {}),
+					getRelayUrls: () => [],
+					publish: () => Promise.resolve(),
+				},
+				signer: { signEvent: () => Promise.resolve({}) },
+				issuerPubkey: 'a'.repeat(64),
+			} as never
+
+			const p1 = pollAndUpdateLiveActivities(mockCtx)
+			const p2 = pollAndUpdateLiveActivities(mockCtx)
+
+			// Both promises should be the same reference (single-flight)
+			expect(p1).toBe(p2)
+
+			const result1 = await p1
+			const result2 = await p2
+			expect(result1).toEqual(result2)
 		})
 	})
 })

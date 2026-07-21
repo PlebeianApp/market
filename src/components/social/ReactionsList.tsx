@@ -79,6 +79,7 @@ export const ReactionsList = ({
 			? quickAddEmojis.map((emoji) => (
 					<button
 						key={emoji}
+						type="button"
 						onClick={() => handleReactionClick(emoji)}
 						className="rounded p-0.5 text-sm hover:bg-zinc-200 transition-colors"
 					>
@@ -97,8 +98,11 @@ export const ReactionsList = ({
 		<div
 			className="flex flex-wrap items-center gap-1"
 			data-testid="reactions-list"
+			tabIndex={0}
 			onMouseEnter={() => setShowQuickButtons(true)}
 			onMouseLeave={() => setShowQuickButtons(false)}
+			onFocus={() => setShowQuickButtons(true)}
+			onBlur={() => setShowQuickButtons(false)}
 		>
 			{children}
 		</div>

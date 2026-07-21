@@ -33,16 +33,24 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 
 	const startsAt = getAuctionStartAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
-	const status = deriveLiveActivityStatus(startsAt, maxEndAt)
-	const isLive = status === 'live'
-	const canChat = isLive
+
+	// Derive a preliminary status from auction timestamps for the refetch
+	// interval and as a fallback before the live activity query loads.
+	const preliminaryStatus = deriveLiveActivityStatus(startsAt, maxEndAt)
 
 	// Poll faster (15s) while planned so the live chat activates promptly
 	// when the auction starts, instead of waiting up to 60s.
-	const liveActivityRefetchMs = status === 'planned' ? 15_000 : 60_000
+	const liveActivityRefetchMs = preliminaryStatus === 'planned' ? 15_000 : 60_000
 	const liveActivityQuery = useLiveActivity(auctionEvent, { refetchInterval: liveActivityRefetchMs })
 	const liveActivity = liveActivityQuery.data
 	const liveActivityCoord = liveActivity?.coord ?? ''
+
+	// Derive availability from the live activity query result when available
+	// (authoritative — set by the CVM worker). Fall back to auction timestamps
+	// before the query loads so the panel is responsive on first render.
+	const status: LiveActivityStatus = liveActivity?.status ?? preliminaryStatus
+	const isLive = status === 'live'
+	const canChat = isLive
 
 	const chatQuery = useLiveChatMessages(liveActivityCoord, isLive)
 	const messages = chatQuery.data ?? []

@@ -43,16 +43,7 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 	if (events.size === 0) return null
 
 	const sorted = Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-	const parsed = parseLiveActivity(sorted[0])
-
-	// NIP-53 stale check: if status=live but event is older than 1hr, treat as ended
-	const STALE_THRESHOLD_S = 3600
-	const eventAge = Math.floor(Date.now() / 1000) - (sorted[0].created_at ?? 0)
-	if (parsed.status === 'live' && eventAge > STALE_THRESHOLD_S) {
-		parsed.status = 'ended'
-	}
-
-	return parsed
+	return parseLiveActivity(sorted[0])
 }
 
 export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<LiveChatMessage[]> => {
