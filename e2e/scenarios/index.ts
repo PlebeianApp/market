@@ -653,19 +653,21 @@ export async function seedAuction(
 }
 
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
+import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
 
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
-export type OrderType = 'product'
+export type OrderType = 'product' | 'auction'
 
 export interface SeededOrderResult {
 	orderEvent: VerifiedEvent
 	orderId: string
 	productEvent?: VerifiedEvent
+	auctionEvent?: VerifiedEvent
 }
 
 /**
  * Master seeding function to create orders in specific states.
- * Handles Product (Invoice flow).
+ * Handles both Product (Invoice flow) and Auction (Settlement flow) differences.
  */
 export async function seedOrder(type: OrderType, stage: OrderStage): Promise<SeededOrderResult> {
 	let relay: Relay | null = null
@@ -679,11 +681,12 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 		const now = Math.floor(Date.now() / 1000)
 
 		let productEvent: VerifiedEvent | undefined
+		let auctionEvent: VerifiedEvent | undefined
 		let itemTagValue = ''
 		let orderAmount = '1000'
 		const shippingOptionCoords = '30406:' + devUser1.pk + ':shippingdtag123'
 
-		// 1. Create the underlying item (Product)
+		// 1. Create the underlying item (Product or Auction)
 		if (type === 'product') {
 			const productId = `prod_${now}_${uuidv4().slice(0, 8)}`
 			productEvent = finalizeEvent(
@@ -706,6 +709,27 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			)
 			await relay.publish(productEvent)
 			itemTagValue = `30402:${devUser1.pk}:${productId}`
+		} else {
+			const auctionId = `auc_${now}_${uuidv4().slice(0, 8)}`
+			auctionEvent = finalizeEvent(
+				{
+					kind: 30408,
+					created_at: now,
+					content: 'Test Auction Description',
+					tags: [
+						['d', auctionId],
+						['title', 'Test Auction'],
+						['price', '500', 'SAT'],
+						['start_at', String(now - 100)],
+						['end_at', String(now + 100)],
+						['reserve', '1000'],
+					],
+				},
+				sellerSkBytes,
+			)
+			await relay.publish(auctionEvent)
+			itemTagValue = `30408:${devUser1.pk}:${auctionId}`
+			orderAmount = '500'
 		}
 
 		// 2. Construct Base Tags Array (MUTABLE)
@@ -718,6 +742,11 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			['amount', orderAmount],
 			['item', itemTagValue, '1'],
 		]
+
+		// Add 'a' tag if it's an auction
+		if (type === 'auction') {
+			baseTags.push(['a', itemTagValue])
+		}
 
 		// 3. Create Order Event Data Object
 		const orderEventData: EventTemplate = {
@@ -839,7 +868,7 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 							],
 						},
 						sellerSkBytes,
-					)
+				)
 					await relay.publish(paymentRequest)
 
 					// Buyer sends Receipt
@@ -858,8 +887,47 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 								],
 							},
 							buyerSkBytes,
-						)
+					)
 						await relay.publish(receipt)
+					}
+				}
+			} else if (type === 'auction') {
+				// Auction Flow: Path Release -> Settlement
+				if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+					// Buyer publishes Path Release (Kind 1025)
+					const pathRelease = finalizeEvent(
+						{
+							kind: AUCTION_PATH_RELEASE_KIND,
+							created_at: now + 5,
+							content: '',
+							tags: [
+								['p', devUser1.pk],
+								['a', itemTagValue],
+								['winning_bid', 'bid_event_id_placeholder'],
+							],
+						},
+						buyerSkBytes,
+					)
+					await relay.publish(pathRelease)
+
+					// Seller publishes Settlement (Kind 1024)
+					if (['processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+						const settlement = finalizeEvent(
+							{
+								kind: AUCTION_SETTLEMENT_KIND,
+								created_at: now + 10,
+								content: '',
+								tags: [
+									['p', devUser2.pk],
+									['a', itemTagValue],
+									['status', 'settled'],
+									['winner', devUser2.pk],
+									['final_amount', '500'],
+								],
+							},
+							sellerSkBytes,
+						)
+						await relay.publish(settlement)
 					}
 				}
 			}
@@ -867,7 +935,7 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 
 		await advanceStage()
 
-		return { orderEvent, orderId, productEvent }
+		return { orderEvent, orderId, auctionEvent, productEvent }
 	} finally {
 		if (relay) {
 			relay.close()
