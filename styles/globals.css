@@ -78,6 +78,15 @@
 	font-synthesis: none;
 }
 
+.hide-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
 /* Add specific sizes for different heading levels */
 h1.font-heading {
 	font-size: 2.4rem;
@@ -112,7 +121,7 @@ button {
 	/* secondary */
 	--secondary: #ff3eb5;
 	--secondary-hover: #0a0a0a;
-	--secondary-foreground: #0a0a0a;
+	--secondary-foreground: #312222;
 	--secondary-foreground-hover: #ff3eb5;
 	--secondary-border: #ff3eb5;
 	--secondary-border-hover: #ff3eb5;
@@ -168,8 +177,8 @@ button {
 	--card-foreground: hsl(0 0% 98%);
 	--popover: hsl(240 10% 3.9%);
 	--popover-foreground: hsl(0 0% 98%);
-	--primary: hsl(0 0% 98%);
-	--primary-foreground: hsl(240 5.9% 10%);
+	--primary: #ff3eb5;
+	--primary-foreground: white;
 	--secondary: hsl(240 3.7% 15.9%);
 	--secondary-foreground: hsl(0 0% 98%);
 	--muted: hsl(240 3.7% 15.9%);
@@ -253,6 +262,7 @@ button {
 	--color-sidebar: var(--sidebar-background);
 	--color-light-gray: var(--light-gray);
 	--color-neo-purple: var(--neo-purple);
+
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -538,5 +548,14 @@ button {
 	/* Custom utility classes */
 	.bg-off-black {
 		background-color: var(--off-black);
+	}
+
+	/* Custom CSS Targetting Selected ToggleGroupItems */
+	/* Target ToggleGroupItems that are currently selected (checked) */
+	button[role='radio'][aria-checked='true'][data-variant='outline'] {
+		/* Example: Override background and text color when selected */
+		border-width: 0.1rem !important;
+		background-color: color-mix(var(--neo-purple) 10%, transparent 90%);
+		border-color: var(--neo-purple) !important;
 	}
 }

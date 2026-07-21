@@ -34,7 +34,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # -----------------------------------------------------------------------------
 # Parse arguments - detect if first arg is a stage or command
 # -----------------------------------------------------------------------------
-STAGES="development staging production"
+STAGES="development staging auctionsdev production"
 COMMANDS="status logs logs-relay restart stop start ssh releases rollback help"
 
 if [[ " $STAGES " =~ " $1 " ]]; then
@@ -202,6 +202,7 @@ case "$COMMAND" in
         echo "Stages:"
         echo "  development    Local development server"
         echo "  staging        Staging server"
+        echo "  auctionsdev    Auctions feature staging server"
         echo "  production     Production server"
         echo ""
         echo "Commands:"
