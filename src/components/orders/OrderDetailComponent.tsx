@@ -5,10 +5,10 @@ import { getAuctionClaimPublicMarkerFields, type PrivateAuctionClaimPayload } fr
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
-import { getCoordsFromATag } from '@/lib/utils/coords'
+import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
-import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { auctionByATagQueryOptions, usePrivateAuctionClaimForOrder } from '@/queries/auctions'
+import { getAuctionCoordinatesFromOrder, getOrderStatus, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
@@ -62,7 +62,17 @@ import {
 	TrackingInfoDisplay,
 	V4VRecipientsCard,
 } from './detail'
+import { AuctionCard } from '@/components/AuctionCard'
 import { UserCard } from '@/components/UserCard'
+import {
+	useAuctionBids,
+	useAuctionSettlements,
+	useAuctionPathReleases,
+	getAuctionTitle,
+	getAuctionSettlementStatus,
+	getAuctionSettlementFinalAmount,
+	getAuctionCurrentPriceFromBids,
+} from '@/queries/auctions'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -115,6 +125,121 @@ function renderStatusIcon(iconName?: string | null, className?: string) {
 	return <IconComponent className={cn(ICON_SIZE_CLASSES, className)} />
 }
 
+// --- Auction Settlement Status Display ---
+function AuctionSettlementStatus({
+	settlements,
+	pathReleases,
+	currentPrice,
+}: {
+	settlements: NDKEvent[]
+	pathReleases: NDKEvent[]
+	currentPrice: number
+}) {
+	const settlement = settlements[0]
+	const settlementStatus = settlement ? getAuctionSettlementStatus(settlement) : null
+
+	const hasPathRelease = pathReleases.length > 0
+	const hasSettlement = settlements.length > 0
+
+	let statusText = ''
+	let statusIcon: React.ReactNode = <Clock className="w-5 h-5 text-yellow-600" />
+	let statusColor = 'bg-yellow-50 border-yellow-200'
+	let textColor = 'text-yellow-900'
+	let description = ''
+
+	if (!hasSettlement && !hasPathRelease) {
+		statusText = 'Awaiting Settlement'
+		statusIcon = <AlertTriangle className="w-5 h-5 text-orange-600" />
+		description = 'Waiting for the buyer to release payment and the seller to confirm the sale.'
+	} else if (!hasSettlement && hasPathRelease) {
+		statusText = 'Funds Released'
+		statusIcon = <ArrowRightLeft className="w-5 h-5 text-blue-600" />
+		statusColor = 'bg-blue-50 border-blue-200'
+		textColor = 'text-blue-900'
+		// Task 3: Simplify payment state language - Funds Released
+		description = 'The buyer has sent the payment. Waiting for the seller to confirm receipt.'
+	} else if (hasSettlement && !hasPathRelease) {
+		statusText = 'Seller Confirmed'
+		statusIcon = <CheckCircle className="w-5 h-5 text-purple-600" />
+		statusColor = 'bg-purple-50 border-purple-200'
+		textColor = 'text-purple-900'
+		// Task 3: Simplify payment state language - Seller Confirmed
+		description = "The seller has confirmed the sale. Waiting for the buyer's payment to arrive."
+	} else if (hasSettlement && hasPathRelease) {
+		if (settlementStatus === 'settled') {
+			statusText = 'Settled'
+			statusIcon = <CheckCircle className="w-5 h-5 text-green-600" />
+			statusColor = 'bg-green-50 border-green-200'
+			textColor = 'text-green-900'
+			// Task 3: Simplify payment state language - Settled
+			description =
+				'The auction is complete! The payment has been sent and the seller has confirmed. Funds should be in your wallet shortly.'
+		} else if (settlementStatus === 'reserve_not_met') {
+			statusText = 'Reserve Not Met'
+			statusIcon = <AlertTriangle className="w-5 h-5 text-red-600" />
+			statusColor = 'bg-red-50 border-red-200'
+			textColor = 'text-red-900'
+			description = 'The highest bid did not meet the reserve price.'
+		} else if (settlementStatus === 'cancelled') {
+			statusText = 'Cancelled'
+			statusIcon = <AlertTriangle className="w-5 h-5 text-gray-600" />
+			statusColor = 'bg-gray-50 border-gray-200'
+			textColor = 'text-gray-900'
+			description = 'The auction was cancelled.'
+		} else {
+			statusText = 'Settlement In Progress'
+			description = 'The settlement process has started but is not yet finalized.'
+		}
+	}
+
+	return (
+		<Card>
+			<CardHeader className="p-4">
+				<div className={`flex items-center gap-3 p-3 rounded-lg border ${statusColor}`}>
+					{statusIcon}
+					<div>
+						<h3 className={`font-semibold ${textColor}`}>{statusText}</h3>
+						<p className={`text-sm mt-1 ${textColor} opacity-80`}>{description}</p>
+					</div>
+				</div>
+			</CardHeader>
+			<CardContent className="px-4 pb-4 pt-0">
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+					<div className="space-y-2">
+						<p className="text-muted-foreground font-medium">Bid</p>
+						<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+							<span>Highest Valid Bid:</span>
+							<span className="font-bold">{currentPrice.toLocaleString()} sats</span>
+						</div>
+						<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+							<span>Buyer Payment:</span>
+							<span className={hasPathRelease ? 'text-green-700 font-medium' : 'text-orange-700'}>
+								{hasPathRelease ? 'Released' : 'Pending'}
+							</span>
+						</div>
+					</div>
+
+					<div className="space-y-2">
+						<p className="text-muted-foreground font-medium">Seller Confirmation</p>
+						<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+							<span>Status:</span>
+							<span className={hasSettlement ? 'text-blue-700 font-medium' : 'text-orange-700'}>
+								{hasSettlement ? getAuctionSettlementStatus(settlement).replace(/_/g, ' ') : 'Pending'}
+							</span>
+						</div>
+						{hasSettlement && settlementStatus === 'settled' && (
+							<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+								<span>Final Amount:</span>
+								<span className="font-bold">{getAuctionSettlementFinalAmount(settlement).toLocaleString()} sats</span>
+							</div>
+						)}
+					</div>
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -142,6 +267,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const canViewLegacyBuyerContact = isBuyer
 	const canViewBuyerContact = isBuyer || isOrderSeller
+	const auctionCoordinates = getAuctionCoordinatesFromOrder(order)
+	const isAuctionOrder = !!auctionCoordinates
 	const auctionClaimFields = getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
 	const privateAuctionClaimQuery = usePrivateAuctionClaimForOrder(orderEvent, isOrderSeller && !!auctionClaimFields)
 	const privateAuctionClaimResult = privateAuctionClaimQuery.data
@@ -329,8 +456,22 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		})),
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
-	const headerTitle = `Products (${products.length} unique)`
-	const headerSubText = `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
+	// Fetch auction-related data if this is an auction order
+	const auctionCoords = isValidATag(auctionCoordinates || '') ? getCoordsFromATag(auctionCoordinates || '') : null
+	const { data: auctionData } = useQuery({
+		...auctionByATagQueryOptions(auctionCoords?.pubkey ?? '', auctionCoords?.identifier ?? ''),
+		enabled: !!auctionCoords?.pubkey && !!auctionCoords.identifier,
+	})
+
+	const { data: auctionBids = [] } = useAuctionBids('', 500, auctionCoordinates || '')
+	const { data: auctionSettlements = [] } = useAuctionSettlements('', 100, auctionCoordinates || '')
+	const { data: auctionPathReleases = [] } = useAuctionPathReleases('', 200, auctionCoordinates || '')
+
+	// Calculate current price for display in settlement card
+	const currentPrice = isAuctionOrder && auctionData ? getAuctionCurrentPriceFromBids(auctionData, auctionBids) : 0
+
+	const headerTitle = isAuctionOrder && auctionData ? `Auction: ${getAuctionTitle(auctionData)}` : `Products (${products.length} unique)`
+	const headerSubText = isAuctionOrder ? undefined : `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
 
 	return (
 		<div className="container mx-auto px-4 py-4">
@@ -342,11 +483,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
 							<div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
 								<div className="flex items-center space-x-3">
-									<div className={`p-2 rounded-lg ${'bg-blue-100'}`}>
-										<Package className="w-5 h-5 text-blue-700" />
+									<div className={`p-2 rounded-lg ${isAuctionOrder ? 'bg-purple-100' : 'bg-blue-100'}`}>
+										{isAuctionOrder ? <Package className="w-5 h-5 text-purple-700" /> : <Package className="w-5 h-5 text-blue-700" />}
 									</div>
 									<div>
-										<p className="text-sm font-medium text-gray-900">{'Products'}</p>
+										<p className="text-sm font-medium text-gray-900">{isAuctionOrder ? 'Auction Item' : 'Products'}</p>
 										<h2 className="font-semibold truncate max-w-[300px] text-gray-800" title={headerTitle}>
 											{headerTitle}
 										</h2>
@@ -459,32 +600,51 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				)}
 				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
 
-				{/* Products */}
-				{products.length > 0 && (
+				{/* Products or Auctions */}
+				{(products.length > 0 || (isAuctionOrder && auctionData)) && (
 					<Card>
 						<CardHeader>
-							<CardTitle>{'Products'}</CardTitle>
+							<CardTitle>{isAuctionOrder ? 'Auction Item' : 'Products'}</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid grid-cols-1 gap-4">
-								{products.map((product) => {
-									const lookupId = getProductId(product) || product.id
-									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
-
-									return (
-										<div key={product.id} className="p-4 border rounded-lg">
-											{
-												<div>
-													<ProductCard product={product} />
-													<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-														<span className="text-sm text-gray-500">Quantity</span>
-														<span className="text-lg font-semibold">{quantity}</span>
-													</div>
-												</div>
-											}
+								{isAuctionOrder && auctionData ? (
+									<div key={auctionData.id} className="p-4 border rounded-lg">
+										<AuctionCard auction={auctionData} bids={auctionBids} className="w-full" />
+										<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+											<span className="text-sm text-gray-500">Quantity</span>
+											<span className="text-lg font-semibold">1</span>
 										</div>
-									)
-								})}
+									</div>
+								) : (
+									products.map((product) => {
+										const lookupId = getProductId(product) || product.id
+										const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
+										const isAuction = product.kind === 30408
+
+										return (
+											<div key={product.id} className="p-4 border rounded-lg">
+												{isAuction ? (
+													<div className="space-y-4">
+														<AuctionCard auction={product} bids={auctionBids} className="w-full" />
+														<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+															<span className="text-sm text-gray-500">Quantity</span>
+															<span className="text-lg font-semibold">{quantity}</span>
+														</div>
+													</div>
+												) : (
+													<div>
+														<ProductCard product={product} />
+														<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+															<span className="text-sm text-gray-500">Quantity</span>
+															<span className="text-lg font-semibold">{quantity}</span>
+														</div>
+													</div>
+												)}
+											</div>
+										)
+									})
+								)}
 							</div>
 						</CardContent>
 					</Card>
@@ -546,7 +706,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				)}
 
 				{/* --- PAYMENT SECTION --- */}
-				{
+				{/* For Auctions: Show Settlement Status */}
+				{isAuctionOrder ? (
+					<>
+						<AuctionSettlementStatus settlements={auctionSettlements} pathReleases={auctionPathReleases} currentPrice={currentPrice} />
+					</>
+				) : (
 					/* For Products: Show Invoice Logic */
 					<>
 						{totalInvoices > 0 && (
@@ -598,7 +763,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 						{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
 					</>
-				}
+				)}
 
 				{/* Order Timeline */}
 				{allEvents.length > 0 && (

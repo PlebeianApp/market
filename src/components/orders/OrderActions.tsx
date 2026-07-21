@@ -5,7 +5,7 @@ import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getBuyerPubkey, getOrderStatus, getSellerPubkey, isAuctionOrder } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
@@ -34,6 +34,8 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
+
+	const isAuction = isAuctionOrder(order)
 
 	const status = getOrderStatus(order)
 
@@ -108,7 +110,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
 			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex flex-wrap gap-2">
+				<div className="flex gap-3">
 					{canCancel && (
 						<Button
 							variant="outline"
@@ -252,15 +254,15 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 				</DialogContent>
 			</Dialog>
 
-			{/* Stock Update Dialog - only for product orders */}
-			{
+			{/* Stock Update Dialog - only for product orders, not auctions */}
+			{!isAuction && (
 				<StockUpdateDialog
 					open={isStockUpdateOpen}
 					onOpenChange={setIsStockUpdateOpen}
 					order={order}
 					onComplete={() => {}} // No-op: no additional actions needed.
 				/>
-			}
+			)}
 		</div>
 	)
 }
