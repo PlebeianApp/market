@@ -11,7 +11,7 @@ import { EmptyCartScreen } from './EmptyCartScreen'
 import { UserCard } from '@/components/UserCard'
 
 export function CartContent({ className = '' }: { className?: string }) {
-	const { cart, sellerData, productsBySeller, totalInSats, totalShippingInSats, totalByCurrency, shippingByCurrency } = useStore(cartStore)
+	const { cart, sellerData, productsBySeller, totalInSats, totalShippingInSats, totalByCurrency } = useStore(cartStore)
 
 	const [parent, enableAnimations] = useAutoAnimate()
 	const navigate = useNavigate()
@@ -100,18 +100,11 @@ export function CartContent({ className = '' }: { className?: string }) {
 													onRemove={handleRemoveProduct}
 													hideShipping={true}
 												/>
-												<div className="mt-2 text-sm text-muted-foreground">
-													{product.shippingMethodId ? (
-														<span>
-															Shipping: {product.shippingMethodName || 'Selected'}
-															{product.shippingCost > 0 && product.shippingCostCurrency
-																? ` - ${product.shippingCost} ${product.shippingCostCurrency}`
-																: ''}
-														</span>
-													) : (
+												{!product.shippingMethodId && (
+													<div className="mt-2 text-sm text-muted-foreground">
 														<span>Select shipping at checkout</span>
-													)}
-												</div>
+													</div>
+												)}
 											</div>
 										))}
 									</ul>
@@ -125,33 +118,20 @@ export function CartContent({ className = '' }: { className?: string }) {
 										</div>
 									))}
 
-									<div className="flex justify-between mt-1">
-										<p className="text-sm">Shipping:</p>
-										<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
-									</div>
-
-									<div className="flex justify-between mt-1 font-semibold">
-										<p className="text-sm">Total:</p>
-										<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
-									</div>
-
 									<div className="mt-3">
 										<p className="text-sm font-semibold">Payment Breakdown</p>
-
 										<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
 											<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
 										</div>
-
 										<div className="flex justify-between mt-1">
-											<p className="text-sm">Merchant: </p>
+											<p className="text-sm">Merchant:</p>
 											<p className="text-sm">
 												{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
 											</p>
 										</div>
-
 										{data.shares.communityAmount > 0 && (
 											<div className="flex justify-between">
-												<p className="text-sm">Community Share: </p>
+												<p className="text-sm">Community Share:</p>
 												<p className="text-sm">
 													{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
 												</p>
@@ -170,14 +150,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 						<div className="flex justify-between">
 							<p className="text-sm">Subtotal:</p>
 							<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
-						</div>
-						<div className="flex justify-between">
-							<p className="text-sm">Shipping:</p>
-							<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
-						</div>
-						<div className="flex justify-between text-lg font-bold">
-							<p>Total:</p>
-							<p>{formatSats(totalInSats)} sat</p>
 						</div>
 					</div>
 

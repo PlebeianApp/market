@@ -13,8 +13,14 @@ import { uiStore } from '@/lib/stores/ui'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
 import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
 import { applyFiatPriceEdit, deriveSatsPriceFromFiat } from '@/lib/utils/productPriceResolution'
+import {
+	resolveProductShippingSelections,
+	getProductShippingTotalCost,
+	getProductShippingExtraCostFromTotal,
+	formatShippingCostForInput,
+} from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
-import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
+import { useBtcExchangeRates } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
@@ -51,26 +57,12 @@ export function DetailTab() {
 	// guarded to avoid storing or publishing a 0-derived price.
 	const hasExchangeRates = !!exchangeRates && Object.keys(exchangeRates).length > 0
 
-	const convertSatsToCurrency = (sats: number, targetCurrency: string): number => {
-		if (targetCurrency === 'SATS') return sats
-		if (targetCurrency === 'BTC') return convertSatsToBtc(sats)
-		if (!exchangeRates) return 0
-
-		const btcAmount = sats / 100_000_000 // Convert sats to BTC
-		const rate = exchangeRates[targetCurrency as SupportedCurrency]
-		return rate ? btcAmount * rate : 0
+	const convertSatsToCurrencyValue = (sats: number, targetCurrency: string): number => {
+		return MempoolService.convertSatsToCurrency({ sats, targetCurrency, exchangeRates })
 	}
 
-	const convertCurrencyToSats = (amount: number, fromCurrency: string): number => {
-		if (fromCurrency === 'SATS') return amount
-		if (fromCurrency === 'BTC') return convertBtcToSats(amount)
-		if (!exchangeRates) return 0
-
-		const rate = exchangeRates[fromCurrency as SupportedCurrency]
-		if (!rate) return 0
-
-		const btcAmount = amount / rate
-		return Math.round(btcAmount * 100_000_000) // Convert BTC to sats
+	const convertCurrencyToSatsValue = (amount: number, fromCurrency: string): number => {
+		return MempoolService.convertCurrencyToSats({ amount, fromCurrency, exchangeRates })
 	}
 
 	const form = useForm({
@@ -102,18 +94,12 @@ export function DetailTab() {
 		// Convert to SATS for storage (sats should always be integers)
 		const satsValue = bitcoinUnit === 'SATS' ? Math.round(numValue) : convertBtcToSats(numValue)
 
-		// Update fiat field if a fiat currency is selected and visible.
-		// Requires exchange rates: without them convertSatsToCurrency returns 0 and
-		// we would write fiatPrice: '0.00' into the store, which fiat-mode publish
-		// then emits as the product price. Skip the sats->fiat sync instead.
-		if (currency !== 'SATS' && currency !== 'BTC' && hasExchangeRates) {
-			const fiatValue = convertSatsToCurrency(satsValue, currency)
-			const fiatValueStr = fiatValue.toFixed(2)
-			setFiatDisplayValue(fiatValueStr)
-			// Also update state.fiatPrice so it's used when publishing in fiat mode
-			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: fiatValueStr })
-		} else {
-			productFormActions.updateValues({ price: satsValue.toString() })
+		productFormActions.updateValues({ price: satsValue.toString() })
+
+		// Update fiat field if a fiat currency is selected and visible
+		if (currency !== 'SATS' && currency !== 'BTC') {
+			const fiatValue = convertSatsToCurrencyValue(satsValue, currency)
+			setFiatDisplayValue(fiatValue.toFixed(2))
 		}
 	}
 
@@ -122,13 +108,18 @@ export function DetailTab() {
 		// Store the raw input value without formatting
 		setFiatDisplayValue(value)
 
-		// Derive the sats price only while exchange rates are available;
-		// otherwise keep the fiat edit and leave the sats price unresolved
-		// until rates arrive (convertCurrencyToSats returns 0 without rates,
-		// and a stored 0 would be published as a real price).
-		const outcome = applyFiatPriceEdit(value, convertCurrencyToSats, { currency, hasExchangeRates })
-		if (outcome) {
-			productFormActions.updateValues(outcome)
+		// Only convert to sats if we have a valid number
+		const numValue = parseFloat(value)
+		if (!isNaN(numValue) && numValue > 0) {
+			const satsValue = convertCurrencyToSatsValue(numValue, currency)
+			// Store both the sats value (for display) and the fiat value (for publishing)
+			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
+		} else if (value === '0') {
+			// Set the price to zero if the input is zero
+			productFormActions.updateValues({ price: '0', fiatPrice: '0' })
+		} else if (value === '') {
+			// Clear the price if input is empty
+			productFormActions.updateValues({ price: '', fiatPrice: '' })
 		}
 	}
 
@@ -236,7 +227,7 @@ export function DetailTab() {
 		if (showFiatField && price && hasExchangeRates) {
 			const satsValue = parseFloat(price) || 0
 			if (satsValue > 0) {
-				const fiatValue = convertSatsToCurrency(satsValue, currency)
+				const fiatValue = convertSatsToCurrencyValue(satsValue, currency)
 				// Only update if the field is not currently being edited
 				// This prevents overwriting user input during typing
 				if (document.activeElement?.id !== 'fiat-price') {
@@ -679,7 +670,7 @@ const QUICK_SHIPPING_TEMPLATES: Array<{
 ]
 
 export function ShippingTab() {
-	const { shippings } = useStore(productFormStore)
+	const { shippings, price, fiatPrice, bitcoinUnit, currency: productCurrency, currencyMode } = useStore(productFormStore)
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
 	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
@@ -836,6 +827,11 @@ export function ShippingTab() {
 		})
 	}
 
+	const updateTotalCost = (index: number, baseCost: number, totalCost: string) => {
+		const extra = getProductShippingExtraCostFromTotal(baseCost, totalCost)
+		updateExtraCost(index, extra)
+	}
+
 	const ServiceIcon = ({ service }: { service: string }) => {
 		switch (service) {
 			case 'express':
@@ -847,6 +843,8 @@ export function ShippingTab() {
 				return <TruckIcon className="w-4 h-4" />
 		}
 	}
+
+	const { data: exchangeRates } = useBtcExchangeRates()
 
 	const resolvedSelectedShippings = useMemo(
 		() => resolveProductShippingSelections(shippings, availableShippingOptions),
@@ -876,19 +874,26 @@ export function ShippingTab() {
 						{resolvedSelectedShippings.map((shipping, index) => {
 							const option = shipping.option
 							return (
-								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
+								<div key={index} className="flex flex-col md:flex-row items-start md:items-center gap-3 p-3 border rounded-md bg-gray-50">
 									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
-									<div className="flex-1">
-										<div className="font-medium">
+
+									<div className="flex-1 min-w-0">
+										<div className="font-medium truncate">
 											{option?.name || (shippingOptionsQuery.isFetched ? 'Unavailable shipping option' : 'Resolving shipping option...')}
 										</div>
 										{option ? (
-											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} •{' '}
-												{option.countries && option.countries.length > 1
-													? `${option.countries.length} countries`
-													: option.countries?.[0] || 'No countries'}{' '}
-												• {option.service || 'Unknown service'}
+											<div className="text-sm text-gray-500 truncate flex items-center gap-2">
+												<span className="text-xs text-muted-foreground">Base Cost:</span>
+												<span className="font-medium">
+													{option.cost} {option.currency}
+												</span>
+												<span className="text-gray-500">•</span>
+												<span className="truncate">
+													{option.countries && option.countries.length > 1
+														? `${option.countries.length} countries`
+														: option.countries?.[0] || 'No countries'}{' '}
+													• {option.service || 'Unknown service'}
+												</span>
 											</div>
 										) : shippingOptionsQuery.isFetched ? (
 											<div className="text-sm text-amber-600">This shipping reference is no longer available: {shipping.shippingRef}</div>
@@ -896,6 +901,7 @@ export function ShippingTab() {
 											<div className="text-sm text-gray-500">Looking up current shipping metadata...</div>
 										)}
 									</div>
+
 									<div className="flex items-center gap-2">
 										<Input
 											type="number"
@@ -906,12 +912,85 @@ export function ShippingTab() {
 											placeholder="Add cost specific to this product"
 											className="w-40 sm:w-56 md:w-76 text-sm"
 										/>
+									</div>
+
+									{/* Product price + combined total */}
+									{price ? (
+										<div className="mt-2 md:mt-0 md:ml-4 flex flex-col items-end text-right md:min-w-[140px]">
+											{(() => {
+												// We display product + total in SATS regardless of seller-selected currency.
+
+												let productSats = 0
+												if (productCurrency === 'SATS') {
+													productSats = Number(price) || 0
+												} else if (productCurrency === 'BTC') {
+													// If bitcoinUnit is BTC, `price` may be BTC amount; otherwise treat as sats
+													productSats =
+														bitcoinUnit === 'BTC'
+															? convertCurrencyToSats({ amount: Number(price) || 0, fromCurrency: 'BTC', exchangeRates })
+															: Number(price) || 0
+												} else {
+													// Fiat currency
+													if (currencyMode === 'fiat' && fiatPrice) {
+														productSats = convertCurrencyToSats({
+															amount: Number(fiatPrice) || 0,
+															fromCurrency: productCurrency,
+															exchangeRates,
+														})
+													} else {
+														// If the form stored a sats value in `price`, use it
+														productSats = Number(price) || 0
+													}
+												}
+
+												// Shipping option total cost in its own currency
+												const shippingTotal = option ? getProductShippingTotalCost(option.cost, shipping.extraCost) : 0
+
+												// Convert shipping total to SATS
+												const shippingSats = (() => {
+													if (!option) return 0
+													const fromCurrency = option.currency || 'USD'
+													const converted = convertBetweenCurrencies({
+														amount: shippingTotal,
+														fromCurrency,
+														toCurrency: 'SATS',
+														exchangeRates,
+													})
+													return Number.isFinite(converted) ? Math.round(converted) : NaN
+												})()
+
+												const combinedSats = Number.isFinite(shippingSats) ? Math.round(productSats + shippingSats) : NaN
+
+												const formatSats = (n: number | string) => {
+													const num = Number(n)
+													if (!Number.isFinite(num)) return '—'
+													return num.toLocaleString()
+												}
+
+												const productDisplay = formatSats(Math.round(productSats))
+												const combinedDisplay = Number.isFinite(combinedSats) ? formatSats(Math.round(combinedSats)) : '—'
+
+												return (
+													<div className="ml-4 flex flex-col items-end text-right">
+														<div className="text-xs text-gray-500">Product price:</div>
+														<div className="text-sm font-semibold font-mono">{productDisplay} SATS</div>
+														<div className="text-xs text-gray-500 mt-1">Total with shipping:</div>
+														<div className="text-sm font-semibold font-mono">{combinedDisplay} SATS</div>
+													</div>
+												)
+											})()}
+										</div>
+									) : null}
+
+									{/* Move remove button after price block for consistent alignment */}
+									<div className="ml-2 md:ml-4 mt-2 md:mt-0">
 										<Button
 											type="button"
 											variant="outline"
 											size="sm"
 											onClick={() => removeShippingOption(index)}
-											className="text-red-600 hover:text-red-700"
+											aria-label="Remove shipping option"
+											className="h-8 w-8 p-0 flex items-center justify-center text-red-600 hover:text-red-700"
 										>
 											<X className="w-4 h-4" />
 										</Button>
@@ -937,6 +1016,7 @@ export function ShippingTab() {
 							<p>No shipping options available.</p>
 							<p className="text-sm mt-2">Quick-create a shipping option to get started:</p>
 						</div>
+
 						{showPickupForm ? (
 							<div className="border rounded-md p-4 space-y-4 bg-gray-50">
 								<div className="flex items-center gap-2">
