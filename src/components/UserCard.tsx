@@ -36,9 +36,9 @@ function formatNpubForDisplay(npub: string): string {
 	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
 }
 
-export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
+export function UserCard({ pubkey, className, size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
 	const safePubkey = pubkey?.trim() || undefined
-	const { data: profileData, isLoading } = useProfile(safePubkey)
+	const { data: profileData, isPending, isFetching } = useProfile(safePubkey)
 	const { profile, user } = profileData || {}
 
 	const breakpoint = useBreakpoint()
@@ -49,17 +49,19 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	const userNpub = user?.npub?.trim()
 	const npub = userNpub && isValidNpub(userNpub) ? userNpub : encodeIdentifierToNpub(safePubkey)
 	const textDisplayNpub = npub ? formatNpubForDisplay(npub) : 'Unknown user'
-	const textTitle = isLoading ? 'Loading...' : (profileDisplayName ?? textDisplayNpub)
+	const isProfileLoading = isPending || isFetching
+	const textTitle = isProfileLoading ? 'Loading...' : (profileDisplayName ?? textDisplayNpub)
 
-	const showNip05AddressAfterBadge = !isLoading && profileNip05 != null && !(subtitle === 'nip-05' || compact)
-	const showNip05AsSubtitle = !isLoading && profileNip05 != null && (subtitle === 'nip-05' || compact)
-	const showNpubAsTitle = !isLoading && profileDisplayName == null && npub != null
-	const showNpubAsSubtitle = !showNpubAsTitle && !isLoading && profileDisplayName != null && subtitle === 'npub' && npub != null
+	const showNip05AddressAfterBadge = !isProfileLoading && profileNip05 != null && !(subtitle === 'nip-05' || compact)
+	const showNip05AsSubtitle = !isProfileLoading && profileNip05 != null && (subtitle === 'nip-05' || compact)
+	const showNpubAsTitle = !isProfileLoading && profileDisplayName == null && npub != null
+	const showNpubAsSubtitle = !showNpubAsTitle && !isProfileLoading && profileDisplayName != null && subtitle === 'npub' && npub != null
 	const showSubtitle = size !== 'xs'
 
+	// Avoid turning an already-compact card into a copy target when it only shows one text line.
 	const onlyPrimaryTextShows = !showSubtitle || (!showNip05AsSubtitle && !showNpubAsSubtitle)
 	const disableSmallPrimaryCopy = (size === 'xs' || size === 'sm') && onlyPrimaryTextShows
-	const shouldCopyNpub = onPress !== 'none' && !isLoading && npub != null && !disableSmallPrimaryCopy
+	const shouldCopyNpub = onPress !== 'none' && !isProfileLoading && npub != null && !disableSmallPrimaryCopy
 
 	const classSizeAvatar = {
 		xs: 'h-6 w-6',
@@ -111,7 +113,6 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 
 	const onClickNpub = shouldCopyNpub
 		? (event: React.MouseEvent) => {
-				//event.stopPropagation()
 				event.preventDefault()
 
 				if (npub == null) {
@@ -135,7 +136,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 
 	const copyNpubWrapper = (child: React.ReactNode) =>
 		shouldCopyNpub ? (
-			<Tooltip open={forceShowTooltip == true ? forceShowTooltip : undefined}>
+			<Tooltip open={forceShowTooltip === true ? forceShowTooltip : undefined}>
 				<TooltipTrigger asChild className={'w-min ' + className}>
 					{child}
 				</TooltipTrigger>

@@ -10,10 +10,12 @@ interface AvatarUserProps extends React.ComponentProps<typeof AvatarPrimitive.Ro
 	pubkey?: string
 }
 
-type ImageLoadingStatus = 'idle' | 'loading' | 'loaded' | 'error'
+type ImageLoadingStatus = NonNullable<
+	Parameters<NonNullable<React.ComponentProps<typeof AvatarPrimitive.Image>['onLoadingStatusChange']>>[0]
+>
 
-function AvatarUser({ pubkey, className = '', ...props }: AvatarUserProps) {
-	const { data: profileData, isLoading: isProfileLoading } = useProfile(pubkey)
+function AvatarUser({ pubkey, className, ...props }: AvatarUserProps) {
+	const { data: profileData, isPending, isFetching } = useProfile(pubkey)
 	const { profile } = profileData ?? {}
 
 	const profileName = (profile?.displayName || profile?.name || '').trim()
@@ -22,13 +24,13 @@ function AvatarUser({ pubkey, className = '', ...props }: AvatarUserProps) {
 	const imageStatus = profilePicture ? (imageState.src === profilePicture ? imageState.status : 'loading') : 'idle'
 	const isImageLoading = imageStatus === 'loading'
 
-	// Determine fallback text
+	// Use a simple initial for the fallback when no profile name is available.
 	const getFallbackText = () => {
-		const title = profileName || 'n'
+		const title = profileName || 'N'
 		return title.charAt(0).toUpperCase()
 	}
 
-	const showSpinner = isProfileLoading || isImageLoading
+	const showSpinner = isPending || isFetching || isImageLoading
 
 	return (
 		<AvatarPrimitive.Root
@@ -47,7 +49,6 @@ function AvatarUser({ pubkey, className = '', ...props }: AvatarUserProps) {
 			)}
 			<AvatarPrimitive.Fallback
 				data-slot="avatar-fallback"
-				delayMs={200}
 				className="bg-neo-purple text-white flex size-full items-center justify-center rounded-full text-center"
 			>
 				{showSpinner ? <Spinner className="h-1/2 w-1/2 text-white" /> : getFallbackText()}
