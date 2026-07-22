@@ -868,7 +868,7 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 							],
 						},
 						sellerSkBytes,
-				)
+					)
 					await relay.publish(paymentRequest)
 
 					// Buyer sends Receipt
@@ -887,7 +887,7 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 								],
 							},
 							buyerSkBytes,
-					)
+						)
 						await relay.publish(receipt)
 					}
 				}
