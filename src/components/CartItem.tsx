@@ -143,43 +143,6 @@ export default function CartItem({
 		setQuantity(amount)
 	}, [amount])
 
-	const formatShippingCost = (cost: number | null | undefined): string => {
-		return typeof cost === 'number' && Number.isFinite(cost) ? cost.toLocaleString() : ''
-	}
-
-	const formatShippingAmount = (cost: number | null | undefined, shippingCurrency?: string | null): string => {
-		return [formatShippingCost(cost), shippingCurrency?.trim()].filter(Boolean).join(' ')
-	}
-
-	const cartSelectedShipping = (() => {
-		const product = cartStore.state.cart.products[productId]
-		if (!product || typeof product.shippingCost !== 'number' || !Number.isFinite(product.shippingCost)) return null
-		return {
-			cost: product.shippingCost,
-			currency: product.shippingCostCurrency,
-		}
-	})()
-
-	const selectedShippingCost = selectedShippingOption
-		? {
-				cost: selectedShippingOption.cost,
-				currency: selectedShippingOption.currency,
-			}
-		: cartSelectedShipping
-
-	const selectedShippingCostText = selectedShippingCost
-		? formatShippingAmount(selectedShippingCost.cost, selectedShippingCost.currency)
-		: ''
-	const hasAdditiveShippingMetadata =
-		selectedShippingOption && Number.isFinite(selectedShippingOption.baseCost) && Number.isFinite(selectedShippingOption.extraCostAmount)
-	const selectedShippingBreakdownText =
-		hasAdditiveShippingMetadata && selectedShippingOption.extraCostAmount !== 0
-			? `${formatShippingAmount(selectedShippingOption.baseCost, selectedShippingOption.currency)} base cost + ${formatShippingAmount(
-					selectedShippingOption.extraCostAmount,
-					selectedShippingOption.currency,
-				)} product cost`
-			: ''
-
 	if (isLoading) {
 		return (
 			<li className="flex gap-4 pb-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
@@ -304,12 +267,6 @@ export default function CartItem({
 					)}
 
 					{!hasShipping && <div className="text-sm font-medium text-red-600">Select a shipping option before continuing.</div>}
-
-					{hasShipping && selectedShippingCostText && (
-						<div className="text-sm text-muted-foreground">Shipping cost: {selectedShippingCostText}</div>
-					)}
-
-					{selectedShippingBreakdownText && <div className="text-xs text-muted-foreground">{selectedShippingBreakdownText}</div>}
 				</div>
 			)}
 		</li>

@@ -21,6 +21,7 @@ import {
 	resolvePublishedProductShippingOptions,
 	type ProductShippingSelection,
 } from '@/lib/utils/productShippingSelections'
+import { MempoolService } from '@/lib/utils/mempool'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -1466,17 +1467,17 @@ export const cartActions = {
 		if (!exchangeRates || !amount) return 0
 
 		const upperCurrency = currency.toUpperCase()
+		const sats = MempoolService.convertCurrencyToSats({
+			amount,
+			fromCurrency: upperCurrency,
+			exchangeRates,
+		})
 
-		if (upperCurrency === 'SATS') return Math.round(amount)
-		if (upperCurrency === 'BTC') return Math.round(amount * numSatsInBtc)
-
-		const rate = exchangeRates[upperCurrency]
-		if (!rate) {
+		if (!Number.isFinite(sats)) {
 			console.warn(`Exchange rate not found for ${upperCurrency}`)
 			return 0
 		}
 
-		const sats = (amount / rate) * numSatsInBtc
 		return Math.round(sats)
 	},
 

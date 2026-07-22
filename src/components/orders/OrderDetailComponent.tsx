@@ -8,6 +8,7 @@ import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
+import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import {
 	getShippingInfo,
 	getShippingPickupAddressString,
@@ -209,7 +210,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 		if (shippingRef.includes(':')) {
 			const parts = shippingRef.split(':')
-			if (parts.length === 3 && parts[0] === '30406') {
+			if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
 				return { pubkey: parts[1], dTag: parts[2] }
 			}
 		}
@@ -430,7 +431,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardHeader>
 						<CardContent>
 							<div className="space-y-4">
-								{shippingInfo && <ShippingInfoDisplay shippingInfo={shippingInfo} />}
+								{shippingInfo && <ShippingInfoDisplay shippingInfo={shippingInfo} totalAmount={totalAmount} />}
 
 								{isPickupService && pickupAddress && <PickupAddressDisplay pickupAddress={pickupAddress} />}
 

@@ -156,6 +156,8 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 
 // --- REACT QUERY OPTIONS ---
 
+const SHIPPING_OPTION_DETAIL_STALE_TIME_MS = 300000
+
 /**
  * React Query options for fetching a single shipping option
  * @param id Shipping option ID
@@ -165,6 +167,7 @@ export const shippingOptionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: shippingKeys.details(id),
 		queryFn: () => fetchShippingOption(id),
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 /**
@@ -177,6 +180,7 @@ export const shippingOptionByCoordinatesQueryOptions = (pubkey: string, dTag: st
 	queryOptions({
 		queryKey: shippingKeys.byCoordinates(pubkey, dTag),
 		queryFn: () => fetchShippingOptionByCoordinates(pubkey, dTag),
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 /**
@@ -196,7 +200,7 @@ export const shippingOptionsByPubkeyQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: shippingKeys.byPubkey(pubkey),
 		queryFn: () => fetchShippingOptionsByPubkey(pubkey),
-		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
