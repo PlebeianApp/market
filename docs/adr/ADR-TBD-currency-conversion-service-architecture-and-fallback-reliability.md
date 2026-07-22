@@ -8,40 +8,33 @@ Issue
 
 2026-07-22
 
-## Related
-
-- PR under review: `turizspace:fix/shipping-options` — centralizes sats/fiat
-  conversion into `MempoolService` and surfaces the behaviors described below.
-- Pre-existing, **kept separate from this ADR and the PR review**: the local
-  Playwright e2e `can create a new product` spec fails on *both* `master` and
-  the PR because the local e2e environment has no BTC exchange rates
-  (`LOCAL_RELAY_ONLY=true`, no reachable ContextVM currency server). That
-  environmental failure must not be attributed to this PR; it is the backdrop
-  that made the structural problems visible.
-- Server-side aggregation: `contextvm/tools/price-sources.ts`
-  (`fetchAllSources` — Yadio/CoinDesk/Binance/CoinGecko, median).
-- Client identity ordering: `src/lib/cvm-identity.ts` (`resolveCvmServerPubkey`).
-- CVM Nostr client: `src/lib/ctxcn-client.ts` (`PlebianCurrencyClient`).
-- Client fetch + fallback: `src/queries/external.tsx` (`fetchBtcExchangeRates`).
-- Pure math: `src/lib/utils/mempool.ts` (`MempoolService.convert*`).
-- Consumers: `src/components/PriceDisplay.tsx`,
-  `src/components/sheet-contents/products/tabs.tsx`, `src/lib/stores/cart.ts`,
-  `src/components/checkout/OnChainPaymentProcessor.tsx`,
-  `src/lib/stores/product.ts`.
-
 ## Context
 
-The app converts prices between sats, BTC, and fiat using **three overlapping
-layers plus a separate server-side aggregator**, with no single source of
-truth. A "simple API fallback" for a missing ContextVM (CVM) rate server *does*
-exist (`fetchBtcExchangeRates` tries ContextVM, then Yadio), but it is fragile:
-it degrades to a single HTTP source, the pure-math layer returns `NaN` when
-rates are unavailable, the CVM identity resolver throws and can take down the
-whole `/api/config` endpoint, and the client/server rate-fetching strategies
-are structurally inconsistent. The net effect is that the conversion path
-reliably works only when ContextVM is healthy, and silently degrades or breaks
-otherwise — which is why a missing-rate state manifests as "failing to
-convert the amount" rather than a clean fallback.
+Plebeian Market converts prices between sats, BTC, and fiat using **three
+overlapping client layers plus a separate server-side rate aggregator**, with
+no single source of truth. A fallback for a missing ContextVM (CVM) rate
+server *does* exist — `fetchBtcExchangeRates` tries ContextVM first, then Yadio —
+but it is fragile: on CVM failure it degrades to a single HTTP source, the
+pure-math layer returns `NaN` when rates are unavailable, the CVM identity
+resolver throws and can take down the entire `/api/config` endpoint, and the
+client and server rate-fetching strategies are structurally inconsistent.
+
+The net effect is that conversion reliably works only when ContextVM is
+healthy, and silently degrades or breaks otherwise. A missing-rate state
+manifests as "failing to convert the amount" rather than a clean fallback,
+and `NaN` can poison derived prices and fail form validation.
+
+This backdrop is visible today in the local e2e environment: the Playwright
+`can create a new product` spec fails on `master` because the local test
+environment has no BTC exchange rates (`LOCAL_RELAY_ONLY=true`, no reachable
+ContextVM currency server). That environmental failure is pre-existing and
+**separate from the structural decisions below** — it is what made these
+problems visible, not a symptom to be "fixed" by any single solution here.
+
+The remainder of this section drills into the architecture and findings; the
+solution space and invariants follow.
+
+### Architecture overview
 
 The four layers, briefly:
 
@@ -62,7 +55,7 @@ The four layers, briefly:
    never reuses this aggregation; on CVM failure the client falls back to
    **single-source Yadio only**.
 
-### Detailed context (for agents)
+### Detailed findings (for agents)
 
 Layer-by-layer findings:
 
@@ -119,6 +112,19 @@ Layer-by-layer findings:
   well-documented; `MempoolService`'s new methods have no doc comments despite
   non-obvious `NaN` semantics; `external.tsx`'s priority is undocumented; the
   client/server fallback asymmetry is unstated anywhere.
+
+### Files involved
+
+- Server-side aggregation: `contextvm/tools/price-sources.ts`
+  (`fetchAllSources` — Yadio/CoinDesk/Binance/CoinGecko, median).
+- Client identity ordering: `src/lib/cvm-identity.ts` (`resolveCvmServerPubkey`).
+- CVM Nostr client: `src/lib/ctxcn-client.ts` (`PlebianCurrencyClient`).
+- Client fetch + fallback: `src/queries/external.tsx` (`fetchBtcExchangeRates`).
+- Pure math: `src/lib/utils/mempool.ts` (`MempoolService.convert*`).
+- Consumers: `src/components/PriceDisplay.tsx`,
+  `src/components/sheet-contents/products/tabs.tsx`, `src/lib/stores/cart.ts`,
+  `src/components/checkout/OnChainPaymentProcessor.tsx`,
+  `src/lib/stores/product.ts`.
 
 ## Problem statement
 
@@ -299,13 +305,12 @@ short-term surface area and a consumer migration.
 
 This ADR is intentionally architecture-first and in **Issue** state: it
 documents the problem and the solution space without committing to a path.
-The immediate PR (`turizspace:fix/shipping-options`) should not be blocked on
-this decision; at minimum the `NaN`-vs-`0` behavioral regression (Solution A's
-first bullet) should be addressed there or as a follow-up, since it is the
-concrete regression the PR introduced on top of the pre-existing
-missing-rates environment.
+At minimum the `NaN`-vs-`0` behavioral regression (Solution A's first bullet)
+should be addressed as a follow-up, since a missing-rate state silently
+poisoning derived prices is a concrete defect independent of which structural
+path is chosen.
 
 The separate, pre-existing local e2e failure (`can create a new product` on
-both master and the PR, due to no reachable rates in the local env) is out of
-scope here; it is tracked alongside but must not be conflated with the PR
-review or with the structural decisions above.
+`master`, due to no reachable rates in the local env) is out of scope here; it
+is tracked alongside but must not be conflated with the structural decisions
+above.
