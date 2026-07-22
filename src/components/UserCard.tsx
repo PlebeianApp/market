@@ -6,7 +6,7 @@ import { Nip05Badge } from './Nip05Badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Link } from '@tanstack/react-router'
 import { nip19 } from 'nostr-tools'
-import { isValidHexKey, isValidNpub } from '@/lib/utils'
+import { cn, isValidHexKey, isValidNpub } from '@/lib/utils'
 
 interface UserCardProps {
 	pubkey?: string
@@ -137,7 +137,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	const copyNpubWrapper = (child: React.ReactNode) =>
 		shouldCopyNpub ? (
 			<Tooltip open={forceShowTooltip === true ? forceShowTooltip : undefined}>
-				<TooltipTrigger asChild className={'w-min ' + className}>
+				<TooltipTrigger asChild className={cn('w-min', className)}>
 					{child}
 				</TooltipTrigger>
 
@@ -151,34 +151,31 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 
 	// Note: We pass in min-w-0 to ensure text (name, npub) truncates
 	const content = (
-		<div className={'flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap ' + classGapHorizontal}>
-			<AvatarUser pubkey={safePubkey} className={classSizeAvatar + ' min-w-0 ' + className} />
-			<div className={'flex flex-col min-w-0 ' + classGapVertical + ' ' + className}>
-				<div className={'flex items-center gap-1 min-w-0 overflow-hidden ' + className}>
+		<div className={cn('flex flex-row items-center min-w-0 font-sans font-normal tracking-normal text-nowrap', classGapHorizontal)}>
+			<AvatarUser pubkey={safePubkey} className={cn(classSizeAvatar, 'min-w-0', className)} />
+			<div className={cn('flex flex-col min-w-0', classGapVertical, className)}>
+				<div className={cn('flex items-center gap-1 min-w-0 overflow-hidden', className)}>
 					{showNpubAsTitle ? (
 						copyNpubWrapper(
-							<h2 className={classSizeName + ' truncate lowercase min-w-0 ' + classNpub + ' ' + className} onClick={onClickNpub}>
+							<h2 className={cn(classSizeName, 'truncate lowercase min-w-0', classNpub, className)} onClick={onClickNpub}>
 								{textTitle}
 							</h2>,
 						)
 					) : (
-						<h2 className={classSizeName + ' truncate min-w-0 ' + className}>{textTitle}</h2>
+						<h2 className={cn(classSizeName, 'truncate min-w-0', className)}>{textTitle}</h2>
 					)}
 					{safePubkey && profileNip05 && (
-						<Nip05Badge pubkey={safePubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
+						<Nip05Badge pubkey={safePubkey} className={cn(classSizeNIP05, className)} showAddress={showNip05AddressAfterBadge} />
 					)}
 				</div>
 
 				{showSubtitle &&
 					(showNip05AsSubtitle ? (
-						<p className={classSizeNIP05 + ' text-gray-400 truncate ' + className}>{profileNip05}</p>
+						<p className={cn(classSizeNIP05, 'text-gray-400 truncate', className)}>{profileNip05}</p>
 					) : (
 						showNpubAsSubtitle &&
 						copyNpubWrapper(
-							<p
-								className={classSizeNpub + ' font-medium text-gray-400 truncate lowercase ' + classNpub + ' ' + className}
-								onClick={onClickNpub}
-							>
+							<p className={cn(classSizeNpub, 'font-medium text-gray-400 truncate lowercase', classNpub, className)} onClick={onClickNpub}>
 								{textDisplayNpub}
 							</p>,
 						)
