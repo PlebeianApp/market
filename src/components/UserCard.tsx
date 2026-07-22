@@ -36,7 +36,7 @@ function formatNpubForDisplay(npub: string): string {
 	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
 }
 
-export function UserCard({ pubkey, className, size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
+export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
 	const safePubkey = pubkey?.trim() || undefined
 	const { data: profileData, isPending, isFetching } = useProfile(safePubkey)
 	const { profile, user } = profileData || {}
