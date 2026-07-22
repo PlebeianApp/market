@@ -14,7 +14,10 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { extractActualContent, isSafeImageUrl } from '@/lib/utils/message-content'
+import { getShippingInfo, shippingOptionByCoordinatesQueryOptions, shippingOptionQueryOptions } from '@/queries/shipping'
 import { Link } from '@tanstack/react-router'
+import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { formatShippingDisplayText } from '@/lib/utils/productShippingSelections'
 
 // Interface for embedded product event data
 interface EmbeddedProductEvent {
@@ -316,6 +319,30 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 	const email = getTagValue(event, 'email')
 	const phone = getTagValue(event, 'phone')
 
+	const parsedShippingData = (() => {
+		if (!shipping) return null
+		if (shipping.includes(':')) {
+			const parts = shipping.split(':')
+			if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
+				return { pubkey: parts[1], dTag: parts[2] }
+			}
+		}
+		return { id: shipping }
+	})()
+
+	const { data: shippingOptionByCoordinates } = useQuery({
+		...shippingOptionByCoordinatesQueryOptions(parsedShippingData?.pubkey || '', parsedShippingData?.dTag || ''),
+		enabled: Boolean(parsedShippingData?.pubkey && parsedShippingData?.dTag),
+	})
+
+	const { data: shippingOptionById } = useQuery({
+		...shippingOptionQueryOptions(parsedShippingData?.id || ''),
+		enabled: Boolean(parsedShippingData?.id && !parsedShippingData?.pubkey),
+	})
+
+	const shippingOption = shippingOptionByCoordinates || shippingOptionById
+	const shippingDisplayText = formatShippingDisplayText(shipping, shippingOption ? getShippingInfo(shippingOption) : null)
+
 	return (
 		<div className="text-sm space-y-1">
 			<div className="flex items-center font-semibold mb-1">
@@ -344,7 +371,7 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 			)}
 			{shipping && (
 				<p className="text-xs mt-1 break-words">
-					<strong>Shipping:</strong> {shipping}
+					<strong>Shipping:</strong> {shippingDisplayText || shipping}
 				</p>
 			)}
 			{address && (
