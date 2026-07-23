@@ -5,17 +5,28 @@ import { Button } from '../ui/button'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
 
-// TODO: Add extends normal React Node/div properties
 interface ReactionsListProps {
 	event: NDKEvent
 	asChildren?: boolean
+	/** Show quick-add emoji buttons on hover (for live chat messages) */
+	showQuickAdd?: boolean
+	/** Quick-add emojis to preview (default: 👍 🔥 ❤️) */
+	quickAddEmojis?: string[]
 }
 
-export const ReactionsList = ({ event, asChildren = false }: ReactionsListProps) => {
+const DEFAULT_QUICK_ADD = ['👍', '🔥', '❤️']
+
+export const ReactionsList = ({
+	event,
+	asChildren = false,
+	showQuickAdd = false,
+	quickAddEmojis = DEFAULT_QUICK_ADD,
+}: ReactionsListProps) => {
 	const { user, isAuthenticated } = useAuth()
 	const { data: reactions } = useEventReactions(event)
 	const reactionsGrouped = reactions && groupReactionsByContent(reactions)
 	const reactionsOwnUser = reactions?.filter((reaction) => reaction.authorPubkey == user?.pubkey)
+	const [showQuickButtons, setShowQuickButtons] = useState(false)
 
 	const mutationPublish = usePublishReactionMutation()
 	const mutationDelete = usePublishDeletionMutation()
@@ -24,40 +35,25 @@ export const ReactionsList = ({ event, asChildren = false }: ReactionsListProps)
 		const reaction = reactionsOwnUser?.find((reaction) => reaction.emoji === content)
 
 		if (reaction) {
-			// If reaction has already been made by user, request deletion
 			handleDeleteReaction(reaction)
 		} else {
-			// Else, add reaction to event
 			handlePublishReaction(content)
 		}
 	}
 
-	// Publish reaction when button is clicked
 	const handlePublishReaction = async (emoji: string) => {
 		if (!isAuthenticated) return
-
 		if (!emoji || !event.id || !event.pubkey) return
-
-		// Pass the event object directly to the mutation
-		await mutationPublish.mutateAsync({
-			emoji,
-			event,
-		})
+		await mutationPublish.mutateAsync({ emoji, event })
 	}
 
-	// Delete the reaction selected
 	const handleDeleteReaction = async (reaction: Reaction) => {
 		if (!isAuthenticated) return
-
 		if (!reaction.id || !reaction.authorPubkey) return
-
-		// Pass the event object directly to the mutation
-		await mutationDelete.mutateAsync({
-			reactionEvent: reaction,
-		})
+		await mutationDelete.mutateAsync({ reactionEvent: reaction })
 	}
 
-	const children =
+	const reactionButtons =
 		reactionsGrouped && reactionsGrouped.size > 0
 			? Array.from(reactionsGrouped.entries()).map(([content, values]) => (
 					<Button
@@ -67,10 +63,8 @@ export const ReactionsList = ({ event, asChildren = false }: ReactionsListProps)
 						className={
 							'rounded-full py-1 px-2 ' +
 							(reactionsOwnUser?.find((r) => r.emoji == content)
-								? // If user had this reaction
-									'bg-neo-purple hover:bg-neo-purple/80 text-white hover:text-white'
-								: // Else
-									'bg-purple-50 text-black hover:bg-pink-100 hover:text-black')
+								? 'bg-neo-purple hover:bg-neo-purple/80 text-white hover:text-white'
+								: 'bg-purple-50 text-black hover:bg-pink-100 hover:text-black')
 						}
 						onClick={() => handleReactionClick(content)}
 					>
@@ -80,12 +74,36 @@ export const ReactionsList = ({ event, asChildren = false }: ReactionsListProps)
 				))
 			: []
 
+	const quickAddButtons =
+		showQuickAdd && isAuthenticated
+			? quickAddEmojis.map((emoji) => (
+					<button
+						key={emoji}
+						type="button"
+						onClick={() => handleReactionClick(emoji)}
+						className="rounded p-0.5 text-sm hover:bg-zinc-200 transition-colors"
+					>
+						{emoji}
+					</button>
+				))
+			: []
+
+	const children = [...reactionButtons, ...(showQuickButtons ? quickAddButtons : [])]
+
 	if (asChildren) {
 		return children
 	}
 
 	return (
-		<div className="flex flex-wrap gap-1" data-testid="reactions-list">
+		<div
+			className="flex flex-wrap items-center gap-1"
+			data-testid="reactions-list"
+			tabIndex={0}
+			onMouseEnter={() => setShowQuickButtons(true)}
+			onMouseLeave={() => setShowQuickButtons(false)}
+			onFocus={() => setShowQuickButtons(true)}
+			onBlur={() => setShowQuickButtons(false)}
+		>
 			{children}
 		</div>
 	)
