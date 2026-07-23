@@ -46,7 +46,7 @@ import { createUserNwcWallets } from './gen_wallets'
 import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { NDKCashuWallet } from '@nostr-dev-kit/wallet'
-import { resolveCvmServerPubkey } from '@/lib/cvm-identity'
+import { resolveCvmServerPubkey } from '@/server/runtime'
 
 // Force local relay only mode to prevent connecting to public relays during seeding
 // This must be set before ndkActions.initialize() is called

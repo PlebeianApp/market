@@ -21,7 +21,6 @@ export const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 export const PORT = Number(process.env.PORT || 3000)
 
 let APP_PUBLIC_KEY: string | undefined
-let CVM_SERVER_PUBKEY: string | undefined
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let eventHandlerReady = false
 
