@@ -1,11 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { getPublicKey, finalizeEvent } from 'nostr-tools/pure'
-import {
-	parseLiveActivity,
-	resolveLiveActivityStatus,
-	deriveLiveActivityStatus,
-	LIVE_ACTIVITY_KIND,
-} from '@/lib/nip53'
+import { parseLiveActivity, resolveLiveActivityStatus, deriveLiveActivityStatus, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
 
 describe('liveChat queries', () => {
 	describe('resolveLiveActivityStatus', () => {

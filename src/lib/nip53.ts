@@ -44,9 +44,7 @@ export function deriveLiveActivityStatus(startsAt: number, maxEndAt: number, now
  * If no relay activity exists, falls back to timestamp-derived status.
  * If relay activity exists but its status is outside the boundary, the boundary wins.
  */
-export function resolveLiveActivityStatus(
-	cvmStatus: LiveActivityStatus | null,
-): LiveActivityStatus | null {
+export function resolveLiveActivityStatus(cvmStatus: LiveActivityStatus | null): LiveActivityStatus | null {
 	// CVM status is the sole authority. Client does NOT derive from timestamps.
 	// If no CVM event detected, there is no live activity — return null.
 	return cvmStatus
