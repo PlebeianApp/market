@@ -23,7 +23,7 @@ import {
 	type AuctionSettlementStatus,
 	type PathReleaseReason,
 } from '../../auction/constants'
-import type { AuctionFallbackChainEntry, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../auction/events'
+import type { AuctionFallbackChainEntry, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from '../../auction/events'
 import {
 	addressableCoordinate,
 	bip32Path,
@@ -125,6 +125,13 @@ export const SettlementEventSchema = z
 		winnerPubkey: nostrPubkeyHex.optional(),
 		finalAmount: nonNegativeInt,
 		pathReleaseEventId: nostrEventIdHex.optional(),
+		payouts: z.array(
+			z.object({
+				bidEventId: nostrEventIdHex,
+				amount: nonNegativeInt,
+				status: z.string().min(1),
+			}) satisfies z.ZodType<SettlementPayoutEntry>,
+		),
 		fallbackChain: z.array(
 			z.object({
 				bidEventId: nostrEventIdHex,
@@ -166,6 +173,16 @@ export const parseSettlementEvent = (event: NDKEvent): ParseSettlementEventResul
 		})
 		.filter((entry): entry is AuctionFallbackChainEntry => entry !== null)
 
+	const payouts: SettlementPayoutEntry[] = readMultiTagTuples(event, 'payout')
+		.map((tuple): SettlementPayoutEntry | null => {
+			const bidEventId = tuple[1] ?? ''
+			const amount = Number.parseInt(tuple[2] ?? '', 10)
+			const status = tuple[3] ?? ''
+			if (!bidEventId || !Number.isFinite(amount) || amount < 0 || !status) return null
+			return { bidEventId, amount, status }
+		})
+		.filter((entry): entry is SettlementPayoutEntry => entry !== null)
+
 	const intermediate = {
 		id: event.id,
 		sellerPubkey: event.pubkey,
@@ -178,6 +195,7 @@ export const parseSettlementEvent = (event: NDKEvent): ParseSettlementEventResul
 		winnerPubkey: readSingleTag(event, 'winner'),
 		finalAmount: Number.parseInt(readSingleTag(event, 'final_amount') ?? '0', 10) || 0,
 		pathReleaseEventId: readSingleTag(event, 'path_release'),
+		payouts,
 		fallbackChain,
 		reason: readSingleTag(event, 'reason'),
 	}

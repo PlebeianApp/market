@@ -204,6 +204,12 @@ export interface AuctionFallbackChainEntry {
 	status: 'griefed' | 'declined' | 'accepted' | 'refunded_at_locktime'
 }
 
+export interface SettlementPayoutEntry {
+	bidEventId: string
+	amount: number
+	status: string
+}
+
 export interface ParsedSettlementEvent {
 	rawEvent: NDKEvent
 
@@ -222,6 +228,8 @@ export interface ParsedSettlementEvent {
 
 	/** Id of the kind-1025 the seller acted on (required when status=settled). */
 	pathReleaseEventId?: string
+	/** One payout per redeemed leg; sum MUST equal finalAmount for settled auctions. */
+	payouts: SettlementPayoutEntry[]
 	/** Fallback cascade history (when the original winner griefed). */
 	fallbackChain: AuctionFallbackChainEntry[]
 	/** Machine-readable reason for cancelled / failure outcomes. */

@@ -22,9 +22,9 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { AUCTION_PATH_RELEASE_KIND } from '../auction/constants'
+import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../auction/constants'
 import { buildPathReleaseTags, buildSettlementTags } from '../auction/tagBuilders'
-import { parsePathReleaseEvent } from '../schemas/auction/settlementEvents'
+import { parsePathReleaseEvent, parseSettlementEvent } from '../schemas/auction/settlementEvents'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
 const REAL_AUCTION_XPUB = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
@@ -212,6 +212,37 @@ describe('parsePathReleaseEvent', () => {
 		const parsed = parsePathReleaseEvent(event)
 		if (!parsed.ok) throw new Error('expected parse success')
 		expect(parsed.value.cashuToken).toBeUndefined()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// parseSettlementEvent — reads payout tags from the event tags
+// ---------------------------------------------------------------------------
+
+describe('parseSettlementEvent', () => {
+	test('round-trips payout tags', () => {
+		const event = {
+			id: '4'.repeat(64),
+			pubkey: SELLER_PK,
+			kind: AUCTION_SETTLEMENT_KIND as unknown as number,
+			created_at: 1_800,
+			tags: buildSettlementTags({
+				auctionRootEventId: AUCTION_ROOT,
+				auctionCoordinate: AUCTION_COORDINATE,
+				status: 'settled',
+				closeAt: 1_800,
+				finalAmount: 12_000,
+				winningBidId: BID_EVENT_ID,
+				winnerPubkey: BIDDER_PK,
+				pathReleaseEventId: PATH_RELEASE_EVENT_ID,
+				payouts: [{ bidEventId: BID_EVENT_ID, amount: 12_000, status: 'redeemed' }],
+			}),
+			content: '',
+		} as unknown as NDKEvent
+
+		const parsed = parseSettlementEvent(event)
+		if (!parsed.ok) throw new Error('expected settlement parse success')
+		expect(parsed.value.payouts).toEqual([{ bidEventId: BID_EVENT_ID, amount: 12_000, status: 'redeemed' }])
 	})
 })
 

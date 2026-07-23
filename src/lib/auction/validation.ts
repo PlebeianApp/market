@@ -35,7 +35,7 @@ import {
 	type ValidatorClaim,
 	type ValidatorReason,
 } from './constants'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent } from './events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 import { getDecodedToken } from '@cashu/cashu-ts'
@@ -151,6 +151,52 @@ export interface ValidatePathReleaseInput {
 	now: number
 	postCloseDecision: 'winner' | 'loser' | null
 	fallbackOfferedAt?: number | null
+	expectedTokenAmount?: number
+}
+
+export type SettlementCompletenessFailureCode =
+	| 'unauthorized_signer'
+	| 'status_invalid'
+	| 'auction_mismatch'
+	| 'winning_bid_mismatch'
+	| 'winning_bid_invalid'
+	| 'path_release_mismatch'
+	| 'path_release_invalid'
+	| 'payout_missing'
+	| 'payout_leg_mismatch'
+	| 'payout_sum_mismatch'
+	| 'fallback_chain_inconsistent'
+	| 'nut7_not_spent'
+
+export type SettlementCompletenessResult =
+	| {
+			isComplete: true
+			releaseTiming: ReleaseTiming
+			payoutSum: number
+			legCount: number
+			usesFallback: boolean
+	  }
+	| {
+			isComplete: false
+			failureCode: SettlementCompletenessFailureCode
+			detail: string
+	  }
+
+export interface SettlementChainLegContext {
+	bid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	nut7State?: Nut7ProofState
+}
+
+export interface ValidateSettlementCompletenessInput {
+	auction: ParsedAuctionEvent
+	settlement: ParsedSettlementEvent
+	winningBid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	winningBidClaim?: ValidatorClaim | null
+	winningBidPostCloseDecision?: 'winner' | 'loser' | null
+	winningBidNut7State?: Nut7ProofState
+	bidChain?: SettlementChainLegContext[]
 }
 
 // ============================================================================
@@ -383,6 +429,7 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseValidityResult => {
 	const { auction, bid, release, now, postCloseDecision, fallbackOfferedAt = null } = input
 	const releaseTiming: ReleaseTiming = now > auction.maxEndAt + auction.settlementGrace ? 'late' : 'prompt'
+	const expectedTokenAmount = input.expectedTokenAmount ?? bid.amount
 
 	if (release.bidderPubkey.toLowerCase() !== bid.bidderPubkey.toLowerCase()) {
 		return invalidRelease('unauthorized_signer', releaseTiming, 'kind-1025 author does not match the original bidder')
@@ -532,11 +579,11 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 			'cashu_token is missing one or more proof_y commitments from the bid',
 		)
 	}
-	if (tokenAmount !== bid.amount) {
+	if (tokenAmount !== expectedTokenAmount) {
 		return invalidRelease(
 			'cashu_token_amount_mismatch',
 			releaseTiming,
-			`cashu_token proof sum ${tokenAmount} does not match bid amount ${bid.amount}`,
+			`cashu_token proof sum ${tokenAmount} does not match expected leg amount ${expectedTokenAmount}`,
 		)
 	}
 
@@ -549,6 +596,86 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 			amount: tokenAmount,
 			proofCount: decodedToken.proofs.length,
 		},
+	}
+}
+
+export const validateSettlementCompleteness = (input: ValidateSettlementCompletenessInput): SettlementCompletenessResult => {
+	const { auction, settlement, winningBid, pathRelease, winningBidClaim, winningBidPostCloseDecision, winningBidNut7State, bidChain } =
+		input
+
+	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
+		return invalidSettlement('unauthorized_signer', 'kind-1024 author does not match the auction seller')
+	}
+	if (settlement.status !== 'settled') {
+		return invalidSettlement('status_invalid', `kind-1024 status must be settled, got ${settlement.status}`)
+	}
+	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) {
+		return invalidSettlement(
+			'auction_mismatch',
+			`kind-1024 references ${settlement.auctionRootEventId}/${settlement.auctionCoordinate}, expected ${auction.rootEventId}/${auction.coordinate}`,
+		)
+	}
+	if (settlement.winningBidId !== winningBid.id || settlement.winnerPubkey?.toLowerCase() !== winningBid.bidderPubkey.toLowerCase()) {
+		return invalidSettlement('winning_bid_mismatch', 'kind-1024 winner tags do not match the expected winning bid')
+	}
+	if (winningBidClaim && !SETTLEMENT_ELIGIBLE_CLAIMS.has(winningBidClaim)) {
+		return invalidSettlement('winning_bid_invalid', `winning bid claim ${winningBidClaim} is not settlement-eligible`)
+	}
+
+	const chain = normaliseSettlementChain({ winningBid, pathRelease, winningBidNut7State, bidChain })
+	const latestLeg = chain[chain.length - 1]
+	if (!latestLeg) {
+		return invalidSettlement('payout_missing', 'settlement chain is empty')
+	}
+	if (settlement.pathReleaseEventId !== latestLeg.pathRelease.id) {
+		return invalidSettlement(
+			'path_release_mismatch',
+			`kind-1024 path_release ${settlement.pathReleaseEventId ?? '<missing>'} does not match latest leg release ${latestLeg.pathRelease.id}`,
+		)
+	}
+
+	const usesFallback = pathRelease.releaseReason === 'fallback_settlement' || settlement.fallbackChain.length > 0
+	const expectedPayouts = buildExpectedSettlementPayouts(chain)
+	const latestExpectedPayout = expectedPayouts[expectedPayouts.length - 1]
+	const inferredPostCloseDecision = inferSettlementPostCloseDecision(pathRelease, settlement, winningBidPostCloseDecision)
+	const pathReleaseValidity = validatePathRelease({
+		auction,
+		bid: winningBid,
+		release: pathRelease,
+		now: settlement.createdAt,
+		postCloseDecision: inferredPostCloseDecision,
+		fallbackOfferedAt: usesFallback ? auction.maxEndAt + auction.fallbackDelaySec : null,
+		expectedTokenAmount: latestExpectedPayout?.amount ?? winningBid.amount,
+	})
+	if (!pathReleaseValidity.isValid) {
+		return invalidSettlement('path_release_invalid', pathReleaseValidity.detail)
+	}
+
+	const fallbackValidity = validateFallbackChainConsistency(settlement, winningBid, pathRelease)
+	if (!fallbackValidity.ok) {
+		return invalidSettlement('fallback_chain_inconsistent', fallbackValidity.detail)
+	}
+
+	if (expectedPayouts.length === 0 || settlement.payouts.length === 0) {
+		return invalidSettlement('payout_missing', 'kind-1024 settled event must carry payout tags for every redeemed leg')
+	}
+	const payoutValidity = validateSettlementPayouts(expectedPayouts, settlement.payouts, settlement.finalAmount)
+	if (!payoutValidity.ok) {
+		return invalidSettlement(payoutValidity.failureCode, payoutValidity.detail)
+	}
+
+	for (const leg of chain) {
+		if (leg.nut7State !== 'spent') {
+			return invalidSettlement('nut7_not_spent', `chain leg ${leg.bid.id.slice(0, 8)}… is ${leg.nut7State ?? 'unknown'}, not spent`)
+		}
+	}
+
+	return {
+		isComplete: true,
+		releaseTiming: pathReleaseValidity.releaseTiming,
+		payoutSum: payoutValidity.payoutSum,
+		legCount: expectedPayouts.length,
+		usesFallback,
 	}
 }
 
@@ -589,6 +716,124 @@ const validateReleaseReason = (input: {
 		return { ok: false, detail: 'release_reason=voluntary_late is only valid after settlement_grace has elapsed' }
 	}
 	return { ok: true }
+}
+
+const SETTLEMENT_ELIGIBLE_CLAIMS = new Set<ValidatorClaim>([
+	'valid_bid_placed',
+	'won_pending_settlement',
+	'lost_pending_refund',
+	'settled_promptly',
+	'settled_late',
+])
+
+const invalidSettlement = (failureCode: SettlementCompletenessFailureCode, detail: string): SettlementCompletenessResult => ({
+	isComplete: false,
+	failureCode,
+	detail,
+})
+
+const normaliseSettlementChain = (input: {
+	winningBid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	winningBidNut7State?: Nut7ProofState
+	bidChain?: SettlementChainLegContext[]
+}): SettlementChainLegContext[] => {
+	if (input.bidChain && input.bidChain.length > 0) return input.bidChain
+	return [{ bid: input.winningBid, pathRelease: input.pathRelease, nut7State: input.winningBidNut7State }]
+}
+
+const inferSettlementPostCloseDecision = (
+	pathRelease: ParsedPathReleaseEvent,
+	settlement: ParsedSettlementEvent,
+	override: 'winner' | 'loser' | null | undefined,
+): 'winner' | 'loser' => {
+	if (override) return override
+	if (pathRelease.releaseReason === 'fallback_settlement') return 'loser'
+	if (settlement.fallbackChain.some((entry) => entry.bidEventId === settlement.winningBidId && entry.status === 'accepted')) return 'loser'
+	return 'winner'
+}
+
+const validateFallbackChainConsistency = (
+	settlement: ParsedSettlementEvent,
+	winningBid: ParsedBidEvent,
+	pathRelease: ParsedPathReleaseEvent,
+): { ok: true } | { ok: false; detail: string } => {
+	const seen = new Set<string>()
+	let acceptedCount = 0
+	for (const entry of settlement.fallbackChain) {
+		if (seen.has(entry.bidEventId)) {
+			return { ok: false, detail: `fallback_chain repeats bid ${entry.bidEventId}` }
+		}
+		seen.add(entry.bidEventId)
+		if (entry.status === 'accepted') acceptedCount += 1
+	}
+	if (acceptedCount > 1) {
+		return { ok: false, detail: 'fallback_chain may contain at most one accepted bid' }
+	}
+	const acceptedWinningEntry = settlement.fallbackChain.find((entry) => entry.bidEventId === winningBid.id && entry.status === 'accepted')
+	if (pathRelease.releaseReason === 'fallback_settlement') {
+		if (!settlement.fallbackChain.length) {
+			return { ok: false, detail: 'fallback settlement requires a non-empty fallback_chain' }
+		}
+		if (!acceptedWinningEntry) {
+			return { ok: false, detail: 'fallback settlement requires an accepted fallback_chain entry for the settled bid' }
+		}
+		const priorFailure = settlement.fallbackChain.some((entry) => entry.bidEventId !== winningBid.id && entry.status !== 'accepted')
+		if (!priorFailure) {
+			return { ok: false, detail: 'fallback settlement requires at least one prior griefed/declined/refunded bid in fallback_chain' }
+		}
+	} else if (acceptedCount > 0 && !acceptedWinningEntry) {
+		return { ok: false, detail: 'fallback_chain accepted entry does not match the declared winning bid' }
+	}
+	return { ok: true }
+}
+
+const buildExpectedSettlementPayouts = (chain: SettlementChainLegContext[]): SettlementPayoutEntry[] => {
+	const expected: SettlementPayoutEntry[] = []
+	let runningAmount = 0
+	for (const leg of chain) {
+		const legAmount = leg.bid.amount - runningAmount
+		runningAmount = leg.bid.amount
+		expected.push({ bidEventId: leg.bid.id, amount: legAmount, status: 'redeemed' })
+	}
+	return expected
+}
+
+const validateSettlementPayouts = (
+	expectedPayouts: SettlementPayoutEntry[],
+	actualPayouts: SettlementPayoutEntry[],
+	finalAmount: number,
+):
+	| { ok: true; payoutSum: number }
+	| { ok: false; failureCode: 'payout_missing' | 'payout_leg_mismatch' | 'payout_sum_mismatch'; detail: string } => {
+	if (actualPayouts.length !== expectedPayouts.length) {
+		return {
+			ok: false,
+			failureCode: 'payout_missing',
+			detail: `kind-1024 carries ${actualPayouts.length} payout tag(s), expected ${expectedPayouts.length}`,
+		}
+	}
+	let payoutSum = 0
+	for (let index = 0; index < expectedPayouts.length; index++) {
+		const expected = expectedPayouts[index]
+		const actual = actualPayouts[index]
+		if (!actual || actual.bidEventId !== expected.bidEventId || actual.amount !== expected.amount || actual.status !== expected.status) {
+			return {
+				ok: false,
+				failureCode: 'payout_leg_mismatch',
+				detail: `payout ${index + 1} does not match expected leg ${expected.bidEventId.slice(0, 8)}… amount=${expected.amount} status=${expected.status}`,
+			}
+		}
+		payoutSum = addAuctionSettlementProofAmount(payoutSum, actual.amount)
+	}
+	if (payoutSum !== finalAmount) {
+		return {
+			ok: false,
+			failureCode: 'payout_sum_mismatch',
+			detail: `sum(payout.amount)=${payoutSum} does not equal final_amount=${finalAmount}`,
+		}
+	}
+	return { ok: true, payoutSum }
 }
 
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')

@@ -31,7 +31,13 @@
  *      → unsettled winner → griefed (terminal).
  */
 
-import { validateBid, validatePathRelease, type BidChainValidation, type BidValidationVerdict } from '../../lib/auction/validation'
+import {
+	validateBid,
+	validatePathRelease,
+	validateSettlementCompleteness,
+	type BidChainValidation,
+	type BidValidationVerdict,
+} from '../../lib/auction/validation'
 import type { ParsedPathReleaseEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
 import { aggregateProofStates, type ValidatorAuctionState, type ValidatorBidState } from './state'
@@ -236,6 +242,7 @@ const deriveSettlementVerdict = (
 		now,
 		postCloseDecision: bidState.postCloseDecision,
 		fallbackOfferedAt: auctionState.fallbackOfferedAt,
+		expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
 	})
 	if (!releaseValidity.isValid) {
 		return {
@@ -253,11 +260,72 @@ const deriveSettlementVerdict = (
 		return { claim: 'won_pending_settlement' }
 	}
 
-	// 3. On-time vs. late. Keep the validator's local clock as the source
+	// 3. Seller declaration check: a valid final kind-1024 must exist and
+	//    match the redeemed chain before we publish settled_*.
+	const settlement = auctionState.settlement
+	if (!settlement || settlement.status !== 'settled' || settlement.winningBidId !== bidState.bid.id) {
+		return { claim: 'won_pending_settlement' }
+	}
+	const settlementCompleteness = validateSettlementCompleteness({
+		auction: auctionState.auction,
+		settlement,
+		winningBid: bidState.bid,
+		pathRelease: release,
+		winningBidClaim: bidState.currentClaim,
+		winningBidPostCloseDecision: bidState.postCloseDecision,
+		winningBidNut7State: aggregate,
+		bidChain: buildSettlementChain(auctionState, bidState),
+	})
+	if (!settlementCompleteness.isComplete) {
+		return { claim: 'won_pending_settlement' }
+	}
+
+	// 4. On-time vs. late. Keep the validator's local clock as the source
 	//    of truth for lifecycle timing, but use the validated release
 	//    timing classification so prompt/late logic is centralised.
-	if (releaseValidity.releaseTiming === 'late') return { claim: 'settled_late' }
+	if (settlementCompleteness.releaseTiming === 'late') return { claim: 'settled_late' }
 	return { claim: 'settled_promptly' }
+}
+
+const buildSettlementChain = (
+	auctionState: ValidatorAuctionState,
+	bidState: ValidatorBidState,
+): Array<{ bid: ValidatorBidState['bid']; pathRelease: ParsedPathReleaseEvent; nut7State: ReturnType<typeof aggregateProofStates> }> => {
+	const chain: Array<{
+		bid: ValidatorBidState['bid']
+		pathRelease: ParsedPathReleaseEvent
+		nut7State: ReturnType<typeof aggregateProofStates>
+	}> = []
+	const legs: ValidatorBidState[] = []
+	const seen = new Set<string>()
+	let current: ValidatorBidState | undefined = bidState
+	while (current) {
+		if (seen.has(current.bid.id)) break
+		seen.add(current.bid.id)
+		legs.unshift(current)
+		const prevBidId = current.bid.prevBidId?.trim()
+		if (!prevBidId) break
+		current = auctionState.bids.get(prevBidId)
+		if (!current) break
+	}
+	for (const leg of legs) {
+		const pathRelease = auctionState.pathReleases.get(leg.bid.id)
+		if (!pathRelease) continue
+		chain.push({
+			bid: leg.bid,
+			pathRelease,
+			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
+		})
+	}
+	return chain
+}
+
+const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number => {
+	const prevBidId = bidState.bid.prevBidId?.trim()
+	if (!prevBidId) return bidState.bid.amount
+	const parent = auctionState.bids.get(prevBidId)
+	if (!parent) return bidState.bid.amount
+	return bidState.bid.amount - parent.bid.amount
 }
 
 // ============================================================================
