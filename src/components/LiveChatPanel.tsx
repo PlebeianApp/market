@@ -2,9 +2,9 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Send, MessageCircle, ChevronDown } from 'lucide-react'
 import { useLiveChatMessages, useLiveActivity } from '@/queries/liveChat'
 import { usePublishLiveChatMessageMutation } from '@/publish/liveChat'
-import { deriveLiveActivityStatus, type LiveActivityStatus } from '@/lib/nip53'
+import { deriveLiveActivityStatus, resolveLiveActivityStatus, type LiveActivityStatus } from '@/lib/nip53'
 import { getAuctionId } from '@/queries/auctions'
-import { getAuctionStartAt, getAuctionMaxEndAt } from '@/lib/auctionSettlement'
+import { getAuctionStartAt, getAuctionBiddingCutoffAt } from '@/lib/auctionSettlement'
 import { LiveChatMessageBubble } from './LiveChatMessage'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
@@ -31,13 +31,27 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const { user } = useStore(authStore)
 	const dTag = getAuctionId(auctionEvent)
 
-	const liveActivityQuery = useLiveActivity(auctionEvent)
+	const startsAt = getAuctionStartAt(auctionEvent)
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auctionEvent)
+
+	// Derive a preliminary status from auction timestamps for the refetch
+	// interval and as a fallback before the live activity query loads.
+	const preliminaryStatus = deriveLiveActivityStatus(startsAt, biddingCutoffAt)
+
+	// Poll faster (15s) while planned so the live chat activates promptly
+	// when the auction starts, instead of waiting up to 60s.
+	const liveActivityRefetchMs = preliminaryStatus === 'planned' ? 15_000 : 60_000
+	const liveActivityQuery = useLiveActivity(auctionEvent, { refetchInterval: liveActivityRefetchMs })
 	const liveActivity = liveActivityQuery.data
 	const liveActivityCoord = liveActivity?.coord ?? ''
 
-	const startsAt = getAuctionStartAt(auctionEvent)
-	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
-	const status = deriveLiveActivityStatus(startsAt, maxEndAt)
+	// Resolve availability through the tested resolver: auction timestamps
+	// are hard boundaries, relay status is only accepted within them.
+	const status = resolveLiveActivityStatus(
+		liveActivity?.status ?? null,
+		startsAt,
+		biddingCutoffAt,
+	)
 	const isLive = status === 'live'
 	const canChat = isLive
 
