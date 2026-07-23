@@ -93,6 +93,8 @@ export interface ValidatorBidState {
 export interface ValidatorAuctionState {
 	rootAuction: ParsedAuctionEvent
 	auction: ParsedAuctionEvent
+	contextStatus: AuctionContextStatus
+	mintReachability: Map<string, MintReachabilityStatus>
 
 	/** bidEventId -> per-bid state. */
 	bids: Map<string, ValidatorBidState>
@@ -122,6 +124,10 @@ export interface ValidatorAuctionState {
 	 */
 	fallbackOfferedAt: number | null
 }
+
+export type AuctionContextStatus = 'pending_mint_check' | 'active'
+
+export type MintReachabilityStatus = 'reachable' | 'unreachable'
 
 // ============================================================================
 // Top-level state
@@ -167,6 +173,8 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 	const fresh: ValidatorAuctionState = {
 		rootAuction: auction,
 		auction,
+		contextStatus: 'pending_mint_check',
+		mintReachability: new Map(auction.mints.map((mintUrl) => [mintUrl, 'unreachable' as const])),
 		bids: new Map(),
 		settlement: null,
 		pathReleases: new Map(),
@@ -176,6 +184,21 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 	}
 	state.auctions.set(auction.rootEventId, fresh)
 	return { auctionState: fresh, status: 'inserted' }
+}
+
+export const setAuctionMintReachability = (
+	auctionState: ValidatorAuctionState,
+	reachability: ReadonlyArray<readonly [string, boolean]>,
+): void => {
+	const next = new Map<string, MintReachabilityStatus>()
+	for (const [mintUrl, isReachable] of reachability) {
+		next.set(mintUrl, isReachable ? 'reachable' : 'unreachable')
+	}
+	for (const mintUrl of auctionState.rootAuction.mints) {
+		if (!next.has(mintUrl)) next.set(mintUrl, 'unreachable')
+	}
+	auctionState.mintReachability = next
+	auctionState.contextStatus = Array.from(next.values()).every((status) => status === 'reachable') ? 'active' : 'pending_mint_check'
 }
 
 /**
@@ -283,6 +306,7 @@ export const collectLiveBids = (
 }> => {
 	const out: Array<{ auctionState: ValidatorAuctionState; bidState: ValidatorBidState }> = []
 	for (const auctionState of Array.from(state.auctions.values())) {
+		if (auctionState.contextStatus !== 'active') continue
 		// After settlement_grace expires we don't care about NUT-7
 		// state anymore — the bid has either been settled or the
 		// timelock refund window opened.

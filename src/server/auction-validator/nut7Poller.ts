@@ -31,6 +31,7 @@ import {
 	type ValidatorState,
 } from './state'
 import { currentTopValidBidAmount } from './lifecycle'
+import { refreshAuctionMintReachability } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 
 export interface Nut7PollerDeps {
@@ -55,6 +56,18 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 	const tick = async (): Promise<void> => {
 		const observedAt = now()
+
+		for (const auctionState of Array.from(deps.state.auctions.values())) {
+			if (auctionState.contextStatus === 'active') continue
+			try {
+				await refreshAuctionMintReachability(auctionState, deps.nut7Options)
+			} catch (err) {
+				logger.warn(
+					`[validator-nut7] mint reachability refresh failed for auction ${auctionState.auction.rootEventId.slice(0, 8)}:`,
+					err instanceof Error ? err.message : err,
+				)
+			}
+		}
 
 		const live = collectLiveBids(deps.state, observedAt)
 		if (!live.length) return

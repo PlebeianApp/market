@@ -36,6 +36,9 @@ export const DEFAULT_NUT7_TIMEOUT_MS = 8_000
 /** Default batch size — most mints accept a few hundred Ys per call. */
 export const DEFAULT_NUT7_BATCH_SIZE = 100
 
+/** Valid compressed secp256k1 generator point used for a cheap NUT-7 probe. */
+export const NUT7_REACHABILITY_PROBE_Y = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
 // ---------- Public API ---------------------------------------------------
 
 export interface CheckProofStateOptions {
@@ -63,6 +66,18 @@ export interface CheckProofStateOptions {
 export const checkProofState = async (mintUrl: string, proofY: string, options: CheckProofStateOptions = {}): Promise<Nut7ProofState> => {
 	const states = await checkProofStateBatch(mintUrl, [proofY], options)
 	return states.get(proofY.toLowerCase()) ?? 'unknown'
+}
+
+export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
+	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
+	const mint = options.mintClient ?? new CashuMint(mintUrl)
+
+	try {
+		const response = await withTimeout(mint.check({ Ys: [NUT7_REACHABILITY_PROBE_Y] }), timeoutMs, `NUT-7 reachability ${mintUrl}`)
+		return !!response && Array.isArray(response.states)
+	} catch {
+		return false
+	}
 }
 
 /**

@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { MinBidCurve, ParsedAuctionEvent } from '../auction/events'
-import { createValidatorState, upsertAuction } from '../../server/auction-validator/state'
+import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
+import { checkMintReachability } from '../cashu/nut7'
+import { collectLiveBids, createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '../../server/auction-validator/state'
 
 const SELLER_PK = 'a'.repeat(64)
+const BIDDER_PK = 'b'.repeat(64)
 const VALIDATOR_PK = 'c'.repeat(64)
+const COMPRESSED_PK = '02' + 'd'.repeat(64)
+const REFUND_PK = '03' + 'e'.repeat(64)
+const PROOF_Y = '02' + 'f'.repeat(64)
 const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 
 const buildAuctionRawEvent = (overrides: { title?: string; endAt?: number; p2pkXpub?: string; mints?: string[] } = {}): NDKEvent => {
@@ -74,6 +79,37 @@ const buildAuction = (overrides: { title?: string; endAt?: number; p2pkXpub?: st
 	}
 }
 
+const buildBid = (): ParsedBidEvent => ({
+	rawEvent: {
+		id: '2'.repeat(64),
+		kind: 1023,
+		pubkey: BIDDER_PK,
+		created_at: 1_500,
+		content: '',
+		tags: [],
+	} as unknown as NDKEvent,
+	id: '2'.repeat(64),
+	bidderPubkey: BIDDER_PK,
+	createdAt: 1_500,
+	auctionRootEventId: '1'.repeat(64),
+	auctionCoordinate: `30408:${SELLER_PK}:auction-test`,
+	sellerPubkey: SELLER_PK,
+	amount: 1_200,
+	currency: 'SAT',
+	mint: 'https://mint.test',
+	locktime: 5_700,
+	refundPubkey: REFUND_PK,
+	childPubkey: COMPRESSED_PK,
+	lockSecrets: ['secret'],
+	proofYs: [PROOF_Y],
+	createdForEndAt: 2_100,
+	bidNonce: 'nonce',
+	keyScheme: 'hd_p2pk',
+	status: 'locked',
+	prevBidId: undefined,
+	note: undefined,
+})
+
 describe('auction validator context guards', () => {
 	test('upsertAuction preserves root context and rejects immutable updates', () => {
 		const state = createValidatorState(VALIDATOR_PK)
@@ -90,5 +126,34 @@ describe('auction validator context guards', () => {
 		const immutableUpdate = upsertAuction(state, buildAuction({ p2pkXpub: 'xpub-other' }))
 		expect(immutableUpdate.status).toBe('rejected_immutable')
 		expect(immutableUpdate.auctionState.auction.p2pkXpub).toBe('xpub-root')
+	})
+
+	test('collectLiveBids skips auctions until mint reachability is active', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auctionState = upsertAuction(state, buildAuction()).auctionState
+		const bid = buildBid()
+
+		upsertBid(state, bid, 1_505)
+		expect(collectLiveBids(state, 1_600)).toEqual([])
+
+		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+
+		const live = collectLiveBids(state, 1_600)
+		expect(live).toHaveLength(1)
+		expect(live[0]?.bidState.bid.id).toBe(bid.id)
+	})
+
+	test('checkMintReachability distinguishes healthy and failing NUT-7 clients', async () => {
+		const healthyMint = {
+			check: async () => ({ states: [{ Y: 'deadbeef', state: 'UNSPENT' }] }),
+		}
+		const failingMint = {
+			check: async () => {
+				throw new Error('network down')
+			},
+		}
+
+		await expect(checkMintReachability('https://mint.test', { mintClient: healthyMint as any })).resolves.toBe(true)
+		await expect(checkMintReachability('https://mint.test', { mintClient: failingMint as any })).resolves.toBe(false)
 	})
 })

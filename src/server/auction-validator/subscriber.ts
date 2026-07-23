@@ -24,6 +24,7 @@
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { NostrEvent } from 'nostr-tools'
+import { verifyEvent } from 'nostr-tools'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../../lib/auction/constants'
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
@@ -31,6 +32,7 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { refreshAuctionMintReachability } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 
 export interface ValidatorSubscriberDeps {
@@ -73,6 +75,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
+		if (!verifyEvent(raw)) {
+			logger.warn(`[validator] dropping auction with invalid signature ${raw.id.slice(0, 8)}`)
+			return
+		}
+
 		const ndkEvent = toNdkEvent(raw)
 		const parsed = parseAuctionEvent(ndkEvent)
 		if (!parsed.ok) {
@@ -88,14 +95,25 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
+		const existing = deps.state.auctions.get(auction.rootEventId)
+		const wasActive = existing?.contextStatus === 'active'
 		const result = upsertAuction(deps.state, auction)
 		if (result.status === 'rejected_immutable') {
 			logger.warn(`[validator] rejecting immutable auction update ${auction.rootEventId.slice(0, 8)}`)
 			return
 		}
 
+		const isActive = await refreshAuctionMintReachability(result.auctionState)
+		if (!isActive) {
+			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} pending mint reachability`)
+			return
+		}
+
+		const shouldDrain = result.status === 'inserted' || !wasActive
 		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
+		}
+		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
 		}
@@ -116,6 +134,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it when the auction shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
+			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
+			existing.push(raw)
+			pendingBids.set(bid.auctionRootEventId, existing)
+			return
+		}
+
+		const trackedAuction = deps.state.auctions.get(bid.auctionRootEventId)
+		if (!trackedAuction || trackedAuction.contextStatus !== 'active') {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
 			existing.push(raw)
 			pendingBids.set(bid.auctionRootEventId, existing)
