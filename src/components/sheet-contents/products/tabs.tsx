@@ -823,6 +823,10 @@ export function ShippingTab() {
 
 	const { data: exchangeRates } = useBtcExchangeRates()
 
+	const convertCurrencyToSatsValue = (amount: number, fromCurrency: string): number => {
+		return MempoolService.convertCurrencyToSats({ amount, fromCurrency, exchangeRates })
+	}
+
 	const resolvedSelectedShippings = useMemo(
 		() => resolveProductShippingSelections(shippings, availableShippingOptions),
 		[shippings, availableShippingOptions],
@@ -902,18 +906,11 @@ export function ShippingTab() {
 													productSats = Number(price) || 0
 												} else if (productCurrency === 'BTC') {
 													// If bitcoinUnit is BTC, `price` may be BTC amount; otherwise treat as sats
-													productSats =
-														bitcoinUnit === 'BTC'
-															? convertCurrencyToSats({ amount: Number(price) || 0, fromCurrency: 'BTC', exchangeRates })
-															: Number(price) || 0
+													productSats = bitcoinUnit === 'BTC' ? convertCurrencyToSatsValue(Number(price) || 0, 'BTC') : Number(price) || 0
 												} else {
 													// Fiat currency
 													if (currencyMode === 'fiat' && fiatPrice) {
-														productSats = convertCurrencyToSats({
-															amount: Number(fiatPrice) || 0,
-															fromCurrency: productCurrency,
-															exchangeRates,
-														})
+														productSats = convertCurrencyToSatsValue(Number(fiatPrice) || 0, productCurrency)
 													} else {
 														// If the form stored a sats value in `price`, use it
 														productSats = Number(price) || 0
@@ -927,12 +924,7 @@ export function ShippingTab() {
 												const shippingSats = (() => {
 													if (!option) return 0
 													const fromCurrency = option.currency || 'USD'
-													const converted = convertBetweenCurrencies({
-														amount: shippingTotal,
-														fromCurrency,
-														toCurrency: 'SATS',
-														exchangeRates,
-													})
+													const converted = convertCurrencyToSatsValue(shippingTotal, fromCurrency)
 													return Number.isFinite(converted) ? Math.round(converted) : NaN
 												})()
 
