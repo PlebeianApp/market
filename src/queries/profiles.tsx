@@ -4,6 +4,36 @@ import { NDKWoT } from '@nostr-dev-kit/wot'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 
+export function normalizeOptionalString(value: unknown): string | null {
+	if (typeof value !== 'string') {
+		return null
+	}
+
+	const trimmed = value.trim()
+	return trimmed.length > 0 ? trimmed : null
+}
+
+export function getNormalizedProfileDisplayName(profile: Partial<NDKUserProfile> | null | undefined): string | null {
+	return normalizeOptionalString(profile?.displayName) ?? normalizeOptionalString(profile?.name)
+}
+
+export function getNormalizedProfileNip05(profile: Partial<NDKUserProfile> | null | undefined): string | null {
+	return normalizeOptionalString(profile?.nip05)
+}
+
+export function getNormalizedProfilePicture(profile: Partial<NDKUserProfile> | null | undefined): string {
+	return normalizeOptionalString(profile?.picture) ?? ''
+}
+
+export function normalizeOptionalPubkey(identifier: string | undefined): string | undefined {
+	if (typeof identifier !== 'string') {
+		return undefined
+	}
+
+	const trimmed = identifier.trim()
+	return trimmed.length > 0 ? trimmed : undefined
+}
+
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -99,13 +129,11 @@ export const nip05ValidationQueryOptions = (pubkey: string) =>
 // --- DATA EXTRACTION FUNCTIONS ---
 
 export const getProfileName = ({ profile }: { profile: NDKUserProfile | null }): string => {
-	if (!profile) return ''
-	return profile.name || profile.displayName || ''
+	return getNormalizedProfileDisplayName(profile) ?? ''
 }
 
 export const getProfileNip05 = ({ profile }: { profile: NDKUserProfile | null }): string | undefined => {
-	if (!profile) return undefined
-	return profile.nip05
+	return getNormalizedProfileNip05(profile) ?? undefined
 }
 
 // --- REACT QUERY HOOKS ---
