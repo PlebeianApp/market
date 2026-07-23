@@ -23,9 +23,7 @@ export function LiveChatMessageBubble({ message }: LiveChatMessageProps) {
 					<UserCard pubkey={message.authorPubkey} size="xs" />
 					<span className="text-[10px] text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
 				</div>
-				<p className={cn('text-sm mt-2 break-words', 'text-muted-foreground')}>
-					{message.content}
-				</p>
+				<p className={cn('text-sm mt-2 break-words', 'text-muted-foreground')}>{message.content}</p>
 				<ReactionsList event={message.event} showQuickAdd />
 			</div>
 		</div>
