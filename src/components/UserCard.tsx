@@ -1,4 +1,10 @@
-import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey, normalizeOptionalString, useProfile } from '@/queries/profiles'
+import {
+	getNormalizedProfileDisplayName,
+	getNormalizedProfileNip05,
+	normalizeOptionalPubkey,
+	normalizeOptionalString,
+	useProfile,
+} from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
 import { useState } from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -208,7 +214,11 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 						<p className={cn(classSizeNIP05, 'text-gray-400 truncate', className)}>{profileNip05}</p>
 					) : (
 						showNpubAsSubtitle &&
-						copyNpubWrapper(<span className={cn(classSizeNpub, 'font-medium text-gray-400 truncate lowercase', classNpub, className)}>{textDisplayNpub}</span>)
+						copyNpubWrapper(
+							<span className={cn(classSizeNpub, 'font-medium text-gray-400 truncate lowercase', classNpub, className)}>
+								{textDisplayNpub}
+							</span>,
+						)
 					))}
 			</div>
 		</div>
