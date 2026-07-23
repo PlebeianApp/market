@@ -290,6 +290,12 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		case undefined:
 		case 'unknown':
 			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
+		case 'missing':
+			return {
+				claim: 'bid_invalid',
+				reason: 'proof_missing',
+				detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
+			}
 		case 'pending':
 			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
 		case 'spent':

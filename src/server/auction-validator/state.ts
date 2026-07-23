@@ -38,7 +38,9 @@ export interface ProofStateSnapshot {
  * Aggregate of a bid's individual proof states. Worst-case semantics:
  *  - `spent` if ANY proof is spent (pre-settlement → fraudulent).
  *  - `unspent` if ALL proofs are unspent.
- *  - `pending` if no proof is spent and at least one is pending.
+ *  - `missing` if no proof is spent and at least one proof is absent
+ *    from an otherwise successful mint response.
+ *  - `pending` if no proof is spent/missing and at least one is pending.
  *  - `unknown` otherwise (no signal yet for at least one proof).
  */
 export type AggregateProofState = Nut7ProofState
@@ -46,6 +48,7 @@ export type AggregateProofState = Nut7ProofState
 export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, expectedProofYs: string[]): AggregateProofState => {
 	if (!expectedProofYs.length) return 'unknown'
 	let sawPending = false
+	let sawMissing = false
 	let allUnspent = true
 	for (const y of expectedProofYs) {
 		const snap = perProof.get(y.toLowerCase())
@@ -54,10 +57,16 @@ export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, 
 			continue
 		}
 		if (snap.state === 'spent') return 'spent'
+		if (snap.state === 'missing') {
+			sawMissing = true
+			allUnspent = false
+			continue
+		}
 		if (snap.state === 'pending') sawPending = true
 		if (snap.state !== 'unspent') allUnspent = false
 	}
 	if (allUnspent) return 'unspent'
+	if (sawMissing) return 'missing'
 	if (sawPending) return 'pending'
 	return 'unknown'
 }

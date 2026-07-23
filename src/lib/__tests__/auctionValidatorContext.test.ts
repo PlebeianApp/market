@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
-import { checkMintReachability } from '../cashu/nut7'
+import { checkMintReachability, checkProofState, checkProofStateBatch } from '../cashu/nut7'
 import {
 	collectLiveBids,
 	createValidatorState,
@@ -161,5 +161,23 @@ describe('auction validator context guards', () => {
 
 		await expect(checkMintReachability('https://mint.test', { mintClient: healthyMint as any })).resolves.toBe(true)
 		await expect(checkMintReachability('https://mint.test', { mintClient: failingMint as any })).resolves.toBe(false)
+	})
+
+	test('checkProofStateBatch marks omitted Ys as missing when the mint response succeeds', async () => {
+		const mint = {
+			check: async () => ({ states: [{ Y: PROOF_Y, state: 'UNSPENT' }] }),
+		}
+
+		const states = await checkProofStateBatch('https://mint.test', [PROOF_Y, COMPRESSED_PK], { mintClient: mint as any })
+		expect(states.get(PROOF_Y.toLowerCase())).toBe('unspent')
+		expect(states.get(COMPRESSED_PK.toLowerCase())).toBe('missing')
+	})
+
+	test('checkProofState returns missing for a successful response that omits the requested Y', async () => {
+		const mint = {
+			check: async () => ({ states: [] }),
+		}
+
+		await expect(checkProofState('https://mint.test', PROOF_Y, { mintClient: mint as any })).resolves.toBe('missing')
 	})
 })

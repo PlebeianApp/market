@@ -625,6 +625,16 @@ describe('validateBid — NUT-7 state', () => {
 		expect(verdict.claim).toBe('bid_pending_review')
 	})
 
+	test('proof_missing when mint omitted a requested Y from a successful NUT-7 response', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction)
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'missing' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('proof_missing')
+		}
+	})
+
 	test('proof_spent when nut7State is spent (fake bid signal)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)

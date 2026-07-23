@@ -44,7 +44,7 @@ const validatorClaimSchema = z.enum(VALIDATOR_CLAIMS, {
 	message: `claim must be one of: ${VALIDATOR_CLAIMS.join(', ')}`,
 }) satisfies z.ZodType<ValidatorClaim>
 
-const nut7StateSchema = z.enum(['unspent', 'pending', 'spent', 'unknown']) satisfies z.ZodType<Nut7ProofState>
+const nut7StateSchema = z.enum(['unspent', 'pending', 'spent', 'missing', 'unknown']) satisfies z.ZodType<Nut7ProofState>
 
 export const ValidatorVerdictEventSchema = z
 	.object({

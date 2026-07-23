@@ -15,10 +15,9 @@
  * - {@link checkProofStateBatch} — batch lookup for multiple Ys, one mint.
  *
  * Both return a normalized {@link Nut7ProofState} (`'unspent' | 'pending'
- * | 'spent' | 'unknown'`) — `'unknown'` is reserved for mint-side
- * errors / network failures so callers can distinguish "mint said
- * something I can't classify" from "I have no signal" without
- * surfacing transport details up the stack.
+ * | 'spent' | 'missing' | 'unknown'`) — `'unknown'` is reserved for
+ * mint-side errors / network failures, while `'missing'` means the mint
+ * answered successfully but omitted a requested Y from the response.
  *
  * Bounded timeout + non-throwing semantics by design: validators poll
  * many proofs across many auctions and a single mint hiccup should
@@ -59,13 +58,15 @@ export interface CheckProofStateOptions {
  *   - network errors
  *   - response timeout
  *   - mint returning a state the spec doesn't define
- *   - mint returning no entry for the requested Y
+ *
+ * Returns `'missing'` when the mint responds successfully but returns
+ * no entry for the requested Y.
  *
  * Callers MUST treat `'unknown'` as "no signal, retry" — not "safe".
  */
 export const checkProofState = async (mintUrl: string, proofY: string, options: CheckProofStateOptions = {}): Promise<Nut7ProofState> => {
 	const states = await checkProofStateBatch(mintUrl, [proofY], options)
-	return states.get(proofY.toLowerCase()) ?? 'unknown'
+	return states.get(proofY.toLowerCase()) ?? 'missing'
 }
 
 export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
@@ -86,7 +87,8 @@ export const checkMintReachability = async (mintUrl: string, options: CheckProof
  * here lets callers compare without worrying about it).
  *
  * Inputs the caller passes that don't appear in the mint's response
- * land in the returned map as `'unknown'`.
+ * land in the returned map as `'missing'` when the request succeeded.
+ * Transport failures still leave them as `'unknown'`.
  */
 export const checkProofStateBatch = async (
 	mintUrl: string,
@@ -120,6 +122,8 @@ export const checkProofStateBatch = async (
 		}
 
 		if (!response || !Array.isArray(response.states)) continue
+
+		for (const y of batch) out.set(y.toLowerCase(), 'missing')
 
 		for (const entry of response.states) {
 			if (!entry || typeof entry.Y !== 'string') continue

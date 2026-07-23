@@ -206,7 +206,7 @@ export const VALIDATOR_REASONS = [
 export type ValidatorReason = (typeof VALIDATOR_REASONS)[number]
 
 /** NUT-7 proof-state values as reported by a Cashu mint. */
-export type Nut7ProofState = 'unspent' | 'pending' | 'spent' | 'unknown'
+export type Nut7ProofState = 'unspent' | 'pending' | 'spent' | 'missing' | 'unknown'
 
 // ---------- Schema markers -----------------------------------------------
 
