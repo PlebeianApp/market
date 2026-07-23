@@ -1,4 +1,4 @@
-import { useProfile, getProfileNip05 } from '@/queries/profiles'
+import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey, normalizeOptionalString, useProfile } from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
 import { useState } from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -36,21 +36,41 @@ function formatNpubForDisplay(npub: string): string {
 	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
 }
 
+export function getUserCardTitle({
+	isProfileLoading,
+	profileDisplayName,
+	textDisplayNpub,
+}: {
+	isProfileLoading: boolean
+	profileDisplayName: string | null
+	textDisplayNpub: string
+}): string {
+	if (isProfileLoading) {
+		return 'Loading...'
+	}
+
+	return profileDisplayName ?? textDisplayNpub
+}
+
+export function isKeyboardCopyActivationKey(event: KeyboardEvent): boolean {
+	return event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'
+}
+
 export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
-	const safePubkey = pubkey?.trim() || undefined
-	const { data: profileData, isPending, isFetching } = useProfile(safePubkey)
+	const safePubkey = normalizeOptionalPubkey(pubkey)
+	const { data: profileData, isLoading } = useProfile(safePubkey)
 	const { profile, user } = profileData || {}
 
 	const breakpoint = useBreakpoint()
 	const compact = breakpoint === 'md' || breakpoint === 'sm'
 
-	const profileDisplayName = (profile?.displayName || profile?.name || '').trim() || null
-	const profileNip05 = getProfileNip05({ profile: profile ?? null })?.trim() || null
-	const userNpub = user?.npub?.trim()
+	const profileDisplayName = getNormalizedProfileDisplayName(profile)
+	const profileNip05 = getNormalizedProfileNip05(profile)
+	const userNpub = normalizeOptionalString(user?.npub)
 	const npub = userNpub && isValidNpub(userNpub) ? userNpub : encodeIdentifierToNpub(safePubkey)
 	const textDisplayNpub = npub ? formatNpubForDisplay(npub) : 'Unknown user'
-	const isProfileLoading = isPending || isFetching
-	const textTitle = isProfileLoading ? 'Loading...' : (profileDisplayName ?? textDisplayNpub)
+	const isProfileLoading = isLoading
+	const textTitle = getUserCardTitle({ isProfileLoading, profileDisplayName, textDisplayNpub })
 
 	const showNip05AddressAfterBadge = !isProfileLoading && profileNip05 != null && !(subtitle === 'nip-05' || compact)
 	const showNip05AsSubtitle = !isProfileLoading && profileNip05 != null && (subtitle === 'nip-05' || compact)
@@ -111,34 +131,52 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 	const [textTooltip, setTextTooltip] = useState(textTooltipDefault)
 	const [forceShowTooltip, setForceShowTooltip] = useState(false)
 
-	const onClickNpub = shouldCopyNpub
-		? (event: React.MouseEvent) => {
-				event.preventDefault()
+	const handleCopyNpub = (event?: React.SyntheticEvent) => {
+		event?.preventDefault()
 
-				if (npub == null) {
+		if (npub == null) {
+			return
+		}
+
+		navigator.clipboard.writeText(npub)
+		setTextTooltip('Copied!')
+		setForceShowTooltip(true)
+
+		setTimeout(() => {
+			setTextTooltip(textTooltipDefault)
+			setForceShowTooltip(false)
+		}, 2000)
+	}
+
+	const onClickNpub = shouldCopyNpub
+		? (event: React.MouseEvent<HTMLButtonElement>) => {
+				handleCopyNpub(event)
+			}
+		: undefined
+
+	const onKeyDownNpub = shouldCopyNpub
+		? (event: React.KeyboardEvent<HTMLButtonElement>) => {
+				if (!isKeyboardCopyActivationKey(event.nativeEvent)) {
 					return
 				}
 
-				// Copy npub to clipboard
-				navigator.clipboard.writeText(npub)
-
-				// Update tooltip to show copied state
-				setTextTooltip('Copied!')
-				setForceShowTooltip(true)
-
-				// After delay, reset tooltip
-				setTimeout(() => {
-					setTextTooltip(textTooltipDefault)
-					setForceShowTooltip(false)
-				}, 2000)
+				handleCopyNpub(event)
 			}
-		: () => {}
+		: undefined
 
 	const copyNpubWrapper = (child: React.ReactNode) =>
 		shouldCopyNpub ? (
 			<Tooltip open={forceShowTooltip === true ? forceShowTooltip : undefined}>
-				<TooltipTrigger asChild className={cn('w-min', className)}>
-					{child}
+				<TooltipTrigger asChild>
+					<button
+						type="button"
+						aria-label={textTooltipDefault}
+						className={cn('w-min min-w-0 border-0 bg-transparent p-0 text-left', classNpub)}
+						onClick={onClickNpub}
+						onKeyDown={onKeyDownNpub}
+					>
+						{child}
+					</button>
 				</TooltipTrigger>
 
 				<TooltipContent side="bottom" className="">
@@ -156,11 +194,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 			<div className={cn('flex flex-col min-w-0', classGapVertical, className)}>
 				<div className={cn('flex items-center gap-1 min-w-0 overflow-hidden', className)}>
 					{showNpubAsTitle ? (
-						copyNpubWrapper(
-							<h2 className={cn(classSizeName, 'truncate lowercase min-w-0', classNpub, className)} onClick={onClickNpub}>
-								{textTitle}
-							</h2>,
-						)
+						copyNpubWrapper(<span className={cn(classSizeName, 'truncate lowercase min-w-0', classNpub, className)}>{textTitle}</span>)
 					) : (
 						<h2 className={cn(classSizeName, 'truncate min-w-0', className)}>{textTitle}</h2>
 					)}
@@ -174,11 +208,7 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 						<p className={cn(classSizeNIP05, 'text-gray-400 truncate', className)}>{profileNip05}</p>
 					) : (
 						showNpubAsSubtitle &&
-						copyNpubWrapper(
-							<p className={cn(classSizeNpub, 'font-medium text-gray-400 truncate lowercase', classNpub, className)} onClick={onClickNpub}>
-								{textDisplayNpub}
-							</p>,
-						)
+						copyNpubWrapper(<span className={cn(classSizeNpub, 'font-medium text-gray-400 truncate lowercase', classNpub, className)}>{textDisplayNpub}</span>)
 					))}
 			</div>
 		</div>

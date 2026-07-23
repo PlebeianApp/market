@@ -3,7 +3,7 @@ import { useState } from 'react'
 import * as AvatarPrimitive from '@radix-ui/react-avatar'
 
 import { cn } from '@/lib/utils'
-import { useProfile } from '@/queries/profiles'
+import { getNormalizedProfileDisplayName, getNormalizedProfilePicture, useProfile } from '@/queries/profiles'
 import { Spinner } from './ui/spinner'
 
 interface AvatarUserProps extends React.ComponentProps<typeof AvatarPrimitive.Root> {
@@ -15,11 +15,11 @@ type ImageLoadingStatus = NonNullable<
 >
 
 function AvatarUser({ pubkey, className, ...props }: AvatarUserProps) {
-	const { data: profileData, isPending, isFetching } = useProfile(pubkey)
+	const { data: profileData, isLoading } = useProfile(pubkey)
 	const { profile } = profileData ?? {}
 
-	const profileName = (profile?.displayName || profile?.name || '').trim()
-	const profilePicture = typeof profile?.picture === 'string' ? profile.picture.trim() : ''
+	const profileName = getNormalizedProfileDisplayName(profile)
+	const profilePicture = getNormalizedProfilePicture(profile)
 	const [imageState, setImageState] = useState<{ src: string; status: ImageLoadingStatus }>({ src: '', status: 'idle' })
 	const imageStatus = profilePicture ? (imageState.src === profilePicture ? imageState.status : 'loading') : 'idle'
 	const isImageLoading = imageStatus === 'loading'
@@ -30,7 +30,7 @@ function AvatarUser({ pubkey, className, ...props }: AvatarUserProps) {
 		return title.charAt(0).toUpperCase()
 	}
 
-	const showSpinner = isPending || isFetching || isImageLoading
+	const showSpinner = isLoading || isImageLoading
 
 	return (
 		<AvatarPrimitive.Root

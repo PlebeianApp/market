@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { nip19 } from 'nostr-tools'
 
 import { isValidHexKey } from '../../lib/utils'
-import { getProfileIdentifierValidationError, validateProfileIdentifier } from '../../lib/utils/profileValidation'
+import { getProfileIdentifierValidationError, validateProfileIdentifier } from '@/lib/utils/profileValidation'
+import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey } from '@/queries/profiles'
+import { getUserCardTitle, isKeyboardCopyActivationKey } from '@/components/UserCard'
 
 const VALID_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 const VALID_NPUB = nip19.npubEncode(VALID_HEX)
@@ -25,6 +27,55 @@ describe('nostr pubkey validation', () => {
 		expect(isValidHexKey('npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq')).toBe(false)
 		expect(isValidHexKey('01234')).toBe(false)
 		expect(isValidHexKey('g'.repeat(64))).toBe(false)
+	})
+})
+
+describe('profile metadata normalization', () => {
+	test('falls back to a valid name when displayName is whitespace-only', () => {
+		const profile = {
+			displayName: '   ',
+			name: 'Alice',
+			picture: 123 as unknown as string,
+			nip05: 456 as unknown as string,
+		}
+
+		expect(getNormalizedProfileDisplayName(profile as never)).toBe('Alice')
+		expect(getNormalizedProfileNip05(profile as never)).toBeNull()
+	})
+
+	test('treats non-string kind-0 fields as absent instead of throwing', () => {
+		const profile = {
+			displayName: 42,
+			name: 999,
+			picture: false,
+			nip05: 123,
+		}
+
+		expect(() => getNormalizedProfileDisplayName(profile as never)).not.toThrow()
+		expect(() => getNormalizedProfileNip05(profile as never)).not.toThrow()
+		expect(getNormalizedProfileDisplayName(profile as never)).toBeNull()
+		expect(getNormalizedProfileNip05(profile as never)).toBeNull()
+	})
+
+	test('guards empty-string callers by normalizing optional pubkeys to undefined', () => {
+		expect(normalizeOptionalPubkey('   ')).toBeUndefined()
+		expect(normalizeOptionalPubkey(undefined)).toBeUndefined()
+		expect(normalizeOptionalPubkey(VALID_HEX)).toBe(VALID_HEX)
+	})
+
+	test('keeps cached identity visible during background refresh', () => {
+		expect(getUserCardTitle({ isProfileLoading: false, profileDisplayName: 'Alice', textDisplayNpub: 'npub1...' })).toBe('Alice')
+		expect(getUserCardTitle({ isProfileLoading: false, profileDisplayName: null, textDisplayNpub: 'npub1...' })).toBe('npub1...')
+	})
+
+	test('treats Enter and Space as keyboard activation for copy mode', () => {
+		const enterEvent = { key: 'Enter' } as KeyboardEvent
+		const spaceEvent = { key: ' ' } as KeyboardEvent
+		const otherEvent = { key: 'Tab' } as KeyboardEvent
+
+		expect(isKeyboardCopyActivationKey(enterEvent)).toBe(true)
+		expect(isKeyboardCopyActivationKey(spaceEvent)).toBe(true)
+		expect(isKeyboardCopyActivationKey(otherEvent)).toBe(false)
 	})
 })
 
