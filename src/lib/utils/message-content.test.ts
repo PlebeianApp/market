@@ -308,25 +308,25 @@ describe('Message Content Utilities', () => {
 		})
 
 		test('returns own order placement copy for kind 16 type 1', () => {
-			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'user' } } as any)).toBe(
-				'You placed an order.',
-			)
-		})
+				expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'user' }, pubkey: 'user' } as any)).toBe(
+					'You placed an order.',
+				)
+			})
 
 		test('returns received order placement copy for kind 16 type 1', () => {
-			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'other' } } as any)).toBe(
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '1']], author: { pubkey: 'other' }, pubkey: 'other' } as any)).toBe(
 				'Placed an order.',
 			)
 		})
 
 		test('returns own payment request copy for kind 16 type 2', () => {
-			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'user' } } as any)).toBe(
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'user' }, pubkey: 'user' } as any)).toBe(
 				'You sent a payment request.',
 			)
 		})
 
 		test('returns received payment request copy for kind 16 type 2', () => {
-			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'other' } } as any)).toBe(
+			expect(getMessageSnippet({ kind: 16, content: '', tags: [['type', '2']], author: { pubkey: 'other' }, pubkey: 'other' } as any)).toBe(
 				'Sent you a payment request.',
 			)
 		})
@@ -341,6 +341,7 @@ describe('Message Content Utilities', () => {
 						['status', 'shipped'],
 					],
 					author: { pubkey: 'user' },
+					pubkey: 'user',
 				} as any),
 			).toBe('You sent a status update: SHIPPED.')
 		})
@@ -355,6 +356,7 @@ describe('Message Content Utilities', () => {
 						['status', 'shipped'],
 					],
 					author: { pubkey: 'other' },
+					pubkey: 'other',
 				} as any),
 			).toBe('Updated their order status to: SHIPPED.')
 		})
@@ -369,6 +371,7 @@ describe('Message Content Utilities', () => {
 						['status', 'delivered'],
 					],
 					author: { pubkey: 'user' },
+					pubkey: 'user',
 				} as any),
 			).toBe('You sent a shipping update: DELIVERED.')
 		})
@@ -396,11 +399,11 @@ describe('Message Content Utilities', () => {
 		})
 
 		test('returns own payment receipt copy for kind 17', () => {
-			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'user' } } as any)).toBe('You sent a payment receipt.')
+			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'user' }, pubkey: 'user' } as any)).toBe('You sent a payment receipt.')
 		})
 
 		test('returns received payment receipt copy for kind 17', () => {
-			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'other' } } as any)).toBe('Sent you a payment receipt.')
+			expect(getMessageSnippet({ kind: 17, content: '', tags: [], author: { pubkey: 'other' }, pubkey: 'other' } as any)).toBe('Sent you a payment receipt.')
 		})
 	})
 })
