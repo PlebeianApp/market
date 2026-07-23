@@ -1,5 +1,5 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { type NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
@@ -18,25 +18,28 @@ const LIVE_CHAT_KIND_NDK = LIVE_CHAT_KIND as unknown as NDKKind
 import { getAuctionId } from './auctions'
 import { configStore } from '@/lib/stores/config'
 
-export const fetchLiveActivity = async (auctionEvent: NDKEvent): Promise<LiveActivity | null> => {
-	const dTag = getAuctionId(auctionEvent)
+export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity | null> => {
+	const dTag = getAuctionId(event)
 	if (!dTag) return null
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return null
 
-	const auctionCoord = `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}`
+	const coord = `${AUCTION_KIND}:${event.pubkey}:${dTag}`
 
+	// Fail closed: only accept live activity events from the expected CVM server.
+	// The integrated boot path requires this identity before rendering the app.
 	const cvmServerPubkey = configStore.state.config.cvmServerPubkey
+	if (!cvmServerPubkey) {
+		console.warn('fetchLiveActivity: cvmServerPubkey not configured — skipping live activity fetch')
+		return null
+	}
 
 	const filter: NDKFilter = {
 		kinds: [LIVE_ACTIVITY_KIND_NDK],
-		'#a': [auctionCoord],
+		authors: [cvmServerPubkey],
+		'#a': [coord],
 		limit: 10,
-	}
-
-	if (cvmServerPubkey) {
-		filter.authors = [cvmServerPubkey]
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout([filter], { timeoutMs: 5000 })
@@ -64,16 +67,20 @@ export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<
 		.sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export const useLiveActivity = (auctionEvent: NDKEvent | null) => {
-	const dTag = auctionEvent ? getAuctionId(auctionEvent) : ''
-	const auctionCoord = auctionEvent && dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
+export interface UseLiveActivityOptions {
+	refetchInterval?: number
+}
+
+export const useLiveActivity = (event: NDKEvent | null, options?: UseLiveActivityOptions) => {
+	const dTag = event ? getAuctionId(event) : ''
+	const coord = event && dTag ? `${AUCTION_KIND}:${event.pubkey}:${dTag}` : ''
 
 	return useQuery(
 		queryOptions({
-			queryKey: liveActivityKeys.byCoord(auctionCoord),
-			queryFn: () => (auctionEvent ? fetchLiveActivity(auctionEvent) : null),
-			enabled: !!auctionEvent && !!dTag,
-			refetchInterval: 60_000,
+			queryKey: liveActivityKeys.byCoord(coord),
+			queryFn: () => (event ? fetchLiveActivity(event) : null),
+			enabled: !!event && !!dTag,
+			refetchInterval: options?.refetchInterval ?? 60_000,
 		}),
 	)
 }

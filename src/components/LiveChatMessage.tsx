@@ -1,5 +1,7 @@
 import type { LiveChatMessage } from '@/lib/nip53'
 import { UserCard } from '@/components/UserCard'
+import { ReactionsList } from '@/components/social/ReactionsList'
+import { cn } from '@/lib/utils'
 
 function formatRelativeTime(timestamp: number): string {
 	const seconds = Math.floor(Date.now() / 1000) - timestamp
@@ -15,13 +17,14 @@ interface LiveChatMessageProps {
 
 export function LiveChatMessageBubble({ message }: LiveChatMessageProps) {
 	return (
-		<div className="flex gap-2 px-3 py-2">
+		<div className="group flex gap-2 px-3 py-2 hover:bg-zinc-50">
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline justify-between gap-2">
 					<UserCard pubkey={message.authorPubkey} size="xs" />
 					<span className="text-[10px] text-muted-foreground">{formatRelativeTime(message.createdAt)}</span>
 				</div>
-				<p className="text-sm mt-2 text-muted-foreground break-words">{message.content}</p>
+				<p className={cn('text-sm mt-2 break-words', 'text-muted-foreground')}>{message.content}</p>
+				<ReactionsList event={message.event} showQuickAdd />
 			</div>
 		</div>
 	)
