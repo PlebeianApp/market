@@ -15,7 +15,6 @@
  * auction + bid events in hand.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import {
 	AUCTION_PATH_RELEASE_KIND,
@@ -24,6 +23,7 @@ import {
 	type PathReleaseReason,
 } from '../../auction/constants'
 import type { AuctionFallbackChainEntry, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from '../../auction/events'
+import type { NostrEventLike } from '../../nostr/eventLike'
 import {
 	addressableCoordinate,
 	bip32Path,
@@ -69,7 +69,7 @@ export type ParsePathReleaseEventResult =
 	| { ok: true; value: ParsedPathReleaseEvent }
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parsePathReleaseEvent = (event: NDKEvent): ParsePathReleaseEventResult => {
+export const parsePathReleaseEvent = (event: NostrEventLike): ParsePathReleaseEventResult => {
 	if (event.kind !== AUCTION_PATH_RELEASE_KIND) {
 		return {
 			ok: false,
@@ -155,7 +155,7 @@ export type ParseSettlementEventResult =
 	| { ok: true; value: ParsedSettlementEvent }
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parseSettlementEvent = (event: NDKEvent): ParseSettlementEventResult => {
+export const parseSettlementEvent = (event: NostrEventLike): ParseSettlementEventResult => {
 	if (event.kind !== AUCTION_SETTLEMENT_KIND) {
 		return {
 			ok: false,

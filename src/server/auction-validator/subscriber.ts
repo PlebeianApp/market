@@ -25,7 +25,6 @@
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { NostrEvent } from 'nostr-tools'
 import { verifyEvent } from 'nostr-tools'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../../lib/auction/constants'
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
@@ -80,8 +79,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseAuctionEvent(ndkEvent)
+		const parsed = parseAuctionEvent(raw)
 		if (!parsed.ok) {
 			// Common case: an auction event that isn't compliant with the
 			// new scheme (missing `auditors`, wrong settlement_policy etc.).
@@ -120,8 +118,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onBidEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseBidEvent(ndkEvent)
+		const parsed = parseBidEvent(raw)
 		if (!parsed.ok) {
 			// Malformed bid → ignore. (Hostile bidders publishing bad
 			// events shouldn't crash the validator; a stricter mode could
@@ -164,8 +161,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parsePathReleaseEvent(ndkEvent)
+		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
 
@@ -196,8 +192,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseSettlementEvent(ndkEvent)
+		const parsed = parseSettlementEvent(raw)
 		if (!parsed.ok) return
 		const settlement = parsed.value
 
@@ -324,23 +319,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 // ============================================================================
 // Internal helpers
 // ============================================================================
-
-const toNdkEvent = (raw: NostrEvent): NDKEvent => {
-	// The NDKEvent constructor accepts a plain Nostr event object via
-	// `new NDKEvent(undefined, raw)` but our parsers only touch
-	// `kind`, `pubkey`, `id`, `created_at`, `content`, `tags` — so a
-	// minimal-construct + assignment is enough and avoids dragging in
-	// an NDK instance.
-	const e = new NDKEvent()
-	e.kind = raw.kind as unknown as number
-	e.pubkey = raw.pubkey
-	e.content = raw.content
-	e.tags = raw.tags
-	e.id = raw.id
-	e.created_at = raw.created_at
-	if (raw.sig) e.sig = raw.sig
-	return e
-}
 
 // The auction kind constants are typed as a strict union of NDKKind
 // values; widen back to number for nostr-tools filter shape.

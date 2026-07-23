@@ -21,9 +21,9 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../auction/constants'
 import { buildPathReleaseTags, buildSettlementTags } from '../auction/tagBuilders'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../schemas/auction/settlementEvents'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
@@ -166,7 +166,7 @@ describe('buildPathReleaseTags', () => {
 // parsePathReleaseEvent — reads cashu_token from the event tags
 // ---------------------------------------------------------------------------
 
-const buildPathReleaseNdkEvent = (overrides: { tags?: string[][]; bidderPubkey?: string } = {}): NDKEvent => {
+const buildPathReleaseNdkEvent = (overrides: { tags?: string[][]; bidderPubkey?: string } = {}): NostrEventLike => {
 	const path = 'm/1/2/3/4/5'
 	const child = deriveAuctionChildP2pkPubkeyFromXpub(REAL_AUCTION_XPUB, path)
 	const tags = overrides.tags ?? [
@@ -185,7 +185,7 @@ const buildPathReleaseNdkEvent = (overrides: { tags?: string[][]; bidderPubkey?:
 		created_at: 1_700,
 		tags,
 		content: '',
-	} as unknown as NDKEvent
+	}
 }
 
 describe('parsePathReleaseEvent', () => {
@@ -238,7 +238,7 @@ describe('parseSettlementEvent', () => {
 				payouts: [{ bidEventId: BID_EVENT_ID, amount: 12_000, status: 'redeemed' }],
 			}),
 			content: '',
-		} as unknown as NDKEvent
+		} as NostrEventLike
 
 		const parsed = parseSettlementEvent(event)
 		if (!parsed.ok) throw new Error('expected settlement parse success')

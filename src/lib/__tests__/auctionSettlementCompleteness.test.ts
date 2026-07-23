@@ -1,25 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { validateSettlementCompleteness } from '../auction/validation'
+import type { NostrEventLike } from '../nostr/eventLike'
 
 const SELLER_PK = 'a'.repeat(64)
 const BIDDER_PK = 'b'.repeat(64)
 const REFUND_PK = '03' + 'e'.repeat(64)
 const REAL_XPUB = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
 
-const stubRawEvent = (kind: number, pubkey: string): NDKEvent =>
-	({
-		kind,
-		pubkey,
-		content: '',
-		tags: [] as string[][],
-		id: 'stub',
-		created_at: 0,
-	}) as unknown as NDKEvent
+const stubRawEvent = (kind: number, pubkey: string): NostrEventLike => ({
+	kind,
+	pubkey,
+	content: '',
+	tags: [] as string[][],
+	id: 'stub',
+	created_at: 0,
+})
 
 const buildLockSecret = (childPubkey: string, locktime: number): string =>
 	JSON.stringify([

@@ -9,7 +9,7 @@
  *    a structured intermediate (e.g. when you're constructing rather
  *    than parsing).
  *
- * 2. {@link parseAuctionEvent} — takes a raw `NDKEvent`, runs the tag
+ * 2. {@link parseAuctionEvent} — takes a raw event, runs the tag
  *    extraction, and returns a `ParsedAuctionEvent` or a structured
  *    Zod error. This is what callers will use 99% of the time.
  *
@@ -20,7 +20,6 @@
  * key scheme, auditors, timing invariants).
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import {
 	AUCTION_KEY_SCHEME,
@@ -33,6 +32,7 @@ import {
 	FALLBACK_DELAY_NUMERATOR,
 } from '../../auction/constants'
 import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '../../auction/events'
+import type { NostrEventLike } from '../../nostr/eventLike'
 import { addressableCoordinate, nostrEventIdHex, nostrPubkeyHex, nonNegativeInt, positiveInt, unixSeconds } from './common'
 import { readIntegerTag, readMultiTag, readSingleTag } from './tagAccess'
 
@@ -63,7 +63,7 @@ const parseMinBidCurve = (raw: string | undefined): MinBidCurve => {
  * Structured intermediate the parser produces from `event.tags` before
  * handing off to Zod. Exposing it as a schema lets tests build fixtures
  * by hand and lets future code (e.g. wallet form validators) reuse the
- * same shape constraints without constructing a full NDKEvent.
+ * same shape constraints without constructing a full event object.
  */
 export const AuctionEventSchema = z
 	.object({
@@ -107,7 +107,7 @@ export const AuctionEventSchema = z
 export type AuctionEventInput = z.infer<typeof AuctionEventSchema>
 
 // ----------------------------------------------------------------------------
-// NDKEvent → ParsedAuctionEvent
+// Raw event → ParsedAuctionEvent
 // ----------------------------------------------------------------------------
 
 /**
@@ -120,14 +120,14 @@ export type ParseAuctionEventResult =
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
 /**
- * Parse a raw kind-30408 NDKEvent into a {@link ParsedAuctionEvent}.
+ * Parse a raw kind-30408 event into a {@link ParsedAuctionEvent}.
  *
  * Failure modes:
  *   - Wrong kind on the event → `wrong_kind`
  *   - Missing required tag → ZodError with field path
  *   - Tag value fails format / range constraint → ZodError
  */
-export const parseAuctionEvent = (event: NDKEvent): ParseAuctionEventResult => {
+export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResult => {
 	if (event.kind !== AUCTION_KIND) {
 		return { ok: false, error: { code: 'wrong_kind', message: `expected kind ${AUCTION_KIND}, got ${event.kind}` } }
 	}
