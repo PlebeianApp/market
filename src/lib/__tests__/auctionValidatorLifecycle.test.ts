@@ -10,6 +10,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
@@ -34,6 +35,7 @@ const COMPRESSED = '02' + 'd'.repeat(64)
 const REFUND_PK = '03' + 'e'.repeat(64)
 const PROOF_Y_A = '02' + '1'.repeat(64)
 const PROOF_Y_B = '02' + '2'.repeat(64)
+const REAL_XPUB = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
 
 const stubRawEvent = (kind: number, pubkey: string): NDKEvent =>
 	({
@@ -145,6 +147,16 @@ const buildBidState = (bid: ParsedBidEvent, observedAt: number, overrides: Parti
 	...overrides,
 })
 
+const buildCashuToken = (mint: string, secrets: string[], amounts?: number[]): string => {
+	const proofs: Proof[] = secrets.map((secret, index) => ({
+		id: '009a1f293253e41e',
+		amount: amounts?.[index] ?? 1,
+		secret,
+		C: `02${String(index + 1).padStart(64, '1')}`,
+	}))
+	return getEncodedToken({ mint, proofs })
+}
+
 const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<ValidatorAuctionState> = {}): ValidatorAuctionState => ({
 	rootAuction: overrides.rootAuction ?? auction,
 	auction: overrides.auction ?? auction,
@@ -158,19 +170,24 @@ const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<Valid
 	fallbackOfferedAt: overrides.fallbackOfferedAt ?? null,
 })
 
-const buildPathRelease = (bidEventId: string, derivationPath: string, childPubkey: string): ParsedPathReleaseEvent => ({
-	rawEvent: stubRawEvent(1025, BIDDER_A),
-	id: '3'.repeat(64),
-	bidderPubkey: BIDDER_A,
-	createdAt: 2_200,
-	bidEventId,
-	auctionCoordinate: `30408:${SELLER_PK}:auction-test`,
-	sellerPubkey: SELLER_PK,
-	derivationPath,
-	childPubkey,
-	releaseReason: 'settlement',
-	auditorRefs: [],
-	content: '',
+const buildPathRelease = (
+	bid: ParsedBidEvent,
+	overrides: Partial<ParsedPathReleaseEvent> & { derivationPath?: string; childPubkey?: string } = {},
+): ParsedPathReleaseEvent => ({
+	rawEvent: stubRawEvent(1025, overrides.bidderPubkey ?? bid.bidderPubkey),
+	id: overrides.id ?? '3'.repeat(64),
+	bidderPubkey: overrides.bidderPubkey ?? bid.bidderPubkey,
+	createdAt: overrides.createdAt ?? 2_200,
+	bidEventId: overrides.bidEventId ?? bid.id,
+	auctionCoordinate: overrides.auctionCoordinate ?? bid.auctionCoordinate,
+	sellerPubkey: overrides.sellerPubkey ?? bid.sellerPubkey,
+	derivationPath: overrides.derivationPath ?? 'm/0/0/0/0/0',
+	childPubkey: overrides.childPubkey ?? bid.childPubkey,
+	releaseReason: overrides.releaseReason ?? 'settlement',
+	auditorRefs: overrides.auditorRefs ?? [],
+	fallbackOfferId: overrides.fallbackOfferId,
+	cashuToken: overrides.cashuToken,
+	content: overrides.content ?? '',
 })
 
 // ============================================================================
@@ -426,33 +443,31 @@ describe('deriveVerdict — post-close', () => {
 
 describe('deriveVerdict — kind-1025 settlement', () => {
 	test('valid path release + NUT-7 spent within grace → settled_promptly', () => {
-		const auction = buildAuction()
-		// Use a path the test can predict will derive correctly.
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const path = 'm/0/0/0/0/0'
-		// derive() in @scure/bip32 is deterministic; just compute it.
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
-		// Use a real xpub for derivation. The fixture xpub above is a placeholder.
-		const realXpub = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
-		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(realXpub, path)
-		const auctionWithRealXpub = buildAuction({ p2pkXpub: realXpub })
-		const bid = buildBid(auctionWithRealXpub, { childPubkey })
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
 
-		const auctionState = buildAuctionState(auctionWithRealXpub, { closeHandled: true })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
 		const bidState = buildBidState(bid, bid.createdAt, {
 			currentClaim: 'valid_bid_placed',
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(bid.id, buildPathRelease(bid.id, path, childPubkey))
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
+		)
 		// Spent at the mint = the seller redeemed.
-		recordNut7State(bidState, bid.proofYs[0], 'spent', auctionWithRealXpub.maxEndAt + 60)
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
 
-		const v = deriveVerdict({ auctionState, bidState, now: auctionWithRealXpub.maxEndAt + 60 })
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		expect(v.claim).toBe('settled_promptly')
 	})
 
 	test('kind-1025 with mismatched child_pubkey → fraudulent_bid', () => {
-		const auction = buildAuction()
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const bid = buildBid(auction, { childPubkey: COMPRESSED })
 		const auctionState = buildAuctionState(auction, { closeHandled: true })
 		const bidState = buildBidState(bid, bid.createdAt, {
@@ -460,11 +475,14 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		// Path doesn't derive to the bid's child_pubkey because the
-		// xpub is just a placeholder string. The lifecycle catches this
-		// either via derivation failure or via mismatch — either way,
-		// fraudulent_bid is the answer.
-		auctionState.pathReleases.set(bid.id, buildPathRelease(bid.id, 'm/0/0/0/0/0', COMPRESSED))
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, {
+				derivationPath: 'm/0/0/0/0/0',
+				childPubkey: COMPRESSED,
+				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+			}),
+		)
 		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
 
 		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
@@ -472,48 +490,179 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 	})
 
 	test('kind-1025 received but mint hasn’t flipped to spent yet → still won_pending_settlement', () => {
-		const auction = buildAuction()
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
-		const realXpub = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
-		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(realXpub, path)
-		const auctionWithRealXpub = buildAuction({ p2pkXpub: realXpub })
-		const bid = buildBid(auctionWithRealXpub, { childPubkey })
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
 
-		const auctionState = buildAuctionState(auctionWithRealXpub, { closeHandled: true })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
 		const bidState = buildBidState(bid, bid.createdAt, {
 			currentClaim: 'valid_bid_placed',
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(bid.id, buildPathRelease(bid.id, path, childPubkey))
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
+		)
 		// Mint state stays unspent — seller hasn't redeemed yet.
-		recordNut7State(bidState, bid.proofYs[0], 'unspent', auctionWithRealXpub.maxEndAt + 60)
+		recordNut7State(bidState, bid.proofYs[0], 'unspent', auction.maxEndAt + 60)
 
-		const v = deriveVerdict({ auctionState, bidState, now: auctionWithRealXpub.maxEndAt + 60 })
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		expect(v.claim).toBe('won_pending_settlement')
 	})
 
 	test('settled_late when grace already expired', () => {
-		const auction = buildAuction({ settlementGrace: 100 })
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
-		const realXpub = 'xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz'
-		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(realXpub, path)
-		const auctionWithRealXpub = buildAuction({ p2pkXpub: realXpub, settlementGrace: 100 })
-		const bid = buildBid(auctionWithRealXpub, { childPubkey })
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
 
-		const auctionState = buildAuctionState(auctionWithRealXpub, { closeHandled: true })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
 		const bidState = buildBidState(bid, bid.createdAt, {
 			currentClaim: 'valid_bid_placed',
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(bid.id, buildPathRelease(bid.id, path, childPubkey))
-		recordNut7State(bidState, bid.proofYs[0], 'spent', auctionWithRealXpub.maxEndAt + 500)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, {
+				derivationPath: path,
+				childPubkey,
+				releaseReason: 'voluntary_late',
+				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+			}),
+		)
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 500)
 
-		const v = deriveVerdict({ auctionState, bidState, now: auctionWithRealXpub.maxEndAt + 500 })
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 500 })
 		expect(v.claim).toBe('settled_late')
+	})
+
+	test('kind-1025 from the wrong signer → fraudulent_bid', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, {
+				bidderPubkey: BIDDER_B,
+				derivationPath: path,
+				childPubkey,
+				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+			}),
+		)
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('fraudulent_bid')
+		expect(verdict.detail).toMatch(/original bidder/)
+	})
+
+	test('kind-1025 missing cashu_token → fraudulent_bid', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey }))
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('fraudulent_bid')
+		expect(verdict.detail).toMatch(/cashu_token/)
+	})
+
+	test('kind-1025 with token amount mismatch → fraudulent_bid', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey, amount: 10 })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [9]) }),
+		)
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('fraudulent_bid')
+		expect(verdict.detail).toMatch(/proof sum 9 does not match bid amount 10/)
+	})
+
+	test('loser cannot use release_reason=settlement', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'loser',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, {
+				derivationPath: path,
+				childPubkey,
+				releaseReason: 'settlement',
+				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+			}),
+		)
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('fraudulent_bid')
+		expect(verdict.detail).toMatch(/winning bid/)
+	})
+
+	test('fallback bidder with valid fallback_settlement can settle', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true, fallbackOfferedAt: auction.maxEndAt + 10 })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'loser',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, {
+				derivationPath: path,
+				childPubkey,
+				releaseReason: 'fallback_settlement',
+				fallbackOfferId: '4'.repeat(64),
+				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+			}),
+		)
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('settled_promptly')
 	})
 })
 

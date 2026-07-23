@@ -31,8 +31,8 @@
  *      → unsettled winner → griefed (terminal).
  */
 
-import { validateBid, type BidChainValidation, type BidValidationVerdict } from '../../lib/auction/validation'
-import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../lib/auctionP2pk'
+import { validateBid, validatePathRelease, type BidChainValidation, type BidValidationVerdict } from '../../lib/auction/validation'
+import type { ParsedPathReleaseEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
 import { aggregateProofStates, type ValidatorAuctionState, type ValidatorBidState } from './state'
 
@@ -109,6 +109,9 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 	const release = auctionState.pathReleases.get(bidState.bid.id)
 
 	if (bidState.postCloseDecision === 'loser') {
+		if (release) {
+			return deriveSettlementVerdict(auctionState, bidState, release, now)
+		}
 		return deriveLoserVerdict(auctionState, bidState, now)
 	}
 
@@ -223,34 +226,22 @@ const deriveLoserVerdict = (auctionState: ValidatorAuctionState, bidState: Valid
 const deriveSettlementVerdict = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
-	release: { derivationPath: string; childPubkey: string },
+	release: ParsedPathReleaseEvent,
 	now: number,
 ): DerivedVerdict => {
-	// 1. Cryptographic check: does the revealed path derive to the
-	//    bid's child_pubkey? Mismatch → fraudulent bid (the lock pubkey
-	//    was never legitimately a child of seller_xpub).
-	let derivedChild: string
-	try {
-		derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(auctionState.auction.p2pkXpub, release.derivationPath)
-	} catch (err) {
+	const releaseValidity = validatePathRelease({
+		auction: auctionState.auction,
+		bid: bidState.bid,
+		release,
+		now,
+		postCloseDecision: bidState.postCloseDecision,
+		fallbackOfferedAt: auctionState.fallbackOfferedAt,
+	})
+	if (!releaseValidity.isValid) {
 		return {
 			claim: 'fraudulent_bid',
 			reason: 'fraudulent_bid',
-			detail: `derivation failed: ${err instanceof Error ? err.message : String(err)}`,
-		}
-	}
-	if (derivedChild.toLowerCase() !== release.childPubkey.toLowerCase()) {
-		return {
-			claim: 'fraudulent_bid',
-			reason: 'fraudulent_bid',
-			detail: `derive(p2pk_xpub, path)=${derivedChild} ≠ release.child_pubkey=${release.childPubkey}`,
-		}
-	}
-	if (derivedChild.toLowerCase() !== bidState.bid.childPubkey.toLowerCase()) {
-		return {
-			claim: 'fraudulent_bid',
-			reason: 'fraudulent_bid',
-			detail: `derive(p2pk_xpub, path)=${derivedChild} ≠ bid.child_pubkey=${bidState.bid.childPubkey}`,
+			detail: releaseValidity.detail,
 		}
 	}
 
@@ -262,11 +253,10 @@ const deriveSettlementVerdict = (
 		return { claim: 'won_pending_settlement' }
 	}
 
-	// 3. On-time vs. late. The kind-1025 created_at carries the bidder
-	//    clock; we use the validator's `now` instead (consistent with
-	//    how we treat created_at vs observed_at elsewhere).
-	const graceExpires = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
-	if (now > graceExpires) return { claim: 'settled_late' }
+	// 3. On-time vs. late. Keep the validator's local clock as the source
+	//    of truth for lifecycle timing, but use the validated release
+	//    timing classification so prompt/late logic is centralised.
+	if (releaseValidity.releaseTiming === 'late') return { claim: 'settled_late' }
 	return { claim: 'settled_promptly' }
 }
 
