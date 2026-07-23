@@ -132,7 +132,7 @@ export function getCurrencyServerRelays(stage?: Stage): string[] {
 	return []
 }
 
-export { resolveCvmServerPubkey as CVM_SERVER_PUBKEY_RESOLVER } from './cvm-identity'
+export { resolveCvmServerPubkey as CVM_SERVER_PUBKEY_RESOLVER } from '@/server/runtime'
 
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 21 sats', amount: 21 },

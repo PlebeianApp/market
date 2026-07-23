@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { NostrClientTransport, PrivateKeySigner, ApplesauceRelayPool } from '@contextvm/sdk'
-import { resolveCvmServerPubkey } from '../src/lib/cvm-identity'
+import { resolveCvmServerPubkey } from '../src/server/runtime'
 
 const RELAY_URL = process.argv[2] || 'ws://100.90.22.201:10547'
 

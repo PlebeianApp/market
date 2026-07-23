@@ -52,9 +52,10 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 
 	// Check for staleness: show warning if activity is older than 2x refetch interval
 	const now = Math.floor(Date.now() / 1000)
-	const isStale = liveActivity && 
+	const isStale =
+		liveActivity &&
 		((liveActivity.createdAt && now - liveActivity.createdAt > liveActivityRefetchMs * 2) ||
-		 (liveActivity.updatedAt && now - liveActivity.updatedAt > liveActivityRefetchMs * 2))
+			(liveActivity.updatedAt && now - liveActivity.updatedAt > liveActivityRefetchMs * 2))
 
 	if (!status) {
 		return (
