@@ -173,20 +173,20 @@ For the first recovery, only `ready` may receive traffic.
 
 ## Boundaries
 
-| Boundary | Decision |
-|---|---|
-| Raw bbolt store | Proposed primary persisted-event boundary |
-| Bleve/Scorch | Derived search projection |
-| Incident search index | Preserved evidence, not first-recovery input |
-| New search generation | Separately built, validated, and activated |
-| `/healthz` | No continued store-readiness proof |
-| `/readyz` | Proposed operational-readiness boundary |
-| Artifact preparation | No activation authority |
-| Service activation | Separate explicit authorization |
-| NIP-01 acceptance | Unchanged; separate future decision |
-| NIP-50 completeness | Plebeian Market readiness invariant |
-| Allocation accounting | Independent forensic/specification track |
-| Payment and wallet state | Out of scope |
+| Boundary                 | Decision                                     |
+| ------------------------ | -------------------------------------------- |
+| Raw bbolt store          | Proposed primary persisted-event boundary    |
+| Bleve/Scorch             | Derived search projection                    |
+| Incident search index    | Preserved evidence, not first-recovery input |
+| New search generation    | Separately built, validated, and activated   |
+| `/healthz`               | No continued store-readiness proof           |
+| `/readyz`                | Proposed operational-readiness boundary      |
+| Artifact preparation     | No activation authority                      |
+| Service activation       | Separate explicit authorization              |
+| NIP-01 acceptance        | Unchanged; separate future decision          |
+| NIP-50 completeness      | Plebeian Market readiness invariant          |
+| Allocation accounting    | Independent forensic/specification track     |
+| Payment and wallet state | Out of scope                                 |
 
 ## Recovery gates
 
