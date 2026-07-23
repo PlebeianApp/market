@@ -55,6 +55,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 	const tick = async (): Promise<void> => {
 		const observedAt = now()
+
 		const live = collectLiveBids(deps.state, observedAt)
 		if (!live.length) return
 

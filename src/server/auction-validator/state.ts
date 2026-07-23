@@ -17,6 +17,7 @@
  */
 
 import type { Nut7ProofState, ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
+import { auctionImmutableFieldsMatch } from '../../lib/auction/immutability'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
 
 // ============================================================================
@@ -90,6 +91,7 @@ export interface ValidatorBidState {
 // ============================================================================
 
 export interface ValidatorAuctionState {
+	rootAuction: ParsedAuctionEvent
 	auction: ParsedAuctionEvent
 
 	/** bidEventId -> per-bid state. */
@@ -142,19 +144,28 @@ export const createValidatorState = (validatorPubkey: string): ValidatorState =>
 	auctions: new Map(),
 })
 
+export interface UpsertAuctionResult {
+	auctionState: ValidatorAuctionState
+	status: 'inserted' | 'updated' | 'rejected_immutable'
+}
+
 /**
  * Register an auction we should track. Idempotent: if the auction is
  * already tracked, update the parsed event (handles re-publish of
  * mutable tags) and return the existing state.
  */
-export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): ValidatorAuctionState => {
+export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): UpsertAuctionResult => {
 	const existing = state.auctions.get(auction.rootEventId)
 	if (existing) {
+		if (!auctionImmutableFieldsMatch(existing.rootAuction.rawEvent, auction.rawEvent)) {
+			return { auctionState: existing, status: 'rejected_immutable' }
+		}
 		// Refresh the parsed event but keep accumulated bid state.
 		existing.auction = auction
-		return existing
+		return { auctionState: existing, status: 'updated' }
 	}
 	const fresh: ValidatorAuctionState = {
+		rootAuction: auction,
 		auction,
 		bids: new Map(),
 		settlement: null,
@@ -164,7 +175,7 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		fallbackOfferedAt: null,
 	}
 	state.auctions.set(auction.rootEventId, fresh)
-	return fresh
+	return { auctionState: fresh, status: 'inserted' }
 }
 
 /**

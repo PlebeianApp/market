@@ -1,14 +1,13 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
 	AUCTION_BID_KIND,
-	AUCTION_IMMUTABLE_MULTI_TAGS,
-	AUCTION_IMMUTABLE_SINGLE_TAGS,
 	AUCTION_KIND,
 	AUCTION_ROOT_EVENT_ID_TAG,
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
 } from './auction/constants'
+import { auctionImmutableFieldsMatch as compareAuctionImmutableFields } from './auction/immutability'
 
 // Re-export the constants that used to live here so downstream callers
 // don't have to chase the move. The canonical definitions are in
@@ -224,9 +223,6 @@ export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {
 	return dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
 }
 
-const normalizeComparableValueList = (values: string[]): string[] =>
-	Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right))
-
 export const getAuctionExtensionRule = (auctionEvent: NDKEvent): AuctionExtensionRule => {
 	const raw = getAuctionTagValue(auctionEvent, 'extension_rule') || 'none'
 	if (raw === 'none') return { kind: 'none', raw }
@@ -245,21 +241,7 @@ export const getAuctionExtensionRule = (auctionEvent: NDKEvent): AuctionExtensio
 		extensionSeconds,
 	}
 }
-
-export const auctionImmutableFieldsMatch = (rootEvent: NDKEvent, candidateEvent: NDKEvent): boolean => {
-	for (const tagName of AUCTION_IMMUTABLE_SINGLE_TAGS) {
-		if (getAuctionTagValue(rootEvent, tagName) !== getAuctionTagValue(candidateEvent, tagName)) return false
-	}
-
-	for (const tagName of AUCTION_IMMUTABLE_MULTI_TAGS) {
-		const rootValues = normalizeComparableValueList(getAuctionTagValues(rootEvent, tagName))
-		const candidateValues = normalizeComparableValueList(getAuctionTagValues(candidateEvent, tagName))
-		if (rootValues.length !== candidateValues.length) return false
-		if (rootValues.some((value, index) => value !== candidateValues[index])) return false
-	}
-
-	return true
-}
+export const auctionImmutableFieldsMatch = compareAuctionImmutableFields
 
 export const compareAuctionPublishedOrderAscending = (left: NDKEvent, right: NDKEvent): number => {
 	const createdAtDelta = (left.created_at || 0) - (right.created_at || 0)

@@ -88,9 +88,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
-		const isNew = !deps.state.auctions.has(auction.rootEventId)
-		upsertAuction(deps.state, auction)
-		if (isNew) {
+		const result = upsertAuction(deps.state, auction)
+		if (result.status === 'rejected_immutable') {
+			logger.warn(`[validator] rejecting immutable auction update ${auction.rootEventId.slice(0, 8)}`)
+			return
+		}
+
+		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
