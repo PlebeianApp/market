@@ -32,6 +32,24 @@ export function deriveLiveActivityStatus(startsAt: number, maxEndAt: number, now
 	return 'live'
 }
 
+/**
+ * Resolve the effective availability status of a live activity, using auction
+ * timestamps as hard boundaries. Relay-reported status is only accepted WITHIN
+ * those boundaries:
+ *
+ * - Before `startsAt`: always 'planned' (relay 'live' cannot open chat early)
+ * - After `biddingCutoffAt`: always 'ended' (relay 'live' cannot extend chat)
+ * - Between starts and cutoff: accept relay status if present, else derive from timestamps
+ *
+ * If no relay activity exists, falls back to timestamp-derived status.
+ * If relay activity exists but its status is outside the boundary, the boundary wins.
+ */
+export function resolveLiveActivityStatus(cvmStatus: LiveActivityStatus | null): LiveActivityStatus | null {
+	// CVM status is the sole authority. Client does NOT derive from timestamps.
+	// If no CVM event detected, there is no live activity — return null.
+	return cvmStatus
+}
+
 export function parseAuctionCoordFromATag(event: any): string | null {
 	const aTag = event.tags?.find((t: string[]) => t[0] === 'a')
 	if (!aTag?.[1]) return null

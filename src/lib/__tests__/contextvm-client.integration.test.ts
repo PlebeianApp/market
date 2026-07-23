@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { getPublicKey } from 'nostr-tools/pure'
 import { PlebianCurrencyClient } from '../ctxcn-client'
 import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@/lib/constants'
-import { resolveCvmServerPubkey } from '../cvm-identity'
+import { resolveCvmServerPubkey } from '@/server/runtime'
 
 const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://localhost:10547'
 const SERVER_PUBKEY = (() => {
