@@ -3,6 +3,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { computeBidFloor, validateBid } from '../auction/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
+import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 
 // =============================================================================
 // Fixture helpers
@@ -131,7 +132,16 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 			refundPubkey,
 		}),
 	]
-	const proofYs = overrides.proofYs ?? Array.from({ length: lockSecrets.length }, () => PROOF_Y)
+	const effectiveLockSecrets =
+		overrides.lockSecrets ??
+		Array.from({ length: overrides.proofYs?.length ?? lockSecrets.length }, () =>
+			buildLockSecret({
+				childPubkey,
+				locktime,
+				refundPubkey,
+			}),
+		)
+	const proofYs = overrides.proofYs ?? effectiveLockSecrets.map((secret) => hashToCurveHexFromString(secret))
 	return {
 		rawEvent: stubRawEvent(1023, BIDDER_PK),
 		id: '2'.repeat(64),
@@ -146,7 +156,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 		locktime,
 		refundPubkey,
 		childPubkey,
-		lockSecrets,
+		lockSecrets: effectiveLockSecrets,
 		proofYs,
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
@@ -302,6 +312,18 @@ describe('validateBid — mint allowlist', () => {
 // =============================================================================
 
 describe('validateBid — lock secret structure', () => {
+	test('bad_proof_y when published proof_y does not match hash_to_curve(lock_secret)', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, {
+			proofYs: [PROOF_Y],
+		})
+		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('bad_proof_y')
+		}
+	})
+
 	test('bad_lock when lock_secret JSON is malformed', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, { lockSecrets: ['not-json'] })
@@ -468,6 +490,27 @@ describe('validateBid — amount and floor', () => {
 		expect(verdict.claim).toBe('bid_invalid')
 		if (verdict.claim === 'bid_invalid') {
 			expect(verdict.reason).toBe('replacement_chain_invalid')
+		}
+	})
+
+	test('rejects rebid when caller reports replacement-chain inconsistency', () => {
+		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
+		const bid = buildBid(auction, {
+			amount: AUCTION_MIN_BID_SATS + AUCTION_MIN_BID_LEG_SATS,
+			prevBidId: '3'.repeat(64),
+		})
+		const verdict = validateBid({
+			auction,
+			bid,
+			observedAt: bid.createdAt,
+			nut7State: 'unspent',
+			currentTopBid: 0,
+			bidChainValidation: { ok: false, detail: 'replacement-chain cycle detected at prev_bid=3333' },
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('replacement_chain_invalid')
+			expect(verdict.detail).toMatch(/cycle detected/)
 		}
 	})
 

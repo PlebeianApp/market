@@ -31,7 +31,7 @@
  *      → unsettled winner → griefed (terminal).
  */
 
-import { validateBid, type BidValidationVerdict } from '../../lib/auction/validation'
+import { validateBid, type BidChainValidation, type BidValidationVerdict } from '../../lib/auction/validation'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../lib/auctionP2pk'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
 import { aggregateProofStates, type ValidatorAuctionState, type ValidatorBidState } from './state'
@@ -148,7 +148,7 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 		observedAt: bidState.observedAt,
 		nut7State,
 		currentTopBid,
-		bidChainLegAmount: deriveBidChainLegAmount(auctionState, bidState),
+		bidChainValidation: deriveBidChainValidation(auctionState, bidState),
 	})
 
 	// validateBid returns a strict union; widen it for the publisher.
@@ -157,13 +157,50 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 	return { claim: 'bid_invalid', reason: verdict.reason, detail: verdict.detail }
 }
 
-const deriveBidChainLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number | undefined => {
+const deriveBidChainValidation = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): BidChainValidation | undefined => {
 	const prevBidId = bidState.bid.prevBidId?.trim()
 	if (!prevBidId) return undefined
-	const previousBidState = auctionState.bids.get(prevBidId)
-	if (!previousBidState) return undefined
-	if (previousBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) return undefined
-	return bidState.bid.amount - previousBidState.bid.amount
+
+	const seen = new Set<string>([bidState.bid.id])
+	let currentBidState: ValidatorBidState = bidState
+
+	while (true) {
+		const parentId = currentBidState.bid.prevBidId?.trim()
+		if (!parentId) break
+		if (seen.has(parentId)) {
+			return { ok: false, detail: `replacement-chain cycle detected at prev_bid=${parentId}` }
+		}
+		seen.add(parentId)
+
+		const parentBidState = auctionState.bids.get(parentId)
+		if (!parentBidState) {
+			return { ok: false, detail: `prev_bid=${parentId} context unavailable for replacement-chain validation` }
+		}
+		if (parentBidState.bid.auctionRootEventId !== bidState.bid.auctionRootEventId) {
+			return { ok: false, detail: `prev_bid=${parentId} references a different auction root` }
+		}
+		if (parentBidState.bid.auctionCoordinate !== bidState.bid.auctionCoordinate) {
+			return { ok: false, detail: `prev_bid=${parentId} references a different auction coordinate` }
+		}
+		if (parentBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
+			return { ok: false, detail: `prev_bid=${parentId} belongs to a different bidder` }
+		}
+		if (currentBidState.bid.amount <= parentBidState.bid.amount) {
+			return {
+				ok: false,
+				detail: `replacement-chain amount must strictly increase (${currentBidState.bid.amount} <= ${parentBidState.bid.amount})`,
+			}
+		}
+
+		currentBidState = parentBidState
+	}
+
+	const immediateParent = auctionState.bids.get(prevBidId)
+	if (!immediateParent) {
+		return { ok: false, detail: `prev_bid=${prevBidId} context unavailable for replacement-chain validation` }
+	}
+
+	return { ok: true, legAmount: bidState.bid.amount - immediateParent.bid.amount }
 }
 
 // ============================================================================

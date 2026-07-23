@@ -35,6 +35,7 @@ import {
 	type ValidatorReason,
 } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent } from './events'
+import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 
 // ============================================================================
@@ -71,6 +72,8 @@ export type PolicyHook = (input: {
 	observedAt: number
 }) => 'pass' | { reject: true; reason: ValidatorReason; detail?: string }
 
+export type BidChainValidation = { ok: true; legAmount: number } | { ok: false; detail: string }
+
 export interface ValidateBidInput {
 	auction: ParsedAuctionEvent
 	bid: ParsedBidEvent
@@ -94,6 +97,8 @@ export interface ValidateBidInput {
 	 * that hold the per-auction bid graph.
 	 */
 	bidChainLegAmount?: number
+	/** Richer replacement-chain validation result from callers that hold the full bid graph. */
+	bidChainValidation?: BidChainValidation
 	/** Optional validator policy hook. */
 	policy?: PolicyHook
 }
@@ -146,7 +151,7 @@ export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: nu
  * module docstring on short-circuiting.
  */
 export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
-	const { auction, bid, observedAt, nut7State, currentTopBid = 0, bidChainLegAmount, policy } = input
+	const { auction, bid, observedAt, nut7State, currentTopBid = 0, bidChainLegAmount, bidChainValidation, policy } = input
 
 	// --- Step 1: cross-event reference integrity -----------------------------
 
@@ -236,6 +241,15 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 				detail: `proof ${i + 1}/${bid.lockSecrets.length}: ${lockParse.reason}${lockParse.detail ? `: ${lockParse.detail}` : ''}`,
 			}
 		}
+
+		const derivedProofY = hashToCurveHexFromString(bid.lockSecrets[i])
+		if (derivedProofY.toLowerCase() !== bid.proofYs[i].toLowerCase()) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_proof_y',
+				detail: `proof ${i + 1}/${bid.proofYs.length}: derived proof_y ${derivedProofY} does not match published ${bid.proofYs[i]}`,
+			}
+		}
 	}
 
 	// --- Step 5: amount + curve floor ---------------------------------------
@@ -253,18 +267,19 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 	if (bid.prevBidId) {
-		if (bidChainLegAmount === undefined) {
+		const chainValidationResult = normaliseBidChainValidation({ bid, bidChainLegAmount, bidChainValidation })
+		if (!chainValidationResult.ok) {
 			return {
 				claim: 'bid_invalid',
 				reason: 'replacement_chain_invalid',
-				detail: `prev_bid=${bid.prevBidId} context unavailable for replacement-chain validation`,
+				detail: chainValidationResult.detail,
 			}
 		}
-		if (!Number.isSafeInteger(bidChainLegAmount) || bidChainLegAmount < AUCTION_MIN_BID_LEG_SATS) {
+		if (!Number.isSafeInteger(chainValidationResult.legAmount) || chainValidationResult.legAmount < AUCTION_MIN_BID_LEG_SATS) {
 			return {
 				claim: 'bid_invalid',
 				reason: 'under_increment',
-				detail: `replacement-chain delta=${bidChainLegAmount} must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
+				detail: `replacement-chain delta=${chainValidationResult.legAmount} must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
 			}
 		}
 	}
@@ -317,6 +332,21 @@ const clamp = (value: number, min: number, max: number): number => {
 	if (value < min) return min
 	if (value > max) return max
 	return value
+}
+
+const normaliseBidChainValidation = (input: {
+	bid: ParsedBidEvent
+	bidChainLegAmount?: number
+	bidChainValidation?: BidChainValidation
+}): BidChainValidation => {
+	if (input.bidChainValidation) return input.bidChainValidation
+	if (input.bidChainLegAmount !== undefined) {
+		return { ok: true, legAmount: input.bidChainLegAmount }
+	}
+	return {
+		ok: false,
+		detail: `prev_bid=${input.bid.prevBidId} context unavailable for replacement-chain validation`,
+	}
 }
 
 /**

@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
+import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import {
 	deriveVerdict,
 	assignCloseRoles,
@@ -104,8 +105,10 @@ const buildBid = (
 	const locktime = overrides.locktime ?? auction.maxEndAt + auction.settlementGrace
 	const childPubkey = overrides.childPubkey ?? COMPRESSED
 	const refundPubkey = overrides.refundPubkey ?? REFUND_PK
-	const proofYs = overrides.proofYs ?? [PROOF_Y_A]
-	const lockSecrets = overrides.lockSecrets ?? proofYs.map(() => buildLockSecret(childPubkey, locktime, refundPubkey))
+	const proofCount = overrides.lockSecrets?.length ?? overrides.proofYs?.length ?? 1
+	const lockSecrets =
+		overrides.lockSecrets ?? Array.from({ length: proofCount }, () => buildLockSecret(childPubkey, locktime, refundPubkey))
+	const proofYs = overrides.proofYs ?? lockSecrets.map((secret) => hashToCurveHexFromString(secret))
 	return {
 		rawEvent: stubRawEvent(1023, overrides.bidderPubkey ?? BIDDER_A),
 		id: overrides.id ?? '2'.repeat(64),
@@ -143,14 +146,16 @@ const buildBidState = (bid: ParsedBidEvent, observedAt: number, overrides: Parti
 })
 
 const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<ValidatorAuctionState> = {}): ValidatorAuctionState => ({
-	auction,
-	bids: new Map(),
-	settlement: null,
-	pathReleases: new Map(),
-	closeHandled: false,
-	winnerHandled: false,
-	fallbackOfferedAt: null,
-	...overrides,
+	rootAuction: overrides.rootAuction ?? auction,
+	auction: overrides.auction ?? auction,
+	contextStatus: overrides.contextStatus ?? 'active',
+	mintReachability: overrides.mintReachability ?? new Map(auction.mints.map((mintUrl) => [mintUrl, 'reachable' as const])),
+	bids: overrides.bids ?? new Map(),
+	settlement: overrides.settlement ?? null,
+	pathReleases: overrides.pathReleases ?? new Map(),
+	closeHandled: overrides.closeHandled ?? false,
+	winnerHandled: overrides.winnerHandled ?? false,
+	fallbackOfferedAt: overrides.fallbackOfferedAt ?? null,
 })
 
 const buildPathRelease = (bidEventId: string, derivationPath: string, childPubkey: string): ParsedPathReleaseEvent => ({
@@ -185,6 +190,32 @@ describe('deriveVerdict — pre-close', () => {
 		expect(v.claim).toBe('valid_bid_placed')
 	})
 
+	test('rejects replacement-chain cycles before mint state can validate the bid', () => {
+		const auction = buildAuction()
+		const firstBid = buildBid(auction, { id: '2'.repeat(64), amount: 1_100 })
+		const secondBid = buildBid(auction, { id: '3'.repeat(64), amount: 1_200, prevBidId: firstBid.id })
+		const loopedFirstBid = { ...firstBid, prevBidId: secondBid.id }
+
+		const firstBidState = buildBidState(loopedFirstBid, loopedFirstBid.createdAt, { currentClaim: null })
+		const secondBidState = buildBidState(secondBid, secondBid.createdAt, { currentClaim: null })
+		recordNut7State(firstBidState, firstBidState.bid.proofYs[0], 'unspent', firstBidState.observedAt)
+		recordNut7State(secondBidState, secondBidState.bid.proofYs[0], 'unspent', secondBidState.observedAt)
+
+		const auctionState = buildAuctionState(auction, {
+			bids: new Map([
+				[firstBidState.bid.id, firstBidState],
+				[secondBidState.bid.id, secondBidState],
+			]),
+		})
+
+		const verdict = deriveVerdict({ auctionState, bidState: secondBidState, now: secondBidState.observedAt, currentTopBid: 0 })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('replacement_chain_invalid')
+			expect(verdict.detail).toMatch(/cycle detected/)
+		}
+	})
+
 	test('no NUT-7 signal → bid_pending_review', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
@@ -211,12 +242,17 @@ describe('deriveVerdict — pre-close', () => {
 
 	test('multi-proof aggregate — one spent flips the bid invalid', () => {
 		const auction = buildAuction()
-		const bid = buildBid(auction, { proofYs: [PROOF_Y_A, PROOF_Y_B] })
+		const bid = buildBid(auction, {
+			lockSecrets: [
+				buildLockSecret(COMPRESSED, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+				buildLockSecret(COMPRESSED, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+			],
+		})
 		const auctionState = buildAuctionState(auction)
 		const bidState = buildBidState(bid, bid.createdAt)
 		auctionState.bids.set(bid.id, bidState)
-		recordNut7State(bidState, PROOF_Y_A, 'unspent', bid.createdAt)
-		recordNut7State(bidState, PROOF_Y_B, 'spent', bid.createdAt)
+		recordNut7State(bidState, bid.proofYs[0], 'unspent', bid.createdAt)
+		recordNut7State(bidState, bid.proofYs[1], 'spent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
 		expect(v.claim).toBe('bid_invalid')
@@ -225,12 +261,17 @@ describe('deriveVerdict — pre-close', () => {
 
 	test('multi-proof aggregate — all unspent → valid_bid_placed', () => {
 		const auction = buildAuction()
-		const bid = buildBid(auction, { proofYs: [PROOF_Y_A, PROOF_Y_B] })
+		const bid = buildBid(auction, {
+			lockSecrets: [
+				buildLockSecret(COMPRESSED, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+				buildLockSecret(COMPRESSED, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+			],
+		})
 		const auctionState = buildAuctionState(auction)
 		const bidState = buildBidState(bid, bid.createdAt)
 		auctionState.bids.set(bid.id, bidState)
-		recordNut7State(bidState, PROOF_Y_A, 'unspent', bid.createdAt)
-		recordNut7State(bidState, PROOF_Y_B, 'unspent', bid.createdAt)
+		recordNut7State(bidState, bid.proofYs[0], 'unspent', bid.createdAt)
+		recordNut7State(bidState, bid.proofYs[1], 'unspent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
 		expect(v.claim).toBe('valid_bid_placed')

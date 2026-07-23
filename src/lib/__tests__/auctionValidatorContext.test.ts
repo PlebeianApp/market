@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 import { checkMintReachability } from '../cashu/nut7'
-import { collectLiveBids, createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '../../server/auction-validator/state'
+import {
+	collectLiveBids,
+	createValidatorState,
+	setAuctionMintReachability,
+	upsertAuction,
+	upsertBid,
+} from '../../server/auction-validator/state'
 
 const SELLER_PK = 'a'.repeat(64)
 const BIDDER_PK = 'b'.repeat(64)
