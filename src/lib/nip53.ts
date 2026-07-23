@@ -45,24 +45,11 @@ export function deriveLiveActivityStatus(startsAt: number, maxEndAt: number, now
  * If relay activity exists but its status is outside the boundary, the boundary wins.
  */
 export function resolveLiveActivityStatus(
-	relayStatus: LiveActivityStatus | null,
-	startsAt: number,
-	biddingCutoffAt: number,
-	now?: number,
-): LiveActivityStatus {
-	const t = now ?? Math.floor(Date.now() / 1000)
-
-	// Hard boundary: before start → always planned
-	if (startsAt > 0 && t < startsAt) return 'planned'
-
-	// Hard boundary: past bidding cutoff → always ended
-	if (biddingCutoffAt > 0 && t >= biddingCutoffAt) return 'ended'
-
-	// Within bounds: prefer relay status if available
-	if (relayStatus) return relayStatus
-
-	// No relay status: derive from timestamps (we're between start and cutoff)
-	return 'live'
+	cvmStatus: LiveActivityStatus | null,
+): LiveActivityStatus | null {
+	// CVM status is the sole authority. Client does NOT derive from timestamps.
+	// If no CVM event detected, there is no live activity — return null.
+	return cvmStatus
 }
 
 export function parseAuctionCoordFromATag(event: any): string | null {

@@ -45,15 +45,25 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const liveActivity = liveActivityQuery.data
 	const liveActivityCoord = liveActivity?.coord ?? ''
 
-	// Resolve availability through the tested resolver: auction timestamps
-	// are hard boundaries, relay status is only accepted within them.
-	const status = resolveLiveActivityStatus(
-		liveActivity?.status ?? null,
-		startsAt,
-		biddingCutoffAt,
-	)
+	// Status comes directly from CVM - no timestamp overrides
+	const status = liveActivity?.status ?? null
 	const isLive = status === 'live'
 	const canChat = isLive
+
+	// Check for staleness: show warning if activity is older than 2x refetch interval
+	const now = Math.floor(Date.now() / 1000)
+	const isStale = liveActivity && 
+		((liveActivity.createdAt && now - liveActivity.createdAt > liveActivityRefetchMs * 2) ||
+		 (liveActivity.updatedAt && now - liveActivity.updatedAt > liveActivityRefetchMs * 2))
+
+	if (!status) {
+		return (
+			<div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+				<MessageCircle className="h-8 w-8 text-muted-foreground" />
+				<p className="text-sm text-muted-foreground">Live chat not available for this auction</p>
+			</div>
+		)
+	}
 
 	const chatQuery = useLiveChatMessages(liveActivityCoord, isLive)
 	const messages = chatQuery.data ?? []
@@ -142,6 +152,12 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 				<div className="flex items-center gap-2">
 					<div className={`h-2 w-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-zinc-300'}`} />
 					<span className="text-sm font-medium text-zinc-700">Live Chat</span>
+					{isStale && (
+						<div className="ml-2 flex items-center gap-1 rounded bg-yellow-50 px-2 py-1">
+							<div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+							<span className="text-xs text-yellow-700">Chat may be experiencing connectivity issues</span>
+						</div>
+					)}
 				</div>
 				<span className="text-xs text-zinc-400">{messages.length} messages</span>
 			</div>
