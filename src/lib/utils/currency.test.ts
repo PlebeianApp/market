@@ -39,4 +39,18 @@ describe('currency conversion helpers', () => {
 		expect(MempoolService.convertCurrencyToSats({ amount: 5_000, fromCurrency: 'SATS', exchangeRates })).toBe(5_000)
 		expect(MempoolService.convertBetweenCurrencies({ amount: 1, fromCurrency: 'BTC', toCurrency: 'USD', exchangeRates })).toBe(100_000)
 	})
+
+	test('returns NaN when fiat conversion rates are undefined for the selected currency', () => {
+		const result = MempoolService.convertCurrencyToSats({ amount: 25, fromCurrency: 'USD', exchangeRates: undefined })
+		expect(Number.isNaN(result)).toBe(true)
+	})
+
+	test('returns NaN when the selected currency rate is missing from exchange rates', () => {
+		const exchangeRates = {
+			EUR: 90_000,
+		} as Record<string, number>
+
+		const result = MempoolService.convertCurrencyToSats({ amount: 25, fromCurrency: 'USD', exchangeRates })
+		expect(Number.isNaN(result)).toBe(true)
+	})
 })

@@ -14,9 +14,13 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { extractActualContent, isSafeImageUrl } from '@/lib/utils/message-content'
-import { getShippingInfo, shippingOptionByCoordinatesQueryOptions, shippingOptionQueryOptions } from '@/queries/shipping'
+import {
+	getShippingInfo,
+	parseShippingReference,
+	shippingOptionByCoordinatesQueryOptions,
+	shippingOptionQueryOptions,
+} from '@/queries/shipping'
 import { Link } from '@tanstack/react-router'
-import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { formatShippingDisplayText } from '@/lib/utils/productShippingSelections'
 
 // Interface for embedded product event data
@@ -319,25 +323,16 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 	const email = getTagValue(event, 'email')
 	const phone = getTagValue(event, 'phone')
 
-	const parsedShippingData = (() => {
-		if (!shipping) return null
-		if (shipping.includes(':')) {
-			const parts = shipping.split(':')
-			if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
-				return { pubkey: parts[1], dTag: parts[2] }
-			}
-		}
-		return { id: shipping }
-	})()
+	const parsedShippingData = parseShippingReference(shipping || '')
 
 	const { data: shippingOptionByCoordinates } = useQuery({
-		...shippingOptionByCoordinatesQueryOptions(parsedShippingData?.pubkey || '', parsedShippingData?.dTag || ''),
-		enabled: Boolean(parsedShippingData?.pubkey && parsedShippingData?.dTag),
+		...shippingOptionByCoordinatesQueryOptions(parsedShippingData.pubkey || '', parsedShippingData.dTag || ''),
+		enabled: Boolean(parsedShippingData.pubkey && parsedShippingData.dTag),
 	})
 
 	const { data: shippingOptionById } = useQuery({
-		...shippingOptionQueryOptions(parsedShippingData?.id || ''),
-		enabled: Boolean(parsedShippingData?.id && !parsedShippingData?.pubkey),
+		...shippingOptionQueryOptions(parsedShippingData.id || ''),
+		enabled: Boolean(parsedShippingData.id && !parsedShippingData.pubkey),
 	})
 
 	const shippingOption = shippingOptionByCoordinates || shippingOptionById
