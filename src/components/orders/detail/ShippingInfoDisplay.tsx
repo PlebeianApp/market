@@ -8,14 +8,10 @@ interface ShippingInfoDisplayProps {
 		countries?: string[]
 		description?: string
 	}
-	totalAmount?: string | number
 }
 
-export function ShippingInfoDisplay({ shippingInfo, totalAmount }: ShippingInfoDisplayProps) {
-	const costDisplay =
-		totalAmount !== undefined
-			? `${totalAmount} ${shippingInfo.price.currency}`
-			: `${shippingInfo.price.amount} ${shippingInfo.price.currency}`
+export function ShippingInfoDisplay({ shippingInfo }: ShippingInfoDisplayProps) {
+	const costDisplay = `${shippingInfo.price.amount} ${shippingInfo.price.currency}`
 
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 gap-4">

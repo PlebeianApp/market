@@ -101,12 +101,16 @@ export function DetailTab() {
 		// Store the raw input value without formatting
 		setFiatDisplayValue(value)
 
-		// Only convert to sats if we have a valid number
+		// Only convert to sats if we have a valid number and a finite conversion result
 		const numValue = parseFloat(value)
 		if (!isNaN(numValue) && numValue > 0) {
 			const satsValue = convertCurrencyToSatsValue(numValue, currency)
-			// Store both the sats value (for display) and the fiat value (for publishing)
-			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
+			if (Number.isFinite(satsValue)) {
+				// Store both the sats value (for display) and the fiat value (for publishing)
+				productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
+			} else {
+				productFormActions.updateValues({ fiatPrice: value })
+			}
 		} else if (value === '0') {
 			// Set the price to zero if the input is zero
 			productFormActions.updateValues({ price: '0', fiatPrice: '0' })
@@ -184,6 +188,8 @@ export function DetailTab() {
 
 	// Check if radio group should be visible
 	const showRadioGroup = showFiatField
+	const fiatConversionUnavailable =
+		showFiatField && fiatDisplayValue !== '' && !Number.isFinite(convertCurrencyToSatsValue(Number(fiatDisplayValue) || 0, currency))
 
 	// Sync local state from store when store values change (for edit mode)
 	useEffect(() => {
@@ -252,6 +258,9 @@ export function DetailTab() {
 							onChange={(e) => handleFiatPriceChange(e.target.value)}
 							className="w-full"
 						/>
+						{fiatConversionUnavailable && (
+							<p className="text-xs text-amber-600">Exchange rate unavailable for {currency}; enter a sats price or switch currency.</p>
+						)}
 					</div>
 				)}
 
@@ -883,14 +892,19 @@ export function ShippingTab() {
 										)}
 									</div>
 
-									<div className="flex items-center gap-2">
+									<div className="flex flex-col gap-1">
+										<Label htmlFor={`shipping-extra-cost-${index}`} className="text-xs text-muted-foreground">
+											Product-specific extra cost
+											<span className="ml-1">({option?.currency || 'currency'})</span>
+										</Label>
 										<Input
+											id={`shipping-extra-cost-${index}`}
 											type="number"
 											step="0.01"
 											min="0"
 											value={shipping.extraCost}
 											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Add cost specific to this product"
+											placeholder="Extra cost for this product"
 											className="w-40 sm:w-56 md:w-76 text-sm"
 										/>
 									</div>
