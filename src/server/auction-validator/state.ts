@@ -17,6 +17,7 @@
  */
 
 import type { Nut7ProofState, ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
+import { auctionImmutableFieldsMatch } from '../../lib/auction/immutability'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
 
 // ============================================================================
@@ -37,7 +38,9 @@ export interface ProofStateSnapshot {
  * Aggregate of a bid's individual proof states. Worst-case semantics:
  *  - `spent` if ANY proof is spent (pre-settlement → fraudulent).
  *  - `unspent` if ALL proofs are unspent.
- *  - `pending` if no proof is spent and at least one is pending.
+ *  - `missing` if no proof is spent and at least one proof is absent
+ *    from an otherwise successful mint response.
+ *  - `pending` if no proof is spent/missing and at least one is pending.
  *  - `unknown` otherwise (no signal yet for at least one proof).
  */
 export type AggregateProofState = Nut7ProofState
@@ -45,6 +48,7 @@ export type AggregateProofState = Nut7ProofState
 export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, expectedProofYs: string[]): AggregateProofState => {
 	if (!expectedProofYs.length) return 'unknown'
 	let sawPending = false
+	let sawMissing = false
 	let allUnspent = true
 	for (const y of expectedProofYs) {
 		const snap = perProof.get(y.toLowerCase())
@@ -53,10 +57,16 @@ export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, 
 			continue
 		}
 		if (snap.state === 'spent') return 'spent'
+		if (snap.state === 'missing') {
+			sawMissing = true
+			allUnspent = false
+			continue
+		}
 		if (snap.state === 'pending') sawPending = true
 		if (snap.state !== 'unspent') allUnspent = false
 	}
 	if (allUnspent) return 'unspent'
+	if (sawMissing) return 'missing'
 	if (sawPending) return 'pending'
 	return 'unknown'
 }
@@ -90,7 +100,10 @@ export interface ValidatorBidState {
 // ============================================================================
 
 export interface ValidatorAuctionState {
+	rootAuction: ParsedAuctionEvent
 	auction: ParsedAuctionEvent
+	contextStatus: AuctionContextStatus
+	mintReachability: Map<string, MintReachabilityStatus>
 
 	/** bidEventId -> per-bid state. */
 	bids: Map<string, ValidatorBidState>
@@ -121,6 +134,10 @@ export interface ValidatorAuctionState {
 	fallbackOfferedAt: number | null
 }
 
+export type AuctionContextStatus = 'pending_mint_check' | 'active'
+
+export type MintReachabilityStatus = 'reachable' | 'unreachable'
+
 // ============================================================================
 // Top-level state
 // ============================================================================
@@ -142,20 +159,31 @@ export const createValidatorState = (validatorPubkey: string): ValidatorState =>
 	auctions: new Map(),
 })
 
+export interface UpsertAuctionResult {
+	auctionState: ValidatorAuctionState
+	status: 'inserted' | 'updated' | 'rejected_immutable'
+}
+
 /**
  * Register an auction we should track. Idempotent: if the auction is
  * already tracked, update the parsed event (handles re-publish of
  * mutable tags) and return the existing state.
  */
-export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): ValidatorAuctionState => {
+export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): UpsertAuctionResult => {
 	const existing = state.auctions.get(auction.rootEventId)
 	if (existing) {
+		if (!auctionImmutableFieldsMatch(existing.rootAuction.rawEvent, auction.rawEvent)) {
+			return { auctionState: existing, status: 'rejected_immutable' }
+		}
 		// Refresh the parsed event but keep accumulated bid state.
 		existing.auction = auction
-		return existing
+		return { auctionState: existing, status: 'updated' }
 	}
 	const fresh: ValidatorAuctionState = {
+		rootAuction: auction,
 		auction,
+		contextStatus: 'pending_mint_check',
+		mintReachability: new Map(auction.mints.map((mintUrl) => [mintUrl, 'unreachable' as const])),
 		bids: new Map(),
 		settlement: null,
 		pathReleases: new Map(),
@@ -164,7 +192,22 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		fallbackOfferedAt: null,
 	}
 	state.auctions.set(auction.rootEventId, fresh)
-	return fresh
+	return { auctionState: fresh, status: 'inserted' }
+}
+
+export const setAuctionMintReachability = (
+	auctionState: ValidatorAuctionState,
+	reachability: ReadonlyArray<readonly [string, boolean]>,
+): void => {
+	const next = new Map<string, MintReachabilityStatus>()
+	for (const [mintUrl, isReachable] of reachability) {
+		next.set(mintUrl, isReachable ? 'reachable' : 'unreachable')
+	}
+	for (const mintUrl of auctionState.rootAuction.mints) {
+		if (!next.has(mintUrl)) next.set(mintUrl, 'unreachable')
+	}
+	auctionState.mintReachability = next
+	auctionState.contextStatus = Array.from(next.values()).every((status) => status === 'reachable') ? 'active' : 'pending_mint_check'
 }
 
 /**
@@ -272,6 +315,7 @@ export const collectLiveBids = (
 }> => {
 	const out: Array<{ auctionState: ValidatorAuctionState; bidState: ValidatorBidState }> = []
 	for (const auctionState of Array.from(state.auctions.values())) {
+		if (auctionState.contextStatus !== 'active') continue
 		// After settlement_grace expires we don't care about NUT-7
 		// state anymore — the bid has either been settled or the
 		// timelock refund window opened.

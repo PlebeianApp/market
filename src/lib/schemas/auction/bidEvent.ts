@@ -21,10 +21,10 @@
  * event available for cross-reference.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import { AUCTION_BID_KIND, AUCTION_KEY_SCHEME } from '../../auction/constants'
 import type { ParsedBidEvent } from '../../auction/events'
+import type { NostrEventLike } from '../../nostr/eventLike'
 import { addressableCoordinate, compressedPubkeyHex, nostrEventIdHex, nostrPubkeyHex, positiveInt, unixSeconds } from './common'
 import { readMultiTag, readSingleTag } from './tagAccess'
 
@@ -67,12 +67,12 @@ export const BidEventSchema = z
 export type BidEventInput = z.infer<typeof BidEventSchema>
 
 // ----------------------------------------------------------------------------
-// NDKEvent → ParsedBidEvent
+// Raw event → ParsedBidEvent
 // ----------------------------------------------------------------------------
 
 export type ParseBidEventResult = { ok: true; value: ParsedBidEvent } | { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parseBidEvent = (event: NDKEvent): ParseBidEventResult => {
+export const parseBidEvent = (event: NostrEventLike): ParseBidEventResult => {
 	if (event.kind !== AUCTION_BID_KIND) {
 		return { ok: false, error: { code: 'wrong_kind', message: `expected kind ${AUCTION_BID_KIND}, got ${event.kind}` } }
 	}

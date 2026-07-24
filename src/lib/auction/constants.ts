@@ -9,8 +9,6 @@
  * See AUCTIONS.md for the full spec.
  */
 
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
-
 // ---------- Settlement policy --------------------------------------------
 
 /** Value of the auction event's `settlement_policy` tag — see §4.1. */
@@ -28,35 +26,34 @@ export const AUCTION_CURRENCY_SAT = 'SAT'
 // ---------- Nostr event kinds --------------------------------------------
 
 /**
- * Cast helper for Nostr kind constants. NDKFilter's `kinds` array is typed
- * as a union of the built-in NDKKind enum members; our auction kinds aren't
- * members, so we cast through `unknown` to keep filter usage typesafe.
+ * Keep auction kind constants typed as numbers so they work with both
+ * nostr-tools events and relay filter builders without importing NDK.
  */
-type AuctionKind = NonNullable<NDKFilter['kinds']>[number]
+type AuctionKind = number
 
 /** Kind 30408 — auction listing (addressable, seller-signed). §4.1. */
-export const AUCTION_KIND = 30408 as unknown as AuctionKind
+export const AUCTION_KIND = 30408 as AuctionKind
 
 /** Kind 1023 — bid commitment (regular event, bidder-signed). §4.2. */
-export const AUCTION_BID_KIND = 1023 as unknown as AuctionKind
+export const AUCTION_BID_KIND = 1023 as AuctionKind
 
 /** Kind 1024 — settlement (regular event, seller-signed). §4.3.2. */
-export const AUCTION_SETTLEMENT_KIND = 1024 as unknown as AuctionKind
+export const AUCTION_SETTLEMENT_KIND = 1024 as AuctionKind
 
 /** Kind 1025 — path release (regular event, bidder-signed). §4.3.1. */
-export const AUCTION_PATH_RELEASE_KIND = 1025 as unknown as AuctionKind
+export const AUCTION_PATH_RELEASE_KIND = 1025 as AuctionKind
 
 /** Kind 1026 — fallback offer (regular event, seller-signed, optional). §8.3. */
-export const AUCTION_FALLBACK_OFFER_KIND = 1026 as unknown as AuctionKind
+export const AUCTION_FALLBACK_OFFER_KIND = 1026 as AuctionKind
 
 /** Kind 30440 — validator bid verdict (parameterized replaceable). §4.4.1. */
-export const VALIDATOR_VERDICT_KIND = 30440 as unknown as AuctionKind
+export const VALIDATOR_VERDICT_KIND = 30440 as AuctionKind
 
 /** Kind 30441 — validator policy declaration (parameterized replaceable). §4.4.2. */
-export const VALIDATOR_POLICY_KIND = 30441 as unknown as AuctionKind
+export const VALIDATOR_POLICY_KIND = 30441 as AuctionKind
 
 /** Kind 30442 — aggregate bidder reputation (parameterized replaceable, optional). §4.4.4. */
-export const BIDDER_AGGREGATE_REPUTATION_KIND = 30442 as unknown as AuctionKind
+export const BIDDER_AGGREGATE_REPUTATION_KIND = 30442 as AuctionKind
 
 // ---------- Floor / curve / clock tolerances -----------------------------
 
@@ -206,7 +203,7 @@ export const VALIDATOR_REASONS = [
 export type ValidatorReason = (typeof VALIDATOR_REASONS)[number]
 
 /** NUT-7 proof-state values as reported by a Cashu mint. */
-export type Nut7ProofState = 'unspent' | 'pending' | 'spent' | 'unknown'
+export type Nut7ProofState = 'unspent' | 'pending' | 'spent' | 'missing' | 'unknown'
 
 // ---------- Schema markers -----------------------------------------------
 

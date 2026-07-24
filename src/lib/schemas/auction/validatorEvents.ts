@@ -14,7 +14,6 @@
  *   clients can gate at the relationship level rather than per-bid.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
 import {
 	BIDDER_AGGREGATE_REPUTATION_KIND,
@@ -33,6 +32,7 @@ import type {
 	ParsedValidatorVerdictEvent,
 	ValidatorPolicyDocument,
 } from '../../auction/events'
+import type { NostrEventLike } from '../../nostr/eventLike'
 import { addressableCoordinate, nostrEventIdHex, nostrPubkeyHex, unixSeconds } from './common'
 import { readSingleTag } from './tagAccess'
 
@@ -44,7 +44,7 @@ const validatorClaimSchema = z.enum(VALIDATOR_CLAIMS, {
 	message: `claim must be one of: ${VALIDATOR_CLAIMS.join(', ')}`,
 }) satisfies z.ZodType<ValidatorClaim>
 
-const nut7StateSchema = z.enum(['unspent', 'pending', 'spent', 'unknown']) satisfies z.ZodType<Nut7ProofState>
+const nut7StateSchema = z.enum(['unspent', 'pending', 'spent', 'missing', 'unknown']) satisfies z.ZodType<Nut7ProofState>
 
 export const ValidatorVerdictEventSchema = z
 	.object({
@@ -76,7 +76,7 @@ export type ParseValidatorVerdictResult =
 	| { ok: true; value: ParsedValidatorVerdictEvent }
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parseValidatorVerdictEvent = (event: NDKEvent): ParseValidatorVerdictResult => {
+export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidatorVerdictResult => {
 	if (event.kind !== VALIDATOR_VERDICT_KIND) {
 		return {
 			ok: false,
@@ -147,7 +147,7 @@ export type ParseValidatorPolicyResult =
 	| { ok: true; value: ParsedValidatorPolicyEvent }
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parseValidatorPolicyEvent = (event: NDKEvent): ParseValidatorPolicyResult => {
+export const parseValidatorPolicyEvent = (event: NostrEventLike): ParseValidatorPolicyResult => {
 	if (event.kind !== VALIDATOR_POLICY_KIND) {
 		return {
 			ok: false,
@@ -210,7 +210,7 @@ export type ParseBidderAggregateResult =
 	| { ok: true; value: ParsedBidderAggregateReputationEvent }
 	| { ok: false; error: z.ZodError | { message: string; code: string } }
 
-export const parseBidderAggregateEvent = (event: NDKEvent): ParseBidderAggregateResult => {
+export const parseBidderAggregateEvent = (event: NostrEventLike): ParseBidderAggregateResult => {
 	if (event.kind !== BIDDER_AGGREGATE_REPUTATION_KIND) {
 		return {
 			ok: false,

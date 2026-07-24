@@ -24,13 +24,14 @@
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { NostrEvent } from 'nostr-tools'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { verifyEvent } from 'nostr-tools'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../../lib/auction/constants'
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { refreshAuctionMintReachability } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 
 export interface ValidatorSubscriberDeps {
@@ -73,8 +74,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseAuctionEvent(ndkEvent)
+		if (!verifyEvent(raw)) {
+			logger.warn(`[validator] dropping auction with invalid signature ${raw.id.slice(0, 8)}`)
+			return
+		}
+
+		const parsed = parseAuctionEvent(raw)
 		if (!parsed.ok) {
 			// Common case: an auction event that isn't compliant with the
 			// new scheme (missing `auditors`, wrong settlement_policy etc.).
@@ -88,18 +93,32 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
-		const isNew = !deps.state.auctions.has(auction.rootEventId)
-		upsertAuction(deps.state, auction)
-		if (isNew) {
+		const existing = deps.state.auctions.get(auction.rootEventId)
+		const wasActive = existing?.contextStatus === 'active'
+		const result = upsertAuction(deps.state, auction)
+		if (result.status === 'rejected_immutable') {
+			logger.warn(`[validator] rejecting immutable auction update ${auction.rootEventId.slice(0, 8)}`)
+			return
+		}
+
+		const isActive = await refreshAuctionMintReachability(result.auctionState)
+		if (!isActive) {
+			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} pending mint reachability`)
+			return
+		}
+
+		const shouldDrain = result.status === 'inserted' || !wasActive
+		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
+		}
+		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
 		}
 	}
 
 	const onBidEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseBidEvent(ndkEvent)
+		const parsed = parseBidEvent(raw)
 		if (!parsed.ok) {
 			// Malformed bid → ignore. (Hostile bidders publishing bad
 			// events shouldn't crash the validator; a stricter mode could
@@ -112,6 +131,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it when the auction shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
+			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
+			existing.push(raw)
+			pendingBids.set(bid.auctionRootEventId, existing)
+			return
+		}
+
+		const trackedAuction = deps.state.auctions.get(bid.auctionRootEventId)
+		if (!trackedAuction || trackedAuction.contextStatus !== 'active') {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
 			existing.push(raw)
 			pendingBids.set(bid.auctionRootEventId, existing)
@@ -134,8 +161,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parsePathReleaseEvent(ndkEvent)
+		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
 
@@ -166,8 +192,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseSettlementEvent(ndkEvent)
+		const parsed = parseSettlementEvent(raw)
 		if (!parsed.ok) return
 		const settlement = parsed.value
 
@@ -294,23 +319,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 // ============================================================================
 // Internal helpers
 // ============================================================================
-
-const toNdkEvent = (raw: NostrEvent): NDKEvent => {
-	// The NDKEvent constructor accepts a plain Nostr event object via
-	// `new NDKEvent(undefined, raw)` but our parsers only touch
-	// `kind`, `pubkey`, `id`, `created_at`, `content`, `tags` — so a
-	// minimal-construct + assignment is enough and avoids dragging in
-	// an NDK instance.
-	const e = new NDKEvent()
-	e.kind = raw.kind as unknown as number
-	e.pubkey = raw.pubkey
-	e.content = raw.content
-	e.tags = raw.tags
-	e.id = raw.id
-	e.created_at = raw.created_at
-	if (raw.sig) e.sig = raw.sig
-	return e
-}
 
 // The auction kind constants are typed as a strict union of NDKKind
 // values; widen back to number for nostr-tools filter shape.

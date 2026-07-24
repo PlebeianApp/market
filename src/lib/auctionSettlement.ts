@@ -1,14 +1,13 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from './nostr/eventLike'
 import {
 	AUCTION_BID_KIND,
-	AUCTION_IMMUTABLE_MULTI_TAGS,
-	AUCTION_IMMUTABLE_SINGLE_TAGS,
 	AUCTION_KIND,
 	AUCTION_ROOT_EVENT_ID_TAG,
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
 } from './auction/constants'
+import { auctionImmutableFieldsMatch as compareAuctionImmutableFields } from './auction/immutability'
 
 // Re-export the constants that used to live here so downstream callers
 // don't have to chase the move. The canonical definitions are in
@@ -28,13 +27,13 @@ export type AuctionExtensionRule =
 
 export type AuctionBidChainGroup = {
 	bidderPubkey: string
-	latestBid: NDKEvent
-	chain: NDKEvent[]
+	latestBid: NostrEventLike
+	chain: NostrEventLike[]
 }
 
 export interface ResolvedAuctionVersionSet {
-	rootEvent: NDKEvent
-	displayEvent: NDKEvent
+	rootEvent: NostrEventLike
+	displayEvent: NostrEventLike
 	rootEventId: string
 	rejectedEventIds: string[]
 }
@@ -44,8 +43,9 @@ export interface ResolvedAuctionVersionSet {
 // bidder-held-path scheme settles directly on-mint after the bidder
 // publishes kind-1025; there's no plan envelope to type.
 
-export const getAuctionTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
-export const getAuctionTagValues = (event: NDKEvent, tagName: string): string[] =>
+export const getAuctionTagValue = (event: NostrEventLike, tagName: string): string =>
+	event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
+export const getAuctionTagValues = (event: NostrEventLike, tagName: string): string[] =>
 	event.tags.filter((tag) => tag[0] === tagName && !!tag[1]).map((tag) => tag[1] || '')
 
 export const parseAuctionNonNegativeInt = (value?: string, fallback: number = 0): number => {
@@ -53,7 +53,7 @@ export const parseAuctionNonNegativeInt = (value?: string, fallback: number = 0)
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-export const getAuctionBidAmount = (bidEvent: NDKEvent): number => {
+export const getAuctionBidAmount = (bidEvent: NostrEventLike): number => {
 	const amountTag = getAuctionTagValue(bidEvent, 'amount')
 	if (amountTag) return parseAuctionNonNegativeInt(amountTag, 0)
 
@@ -65,17 +65,18 @@ export const getAuctionBidAmount = (bidEvent: NDKEvent): number => {
 	}
 }
 
-export const getAuctionBidStatus = (bidEvent: NDKEvent): string => getAuctionTagValue(bidEvent, 'status') || 'unknown'
+export const getAuctionBidStatus = (bidEvent: NostrEventLike): string => getAuctionTagValue(bidEvent, 'status') || 'unknown'
 
-export const getAuctionReserveAmount = (auctionEvent: NDKEvent): number =>
+export const getAuctionReserveAmount = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'reserve'), 0)
 
-export const getAuctionStartAt = (auctionEvent: NDKEvent): number =>
+export const getAuctionStartAt = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'start_at'), 0)
-export const getAuctionEndAt = (auctionEvent: NDKEvent): number => parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'end_at'), 0)
-export const getAuctionMaxEndAt = (auctionEvent: NDKEvent): number =>
+export const getAuctionEndAt = (auctionEvent: NostrEventLike): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'end_at'), 0)
+export const getAuctionMaxEndAt = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'max_end_at'), 0)
-export const getAuctionBiddingCutoffAt = (auctionEvent: NDKEvent): number => {
+export const getAuctionBiddingCutoffAt = (auctionEvent: NostrEventLike): number => {
 	const endAt = getAuctionEndAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
 
@@ -89,7 +90,7 @@ export const getAuctionBiddingCutoffAt = (auctionEvent: NDKEvent): number => {
  * the bid's Cashu locktime — see AUCTIONS.md §4.1 / §6.0). Auctions are
  * required to emit this; a 0 fallback signals a malformed (legacy) event.
  */
-export const getAuctionSettlementGrace = (auctionEvent: NDKEvent): number =>
+export const getAuctionSettlementGrace = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'settlement_grace'), 0)
 
 /**
@@ -106,10 +107,10 @@ export const getAuctionSettlementGrace = (auctionEvent: NDKEvent): number =>
  */
 export const BID_FLOOR_TIME_GRACE_SECONDS = 5
 
-export const getAuctionStartingBid = (auctionEvent: NDKEvent): number =>
+export const getAuctionStartingBid = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'starting_bid'), 0)
 
-export const getAuctionBidIncrement = (auctionEvent: NDKEvent): number =>
+export const getAuctionBidIncrement = (auctionEvent: NostrEventLike): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'bid_increment'), 0)
 
 export type AuctionMinBidCurveShape = 'none' | 'linear' | 'exponential'
@@ -140,7 +141,7 @@ const parseMinBidCurvePeak = (value: string): number => {
  * tags so callers can treat "no curve" as the safe default: floor stays
  * flat through the whole bidding window. See AUCTIONS.md §4.1 / §6.1.
  */
-export const getAuctionMinBidCurve = (auctionEvent: NDKEvent): AuctionMinBidCurve => {
+export const getAuctionMinBidCurve = (auctionEvent: NostrEventLike): AuctionMinBidCurve => {
 	const raw = getAuctionTagValue(auctionEvent, 'min_bid_curve')
 	if (!raw) return { shape: 'none', peakMultiplier: 1, raw: '' }
 	const [shapeRaw, peakRaw] = raw.split(':')
@@ -173,7 +174,7 @@ export const getAuctionMinBidCurve = (auctionEvent: NDKEvent): AuctionMinBidCurv
  * Returns a positive integer (rounded up — bidder must pay at least the
  * computed floor; rounding down would let bidders shave a sat off).
  */
-export const computeAuctionBidFloor = (auctionEvent: NDKEvent, topBid: number, atSeconds: number): number => {
+export const computeAuctionBidFloor = (auctionEvent: NostrEventLike, topBid: number, atSeconds: number): number => {
 	const endAt = getAuctionEndAt(auctionEvent)
 	const maxEndAt = getAuctionMaxEndAt(auctionEvent) || endAt
 	const startingBid = getAuctionStartingBid(auctionEvent)
@@ -217,17 +218,14 @@ export const computeAuctionFloorMultiplier = (params: {
 	// exponential
 	return Math.pow(peakMultiplier, tNorm)
 }
-export const getAuctionRootEventId = (auctionEvent: NDKEvent): string =>
+export const getAuctionRootEventId = (auctionEvent: NostrEventLike): string =>
 	getAuctionTagValue(auctionEvent, AUCTION_ROOT_EVENT_ID_TAG) || auctionEvent.id
-export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {
+export const getAuctionCoordinate = (auctionEvent: NostrEventLike): string => {
 	const dTag = getAuctionTagValue(auctionEvent, 'd')
 	return dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
 }
 
-const normalizeComparableValueList = (values: string[]): string[] =>
-	Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right))
-
-export const getAuctionExtensionRule = (auctionEvent: NDKEvent): AuctionExtensionRule => {
+export const getAuctionExtensionRule = (auctionEvent: NostrEventLike): AuctionExtensionRule => {
 	const raw = getAuctionTagValue(auctionEvent, 'extension_rule') || 'none'
 	if (raw === 'none') return { kind: 'none', raw }
 
@@ -245,29 +243,15 @@ export const getAuctionExtensionRule = (auctionEvent: NDKEvent): AuctionExtensio
 		extensionSeconds,
 	}
 }
+export const auctionImmutableFieldsMatch = compareAuctionImmutableFields
 
-export const auctionImmutableFieldsMatch = (rootEvent: NDKEvent, candidateEvent: NDKEvent): boolean => {
-	for (const tagName of AUCTION_IMMUTABLE_SINGLE_TAGS) {
-		if (getAuctionTagValue(rootEvent, tagName) !== getAuctionTagValue(candidateEvent, tagName)) return false
-	}
-
-	for (const tagName of AUCTION_IMMUTABLE_MULTI_TAGS) {
-		const rootValues = normalizeComparableValueList(getAuctionTagValues(rootEvent, tagName))
-		const candidateValues = normalizeComparableValueList(getAuctionTagValues(candidateEvent, tagName))
-		if (rootValues.length !== candidateValues.length) return false
-		if (rootValues.some((value, index) => value !== candidateValues[index])) return false
-	}
-
-	return true
-}
-
-export const compareAuctionPublishedOrderAscending = (left: NDKEvent, right: NDKEvent): number => {
+export const compareAuctionPublishedOrderAscending = (left: NostrEventLike, right: NostrEventLike): number => {
 	const createdAtDelta = (left.created_at || 0) - (right.created_at || 0)
 	if (createdAtDelta !== 0) return createdAtDelta
 	return left.id.localeCompare(right.id)
 }
 
-export const resolveAuctionVersionSet = (events: NDKEvent[]): ResolvedAuctionVersionSet | null => {
+export const resolveAuctionVersionSet = (events: NostrEventLike[]): ResolvedAuctionVersionSet | null => {
 	if (!events.length) return null
 
 	const sorted = [...events].sort(compareAuctionPublishedOrderAscending)
@@ -290,13 +274,13 @@ export const resolveAuctionVersionSet = (events: NDKEvent[]): ResolvedAuctionVer
 	}
 }
 
-export const compareAuctionBidChronologyAscending = (left: NDKEvent, right: NDKEvent): number => {
+export const compareAuctionBidChronologyAscending = (left: NostrEventLike, right: NostrEventLike): number => {
 	const createdAtDelta = (left.created_at || 0) - (right.created_at || 0)
 	if (createdAtDelta !== 0) return createdAtDelta
 	return left.id.localeCompare(right.id)
 }
 
-export const getAuctionEffectiveEndAt = (auctionEvent: NDKEvent, bids: NDKEvent[]): number => {
+export const getAuctionEffectiveEndAt = (auctionEvent: NostrEventLike, bids: NostrEventLike[]): number => {
 	const nominalEndAt = getAuctionEndAt(auctionEvent)
 	if (!nominalEndAt) return 0
 
@@ -327,7 +311,7 @@ export const getAuctionEffectiveEndAt = (auctionEvent: NDKEvent, bids: NDKEvent[
 	return effectiveEndAt
 }
 
-export const getAuctionBidAcceptanceEndAt = (auctionEvent: NDKEvent, bids: NDKEvent[]): number => {
+export const getAuctionBidAcceptanceEndAt = (auctionEvent: NostrEventLike, bids: NostrEventLike[]): number => {
 	const extensionRule = getAuctionExtensionRule(auctionEvent)
 
 	if (extensionRule.kind === 'anti_sniping') {
@@ -337,7 +321,7 @@ export const getAuctionBidAcceptanceEndAt = (auctionEvent: NDKEvent, bids: NDKEv
 	return getAuctionBiddingCutoffAt(auctionEvent)
 }
 
-export const getAuctionWindowValidBids = (auctionEvent: NDKEvent, bids: NDKEvent[]): NDKEvent[] => {
+export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: NostrEventLike[]): NostrEventLike[] => {
 	const auctionRootEventId = getAuctionRootEventId(auctionEvent)
 	const startAt = getAuctionStartAt(auctionEvent)
 	const acceptanceEndAt = getAuctionBidAcceptanceEndAt(auctionEvent, bids)
@@ -351,13 +335,13 @@ export const getAuctionWindowValidBids = (auctionEvent: NDKEvent, bids: NDKEvent
 	})
 }
 
-export const getAuctionCurrentPrice = (auctionEvent: NDKEvent, bids: NDKEvent[], startingBid: number = 0): number =>
+export const getAuctionCurrentPrice = (auctionEvent: NostrEventLike, bids: NostrEventLike[], startingBid: number = 0): number =>
 	getAuctionWindowValidBids(auctionEvent, bids).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
 
-export const collectAuctionBidChain = (latestBid: NDKEvent, bidById: Map<string, NDKEvent>): NDKEvent[] => {
-	const chain: NDKEvent[] = []
+export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<string, NostrEventLike>): NostrEventLike[] => {
+	const chain: NostrEventLike[] = []
 	const seen = new Set<string>()
-	let current: NDKEvent | undefined = latestBid
+	let current: NostrEventLike | undefined = latestBid
 
 	while (current && !seen.has(current.id)) {
 		chain.unshift(current)
@@ -374,8 +358,8 @@ export const collectAuctionBidChain = (latestBid: NDKEvent, bidById: Map<string,
 	return chain
 }
 
-export const buildActiveAuctionBidChains = (bids: NDKEvent[]): AuctionBidChainGroup[] => {
-	const latestByBidder = new Map<string, NDKEvent>()
+export const buildActiveAuctionBidChains = (bids: NostrEventLike[]): AuctionBidChainGroup[] => {
+	const latestByBidder = new Map<string, NostrEventLike>()
 
 	for (const bid of bids) {
 		if (!ACTIVE_AUCTION_BID_STATUSES.has(getAuctionBidStatus(bid))) continue
