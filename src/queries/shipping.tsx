@@ -1,5 +1,6 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { HEX_KEYS_REGEX } from '@/lib/constants'
 import { ndkActions } from '@/lib/stores/ndk'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
@@ -112,6 +113,12 @@ export const fetchShippingOption = async (id: string) => {
 	if (!event) {
 		throw new Error('Shipping option not found')
 	}
+	if (event.kind !== SHIPPING_KIND) {
+		throw new Error('Shipping option kind mismatch')
+	}
+	if (event.id !== id) {
+		throw new Error('Shipping option identity mismatch')
+	}
 
 	return event
 }
@@ -131,6 +138,16 @@ export const fetchShippingOptionByCoordinates = async (pubkey: string, dTag: str
 
 	if (!event) {
 		throw new Error('Shipping option not found')
+	}
+	if (event.kind !== SHIPPING_KIND) {
+		throw new Error('Shipping option kind mismatch')
+	}
+	if (event.pubkey !== pubkey) {
+		throw new Error('Shipping option pubkey mismatch')
+	}
+	const eventDTag = event.tags.find((t) => t[0] === 'd')?.[1]
+	if (eventDTag !== dTag) {
+		throw new Error('Shipping option d-tag mismatch')
 	}
 
 	return event
@@ -156,6 +173,8 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 
 // --- REACT QUERY OPTIONS ---
 
+const SHIPPING_OPTION_DETAIL_STALE_TIME_MS = 300000
+
 /**
  * React Query options for fetching a single shipping option
  * @param id Shipping option ID
@@ -165,6 +184,7 @@ export const shippingOptionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: shippingKeys.details(id),
 		queryFn: () => fetchShippingOption(id),
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 /**
@@ -177,6 +197,7 @@ export const shippingOptionByCoordinatesQueryOptions = (pubkey: string, dTag: st
 	queryOptions({
 		queryKey: shippingKeys.byCoordinates(pubkey, dTag),
 		queryFn: () => fetchShippingOptionByCoordinates(pubkey, dTag),
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 /**
@@ -196,7 +217,7 @@ export const shippingOptionsByPubkeyQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: shippingKeys.byPubkey(pubkey),
 		queryFn: () => fetchShippingOptionsByPubkey(pubkey),
-		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
+		staleTime: SHIPPING_OPTION_DETAIL_STALE_TIME_MS,
 	})
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
@@ -409,21 +430,39 @@ export const createShippingReference = (pubkey: string, id: string): string => {
 	return `${SHIPPING_KIND}:${pubkey}:${id}`
 }
 
+export type ParsedShippingReference = {
+	kind?: number
+	pubkey?: string
+	dTag?: string
+	id?: string
+}
+
 /**
- * Parses a shipping reference to extract the event ID
- * @param reference The shipping reference (either composite "30406:pubkey:id" or direct ID)
- * @returns The event ID (d tag value)
+ * Parses a shipping reference using the shared addressable coordinate format.
+ * Supports: "30406:pubkey:d-tag" with a full non-empty remainder as d-tag,
+ * and a legacy direct event-id path only when the identifier is a validated 64-hex event ID.
  */
-export const parseShippingReference = (reference: string): string => {
-	// If it's a composite reference (contains colons), extract the ID part
-	if (reference.includes(':')) {
-		const parts = reference.split(':')
-		if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
-			return parts[2] // Return the ID part
+export const parseShippingReference = (reference: string): ParsedShippingReference => {
+	const trimmed = reference.trim()
+	if (!trimmed) return {}
+
+	if (trimmed.includes(':')) {
+		const [kindPart, pubkeyPart, ...dTagParts] = trimmed.split(':')
+		const dTag = dTagParts.join(':').trim()
+		if (kindPart === SHIPPING_KIND.toString() && HEX_KEYS_REGEX.test(pubkeyPart ?? '') && dTag.length > 0) {
+			return {
+				kind: SHIPPING_KIND,
+				pubkey: pubkeyPart,
+				dTag,
+			}
 		}
 	}
-	// Otherwise, assume it's already a direct ID
-	return reference
+
+	if (HEX_KEYS_REGEX.test(trimmed)) {
+		return { id: trimmed }
+	}
+
+	return {}
 }
 
 export type ShippingUpdateParams = {
