@@ -63,9 +63,25 @@ describe('notification store scoped last-seen behavior', () => {
 				'auction-b': 3,
 			},
 			unseenAuctionComments: 4,
+			unseenAuctionCommentsByAuction: {
+				'auction-a': 1,
+				'auction-b': 3,
+			},
 			unseenAuctionEventComments: 3,
+			unseenAuctionEventCommentsByAuction: {
+				'auction-a': 1,
+				'auction-b': 2,
+			},
 			unseenAuctionLive: 2,
+			unseenAuctionLiveByAuction: {
+				'auction-a': 1,
+				'auction-b': 1,
+			},
 			unseenAuctionSettlementBegins: 2,
+			unseenAuctionSettlementBeginsByAuction: {
+				'auction-a': 1,
+				'auction-b': 1,
+			},
 			lastSeenTimestamps: {
 				...state.lastSeenTimestamps,
 				auctionBids: 100,
@@ -82,10 +98,10 @@ describe('notification store scoped last-seen behavior', () => {
 		}))
 
 		notificationActions.markAuctionBidsSeen('auction-a')
-		notificationActions.markAuctionCommentsSeen('auction-a', 1)
-		notificationActions.markAuctionEventCommentsSeen('auction-a', 1)
-		notificationActions.markAuctionLiveSeen('auction-a', 1)
-		notificationActions.markAuctionSettlementBeginsSeen('auction-a', 1)
+		notificationActions.markAuctionCommentsSeen('auction-a')
+		notificationActions.markAuctionEventCommentsSeen('auction-a')
+		notificationActions.markAuctionLiveSeen('auction-a')
+		notificationActions.markAuctionSettlementBeginsSeen('auction-a')
 
 		expect(notificationStore.state.unseenAuctionBids).toBe(3)
 		expect(notificationStore.state.unseenAuctionBidsByAuction).toEqual({
@@ -93,9 +109,25 @@ describe('notification store scoped last-seen behavior', () => {
 			'auction-b': 3,
 		})
 		expect(notificationStore.state.unseenAuctionComments).toBe(3)
+		expect(notificationStore.state.unseenAuctionCommentsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 3,
+		})
 		expect(notificationStore.state.unseenAuctionEventComments).toBe(2)
+		expect(notificationStore.state.unseenAuctionEventCommentsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 2,
+		})
 		expect(notificationStore.state.unseenAuctionLive).toBe(1)
+		expect(notificationStore.state.unseenAuctionLiveByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 1,
+		})
 		expect(notificationStore.state.unseenAuctionSettlementBegins).toBe(1)
+		expect(notificationStore.state.unseenAuctionSettlementBeginsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 1,
+		})
 
 		expect(notificationStore.state.lastSeenTimestamps.auctionBids).toBe(100)
 		expect(notificationStore.state.lastSeenTimestamps.auctionComments).toBe(101)
@@ -169,6 +201,10 @@ describe('notification store scoped last-seen behavior', () => {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenProductComments: 3,
+			unseenProductCommentsByProduct: {
+				'product-a': 2,
+				'product-b': 1,
+			},
 			lastSeenTimestamps: {
 				...state.lastSeenTimestamps,
 				productComments: 50,
@@ -178,9 +214,13 @@ describe('notification store scoped last-seen behavior', () => {
 			},
 		}))
 
-		notificationActions.markProductCommentsSeen('product-a', 2)
+		notificationActions.markProductCommentsSeen('product-a')
 
 		expect(notificationStore.state.unseenProductComments).toBe(1)
+		expect(notificationStore.state.unseenProductCommentsByProduct).toEqual({
+			'product-a': 0,
+			'product-b': 1,
+		})
 		expect(notificationStore.state.lastSeenTimestamps.productComments).toBe(50)
 		expect(notificationStore.state.lastSeenTimestamps.productCommentsByProduct).toEqual({
 			'product-a': fakeNowSeconds,
@@ -270,5 +310,118 @@ describe('notification store scoped last-seen behavior', () => {
 			'auction-b': 2,
 		})
 		expect(notificationStore.state.unseenAuctionBids).toBe(3)
+	})
+
+	test('recalculate derives every unseen aggregate from its canonical scoped counts map', () => {
+		notificationActions.recalculateFromEvents({
+			orderCount: 0,
+			messageCount: 0,
+			purchaseCount: 0,
+			conversationCounts: {},
+			auctionBidCountsByAuction: { 'auction-a': 1 },
+			auctionCommentCountsByAuction: { 'auction-a': 2, 'auction-b': 1 },
+			auctionEventCommentCountsByAuction: { 'auction-a': 3 },
+			productCommentCountsByProduct: { 'product-a': 1, 'product-b': 4 },
+			auctionLiveCountsByAuction: { 'auction-a': 1, 'auction-b': 1, 'auction-c': 1 },
+			auctionSettlementBeginsCountsByAuction: { 'auction-a': 2 },
+		})
+
+		expect(notificationStore.state.unseenAuctionBidsByAuction).toEqual({ 'auction-a': 1 })
+		expect(notificationStore.state.unseenAuctionBids).toBe(1)
+
+		expect(notificationStore.state.unseenAuctionCommentsByAuction).toEqual({
+			'auction-a': 2,
+			'auction-b': 1,
+		})
+		expect(notificationStore.state.unseenAuctionComments).toBe(3)
+
+		expect(notificationStore.state.unseenAuctionEventCommentsByAuction).toEqual({ 'auction-a': 3 })
+		expect(notificationStore.state.unseenAuctionEventComments).toBe(3)
+
+		expect(notificationStore.state.unseenProductCommentsByProduct).toEqual({
+			'product-a': 1,
+			'product-b': 4,
+		})
+		expect(notificationStore.state.unseenProductComments).toBe(5)
+
+		expect(notificationStore.state.unseenAuctionLiveByAuction).toEqual({
+			'auction-a': 1,
+			'auction-b': 1,
+			'auction-c': 1,
+		})
+		expect(notificationStore.state.unseenAuctionLive).toBe(3)
+
+		expect(notificationStore.state.unseenAuctionSettlementBeginsByAuction).toEqual({ 'auction-a': 2 })
+		expect(notificationStore.state.unseenAuctionSettlementBegins).toBe(2)
+	})
+
+	test('scoped increment records the per-key count and keeps the global as the sum of scoped counts', () => {
+		notificationActions.incrementUnseenAuctionComments('auction-a')
+		notificationActions.incrementUnseenAuctionComments('auction-a')
+		notificationActions.incrementUnseenAuctionComments('auction-b')
+
+		expect(notificationStore.state.unseenAuctionCommentsByAuction).toEqual({
+			'auction-a': 2,
+			'auction-b': 1,
+		})
+		expect(notificationStore.state.unseenAuctionComments).toBe(3)
+
+		notificationActions.incrementUnseenProductComments('product-a')
+		notificationActions.incrementUnseenProductComments('product-b')
+		notificationActions.incrementUnseenProductComments('product-b')
+
+		expect(notificationStore.state.unseenProductCommentsByProduct).toEqual({
+			'product-a': 1,
+			'product-b': 2,
+		})
+		expect(notificationStore.state.unseenProductComments).toBe(3)
+
+		notificationActions.incrementUnseenAuctionEventComments('auction-a')
+		expect(notificationStore.state.unseenAuctionEventCommentsByAuction).toEqual({ 'auction-a': 1 })
+		expect(notificationStore.state.unseenAuctionEventComments).toBe(1)
+
+		notificationActions.incrementUnseenAuctionLive('auction-a')
+		expect(notificationStore.state.unseenAuctionLiveByAuction).toEqual({ 'auction-a': 1 })
+		expect(notificationStore.state.unseenAuctionLive).toBe(1)
+
+		notificationActions.incrementUnseenAuctionSettlementBegins('auction-a')
+		expect(notificationStore.state.unseenAuctionSettlementBeginsByAuction).toEqual({ 'auction-a': 1 })
+		expect(notificationStore.state.unseenAuctionSettlementBegins).toBe(1)
+	})
+
+	test('marking one auction seen zeroes only its scoped entry and leaves siblings untouched', () => {
+		notificationActions.incrementUnseenAuctionComments('auction-a')
+		notificationActions.incrementUnseenAuctionComments('auction-a')
+		notificationActions.incrementUnseenAuctionComments('auction-b')
+
+		notificationActions.markAuctionCommentsSeen('auction-a')
+
+		expect(notificationStore.state.unseenAuctionCommentsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 1,
+		})
+		expect(notificationStore.state.unseenAuctionComments).toBe(1)
+
+		// Sibling entry is still incrementable after the targeted clear.
+		notificationActions.incrementUnseenAuctionComments('auction-b')
+		expect(notificationStore.state.unseenAuctionCommentsByAuction).toEqual({
+			'auction-a': 0,
+			'auction-b': 2,
+		})
+		expect(notificationStore.state.unseenAuctionComments).toBe(2)
+	})
+
+	test('marking one product seen zeroes only its scoped entry and leaves siblings untouched', () => {
+		notificationActions.incrementUnseenProductComments('product-a')
+		notificationActions.incrementUnseenProductComments('product-a')
+		notificationActions.incrementUnseenProductComments('product-b')
+
+		notificationActions.markProductCommentsSeen('product-a')
+
+		expect(notificationStore.state.unseenProductCommentsByProduct).toEqual({
+			'product-a': 0,
+			'product-b': 1,
+		})
+		expect(notificationStore.state.unseenProductComments).toBe(1)
 	})
 })

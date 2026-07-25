@@ -385,7 +385,7 @@ export const useNotificationMonitor = () => {
 			if (startAt > notificationActions.getLastSeenAuctionLive(auctionKey)) {
 				scheduleAt(startAt, scheduledAuctionLiveKeys, () => {
 					console.log('[NotificationMonitor] Seller auction went live:', auction.id)
-					notificationActions.incrementUnseenAuctionLive()
+					notificationActions.incrementUnseenAuctionLive(auctionKey)
 				})
 			}
 
@@ -393,7 +393,7 @@ export const useNotificationMonitor = () => {
 			if (biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)) {
 				scheduleAt(biddingCutoffAt, scheduledAuctionSettlementKeys, () => {
 					console.log('[NotificationMonitor] Seller auction entered settlement:', auction.id)
-					notificationActions.incrementUnseenAuctionSettlementBegins()
+					notificationActions.incrementUnseenAuctionSettlementBegins(auctionKey)
 				})
 			}
 		}
@@ -589,19 +589,57 @@ export const useNotificationMonitor = () => {
 					return event.pubkey !== user.pubkey && isNewProductComment(event, productKey)
 				})
 
+				const auctionCommentCountsByAuction = newSellerLiveChatEvents.reduce<Record<string, number>>((counts, event) => {
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A']), [sellerAuctionKeyByLiveActivityCoordinate])
+					if (!auctionKey) return counts
+					counts[auctionKey] = (counts[auctionKey] || 0) + 1
+					return counts
+				}, {})
+
+				const auctionEventCommentCountsByAuction = newSellerAuctionCommentEvents.reduce<Record<string, number>>((counts, event) => {
+					const auctionKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerAuctionKeyByCoordinate,
+						sellerAuctionKeyByRootEventId,
+					])
+					if (!auctionKey) return counts
+					counts[auctionKey] = (counts[auctionKey] || 0) + 1
+					return counts
+				}, {})
+
+				const productCommentCountsByProduct = newSellerProductCommentEvents.reduce<Record<string, number>>((counts, event) => {
+					const productKey = resolveScopedKeyFromLookups(getTagValues(event, ['a', 'A', 'e', 'E']), [
+						sellerProductKeyByCoordinate,
+						sellerProductKeyByEventId,
+					])
+					if (!productKey) return counts
+					counts[productKey] = (counts[productKey] || 0) + 1
+					return counts
+				}, {})
+
+				const auctionLiveCountsByAuction: Record<string, number> = {}
 				const unseenAuctionLiveCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
 					const startAt = getAuctionStartAt(auction)
-					return (
-						startAt > notificationActions.getLastSeenAuctionLive(getAuctionNotificationKey(auction)) && startAt <= initializationStartedAt
-					)
+					const matches =
+						startAt > notificationActions.getLastSeenAuctionLive(auctionKey) && startAt <= initializationStartedAt
+					if (matches && auctionKey) {
+						auctionLiveCountsByAuction[auctionKey] = (auctionLiveCountsByAuction[auctionKey] || 0) + 1
+					}
+					return matches
 				}).length
 
+				const auctionSettlementBeginsCountsByAuction: Record<string, number> = {}
 				const unseenAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
+					const auctionKey = getAuctionNotificationKey(auction)
 					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-					return (
-						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(getAuctionNotificationKey(auction)) &&
+					const matches =
+						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey) &&
 						biddingCutoffAt <= initializationStartedAt
-					)
+					if (matches && auctionKey) {
+						auctionSettlementBeginsCountsByAuction[auctionKey] =
+							(auctionSettlementBeginsCountsByAuction[auctionKey] || 0) + 1
+					}
+					return matches
 				}).length
 
 				const ownBidEvents = await fetchAuctionBidsByBidder(user.pubkey, 500)
@@ -660,11 +698,14 @@ export const useNotificationMonitor = () => {
 					if (!auctionKey) return false
 
 					const startAt = getAuctionStartAt(auction)
-					return (
+					const matches =
 						startAt > initializationStartedAt &&
 						startAt <= initializationCompletedAt &&
 						startAt > notificationActions.getLastSeenAuctionLive(auctionKey)
-					)
+					if (matches) {
+						auctionLiveCountsByAuction[auctionKey] = (auctionLiveCountsByAuction[auctionKey] || 0) + 1
+					}
+					return matches
 				}).length
 
 				const reconciledAuctionSettlementBeginsCount = sellerAuctions.filter((auction) => {
@@ -672,11 +713,15 @@ export const useNotificationMonitor = () => {
 					if (!auctionKey) return false
 
 					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-					return (
+					const matches =
 						biddingCutoffAt > initializationStartedAt &&
 						biddingCutoffAt <= initializationCompletedAt &&
 						biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)
-					)
+					if (matches) {
+						auctionSettlementBeginsCountsByAuction[auctionKey] =
+							(auctionSettlementBeginsCountsByAuction[auctionKey] || 0) + 1
+					}
+					return matches
 				}).length
 
 				// Update store with initial counts
@@ -688,10 +733,15 @@ export const useNotificationMonitor = () => {
 					auctionBidCount: newSellerBidEvents.length,
 					auctionBidCountsByAuction: newSellerBidCountsByAuction,
 					auctionCommentCount: newSellerLiveChatEvents.length,
+					auctionCommentCountsByAuction,
 					auctionEventCommentCount: newSellerAuctionCommentEvents.length,
+					auctionEventCommentCountsByAuction,
 					productCommentCount: newSellerProductCommentEvents.length,
+					productCommentCountsByProduct,
 					auctionLiveCount: unseenAuctionLiveCount + reconciledAuctionLiveCount,
+					auctionLiveCountsByAuction,
 					auctionSettlementBeginsCount: unseenAuctionSettlementBeginsCount + reconciledAuctionSettlementBeginsCount,
+					auctionSettlementBeginsCountsByAuction,
 					bidUpdateCount: newHigherBidEvents.length + newSettlementEvents.length,
 				})
 
@@ -749,7 +799,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !isNewAuctionComment(event, auctionKey)) return
 
 					console.log('[NotificationMonitor] New live chat comment on seller auction:', event.id)
-					notificationActions.incrementUnseenAuctionComments()
+					notificationActions.incrementUnseenAuctionComments(auctionKey)
 				}
 
 				const subscribeSellerLiveActivityCoordinate = (liveActivityCoordinate: string) => {
@@ -837,7 +887,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !isNewAuctionEventComment(event, auctionKey)) return
 
 					console.log('[NotificationMonitor] New thread comment on seller auction:', event.id)
-					notificationActions.incrementUnseenAuctionEventComments()
+					notificationActions.incrementUnseenAuctionEventComments(auctionKey)
 				}
 
 				const handleSellerProductCommentEvent = (event: NDKEvent) => {
@@ -851,7 +901,7 @@ export const useNotificationMonitor = () => {
 					if (event.pubkey === user.pubkey || !isNewProductComment(event, productKey)) return
 
 					console.log('[NotificationMonitor] New thread comment on seller product:', event.id)
-					notificationActions.incrementUnseenProductComments()
+					notificationActions.incrementUnseenProductComments(productKey)
 				}
 
 				const handleWatchedSettlementEvent = (event: NDKEvent) => {

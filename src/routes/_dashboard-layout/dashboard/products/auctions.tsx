@@ -380,10 +380,10 @@ function AuctionListItem({
 
 	const handleMarkActivitySeen = () => {
 		notificationActions.markAuctionBidsSeen(auctionNotificationKey)
-		notificationActions.markAuctionCommentsSeen(auctionNotificationKey, newChatCount)
-		notificationActions.markAuctionEventCommentsSeen(auctionNotificationKey, newCommentsCount)
-		notificationActions.markAuctionLiveSeen(auctionNotificationKey, hasNewLiveStatus ? 1 : 0)
-		notificationActions.markAuctionSettlementBeginsSeen(auctionNotificationKey, hasNewSettlementStatus ? 1 : 0)
+		notificationActions.markAuctionCommentsSeen(auctionNotificationKey)
+		notificationActions.markAuctionEventCommentsSeen(auctionNotificationKey)
+		notificationActions.markAuctionLiveSeen(auctionNotificationKey)
+		notificationActions.markAuctionSettlementBeginsSeen(auctionNotificationKey)
 	}
 
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
