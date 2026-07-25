@@ -284,6 +284,7 @@ export const useNotificationMonitor = () => {
 		const subscribedSellerAuctionCoordinates = new Set<string>()
 		const subscribedSellerLiveActivityCoordinates = new Set<string>()
 		const phaseTimeoutIds: number[] = []
+		let lifecycleReconcileInterval: number | undefined
 
 		// Mark as monitoring to prevent duplicate subscriptions
 		isMonitoringRef.current = true
@@ -714,6 +715,43 @@ export const useNotificationMonitor = () => {
 
 				sellerAuctions.forEach(scheduleAuctionPhaseNotification)
 
+				// Periodic lifecycle reconciliation — catches transitions missed
+				// when setTimeout is throttled in background tabs (Chrome clamps
+				// background timers to >=1min, which can skip short-fuse transitions).
+				lifecycleReconcileInterval = window.setInterval(() => {
+					if (isCancelled) return
+					const now = Math.floor(Date.now() / 1000)
+					sellerAuctions.forEach((auction) => {
+						const auctionKey = getAuctionNotificationKey(auction)
+						if (!auctionKey) return
+
+						const startAt = getAuctionStartAt(auction)
+						if (
+							startAt > 0 &&
+							startAt <= now &&
+							startAt > notificationActions.getLastSeenAuctionLive(auctionKey) &&
+							!scheduledAuctionLiveKeys.has(auctionKey)
+						) {
+							console.log('[NotificationMonitor] Lifecycle reconcile: auction went live:', auction.id)
+							notificationActions.incrementUnseenAuctionLive()
+							scheduledAuctionLiveKeys.add(auctionKey)
+						}
+
+						const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+						if (
+							biddingCutoffAt > 0 &&
+							biddingCutoffAt <= now &&
+							biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey) &&
+							!scheduledAuctionSettlementKeys.has(auctionKey)
+						) {
+							console.log('[NotificationMonitor] Lifecycle reconcile: auction entered settlement:', auction.id)
+							notificationActions.incrementUnseenAuctionSettlementBegins()
+							scheduledAuctionSettlementKeys.add(auctionKey)
+						}
+					})
+				}, 60_000)
+				phaseTimeoutIds.push(lifecycleReconcileInterval)
+
 				const handleSellerBidEvent = (event: NDKEvent) => {
 					if (!event.id || seenAuctionEventIds.has(event.id)) return
 					seenAuctionEventIds.add(event.id)
@@ -1061,6 +1099,9 @@ export const useNotificationMonitor = () => {
 			console.log('[NotificationMonitor] Stopping notification monitoring')
 			isCancelled = true
 			phaseTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
+			if (lifecycleReconcileInterval !== undefined) {
+				window.clearInterval(lifecycleReconcileInterval)
+			}
 			subscriptionsRef.current.forEach((sub) => {
 				sub.stop()
 			})
