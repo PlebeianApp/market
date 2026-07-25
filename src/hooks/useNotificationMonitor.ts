@@ -288,6 +288,9 @@ export const useNotificationMonitor = () => {
 		// Mark as monitoring to prevent duplicate subscriptions
 		isMonitoringRef.current = true
 
+		let lastReconciledAt = 0
+		let sellerAuctions: NDKEvent[] = []
+
 		console.log('[NotificationMonitor] Starting notification monitoring for user:', user.pubkey)
 
 		// Helper to check if an event is newer than last seen
@@ -398,6 +401,24 @@ export const useNotificationMonitor = () => {
 			}
 		}
 
+		const reconcileLifecycleTransitions = () => {
+			if (isCancelled) return
+			const now = Math.floor(Date.now() / 1000)
+			for (const auction of sellerAuctions) {
+				const auctionKey = getAuctionNotificationKey(auction)
+				if (!auctionKey) continue
+				const startAt = getAuctionStartAt(auction)
+				if (startAt > lastReconciledAt && startAt <= now && startAt > notificationActions.getLastSeenAuctionLive(auctionKey)) {
+					notificationActions.incrementUnseenAuctionLive(auctionKey)
+				}
+				const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+				if (biddingCutoffAt > lastReconciledAt && biddingCutoffAt <= now && biddingCutoffAt > notificationActions.getLastSeenAuctionSettlementBegins(auctionKey)) {
+					notificationActions.incrementUnseenAuctionSettlementBegins(auctionKey)
+				}
+			}
+			lastReconciledAt = now
+		}
+
 		const getHighestOwnBidAmountForAuction = (
 			event: NDKEvent,
 			highestOwnBidByRootId: Map<string, number>,
@@ -472,7 +493,7 @@ export const useNotificationMonitor = () => {
 					return isUpdate && event.pubkey !== user.pubkey && isNewPurchaseUpdate(event)
 				})
 
-				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
+				sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
 				const sellerProducts = await fetchProductsByPubkey(user.pubkey, true, 500)
 				const sellerAuctionKeyByRootEventId = new Map<string, string>()
 				const sellerAuctionKeyByCoordinate = new Map<string, string>()
@@ -713,6 +734,7 @@ export const useNotificationMonitor = () => {
 				})
 
 				sellerAuctions.forEach(scheduleAuctionPhaseNotification)
+				lastReconciledAt = initializationCompletedAt
 
 				const handleSellerBidEvent = (event: NDKEvent) => {
 					if (!event.id || seenAuctionEventIds.has(event.id)) return
@@ -964,6 +986,13 @@ export const useNotificationMonitor = () => {
 		// Start initial fetch
 		initializeNotifications()
 
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible' && !isCancelled) {
+				reconcileLifecycleTransitions()
+			}
+		}
+		document.addEventListener('visibilitychange', handleVisibilityChange)
+
 		// Set up real-time subscriptions
 
 		// 1. Subscribe to new orders where user is seller
@@ -1060,6 +1089,7 @@ export const useNotificationMonitor = () => {
 		return () => {
 			console.log('[NotificationMonitor] Stopping notification monitoring')
 			isCancelled = true
+			document.removeEventListener('visibilitychange', handleVisibilityChange)
 			phaseTimeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId))
 			subscriptionsRef.current.forEach((sub) => {
 				sub.stop()
