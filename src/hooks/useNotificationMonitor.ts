@@ -283,6 +283,8 @@ export const useNotificationMonitor = () => {
 		const subscribedSellerAuctionRootEventIds = new Set<string>()
 		const subscribedSellerAuctionCoordinates = new Set<string>()
 		const subscribedSellerLiveActivityCoordinates = new Set<string>()
+		const subscribedSellerProductCoordinates = new Set<string>()
+		const subscribedSellerProductEventIds = new Set<string>()
 		const phaseTimeoutIds: number[] = []
 
 		// Mark as monitoring to prevent duplicate subscriptions
@@ -954,6 +956,56 @@ export const useNotificationMonitor = () => {
 
 				auctionListingSubscription.on('event', handleOwnAuctionEvent)
 				subscriptionsRef.current.push(auctionListingSubscription)
+
+				// Subscribe to seller's own product events to catch new products
+				const productListingSubscription = ndk.subscribe(
+					{
+						kinds: [30408 as NDKKind],
+						authors: [user.pubkey],
+						since: subscriptionSince,
+					},
+					{ closeOnEose: false },
+				)
+
+				productListingSubscription.on('event', (event: NDKEvent) => {
+					if (event.pubkey !== user.pubkey) return
+
+					const productCoordinate = getAddressableEventCoordinate(event)
+					const productEventId = event.id
+					if (!productCoordinate && !productEventId) return
+
+					const productKey = productEventId
+
+					if (productCoordinate) sellerProductKeyByCoordinate.set(productCoordinate, productKey)
+					sellerProductKeyByEventId.set(productEventId, productKey)
+
+					if (productCoordinate && !subscribedSellerProductCoordinates.has(productCoordinate)) {
+						subscribedSellerProductCoordinates.add(productCoordinate)
+						subscribeToTaggedAuctionEvents({
+							kind: COMMENT_KIND_NDK,
+							tagName: '#a',
+							values: [productCoordinate],
+							onEvent: handleSellerProductCommentEvent,
+						})
+						subscribeToTaggedAuctionEvents({
+							kind: COMMENT_KIND_NDK,
+							tagName: '#A',
+							values: [productCoordinate],
+							onEvent: handleSellerProductCommentEvent,
+						})
+					}
+					if (!subscribedSellerProductEventIds.has(productEventId)) {
+						subscribedSellerProductEventIds.add(productEventId)
+						subscribeToTaggedAuctionEvents({
+							kind: COMMENT_KIND_NDK,
+							tagName: '#E',
+							values: [productEventId],
+							onEvent: handleSellerProductCommentEvent,
+						})
+					}
+				})
+
+				subscriptionsRef.current.push(productListingSubscription)
 
 				console.log('[NotificationMonitor] Subscriptions active:', subscriptionsRef.current.length)
 			} catch (error) {
