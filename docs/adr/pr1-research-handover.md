@@ -341,15 +341,25 @@ enforce. The `nostr/` AGENTS.md must document the hooks exception.
 
 ## 6. Inconsistency in component definitions and usage
 
-### 6a. `forwardRef` vs function components
+### 6a. `forwardRef` vs function components — **DECIDED**
 
 Only 6 of ~125 components use `forwardRef` (`SelectableBadge`, `TooltipButton`, and 4 in `Header`).
 The `ui/` primitives use the modern Shadcn function-component style (no `forwardRef`, `React.ComponentProps`).
-ADR 1c asks migrated components to forward refs — but Shadcn's current direction drops `forwardRef`
-in favor of `React.ComponentProps` + `data-slot`. **This needs a decision in the architecture step:**
-adopt `forwardRef` (ADR as written) or follow Shadcn's `React.ComponentProps` convention (what `ui/`
-already does). The two `shared/` components (`SelectableBadge`, `TooltipButton`) use `forwardRef`,
-so `shared/` and `ui/` are already inconsistent.
+ADR 1c asks migrated components to forward refs.
+
+**Decision (captured in `src/components/AGENTS.md`):**
+- `ui/` Shadcn primitives are left **as-is, no diffs** — do not convert to `forwardRef` or modify.
+  They keep the `React.ComponentProps` + `data-slot` style.
+- All components authored by us (`ui-wrappers/`, `shared/`, `nostr/`, `layout/`, `dialogs/`, feature
+  dirs) **must use `forwardRef`** for consistency.
+- The two existing `shared/` components (`SelectableBadge`, `TooltipButton`) are already correct.
+- **Forwarding through Shadcn primitives:** rely on the primitives' `{...props}` spread to attach
+  `ref` to the root DOM node; do not wrap in an extra element solely for the ref. This avoids React
+  dev warnings while keeping wrappers single-element. Restated in per-subdir `AGENTS.md` (e.g.
+  `ui-wrappers/AGENTS.md`).
+
+The `ui → ui-wrappers` boundary is where the convention switches: wrappers take `forwardRef` and
+adapt around the non-`forwardRef` primitives.
 
 ### 6b. Props typing inconsistency
 
@@ -411,8 +421,9 @@ done in PR 1 as pure file moves if imports are switched to aliases simultaneousl
    green/blue/amber/yellow/pink usages collapse onto `info/warning/error/success` + `muted-foreground`.
 3. **`text-black`-on-`bg-secondary` and `bg-white` dialogs are dark-mode bugs waiting to happen** —
    they assume light mode. Any wrapper that standardizes surface colors fixes a class of bugs.
-4. **Shadcn `forwardRef` vs `React.ComponentProps`** must be decided before writing the
-   `ui-wrappers/` AGENTS.md, because the example components in PR 1 set the precedent.
+4. **Shadcn `forwardRef` vs `React.ComponentProps`** — **DECIDED** (see §6a). `ui/` primitives
+   left as-is; our components use `forwardRef`; refs forwarded through primitives' `{...props}`
+   spread. Captured in `src/components/AGENTS.md`.
 5. **`nostr/` hooks exception** needs explicit scope in its AGENTS.md: which hooks are allowed
    (`useProfile`, `useQuery` for nostr events) vs which stay in routes/queries
    (`cartActions`, `uiActions`, `authActions` — arguably callbacks, not inline calls).
