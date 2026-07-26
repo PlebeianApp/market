@@ -6,12 +6,13 @@ The codebase has grown to span multiple domains, resulting in a fragmented UI la
 
 ### Part 1: Foundation (Target Specification)
 
-**1a. Stylesheet: Single File, Layer-Based Deprecation**
-The app should have a single `globals.css` file:
-- Define a clean token system at the top (`:root`, `.dark`, `@theme inline`) modeled on standard Shadcn conventions (e.g., `primary`, `secondary`, `muted`, `accent`). See an example here: https://ui.shadcn.com/docs/theming
+**1a. Stylesheet: Scoped Theme + Slice-by-Slice Migration**
+The app should define a new theme under a `.theme-new { ... }` class scope (in a dedicated `styles/globals-new.css`, imported after the existing `styles/globals.css`), rather than on `:root`. Scoping the new token system to a class — applied to migrated subtrees via a `ThemeMigrationWrapper` component — is what enables **slice-by-slice migration**: new and old UI can coexist on the same page without one clobbering the other, because CSS custom properties are DOM-scoped rather than layer-scoped. The legacy `globals.css` `:root` tokens remain the default for unmigrated UI and are removed only when the whole app is wrapped and no legacy consumers remain.
+- Define a clean token system inside `.theme-new` (with `& .dark { ... }` for dark mode, and `@theme inline` consuming the scoped variables) modeled on standard Shadcn conventions (e.g., `primary`, `secondary`, `muted`, `accent`). See an example here: https://ui.shadcn.com/docs/theming
+- **Color standard:** Tokens should be defined using **`oklch`**, the preferred color standard for this stylesheet.
 - Change the font specification from `font-serif` and `font-sans` to `font-body` and `font-header`. This is more semantic, usage-based definition that more widely applies to all websites and web-apps.
 - Extend this with specific **UX state tokens** (`info`, `warning`, `error`, `success`) for cards (including foreground, background, border) for semantic/ux-based styling. This should more or less map onto the colours: **blue** for info, **orange** for warning, **red** for error and **green** for success.
-- All existing component-specific utilities, global element overrides, `!important` rules, and custom selectors must be wrapped in `@layer legacy { ... }` with deprecation markers. 
+- `.theme-new` may scope not only the custom-property token block but also `@layer base` and `@layer utilities`, so that base resets and utility classes defined for the new theme apply only within migrated subtrees. `@import 'tailwindcss'`, `@theme`, and `@custom-variant` remain defined once in `globals.css` and are not duplicated.
 
 The current app styles need to be refactored and redefined within the new stylesheet, and this is done in the migration guide section 2b.
 
@@ -62,12 +63,13 @@ For example, an inline component used in `routes/` such as `renderHomepageHero()
 **2b. Component styles migration**
 
 The foundation creates a new stylesheet pattern, but for backwards compatibility the old styles need to be kept accessible by unmigrated components. When performing a migration, the UI in the target slice should:
-- Replace the now-deprecated patterns with the new stylesheet definition
+- Be wrapped in `ThemeMigrationWrapper` (or have an existing wrapper moved up the tree to cover it), opting the slice into the `.theme-new` token scope.
+- Replace the now-deprecated patterns with the new stylesheet definition, repointing hardcoded colors/fonts/radii to the scoped semantic tokens.
 - Not define any custom styles that may conflict with the new stylesheet definition, such as colours, fonts, border radiuses, and so on.
-- When a legacy utility has zero remaining references, it is deleted.
-The migration is complete when `@layer legacy` is empty.
+- When a legacy utility in `globals.css` has zero remaining *unwrapped* references, it is deleted.
+The migration is complete when `ThemeMigrationWrapper` covers the entire app and the legacy `:root` token block plus all legacy utilities have been removed from `globals.css`.
 
-The expected outcome is a clean stylesheet containing only tokens and generic utilities, with all component-specific styling moved into component files. The `@layer legacy` block serves as the migration tracker: as components migrate, their corresponding legacy utilities are extracted into component files using `cn()` + semantic tokens. 
+The expected outcome is a clean stylesheet containing only tokens and generic utilities, with all component-specific styling moved into component files. The `.theme-new` scope and `ThemeMigrationWrapper` placement serve as the migration tracker: as components migrate, their corresponding legacy utilities are extracted into component files using `cn()` + semantic tokens.
 
 
 **2c. Compliance and Maintanance**
@@ -83,13 +85,13 @@ In order to keep the work of each PR over time, every migrated or created compon
 - The widget book harness provides visual regression testing and a browsable component gallery, ensuring migrated components are verified.
 - The `nostr/` directory resolves the tension between "no business logic" and necessary data access patterns via standardized hooks.
 - Enforcement is lean: CI catches structural violations, while AGENTS.md handles nuanced judgment calls.
-- The `@layer legacy` block creates a self-documenting migration progress indicator.
+- The `.theme-new` scope + `ThemeMigrationWrapper` placement creates a self-documenting migration progress indicator: migrated subtrees are visibly opted into the new theme, and the legacy `globals.css` shrinks as consumers migrate.
 
 ## PR Strategy
 
 A suggested PR strategy is as follows:
 
-- **PR 1 - Foundation - Styles:** Defines new styles and marks previous as deprecated. Creates new directories and AGENTS.md files where appropriate, such as `ui-wrapper`, `shared`, `nostr`, `layout` and `dialog`. Pulls remaining ad-hoc UI components into the `components/` directory. Include a few components that are under the *"Modify"* strategy of 2a for 1+ compliant example component(s) in each subdirectory.
+- **PR 1 - Foundation - Styles:** Defines the new `.theme-new` scoped stylesheet (`styles/globals-new.css`) and the `ThemeMigrationWrapper` component, wiring it in without yet opting in any subtree. Creates new directories and AGENTS.md files where appropriate, such as `ui-wrapper`, `shared`, `nostr`, `layout` and `dialog`. Pulls remaining ad-hoc UI components into the `components/` directory. Include a few components that are under the *"Modify"* strategy of 2a for 1+ compliant example component(s) in each subdirectory, built *inside* the `.theme-new` scope to validate it.
 - **PR 2 - Foundation - Test Harness:** Implement the test harness app that can run on modular widget libraries. Include the ability to run on all libs (LIBRARY=*) or on specific ones only. Include the Playwright configuration to define and run tests on specific components, and provide test coverage for the existing components in the newly migrated subdirectories.
 - **PR 3 - Migration: Home Page & User Profile Components:** - Create a migration for components found in the home page. This coincides with the CMS work which will use many of the same components.
 - **PR 4 - Migration: Layout Components:** - Create a migration for the commonly used app layout components (header, footer, sidebar) to ensure they are compliant with the new styling.
