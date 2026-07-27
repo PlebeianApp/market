@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { AUCTION_PATH_RELEASE_KIND } from '@/lib/auction/constants'
+import type { NostrEvent, NostrFilter } from '@/lib/nostr/io'
 
-let fetchedFilters: NDKFilter[] = []
-let relayEvents = new Set<NDKEvent>()
+type RelayEvent = NostrEvent
+
+let fetchedFilters: NostrFilter[] = []
+let relayEvents = new Set<RelayEvent>()
 
 if (!('localStorage' in globalThis)) {
 	const items = new Map<string, string>()
@@ -28,9 +30,19 @@ mock.module('@/lib/stores/blacklist', () => ({
 }))
 
 mock.module('@/lib/stores/ndk', () => ({
+	getWriteRelays: () => [],
+	ndkStore: {
+		state: {
+			ndk: null,
+			zapNdk: null,
+			explicitRelayUrls: [],
+			writeRelayUrls: [],
+			signer: undefined,
+		},
+	},
 	ndkActions: {
 		getNDK: () => ({}),
-		fetchEventsWithTimeout: mock(async (filter: NDKFilter) => {
+		fetchEventsWithTimeout: mock(async (filter: NostrFilter) => {
 			fetchedFilters.push(filter)
 			return relayEvents
 		}),
@@ -44,7 +56,7 @@ const SELLER_PUBKEY = 'a'.repeat(64)
 const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
 const OTHER_AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-2`
 
-function pathReleaseEvent(id: string, coordinate: string, createdAt: number): NDKEvent {
+function pathReleaseEvent(id: string, coordinate: string, createdAt: number): RelayEvent {
 	return {
 		id,
 		kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
@@ -55,7 +67,7 @@ function pathReleaseEvent(id: string, coordinate: string, createdAt: number): ND
 			['e', '2'.repeat(64)],
 			['a', coordinate],
 		],
-	} as unknown as NDKEvent
+	} as RelayEvent
 }
 
 describe('auction path-release queries', () => {
