@@ -21,7 +21,7 @@ import type { EventTemplate } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '../../lib/auction/constants'
 import { buildValidatorVerdictTags } from '../../lib/auction/tagBuilders'
 import { aggregateProofStates, markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
-import { deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
+import { assignCloseRoles, deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
 
 // ============================================================================
 // Public API
@@ -62,6 +62,11 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 	 */
 	const publishIfChanged = async (input: PublishVerdictInput): Promise<PublishVerdictResult> => {
 		const observedAt = now()
+
+		if (!input.auctionState.closeHandled && observedAt > input.auctionState.auction.maxEndAt) {
+			assignCloseRoles(input.auctionState)
+		}
+
 		const verdict = deriveVerdict({
 			auctionState: input.auctionState,
 			bidState: input.bidState,
