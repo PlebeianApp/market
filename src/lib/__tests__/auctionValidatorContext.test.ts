@@ -3,6 +3,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { checkMintReachability, checkProofState, checkProofStateBatch } from '../cashu/nut7'
 import {
+	aggregateProofStates,
 	collectLiveBids,
 	createValidatorState,
 	recordPathRelease,
@@ -440,5 +441,45 @@ describe('auction validator release observed-time binding', () => {
 		// observation (200), so re-derivation stays deterministic.
 		expect(recordPathRelease(state, releaseB, 300).status).toBe('recorded')
 		expect(auctionState.pathReleaseObservedAt.get('b'.repeat(64))).toBe(200)
+	})
+})
+
+describe('aggregateProofStates — all-spent semantics', () => {
+	const snap = (state: import("../auction/constants").Nut7ProofState) => ({ state, observedAt: 1 })
+	const mk = (entries: Array<[string, import("../auction/constants").Nut7ProofState]>) => {
+		const m = new Map<string, { state: import("../auction/constants").Nut7ProofState; observedAt: number }>()
+		for (const [y, s] of entries) m.set(y, snap(s))
+		return m
+	}
+
+	test('spent only when every expected proof is present and spent', () => {
+		const ys = ['aa', 'bb', 'cc']
+		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'spent'], ['cc', 'spent']]), ys)).toBe('spent')
+	})
+
+	test('mixed spent + unspent is not spent', () => {
+		const ys = ['aa', 'bb']
+		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'unspent']]), ys)).not.toBe('spent')
+		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'unspent']]), ys)).toBe('unknown')
+	})
+
+	test('spent + missing is not spent', () => {
+		const ys = ['aa', 'bb']
+		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'missing']]), ys)).toBe('missing')
+	})
+
+	test('spent + pending is not spent', () => {
+		const ys = ['aa', 'bb']
+		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'pending']]), ys)).toBe('pending')
+	})
+
+	test('spent + unknown is not spent', () => {
+		const ys = ['aa', 'bb']
+		expect(aggregateProofStates(mk([['aa', 'spent']]), ys)).toBe('unknown')
+	})
+
+	test('all unspent → unspent', () => {
+		const ys = ['aa', 'bb']
+		expect(aggregateProofStates(mk([['aa', 'unspent'], ['bb', 'unspent']]), ys)).toBe('unspent')
 	})
 })

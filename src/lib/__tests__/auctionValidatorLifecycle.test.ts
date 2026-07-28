@@ -316,6 +316,43 @@ describe('deriveVerdict — pre-close', () => {
 		expect(v.claim).toBe('valid_bid_placed')
 	})
 
+	test('post-close partial redemption (one of two proofs spent) stays won_pending_settlement, not settled_*', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, {
+			childPubkey,
+			lockSecrets: [
+				buildLockSecret(childPubkey, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+				buildLockSecret(childPubkey, auction.maxEndAt + auction.settlementGrace, REFUND_PK),
+			],
+			amount: 2,
+		})
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		auctionState.pathReleases.set(
+			bid.id,
+			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [1, 1]) }),
+		)
+		const release = auctionState.pathReleases.get(bid.id)!
+		auctionState.settlement = buildSettlement(auction, bid, {
+			pathReleaseEventId: release.id,
+			finalAmount: 2,
+			payouts: [{ bidEventId: bid.id, amount: 2, status: 'redeemed' }],
+		})
+		// Only one of two proofs is spent → aggregate is NOT 'spent'.
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+		recordNut7State(bidState, bid.proofYs[1], 'unspent', auction.maxEndAt + 60)
+
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(v.claim).toBe('won_pending_settlement')
+	})
+
 	test('rebid with sub-minimum own delta cannot become valid_bid_placed', () => {
 		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
 		const previousBid = buildBid(auction, { id: 'a'.repeat(64), amount: AUCTION_MIN_BID_SATS })

@@ -35,36 +35,53 @@ export interface ProofStateSnapshot {
 }
 
 /**
- * Aggregate of a bid's individual proof states. Worst-case semantics:
- *  - `spent` if ANY proof is spent (pre-settlement → fraudulent).
- *  - `unspent` if ALL proofs are unspent.
+ * Aggregate of a bid's individual proof states. `spent` requires EVERY
+ * expected `proof_y` to be present and explicitly spent — it is the
+ * settlement-completeness signal, not "any proof spent". Mixed states
+ * (spent plus unspent/missing/pending/unknown) are never `spent`.
+ *  - `spent` if ALL expected proofs are present and spent.
+ *  - `unspent` if ALL expected proofs are unspent.
  *  - `missing` if no proof is spent and at least one proof is absent
  *    from an otherwise successful mint response.
  *  - `pending` if no proof is spent/missing and at least one is pending.
  *  - `unknown` otherwise (no signal yet for at least one proof).
+ *
+ * Pre-settlement fraud ("any proof spent") is detected separately in
+ * `validateBid` from the per-proof map, so this aggregate is free to
+ * mean "complete redemption" for the settlement gate.
  */
 export type AggregateProofState = Nut7ProofState
 
 export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, expectedProofYs: string[]): AggregateProofState => {
 	if (!expectedProofYs.length) return 'unknown'
+	let allSpent = true
 	let sawPending = false
 	let sawMissing = false
 	let allUnspent = true
 	for (const y of expectedProofYs) {
 		const snap = perProof.get(y.toLowerCase())
 		if (!snap || snap.state === 'unknown') {
+			allSpent = false
 			allUnspent = false
 			continue
 		}
-		if (snap.state === 'spent') return 'spent'
-		if (snap.state === 'missing') {
-			sawMissing = true
+		if (snap.state === 'spent') {
+			// spent contributes to allSpent; it is not unspent.
 			allUnspent = false
 			continue
 		}
-		if (snap.state === 'pending') sawPending = true
-		if (snap.state !== 'unspent') allUnspent = false
+		if (snap.state === 'unspent') {
+			// unspent keeps allUnspent true; it is not spent.
+			allSpent = false
+			continue
+		}
+		// missing or pending: neither spent nor unspent.
+		allSpent = false
+		allUnspent = false
+		if (snap.state === 'missing') sawMissing = true
+		else if (snap.state === 'pending') sawPending = true
 	}
+	if (allSpent) return 'spent'
 	if (allUnspent) return 'unspent'
 	if (sawMissing) return 'missing'
 	if (sawPending) return 'pending'

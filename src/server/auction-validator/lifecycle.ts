@@ -156,6 +156,9 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 		bid: bidState.bid,
 		observedAt: bidState.observedAt,
 		nut7State,
+		// Pre-settlement fraud ("any proof spent") is detected from the
+		// per-proof map, independent of the all-spent aggregate.
+		nut7ProofStates: buildProofStateMap(bidState),
 		currentTopBid,
 		bidChainValidation: deriveBidChainValidation(auctionState, bidState),
 	})

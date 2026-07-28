@@ -87,8 +87,19 @@ export interface ValidateBidInput {
 	 * Latest NUT-7 result the validator has for this bid's proof.
 	 * `undefined` ≡ the validator hasn't queried yet — pipeline returns
 	 * `bid_pending_review`.
+	 *
+	 * Note: `nut7State === 'spent'` here means EVERY expected proof is
+	 * spent (the settlement-completeness aggregate). Pre-settlement
+	 * fraud — ANY single proof spent — is detected from `nut7ProofStates`
+	 * below when available, so a partially-spent bid is still rejected.
 	 */
 	nut7State?: Nut7ProofState
+	/**
+	 * Per-proof NUT-7 states keyed by lowercased `proof_y`. When present,
+	 * `validateBid` detects pre-settlement fraud (any expected proof
+	 * spent) directly, independent of the all-spent aggregate.
+	 */
+	nut7ProofStates?: ReadonlyMap<string, Nut7ProofState>
 	/**
 	 * Current top valid bid amount on the auction at the moment of
 	 * validation. Used by the floor computation. `undefined` means
@@ -390,6 +401,24 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	}
 
 	// --- Step 6: NUT-7 proof state ------------------------------------------
+
+	// Pre-settlement fraud: ANY expected proof spent invalidates the bid,
+	// independent of the all-spent aggregate (which only reports 'spent'
+	// when EVERY proof is spent — that is the settlement-completeness
+	// signal, not the fraud signal). Detected from the per-proof map so a
+	// partially-spent bid is still rejected before the aggregate switch.
+	const { nut7ProofStates } = input
+	if (nut7ProofStates) {
+		for (const proofY of bid.proofYs) {
+			if (readProofState(nut7ProofStates, proofY) === 'spent') {
+				return {
+					claim: 'bid_invalid',
+					reason: 'proof_spent',
+					detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
+				}
+			}
+		}
+	}
 
 	switch (nut7State) {
 		case undefined:
