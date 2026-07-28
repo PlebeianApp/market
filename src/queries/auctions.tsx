@@ -32,25 +32,6 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
-import { getCoordsFromATag } from '@/lib/utils/coords'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@/lib/auction/events'
-import {
-	validateAuctionImmutableTags,
-	validateBid,
-	validateBidLocalOnly,
-	validatePathReleaseLocalOnly,
-	validateSettlementEventLocalOnly,
-} from '@/lib/auction/validation'
-import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
-import { checkProofStateBatch } from '@/lib/cashu/nut7'
-import { parseBidEvent, type ParseBidEventResult } from '@/lib/schemas/auction/bidEvent'
-import {
-	parsePathReleaseEvent,
-	parseSettlementEvent,
-	type ParsePathReleaseEventResult,
-	type ParseSettlementEventResult,
-} from '@/lib/schemas/auction/settlementEvents'
-import type z from 'zod'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -1009,138 +990,26 @@ export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | u
 		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
 
+// ============================================================================
+// PLACEHOLDER — Validation query logic moved to #1170 (feat/1151-auction-validation)
+// ============================================================================
 //
-
-export type AuctionWithRelatedEvents = {
-	bids?: ParsedBidEvent[]
-	settlements?: ParsedSettlementEvent[]
-	pathReleases?: ParsedPathReleaseEvent[]
-	claimOrders?: NDKEvent[]
-
-	latestAuction: ParsedAuctionEvent // Latest auction event
-	topBid?: ParsedBidEvent
-	settlement?: ParsedSettlementEvent
-	pathRelease?: ParsedPathReleaseEvent
-	claimOrder?: NDKEvent
-}
-
-const fetchAndValidateAuctionEvent = async (rootAuctionId: string, auctionCoordinates: string): Promise<ParsedAuctionEvent | null> => {
-	const auctionCoords = getCoordsFromATag(auctionCoordinates)
-	const [rootAuctionEvent, latestAuctionEvent] = await Promise.all([
-		fetchAuction(rootAuctionId),
-		fetchAuctionByATag(auctionCoords.pubkey, auctionCoords.identifier),
-	])
-
-	if (!rootAuctionEvent || !latestAuctionEvent) return null
-
-	const rootAuctionEventParsedResult = parseAuctionEvent(rootAuctionEvent)
-	const latestAuctionEventParsedResult = parseAuctionEvent(latestAuctionEvent)
-
-	if (!rootAuctionEventParsedResult.ok || !latestAuctionEventParsedResult.ok) return null
-
-	const rootAuctionEventParsed = rootAuctionEventParsedResult.value
-	const latestAuctionEventParsed = latestAuctionEventParsedResult.value
-
-	const isValidAuctionEvent = validateAuctionImmutableTags(rootAuctionEventParsed, latestAuctionEventParsed)
-
-	if (!isValidAuctionEvent) return null
-
-	return latestAuctionEventParsed
-}
-
-type ParsedAuctionRelatedEvent = ParsedBidEvent | ParsedPathReleaseEvent | ParsedSettlementEvent
-type ParseResult<T> = { ok: true; value: T } | { ok: false; error: z.ZodError | { message: string; code: string } }
-
-const fetchAndValidateRelatedAuctionEvent = async <T extends ParsedAuctionRelatedEvent>(
-	auctionEvent: ParsedAuctionEvent,
-	fetch: (auctionEvent: ParsedAuctionEvent) => Promise<NDKEvent[]>,
-	parse: (event: NDKEvent) => ParseResult<T>,
-	validate: (auctionEvent: ParsedAuctionEvent, event: T) => boolean,
-) => {
-	const relatedEvents = await fetch(auctionEvent)
-
-	return relatedEvents
-		.map((event) => {
-			const result = parse(event)
-			if (!result.ok) return
-
-			return result.value as T
-		})
-		.filter((event): event is T => event !== undefined && validate(auctionEvent, event))
-}
-
-export const fetchAuctionRelatedEvents = async (
-	rootAuctionId: string,
-	limit: number = 500,
-	auctionCoordinates: string,
-): Promise<AuctionWithRelatedEvents | null> => {
-	if (!rootAuctionId || !auctionCoordinates) return null
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return null
-
-	const auctionEvent = await fetchAndValidateAuctionEvent(rootAuctionId, auctionCoordinates)
-
-	if (!auctionEvent) return null
-
-	// Bid Events
-	const bids = await fetchAndValidateRelatedAuctionEvent(
-		auctionEvent,
-		() => fetchAuctionBids('', limit, auctionEvent.coordinate),
-		parseBidEvent,
-		validateBidLocalOnly,
-	)
-
-	const highestBid = bids
-		.sort((a, b) => {
-			const amountDelta = b.amount - a.amount
-			if (amountDelta !== 0) return amountDelta
-			const timeDelta = (a.createdAt || 0) - (b.createdAt || 0)
-			if (timeDelta !== 0) return timeDelta
-			return a.id.localeCompare(b.id)
-		})
-		.at(0)
-
-	if (!bids || !highestBid)
-		return {
-			latestAuction: auctionEvent,
-		}
-
-	const [settlements, pathReleases] = await Promise.all([
-		// Settlement Events
-		fetchAndValidateRelatedAuctionEvent(
-			auctionEvent,
-			() => fetchAuctionSettlements('', limit, auctionEvent.coordinate),
-			parseSettlementEvent,
-			validateSettlementEventLocalOnly,
-		),
-		// Path Release Events
-		fetchAndValidateRelatedAuctionEvent(
-			auctionEvent,
-			() => fetchAuctionPathReleases('', limit, auctionEvent.coordinate),
-			parsePathReleaseEvent,
-			(auctionEvent, pathReleaseEvent) => validatePathReleaseLocalOnly(auctionEvent, pathReleaseEvent, highestBid),
-		),
-	])
-
-	return {
-		latestAuction: auctionEvent,
-		bids: bids,
-		topBid: highestBid,
-		settlements: settlements,
-		// settlement: settlements
-		pathReleases: pathReleases,
-		// pathRelease: pathReleases,
-	}
-}
-
-export const auctionWithRelatedEventsQueryOptions = (auctionRootId: string, auctionCoordinates: string, limit: number = 100) =>
-	queryOptions({
-		queryKey: [...auctionKeys.details(auctionRootId || auctionCoordinates || ''), auctionCoordinates || ''],
-		queryFn: () => fetchAuctionRelatedEvents(auctionRootId, limit, auctionCoordinates),
-		enabled: !!(auctionRootId || auctionCoordinates),
-		staleTime: 5000,
-		refetchInterval: 5000,
-	})
-
-export const useAuctionWithRelatedEvents = (auctionRootId: string, auctionCoordinates: string) =>
-	useQuery({ ...auctionWithRelatedEventsQueryOptions(auctionRootId, auctionCoordinates) })
+// The following query/validation helpers were previously prototyped in this
+// branch but have been stripped to avoid duplication with the dedicated
+// auction-validation work in PR #1170 (branch: feat/1151-auction-validation).
+//
+// Removed functions (to be re-introduced from #1170 when merging):
+//
+//   - fetchAndValidateAuctionEvent(rootAuctionId, auctionCoordinates)
+//   - fetchAndValidateRelatedAuctionEvent(auctionEvent, fetch, parse, validate)
+//   - fetchAuctionRelatedEvents(rootAuctionId, limit, auctionCoordinates)
+//   - auctionWithRelatedEventsQueryOptions(auctionRootId, auctionCoordinates, limit)
+//   - useAuctionWithRelatedEvents(auctionRootId, auctionCoordinates)
+//
+// PR #1170 is the parent branch for all auction validation. Its implementation
+// is more complete and addresses blocking review findings around event
+// authentication, proof-spent completeness, validator-observed timing,
+// post-grace redemption observability, per-mint availability scoping,
+// close-role assignment wiring, and pinned auction identity checks.
+//
+// See: docs/adr/ADR-0015-settlement-validation-split.md
