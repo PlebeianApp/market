@@ -42,6 +42,11 @@ export interface DialogShellProps {
  * uses `bg-background` (a semantic token) instead, which resolves correctly
  * in both light and dark themes.
  *
+ * Because `DialogContent` portals to `document.body`, we add the `theme-new`
+ * class directly to the portaled content so scoped tokens (including dark
+ * mode overrides) still apply even though the content is outside the
+ * `ThemeMigrationWrapper` DOM subtree.
+ *
  * This component demonstrates the `dialogs/` pattern:
  * - Standardizes dialog surface colors via semantic tokens
  * - Composes Shadcn `ui/dialog` primitives
@@ -54,7 +59,7 @@ function DialogShell({ open, onOpenChange, title, description, trigger, footer, 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			{trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-			<DialogContent className={cn('bg-background', className)} showCloseButton={showClose}>
+			<DialogContent className={cn('theme-new bg-background', className)} showCloseButton={showClose}>
 				{(title || description) && (
 					<DialogHeader>
 						{title && <DialogTitle>{title}</DialogTitle>}

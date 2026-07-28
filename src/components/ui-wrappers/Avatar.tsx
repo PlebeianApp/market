@@ -42,11 +42,8 @@ const Avatar = React.forwardRef<HTMLSpanElement, AvatarWrapperProps>(
 	({ src, fallback, size = 'sm', className, children, ...props }, ref) => {
 		return (
 			<AvatarPrimitive ref={ref} className={cn(sizeMap[size], className)} {...props}>
-				{src ? (
-					<AvatarImage src={src} alt={fallback ?? 'Avatar'} />
-				) : (
-					<AvatarFallback>{fallback?.charAt(0).toUpperCase() ?? '?'}</AvatarFallback>
-				)}
+				{src && <AvatarImage src={src} alt={fallback ?? 'Avatar'} />}
+				<AvatarFallback>{fallback?.charAt(0).toUpperCase() ?? '?'}</AvatarFallback>
 				{children}
 			</AvatarPrimitive>
 		)

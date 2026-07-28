@@ -11,9 +11,10 @@
  *   - All colors are defined in oklch.
  *   - Fonts are renamed: font-body (was font-sans), font-header (was font-heading).
  *   - UX-state tokens (info/warning/error/success) with fg/bg/border are added.
- *   - Dark mode is nested coherently via `& .dark { ... }`, mirroring ALL custom
- *     variants — fixing the incoherence where the old .dark omitted -hover/
- *     -border-hover tokens.
+ *   - Dark mode overrides use `.dark .theme-new` (ancestor selector) so that
+ *     they apply when the `.dark` class is on an ancestor element (e.g.
+ *     `html.dark`), mirroring the legacy globals.css pattern where `.dark`
+ *     is an ancestor, not a descendant.
  *   - @theme inline registers new utility names (info/warning/error/success,
  *     font-body/font-header) with Tailwind so classes like bg-info, text-error,
  *     font-body become available. Existing utility names (bg-primary, etc.)
@@ -145,104 +146,6 @@
 	--sidebar-border: oklch(0.851 0.025 340.4);
 	--sidebar-ring: oklch(0.688 0.249 348);
 
-	/* ── Dark mode (nested, coherent: mirrors ALL custom variants) ────── */
-	& .dark {
-		--background: oklch(0.135 0.005 285.8);
-		--foreground: oklch(0.982 0 0);
-		--card: oklch(0.135 0.005 285.8);
-		--card-foreground: oklch(0.982 0 0);
-		--popover: oklch(0.135 0.005 285.8);
-		--popover-foreground: oklch(0.982 0 0);
-
-		--primary: oklch(0.982 0 0);
-		--primary-hover: oklch(0.982 0 0);
-		--primary-foreground: oklch(0.206 0.008 285.7);
-		--primary-foreground-hover: oklch(0.206 0.008 285.7);
-		--primary-border: oklch(0.982 0 0);
-		--primary-border-hover: oklch(0.982 0 0);
-
-		--secondary: oklch(0.274 0.006 286);
-		--secondary-hover: oklch(0.274 0.006 286);
-		--secondary-foreground: oklch(0.982 0 0);
-		--secondary-foreground-hover: oklch(0.982 0 0);
-		--secondary-border: oklch(0.274 0.006 286);
-		--secondary-border-hover: oklch(0.274 0.006 286);
-
-		--tertiary: oklch(0.274 0.006 286);
-		--tertiary-hover: oklch(0.274 0.006 286);
-		--tertiary-foreground: oklch(0.982 0 0);
-		--tertiary-foreground-hover: oklch(0.982 0 0);
-		--tertiary-border: oklch(0.274 0.006 286);
-		--tertiary-border-hover: oklch(0.274 0.006 286);
-
-		--focus: oklch(0.868 0.006 286.3);
-		--focus-hover: oklch(0.868 0.006 286.3);
-		--focus-foreground: oklch(0.982 0 0);
-		--focus-foreground-hover: oklch(0.982 0 0);
-		--focus-border: oklch(0.868 0.006 286.3);
-		--focus-border-hover: oklch(0.868 0.006 286.3);
-
-		--muted: oklch(0.274 0.006 286);
-		--muted-foreground: oklch(0.712 0.012 286.1);
-
-		--accent: oklch(0.274 0.006 286);
-		--accent-foreground: oklch(0.982 0 0);
-
-		--destructive: oklch(0.396 0.133 25.7);
-		--destructive-foreground: oklch(0.982 0 0);
-
-		--border: oklch(0.274 0.006 286);
-		--input: oklch(0.274 0.006 286);
-		--ring: oklch(0.868 0.006 286.3);
-
-		/* UX-state tokens — dark mode (muted backgrounds, brighter accents) */
-		--info: oklch(0.714 0.143 254.6);
-		--info-foreground: oklch(0.237 0.059 259);
-		--info-muted: oklch(0.346 0.074 256);
-		--info-border: oklch(0.428 0.091 255.7);
-
-		--warning: oklch(0.837 0.164 84.4);
-		--warning-foreground: oklch(0.216 0.006 56);
-		--warning-muted: oklch(0.286 0.064 53.8);
-		--warning-border: oklch(0.414 0.105 45.9);
-
-		--error: oklch(0.711 0.166 22.2);
-		--error-foreground: oklch(0.205 0.057 23.5);
-		--error-muted: oklch(0.271 0.101 12.1);
-		--error-border: oklch(0.396 0.133 25.7);
-
-		--success: oklch(0.8 0.182 151.7);
-		--success-foreground: oklch(0.266 0.063 152.9);
-		--success-muted: oklch(0.266 0.063 152.9);
-		--success-border: oklch(0.448 0.108 151.3);
-
-		/* Custom colors — dark mode */
-		--light-gray: oklch(0.274 0.006 286);
-		--off-black: oklch(0.135 0.005 285.8);
-		--neo-purple: oklch(0.688 0.249 348);
-		--secondary-black: oklch(0.187 0 0);
-		--tertiary-black: oklch(0.231 0 0);
-		--neo-blue: oklch(0.743 0.154 235.1);
-		--neo-gray: oklch(0.274 0.006 286);
-
-		/* Chart tokens — dark mode (same values, oklch handles perception) */
-		--chart-1: oklch(0.527 0.193 262.2);
-		--chart-2: oklch(0.696 0.134 165.4);
-		--chart-3: oklch(0.723 0.15 60.6);
-		--chart-4: oklch(0.618 0.204 312.8);
-		--chart-5: oklch(0.612 0.209 6.5);
-
-		/* Sidebar tokens — dark mode */
-		--sidebar-background: oklch(0.135 0.005 285.8);
-		--sidebar-foreground: oklch(0.982 0 0);
-		--sidebar-primary: oklch(0.527 0.193 262.2);
-		--sidebar-primary-foreground: oklch(1 0 0);
-		--sidebar-accent: oklch(0.274 0.006 286);
-		--sidebar-accent-foreground: oklch(0.982 0 0);
-		--sidebar-border: oklch(0.274 0.006 286);
-		--sidebar-ring: oklch(0.868 0.006 286.3);
-	}
-
 	/* ── @theme inline: register NEW utilities with Tailwind ───────────── */
 	/* Existing tokens (primary, secondary, etc.) are already registered by */
 	/* globals.css @theme inline and resolve to the same var() names — they  */
@@ -282,12 +185,113 @@
 		--color-off-black: var(--off-black);
 		--color-neo-purple: var(--neo-purple);
 	}
+}
 
-	/* ── Base resets scoped to .theme-new (ADR §1a permits @layer base) ─ */
-	@layer base {
-		/* Font-family defaults within migrated subtrees */
-		body {
-			font-family: var(--font-body);
-		}
+/* ── Dark mode (ancestor selector: .dark on <html> or any ancestor) ─── */
+/* Mirrors ALL custom variants — fixing the incoherence where the old .dark */
+/* omitted -hover/-border-hover tokens.                                   */
+.dark .theme-new {
+	--background: oklch(0.135 0.005 285.8);
+	--foreground: oklch(0.982 0 0);
+	--card: oklch(0.135 0.005 285.8);
+	--card-foreground: oklch(0.982 0 0);
+	--popover: oklch(0.135 0.005 285.8);
+	--popover-foreground: oklch(0.982 0 0);
+
+	--primary: oklch(0.982 0 0);
+	--primary-hover: oklch(0.982 0 0);
+	--primary-foreground: oklch(0.206 0.008 285.7);
+	--primary-foreground-hover: oklch(0.206 0.008 285.7);
+	--primary-border: oklch(0.982 0 0);
+	--primary-border-hover: oklch(0.982 0 0);
+
+	--secondary: oklch(0.274 0.006 286);
+	--secondary-hover: oklch(0.274 0.006 286);
+	--secondary-foreground: oklch(0.982 0 0);
+	--secondary-foreground-hover: oklch(0.982 0 0);
+	--secondary-border: oklch(0.274 0.006 286);
+	--secondary-border-hover: oklch(0.274 0.006 286);
+
+	--tertiary: oklch(0.274 0.006 286);
+	--tertiary-hover: oklch(0.274 0.006 286);
+	--tertiary-foreground: oklch(0.982 0 0);
+	--tertiary-foreground-hover: oklch(0.982 0 0);
+	--tertiary-border: oklch(0.274 0.006 286);
+	--tertiary-border-hover: oklch(0.274 0.006 286);
+
+	--focus: oklch(0.868 0.006 286.3);
+	--focus-hover: oklch(0.868 0.006 286.3);
+	--focus-foreground: oklch(0.982 0 0);
+	--focus-foreground-hover: oklch(0.982 0 0);
+	--focus-border: oklch(0.868 0.006 286.3);
+	--focus-border-hover: oklch(0.868 0.006 286.3);
+
+	--muted: oklch(0.274 0.006 286);
+	--muted-foreground: oklch(0.712 0.012 286.1);
+
+	--accent: oklch(0.274 0.006 286);
+	--accent-foreground: oklch(0.982 0 0);
+
+	--destructive: oklch(0.396 0.133 25.7);
+	--destructive-foreground: oklch(0.982 0 0);
+
+	--border: oklch(0.274 0.006 286);
+	--input: oklch(0.274 0.006 286);
+	--ring: oklch(0.868 0.006 286.3);
+
+	/* UX-state tokens — dark mode (muted backgrounds, brighter accents) */
+	--info: oklch(0.714 0.143 254.6);
+	--info-foreground: oklch(0.237 0.059 259);
+	--info-muted: oklch(0.346 0.074 256);
+	--info-border: oklch(0.428 0.091 255.7);
+
+	--warning: oklch(0.837 0.164 84.4);
+	--warning-foreground: oklch(0.216 0.006 56);
+	--warning-muted: oklch(0.286 0.064 53.8);
+	--warning-border: oklch(0.414 0.105 45.9);
+
+	--error: oklch(0.711 0.166 22.2);
+	--error-foreground: oklch(0.205 0.057 23.5);
+	--error-muted: oklch(0.271 0.101 12.1);
+	--error-border: oklch(0.396 0.133 25.7);
+
+	--success: oklch(0.8 0.182 151.7);
+	--success-foreground: oklch(0.266 0.063 152.9);
+	--success-muted: oklch(0.266 0.063 152.9);
+	--success-border: oklch(0.448 0.108 151.3);
+
+	/* Custom colors — dark mode */
+	--light-gray: oklch(0.274 0.006 286);
+	--off-black: oklch(0.135 0.005 285.8);
+	--neo-purple: oklch(0.688 0.249 348);
+	--secondary-black: oklch(0.187 0 0);
+	--tertiary-black: oklch(0.231 0 0);
+	--neo-blue: oklch(0.743 0.154 235.1);
+	--neo-gray: oklch(0.274 0.006 286);
+
+	/* Chart tokens — dark mode (same values, oklch handles perception) */
+	--chart-1: oklch(0.527 0.193 262.2);
+	--chart-2: oklch(0.696 0.134 165.4);
+	--chart-3: oklch(0.723 0.15 60.6);
+	--chart-4: oklch(0.618 0.204 312.8);
+	--chart-5: oklch(0.612 0.209 6.5);
+
+	/* Sidebar tokens — dark mode */
+	--sidebar-background: oklch(0.135 0.005 285.8);
+	--sidebar-foreground: oklch(0.982 0 0);
+	--sidebar-primary: oklch(0.527 0.193 262.2);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.274 0.006 286);
+	--sidebar-accent-foreground: oklch(0.982 0 0);
+	--sidebar-border: oklch(0.274 0.006 286);
+	--sidebar-ring: oklch(0.868 0.006 286.3);
+}
+
+/* ── Base resets scoped to .theme-new (ADR §1a permits @layer base) ─ */
+/* The wrapper is a <div>, so we apply the inheritable font-family to the */
+/* .theme-new element itself rather than to body (which is not a descendant). */
+@layer base {
+	.theme-new {
+		font-family: var(--font-body);
 	}
 }

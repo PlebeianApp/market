@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export interface IconButtonProps extends React.ComponentProps<typeof Button> {
@@ -13,8 +14,8 @@ export interface IconButtonProps extends React.ComponentProps<typeof Button> {
 }
 
 /**
- * IconButton — a square icon-only button with consistent sizing and an
- * optional notification badge.
+ * IconButton — a square icon-only button with consistent sizing, an
+ * optional notification badge, and an optional tooltip.
  *
  * Extracted from the repeated pattern in `Header.tsx` where `LoginButton`,
  * `LogoutButton`, `ProfileButton`, `CartButton`, `DashboardButton`,
@@ -27,17 +28,19 @@ export interface IconButtonProps extends React.ComponentProps<typeof Button> {
  * - Tokenized badge colors (`bg-secondary text-secondary-foreground`) instead
  *   of hardcoded `text-black` (which was a dark-mode bug)
  * - Callbacks for actions (the button click behavior is passed via `onClick`)
+ * - Renders a Radix tooltip when `tooltip` is provided
  *
  * The `btn-border-highlight` utility remains in the legacy `globals.css` until
  * the Button variant system replaces it in a later migration slice.
  */
 const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
-	({ className, isActive, notificationCount, children, ...props }, ref) => {
-		return (
+	({ className, isActive, notificationCount, tooltip, children, ...props }, ref) => {
+		const button = (
 			<Button
 				ref={ref}
 				variant="outline"
 				className={cn('relative btn-border-highlight w-11 h-10 p-2', isActive && 'btn-active', className)}
+				aria-label={tooltip}
 				{...props}
 			>
 				{children}
@@ -47,6 +50,19 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 					</span>
 				)}
 			</Button>
+		)
+
+		if (!tooltip) {
+			return button
+		}
+
+		return (
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>{button}</TooltipTrigger>
+					<TooltipContent>{tooltip}</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
 		)
 	},
 )

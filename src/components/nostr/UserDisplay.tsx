@@ -3,7 +3,18 @@ import * as React from 'react'
 import { Avatar } from '@/components/ui-wrappers/Avatar'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+
+/**
+ * Library-neutral profile shape — avoids importing NDK types directly
+ * (NDK footprint guard). Only the fields this component uses are
+ * declared; the real NDK profile type is structurally compatible.
+ */
+export interface UserProfile {
+	displayName?: string
+	name?: string
+	picture?: string
+	nip05?: string
+}
 
 export interface UserDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
 	/** Pubkey of the user to display. The component fetches profile data
@@ -16,7 +27,7 @@ export interface UserDisplayProps extends React.HTMLAttributes<HTMLDivElement> {
 	/** Show NIP-05 verification badge if available. */
 	showNip05?: boolean
 	/** Additional profile data. If provided, skips the `useProfile` fetch. */
-	profile?: NDKUserProfile | null
+	profile?: UserProfile | null
 }
 
 /**
@@ -48,16 +59,20 @@ const UserDisplay = React.forwardRef<HTMLDivElement, UserDisplayProps>(
 		return (
 			<div
 				ref={ref}
-				className={cn('flex items-center gap-2 cursor-pointer', className)}
-				onClick={() => onPress?.(pubkey)}
+				className={cn('flex items-center gap-2', onPress && 'cursor-pointer', className)}
+				onClick={onPress ? () => onPress(pubkey) : undefined}
 				role={onPress ? 'button' : undefined}
 				tabIndex={onPress ? 0 : undefined}
-				onKeyDown={(e) => {
-					if (onPress && (e.key === 'Enter' || e.key === ' ')) {
-						e.preventDefault()
-						onPress(pubkey)
-					}
-				}}
+				onKeyDown={
+					onPress
+						? (e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault()
+									onPress(pubkey)
+								}
+							}
+						: undefined
+				}
 				{...props}
 			>
 				<Avatar src={profile?.picture} fallback={displayName} size={size} />

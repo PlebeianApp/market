@@ -20,7 +20,6 @@ import { notificationActions } from '@/lib/stores/notifications'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal' // Add this import
-import { ThemeMigrationWrapper } from '@/components/theme-migration/ThemeMigrationWrapper'
 import type { PIIScanResult } from '@/lib/utils/piiScanner'
 
 export const Route = createRootRoute({
