@@ -25,6 +25,7 @@ import { checkProofStateBatch, type CheckProofStateOptions } from '../../lib/cas
 import {
 	aggregateProofStates,
 	collectLiveBids,
+	isTerminalClaim,
 	recordNut7State,
 	type ValidatorAuctionState,
 	type ValidatorBidState,
@@ -48,6 +49,10 @@ export interface Nut7PollerDeps {
 export interface Nut7Poller {
 	/** Run one full poll round. Awaits all per-mint batches in parallel. */
 	tick: () => Promise<void>
+	/** Force-refresh NUT-7 states for one bid chain (used on kind-1025 arrival). */
+	refreshBidChain: (input: { auctionRootEventId: string; bidEventId: string }) => Promise<void>
+	/** Force-refresh NUT-7 states for released, nonterminal bids in an auction (used on kind-1024 arrival). */
+	refreshAuctionReleasedNonterminal: (auctionRootEventId: string) => Promise<void>
 }
 
 export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
@@ -71,20 +76,55 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 		const live = collectLiveBids(deps.state, observedAt)
 		if (!live.length) return
+		const entries = expandProofEntries(live)
+		if (!entries.length) return
+
+		await refreshProofStates(entries, observedAt, 'tick')
+	}
+
+	const refreshBidChain = async (input: { auctionRootEventId: string; bidEventId: string }): Promise<void> => {
+		const auctionState = deps.state.auctions.get(input.auctionRootEventId)
+		if (!auctionState) return
+		const bidState = auctionState.bids.get(input.bidEventId)
+		if (!bidState) return
+
+		const observedAt = now()
+		const chain = buildBidChain(auctionState, bidState)
+		const chainWithReleases = chain.filter((leg) => leg.bid.id === bidState.bid.id || auctionState.pathReleases.has(leg.bid.id))
+		const entries = expandProofEntries(chainWithReleases.map((leg) => ({ auctionState, bidState: leg })))
+		if (!entries.length) return
+
+		await refreshProofStates(entries, observedAt, `refresh_bid_chain:${input.bidEventId.slice(0, 8)}`)
+	}
+
+	const refreshAuctionReleasedNonterminal = async (auctionRootEventId: string): Promise<void> => {
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return
+
+		const observedAt = now()
+		const released = Array.from(auctionState.bids.values()).filter(
+			(bidState) => auctionState.pathReleases.has(bidState.bid.id) && !isTerminalClaim(bidState.currentClaim),
+		)
+		const entries = expandProofEntries(released.map((bidState) => ({ auctionState, bidState })))
+		if (!entries.length) return
+
+		await refreshProofStates(entries, observedAt, `refresh_released:${auctionRootEventId.slice(0, 8)}`)
+	}
+
+	const refreshProofStates = async (entries: ProofQueryEntry[], observedAt: number, source: string): Promise<void> => {
+		if (!entries.length) return
 
 		// Bucket Y → bid for each mint. The mint takes a flat
 		// `Ys: string[]`, but we need to map results back to the
 		// originating bid state when the response arrives.
 		const buckets = new Map<string, MintBucket>()
-		for (const { auctionState, bidState } of live) {
-			let bucket = buckets.get(bidState.bid.mint)
+		for (const entry of entries) {
+			let bucket = buckets.get(entry.bidState.bid.mint)
 			if (!bucket) {
-				bucket = { mintUrl: bidState.bid.mint, entries: [] }
-				buckets.set(bidState.bid.mint, bucket)
+				bucket = { mintUrl: entry.bidState.bid.mint, entries: [] }
+				buckets.set(entry.bidState.bid.mint, bucket)
 			}
-			for (const y of bidState.bid.proofYs) {
-				bucket.entries.push({ auctionState, bidState, proofY: y })
-			}
+			bucket.entries.push(entry)
 		}
 
 		// Run each mint's batch in parallel. Per-mint failures are
@@ -97,7 +137,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 				try {
 					response = await checkProofStateBatch(bucket.mintUrl, allYs, deps.nut7Options)
 				} catch (err) {
-					logger.warn(`[validator-nut7] mint ${bucket.mintUrl} batch failed:`, err instanceof Error ? err.message : err)
+					logger.warn(`[validator-nut7] ${source} mint ${bucket.mintUrl} batch failed:`, err instanceof Error ? err.message : err)
 					return
 				}
 
@@ -121,7 +161,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 						})
 					} catch (err) {
 						logger.error(
-							`[validator-nut7] publish failed for bid ${bidState.bid.id.slice(0, 8)} (${auctionState.auction.dTag}):`,
+							`[validator-nut7] ${source} publish failed for bid ${bidState.bid.id.slice(0, 8)} (${auctionState.auction.dTag}):`,
 							err instanceof Error ? err.message : err,
 						)
 					}
@@ -130,7 +170,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 		)
 	}
 
-	return { tick }
+	return { tick, refreshBidChain, refreshAuctionReleasedNonterminal }
 }
 
 // ============================================================================
@@ -139,11 +179,43 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 interface MintBucket {
 	mintUrl: string
-	entries: Array<{
+	entries: ProofQueryEntry[]
+}
+
+interface ProofQueryEntry {
+	auctionState: ValidatorAuctionState
+	bidState: ValidatorBidState
+	proofY: string
+}
+
+const expandProofEntries = (
+	bids: Array<{
 		auctionState: ValidatorAuctionState
 		bidState: ValidatorBidState
-		proofY: string
-	}>
+	}>,
+): ProofQueryEntry[] => {
+	const out: ProofQueryEntry[] = []
+	for (const { auctionState, bidState } of bids) {
+		for (const proofY of bidState.bid.proofYs) {
+			out.push({ auctionState, bidState, proofY })
+		}
+	}
+	return out
+}
+
+const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: ValidatorBidState): ValidatorBidState[] => {
+	const chain: ValidatorBidState[] = []
+	const seen = new Set<string>()
+	let current: ValidatorBidState | undefined = latestBidState
+	while (current) {
+		if (seen.has(current.bid.id)) break
+		seen.add(current.bid.id)
+		chain.push(current)
+		const prevBidId = current.bid.prevBidId?.trim()
+		if (!prevBidId) break
+		current = auctionState.bids.get(prevBidId)
+	}
+	return chain
 }
 
 const defaultLogger = () => ({

@@ -34,11 +34,13 @@ import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
 import { refreshAuctionMintReachability } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
+import type { Nut7Poller } from './nut7Poller'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
 	relayPool: ApplesauceRelayPool
 	publisher: ReturnType<typeof createVerdictPublisher>
+	nut7Poller?: Pick<Nut7Poller, 'refreshBidChain' | 'refreshAuctionReleasedNonterminal'>
 	/** Override for "current time" — defaults to `Date.now() / 1000`. */
 	now?: () => number
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
@@ -210,6 +212,20 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const bidState = auctionState.bids.get(release.bidEventId)
 		if (!bidState) return // shouldn't happen — recordPathRelease ensures the bid is in the auction
 
+		if (deps.nut7Poller) {
+			try {
+				await deps.nut7Poller.refreshBidChain({
+					auctionRootEventId: auctionState.auction.rootEventId,
+					bidEventId: release.bidEventId,
+				})
+			} catch (err) {
+				logger.warn(
+					`[validator] kind-1025 NUT-7 refresh failed for bid ${release.bidEventId.slice(0, 8)}:`,
+					err instanceof Error ? err.message : err,
+				)
+			}
+		}
+
 		try {
 			await deps.publisher.publishIfChanged({
 				auctionState,
@@ -239,6 +255,17 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			existing.push(raw)
 			pendingSettlements.set(settlement.auctionRootEventId, existing)
 			return
+		}
+
+		if (deps.nut7Poller) {
+			try {
+				await deps.nut7Poller.refreshAuctionReleasedNonterminal(auctionState.auction.rootEventId)
+			} catch (err) {
+				logger.warn(
+					`[validator] kind-1024 NUT-7 refresh failed for auction ${auctionState.auction.rootEventId.slice(0, 8)}:`,
+					err instanceof Error ? err.message : err,
+				)
+			}
 		}
 
 		// A kind-1024 changes the validator's view of the auction

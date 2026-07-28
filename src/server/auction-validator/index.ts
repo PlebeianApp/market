@@ -64,13 +64,14 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 	}
 
 	const publisher = createVerdictPublisher({ signer: options.signer, relayPool: options.relayPool })
+	const poller = createNut7Poller({ state, publisher, logger })
 	const subscriber = createValidatorSubscriber({
 		state,
 		relayPool: options.relayPool,
 		publisher,
+		nut7Poller: poller,
 		logger,
 	})
-	const poller = createNut7Poller({ state, publisher, logger })
 
 	await subscriber.start()
 
