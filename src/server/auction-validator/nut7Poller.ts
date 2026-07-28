@@ -63,7 +63,6 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 		const observedAt = now()
 
 		for (const auctionState of Array.from(deps.state.auctions.values())) {
-			if (auctionState.contextStatus === 'active') continue
 			try {
 				await refreshAuctionMintReachability(auctionState, deps.nut7Options)
 			} catch (err) {

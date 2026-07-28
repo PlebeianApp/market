@@ -211,7 +211,7 @@ export const setAuctionMintReachability = (
 		if (!next.has(mintUrl)) next.set(mintUrl, 'unreachable')
 	}
 	auctionState.mintReachability = next
-	auctionState.contextStatus = Array.from(next.values()).every((status) => status === 'reachable') ? 'active' : 'pending_mint_check'
+	auctionState.contextStatus = Array.from(next.values()).some((status) => status === 'reachable') ? 'active' : 'pending_mint_check'
 }
 
 /**
@@ -315,7 +315,7 @@ export const markVerdictPublished = (
 
 /**
  * Convenience: collect every (auction, bid) tuple where the bid is
- * still "live" (no terminal verdict and the auction hasn't ended).
+ * still "live" and the bid's selected mint is currently reachable.
  * Used by the NUT-7 poller to decide what to query.
  */
 export const collectLiveBids = (
@@ -327,13 +327,13 @@ export const collectLiveBids = (
 }> => {
 	const out: Array<{ auctionState: ValidatorAuctionState; bidState: ValidatorBidState }> = []
 	for (const auctionState of Array.from(state.auctions.values())) {
-		if (auctionState.contextStatus !== 'active') continue
 		// After settlement_grace expires we don't care about NUT-7
 		// state anymore — the bid has either been settled or the
 		// timelock refund window opened.
 		if (now > auctionState.auction.maxEndAt + auctionState.auction.settlementGrace) continue
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (isTerminalClaim(bidState.currentClaim)) continue
+			if (auctionState.mintReachability.get(bidState.bid.mint) !== 'reachable') continue
 			out.push({ auctionState, bidState })
 		}
 	}

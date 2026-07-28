@@ -120,20 +120,18 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 
 		const existing = deps.state.auctions.get(auction.rootEventId)
-		const wasActive = existing?.contextStatus === 'active'
 		const result = upsertAuction(deps.state, auction)
 		if (result.status === 'rejected_immutable') {
 			logger.warn(`[validator] rejecting immutable auction update ${auction.rootEventId.slice(0, 8)}`)
 			return
 		}
 
-		const isActive = await refreshAuctionMintReachability(result.auctionState)
-		if (!isActive) {
-			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} pending mint reachability`)
-			return
+		const hasAnyReachableMint = await refreshAuctionMintReachability(result.auctionState)
+		if (!hasAnyReachableMint) {
+			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} has no reachable mints yet`)
 		}
 
-		const shouldDrain = result.status === 'inserted' || !wasActive
+		const shouldDrain = result.status === 'inserted'
 		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
 		}
@@ -161,14 +159,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it when the auction shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
-			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			existing.push(raw)
-			pendingBids.set(bid.auctionRootEventId, existing)
-			return
-		}
-
-		const trackedAuction = deps.state.auctions.get(bid.auctionRootEventId)
-		if (!trackedAuction || trackedAuction.contextStatus !== 'active') {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
 			existing.push(raw)
 			pendingBids.set(bid.auctionRootEventId, existing)

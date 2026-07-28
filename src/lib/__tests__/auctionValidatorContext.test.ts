@@ -85,16 +85,16 @@ const buildAuction = (overrides: { title?: string; endAt?: number; p2pkXpub?: st
 	}
 }
 
-const buildBid = (): ParsedBidEvent => ({
+const buildBid = (overrides: { id?: string; mint?: string } = {}): ParsedBidEvent => ({
 	rawEvent: {
-		id: '2'.repeat(64),
+		id: overrides.id ?? '2'.repeat(64),
 		kind: 1023,
 		pubkey: BIDDER_PK,
 		created_at: 1_500,
 		content: '',
 		tags: [],
 	} as unknown as NDKEvent,
-	id: '2'.repeat(64),
+	id: overrides.id ?? '2'.repeat(64),
 	bidderPubkey: BIDDER_PK,
 	createdAt: 1_500,
 	auctionRootEventId: '1'.repeat(64),
@@ -102,7 +102,7 @@ const buildBid = (): ParsedBidEvent => ({
 	sellerPubkey: SELLER_PK,
 	amount: 1_200,
 	currency: 'SAT',
-	mint: 'https://mint.test',
+	mint: overrides.mint ?? 'https://mint.test',
 	locktime: 5_700,
 	refundPubkey: REFUND_PK,
 	childPubkey: COMPRESSED_PK,
@@ -134,19 +134,24 @@ describe('auction validator context guards', () => {
 		expect(immutableUpdate.auctionState.auction.p2pkXpub).toBe('xpub-root')
 	})
 
-	test('collectLiveBids skips auctions until mint reachability is active', () => {
+	test('collectLiveBids scopes liveness to each bid mint reachability', () => {
 		const state = createValidatorState(VALIDATOR_PK)
-		const auctionState = upsertAuction(state, buildAuction()).auctionState
-		const bid = buildBid()
+		const auctionState = upsertAuction(state, buildAuction({ mints: ['https://mint-a.test', 'https://mint-b.test'] })).auctionState
+		const reachableBid = buildBid({ id: '2'.repeat(64), mint: 'https://mint-a.test' })
+		const unreachableBid = buildBid({ id: '3'.repeat(64), mint: 'https://mint-b.test' })
 
-		upsertBid(state, bid, 1_505)
+		upsertBid(state, reachableBid, 1_505)
+		upsertBid(state, unreachableBid, 1_506)
 		expect(collectLiveBids(state, 1_600)).toEqual([])
 
-		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+		setAuctionMintReachability(auctionState, [
+			['https://mint-a.test', true],
+			['https://mint-b.test', false],
+		])
 
 		const live = collectLiveBids(state, 1_600)
 		expect(live).toHaveLength(1)
-		expect(live[0]?.bidState.bid.id).toBe(bid.id)
+		expect(live[0]?.bidState.bid.id).toBe(reachableBid.id)
 	})
 
 	test('checkMintReachability distinguishes healthy and failing NUT-7 clients', async () => {
