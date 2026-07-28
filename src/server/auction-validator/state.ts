@@ -52,6 +52,14 @@ export interface ProofStateSnapshot {
  */
 export type AggregateProofState = Nut7ProofState
 
+/**
+ * Maximum depth of a bid replacement-chain walk. Legitimate chains are
+ * short (a handful of rebids); this bounds adversarial or pathological
+ * depth so a single walk is O(1) memory/CPU regardless of relay history.
+ * The walk also has a cycle guard; this is a belt-and-suspenders bound.
+ */
+export const MAX_REPLACEMENT_CHAIN_DEPTH = 64
+
 export const aggregateProofStates = (perProof: Map<string, ProofStateSnapshot>, expectedProofYs: string[]): AggregateProofState => {
 	if (!expectedProofYs.length) return 'unknown'
 	let allSpent = true

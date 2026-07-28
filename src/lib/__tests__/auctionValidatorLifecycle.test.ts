@@ -22,7 +22,7 @@ import {
 	currentTopValidBidAmount,
 } from '../../server/auction-validator/lifecycle'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
-import { recordNut7State } from '../../server/auction-validator/state'
+import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State } from '../../server/auction-validator/state'
 
 // ============================================================================
 // Fixtures — direct object construction (no Zod parser involvement)
@@ -253,6 +253,43 @@ describe('deriveVerdict — pre-close', () => {
 		if (verdict.claim === 'bid_invalid') {
 			expect(verdict.reason).toBe('replacement_chain_invalid')
 			expect(verdict.detail).toMatch(/cycle detected/)
+		}
+	})
+
+	test('rejects replacement chains deeper than MAX_REPLACEMENT_CHAIN_DEPTH', () => {
+		const auction = buildAuction()
+		// Build a chain longer than the depth bound. Each leg has a
+		// strictly increasing amount (so the only failure is depth).
+		const depth = MAX_REPLACEMENT_CHAIN_DEPTH + 2
+		const bids: ParsedBidEvent[] = []
+		for (let i = 0; i < depth; i++) {
+			bids.push(
+				buildBid(auction, {
+					id: i.toString(16).padStart(64, '0'),
+					amount: 1_000 + i * 100,
+					prevBidId: i > 0 ? bids[i - 1].id : undefined,
+				}),
+			)
+		}
+		const head = bids[depth - 1]
+		const bidMap = new Map<string, ValidatorBidState>()
+		for (const b of bids) {
+			const bs = buildBidState(b, b.createdAt, { currentClaim: null })
+			recordNut7State(bs, b.proofYs[0], 'unspent', b.createdAt)
+			bidMap.set(b.id, bs)
+		}
+		const auctionState = buildAuctionState(auction, { bids: bidMap })
+
+		const verdict = deriveVerdict({
+			auctionState,
+			bidState: bidMap.get(head.id)!,
+			now: head.createdAt,
+			currentTopBid: 0,
+		})
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('replacement_chain_invalid')
+			expect(verdict.detail).toMatch(/depth exceeded/)
 		}
 	})
 

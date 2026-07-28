@@ -27,6 +27,7 @@ import {
 	collectLiveBids,
 	isTerminalClaim,
 	recordNut7State,
+	MAX_REPLACEMENT_CHAIN_DEPTH,
 	type ValidatorAuctionState,
 	type ValidatorBidState,
 	type ValidatorState,
@@ -275,6 +276,7 @@ const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: Vali
 	let current: ValidatorBidState | undefined = latestBidState
 	while (current) {
 		if (seen.has(current.bid.id)) break
+		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) break
 		seen.add(current.bid.id)
 		chain.push(current)
 		const prevBidId = current.bid.prevBidId?.trim()

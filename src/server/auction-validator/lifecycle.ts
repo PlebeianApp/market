@@ -40,7 +40,7 @@ import {
 } from '../../lib/auction/validation'
 import type { ParsedPathReleaseEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
-import { aggregateProofStates, type ValidatorAuctionState, type ValidatorBidState } from './state'
+import { aggregateProofStates, MAX_REPLACEMENT_CHAIN_DEPTH, type ValidatorAuctionState, type ValidatorBidState } from './state'
 
 // ============================================================================
 // Public verdict shape
@@ -182,6 +182,9 @@ const deriveBidChainValidation = (auctionState: ValidatorAuctionState, bidState:
 		if (seen.has(parentId)) {
 			return { ok: false, detail: `replacement-chain cycle detected at prev_bid=${parentId}` }
 		}
+		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) {
+			return { ok: false, detail: `replacement-chain depth exceeded (${MAX_REPLACEMENT_CHAIN_DEPTH})` }
+		}
 		seen.add(parentId)
 
 		const parentBidState = auctionState.bids.get(parentId)
@@ -318,6 +321,7 @@ const buildSettlementChain = (
 	let current: ValidatorBidState | undefined = bidState
 	while (current) {
 		if (seen.has(current.bid.id)) break
+		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) break
 		seen.add(current.bid.id)
 		legs.unshift(current)
 		const prevBidId = current.bid.prevBidId?.trim()
