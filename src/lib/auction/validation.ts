@@ -185,6 +185,7 @@ export type SettlementCompletenessResult =
 export interface SettlementChainLegContext {
 	bid: ParsedBidEvent
 	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
 	nut7State?: Nut7ProofState
 	/**
 	 * Optional per-proof NUT-7 states keyed by `proof_y` (lowercased).
@@ -199,6 +200,7 @@ export interface ValidateSettlementCompletenessInput {
 	settlement: ParsedSettlementEvent
 	winningBid: ParsedBidEvent
 	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
 	winningBidClaim?: ValidatorClaim | null
 	winningBidPostCloseDecision?: 'winner' | 'loser' | null
 	winningBidNut7State?: Nut7ProofState
@@ -655,7 +657,7 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 		auction,
 		bid: winningBid,
 		release: pathRelease,
-		now: settlement.createdAt,
+		now: input.pathReleaseObservedAt ?? latestLeg.pathReleaseObservedAt ?? settlement.createdAt,
 		postCloseDecision: inferredPostCloseDecision,
 		fallbackOfferedAt: usesFallback ? auction.maxEndAt + auction.fallbackDelaySec : null,
 		expectedTokenAmount: latestExpectedPayout?.amount ?? winningBid.amount,
@@ -749,6 +751,7 @@ const invalidSettlement = (failureCode: SettlementCompletenessFailureCode, detai
 const normaliseSettlementChain = (input: {
 	winningBid: ParsedBidEvent
 	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
 	winningBidNut7State?: Nut7ProofState
 	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 	bidChain?: SettlementChainLegContext[]
@@ -758,6 +761,7 @@ const normaliseSettlementChain = (input: {
 		{
 			bid: input.winningBid,
 			pathRelease: input.pathRelease,
+			pathReleaseObservedAt: input.pathReleaseObservedAt,
 			nut7State: input.winningBidNut7State,
 			nut7ProofStates: input.winningBidNut7ProofStates,
 		},

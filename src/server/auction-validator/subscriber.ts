@@ -196,8 +196,9 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
+		const observedAt = now()
 
-		const auctionState = recordPathRelease(deps.state, release)
+		const auctionState = recordPathRelease(deps.state, release, observedAt)
 		if (!auctionState) {
 			// We don't know about this bid yet (auction or bid event
 			// hasn't arrived). Stash and replay when the bid appears.

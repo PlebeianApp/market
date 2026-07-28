@@ -235,11 +235,12 @@ const deriveSettlementVerdict = (
 	release: ParsedPathReleaseEvent,
 	now: number,
 ): DerivedVerdict => {
+	const releaseObservedAt = auctionState.pathReleaseObservedAt.get(bidState.bid.id) ?? now
 	const releaseValidity = validatePathRelease({
 		auction: auctionState.auction,
 		bid: bidState.bid,
 		release,
-		now,
+		now: releaseObservedAt,
 		postCloseDecision: bidState.postCloseDecision,
 		fallbackOfferedAt: auctionState.fallbackOfferedAt,
 		expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
@@ -275,6 +276,7 @@ const deriveSettlementVerdict = (
 		winningBidPostCloseDecision: bidState.postCloseDecision,
 		winningBidNut7State: aggregate,
 		winningBidNut7ProofStates: buildProofStateMap(bidState),
+		pathReleaseObservedAt: releaseObservedAt,
 		bidChain: buildSettlementChain(auctionState, bidState),
 	})
 	if (!settlementCompleteness.isComplete) {
@@ -294,12 +296,14 @@ const buildSettlementChain = (
 ): Array<{
 	bid: ValidatorBidState['bid']
 	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
 	nut7State: ReturnType<typeof aggregateProofStates>
 	nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
 }> => {
 	const chain: Array<{
 		bid: ValidatorBidState['bid']
 		pathRelease: ParsedPathReleaseEvent
+		pathReleaseObservedAt?: number
 		nut7State: ReturnType<typeof aggregateProofStates>
 		nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
 	}> = []
@@ -322,6 +326,7 @@ const buildSettlementChain = (
 		chain.push({
 			bid: leg.bid,
 			pathRelease,
+			pathReleaseObservedAt: auctionState.pathReleaseObservedAt.get(leg.bid.id),
 			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
 			nut7ProofStates,
 		})

@@ -114,6 +114,9 @@ export interface ValidatorAuctionState {
 	/** bidEventId -> kind-1025 from the bidder, when observed. */
 	pathReleases: Map<string, ParsedPathReleaseEvent>
 
+	/** bidEventId -> unix seconds when this validator first observed the kind-1025. */
+	pathReleaseObservedAt: Map<string, number>
+
 	// ---- Lifecycle markers -------------------------------------------------
 
 	/** True once the close lifecycle has assigned winner/loser roles. */
@@ -187,6 +190,7 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		bids: new Map(),
 		settlement: null,
 		pathReleases: new Map(),
+		pathReleaseObservedAt: new Map(),
 		closeHandled: false,
 		winnerHandled: false,
 		fallbackOfferedAt: null,
@@ -248,12 +252,20 @@ export const upsertBid = (
 }
 
 /** Record a kind-1025 path release. Returns the auction state, or `null` when unknown. */
-export const recordPathRelease = (state: ValidatorState, release: ParsedPathReleaseEvent): ValidatorAuctionState | null => {
+export const recordPathRelease = (
+	state: ValidatorState,
+	release: ParsedPathReleaseEvent,
+	observedAt: number,
+): ValidatorAuctionState | null => {
 	// Path release references the bid event (`e` tag → bidEventId).
 	// Find the owning auction by scanning auctions for that bid.
 	for (const auctionState of Array.from(state.auctions.values())) {
 		if (auctionState.bids.has(release.bidEventId)) {
 			auctionState.pathReleases.set(release.bidEventId, release)
+			const existingObservedAt = auctionState.pathReleaseObservedAt.get(release.bidEventId)
+			if (existingObservedAt === undefined || observedAt < existingObservedAt) {
+				auctionState.pathReleaseObservedAt.set(release.bidEventId, observedAt)
+			}
 			return auctionState
 		}
 	}
