@@ -28,11 +28,7 @@ const DEFAULT_MAX_CONCURRENCY = 4
 // caches — keeping unit/integration tests deterministic.
 const reachabilityCache = new Map<string, { reachable: boolean; at: number }>()
 
-const probeConcurrently = async <T>(
-	items: ReadonlyArray<T>,
-	limit: number,
-	worker: (item: T) => Promise<void>,
-): Promise<void> => {
+const probeConcurrently = async <T>(items: ReadonlyArray<T>, limit: number, worker: (item: T) => Promise<void>): Promise<void> => {
 	let cursor = 0
 	const run = async (): Promise<void> => {
 		while (cursor < items.length) {

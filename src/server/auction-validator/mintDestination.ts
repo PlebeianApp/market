@@ -59,11 +59,7 @@ const isPrivateIpv6 = (host: string): boolean => {
 const isIpLiteral = (host: string): boolean => /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')
 
 const isLocalhostHost = (host: string): boolean =>
-	host === 'localhost' ||
-	host.endsWith('.localhost') ||
-	host === '127.0.0.1' ||
-	host === '[::1]' ||
-	host === '::1'
+	host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '[::1]' || host === '::1'
 
 export const isMintDestinationAllowed = (mintUrl: string, options: MintDestinationPolicyOptions = {}): DestinationCheck => {
 	let parsed: URL

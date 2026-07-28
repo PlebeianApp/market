@@ -161,7 +161,16 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		const locktime = auction.maxEndAt + auction.settlementGrace
 		const lockSecret = JSON.stringify([
 			'P2PK',
-			{ nonce: 'n', data: COMPRESSED_PK, tags: [['sigflag', 'SIG_INPUTS'], ['locktime', String(locktime)], ['refund', REFUND_PK], ['n_sigs_refund', '1']] },
+			{
+				nonce: 'n',
+				data: COMPRESSED_PK,
+				tags: [
+					['sigflag', 'SIG_INPUTS'],
+					['locktime', String(locktime)],
+					['refund', REFUND_PK],
+					['n_sigs_refund', '1'],
+				],
+			},
 		])
 		const proofY = hashToCurveHexFromString(lockSecret)
 		const pendingBid = buildBid(auction, { id: '2'.repeat(64), bidderPubkey: BIDDER_A, amount: 1_200, proofY })

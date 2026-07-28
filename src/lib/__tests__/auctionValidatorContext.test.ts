@@ -206,10 +206,7 @@ describe('auction validator context guards', () => {
 		// A normal addressable replacement: a brand-new event id and no
 		// `auction_root_event_id` tag (so parsed `rootEventId` is its own
 		// new id), same seller + d + coordinate, mutable title change.
-		const replacement = upsertAuction(
-			state,
-			buildAuction({ rootEventId: '9'.repeat(64), title: 'Updated title' }),
-		)
+		const replacement = upsertAuction(state, buildAuction({ rootEventId: '9'.repeat(64), title: 'Updated title' }))
 
 		// Not inserted as a second auction — resolved to the existing one.
 		expect(replacement.status).toBe('updated')
@@ -230,10 +227,7 @@ describe('auction validator context guards', () => {
 		upsertBid(state, buildBid({ id: '2'.repeat(64) }), 1_505)
 		expect(inserted.auctionState.bids.size).toBe(1)
 
-		const replacement = upsertAuction(
-			state,
-			buildAuction({ rootEventId: '8'.repeat(64), title: 'Updated title' }),
-		)
+		const replacement = upsertAuction(state, buildAuction({ rootEventId: '8'.repeat(64), title: 'Updated title' }))
 		expect(replacement.status).toBe('updated')
 		// Accumulated bid state is preserved across the addressable update.
 		expect(replacement.auctionState.bids.size).toBe(1)
@@ -250,10 +244,7 @@ describe('auction validator context guards', () => {
 		// this resolves to a *different* coordinate and is inserted as a
 		// separate lineage (it must not overwrite the pinned auction).
 		const otherSeller = '7'.repeat(64)
-		const otherLineage = upsertAuction(
-			state,
-			buildAuction({ rootEventId: '6'.repeat(64), sellerPubkey: otherSeller, title: 'Imposter' }),
-		)
+		const otherLineage = upsertAuction(state, buildAuction({ rootEventId: '6'.repeat(64), sellerPubkey: otherSeller, title: 'Imposter' }))
 
 		expect(otherLineage.status).toBe('inserted')
 		expect(state.auctions.size).toBe(2)
@@ -338,10 +329,7 @@ const buildPathRelease = (bid: ParsedBidEvent, overrides: Partial<ParsedPathRele
 	content: '',
 })
 
-const buildSettlement = (
-	auction: ParsedAuctionEvent,
-	overrides: Partial<ParsedSettlementEvent> = {},
-): ParsedSettlementEvent => ({
+const buildSettlement = (auction: ParsedAuctionEvent, overrides: Partial<ParsedSettlementEvent> = {}): ParsedSettlementEvent => ({
 	rawEvent: {
 		id: overrides.id ?? '6'.repeat(64),
 		kind: 1024,
@@ -445,32 +433,73 @@ describe('auction validator release observed-time binding', () => {
 })
 
 describe('aggregateProofStates — all-spent semantics', () => {
-	const snap = (state: import("../auction/constants").Nut7ProofState) => ({ state, observedAt: 1 })
-	const mk = (entries: Array<[string, import("../auction/constants").Nut7ProofState]>) => {
-		const m = new Map<string, { state: import("../auction/constants").Nut7ProofState; observedAt: number }>()
+	const snap = (state: import('../auction/constants').Nut7ProofState) => ({ state, observedAt: 1 })
+	const mk = (entries: Array<[string, import('../auction/constants').Nut7ProofState]>) => {
+		const m = new Map<string, { state: import('../auction/constants').Nut7ProofState; observedAt: number }>()
 		for (const [y, s] of entries) m.set(y, snap(s))
 		return m
 	}
 
 	test('spent only when every expected proof is present and spent', () => {
 		const ys = ['aa', 'bb', 'cc']
-		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'spent'], ['cc', 'spent']]), ys)).toBe('spent')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'spent'],
+					['bb', 'spent'],
+					['cc', 'spent'],
+				]),
+				ys,
+			),
+		).toBe('spent')
 	})
 
 	test('mixed spent + unspent is not spent', () => {
 		const ys = ['aa', 'bb']
-		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'unspent']]), ys)).not.toBe('spent')
-		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'unspent']]), ys)).toBe('unknown')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'spent'],
+					['bb', 'unspent'],
+				]),
+				ys,
+			),
+		).not.toBe('spent')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'spent'],
+					['bb', 'unspent'],
+				]),
+				ys,
+			),
+		).toBe('unknown')
 	})
 
 	test('spent + missing is not spent', () => {
 		const ys = ['aa', 'bb']
-		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'missing']]), ys)).toBe('missing')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'spent'],
+					['bb', 'missing'],
+				]),
+				ys,
+			),
+		).toBe('missing')
 	})
 
 	test('spent + pending is not spent', () => {
 		const ys = ['aa', 'bb']
-		expect(aggregateProofStates(mk([['aa', 'spent'], ['bb', 'pending']]), ys)).toBe('pending')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'spent'],
+					['bb', 'pending'],
+				]),
+				ys,
+			),
+		).toBe('pending')
 	})
 
 	test('spent + unknown is not spent', () => {
@@ -480,7 +509,15 @@ describe('aggregateProofStates — all-spent semantics', () => {
 
 	test('all unspent → unspent', () => {
 		const ys = ['aa', 'bb']
-		expect(aggregateProofStates(mk([['aa', 'unspent'], ['bb', 'unspent']]), ys)).toBe('unspent')
+		expect(
+			aggregateProofStates(
+				mk([
+					['aa', 'unspent'],
+					['bb', 'unspent'],
+				]),
+				ys,
+			),
+		).toBe('unspent')
 	})
 })
 

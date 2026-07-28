@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { isMintDestinationAllowed } from '../../server/auction-validator/mintDestination'
 import { refreshAuctionMintReachability } from '../../server/auction-validator/mintReachability'
-import { createValidatorState, setAuctionMintReachability, upsertAuction, type ValidatorAuctionState } from '../../server/auction-validator/state'
+import {
+	createValidatorState,
+	setAuctionMintReachability,
+	upsertAuction,
+	type ValidatorAuctionState,
+} from '../../server/auction-validator/state'
 import type { MinBidCurve, ParsedAuctionEvent } from '../auction/events'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 

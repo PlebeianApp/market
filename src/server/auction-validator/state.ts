@@ -368,11 +368,7 @@ export type RecordPathReleaseResult =
  *
  * On replay (after the bid lands) the same authorization is re-applied.
  */
-export const recordPathRelease = (
-	state: ValidatorState,
-	release: ParsedPathReleaseEvent,
-	observedAt: number,
-): RecordPathReleaseResult => {
+export const recordPathRelease = (state: ValidatorState, release: ParsedPathReleaseEvent, observedAt: number): RecordPathReleaseResult => {
 	// Path release references the bid event (`e` tag → bidEventId).
 	// Find the owning auction for that bid.
 	for (const auctionState of Array.from(state.auctions.values())) {
