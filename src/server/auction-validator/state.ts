@@ -323,33 +323,68 @@ export const upsertBid = (
 	return { auctionState, bidState: fresh }
 }
 
-/** Record a kind-1025 path release. Returns the auction state, or `null` when unknown. */
+/** Result of attempting to record a kind-1025 path release. */
+export type RecordPathReleaseResult =
+	| { status: 'recorded'; auctionState: ValidatorAuctionState }
+	| { status: 'unknown_bid' }
+	| { status: 'wrong_author' }
+
+/**
+ * Record a kind-1025 path release. The release is only stored once the
+ * referenced bid is resolved **and** the authenticated signer matches
+ * that bid's bidder pubkey — a correctly-signed third-party release
+ * must not overwrite an honest bidder's selected release. Wrong-author
+ * evidence is dropped without influencing state or reputation; the
+ * caller distinguishes `unknown_bid` (ordering gap → buffer + replay)
+ * from `wrong_author` (drop, do not buffer).
+ *
+ * On replay (after the bid lands) the same authorization is re-applied.
+ */
 export const recordPathRelease = (
 	state: ValidatorState,
 	release: ParsedPathReleaseEvent,
 	observedAt: number,
-): ValidatorAuctionState | null => {
+): RecordPathReleaseResult => {
 	// Path release references the bid event (`e` tag → bidEventId).
-	// Find the owning auction by scanning auctions for that bid.
+	// Find the owning auction for that bid.
 	for (const auctionState of Array.from(state.auctions.values())) {
-		if (auctionState.bids.has(release.bidEventId)) {
-			auctionState.pathReleases.set(release.bidEventId, release)
-			const existingObservedAt = auctionState.pathReleaseObservedAt.get(release.bidEventId)
-			if (existingObservedAt === undefined || observedAt < existingObservedAt) {
-				auctionState.pathReleaseObservedAt.set(release.bidEventId, observedAt)
-			}
-			return auctionState
+		const bidState = auctionState.bids.get(release.bidEventId)
+		if (!bidState) continue
+		if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
+			return { status: 'wrong_author' }
 		}
+		auctionState.pathReleases.set(release.bidEventId, release)
+		const existingObservedAt = auctionState.pathReleaseObservedAt.get(release.bidEventId)
+		if (existingObservedAt === undefined || observedAt < existingObservedAt) {
+			auctionState.pathReleaseObservedAt.set(release.bidEventId, observedAt)
+		}
+		return { status: 'recorded', auctionState }
 	}
-	return null
+	return { status: 'unknown_bid' }
 }
 
-/** Record a kind-1024 settlement. */
-export const recordSettlement = (state: ValidatorState, settlement: ParsedSettlementEvent): ValidatorAuctionState | null => {
+/** Result of attempting to record a kind-1024 settlement. */
+export type RecordSettlementResult =
+	| { status: 'recorded'; auctionState: ValidatorAuctionState }
+	| { status: 'unknown_auction' }
+	| { status: 'wrong_seller' }
+
+/**
+ * Record a kind-1024 settlement. The single settlement slot is only
+ * overwritten once the authenticated signer matches the pinned auction
+ * seller — a correctly-signed non-seller event must not replace valid
+ * seller evidence. `unknown_auction` (ordering gap → buffer + replay)
+ * is distinct from `wrong_seller` (drop, do not buffer); replay
+ * re-applies the same authorization.
+ */
+export const recordSettlement = (state: ValidatorState, settlement: ParsedSettlementEvent): RecordSettlementResult => {
 	const auctionState = state.auctions.get(settlement.auctionRootEventId)
-	if (!auctionState) return null
+	if (!auctionState) return { status: 'unknown_auction' }
+	if (settlement.sellerPubkey.toLowerCase() !== auctionState.rootAuction.sellerPubkey.toLowerCase()) {
+		return { status: 'wrong_seller' }
+	}
 	auctionState.settlement = settlement
-	return auctionState
+	return { status: 'recorded', auctionState }
 }
 
 /**

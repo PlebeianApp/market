@@ -206,3 +206,160 @@ describe('auction validator subscriber signature checks', () => {
 		}
 	})
 })
+
+/**
+ * Authorization-before-mutation coverage (review 4800100458, blocking 1
+ * + inlines 4800101759 / 4800105709). A correctly-signed event from the
+ * wrong author must not overwrite the single path-release slot, must
+ * not be buffered, and must not trigger a verdict publish.
+ */
+describe('auction validator subscriber authorizes before mutation', () => {
+	const buildHarness = () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		const auctionState = buildAuctionState(state)
+		const publishCalls: string[] = []
+		const relayPool = {
+			handlers: new Map<number, (event: NostrEvent) => void>(),
+			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
+				const kind = filters[0]?.kinds?.[0]
+				if (kind !== undefined) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				return () => undefined
+			},
+			publish: async () => undefined,
+		}
+		const publisher = {
+			publishIfChanged: async (input: { bidState: { bid: { id: string } } }) => {
+				publishCalls.push(input.bidState.bid.id)
+				return { verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }
+			},
+		}
+		const subscriber = createValidatorSubscriber({ state, relayPool: relayPool as any, publisher: publisher as any })
+		return { state, auctionState, relayPool, publishCalls, subscriber }
+	}
+
+	const dispatch = (relayPool: any, event: NostrEvent) => {
+		const handler = relayPool.handlers.get(event.kind) as ((event: NostrEvent) => void) | undefined
+		if (!handler) throw new Error(`no handler for kind ${event.kind}`)
+		handler(event)
+	}
+	const flush = async () => {
+		await Promise.resolve()
+		await Promise.resolve()
+		await Promise.resolve()
+	}
+
+	const buildSignedBid = (bidderSk: Uint8Array): NostrEvent =>
+		createSignedEvent(bidderSk, {
+			kind: AUCTION_BID_KIND,
+			created_at: 1_500,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['p', SELLER_PUBKEY],
+				['amount', '1200'],
+				['currency', 'SAT'],
+				['mint', 'https://mint.test'],
+				['locktime', '5700'],
+				['refund_pubkey', '03' + 'f'.repeat(64)],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['lock_secret', 'secret-1'],
+				['proof_y', '02' + 'b'.repeat(64)],
+				['created_for_end_at', '2100'],
+				['bid_nonce', 'nonce'],
+				['key_scheme', 'hd_p2pk'],
+				['status', 'locked'],
+			],
+		} as unknown as EventTemplate)
+
+	test('a validly-signed kind-1025 from a non-bidder does not overwrite the release slot or publish', async () => {
+		const { state, auctionState, relayPool, publishCalls, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const attackerSk = generateSecretKey()
+		const bidEvent = buildSignedBid(bidderSk)
+		dispatch(relayPool, bidEvent)
+		await flush()
+		// The bid itself triggered one publish.
+		expect(publishCalls).toEqual([bidEvent.id])
+
+		// Valid release authored by the bidder → recorded + published.
+		const validRelease = createSignedEvent(bidderSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_600,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+		dispatch(relayPool, validRelease)
+		await flush()
+		expect(auctionState.pathReleases.get(bidEvent.id)?.id).toBe(validRelease.id)
+		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
+
+		// Correctly-signed release from a different author → dropped,
+		// not buffered, and not published.
+		const wrongAuthorRelease = createSignedEvent(attackerSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_700,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+		dispatch(relayPool, wrongAuthorRelease)
+		await flush()
+
+		// The honest bidder's release is still pinned; no new publish.
+		expect(auctionState.pathReleases.get(bidEvent.id)?.id).toBe(validRelease.id)
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.pathReleases.size).toBe(1)
+		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
+		await subscriber.stop()
+	})
+
+	test('a validly-signed kind-1024 from a non-seller does not replace the settlement slot', async () => {
+		const { state, auctionState, relayPool, subscriber } = buildHarness()
+		await subscriber.start()
+
+		// The auction's pinned seller is SELLER_PUBKEY ('b'.repeat(64)).
+		// A settlement authored by any other signer must be rejected.
+		const attackerSk = generateSecretKey()
+		const imposterSettlement = createSignedEvent(attackerSk, {
+			kind: AUCTION_SETTLEMENT_KIND,
+			created_at: 1_800,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['status', 'settled'],
+				['close_at', '2100'],
+				['winning_bid', 'e'.repeat(64)],
+				['winner', 'c'.repeat(64)],
+				['final_amount', '1200'],
+				['path_release', 'path-release-event-id'],
+				['payout', 'e'.repeat(64), '1200', 'settled'],
+			],
+		} as unknown as EventTemplate)
+		dispatch(relayPool, imposterSettlement)
+		await flush()
+
+		// The single settlement slot stays empty; the imposter did not
+		// overwrite it and no settled_* verdict was derived from it.
+		expect(auctionState.settlement).toBeNull()
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.settlement).toBeNull()
+		await subscriber.stop()
+	})
+})

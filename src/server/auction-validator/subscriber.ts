@@ -190,15 +190,26 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const release = parsed.value
 		const observedAt = now()
 
-		const auctionState = recordPathRelease(deps.state, release, observedAt)
-		if (!auctionState) {
+		const recordResult = recordPathRelease(deps.state, release, observedAt)
+		if (recordResult.status === 'unknown_bid') {
 			// We don't know about this bid yet (auction or bid event
-			// hasn't arrived). Stash and replay when the bid appears.
+			// hasn't arrived). Stash and replay when the bid appears;
+			// authorization is re-applied on replay.
 			const existing = pendingReleases.get(release.bidEventId) ?? []
 			existing.push(raw)
 			pendingReleases.set(release.bidEventId, existing)
 			return
 		}
+		if (recordResult.status === 'wrong_author') {
+			// Correctly-signed but not by the bid's bidder. Drop without
+			// mutating state, buffering, or publishing a verdict — wrong-author
+			// evidence must not change reputation.
+			logger.warn(
+				`[validator] dropping kind-1025 ${release.id.slice(0, 8)}: signer does not match bidder for bid ${release.bidEventId.slice(0, 8)}`,
+			)
+			return
+		}
+		const auctionState = recordResult.auctionState
 		const bidState = auctionState.bids.get(release.bidEventId)
 		if (!bidState) return // shouldn't happen — recordPathRelease ensures the bid is in the auction
 
@@ -239,13 +250,23 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (!parsed.ok) return
 		const settlement = parsed.value
 
-		const auctionState = recordSettlement(deps.state, settlement)
-		if (!auctionState) {
+		const recordResult = recordSettlement(deps.state, settlement)
+		if (recordResult.status === 'unknown_auction') {
 			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
 			existing.push(raw)
 			pendingSettlements.set(settlement.auctionRootEventId, existing)
 			return
 		}
+		if (recordResult.status === 'wrong_seller') {
+			// Correctly-signed but not by the auction seller. Drop without
+			// overwriting the settlement slot, buffering, or publishing —
+			// wrong-seller evidence must not replace valid seller evidence.
+			logger.warn(
+				`[validator] dropping kind-1024 ${settlement.id.slice(0, 8)}: signer does not match seller for auction ${settlement.auctionRootEventId.slice(0, 8)}`,
+			)
+			return
+		}
+		const auctionState = recordResult.auctionState
 
 		if (deps.nut7Poller) {
 			try {

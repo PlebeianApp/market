@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
+import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { checkMintReachability, checkProofState, checkProofStateBatch } from '../cashu/nut7'
 import {
 	collectLiveBids,
 	createValidatorState,
+	recordPathRelease,
+	recordSettlement,
 	setAuctionMintReachability,
 	upsertAuction,
 	upsertBid,
@@ -308,5 +310,105 @@ describe('auction validator context guards', () => {
 		}
 
 		await expect(checkProofState('https://mint.test', PROOF_Y, { mintClient: mint as any })).resolves.toBe('missing')
+	})
+})
+
+const buildPathRelease = (bid: ParsedBidEvent, overrides: Partial<ParsedPathReleaseEvent> = {}): ParsedPathReleaseEvent => ({
+	rawEvent: {
+		id: overrides.id ?? '5'.repeat(64),
+		kind: 1025,
+		pubkey: overrides.bidderPubkey ?? bid.bidderPubkey,
+		created_at: 2_200,
+		content: '',
+		tags: [],
+	} as unknown as NDKEvent,
+	id: overrides.id ?? '5'.repeat(64),
+	bidderPubkey: overrides.bidderPubkey ?? bid.bidderPubkey,
+	createdAt: 2_200,
+	bidEventId: overrides.bidEventId ?? bid.id,
+	auctionCoordinate: overrides.auctionCoordinate ?? bid.auctionCoordinate,
+	sellerPubkey: overrides.sellerPubkey ?? bid.sellerPubkey,
+	derivationPath: overrides.derivationPath ?? 'm/0/0/0/0/0',
+	childPubkey: overrides.childPubkey ?? bid.childPubkey,
+	releaseReason: overrides.releaseReason ?? 'settlement',
+	auditorRefs: [],
+	fallbackOfferId: undefined,
+	cashuToken: undefined,
+	content: '',
+})
+
+const buildSettlement = (
+	auction: ParsedAuctionEvent,
+	overrides: Partial<ParsedSettlementEvent> = {},
+): ParsedSettlementEvent => ({
+	rawEvent: {
+		id: overrides.id ?? '6'.repeat(64),
+		kind: 1024,
+		pubkey: overrides.sellerPubkey ?? auction.sellerPubkey,
+		created_at: 2_200,
+		content: '',
+		tags: [],
+	} as unknown as NDKEvent,
+	id: overrides.id ?? '6'.repeat(64),
+	sellerPubkey: overrides.sellerPubkey ?? auction.sellerPubkey,
+	createdAt: 2_200,
+	auctionRootEventId: overrides.auctionRootEventId ?? auction.rootEventId,
+	auctionCoordinate: overrides.auctionCoordinate ?? auction.coordinate,
+	status: overrides.status ?? 'settled',
+	closeAt: overrides.closeAt ?? auction.maxEndAt + 120,
+	winningBidId: overrides.winningBidId,
+	winnerPubkey: overrides.winnerPubkey,
+	finalAmount: overrides.finalAmount ?? 1_200,
+	pathReleaseEventId: overrides.pathReleaseEventId,
+	payouts: overrides.payouts ?? [],
+	fallbackChain: overrides.fallbackChain ?? [],
+	reason: overrides.reason,
+})
+
+describe('auction validator record authorization', () => {
+	test('recordPathRelease authorizes the signer against the bid and re-authorizes on replay', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		upsertAuction(state, auction)
+		const bid = buildBid({ id: '2'.repeat(64) })
+
+		// Before the bid is known → ordering gap, buffer (unknown_bid).
+		const release = buildPathRelease(bid)
+		expect(recordPathRelease(state, release, 2_200)).toEqual({ status: 'unknown_bid' })
+
+		// Bid lands.
+		upsertBid(state, bid, 1_505)
+
+		// Replayed release from the bidder → recorded.
+		const bidderRelease = buildPathRelease(bid, { id: '5'.repeat(64) })
+		expect(recordPathRelease(state, bidderRelease, 2_200).status).toBe('recorded')
+
+		// A correctly-signed release from a different author → wrong_author,
+		// dropped without overwriting the honest bidder's release.
+		const wrongAuthor = buildPathRelease(bid, { id: '7'.repeat(64), bidderPubkey: 'z'.repeat(64) })
+		const result = recordPathRelease(state, wrongAuthor, 2_201)
+		expect(result.status).toBe('wrong_author')
+		const auctionState = state.auctions.get(auction.rootEventId)!
+		expect(auctionState.pathReleases.get(bid.id)?.id).toBe('5'.repeat(64))
+	})
+
+	test('recordSettlement authorizes the signer against the pinned auction seller', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		upsertAuction(state, auction)
+
+		// Unknown auction → ordering gap, buffer.
+		const orphan = buildSettlement(auction, { auctionRootEventId: '9'.repeat(64) })
+		expect(recordSettlement(state, orphan)).toEqual({ status: 'unknown_auction' })
+
+		// Correct seller → recorded.
+		const sellerSettlement = buildSettlement(auction, { id: '6'.repeat(64) })
+		expect(recordSettlement(state, sellerSettlement).status).toBe('recorded')
+
+		// Non-seller → wrong_seller, dropped without overwriting the slot.
+		const imposter = buildSettlement(auction, { id: '8'.repeat(64), sellerPubkey: 'z'.repeat(64) })
+		expect(recordSettlement(state, imposter).status).toBe('wrong_seller')
+		const auctionState = state.auctions.get(auction.rootEventId)!
+		expect(auctionState.settlement?.id).toBe('6'.repeat(64))
 	})
 })
