@@ -186,6 +186,12 @@ export interface SettlementChainLegContext {
 	bid: ParsedBidEvent
 	pathRelease: ParsedPathReleaseEvent
 	nut7State?: Nut7ProofState
+	/**
+	 * Optional per-proof NUT-7 states keyed by `proof_y` (lowercased).
+	 * When present, settlement completeness requires every expected proof
+	 * to be explicitly `spent`.
+	 */
+	nut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 }
 
 export interface ValidateSettlementCompletenessInput {
@@ -196,6 +202,7 @@ export interface ValidateSettlementCompletenessInput {
 	winningBidClaim?: ValidatorClaim | null
 	winningBidPostCloseDecision?: 'winner' | 'loser' | null
 	winningBidNut7State?: Nut7ProofState
+	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 	bidChain?: SettlementChainLegContext[]
 }
 
@@ -622,7 +629,13 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 		return invalidSettlement('winning_bid_invalid', `winning bid claim ${winningBidClaim} is not settlement-eligible`)
 	}
 
-	const chain = normaliseSettlementChain({ winningBid, pathRelease, winningBidNut7State, bidChain })
+	const chain = normaliseSettlementChain({
+		winningBid,
+		pathRelease,
+		winningBidNut7State,
+		winningBidNut7ProofStates: input.winningBidNut7ProofStates,
+		bidChain,
+	})
 	const latestLeg = chain[chain.length - 1]
 	if (!latestLeg) {
 		return invalidSettlement('payout_missing', 'settlement chain is empty')
@@ -665,8 +678,9 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 	}
 
 	for (const leg of chain) {
-		if (leg.nut7State !== 'spent') {
-			return invalidSettlement('nut7_not_spent', `chain leg ${leg.bid.id.slice(0, 8)}… is ${leg.nut7State ?? 'unknown'}, not spent`)
+		const nut7SpendEvidence = validateSettlementLegNut7States(leg)
+		if (!nut7SpendEvidence.ok) {
+			return invalidSettlement('nut7_not_spent', nut7SpendEvidence.detail)
 		}
 	}
 
@@ -736,11 +750,66 @@ const normaliseSettlementChain = (input: {
 	winningBid: ParsedBidEvent
 	pathRelease: ParsedPathReleaseEvent
 	winningBidNut7State?: Nut7ProofState
+	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 	bidChain?: SettlementChainLegContext[]
 }): SettlementChainLegContext[] => {
 	if (input.bidChain && input.bidChain.length > 0) return input.bidChain
-	return [{ bid: input.winningBid, pathRelease: input.pathRelease, nut7State: input.winningBidNut7State }]
+	return [
+		{
+			bid: input.winningBid,
+			pathRelease: input.pathRelease,
+			nut7State: input.winningBidNut7State,
+			nut7ProofStates: input.winningBidNut7ProofStates,
+		},
+	]
 }
+
+const validateSettlementLegNut7States = (leg: SettlementChainLegContext): { ok: true } | { ok: false; detail: string } => {
+	const proofStates = leg.nut7ProofStates
+	if (proofStates) {
+		for (const proofY of leg.bid.proofYs) {
+			const state = readProofState(proofStates, proofY)
+			if (state !== 'spent') {
+				return {
+					ok: false,
+					detail: `chain leg ${leg.bid.id.slice(0, 8)}… proof ${proofY.slice(0, 8)}… is ${state ?? 'unknown'}, not spent`,
+				}
+			}
+		}
+		return { ok: true }
+	}
+
+	// Backward-compatible fallback: aggregate state is only sufficient for
+	// single-proof legs. Multi-proof legs require explicit per-proof states.
+	if (leg.bid.proofYs.length <= 1 && leg.nut7State === 'spent') {
+		return { ok: true }
+	}
+
+	if (leg.bid.proofYs.length > 1) {
+		return {
+			ok: false,
+			detail: `chain leg ${leg.bid.id.slice(0, 8)}… has ${leg.bid.proofYs.length} proofs but no per-proof NUT-7 evidence`,
+		}
+	}
+
+	return {
+		ok: false,
+		detail: `chain leg ${leg.bid.id.slice(0, 8)}… is ${leg.nut7State ?? 'unknown'}, not spent`,
+	}
+}
+
+const readProofState = (
+	states: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>,
+	proofY: string,
+): Nut7ProofState | undefined => {
+	const key = proofY.toLowerCase()
+	if (isNut7ProofStateMap(states)) return states.get(key)
+	return states[key]
+}
+
+const isNut7ProofStateMap = (
+	states: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>,
+): states is ReadonlyMap<string, Nut7ProofState> => states instanceof Map
 
 const inferSettlementPostCloseDecision = (
 	pathRelease: ParsedPathReleaseEvent,

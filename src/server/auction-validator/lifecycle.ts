@@ -274,6 +274,7 @@ const deriveSettlementVerdict = (
 		winningBidClaim: bidState.currentClaim,
 		winningBidPostCloseDecision: bidState.postCloseDecision,
 		winningBidNut7State: aggregate,
+		winningBidNut7ProofStates: buildProofStateMap(bidState),
 		bidChain: buildSettlementChain(auctionState, bidState),
 	})
 	if (!settlementCompleteness.isComplete) {
@@ -290,11 +291,17 @@ const deriveSettlementVerdict = (
 const buildSettlementChain = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
-): Array<{ bid: ValidatorBidState['bid']; pathRelease: ParsedPathReleaseEvent; nut7State: ReturnType<typeof aggregateProofStates> }> => {
+): Array<{
+	bid: ValidatorBidState['bid']
+	pathRelease: ParsedPathReleaseEvent
+	nut7State: ReturnType<typeof aggregateProofStates>
+	nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
+}> => {
 	const chain: Array<{
 		bid: ValidatorBidState['bid']
 		pathRelease: ParsedPathReleaseEvent
 		nut7State: ReturnType<typeof aggregateProofStates>
+		nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
 	}> = []
 	const legs: ValidatorBidState[] = []
 	const seen = new Set<string>()
@@ -311,13 +318,24 @@ const buildSettlementChain = (
 	for (const leg of legs) {
 		const pathRelease = auctionState.pathReleases.get(leg.bid.id)
 		if (!pathRelease) continue
+		const nut7ProofStates = buildProofStateMap(leg)
 		chain.push({
 			bid: leg.bid,
 			pathRelease,
 			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
+			nut7ProofStates,
 		})
 	}
 	return chain
+}
+
+const buildProofStateMap = (bidState: ValidatorBidState): Map<string, ReturnType<typeof aggregateProofStates>> => {
+	const perProof = new Map<string, ReturnType<typeof aggregateProofStates>>()
+	for (const proofY of bidState.bid.proofYs) {
+		const state = bidState.nut7States.get(proofY.toLowerCase())?.state ?? 'unknown'
+		perProof.set(proofY.toLowerCase(), state)
+	}
+	return perProof
 }
 
 const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number => {

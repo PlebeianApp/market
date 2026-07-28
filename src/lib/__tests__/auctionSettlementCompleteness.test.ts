@@ -103,6 +103,8 @@ const buildToken = (mint: string, secret: string, amount: number): string => {
 	return getEncodedToken({ mint, proofs: [proof] })
 }
 
+const buildTokenFromProofs = (mint: string, proofs: Proof[]): string => getEncodedToken({ mint, proofs })
+
 const buildPathRelease = (
 	bid: ParsedBidEvent,
 	path: string,
@@ -250,5 +252,89 @@ describe('validateSettlementCompleteness', () => {
 
 		expect(result.isComplete).toBe(false)
 		if (!result.isComplete) expect(result.failureCode).toBe('fallback_chain_inconsistent')
+	})
+
+	test('rejects mixed per-proof states [spent, unspent] even when aggregate is spent', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, {
+			id: '2'.repeat(64),
+			amount: 100,
+			path: 'm/0/0/0/0/0',
+		})
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const lockSecretA = buildLockSecret(bid.childPubkey, locktime)
+		const lockSecretB = buildLockSecret(bid.childPubkey, locktime)
+		const multiProofBid: ParsedBidEvent = {
+			...bid,
+			lockSecrets: [lockSecretA, lockSecretB],
+			proofYs: [hashToCurveHexFromString(lockSecretA), hashToCurveHexFromString(lockSecretB)],
+		}
+
+		const release = {
+			...buildPathRelease(multiProofBid, 'm/0/0/0/0/0', '3'.repeat(64)),
+			cashuToken: buildTokenFromProofs(multiProofBid.mint, [
+				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretA, C: '02' + '1'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretB, C: '02' + '2'.repeat(64) },
+			]),
+		}
+		const settlement = buildSettlement(auction, multiProofBid, release.id)
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: multiProofBid,
+			pathRelease: release,
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+			winningBidNut7ProofStates: {
+				[multiProofBid.proofYs[0].toLowerCase()]: 'spent',
+				[multiProofBid.proofYs[1].toLowerCase()]: 'unspent',
+			},
+		})
+
+		expect(result.isComplete).toBe(false)
+		if (!result.isComplete) expect(result.failureCode).toBe('nut7_not_spent')
+	})
+
+	test('rejects mixed per-proof states [spent, missing] even when aggregate is spent', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, {
+			id: '2'.repeat(64),
+			amount: 100,
+			path: 'm/0/0/0/0/0',
+		})
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const lockSecretA = buildLockSecret(bid.childPubkey, locktime)
+		const lockSecretB = buildLockSecret(bid.childPubkey, locktime)
+		const multiProofBid: ParsedBidEvent = {
+			...bid,
+			lockSecrets: [lockSecretA, lockSecretB],
+			proofYs: [hashToCurveHexFromString(lockSecretA), hashToCurveHexFromString(lockSecretB)],
+		}
+
+		const release = {
+			...buildPathRelease(multiProofBid, 'm/0/0/0/0/0', '3'.repeat(64)),
+			cashuToken: buildTokenFromProofs(multiProofBid.mint, [
+				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretA, C: '02' + '1'.repeat(64) },
+				{ id: '009a1f293253e41e', amount: 50, secret: lockSecretB, C: '02' + '2'.repeat(64) },
+			]),
+		}
+		const settlement = buildSettlement(auction, multiProofBid, release.id)
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: multiProofBid,
+			pathRelease: release,
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+			winningBidNut7ProofStates: {
+				[multiProofBid.proofYs[0].toLowerCase()]: 'spent',
+				[multiProofBid.proofYs[1].toLowerCase()]: 'missing',
+			},
+		})
+
+		expect(result.isComplete).toBe(false)
+		if (!result.isComplete) expect(result.failureCode).toBe('nut7_not_spent')
 	})
 })
