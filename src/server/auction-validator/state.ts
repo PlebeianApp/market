@@ -167,6 +167,16 @@ export interface UpsertAuctionResult {
 	status: 'inserted' | 'updated' | 'rejected_immutable'
 }
 
+const sameAuctionIdentity = (root: ParsedAuctionEvent, candidate: ParsedAuctionEvent): boolean => {
+	if (root.rootEventId !== candidate.rootEventId) return false
+	if (root.sellerPubkey.toLowerCase() !== candidate.sellerPubkey.toLowerCase()) return false
+	if (root.dTag !== candidate.dTag) return false
+	if (root.coordinate !== candidate.coordinate) return false
+	if (root.rawEvent.kind !== candidate.rawEvent.kind) return false
+	if (root.rawEvent.pubkey.toLowerCase() !== candidate.rawEvent.pubkey.toLowerCase()) return false
+	return true
+}
+
 /**
  * Register an auction we should track. Idempotent: if the auction is
  * already tracked, update the parsed event (handles re-publish of
@@ -175,6 +185,9 @@ export interface UpsertAuctionResult {
 export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): UpsertAuctionResult => {
 	const existing = state.auctions.get(auction.rootEventId)
 	if (existing) {
+		if (!sameAuctionIdentity(existing.rootAuction, auction)) {
+			return { auctionState: existing, status: 'rejected_immutable' }
+		}
 		if (!auctionImmutableFieldsMatch(existing.rootAuction.rawEvent, auction.rawEvent)) {
 			return { auctionState: existing, status: 'rejected_immutable' }
 		}

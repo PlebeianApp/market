@@ -18,17 +18,28 @@ const REFUND_PK = '03' + 'e'.repeat(64)
 const PROOF_Y = '02' + 'f'.repeat(64)
 const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 
-const buildAuctionRawEvent = (overrides: { title?: string; endAt?: number; p2pkXpub?: string; mints?: string[] } = {}): NDKEvent => {
+const buildAuctionRawEvent = (
+	overrides: {
+		title?: string
+		endAt?: number
+		p2pkXpub?: string
+		mints?: string[]
+		rootEventId?: string
+		sellerPubkey?: string
+		dTag?: string
+	} = {},
+): NDKEvent => {
 	const endAt = overrides.endAt ?? 2_000
 	const mints = overrides.mints ?? ['https://mint.test']
+	const sellerPubkey = overrides.sellerPubkey ?? SELLER_PK
 	return {
-		id: '1'.repeat(64),
+		id: overrides.rootEventId ?? '1'.repeat(64),
 		kind: 30408,
-		pubkey: SELLER_PK,
+		pubkey: sellerPubkey,
 		created_at: 1_000,
 		content: '',
 		tags: [
-			['d', 'auction-test'],
+			['d', overrides.dTag ?? 'auction-test'],
 			['title', overrides.title ?? 'Original title'],
 			['auction_type', 'english'],
 			['start_at', '1000'],
@@ -52,13 +63,26 @@ const buildAuctionRawEvent = (overrides: { title?: string; endAt?: number; p2pkX
 	} as unknown as NDKEvent
 }
 
-const buildAuction = (overrides: { title?: string; endAt?: number; p2pkXpub?: string; mints?: string[] } = {}): ParsedAuctionEvent => {
+const buildAuction = (
+	overrides: {
+		title?: string
+		endAt?: number
+		p2pkXpub?: string
+		mints?: string[]
+		rootEventId?: string
+		sellerPubkey?: string
+		dTag?: string
+		coordinate?: string
+	} = {},
+): ParsedAuctionEvent => {
 	const rawEvent = buildAuctionRawEvent(overrides)
+	const sellerPubkey = overrides.sellerPubkey ?? SELLER_PK
+	const dTag = overrides.dTag ?? 'auction-test'
 	return {
 		rawEvent,
-		dTag: 'auction-test',
-		sellerPubkey: SELLER_PK,
-		coordinate: `30408:${SELLER_PK}:auction-test`,
+		dTag,
+		sellerPubkey,
+		coordinate: overrides.coordinate ?? `30408:${sellerPubkey}:${dTag}`,
 		rootEventId: rawEvent.id,
 		title: overrides.title ?? 'Original title',
 		content: '',
@@ -132,6 +156,42 @@ describe('auction validator context guards', () => {
 		const immutableUpdate = upsertAuction(state, buildAuction({ p2pkXpub: 'xpub-other' }))
 		expect(immutableUpdate.status).toBe('rejected_immutable')
 		expect(immutableUpdate.auctionState.auction.p2pkXpub).toBe('xpub-root')
+	})
+
+	test('upsertAuction rejects cross-author update even when root id matches', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const inserted = upsertAuction(state, buildAuction())
+		expect(inserted.status).toBe('inserted')
+
+		const crossAuthor = upsertAuction(
+			state,
+			buildAuction({
+				rootEventId: inserted.auctionState.rootAuction.rootEventId,
+				sellerPubkey: 'f'.repeat(64),
+				title: 'Spoofed update',
+			}),
+		)
+
+		expect(crossAuthor.status).toBe('rejected_immutable')
+		expect(crossAuthor.auctionState.auction.title).toBe('Original title')
+	})
+
+	test('upsertAuction rejects coordinate mismatch for pinned root identity', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const inserted = upsertAuction(state, buildAuction())
+		expect(inserted.status).toBe('inserted')
+
+		const coordinateMismatch = upsertAuction(
+			state,
+			buildAuction({
+				rootEventId: inserted.auctionState.rootAuction.rootEventId,
+				coordinate: `30408:${SELLER_PK}:spoofed-dtag`,
+				title: 'Wrong coordinate update',
+			}),
+		)
+
+		expect(coordinateMismatch.status).toBe('rejected_immutable')
+		expect(coordinateMismatch.auctionState.auction.title).toBe('Original title')
 	})
 
 	test('collectLiveBids scopes liveness to each bid mint reachability', () => {
