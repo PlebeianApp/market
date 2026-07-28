@@ -302,7 +302,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		} as unknown as EventTemplate)
 		dispatch(relayPool, validRelease)
 		await flush()
-		expect(auctionState.pathReleases.get(bidEvent.id)?.id).toBe(validRelease.id)
+		expect(auctionState.pathReleases.get(bidEvent.id)?.[0]?.id).toBe(validRelease.id)
 		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
 
 		// Correctly-signed release from a different author → dropped,
@@ -324,7 +324,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await flush()
 
 		// The honest bidder's release is still pinned; no new publish.
-		expect(auctionState.pathReleases.get(bidEvent.id)?.id).toBe(validRelease.id)
+		expect(auctionState.pathReleases.get(bidEvent.id)?.[0]?.id).toBe(validRelease.id)
 		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.pathReleases.size).toBe(1)
 		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
 		await subscriber.stop()

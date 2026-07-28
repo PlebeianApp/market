@@ -112,7 +112,7 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 
 	// --- Phase 2: close & settlement ----------------------------------------
 
-	const release = auctionState.pathReleases.get(bidState.bid.id)
+	const release = selectCanonicalRelease(auctionState, bidState, now)
 
 	if (bidState.postCloseDecision === 'loser') {
 		if (release) {
@@ -286,7 +286,7 @@ const deriveSettlementVerdict = (
 		winningBidNut7State: aggregate,
 		winningBidNut7ProofStates: buildProofStateMap(bidState),
 		pathReleaseObservedAt: releaseObservedAt,
-		bidChain: buildSettlementChain(auctionState, bidState),
+		bidChain: buildSettlementChain(auctionState, bidState, now),
 	})
 	if (!settlementCompleteness.isComplete) {
 		return { claim: 'won_pending_settlement' }
@@ -302,6 +302,7 @@ const deriveSettlementVerdict = (
 const buildSettlementChain = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
+	now: number,
 ): Array<{
 	bid: ValidatorBidState['bid']
 	pathRelease: ParsedPathReleaseEvent
@@ -330,7 +331,7 @@ const buildSettlementChain = (
 		if (!current) break
 	}
 	for (const leg of legs) {
-		const pathRelease = auctionState.pathReleases.get(leg.bid.id)
+		const pathRelease = selectCanonicalRelease(auctionState, leg, now)
 		if (!pathRelease) continue
 		const nut7ProofStates = buildProofStateMap(leg)
 		chain.push({
@@ -359,6 +360,71 @@ const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: Valid
 	const parent = auctionState.bids.get(prevBidId)
 	if (!parent) return bidState.bid.amount
 	return bidState.bid.amount - parent.bid.amount
+}
+
+/**
+ * Deterministically select the canonical kind-1025 release for a bid
+ * from the set of authorized candidates, independent of relay delivery
+ * order. Two phases:
+ *
+ *  1. Settlement-referenced. The seller's kind-1024 declares the exact
+ *     release id it acted on (`pathReleaseEventId`). When that release
+ *     is among the observed candidates, select it — this is the
+ *     protocol's own authoritative, order-independent choice, and the
+ *     only pick that cannot contradict the `path_release_mismatch`
+ *     completeness check.
+ *  2. Pre-settlement fallback. Among the remaining authorized
+ *     candidates, prefer releases that pass full `validatePathRelease`
+ *     validation; tiebreak by earliest `created_at`, then smallest event
+ *     id. This drops an early *unusable* release in favour of a later
+ *     *valid* one.
+ *
+ * Fraud threshold (option a): if no candidate is valid, the earliest
+ * invalid one is returned so the existing `fraudulent_bid` signal at the
+ * verdict layer is preserved — an isolated unusable release still flags
+ * fraud, but a later valid release supersedes it.
+ *
+ * `observedAt` is bound to the *selected* release's own first-observed
+ * time (keyed by release id in `pathReleaseObservedAt`), never a
+ * different event's timestamp.
+ */
+const selectCanonicalRelease = (
+	auctionState: ValidatorAuctionState,
+	bidState: ValidatorBidState,
+	now: number,
+): ParsedPathReleaseEvent | undefined => {
+	const candidates = auctionState.pathReleases.get(bidState.bid.id) ?? []
+	if (candidates.length === 0) return undefined
+
+	// 1. Settlement-referenced selection.
+	const settlement = auctionState.settlement
+	if (settlement && settlement.status === 'settled' && settlement.winningBidId === bidState.bid.id && settlement.pathReleaseEventId) {
+		const named = candidates.find((r) => r.id === settlement.pathReleaseEventId)
+		if (named) return named
+	}
+
+	// 2. Deterministic fallback: prefer valid, then earliest created_at,
+	//    then smallest event id.
+	const ranked = candidates
+		.map((r) => {
+			const observedAt = auctionState.pathReleaseObservedAt.get(r.id) ?? now
+			const validity = validatePathRelease({
+				auction: auctionState.auction,
+				bid: bidState.bid,
+				release: r,
+				now: observedAt,
+				postCloseDecision: bidState.postCloseDecision,
+				fallbackOfferedAt: auctionState.fallbackOfferedAt,
+				expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
+			})
+			return { release: r, valid: validity.isValid, createdAt: r.createdAt, id: r.id }
+		})
+		.sort((a, b) => {
+			if (a.valid !== b.valid) return a.valid ? -1 : 1
+			if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
+			return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+		})
+	return ranked[0]?.release
 }
 
 // ============================================================================

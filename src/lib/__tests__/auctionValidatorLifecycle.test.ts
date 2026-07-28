@@ -171,6 +171,14 @@ const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<Valid
 	fallbackOfferedAt: overrides.fallbackOfferedAt ?? null,
 })
 
+/** Append an authorized release to a bid's candidate set (dedup by id). */
+const seedRelease = (state: ValidatorAuctionState, bidId: string, release: ParsedPathReleaseEvent) => {
+	const existing = state.pathReleases.get(bidId) ?? []
+	if (!existing.some((r) => r.id === release.id)) state.pathReleases.set(bidId, [...existing, release])
+}
+/** Read the first (deterministic) candidate for a bid. */
+const getRelease = (state: ValidatorAuctionState, bidId: string): ParsedPathReleaseEvent | undefined => state.pathReleases.get(bidId)?.[0]
+
 const buildPathRelease = (
 	bid: ParsedBidEvent,
 	overrides: Partial<ParsedPathReleaseEvent> & { derivationPath?: string; childPubkey?: string } = {},
@@ -373,11 +381,12 @@ describe('deriveVerdict — pre-close', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [1, 1]) }),
 		)
-		const release = auctionState.pathReleases.get(bid.id)!
+		const release = getRelease(auctionState, bid.id)!
 		auctionState.settlement = buildSettlement(auction, bid, {
 			pathReleaseEventId: release.id,
 			finalAmount: 2,
@@ -517,7 +526,8 @@ describe('deriveVerdict — post-close', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
 		)
@@ -574,11 +584,12 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.settlement = buildSettlement(auction, bid, { pathReleaseEventId: release.id })
 		// Spent at the mint = the seller redeemed.
@@ -597,7 +608,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: 'm/0/0/0/0/0',
@@ -624,7 +636,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
 		)
@@ -647,11 +660,12 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]) }),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.settlement = buildSettlement(auction, bid, {
 			pathReleaseEventId: release.id,
@@ -677,7 +691,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: path,
@@ -686,7 +701,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 110)
 		auctionState.settlement = buildSettlement(auction, bid, {
@@ -713,7 +728,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: path,
@@ -722,7 +738,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 50)
 		auctionState.settlement = buildSettlement(auction, bid, {
@@ -749,7 +765,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: path,
@@ -758,7 +775,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 130)
 		auctionState.settlement = buildSettlement(auction, bid, {
@@ -807,7 +824,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		// The selected release is B; observed times are bound per release
 		// event id, so B uses its own late time (maxEndAt+130), not A's
 		// earlier in-grace time (maxEndAt+50).
-		auctionState.pathReleases.set(bid.id, releaseB)
+		seedRelease(auctionState, bid.id, releaseB)
 		auctionState.pathReleaseObservedAt.set(releaseA.id, auction.maxEndAt + 50)
 		auctionState.pathReleaseObservedAt.set(releaseB.id, auction.maxEndAt + 130)
 		auctionState.settlement = buildSettlement(auction, bid, {
@@ -834,7 +851,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				bidderPubkey: BIDDER_B,
@@ -862,7 +880,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey }))
+		seedRelease(auctionState, bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey }))
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		expect(verdict.claim).toBe('fraudulent_bid')
@@ -881,7 +899,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'winner',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, { derivationPath: path, childPubkey, cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [9]) }),
 		)
@@ -903,7 +922,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'loser',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: path,
@@ -930,7 +950,8 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 			postCloseDecision: 'loser',
 		})
 		auctionState.bids.set(bid.id, bidState)
-		auctionState.pathReleases.set(
+		seedRelease(
+			auctionState,
 			bid.id,
 			buildPathRelease(bid, {
 				derivationPath: path,
@@ -940,7 +961,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		const release = auctionState.pathReleases.get(bid.id)
+		const release = getRelease(auctionState, bid.id)
 		if (!release) throw new Error('expected path release fixture')
 		auctionState.settlement = buildSettlement(auction, bid, {
 			pathReleaseEventId: release.id,
@@ -953,6 +974,127 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		expect(verdict.claim).toBe('settled_promptly')
+	})
+
+	// ---- Deterministic release selection (review 4800100458) ---------------
+
+	test('an isolated unusable authorized release still flags fraudulent_bid (option a: selection does not redefine the fraud threshold)', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
+		auctionState.bids.set(bid.id, bidState)
+
+		// Usable structure but no cashu_token → unusable. No valid candidate
+		// exists yet, so the earliest invalid candidate is returned and the
+		// verdict layer emits fraudulent_bid (the existing signal is kept).
+		seedRelease(auctionState, bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey, releaseReason: 'settlement' }))
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+
+		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(verdict.claim).toBe('fraudulent_bid')
+		expect(verdict.detail).toMatch(/cashu_token/)
+	})
+
+	test('an early unusable release does not block a later valid release — relay-order independent', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const token = buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount])
+
+		const unusable = buildPathRelease(bid, {
+			id: 'e'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: undefined, // unusable: no redeemable token
+			createdAt: auction.maxEndAt + 10,
+		})
+		const valid = buildPathRelease(bid, {
+			id: 'l'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 20,
+		})
+
+		// Helper to run selection in a given candidate order.
+		const run = (first: ParsedPathReleaseEvent, second: ParsedPathReleaseEvent) => {
+			const auctionState = buildAuctionState(auction, { closeHandled: true })
+			const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
+			auctionState.bids.set(bid.id, bidState)
+			seedRelease(auctionState, bid.id, first)
+			seedRelease(auctionState, bid.id, second)
+			recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+			return deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		}
+
+		// Order 1: unusable arrives first, then valid.
+		const v1 = run(unusable, valid)
+		// Order 2: valid arrives first, then unusable.
+		const v2 = run(valid, unusable)
+
+		// Both orders select the VALID release (no settlement yet → pending),
+		// never fraudulent_bid. If the unusable release were selected the
+		// verdict would be fraudulent_bid; relay order must not change that.
+		expect(v1.claim).toBe('won_pending_settlement')
+		expect(v2.claim).toBe('won_pending_settlement')
+		expect(v1.claim).toBe(v2.claim)
+	})
+
+	test('settlement-referenced selection overrides the earliest-valid heuristic', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
+		auctionState.bids.set(bid.id, bidState)
+		const token = buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount])
+
+		// Two VALID authorized releases. A is earliest (created_at-wise,
+		// observed within grace → prompt); B is later (observed after grace
+		// → late). The seller's kind-1024 declares it acted on B.
+		const releaseA = buildPathRelease(bid, {
+			id: 'a'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 10,
+		})
+		const releaseB = buildPathRelease(bid, {
+			id: 'b'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'voluntary_late',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 20,
+		})
+		seedRelease(auctionState, bid.id, releaseA)
+		seedRelease(auctionState, bid.id, releaseB)
+		auctionState.pathReleaseObservedAt.set(releaseA.id, auction.maxEndAt + 50) // in-grace
+		auctionState.pathReleaseObservedAt.set(releaseB.id, auction.maxEndAt + 130) // after grace
+		auctionState.settlement = buildSettlement(auction, bid, {
+			closeAt: auction.maxEndAt + 80,
+			pathReleaseEventId: releaseB.id,
+		})
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 130)
+
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 130 })
+		// B is selected via the settlement's pathReleaseEventId (not the
+		// earliest-valid heuristic A). B's own observed time is after grace
+		// → settled_late. Had the heuristic picked A, the
+		// path_release_mismatch check (settlement names B ≠ A) would have
+		// left the verdict at won_pending_settlement.
+		expect(v.claim).toBe('settled_late')
 	})
 })
 

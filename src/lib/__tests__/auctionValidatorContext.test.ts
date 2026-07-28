@@ -378,7 +378,7 @@ describe('auction validator record authorization', () => {
 		const result = recordPathRelease(state, wrongAuthor, 2_201)
 		expect(result.status).toBe('wrong_author')
 		const auctionState = state.auctions.get(auction.rootEventId)!
-		expect(auctionState.pathReleases.get(bid.id)?.id).toBe('5'.repeat(64))
+		expect(auctionState.pathReleases.get(bid.id)?.[0]?.id).toBe('5'.repeat(64))
 	})
 
 	test('recordSettlement authorizes the signer against the pinned auction seller', () => {
@@ -413,21 +413,25 @@ describe('auction validator release observed-time binding', () => {
 		const releaseA = buildPathRelease(bid, { id: 'a'.repeat(64) })
 		const releaseB = buildPathRelease(bid, { id: 'b'.repeat(64) })
 
-		// Early release A observed at T0=100, then a distinct late release B
-		// observed at T1=200 (both authorized by the same bidder). The
-		// selected slot is the last arrival (B); B must use its OWN
-		// observed time, not A's earlier timestamp.
+		// Two authorized releases for the same bid (both signed by the
+		// bidder) are kept as independent candidates — selection is
+		// deterministic and deferred to verdict time, not last-write-wins.
+		// Each release's observed time is bound to its OWN event id, so a
+		// later release can never inherit an earlier one's timestamp.
 		expect(recordPathRelease(state, releaseA, 100).status).toBe('recorded')
 		expect(recordPathRelease(state, releaseB, 200).status).toBe('recorded')
 
 		const auctionState = state.auctions.get(auction.rootEventId)!
-		expect(auctionState.pathReleases.get(bid.id)?.id).toBe('b'.repeat(64))
+		// Both candidates are retained, in observation order.
+		expect(auctionState.pathReleases.get(bid.id)?.map((r) => r.id)).toEqual(['a'.repeat(64), 'b'.repeat(64)])
 		expect(auctionState.pathReleaseObservedAt.get('a'.repeat(64))).toBe(100)
 		expect(auctionState.pathReleaseObservedAt.get('b'.repeat(64))).toBe(200)
 
-		// Duplicate delivery of B at a later time preserves B's first
-		// observation (200), so re-derivation stays deterministic.
+		// Duplicate delivery of B at a later time is deduped (no third
+		// candidate) and preserves B's first observation (200), so
+		// re-derivation stays deterministic.
 		expect(recordPathRelease(state, releaseB, 300).status).toBe('recorded')
+		expect(auctionState.pathReleases.get(bid.id)?.map((r) => r.id)).toEqual(['a'.repeat(64), 'b'.repeat(64)])
 		expect(auctionState.pathReleaseObservedAt.get('b'.repeat(64))).toBe(200)
 	})
 })

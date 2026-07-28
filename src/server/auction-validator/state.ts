@@ -146,8 +146,14 @@ export interface ValidatorAuctionState {
 	/** Seller's kind-1024, when observed. */
 	settlement: ParsedSettlementEvent | null
 
-	/** bidEventId -> kind-1025 from the bidder, when observed. */
-	pathReleases: Map<string, ParsedPathReleaseEvent>
+	/**
+	 * bidEventId -> every authorized kind-1025 observed for that bid.
+	 * Selection among these candidates is deterministic (settlement-
+	 * referenced, then earliest valid `created_at`) — see
+	 * `selectCanonicalRelease` in lifecycle.ts. A single slot would make
+	 * the chosen release depend on relay delivery order.
+	 */
+	pathReleases: Map<string, ParsedPathReleaseEvent[]>
 
 	/** release event id -> unix seconds when this validator first observed that kind-1025. */
 	pathReleaseObservedAt: Map<string, number>
@@ -369,7 +375,7 @@ export type RecordPathReleaseResult =
  * Record a kind-1025 path release. The release is only stored once the
  * referenced bid is resolved **and** the authenticated signer matches
  * that bid's bidder pubkey — a correctly-signed third-party release
- * must not overwrite an honest bidder's selected release. Wrong-author
+ * must not enter an honest bidder's candidate set. Wrong-author
  * evidence is dropped without influencing state or reputation; the
  * caller distinguishes `unknown_bid` (ordering gap → buffer + replay)
  * from `wrong_author` (drop, do not buffer).
@@ -385,7 +391,13 @@ export const recordPathRelease = (state: ValidatorState, release: ParsedPathRele
 		if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
 			return { status: 'wrong_author' }
 		}
-		auctionState.pathReleases.set(release.bidEventId, release)
+		// Append to the per-bid candidate set (dedup by release event id).
+		// Selection is deferred to verdict time so it can be deterministic
+		// and settlement-referenced — see selectCanonicalRelease.
+		const existing = auctionState.pathReleases.get(release.bidEventId) ?? []
+		if (!existing.some((r) => r.id === release.id)) {
+			auctionState.pathReleases.set(release.bidEventId, [...existing, release])
+		}
 		// Bind the observed time to THIS release event id (not the bid id) so
 		// a later selected release can never inherit a different event's
 		// earlier timestamp. Duplicate delivery of the same release preserves
