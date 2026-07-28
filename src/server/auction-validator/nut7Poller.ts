@@ -35,6 +35,29 @@ import { currentTopValidBidAmount } from './lifecycle'
 import { refreshAuctionMintReachability } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 
+// ---------------------------------------------------------------------------
+// Bounded post-grace retry configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of post-grace proof polls for a single released
+ * nonterminal bid before the poller gives up (explicit cutoff). A
+ * voluntary_late release and its redemption happen after settlement
+ * grace; without a cutoff the poller could chase a never-redeemed bid
+ * forever.
+ */
+export const POST_GRACE_MAX_ATTEMPTS = 8
+
+/**
+ * Base backoff (seconds) between post-grace retries; doubled each
+ * attempt and capped so retries space out but don't stall for too long.
+ */
+export const POST_GRACE_BASE_BACKOFF_SEC = 60
+export const POST_GRACE_MAX_BACKOFF_SEC = 1_800
+
+const postGraceBackoffSec = (attempt: number): number =>
+	Math.min(POST_GRACE_BASE_BACKOFF_SEC * 2 ** (attempt - 1), POST_GRACE_MAX_BACKOFF_SEC)
+
 export interface Nut7PollerDeps {
 	state: ValidatorState
 	publisher: ReturnType<typeof createVerdictPublisher>
@@ -75,10 +98,24 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 		const live = collectLiveBids(deps.state, observedAt)
 		if (!live.length) return
-		const entries = expandProofEntries(live)
+		// Post-grace released nonterminal bids poll on a bounded backoff
+		// schedule with an explicit cutoff (see POST_GRACE_* constants).
+		// Pre-grace bids always poll.
+		const due = live.filter(({ auctionState, bidState }) => {
+			const postGrace = observedAt > auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
+			if (!postGrace) return true
+			const retry = bidState.postGraceRetry
+			if (!retry) return true
+			if (retry.attempts >= POST_GRACE_MAX_ATTEMPTS) return false
+			if (observedAt < retry.nextAttemptAt) return false
+			return true
+		})
+		if (!due.length) return
+		const entries = expandProofEntries(due)
 		if (!entries.length) return
 
 		await refreshProofStates(entries, observedAt, 'tick')
+		schedulePostGraceRetries(due, observedAt)
 	}
 
 	const refreshBidChain = async (input: { auctionRootEventId: string; bidEventId: string }): Promise<void> => {
@@ -167,6 +204,34 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 				}
 			}),
 		)
+	}
+
+	/**
+	 * After a tick, advance the bounded post-grace retry schedule for each
+	 * polled bid that is still released-and-nonterminal past grace. A bid
+	 * that flipped terminal (settled) clears its schedule; one still
+	 * non-terminal gets the next backoff slot, or hits the cutoff and stops.
+	 */
+	const schedulePostGraceRetries = (
+		bids: Array<{ auctionState: ValidatorAuctionState; bidState: ValidatorBidState }>,
+		observedAt: number,
+	): void => {
+		for (const { auctionState, bidState } of bids) {
+			const postGrace = observedAt > auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
+			if (!postGrace) continue
+			if (isTerminalClaim(bidState.currentClaim)) {
+				bidState.postGraceRetry = null
+				continue
+			}
+			// Only released nonterminal bids were collected post-grace.
+			const attempts = (bidState.postGraceRetry?.attempts ?? 0) + 1
+			if (attempts >= POST_GRACE_MAX_ATTEMPTS) {
+				// Cutoff reached: leave the bid at its last verdict.
+				bidState.postGraceRetry = { attempts, nextAttemptAt: Number.POSITIVE_INFINITY }
+			} else {
+				bidState.postGraceRetry = { attempts, nextAttemptAt: observedAt + postGraceBackoffSec(attempts) }
+			}
+		}
 	}
 
 	return { tick, refreshBidChain, refreshAuctionReleasedNonterminal }

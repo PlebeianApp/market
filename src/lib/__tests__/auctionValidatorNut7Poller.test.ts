@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, MinBidCurve } from '../auction/events'
-import { createNut7Poller } from '../../server/auction-validator/nut7Poller'
+import { NUT7_REACHABILITY_PROBE_Y } from '../cashu/nut7'
+import {
+	POST_GRACE_BASE_BACKOFF_SEC,
+	POST_GRACE_MAX_ATTEMPTS,
+	createNut7Poller,
+} from '../../server/auction-validator/nut7Poller'
 import {
 	collectLiveBids,
 	createValidatorState,
@@ -179,7 +184,12 @@ describe('auction validator nut7 focused refresh', () => {
 		recordPathRelease(state, buildPathRelease(auction, bid), auction.maxEndAt + 120)
 
 		const postGraceNow = auction.maxEndAt + auction.settlementGrace + 50
-		expect(collectLiveBids(state, postGraceNow)).toEqual([])
+		// Post-grace, a released nonterminal bid IS now collected (it can
+		// still settle via a voluntary_late release); only unreleased bids
+		// are excluded post-grace.
+		const livePostGrace = collectLiveBids(state, postGraceNow)
+		expect(livePostGrace).toHaveLength(1)
+		expect(livePostGrace[0]?.bidState.bid.id).toBe(bid.id)
 
 		let publishCalls = 0
 		const mintCalls: string[][] = []
@@ -253,5 +263,106 @@ describe('auction validator nut7 focused refresh', () => {
 
 		expect(mintCalls).toHaveLength(1)
 		expect(mintCalls[0]).toEqual([releasedNonterminalBid.proofYs[0]])
+	})
+})
+
+describe('auction validator nut7 post-grace retry scheduler', () => {
+	const setupReleasedPostGraceBid = () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction({ settlementGrace: 100 })
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [[auction.mints[0]!, true]])
+		const bid = buildBid(auction)
+		const upserted = upsertBid(state, bid, bid.createdAt)
+		if (!upserted) throw new Error('expected bid to upsert')
+		upserted.bidState.currentClaim = 'won_pending_settlement'
+		recordPathRelease(state, buildPathRelease(auction, bid), auction.maxEndAt + 120)
+		return { state, auction, bid, upserted }
+	}
+
+	test('first post-grace check unknown, later scheduled check becomes spent without a relay event', async () => {
+		const { state, auction, bid, upserted } = setupReleasedPostGraceBid()
+		let proofCheckCalls = 0
+		let clock = auction.maxEndAt + auction.settlementGrace + 50
+		const publishCalls: number[] = []
+		const poller = createNut7Poller({
+			state,
+			publisher: {
+				publishIfChanged: async () => {
+					publishCalls.push(1)
+					return { verdict: { claim: 'won_pending_settlement' }, published: true }
+				},
+			} as any,
+			now: () => clock,
+			nut7Options: {
+				mintClient: {
+					check: async ({ Ys }: { Ys: string[] }) => {
+						if (Ys.includes(NUT7_REACHABILITY_PROBE_Y)) {
+							return { states: [{ Y: NUT7_REACHABILITY_PROBE_Y, state: 'UNSPENT' }] }
+						}
+						proofCheckCalls += 1
+						// First proof check: malformed state → 'unknown' (no signal).
+						if (proofCheckCalls === 1) return { states: Ys.map((Y) => ({ Y, state: 'BOGUS' })) }
+						// Later scheduled check: spent → settlement observed.
+						return { states: Ys.map((Y) => ({ Y, state: 'SPENT' })) }
+					},
+				} as any,
+			},
+		})
+
+		// First tick (post-grace): one proof query, result unknown.
+		await poller.tick()
+		expect(proofCheckCalls).toBe(1)
+		expect(upserted.bidState.nut7States.get(bid.proofYs[0]!.toLowerCase())?.state).toBe('unknown')
+		expect(publishCalls).toHaveLength(1)
+		// A retry is scheduled with backoff.
+		expect(upserted.bidState.postGraceRetry?.attempts).toBe(1)
+		expect(upserted.bidState.postGraceRetry?.nextAttemptAt).toBe(clock + POST_GRACE_BASE_BACKOFF_SEC)
+
+		// Advance the clock past the backoff; no new relay event arrives.
+		clock = upserted.bidState.postGraceRetry!.nextAttemptAt + 1
+		await poller.tick()
+		expect(proofCheckCalls).toBe(2)
+		expect(upserted.bidState.nut7States.get(bid.proofYs[0]!.toLowerCase())?.state).toBe('spent')
+		expect(publishCalls).toHaveLength(2)
+	})
+
+	test('backoff respects the explicit cutoff and stops polling a never-redeemed bid', async () => {
+		const { state, auction, bid, upserted } = setupReleasedPostGraceBid()
+		let proofCheckCalls = 0
+		let clock = auction.maxEndAt + auction.settlementGrace + 50
+		const poller = createNut7Poller({
+			state,
+			publisher: {
+				publishIfChanged: async () => ({ verdict: { claim: 'won_pending_settlement' }, published: true }),
+			} as any,
+			now: () => clock,
+			nut7Options: {
+				mintClient: {
+					check: async ({ Ys }: { Ys: string[] }) => {
+						if (Ys.includes(NUT7_REACHABILITY_PROBE_Y)) {
+							return { states: [{ Y: NUT7_REACHABILITY_PROBE_Y, state: 'UNSPENT' }] }
+						}
+						proofCheckCalls += 1
+						// Never redeems — always unknown.
+						return { states: Ys.map((Y) => ({ Y, state: 'BOGUS' })) }
+					},
+				} as any,
+			},
+		})
+
+		// Drive ticks past every backoff until the cutoff.
+		for (let i = 0; i < POST_GRACE_MAX_ATTEMPTS; i++) {
+			await poller.tick()
+			const retry = upserted.bidState.postGraceRetry
+			if (retry && Number.isFinite(retry.nextAttemptAt)) clock = retry.nextAttemptAt + 1
+		}
+		expect(proofCheckCalls).toBe(POST_GRACE_MAX_ATTEMPTS)
+		// After the cutoff, the bid is no longer due.
+		expect(upserted.bidState.postGraceRetry?.attempts).toBe(POST_GRACE_MAX_ATTEMPTS)
+		const callsBefore = proofCheckCalls
+		await poller.tick()
+		await poller.tick()
+		expect(proofCheckCalls).toBe(callsBefore) // no further polling
 	})
 })

@@ -110,6 +110,16 @@ export interface ValidatorBidState {
 
 	/** Set by the close lifecycle once the auction's `max_end_at` elapses. */
 	postCloseDecision: 'winner' | 'loser' | null
+
+	/**
+	 * Bounded post-grace retry schedule for a released, nonterminal bid.
+	 * `null` until the first post-grace poll that fails to flip the bid
+	 * terminal; thereafter tracks attempts and the next due time so the
+	 * poller backs off and stops at an explicit cutoff (a voluntary_late
+	 * release and its redemption happen after settlement grace, so the
+	 * normal poll would otherwise drop them and leave the bid stuck).
+	 */
+	postGraceRetry: { attempts: number; nextAttemptAt: number } | null
 }
 
 // ============================================================================
@@ -335,6 +345,7 @@ export const upsertBid = (
 		currentDetail: undefined,
 		lastPublishedAt: null,
 		postCloseDecision: null,
+		postGraceRetry: null,
 	}
 	auctionState.bids.set(bid.id, fresh)
 	return { auctionState, bidState: fresh }
@@ -455,12 +466,17 @@ export const collectLiveBids = (
 }> => {
 	const out: Array<{ auctionState: ValidatorAuctionState; bidState: ValidatorBidState }> = []
 	for (const auctionState of Array.from(state.auctions.values())) {
-		// After settlement_grace expires we don't care about NUT-7
-		// state anymore — the bid has either been settled or the
-		// timelock refund window opened.
-		if (now > auctionState.auction.maxEndAt + auctionState.auction.settlementGrace) continue
+		const postGrace = now > auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (isTerminalClaim(bidState.currentClaim)) continue
+			if (postGrace) {
+				// After grace, only released nonterminal bids can still
+				// progress: a voluntary_late release and its redemption
+				// happen after this boundary. Unreleased bids are heading
+				// to a terminal grief/refund verdict via the lifecycle and
+				// need no mint polling.
+				if (!auctionState.pathReleases.has(bidState.bid.id)) continue
+			}
 			if (auctionState.mintReachability.get(bidState.bid.mint) !== 'reachable') continue
 			out.push({ auctionState, bidState })
 		}
