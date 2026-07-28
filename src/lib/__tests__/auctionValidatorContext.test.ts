@@ -194,6 +194,70 @@ describe('auction validator context guards', () => {
 		expect(coordinateMismatch.auctionState.auction.title).toBe('Original title')
 	})
 
+	test('upsertAuction resolves a same-coordinate/new-event-id addressable replacement to the pinned auction', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const inserted = upsertAuction(state, buildAuction())
+		const pinnedRootId = inserted.auctionState.rootAuction.rootEventId
+		expect(inserted.status).toBe('inserted')
+
+		// A normal addressable replacement: a brand-new event id and no
+		// `auction_root_event_id` tag (so parsed `rootEventId` is its own
+		// new id), same seller + d + coordinate, mutable title change.
+		const replacement = upsertAuction(
+			state,
+			buildAuction({ rootEventId: '9'.repeat(64), title: 'Updated title' }),
+		)
+
+		// Not inserted as a second auction — resolved to the existing one.
+		expect(replacement.status).toBe('updated')
+		expect(state.auctions.size).toBe(1)
+		expect(state.auctionsByCoordinate.size).toBe(1)
+		// The pinned root event id is retained; only the mutable event refreshed.
+		expect(replacement.auctionState.rootAuction.rootEventId).toBe(pinnedRootId)
+		expect(replacement.auctionState.auction.rootEventId).toBe('9'.repeat(64))
+		expect(replacement.auctionState.auction.title).toBe('Updated title')
+		// Coordinate index still points at the original pinned root.
+		expect(state.auctionsByCoordinate.get(`30408:${SELLER_PK}:auction-test`)).toBe(pinnedRootId)
+	})
+
+	test('upsertAuction pins the first event of a coordinate lineage and preserves accumulated bids', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const inserted = upsertAuction(state, buildAuction())
+		const pinnedRootId = inserted.auctionState.rootAuction.rootEventId
+		upsertBid(state, buildBid({ id: '2'.repeat(64) }), 1_505)
+		expect(inserted.auctionState.bids.size).toBe(1)
+
+		const replacement = upsertAuction(
+			state,
+			buildAuction({ rootEventId: '8'.repeat(64), title: 'Updated title' }),
+		)
+		expect(replacement.status).toBe('updated')
+		// Accumulated bid state is preserved across the addressable update.
+		expect(replacement.auctionState.bids.size).toBe(1)
+		expect(replacement.auctionState.rootAuction.rootEventId).toBe(pinnedRootId)
+	})
+
+	test('upsertAuction rejects a different-signer addressable replacement on the same coordinate', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const inserted = upsertAuction(state, buildAuction())
+		const pinnedRootId = inserted.auctionState.rootAuction.rootEventId
+
+		// A different valid signer cannot replace the pinned auction even
+		// though the d tag matches: the coordinate includes the seller, so
+		// this resolves to a *different* coordinate and is inserted as a
+		// separate lineage (it must not overwrite the pinned auction).
+		const otherSeller = '7'.repeat(64)
+		const otherLineage = upsertAuction(
+			state,
+			buildAuction({ rootEventId: '6'.repeat(64), sellerPubkey: otherSeller, title: 'Imposter' }),
+		)
+
+		expect(otherLineage.status).toBe('inserted')
+		expect(state.auctions.size).toBe(2)
+		// The original pinned auction is untouched.
+		expect(state.auctions.get(pinnedRootId)?.auction.title).toBe('Original title')
+	})
+
 	test('collectLiveBids scopes liveness to each bid mint reachability', () => {
 		const state = createValidatorState(VALIDATOR_PK)
 		const auctionState = upsertAuction(state, buildAuction({ mints: ['https://mint-a.test', 'https://mint-b.test'] })).auctionState

@@ -151,6 +151,16 @@ export interface ValidatorState {
 
 	/** auctionRootEventId -> per-auction state. */
 	auctions: Map<string, ValidatorAuctionState>
+
+	/**
+	 * Canonical auction coordinate (`30408:<seller>:<d>`) -> pinned
+	 * `rootEventId`. Lets an addressable replacement that carries a
+	 * *new* event id and no `auction_root_event_id` tag resolve to the
+	 * existing pinned auction instead of being inserted as a second
+	 * auction. The coordinate includes the seller pubkey, so distinct
+	 * sellers sharing a `d` tag never collide here.
+	 */
+	auctionsByCoordinate: Map<string, string>
 }
 
 // ============================================================================
@@ -160,6 +170,7 @@ export interface ValidatorState {
 export const createValidatorState = (validatorPubkey: string): ValidatorState => ({
 	validatorPubkey,
 	auctions: new Map(),
+	auctionsByCoordinate: new Map(),
 })
 
 export interface UpsertAuctionResult {
@@ -167,8 +178,27 @@ export interface UpsertAuctionResult {
 	status: 'inserted' | 'updated' | 'rejected_immutable'
 }
 
+/**
+ * Identity check for a candidate that carries the original
+ * `auction_root_event_id` tag (so `candidate.rootEventId` equals the
+ * pinned root). Every identity field — root id, seller, `d` tag,
+ * `kind:pubkey:d` coordinate, and signer — must match the pinned
+ * auction.
+ */
 const sameAuctionIdentity = (root: ParsedAuctionEvent, candidate: ParsedAuctionEvent): boolean => {
 	if (root.rootEventId !== candidate.rootEventId) return false
+	return sameAuctionCoordinate(root, candidate)
+}
+
+/**
+ * Coordinate-only identity check for a normal addressable replacement
+ * that has a *new* event id and no `auction_root_event_id` tag. Such a
+ * replacement legitimately changes `rootEventId`, so we pin to the
+ * original root and verify the addressable identity instead: seller,
+ * `d` tag, `kind:pubkey:d` coordinate, and signer. A different valid
+ * signer or coordinate cannot replace the pinned auction.
+ */
+const sameAuctionCoordinate = (root: ParsedAuctionEvent, candidate: ParsedAuctionEvent): boolean => {
 	if (root.sellerPubkey.toLowerCase() !== candidate.sellerPubkey.toLowerCase()) return false
 	if (root.dTag !== candidate.dTag) return false
 	if (root.coordinate !== candidate.coordinate) return false
@@ -181,20 +211,48 @@ const sameAuctionIdentity = (root: ParsedAuctionEvent, candidate: ParsedAuctionE
  * Register an auction we should track. Idempotent: if the auction is
  * already tracked, update the parsed event (handles re-publish of
  * mutable tags) and return the existing state.
+ *
+ * Resolution order:
+ *   1. By pinned `rootEventId` (first publish, and replacements that
+ *      carry `auction_root_event_id`).
+ *   2. By canonical coordinate `30408:<seller>:<d>` — a normal
+ *      addressable replacement with a new event id and no root tag
+ *      resolves to the existing pinned auction instead of being
+ *      inserted as a second auction. The pinned root event id is
+ *      retained; only the mutable parsed event refreshes.
  */
 export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent): UpsertAuctionResult => {
-	const existing = state.auctions.get(auction.rootEventId)
+	// 1. Resolve by pinned root event id.
+	let existing = state.auctions.get(auction.rootEventId) ?? null
+	let resolvedByCoordinate = false
+
+	// 2. Resolve by canonical coordinate for an addressable
+	//    replacement whose new event id is not yet pinned.
+	if (!existing) {
+		const pinnedRootId = state.auctionsByCoordinate.get(auction.coordinate)
+		if (pinnedRootId !== undefined) {
+			existing = state.auctions.get(pinnedRootId) ?? null
+			resolvedByCoordinate = existing !== null
+		}
+	}
+
 	if (existing) {
-		if (!sameAuctionIdentity(existing.rootAuction, auction)) {
+		const identityOk = resolvedByCoordinate
+			? sameAuctionCoordinate(existing.rootAuction, auction)
+			: sameAuctionIdentity(existing.rootAuction, auction)
+		if (!identityOk) {
 			return { auctionState: existing, status: 'rejected_immutable' }
 		}
 		if (!auctionImmutableFieldsMatch(existing.rootAuction.rawEvent, auction.rawEvent)) {
 			return { auctionState: existing, status: 'rejected_immutable' }
 		}
-		// Refresh the parsed event but keep accumulated bid state.
+		// Refresh the parsed event but keep the pinned root auction and
+		// all accumulated bid/settlement state.
 		existing.auction = auction
 		return { auctionState: existing, status: 'updated' }
 	}
+
+	// New lineage: pin this first event as the root.
 	const fresh: ValidatorAuctionState = {
 		rootAuction: auction,
 		auction,
@@ -209,6 +267,7 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		fallbackOfferedAt: null,
 	}
 	state.auctions.set(auction.rootEventId, fresh)
+	state.auctionsByCoordinate.set(auction.coordinate, auction.rootEventId)
 	return { auctionState: fresh, status: 'inserted' }
 }
 
