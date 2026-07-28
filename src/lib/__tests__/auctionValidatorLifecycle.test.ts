@@ -143,6 +143,7 @@ const buildBidState = (bid: ParsedBidEvent, observedAt: number, overrides: Parti
 	currentDetail: undefined,
 	lastPublishedAt: null,
 	postCloseDecision: null,
+	postGraceRetry: null,
 	...overrides,
 })
 

@@ -201,7 +201,7 @@ describe('auction validator publisher close-role runtime wiring', () => {
 
 		expect(auctionState.closeHandled).toBe(true)
 		// The close snapshot saw no valid bid → no winner.
-		expect(pending.bidState.postCloseDecision).toBe('loser')
+		expect(auctionState.bids.get(pendingBid.id)?.postCloseDecision).toBe('loser')
 		// It is routed to the loser path (refund), never the winner path.
 		expect(result.verdict.claim).toBe('lost_pending_refund')
 		expect(publishedClaims).toEqual(['published'])

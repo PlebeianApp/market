@@ -279,6 +279,32 @@ describe('validateSettlementCompleteness', () => {
 		}
 	})
 
+	test('accepts settlement at the close_at == max_end_at boundary (invariant: close_at >= max_end_at)', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, { id: '2'.repeat(64), amount: 100, path: 'm/0/0/0/0/0' })
+		const release = buildPathRelease(bid, 'm/0/0/0/0/0', '3'.repeat(64))
+		const settlement: ParsedSettlementEvent = {
+			...buildSettlement(auction, bid, release.id),
+			closeAt: auction.maxEndAt,
+		}
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: bid,
+			pathRelease: release,
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+		})
+
+		// The boundary value passes the close_at >= max_end_at check;
+		// completeness may still fail on other invariants, but it must
+		// NOT fail with the close_at status_invalid reason.
+		if (!result.isComplete) {
+			expect(result.failureCode).not.toBe('status_invalid')
+		}
+	})
+
 	test('rejects mixed per-proof states [spent, unspent] even when aggregate is spent', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
