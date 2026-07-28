@@ -114,7 +114,7 @@ export interface ValidatorAuctionState {
 	/** bidEventId -> kind-1025 from the bidder, when observed. */
 	pathReleases: Map<string, ParsedPathReleaseEvent>
 
-	/** bidEventId -> unix seconds when this validator first observed the kind-1025. */
+	/** release event id -> unix seconds when this validator first observed that kind-1025. */
 	pathReleaseObservedAt: Map<string, number>
 
 	// ---- Lifecycle markers -------------------------------------------------
@@ -354,9 +354,13 @@ export const recordPathRelease = (
 			return { status: 'wrong_author' }
 		}
 		auctionState.pathReleases.set(release.bidEventId, release)
-		const existingObservedAt = auctionState.pathReleaseObservedAt.get(release.bidEventId)
-		if (existingObservedAt === undefined || observedAt < existingObservedAt) {
-			auctionState.pathReleaseObservedAt.set(release.bidEventId, observedAt)
+		// Bind the observed time to THIS release event id (not the bid id) so
+		// a later selected release can never inherit a different event's
+		// earlier timestamp. Duplicate delivery of the same release preserves
+		// its first-observed time (min per release id).
+		const prevObservedAt = auctionState.pathReleaseObservedAt.get(release.id)
+		if (prevObservedAt === undefined || observedAt < prevObservedAt) {
+			auctionState.pathReleaseObservedAt.set(release.id, observedAt)
 		}
 		return { status: 'recorded', auctionState }
 	}

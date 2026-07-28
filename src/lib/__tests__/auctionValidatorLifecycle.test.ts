@@ -611,9 +611,9 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		auctionState.pathReleaseObservedAt.set(bid.id, auction.maxEndAt + 110)
 		const release = auctionState.pathReleases.get(bid.id)
 		if (!release) throw new Error('expected path release fixture')
+		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 110)
 		auctionState.settlement = buildSettlement(auction, bid, {
 			createdAt: auction.maxEndAt + 500,
 			closeAt: auction.maxEndAt + 500,
@@ -647,9 +647,9 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		auctionState.pathReleaseObservedAt.set(bid.id, auction.maxEndAt + 50)
 		const release = auctionState.pathReleases.get(bid.id)
 		if (!release) throw new Error('expected path release fixture')
+		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 50)
 		auctionState.settlement = buildSettlement(auction, bid, {
 			createdAt: auction.maxEndAt + 500,
 			closeAt: auction.maxEndAt + 500,
@@ -683,9 +683,9 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 				cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
 			}),
 		)
-		auctionState.pathReleaseObservedAt.set(bid.id, auction.maxEndAt + 130)
 		const release = auctionState.pathReleases.get(bid.id)
 		if (!release) throw new Error('expected path release fixture')
+		auctionState.pathReleaseObservedAt.set(release.id, auction.maxEndAt + 130)
 		auctionState.settlement = buildSettlement(auction, bid, {
 			createdAt: auction.maxEndAt + 80,
 			closeAt: auction.maxEndAt + 80,
@@ -694,6 +694,56 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 130)
 
 		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 130 })
+		expect(v.claim).toBe('settled_late')
+	})
+
+	test('a late voluntary_late release is classified by its OWN observed time, not an earlier release’s', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+
+		// Early authorized release A (settlement, observed WITHIN grace).
+		const releaseA = buildPathRelease(bid, {
+			id: '3'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+		})
+		// Late authorized release B (voluntary_late, observed AFTER grace) —
+		// the one the seller's kind-1024 actually settles on.
+		const releaseB = buildPathRelease(bid, {
+			id: '7'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'voluntary_late',
+			cashuToken: buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount]),
+		})
+
+		// The selected release is B; observed times are bound per release
+		// event id, so B uses its own late time (maxEndAt+130), not A's
+		// earlier in-grace time (maxEndAt+50).
+		auctionState.pathReleases.set(bid.id, releaseB)
+		auctionState.pathReleaseObservedAt.set(releaseA.id, auction.maxEndAt + 50)
+		auctionState.pathReleaseObservedAt.set(releaseB.id, auction.maxEndAt + 130)
+		auctionState.settlement = buildSettlement(auction, bid, {
+			pathReleaseEventId: releaseB.id,
+		})
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 130)
+
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 130 })
+		// Using B's own observed time (after grace) → settled_late. If B
+		// inherited A's earlier in-grace time, voluntary_late would be
+		// rejected (before grace) → fraudulent_bid.
 		expect(v.claim).toBe('settled_late')
 	})
 

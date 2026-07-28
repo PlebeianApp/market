@@ -412,3 +412,33 @@ describe('auction validator record authorization', () => {
 		expect(auctionState.settlement?.id).toBe('6'.repeat(64))
 	})
 })
+
+describe('auction validator release observed-time binding', () => {
+	test('recordPathRelease binds observed time to each release event id (no cross-event inheritance)', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		upsertAuction(state, auction)
+		const bid = buildBid({ id: '2'.repeat(64) })
+		upsertBid(state, bid, 1_505)
+
+		const releaseA = buildPathRelease(bid, { id: 'a'.repeat(64) })
+		const releaseB = buildPathRelease(bid, { id: 'b'.repeat(64) })
+
+		// Early release A observed at T0=100, then a distinct late release B
+		// observed at T1=200 (both authorized by the same bidder). The
+		// selected slot is the last arrival (B); B must use its OWN
+		// observed time, not A's earlier timestamp.
+		expect(recordPathRelease(state, releaseA, 100).status).toBe('recorded')
+		expect(recordPathRelease(state, releaseB, 200).status).toBe('recorded')
+
+		const auctionState = state.auctions.get(auction.rootEventId)!
+		expect(auctionState.pathReleases.get(bid.id)?.id).toBe('b'.repeat(64))
+		expect(auctionState.pathReleaseObservedAt.get('a'.repeat(64))).toBe(100)
+		expect(auctionState.pathReleaseObservedAt.get('b'.repeat(64))).toBe(200)
+
+		// Duplicate delivery of B at a later time preserves B's first
+		// observation (200), so re-derivation stays deterministic.
+		expect(recordPathRelease(state, releaseB, 300).status).toBe('recorded')
+		expect(auctionState.pathReleaseObservedAt.get('b'.repeat(64))).toBe(200)
+	})
+})

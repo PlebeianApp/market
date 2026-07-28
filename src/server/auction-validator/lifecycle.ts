@@ -235,7 +235,10 @@ const deriveSettlementVerdict = (
 	release: ParsedPathReleaseEvent,
 	now: number,
 ): DerivedVerdict => {
-	const releaseObservedAt = auctionState.pathReleaseObservedAt.get(bidState.bid.id) ?? now
+	// Read the observed time bound to THIS release event (keyed by release
+	// id), so a backdated or later-arriving release cannot inherit a
+	// different event's earlier timestamp.
+	const releaseObservedAt = auctionState.pathReleaseObservedAt.get(release.id) ?? now
 	const releaseValidity = validatePathRelease({
 		auction: auctionState.auction,
 		bid: bidState.bid,
@@ -326,7 +329,7 @@ const buildSettlementChain = (
 		chain.push({
 			bid: leg.bid,
 			pathRelease,
-			pathReleaseObservedAt: auctionState.pathReleaseObservedAt.get(leg.bid.id),
+			pathReleaseObservedAt: auctionState.pathReleaseObservedAt.get(pathRelease.id),
 			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
 			nut7ProofStates,
 		})
