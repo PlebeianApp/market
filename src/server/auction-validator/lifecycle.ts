@@ -413,6 +413,27 @@ export const assignCloseRoles = (auctionState: ValidatorAuctionState): Validator
 }
 
 /**
+ * Snapshot semantics for the close lifecycle. `assignCloseRoles`
+ * snapshots winner/loser roles over the bids that were
+ * `valid_bid_placed` at the moment close was handled. A bid that only
+ * reaches `valid_bid_placed` afterwards (e.g. a delayed NUT-7 unspent
+ * result) was not confirmed valid at the close snapshot and therefore
+ * cannot become the winner — it is assigned the `loser` role so it
+ * refunds at locktime and never enters winner settlement processing.
+ *
+ * This is deterministic (arrival-order independent: a late-valid bid is
+ * always a non-winner) and bounds the null-role window the publisher
+ * closes after deriving the verdict. Returns true when a role was
+ * assigned (caller should re-derive the verdict).
+ */
+export const assignLateValidLoserRole = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): boolean => {
+	if (!auctionState.closeHandled) return false
+	if (bidState.postCloseDecision !== null) return false
+	bidState.postCloseDecision = 'loser'
+	return true
+}
+
+/**
  * Recompute the current top valid bid amount for an auction. Used by
  * pre-close floor checks. Walks live bids and picks the max amount on
  * any that has reached `valid_bid_placed`.

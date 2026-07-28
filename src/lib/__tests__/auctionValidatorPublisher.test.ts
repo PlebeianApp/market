@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
+import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { createVerdictPublisher } from '../../server/auction-validator/publisher'
 import { createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '../../server/auction-validator/state'
 
@@ -147,5 +148,62 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		expect(winnerDecision).toBe('winner')
 		expect(loserDecision).toBe('loser')
 		expect(publishedCount).toBe(1)
+	})
+	test('a bid pending at close that becomes valid after close takes the loser role, not the winner path', async () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+
+		// The only bid: pending review at close (no NUT-7 confirmation yet).
+		// Use a real P2PK lock secret with a matching proof_y so the
+		// pre-close validation pipeline can confirm it valid_bid_placed.
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const lockSecret = JSON.stringify([
+			'P2PK',
+			{ nonce: 'n', data: COMPRESSED_PK, tags: [['sigflag', 'SIG_INPUTS'], ['locktime', String(locktime)], ['refund', REFUND_PK], ['n_sigs_refund', '1']] },
+		])
+		const proofY = hashToCurveHexFromString(lockSecret)
+		const pendingBid = buildBid(auction, { id: '2'.repeat(64), bidderPubkey: BIDDER_A, amount: 1_200, proofY })
+		pendingBid.lockSecrets = [lockSecret]
+		pendingBid.proofYs = [proofY]
+		const pending = upsertBid(state, pendingBid, pendingBid.createdAt)
+		if (!pending) throw new Error('expected bid to upsert')
+		pending.bidState.currentClaim = 'bid_pending_review'
+		pending.bidState.postCloseDecision = null
+		auctionState.closeHandled = false
+
+		const publishedClaims: string[] = []
+		const publisher = createVerdictPublisher({
+			signer: {
+				getPublicKey: async () => VALIDATOR_PK,
+				signEvent: async (template: EventTemplate) =>
+					({ ...template, id: '9'.repeat(64), pubkey: VALIDATOR_PK, sig: 'a'.repeat(128) }) as any,
+			} as any,
+			relayPool: {
+				publish: async () => {
+					publishedClaims.push('published')
+				},
+			} as any,
+			now: () => auction.maxEndAt + 10,
+		})
+
+		// NUT-7 now confirms the bid's proof unspent — it reaches
+		// valid_bid_placed, but only AFTER close. Snapshot semantics: it
+		// was not confirmed valid at the close snapshot, so it cannot win.
+		pending.bidState.nut7States.set(proofY.toLowerCase(), { state: 'unspent', observedAt: auction.maxEndAt + 10 })
+
+		const result = await publisher.publishIfChanged({
+			auctionState,
+			bidState: pending.bidState,
+			currentTopBid: 0,
+		})
+
+		expect(auctionState.closeHandled).toBe(true)
+		// The close snapshot saw no valid bid → no winner.
+		expect(pending.bidState.postCloseDecision).toBe('loser')
+		// It is routed to the loser path (refund), never the winner path.
+		expect(result.verdict.claim).toBe('lost_pending_refund')
+		expect(publishedClaims).toEqual(['published'])
 	})
 })
