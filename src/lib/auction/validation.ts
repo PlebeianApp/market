@@ -618,6 +618,9 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 	if (settlement.status !== 'settled') {
 		return invalidSettlement('status_invalid', `kind-1024 status must be settled, got ${settlement.status}`)
 	}
+	if (settlement.closeAt < auction.maxEndAt) {
+		return invalidSettlement('status_invalid', `kind-1024 close_at=${settlement.closeAt} precedes max_end_at=${auction.maxEndAt}`)
+	}
 	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) {
 		return invalidSettlement(
 			'auction_mismatch',

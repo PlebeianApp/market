@@ -254,6 +254,31 @@ describe('validateSettlementCompleteness', () => {
 		if (!result.isComplete) expect(result.failureCode).toBe('fallback_chain_inconsistent')
 	})
 
+	test('rejects settlement when close_at precedes max_end_at', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, { id: '2'.repeat(64), amount: 100, path: 'm/0/0/0/0/0' })
+		const release = buildPathRelease(bid, 'm/0/0/0/0/0', '3'.repeat(64))
+		const settlement: ParsedSettlementEvent = {
+			...buildSettlement(auction, bid, release.id),
+			closeAt: auction.maxEndAt - 1,
+		}
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: bid,
+			pathRelease: release,
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+		})
+
+		expect(result.isComplete).toBe(false)
+		if (!result.isComplete) {
+			expect(result.failureCode).toBe('status_invalid')
+			expect(result.detail).toContain('close_at')
+		}
+	})
+
 	test('rejects mixed per-proof states [spent, unspent] even when aggregate is spent', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
