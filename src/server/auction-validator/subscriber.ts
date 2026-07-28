@@ -32,7 +32,7 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
-import { refreshAuctionMintReachability } from './mintReachability'
+import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
 
@@ -43,6 +43,8 @@ export interface ValidatorSubscriberDeps {
 	nut7Poller?: Pick<Nut7Poller, 'refreshBidChain' | 'refreshAuctionReleasedNonterminal'>
 	/** Override for "current time" — defaults to `Date.now() / 1000`. */
 	now?: () => number
+	/** Operator-controlled outbound-network + load policy for mint probes. */
+	mintProbePolicy?: MintProbePolicy
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -126,7 +128,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
-		const hasAnyReachableMint = await refreshAuctionMintReachability(result.auctionState)
+		const hasAnyReachableMint = await refreshAuctionMintReachability(result.auctionState, undefined, deps.mintProbePolicy)
 		if (!hasAnyReachableMint) {
 			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} has no reachable mints yet`)
 		}

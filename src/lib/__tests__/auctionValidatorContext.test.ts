@@ -483,3 +483,40 @@ describe('aggregateProofStates — all-spent semantics', () => {
 		expect(aggregateProofStates(mk([['aa', 'unspent'], ['bb', 'unspent']]), ys)).toBe('unspent')
 	})
 })
+
+describe('auction validator per-mint availability scoping', () => {
+	test('an unavailable selected mint leaves that bid pending without blocking bids on healthy mints', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auctionState = upsertAuction(state, buildAuction({ mints: ['https://mint-a.test', 'https://mint-b.test'] })).auctionState
+		const bidOnA = buildBid({ id: '2'.repeat(64), mint: 'https://mint-a.test' })
+		const bidOnB = buildBid({ id: '3'.repeat(64), mint: 'https://mint-b.test' })
+		upsertBid(state, bidOnA, 1_505)
+		upsertBid(state, bidOnB, 1_506)
+
+		// mint-b is healthy, mint-a is down. The auction stays active
+		// (any reachable mint) — one unavailable mint does not gate it.
+		setAuctionMintReachability(auctionState, [
+			['https://mint-a.test', false],
+			['https://mint-b.test', true],
+		])
+		expect(auctionState.contextStatus).toBe('active')
+
+		const live = collectLiveBids(state, 1_600)
+		// The bid on the healthy mint is polled; the bid on the down mint
+		// is left pending (not collected, not hard-failed) and does not
+		// block the healthy bid.
+		expect(live).toHaveLength(1)
+		expect(live[0]?.bidState.bid.id).toBe(bidOnB.id)
+		const stuckBid = auctionState.bids.get(bidOnA.id)!
+		expect(stuckBid.currentClaim).toBeNull()
+	})
+
+	test('an auction with no reachable mints is pending, not blocking, and polls nothing', () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auctionState = upsertAuction(state, buildAuction({ mints: ['https://mint-a.test'] })).auctionState
+		upsertBid(state, buildBid({ id: '2'.repeat(64) }), 1_505)
+		setAuctionMintReachability(auctionState, [['https://mint-a.test', false]])
+		expect(auctionState.contextStatus).toBe('pending_mint_check')
+		expect(collectLiveBids(state, 1_600)).toEqual([])
+	})
+})

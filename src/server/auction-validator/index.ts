@@ -18,6 +18,7 @@ import { createVerdictPublisher } from './publisher'
 import { createNut7Poller } from './nut7Poller'
 import { createValidatorSubscriber } from './subscriber'
 import { publishValidatorPolicy } from './policy'
+import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
 
 export interface StartAuctionValidatorOptions {
@@ -31,6 +32,13 @@ export interface StartAuctionValidatorOptions {
 	nut7PollIntervalMs?: number
 	/** Lifecycle-tick interval in milliseconds (close transitions, grief detection). Default 15s. */
 	lifecycleTickMs?: number
+	/**
+	 * Operator-controlled outbound-network + load policy for mint
+	 * reachability probes (destination allow-list, mint cap, concurrency,
+	 * cache TTL, insecure-localhost opt-in). Defaults are safe: private
+	 * destinations rejected, bounded concurrency, no cache.
+	 */
+	mintProbePolicy?: MintProbePolicy
 	/** Logger override. Default `console`. */
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
@@ -64,13 +72,14 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 	}
 
 	const publisher = createVerdictPublisher({ signer: options.signer, relayPool: options.relayPool })
-	const poller = createNut7Poller({ state, publisher, logger })
+	const poller = createNut7Poller({ state, publisher, logger, mintProbePolicy: options.mintProbePolicy })
 	const subscriber = createValidatorSubscriber({
 		state,
 		relayPool: options.relayPool,
 		publisher,
 		nut7Poller: poller,
 		logger,
+		mintProbePolicy: options.mintProbePolicy,
 	})
 
 	await subscriber.start()

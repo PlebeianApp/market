@@ -32,7 +32,7 @@ import {
 	type ValidatorState,
 } from './state'
 import { currentTopValidBidAmount } from './lifecycle'
-import { refreshAuctionMintReachability } from './mintReachability'
+import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 
 // ---------------------------------------------------------------------------
@@ -63,6 +63,8 @@ export interface Nut7PollerDeps {
 	publisher: ReturnType<typeof createVerdictPublisher>
 	/** Per-mint NUT-7 query options (timeout etc.). Optional. */
 	nut7Options?: CheckProofStateOptions
+	/** Operator-controlled outbound-network + load policy for mint probes. */
+	mintProbePolicy?: MintProbePolicy
 	/** Override for "current time" — defaults to `Date.now() / 1000`. */
 	now?: () => number
 	/** Per-tick logger; defaults to console. */
@@ -87,7 +89,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 
 		for (const auctionState of Array.from(deps.state.auctions.values())) {
 			try {
-				await refreshAuctionMintReachability(auctionState, deps.nut7Options)
+				await refreshAuctionMintReachability(auctionState, deps.nut7Options, deps.mintProbePolicy)
 			} catch (err) {
 				logger.warn(
 					`[validator-nut7] mint reachability refresh failed for auction ${auctionState.auction.rootEventId.slice(0, 8)}:`,
