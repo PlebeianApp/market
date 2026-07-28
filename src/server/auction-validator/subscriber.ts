@@ -23,8 +23,9 @@
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
+import { schnorr } from '@noble/curves/secp256k1.js'
 import type { NostrEvent } from 'nostr-tools'
-import { verifyEvent } from 'nostr-tools'
+import { getEventHash } from 'nostr-tools'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../../lib/auction/constants'
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
@@ -73,9 +74,32 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// Event handlers
 	// =========================================================================
 
+	const verifyIncomingEvent = (raw: NostrEvent, label: string): boolean => {
+		try {
+			const expectedId = getEventHash(raw)
+			if (expectedId !== raw.id) {
+				logger.warn(`[validator] dropping ${label} with mismatched event id ${raw.id.slice(0, 8)}`)
+				return false
+			}
+
+			const valid = schnorr.verify(
+				Uint8Array.from(Buffer.from(raw.sig, 'hex')),
+				Uint8Array.from(Buffer.from(expectedId, 'hex')),
+				Uint8Array.from(Buffer.from(raw.pubkey, 'hex')),
+			)
+			if (!valid) {
+				logger.warn(`[validator] dropping ${label} with invalid signature ${raw.id.slice(0, 8)}`)
+				return false
+			}
+			return true
+		} catch {
+			logger.warn(`[validator] dropping ${label} with invalid signature ${raw.id.slice(0, 8)}`)
+			return false
+		}
+	}
+
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
-		if (!verifyEvent(raw)) {
-			logger.warn(`[validator] dropping auction with invalid signature ${raw.id.slice(0, 8)}`)
+		if (!verifyIncomingEvent(raw, 'auction')) {
 			return
 		}
 
@@ -118,6 +142,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onBidEvent = async (raw: NostrEvent): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'bid')) {
+			return
+		}
+
 		const parsed = parseBidEvent(raw)
 		if (!parsed.ok) {
 			// Malformed bid → ignore. (Hostile bidders publishing bad
@@ -161,6 +189,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'path release')) {
+			return
+		}
+
 		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
@@ -192,6 +224,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'settlement')) {
+			return
+		}
+
 		const parsed = parseSettlementEvent(raw)
 		if (!parsed.ok) return
 		const settlement = parsed.value
