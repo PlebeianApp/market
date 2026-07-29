@@ -147,6 +147,15 @@ export interface ValidatorAuctionState {
 	settlement: ParsedSettlementEvent | null
 
 	/**
+	 * Every authorized seller kind-1024 observed for this auction.
+	 * Selection among conflicting settlements is deterministic
+	 * (settlement-first, see selectCanonicalEvidence in lifecycle.ts);
+	 * a single last-arrival slot would make the chosen settlement depend
+	 * on relay delivery order.
+	 */
+	settlements: ParsedSettlementEvent[]
+
+	/**
 	 * bidEventId -> every authorized kind-1025 observed for that bid.
 	 * Selection among these candidates is deterministic (settlement-
 	 * referenced, then earliest valid `created_at`) — see
@@ -307,6 +316,7 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		mintReachability: new Map(auction.mints.map((mintUrl) => [mintUrl, 'unreachable' as const])),
 		bids: new Map(),
 		settlement: null,
+		settlements: [],
 		pathReleases: new Map(),
 		pathReleaseObservedAt: new Map(),
 		closeHandled: false,
@@ -389,13 +399,13 @@ export type RecordPathReleaseResult =
  * On replay (after the bid lands) the same authorization is re-applied.
  */
 export const recordPathRelease = (state: ValidatorState, release: ParsedPathReleaseEvent, observedAt: number): RecordPathReleaseResult => {
-// Path release references the bid event (`e` tag → bidEventId).
+	// Path release references the bid event (`e` tag → bidEventId).
 	// Find the owning auction for that bid.
 	for (const auctionState of Array.from(state.auctions.values())) {
 		const bidState = auctionState.bids.get(release.bidEventId)
 		if (!bidState) continue
-if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
-return { status: 'wrong_author' }
+		if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
+			return { status: 'wrong_author' }
 		}
 		// Append to the per-bid candidate set (dedup by release event id).
 		// Selection is deferred to verdict time so it can be deterministic
@@ -424,18 +434,28 @@ export type RecordSettlementResult =
 	| { status: 'wrong_seller' }
 
 /**
- * Record a kind-1024 settlement. The single settlement slot is only
- * overwritten once the authenticated signer matches the pinned auction
- * seller — a correctly-signed non-seller event must not replace valid
- * seller evidence. `unknown_auction` (ordering gap → buffer + replay)
+ * Record a kind-1024 settlement. Authorized settlements are retained as
+ * candidates (dedup by id); a correctly-signed non-seller event is
+ * rejected before any state change so it cannot enter the candidate set
+ * or affect reputation. `unknown_auction` (ordering gap → buffer + replay)
  * is distinct from `wrong_seller` (drop, do not buffer); replay
- * re-applies the same authorization.
+ * re-applies the same authorization. Conflicting authorized settlements
+ * are triaged deterministically at verdict time (settlement-first),
+ * independent of relay delivery order — see selectCanonicalEvidence.
  */
 export const recordSettlement = (state: ValidatorState, settlement: ParsedSettlementEvent): RecordSettlementResult => {
 	const auctionState = state.auctions.get(settlement.auctionRootEventId)
 	if (!auctionState) return { status: 'unknown_auction' }
 	if (settlement.sellerPubkey.toLowerCase() !== auctionState.rootAuction.sellerPubkey.toLowerCase()) {
 		return { status: 'wrong_seller' }
+	}
+	// Retain every authorized settlement as a candidate (dedup by id) so
+	// conflicting seller evidence is triaged deterministically rather
+	// than by relay arrival order — see selectCanonicalEvidence. The
+	// legacy single slot is also kept for backward-compatible readers.
+	const existingSettlements = auctionState.settlements ?? []
+	if (!existingSettlements.some((s) => s.id === settlement.id)) {
+		auctionState.settlements = [...existingSettlements, settlement]
 	}
 	auctionState.settlement = settlement
 	return { status: 'recorded', auctionState }

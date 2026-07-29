@@ -38,7 +38,7 @@ import {
 	type BidChainValidation,
 	type BidValidationVerdict,
 } from '../../lib/auction/validation'
-import type { ParsedPathReleaseEvent } from '../../lib/auction/events'
+import type { ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
 import { aggregateProofStates, MAX_REPLACEMENT_CHAIN_DEPTH, type ValidatorAuctionState, type ValidatorBidState } from './state'
 
@@ -112,11 +112,12 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 
 	// --- Phase 2: close & settlement ----------------------------------------
 
-	const release = selectCanonicalRelease(auctionState, bidState, now)
+	const sel = selectCanonicalEvidence(auctionState, bidState, now)
+	const release = sel?.release
 
 	if (bidState.postCloseDecision === 'loser') {
 		if (release) {
-			return deriveSettlementVerdict(auctionState, bidState, release, now)
+			return deriveSettlementVerdict(auctionState, bidState, sel, now)
 		}
 		return deriveLoserVerdict(auctionState, bidState, now)
 	}
@@ -128,7 +129,7 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 	//   4. Else, still won_pending_settlement.
 
 	if (release) {
-		return deriveSettlementVerdict(auctionState, bidState, release, now)
+		return deriveSettlementVerdict(auctionState, bidState, sel, now)
 	}
 
 	const graceExpires = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
@@ -238,9 +239,11 @@ const deriveLoserVerdict = (auctionState: ValidatorAuctionState, bidState: Valid
 const deriveSettlementVerdict = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
-	release: ParsedPathReleaseEvent,
+	sel: { settlement: ParsedSettlementEvent | undefined; release: ParsedPathReleaseEvent | undefined },
 	now: number,
 ): DerivedVerdict => {
+	const release = sel.release
+	if (!release) return { claim: 'won_pending_settlement' }
 	// Read the observed time bound to THIS release event (keyed by release
 	// id), so a backdated or later-arriving release cannot inherit a
 	// different event's earlier timestamp.
@@ -270,10 +273,12 @@ const deriveSettlementVerdict = (
 		return { claim: 'won_pending_settlement' }
 	}
 
-	// 3. Seller declaration check: a valid final kind-1024 must exist and
-	//    match the redeemed chain before we publish settled_*.
-	const settlement = auctionState.settlement
-	if (!settlement || settlement.status !== 'settled' || settlement.winningBidId !== bidState.bid.id) {
+	// 3. Seller declaration check: the deterministically selected
+	//    settlement must exist and match the redeemed chain before we
+	//    publish settled_*. sel.settlement is undefined when no authorized
+	//    settlement references a valid release for this bid.
+	const settlement = sel.settlement
+	if (!settlement) {
 		return { claim: 'won_pending_settlement' }
 	}
 	const settlementCompleteness = validateSettlementCompleteness({
@@ -331,7 +336,7 @@ const buildSettlementChain = (
 		if (!current) break
 	}
 	for (const leg of legs) {
-		const pathRelease = selectCanonicalRelease(auctionState, leg, now)
+		const pathRelease = selectCanonicalEvidence(auctionState, leg, now).release
 		if (!pathRelease) continue
 		const nut7ProofStates = buildProofStateMap(leg)
 		chain.push({
@@ -363,49 +368,40 @@ const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: Valid
 }
 
 /**
- * Deterministically select the canonical kind-1025 release for a bid
- * from the set of authorized candidates, independent of relay delivery
- * order. Two phases:
+ * Deterministically select the canonical (settlement, release) pair for
+ * a bid, independent of relay delivery order.
  *
- *  1. Settlement-referenced. The seller's kind-1024 declares the exact
- *     release id it acted on (`pathReleaseEventId`). When that release
- *     is among the observed candidates, select it — this is the
- *     protocol's own authoritative, order-independent choice, and the
- *     only pick that cannot contradict the `path_release_mismatch`
- *     completeness check.
- *  2. Pre-settlement fallback. Among the remaining authorized
- *     candidates, prefer releases that pass full `validatePathRelease`
- *     validation; tiebreak by earliest `created_at`, then smallest event
- *     id. This drops an early *unusable* release in favour of a later
- *     *valid* one.
+ * Conflicting authorized seller kind-1024 events are triaged
+ * settlement-first: among authorized settlements for this bid, prefer
+ * those that reference a *valid* authorized release (the seller can only
+ * legitimately settle once; a settlement naming an invalid/unknown
+ * release is not valid), then tiebreak by earliest `created_at`, then
+ * smallest event id — the same deterministic triage applied to releases
+ * and winning bids. The canonical release is the one the selected
+ * settlement names.
  *
- * Fraud threshold (option a): if no candidate is valid, the earliest
- * invalid one is returned so the existing `fraudulent_bid` signal at the
- * verdict layer is preserved — an isolated unusable release still flags
- * fraud, but a later valid release supersedes it.
+ * Pre-settlement fallback: if no settlement references a valid release,
+ * the canonical release is the earliest valid authorized candidate
+ * (then earliest invalid — option a: an isolated unusable release still
+ * flags `fraudulent_bid` at the verdict layer, but a later valid release
+ * supersedes it), and there is no settlement.
  *
- * `observedAt` is bound to the *selected* release's own first-observed
- * time (keyed by release id in `pathReleaseObservedAt`), never a
- * different event's timestamp.
+ * Note: the `settlement` release reason is valid for the winner at any
+ * time (not grace-gated; only `voluntary_late` is), so "release-first"
+ * selection would false-negative a legitimate late settlement — hence
+ * settlement-first. `observedAt` is bound to the selected release's own
+ * first-observed time (keyed by release id), never a different event's.
  */
-const selectCanonicalRelease = (
+const selectCanonicalEvidence = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
 	now: number,
-): ParsedPathReleaseEvent | undefined => {
+): { settlement: ParsedSettlementEvent | undefined; release: ParsedPathReleaseEvent | undefined } => {
 	const candidates = auctionState.pathReleases.get(bidState.bid.id) ?? []
-	if (candidates.length === 0) return undefined
+	if (candidates.length === 0) return { settlement: undefined, release: undefined }
 
-	// 1. Settlement-referenced selection.
-	const settlement = auctionState.settlement
-	if (settlement && settlement.status === 'settled' && settlement.winningBidId === bidState.bid.id && settlement.pathReleaseEventId) {
-		const named = candidates.find((r) => r.id === settlement.pathReleaseEventId)
-		if (named) return named
-	}
-
-	// 2. Deterministic fallback: prefer valid, then earliest created_at,
-	//    then smallest event id.
-	const ranked = candidates
+	// Validate each release once (settlement-independent validity).
+	const rankedCandidates = candidates
 		.map((r) => {
 			const observedAt = auctionState.pathReleaseObservedAt.get(r.id) ?? now
 			const validity = validatePathRelease({
@@ -424,7 +420,35 @@ const selectCanonicalRelease = (
 			if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
 			return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 		})
-	return ranked[0]?.release
+	const validReleaseIds = new Set(rankedCandidates.filter((r) => r.valid).map((r) => r.id))
+	const validReleases = rankedCandidates.filter((r) => r.valid)
+
+	// Authorized settlements for this bid (fallback to the legacy single
+	// slot for tests/older seed paths). Keep only those that reference a
+	// valid authorized release.
+	const allSettlements = auctionState.settlements.length
+		? auctionState.settlements
+		: auctionState.settlement
+			? [auctionState.settlement]
+			: []
+	const validSettlements = allSettlements
+		.filter(
+			(s) =>
+				s.status === 'settled' && s.winningBidId === bidState.bid.id && s.pathReleaseEventId && validReleaseIds.has(s.pathReleaseEventId),
+		)
+		.sort((a, b) => (a.createdAt !== b.createdAt ? a.createdAt - b.createdAt : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
+	if (validSettlements.length > 0) {
+		const settlement = validSettlements[0]!
+		const release = candidates.find((r) => r.id === settlement.pathReleaseEventId)
+		return { settlement, release }
+	}
+
+	// No settlement references a valid release: release-only fallback.
+	// option (a) — if no valid release, the earliest invalid candidate is
+	// returned so the verdict layer's fraudulent_bid signal is preserved.
+	const fallback = (validReleases.length > 0 ? validReleases : rankedCandidates)[0]
+	return { settlement: undefined, release: fallback?.release }
 }
 
 // ============================================================================

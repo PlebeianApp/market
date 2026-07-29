@@ -22,7 +22,7 @@ import {
 	currentTopValidBidAmount,
 } from '../../server/auction-validator/lifecycle'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
-import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State } from '../../server/auction-validator/state'
+import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '../../server/auction-validator/state'
 
 // ============================================================================
 // Fixtures — direct object construction (no Zod parser involvement)
@@ -164,6 +164,7 @@ const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<Valid
 	mintReachability: overrides.mintReachability ?? new Map(auction.mints.map((mintUrl) => [mintUrl, 'reachable' as const])),
 	bids: overrides.bids ?? new Map(),
 	settlement: overrides.settlement ?? null,
+	settlements: overrides.settlements ?? (overrides.settlement ? [overrides.settlement] : []),
 	pathReleases: overrides.pathReleases ?? new Map(),
 	pathReleaseObservedAt: overrides.pathReleaseObservedAt ?? new Map(),
 	closeHandled: overrides.closeHandled ?? false,
@@ -1095,6 +1096,130 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		// path_release_mismatch check (settlement names B ≠ A) would have
 		// left the verdict at won_pending_settlement.
 		expect(v.claim).toBe('settled_late')
+	})
+
+	test('conflicting seller settlements are triaged deterministically (delivery-order independent)', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const token = buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount])
+
+		// Two VALID authorized releases, both valid after grace:
+		//  - A: 'settlement' reason (valid for the winner at any time), observed in-grace.
+		//  - B: 'voluntary_late' reason (valid after grace), observed after grace.
+		const releaseA = buildPathRelease(bid, {
+			id: 'a'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 10,
+		})
+		const releaseB = buildPathRelease(bid, {
+			id: 'b'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'voluntary_late',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 20,
+		})
+
+		// Two conflicting seller settlements, each referencing a valid release.
+		const settlementA = buildSettlement(auction, bid, {
+			id: 's'.repeat(64),
+			closeAt: auction.maxEndAt + 30,
+			pathReleaseEventId: releaseA.id,
+		})
+		const settlementB = buildSettlement(auction, bid, {
+			id: 't'.repeat(64),
+			closeAt: auction.maxEndAt + 40,
+			pathReleaseEventId: releaseB.id,
+		})
+
+		const run = (settlementOrder: ParsedSettlementEvent[], releaseOrder: ParsedPathReleaseEvent[]) => {
+			const auctionState = buildAuctionState(auction, { closeHandled: true })
+			const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
+			auctionState.bids.set(bid.id, bidState)
+			for (const r of releaseOrder) seedRelease(auctionState, bid.id, r)
+			auctionState.pathReleaseObservedAt.set(releaseA.id, auction.maxEndAt + 50)
+			auctionState.pathReleaseObservedAt.set(releaseB.id, auction.maxEndAt + 130)
+			// recordSettlement appends dedup; call in the given order.
+			auctionState.settlements = []
+			for (const s of settlementOrder)
+				recordSettlement(
+					{ auctions: new Map([[auction.rootEventId, auctionState]]), auctionsByCoordinate: new Map(), validatorPubkey: '' } as any,
+					s,
+				)
+			recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 130)
+			return deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 130 })
+		}
+
+		// Both valid settlements reference valid releases; the deterministic
+		// tiebreak is earliest settlement created_at → settlementA (names A,
+		// observed in-grace → settled_promptly). Delivery order must not
+		// change the outcome.
+		const order1 = run([settlementA, settlementB], [releaseA, releaseB])
+		const order2 = run([settlementB, settlementA], [releaseB, releaseA])
+		expect(order1.claim).toBe('settled_promptly')
+		expect(order2.claim).toBe('settled_promptly')
+		expect(order1.claim).toBe(order2.claim)
+	})
+
+	test('a settlement referencing an invalid release is not selected; a valid settlement wins', () => {
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+		const token = buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount])
+
+		// releaseInvalid is unusable (no cashu_token); releaseValid is usable.
+		const releaseInvalid = buildPathRelease(bid, {
+			id: 'i'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			createdAt: auction.maxEndAt + 10,
+		})
+		const releaseValid = buildPathRelease(bid, {
+			id: 'v'.repeat(64),
+			derivationPath: path,
+			childPubkey,
+			releaseReason: 'settlement',
+			cashuToken: token,
+			createdAt: auction.maxEndAt + 20,
+		})
+
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
+		auctionState.bids.set(bid.id, bidState)
+		seedRelease(auctionState, bid.id, releaseInvalid)
+		seedRelease(auctionState, bid.id, releaseValid)
+		auctionState.pathReleaseObservedAt.set(releaseInvalid.id, auction.maxEndAt + 50)
+		auctionState.pathReleaseObservedAt.set(releaseValid.id, auction.maxEndAt + 60)
+		// A settlement referencing the INVALID release is not a valid settlement.
+		const badSettlement = buildSettlement(auction, bid, { closeAt: auction.maxEndAt + 30, pathReleaseEventId: releaseInvalid.id })
+		// A settlement referencing the VALID release is valid.
+		const goodSettlement = buildSettlement(auction, bid, {
+			id: 'g'.repeat(64),
+			closeAt: auction.maxEndAt + 40,
+			pathReleaseEventId: releaseValid.id,
+		})
+		recordSettlement(
+			{ auctions: new Map([[auction.rootEventId, auctionState]]), auctionsByCoordinate: new Map(), validatorPubkey: '' } as any,
+			badSettlement,
+		)
+		recordSettlement(
+			{ auctions: new Map([[auction.rootEventId, auctionState]]), auctionsByCoordinate: new Map(), validatorPubkey: '' } as any,
+			goodSettlement,
+		)
+		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
+
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		// The good settlement (valid release) is selected → settled_promptly.
+		expect(v.claim).toBe('settled_promptly')
 	})
 })
 
