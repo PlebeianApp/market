@@ -69,10 +69,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// Active unsubscribe handles, one per REQ we currently have open.
 	const unsubscribes: Array<() => void> = []
 	// Buffered bids/releases/settlements that arrived before we knew
-	// about their auction. Drained whenever we learn about a new auction.
-	const pendingBids = new Map<string, NostrEvent[]>() // auctionRootEventId → events
-	const pendingReleases = new Map<string, NostrEvent[]>() // bidEventId → events
-	const pendingSettlements = new Map<string, NostrEvent[]>() // auctionRootEventId → events
+	// about their auction. Each carries the validator's first-observed
+	// time so replay uses the original sighting, not replay-time now()
+	// (which would let relay ordering change prompt/late classification).
+	const pendingBids = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
+	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
 
 	// =========================================================================
 	// Event handlers
@@ -143,7 +145,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
-	const onBidEvent = async (raw: NostrEvent): Promise<void> => {
+	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
 		if (!verifyIncomingEvent(raw, 'bid')) {
 			return
 		}
@@ -157,17 +159,19 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 		const bid = parsed.value
+		const firstObservedAt = observedAt ?? now()
 
 		// If the auction hasn't arrived yet on our relay, stash the bid
-		// and replay it when the auction shows up.
+		// and replay it (with this first-observed time) when the auction
+		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingBids.set(bid.auctionRootEventId, existing)
 			return
 		}
 
-		const result = upsertBid(deps.state, bid, now())
+		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
 
 		// Run derive + publish.
@@ -182,7 +186,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
-	const onPathReleaseEvent = async (raw: NostrEvent): Promise<void> => {
+	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
 		if (!verifyIncomingEvent(raw, 'path release')) {
 			return
 		}
@@ -190,15 +194,16 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
-		const observedAt = now()
+		const firstObservedAt = observedAt ?? now()
 
-		const recordResult = recordPathRelease(deps.state, release, observedAt)
+		const recordResult = recordPathRelease(deps.state, release, firstObservedAt)
 		if (recordResult.status === 'unknown_bid') {
 			// We don't know about this bid yet (auction or bid event
 			// hasn't arrived). Stash and replay when the bid appears;
-			// authorization is re-applied on replay.
+			// authorization is re-applied on replay. Preserve the
+			// first-observed time so prompt/late classification is stable.
 			const existing = pendingReleases.get(release.bidEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingReleases.set(release.bidEventId, existing)
 			return
 		}
@@ -243,7 +248,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
-	const onSettlementEvent = async (raw: NostrEvent): Promise<void> => {
+	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
 		if (!verifyIncomingEvent(raw, 'settlement')) {
 			return
 		}
@@ -251,11 +256,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const parsed = parseSettlementEvent(raw)
 		if (!parsed.ok) return
 		const settlement = parsed.value
+		const firstObservedAt = observedAt ?? now()
 
 		const recordResult = recordSettlement(deps.state, settlement)
 		if (recordResult.status === 'unknown_auction') {
 			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingSettlements.set(settlement.auctionRootEventId, existing)
 			return
 		}
@@ -295,11 +301,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const drainPending = async (auctionRootEventId: string): Promise<void> => {
 		const bids = pendingBids.get(auctionRootEventId) ?? []
 		pendingBids.delete(auctionRootEventId)
-		for (const bid of bids) await onBidEvent(bid)
+		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
 		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
 		pendingSettlements.delete(auctionRootEventId)
-		for (const s of settlements) await onSettlementEvent(s)
+		for (const { raw, observedAt } of settlements) await onSettlementEvent(raw, observedAt)
 
 		// Path releases are keyed by bidEventId — after the bids
 		// drained above, try replaying every stash and clean up the
@@ -308,7 +314,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			const auctionState = deps.state.auctions.get(auctionRootEventId)
 			if (auctionState && auctionState.bids.has(bidEventId)) {
 				pendingReleases.delete(bidEventId)
-				for (const r of releases) await onPathReleaseEvent(r)
+				for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
 			}
 		}
 	}

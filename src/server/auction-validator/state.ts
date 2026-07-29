@@ -389,13 +389,13 @@ export type RecordPathReleaseResult =
  * On replay (after the bid lands) the same authorization is re-applied.
  */
 export const recordPathRelease = (state: ValidatorState, release: ParsedPathReleaseEvent, observedAt: number): RecordPathReleaseResult => {
-	// Path release references the bid event (`e` tag → bidEventId).
+// Path release references the bid event (`e` tag → bidEventId).
 	// Find the owning auction for that bid.
 	for (const auctionState of Array.from(state.auctions.values())) {
 		const bidState = auctionState.bids.get(release.bidEventId)
 		if (!bidState) continue
-		if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
-			return { status: 'wrong_author' }
+if (release.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
+return { status: 'wrong_author' }
 		}
 		// Append to the per-bid candidate set (dedup by release event id).
 		// Selection is deferred to verdict time so it can be deterministic
