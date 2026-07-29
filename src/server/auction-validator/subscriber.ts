@@ -23,22 +23,28 @@
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
+import { schnorr } from '@noble/curves/secp256k1.js'
 import type { NostrEvent } from 'nostr-tools'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getEventHash } from 'nostr-tools'
 import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '../../lib/auction/constants'
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
+import type { Nut7Poller } from './nut7Poller'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
 	relayPool: ApplesauceRelayPool
 	publisher: ReturnType<typeof createVerdictPublisher>
+	nut7Poller?: Pick<Nut7Poller, 'refreshBidChain' | 'refreshAuctionReleasedNonterminal'>
 	/** Override for "current time" — defaults to `Date.now() / 1000`. */
 	now?: () => number
+	/** Operator-controlled outbound-network + load policy for mint probes. */
+	mintProbePolicy?: MintProbePolicy
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -63,18 +69,47 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// Active unsubscribe handles, one per REQ we currently have open.
 	const unsubscribes: Array<() => void> = []
 	// Buffered bids/releases/settlements that arrived before we knew
-	// about their auction. Drained whenever we learn about a new auction.
-	const pendingBids = new Map<string, NostrEvent[]>() // auctionRootEventId → events
-	const pendingReleases = new Map<string, NostrEvent[]>() // bidEventId → events
-	const pendingSettlements = new Map<string, NostrEvent[]>() // auctionRootEventId → events
+	// about their auction. Each carries the validator's first-observed
+	// time so replay uses the original sighting, not replay-time now()
+	// (which would let relay ordering change prompt/late classification).
+	const pendingBids = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
+	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
 
 	// =========================================================================
 	// Event handlers
 	// =========================================================================
 
+	const verifyIncomingEvent = (raw: NostrEvent, label: string): boolean => {
+		try {
+			const expectedId = getEventHash(raw)
+			if (expectedId !== raw.id) {
+				logger.warn(`[validator] dropping ${label} with mismatched event id ${raw.id.slice(0, 8)}`)
+				return false
+			}
+
+			const valid = schnorr.verify(
+				Uint8Array.from(Buffer.from(raw.sig, 'hex')),
+				Uint8Array.from(Buffer.from(expectedId, 'hex')),
+				Uint8Array.from(Buffer.from(raw.pubkey, 'hex')),
+			)
+			if (!valid) {
+				logger.warn(`[validator] dropping ${label} with invalid signature ${raw.id.slice(0, 8)}`)
+				return false
+			}
+			return true
+		} catch {
+			logger.warn(`[validator] dropping ${label} with invalid signature ${raw.id.slice(0, 8)}`)
+			return false
+		}
+	}
+
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseAuctionEvent(ndkEvent)
+		if (!verifyIncomingEvent(raw, 'auction')) {
+			return
+		}
+
+		const parsed = parseAuctionEvent(raw)
 		if (!parsed.ok) {
 			// Common case: an auction event that isn't compliant with the
 			// new scheme (missing `auditors`, wrong settlement_policy etc.).
@@ -88,18 +123,34 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 
-		const isNew = !deps.state.auctions.has(auction.rootEventId)
-		upsertAuction(deps.state, auction)
-		if (isNew) {
+		const existing = deps.state.auctions.get(auction.rootEventId)
+		const result = upsertAuction(deps.state, auction)
+		if (result.status === 'rejected_immutable') {
+			logger.warn(`[validator] rejecting immutable auction update ${auction.rootEventId.slice(0, 8)}`)
+			return
+		}
+
+		const hasAnyReachableMint = await refreshAuctionMintReachability(result.auctionState, undefined, deps.mintProbePolicy)
+		if (!hasAnyReachableMint) {
+			logger.warn(`[validator] auction ${auction.rootEventId.slice(0, 8)} has no reachable mints yet`)
+		}
+
+		const shouldDrain = result.status === 'inserted'
+		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
+		}
+		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
 		}
 	}
 
-	const onBidEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseBidEvent(ndkEvent)
+	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'bid')) {
+			return
+		}
+
+		const parsed = parseBidEvent(raw)
 		if (!parsed.ok) {
 			// Malformed bid → ignore. (Hostile bidders publishing bad
 			// events shouldn't crash the validator; a stricter mode could
@@ -108,17 +159,19 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 		const bid = parsed.value
+		const firstObservedAt = observedAt ?? now()
 
 		// If the auction hasn't arrived yet on our relay, stash the bid
-		// and replay it when the auction shows up.
+		// and replay it (with this first-observed time) when the auction
+		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingBids.set(bid.auctionRootEventId, existing)
 			return
 		}
 
-		const result = upsertBid(deps.state, bid, now())
+		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
 
 		// Run derive + publish.
@@ -133,23 +186,53 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
-	const onPathReleaseEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parsePathReleaseEvent(ndkEvent)
+	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'path release')) {
+			return
+		}
+
+		const parsed = parsePathReleaseEvent(raw)
 		if (!parsed.ok) return
 		const release = parsed.value
+		const firstObservedAt = observedAt ?? now()
 
-		const auctionState = recordPathRelease(deps.state, release)
-		if (!auctionState) {
+		const recordResult = recordPathRelease(deps.state, release, firstObservedAt)
+		if (recordResult.status === 'unknown_bid') {
 			// We don't know about this bid yet (auction or bid event
-			// hasn't arrived). Stash and replay when the bid appears.
+			// hasn't arrived). Stash and replay when the bid appears;
+			// authorization is re-applied on replay. Preserve the
+			// first-observed time so prompt/late classification is stable.
 			const existing = pendingReleases.get(release.bidEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingReleases.set(release.bidEventId, existing)
 			return
 		}
+		if (recordResult.status === 'wrong_author') {
+			// Correctly-signed but not by the bid's bidder. Drop without
+			// mutating state, buffering, or publishing a verdict — wrong-author
+			// evidence must not change reputation.
+			logger.warn(
+				`[validator] dropping kind-1025 ${release.id.slice(0, 8)}: signer does not match bidder for bid ${release.bidEventId.slice(0, 8)}`,
+			)
+			return
+		}
+		const auctionState = recordResult.auctionState
 		const bidState = auctionState.bids.get(release.bidEventId)
 		if (!bidState) return // shouldn't happen — recordPathRelease ensures the bid is in the auction
+
+		if (deps.nut7Poller) {
+			try {
+				await deps.nut7Poller.refreshBidChain({
+					auctionRootEventId: auctionState.auction.rootEventId,
+					bidEventId: release.bidEventId,
+				})
+			} catch (err) {
+				logger.warn(
+					`[validator] kind-1025 NUT-7 refresh failed for bid ${release.bidEventId.slice(0, 8)}:`,
+					err instanceof Error ? err.message : err,
+				)
+			}
+		}
 
 		try {
 			await deps.publisher.publishIfChanged({
@@ -165,18 +248,43 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
-	const onSettlementEvent = async (raw: NostrEvent): Promise<void> => {
-		const ndkEvent = toNdkEvent(raw)
-		const parsed = parseSettlementEvent(ndkEvent)
+	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		if (!verifyIncomingEvent(raw, 'settlement')) {
+			return
+		}
+
+		const parsed = parseSettlementEvent(raw)
 		if (!parsed.ok) return
 		const settlement = parsed.value
+		const firstObservedAt = observedAt ?? now()
 
-		const auctionState = recordSettlement(deps.state, settlement)
-		if (!auctionState) {
+		const recordResult = recordSettlement(deps.state, settlement)
+		if (recordResult.status === 'unknown_auction') {
 			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
-			existing.push(raw)
+			existing.push({ raw, observedAt: firstObservedAt })
 			pendingSettlements.set(settlement.auctionRootEventId, existing)
 			return
+		}
+		if (recordResult.status === 'wrong_seller') {
+			// Correctly-signed but not by the auction seller. Drop without
+			// overwriting the settlement slot, buffering, or publishing —
+			// wrong-seller evidence must not replace valid seller evidence.
+			logger.warn(
+				`[validator] dropping kind-1024 ${settlement.id.slice(0, 8)}: signer does not match seller for auction ${settlement.auctionRootEventId.slice(0, 8)}`,
+			)
+			return
+		}
+		const auctionState = recordResult.auctionState
+
+		if (deps.nut7Poller) {
+			try {
+				await deps.nut7Poller.refreshAuctionReleasedNonterminal(auctionState.auction.rootEventId)
+			} catch (err) {
+				logger.warn(
+					`[validator] kind-1024 NUT-7 refresh failed for auction ${auctionState.auction.rootEventId.slice(0, 8)}:`,
+					err instanceof Error ? err.message : err,
+				)
+			}
 		}
 
 		// A kind-1024 changes the validator's view of the auction
@@ -193,11 +301,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const drainPending = async (auctionRootEventId: string): Promise<void> => {
 		const bids = pendingBids.get(auctionRootEventId) ?? []
 		pendingBids.delete(auctionRootEventId)
-		for (const bid of bids) await onBidEvent(bid)
+		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
 		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
 		pendingSettlements.delete(auctionRootEventId)
-		for (const s of settlements) await onSettlementEvent(s)
+		for (const { raw, observedAt } of settlements) await onSettlementEvent(raw, observedAt)
 
 		// Path releases are keyed by bidEventId — after the bids
 		// drained above, try replaying every stash and clean up the
@@ -206,7 +314,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			const auctionState = deps.state.auctions.get(auctionRootEventId)
 			if (auctionState && auctionState.bids.has(bidEventId)) {
 				pendingReleases.delete(bidEventId)
-				for (const r of releases) await onPathReleaseEvent(r)
+				for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
 			}
 		}
 	}
@@ -294,23 +402,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 // ============================================================================
 // Internal helpers
 // ============================================================================
-
-const toNdkEvent = (raw: NostrEvent): NDKEvent => {
-	// The NDKEvent constructor accepts a plain Nostr event object via
-	// `new NDKEvent(undefined, raw)` but our parsers only touch
-	// `kind`, `pubkey`, `id`, `created_at`, `content`, `tags` — so a
-	// minimal-construct + assignment is enough and avoids dragging in
-	// an NDK instance.
-	const e = new NDKEvent()
-	e.kind = raw.kind as unknown as number
-	e.pubkey = raw.pubkey
-	e.content = raw.content
-	e.tags = raw.tags
-	e.id = raw.id
-	e.created_at = raw.created_at
-	if (raw.sig) e.sig = raw.sig
-	return e
-}
 
 // The auction kind constants are typed as a strict union of NDKKind
 // values; widen back to number for nostr-tools filter shape.

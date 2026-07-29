@@ -21,13 +21,13 @@
  *   issues, not via thrown access errors.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '../../nostr/eventLike'
 
 /**
  * Read the first value (`tag[1]`) for the named tag. `undefined` when
  * the tag is absent or has no value slot.
  */
-export const readSingleTag = (event: NDKEvent, name: string): string | undefined => {
+export const readSingleTag = (event: NostrEventLike, name: string): string | undefined => {
 	for (const tag of event.tags) {
 		if (tag[0] === name && typeof tag[1] === 'string' && tag[1].length > 0) return tag[1]
 	}
@@ -38,7 +38,7 @@ export const readSingleTag = (event: NDKEvent, name: string): string | undefined
  * Read all first-values for a repeating tag. e.g.
  * `["mint", "mintA"]`, `["mint", "mintB"]` → `["mintA", "mintB"]`.
  */
-export const readMultiTag = (event: NDKEvent, name: string): string[] => {
+export const readMultiTag = (event: NostrEventLike, name: string): string[] => {
 	const out: string[] = []
 	for (const tag of event.tags) {
 		if (tag[0] === name && typeof tag[1] === 'string' && tag[1].length > 0) out.push(tag[1])
@@ -47,14 +47,14 @@ export const readMultiTag = (event: NDKEvent, name: string): string[] => {
 }
 
 /** Read the full tag tuple (so callers can use tag[2], tag[3] for compound tags). */
-export const readSingleTagTuple = (event: NDKEvent, name: string): string[] | undefined => {
+export const readSingleTagTuple = (event: NostrEventLike, name: string): string[] | undefined => {
 	for (const tag of event.tags) {
 		if (tag[0] === name) return tag
 	}
 	return undefined
 }
 
-export const readMultiTagTuples = (event: NDKEvent, name: string): string[][] => {
+export const readMultiTagTuples = (event: NostrEventLike, name: string): string[][] => {
 	return event.tags.filter((tag) => tag[0] === name)
 }
 
@@ -63,7 +63,7 @@ export const readMultiTagTuples = (event: NDKEvent, name: string): string[][] =>
  * missing tags AND for non-integer values (so the schema can decide
  * whether to use a default or fail).
  */
-export const readIntegerTag = (event: NDKEvent, name: string): number | undefined => {
+export const readIntegerTag = (event: NostrEventLike, name: string): number | undefined => {
 	const raw = readSingleTag(event, name)
 	if (raw === undefined) return undefined
 	const n = Number.parseInt(raw, 10)

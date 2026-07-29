@@ -31,10 +31,16 @@
  *      → unsettled winner → griefed (terminal).
  */
 
-import { validateBid, type BidValidationVerdict } from '../../lib/auction/validation'
-import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../lib/auctionP2pk'
+import {
+	validateBid,
+	validatePathRelease,
+	validateSettlementCompleteness,
+	type BidChainValidation,
+	type BidValidationVerdict,
+} from '../../lib/auction/validation'
+import type { ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
 import type { ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
-import { aggregateProofStates, type ValidatorAuctionState, type ValidatorBidState } from './state'
+import { aggregateProofStates, MAX_REPLACEMENT_CHAIN_DEPTH, type ValidatorAuctionState, type ValidatorBidState } from './state'
 
 // ============================================================================
 // Public verdict shape
@@ -106,9 +112,13 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 
 	// --- Phase 2: close & settlement ----------------------------------------
 
-	const release = auctionState.pathReleases.get(bidState.bid.id)
+	const sel = selectCanonicalEvidence(auctionState, bidState, now)
+	const release = sel?.release
 
 	if (bidState.postCloseDecision === 'loser') {
+		if (release) {
+			return deriveSettlementVerdict(auctionState, bidState, sel, now)
+		}
 		return deriveLoserVerdict(auctionState, bidState, now)
 	}
 
@@ -119,7 +129,7 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 	//   4. Else, still won_pending_settlement.
 
 	if (release) {
-		return deriveSettlementVerdict(auctionState, bidState, release, now)
+		return deriveSettlementVerdict(auctionState, bidState, sel, now)
 	}
 
 	const graceExpires = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
@@ -147,8 +157,11 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 		bid: bidState.bid,
 		observedAt: bidState.observedAt,
 		nut7State,
+		// Pre-settlement fraud ("any proof spent") is detected from the
+		// per-proof map, independent of the all-spent aggregate.
+		nut7ProofStates: buildProofStateMap(bidState),
 		currentTopBid,
-		bidChainLegAmount: deriveBidChainLegAmount(auctionState, bidState),
+		bidChainValidation: deriveBidChainValidation(auctionState, bidState),
 	})
 
 	// validateBid returns a strict union; widen it for the publisher.
@@ -157,13 +170,53 @@ const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: Va
 	return { claim: 'bid_invalid', reason: verdict.reason, detail: verdict.detail }
 }
 
-const deriveBidChainLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number | undefined => {
+const deriveBidChainValidation = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): BidChainValidation | undefined => {
 	const prevBidId = bidState.bid.prevBidId?.trim()
 	if (!prevBidId) return undefined
-	const previousBidState = auctionState.bids.get(prevBidId)
-	if (!previousBidState) return undefined
-	if (previousBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) return undefined
-	return bidState.bid.amount - previousBidState.bid.amount
+
+	const seen = new Set<string>([bidState.bid.id])
+	let currentBidState: ValidatorBidState = bidState
+
+	while (true) {
+		const parentId = currentBidState.bid.prevBidId?.trim()
+		if (!parentId) break
+		if (seen.has(parentId)) {
+			return { ok: false, detail: `replacement-chain cycle detected at prev_bid=${parentId}` }
+		}
+		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) {
+			return { ok: false, detail: `replacement-chain depth exceeded (${MAX_REPLACEMENT_CHAIN_DEPTH})` }
+		}
+		seen.add(parentId)
+
+		const parentBidState = auctionState.bids.get(parentId)
+		if (!parentBidState) {
+			return { ok: false, detail: `prev_bid=${parentId} context unavailable for replacement-chain validation` }
+		}
+		if (parentBidState.bid.auctionRootEventId !== bidState.bid.auctionRootEventId) {
+			return { ok: false, detail: `prev_bid=${parentId} references a different auction root` }
+		}
+		if (parentBidState.bid.auctionCoordinate !== bidState.bid.auctionCoordinate) {
+			return { ok: false, detail: `prev_bid=${parentId} references a different auction coordinate` }
+		}
+		if (parentBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
+			return { ok: false, detail: `prev_bid=${parentId} belongs to a different bidder` }
+		}
+		if (currentBidState.bid.amount <= parentBidState.bid.amount) {
+			return {
+				ok: false,
+				detail: `replacement-chain amount must strictly increase (${currentBidState.bid.amount} <= ${parentBidState.bid.amount})`,
+			}
+		}
+
+		currentBidState = parentBidState
+	}
+
+	const immediateParent = auctionState.bids.get(prevBidId)
+	if (!immediateParent) {
+		return { ok: false, detail: `prev_bid=${prevBidId} context unavailable for replacement-chain validation` }
+	}
+
+	return { ok: true, legAmount: bidState.bid.amount - immediateParent.bid.amount }
 }
 
 // ============================================================================
@@ -186,34 +239,29 @@ const deriveLoserVerdict = (auctionState: ValidatorAuctionState, bidState: Valid
 const deriveSettlementVerdict = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
-	release: { derivationPath: string; childPubkey: string },
+	sel: { settlement: ParsedSettlementEvent | undefined; release: ParsedPathReleaseEvent | undefined },
 	now: number,
 ): DerivedVerdict => {
-	// 1. Cryptographic check: does the revealed path derive to the
-	//    bid's child_pubkey? Mismatch → fraudulent bid (the lock pubkey
-	//    was never legitimately a child of seller_xpub).
-	let derivedChild: string
-	try {
-		derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(auctionState.auction.p2pkXpub, release.derivationPath)
-	} catch (err) {
+	const release = sel.release
+	if (!release) return { claim: 'won_pending_settlement' }
+	// Read the observed time bound to THIS release event (keyed by release
+	// id), so a backdated or later-arriving release cannot inherit a
+	// different event's earlier timestamp.
+	const releaseObservedAt = auctionState.pathReleaseObservedAt.get(release.id) ?? now
+	const releaseValidity = validatePathRelease({
+		auction: auctionState.auction,
+		bid: bidState.bid,
+		release,
+		now: releaseObservedAt,
+		postCloseDecision: bidState.postCloseDecision,
+		fallbackOfferedAt: auctionState.fallbackOfferedAt,
+		expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
+	})
+	if (!releaseValidity.isValid) {
 		return {
 			claim: 'fraudulent_bid',
 			reason: 'fraudulent_bid',
-			detail: `derivation failed: ${err instanceof Error ? err.message : String(err)}`,
-		}
-	}
-	if (derivedChild.toLowerCase() !== release.childPubkey.toLowerCase()) {
-		return {
-			claim: 'fraudulent_bid',
-			reason: 'fraudulent_bid',
-			detail: `derive(p2pk_xpub, path)=${derivedChild} ≠ release.child_pubkey=${release.childPubkey}`,
-		}
-	}
-	if (derivedChild.toLowerCase() !== bidState.bid.childPubkey.toLowerCase()) {
-		return {
-			claim: 'fraudulent_bid',
-			reason: 'fraudulent_bid',
-			detail: `derive(p2pk_xpub, path)=${derivedChild} ≠ bid.child_pubkey=${bidState.bid.childPubkey}`,
+			detail: releaseValidity.detail,
 		}
 	}
 
@@ -225,12 +273,182 @@ const deriveSettlementVerdict = (
 		return { claim: 'won_pending_settlement' }
 	}
 
-	// 3. On-time vs. late. The kind-1025 created_at carries the bidder
-	//    clock; we use the validator's `now` instead (consistent with
-	//    how we treat created_at vs observed_at elsewhere).
-	const graceExpires = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
-	if (now > graceExpires) return { claim: 'settled_late' }
+	// 3. Seller declaration check: the deterministically selected
+	//    settlement must exist and match the redeemed chain before we
+	//    publish settled_*. sel.settlement is undefined when no authorized
+	//    settlement references a valid release for this bid.
+	const settlement = sel.settlement
+	if (!settlement) {
+		return { claim: 'won_pending_settlement' }
+	}
+	const settlementCompleteness = validateSettlementCompleteness({
+		auction: auctionState.auction,
+		settlement,
+		winningBid: bidState.bid,
+		pathRelease: release,
+		winningBidClaim: bidState.currentClaim,
+		winningBidPostCloseDecision: bidState.postCloseDecision,
+		winningBidNut7State: aggregate,
+		winningBidNut7ProofStates: buildProofStateMap(bidState),
+		pathReleaseObservedAt: releaseObservedAt,
+		bidChain: buildSettlementChain(auctionState, bidState, now),
+	})
+	if (!settlementCompleteness.isComplete) {
+		return { claim: 'won_pending_settlement' }
+	}
+
+	// 4. On-time vs. late. Keep the validator's local clock as the source
+	//    of truth for lifecycle timing, but use the validated release
+	//    timing classification so prompt/late logic is centralised.
+	if (settlementCompleteness.releaseTiming === 'late') return { claim: 'settled_late' }
 	return { claim: 'settled_promptly' }
+}
+
+const buildSettlementChain = (
+	auctionState: ValidatorAuctionState,
+	bidState: ValidatorBidState,
+	now: number,
+): Array<{
+	bid: ValidatorBidState['bid']
+	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
+	nut7State: ReturnType<typeof aggregateProofStates>
+	nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
+}> => {
+	const chain: Array<{
+		bid: ValidatorBidState['bid']
+		pathRelease: ParsedPathReleaseEvent
+		pathReleaseObservedAt?: number
+		nut7State: ReturnType<typeof aggregateProofStates>
+		nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
+	}> = []
+	const legs: ValidatorBidState[] = []
+	const seen = new Set<string>()
+	let current: ValidatorBidState | undefined = bidState
+	while (current) {
+		if (seen.has(current.bid.id)) break
+		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) break
+		seen.add(current.bid.id)
+		legs.unshift(current)
+		const prevBidId = current.bid.prevBidId?.trim()
+		if (!prevBidId) break
+		current = auctionState.bids.get(prevBidId)
+		if (!current) break
+	}
+	for (const leg of legs) {
+		const pathRelease = selectCanonicalEvidence(auctionState, leg, now).release
+		if (!pathRelease) continue
+		const nut7ProofStates = buildProofStateMap(leg)
+		chain.push({
+			bid: leg.bid,
+			pathRelease,
+			pathReleaseObservedAt: auctionState.pathReleaseObservedAt.get(pathRelease.id),
+			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
+			nut7ProofStates,
+		})
+	}
+	return chain
+}
+
+const buildProofStateMap = (bidState: ValidatorBidState): Map<string, ReturnType<typeof aggregateProofStates>> => {
+	const perProof = new Map<string, ReturnType<typeof aggregateProofStates>>()
+	for (const proofY of bidState.bid.proofYs) {
+		const state = bidState.nut7States.get(proofY.toLowerCase())?.state ?? 'unknown'
+		perProof.set(proofY.toLowerCase(), state)
+	}
+	return perProof
+}
+
+const deriveBidLegAmount = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): number => {
+	const prevBidId = bidState.bid.prevBidId?.trim()
+	if (!prevBidId) return bidState.bid.amount
+	const parent = auctionState.bids.get(prevBidId)
+	if (!parent) return bidState.bid.amount
+	return bidState.bid.amount - parent.bid.amount
+}
+
+/**
+ * Deterministically select the canonical (settlement, release) pair for
+ * a bid, independent of relay delivery order.
+ *
+ * Conflicting authorized seller kind-1024 events are triaged
+ * settlement-first: among authorized settlements for this bid, prefer
+ * those that reference a *valid* authorized release (the seller can only
+ * legitimately settle once; a settlement naming an invalid/unknown
+ * release is not valid), then tiebreak by earliest `created_at`, then
+ * smallest event id — the same deterministic triage applied to releases
+ * and winning bids. The canonical release is the one the selected
+ * settlement names.
+ *
+ * Pre-settlement fallback: if no settlement references a valid release,
+ * the canonical release is the earliest valid authorized candidate
+ * (then earliest invalid — option a: an isolated unusable release still
+ * flags `fraudulent_bid` at the verdict layer, but a later valid release
+ * supersedes it), and there is no settlement.
+ *
+ * Note: the `settlement` release reason is valid for the winner at any
+ * time (not grace-gated; only `voluntary_late` is), so "release-first"
+ * selection would false-negative a legitimate late settlement — hence
+ * settlement-first. `observedAt` is bound to the selected release's own
+ * first-observed time (keyed by release id), never a different event's.
+ */
+const selectCanonicalEvidence = (
+	auctionState: ValidatorAuctionState,
+	bidState: ValidatorBidState,
+	now: number,
+): { settlement: ParsedSettlementEvent | undefined; release: ParsedPathReleaseEvent | undefined } => {
+	const candidates = auctionState.pathReleases.get(bidState.bid.id) ?? []
+	if (candidates.length === 0) return { settlement: undefined, release: undefined }
+
+	// Validate each release once (settlement-independent validity).
+	const rankedCandidates = candidates
+		.map((r) => {
+			const observedAt = auctionState.pathReleaseObservedAt.get(r.id) ?? now
+			const validity = validatePathRelease({
+				auction: auctionState.auction,
+				bid: bidState.bid,
+				release: r,
+				now: observedAt,
+				postCloseDecision: bidState.postCloseDecision,
+				fallbackOfferedAt: auctionState.fallbackOfferedAt,
+				expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
+			})
+			return { release: r, valid: validity.isValid, createdAt: r.createdAt, id: r.id }
+		})
+		.sort((a, b) => {
+			if (a.valid !== b.valid) return a.valid ? -1 : 1
+			if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
+			return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+		})
+	const validReleaseIds = new Set(rankedCandidates.filter((r) => r.valid).map((r) => r.id))
+	const validReleases = rankedCandidates.filter((r) => r.valid)
+
+	// Authorized settlements for this bid (fallback to the legacy single
+	// slot for tests/older seed paths). Keep only those that reference a
+	// valid authorized release.
+	const allSettlements = auctionState.settlements.length
+		? auctionState.settlements
+		: auctionState.settlement
+			? [auctionState.settlement]
+			: []
+	const validSettlements = allSettlements
+		.filter(
+			(s) =>
+				s.status === 'settled' && s.winningBidId === bidState.bid.id && s.pathReleaseEventId && validReleaseIds.has(s.pathReleaseEventId),
+		)
+		.sort((a, b) => (a.createdAt !== b.createdAt ? a.createdAt - b.createdAt : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
+	if (validSettlements.length > 0) {
+		const settlement = validSettlements[0]!
+		const release = candidates.find((r) => r.id === settlement.pathReleaseEventId)
+		return { settlement, release }
+	}
+
+	// No settlement references a valid release: release-only fallback.
+	// option (a) — if no valid release, the earliest invalid candidate is
+	// returned so the verdict layer's fraudulent_bid signal is preserved.
+	const fallback = (validReleases.length > 0 ? validReleases : rankedCandidates)[0]
+	return { settlement: undefined, release: fallback?.release }
 }
 
 // ============================================================================
@@ -286,6 +504,27 @@ export const assignCloseRoles = (auctionState: ValidatorAuctionState): Validator
 	}
 	auctionState.closeHandled = true
 	return winner
+}
+
+/**
+ * Snapshot semantics for the close lifecycle. `assignCloseRoles`
+ * snapshots winner/loser roles over the bids that were
+ * `valid_bid_placed` at the moment close was handled. A bid that only
+ * reaches `valid_bid_placed` afterwards (e.g. a delayed NUT-7 unspent
+ * result) was not confirmed valid at the close snapshot and therefore
+ * cannot become the winner — it is assigned the `loser` role so it
+ * refunds at locktime and never enters winner settlement processing.
+ *
+ * This is deterministic (arrival-order independent: a late-valid bid is
+ * always a non-winner) and bounds the null-role window the publisher
+ * closes after deriving the verdict. Returns true when a role was
+ * assigned (caller should re-derive the verdict).
+ */
+export const assignLateValidLoserRole = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): boolean => {
+	if (!auctionState.closeHandled) return false
+	if (bidState.postCloseDecision !== null) return false
+	bidState.postCloseDecision = 'loser'
+	return true
 }
 
 /**

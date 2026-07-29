@@ -2,16 +2,16 @@
  * Parsed shapes of the auction protocol's Nostr events under
  * `cashu_p2pk_bidder_path_v1`. See AUCTIONS.md §4 for the on-wire tag
  * layout; the types here are what callers see after Zod-parsing a raw
- * `NDKEvent` (parsers live in `src/lib/schemas/auction/*`).
+ * Nostr event (parsers live in `src/lib/schemas/auction/*`).
  *
  * Naming convention: each `Parsed<Kind>Event` reflects ONE parsed
- * Nostr event of the named kind. The raw `NDKEvent` is kept on
+ * Nostr event of the named kind. The raw event is kept on
  * `.rawEvent` so callers can still reach for signature checks, raw
  * tag access, or republish.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { AuctionSettlementStatus, Nut7ProofState, PathReleaseReason, ValidatorClaim, ValidatorReason } from './constants'
+import type { NostrEventLike } from '../nostr/eventLike'
 
 // =========================================================================
 // kind 30408 — Auction listing (seller-signed, addressable) — §4.1
@@ -28,7 +28,7 @@ export interface MinBidCurve {
 }
 
 export interface ParsedAuctionEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	// Identity
 	/** `d` tag — seller-chosen auction identifier. */
@@ -93,7 +93,7 @@ export interface ParsedAuctionEvent {
 // =========================================================================
 
 export interface ParsedBidEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	// Identity
 	/** Bid event id. */
@@ -155,7 +155,7 @@ export interface ParsedBidEvent {
 // =========================================================================
 
 export interface ParsedPathReleaseEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	/** Path release event id. */
 	id: string
@@ -204,8 +204,14 @@ export interface AuctionFallbackChainEntry {
 	status: 'griefed' | 'declined' | 'accepted' | 'refunded_at_locktime'
 }
 
+export interface SettlementPayoutEntry {
+	bidEventId: string
+	amount: number
+	status: string
+}
+
 export interface ParsedSettlementEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	id: string
 	sellerPubkey: string
@@ -222,6 +228,8 @@ export interface ParsedSettlementEvent {
 
 	/** Id of the kind-1025 the seller acted on (required when status=settled). */
 	pathReleaseEventId?: string
+	/** One payout per redeemed leg; sum MUST equal finalAmount for settled auctions. */
+	payouts: SettlementPayoutEntry[]
 	/** Fallback cascade history (when the original winner griefed). */
 	fallbackChain: AuctionFallbackChainEntry[]
 	/** Machine-readable reason for cancelled / failure outcomes. */
@@ -233,7 +241,7 @@ export interface ParsedSettlementEvent {
 // =========================================================================
 
 export interface ParsedFallbackOfferEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	id: string
 	sellerPubkey: string
@@ -254,7 +262,7 @@ export interface ParsedFallbackOfferEvent {
 // =========================================================================
 
 export interface ParsedValidatorVerdictEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	id: string
 	validatorPubkey: string
@@ -302,7 +310,7 @@ export interface ValidatorPolicyDocument {
 }
 
 export interface ParsedValidatorPolicyEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	id: string
 	validatorPubkey: string
@@ -330,7 +338,7 @@ export interface BidderAggregateReputationDocument {
 }
 
 export interface ParsedBidderAggregateReputationEvent {
-	rawEvent: NDKEvent
+	rawEvent: NostrEventLike
 
 	id: string
 	validatorPubkey: string

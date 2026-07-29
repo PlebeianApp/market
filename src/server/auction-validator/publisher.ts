@@ -21,7 +21,7 @@ import type { EventTemplate } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '../../lib/auction/constants'
 import { buildValidatorVerdictTags } from '../../lib/auction/tagBuilders'
 import { aggregateProofStates, markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
-import { deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
+import { assignCloseRoles, assignLateValidLoserRole, deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
 
 // ============================================================================
 // Public API
@@ -62,12 +62,35 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 	 */
 	const publishIfChanged = async (input: PublishVerdictInput): Promise<PublishVerdictResult> => {
 		const observedAt = now()
-		const verdict = deriveVerdict({
+
+		if (!input.auctionState.closeHandled && observedAt > input.auctionState.auction.maxEndAt) {
+			assignCloseRoles(input.auctionState)
+		}
+
+		let verdict = deriveVerdict({
 			auctionState: input.auctionState,
 			bidState: input.bidState,
 			now: observedAt,
 			currentTopBid: input.currentTopBid,
 		})
+
+		// Snapshot semantics: a bid that only reached valid_bid_placed
+		// after the close snapshot (postCloseDecision still null while
+		// closeHandled) cannot become the winner — assign the loser role
+		// and re-derive so it never enters winner settlement processing.
+		if (
+			input.auctionState.closeHandled &&
+			verdict.claim === 'valid_bid_placed' &&
+			input.bidState.postCloseDecision === null &&
+			assignLateValidLoserRole(input.auctionState, input.bidState)
+		) {
+			verdict = deriveVerdict({
+				auctionState: input.auctionState,
+				bidState: input.bidState,
+				now: observedAt,
+				currentTopBid: input.currentTopBid,
+			})
+		}
 
 		if (!verdictChanged(verdict, input.bidState.currentClaim, input.bidState.currentReason)) {
 			return { verdict, published: false }
