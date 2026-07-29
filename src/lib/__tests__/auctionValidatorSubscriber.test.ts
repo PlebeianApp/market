@@ -481,7 +481,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 
 		// Recorded times use the FIRST sighting (5000), not replay-time (9000).
 		const auctionState = state.auctions.get(auctionRootId)!
-const bidState = auctionState.bids.get(bidEvent.id)!
+		const bidState = auctionState.bids.get(bidEvent.id)!
 		expect(bidState.observedAt).toBe(5_000)
 		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
 		await subscriber.stop()
