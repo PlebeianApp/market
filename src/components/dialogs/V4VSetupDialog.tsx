@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { V4VManager } from '@/components/v4v/V4VManager'
 import { salesV4VConfig, salesV4VLabels, type V4VConfig, type V4VLabels } from '@/lib/v4v/labels'
+import { salesV4VManagerProps } from '@/lib/v4v/sales-props'
 import { deriveInitialSharesFromStored } from '@/lib/v4v/splits'
 import { useV4VManager } from '@/hooks/useV4VManager'
 import { useV4VShares } from '@/queries/v4v'
@@ -46,36 +47,7 @@ export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4
 				</DialogHeader>
 
 				<div className="space-y-6 py-4">
-					<V4VManager
-						shares={sales.localShares}
-						totalV4VPercentage={sales.totalV4VPercentage}
-						newRecipientNpub={sales.newRecipientNpub}
-						newRecipientShare={sales.newRecipientShare}
-						showAddForm={sales.showAddForm}
-						canReceiveZaps={sales.canReceiveZaps}
-						isCheckingZap={sales.isCheckingZap}
-						isChecking={sales.isChecking}
-						isSaving={sales.publishMutation.isPending}
-						sellerPercentage={sales.sellerPercentage}
-						formattedSellerPercentage={sales.formattedSellerPercentage}
-						formattedTotalV4V={sales.formattedTotalV4V}
-						recipientColors={sales.recipientColors}
-						emoji={sales.emoji}
-						emojiSize={sales.emojiSize}
-						emojiClass={sales.emojiClass}
-						onTotalV4VPercentageChange={sales.handleTotalV4VPercentageChange}
-						onProfileSelect={sales.handleProfileSelect}
-						onAddRecipient={sales.handleAddRecipient}
-						onRemoveRecipient={sales.handleRemoveRecipient}
-						onUpdatePercentage={sales.handleUpdatePercentage}
-						onEqualizeAll={sales.handleEqualizeAll}
-						onSetNewRecipientShare={sales.setNewRecipientShare}
-						onToggleAddForm={sales.setShowAddForm}
-						onSave={sales.saveShares}
-						onCancel={() => onOpenChange(false)}
-						labels={labels}
-						config={config}
-					/>
+					<V4VManager {...salesV4VManagerProps(sales)} onCancel={() => onOpenChange(false)} labels={labels} config={config} />
 				</div>
 			</DialogContent>
 		</Dialog>

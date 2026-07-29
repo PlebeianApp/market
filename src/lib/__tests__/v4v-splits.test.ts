@@ -25,9 +25,12 @@ describe('normalizeShares', () => {
 		expect(out[0].percentage).toBeCloseTo(0.5, 10)
 	})
 
-	test('returns input unchanged when total is 0', () => {
-		const out = normalizeShares([share('a', 0)])
-		expect(out).toEqual([share('a', 0)])
+	test('returns a copy (not the same reference) when total is 0', () => {
+		const input = [share('a', 0)]
+		const out = normalizeShares(input)
+		expect(out).toEqual(input)
+		expect(out).not.toBe(input)
+		expect(out[0]).not.toBe(input[0])
 	})
 })
 
@@ -141,5 +144,10 @@ describe('deriveInitialSharesFromStored', () => {
 		expect(sum(out.initialShares)).toBeCloseTo(1, 10)
 		expect(out.initialShares[0].percentage).toBeCloseTo(0.7, 10) // 0.07 / 0.10
 		expect(out.initialShares[1].percentage).toBeCloseTo(0.3, 10)
+	})
+
+	test('returns empty shares and 0 total when all stored percentages are 0', () => {
+		const stored = [share('a', 0), share('b', 0)]
+		expect(deriveInitialSharesFromStored(stored)).toEqual({ initialShares: [], initialTotalPercentage: 0 })
 	})
 })

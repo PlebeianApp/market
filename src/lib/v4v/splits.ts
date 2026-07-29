@@ -23,7 +23,7 @@ function sum(shares: V4VDTO[]): number {
 /** Divide every share by the total so the array sums to exactly 1. */
 export function normalizeShares(shares: V4VDTO[]): V4VDTO[] {
 	const total = sum(shares)
-	if (total === 0) return shares
+	if (total === 0) return shares.map((s) => ({ ...s }))
 	return shares.map((s) => ({ ...s, percentage: s.percentage / total }))
 }
 
@@ -147,8 +147,14 @@ export function deriveInitialSharesFromStored(storedShares: V4VDTO[] | undefined
 		return { initialShares: [], initialTotalPercentage: 10 }
 	}
 
-	const totalPercentage = storedShares.reduce((acc, s) => acc + s.percentage, 0) * 100
 	const totalSharePercentage = storedShares.reduce((acc, s) => acc + s.percentage, 0)
+	const totalPercentage = totalSharePercentage * 100
+
+	// Guard against all-zero stored shares (would produce NaN from division by zero).
+	if (totalSharePercentage === 0) {
+		return { initialShares: [], initialTotalPercentage: 0 }
+	}
+
 	const normalizedShares = storedShares.map((s) => ({
 		...s,
 		percentage: s.percentage / totalSharePercentage,

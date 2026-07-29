@@ -54,7 +54,7 @@ export interface V4VManagerProps {
 	onEqualizeAll: () => void
 	onSetNewRecipientShare: (value: number) => void
 	onToggleAddForm: (open: boolean) => void
-	onSave: () => void
+	onSave: () => void | Promise<void>
 	onCancel?: () => void
 
 	// --- the "how" declared by the call site ---
@@ -100,7 +100,7 @@ export const V4VManager = forwardRef<HTMLDivElement, V4VManagerProps>(function V
 	ref,
 ) {
 	const handleSave = () => {
-		onSave()
+		void onSave()
 	}
 
 	// Whether adding a recipient is allowed right now. The sales adapter requires
