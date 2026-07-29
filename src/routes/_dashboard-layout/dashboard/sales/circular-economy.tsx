@@ -1,10 +1,18 @@
 import { V4VManager } from '@/components/v4v/V4VManager'
+import { salesV4VConfig, salesV4VLabels } from '@/lib/v4v/labels'
+import { deriveInitialSharesFromStored } from '@/lib/v4v/splits'
 import { authStore } from '@/lib/stores/auth'
+import { useV4VManager } from '@/hooks/useV4VManager'
 import { useV4VShares } from '@/queries/v4v'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
+
+// Sales-only emoji animation styles. Imported here (at the call site) rather
+// than inside the agnostic V4VManager so the component stays free of
+// product-specific styling.
+import '@/routes/_dashboard-layout/dashboard/sales/emoji-animations.css'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,
@@ -18,29 +26,13 @@ function CircularEconomyComponent() {
 	// Fetch existing V4V shares
 	const { data: v4vShares, isLoading } = useV4VShares(userPubkey)
 
-	// Calculate initial values from fetched shares
-	const { initialShares, initialTotalPercentage } = useMemo(() => {
-		if (!v4vShares || v4vShares.length === 0) {
-			// No shares configured - use defaults
-			return { initialShares: [], initialTotalPercentage: 10 }
-		}
+	// Derive editor boot values from stored shares (shared helper, no duplication).
+	const { initialShares, initialTotalPercentage } = useMemo(() => deriveInitialSharesFromStored(v4vShares), [v4vShares])
 
-		// Calculate total V4V percentage (sum of all share percentages)
-		// Shares are stored as decimals (0.1 = 10% of total sales)
-		const totalPercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0) * 100
-
-		// Normalize shares to sum to 1 (for the split between recipients in the UI)
-		const totalSharePercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0)
-		const normalizedShares = v4vShares.map((share) => ({
-			...share,
-			percentage: share.percentage / totalSharePercentage,
-		}))
-
-		return {
-			initialShares: normalizedShares,
-			initialTotalPercentage: totalPercentage,
-		}
-	}, [v4vShares])
+	// The sales / "all products" adapter — owns state, defaults, emoji, and
+	// persistence to kind 30078. The route injects its output into the agnostic
+	// V4VManager below, which is what declares this view is specifically for sales.
+	const sales = useV4VManager({ userPubkey, initialShares, initialTotalPercentage })
 
 	if (isLoading) {
 		return (
@@ -62,11 +54,33 @@ function CircularEconomyComponent() {
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
 				<V4VManager
-					userPubkey={userPubkey}
-					initialShares={initialShares}
-					initialTotalPercentage={initialTotalPercentage}
-					showChangesIndicator={false}
-					saveButtonText="Save Changes"
+					shares={sales.localShares}
+					totalV4VPercentage={sales.totalV4VPercentage}
+					newRecipientNpub={sales.newRecipientNpub}
+					newRecipientShare={sales.newRecipientShare}
+					showAddForm={sales.showAddForm}
+					canReceiveZaps={sales.canReceiveZaps}
+					isCheckingZap={sales.isCheckingZap}
+					isChecking={sales.isChecking}
+					isSaving={sales.publishMutation.isPending}
+					sellerPercentage={sales.sellerPercentage}
+					formattedSellerPercentage={sales.formattedSellerPercentage}
+					formattedTotalV4V={sales.formattedTotalV4V}
+					recipientColors={sales.recipientColors}
+					emoji={sales.emoji}
+					emojiSize={sales.emojiSize}
+					emojiClass={sales.emojiClass}
+					onTotalV4VPercentageChange={sales.handleTotalV4VPercentageChange}
+					onProfileSelect={sales.handleProfileSelect}
+					onAddRecipient={sales.handleAddRecipient}
+					onRemoveRecipient={sales.handleRemoveRecipient}
+					onUpdatePercentage={sales.handleUpdatePercentage}
+					onEqualizeAll={sales.handleEqualizeAll}
+					onSetNewRecipientShare={sales.setNewRecipientShare}
+					onToggleAddForm={sales.setShowAddForm}
+					onSave={sales.saveShares}
+					labels={salesV4VLabels}
+					config={salesV4VConfig}
 				/>
 			</div>
 		</div>

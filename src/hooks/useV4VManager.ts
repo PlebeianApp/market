@@ -1,4 +1,11 @@
 import type { V4VDTO } from '@/lib/stores/cart'
+import {
+	addRecipientToShares,
+	equalizeAllShares,
+	removeRecipientFromShares,
+	scaleSharesByTotal,
+	updateSharePercentage,
+} from '@/lib/v4v/splits'
 import { getDistinctColorsForRecipients } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import { useZapCapabilityByNpub } from '@/queries/profiles'
@@ -135,38 +142,7 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 				return
 			}
 
-			let newSharePercentage = 0
-			let updatedShares = []
-
-			if (localShares.length === 0) {
-				newSharePercentage = 1
-				updatedShares = [
-					{
-						id: `new-${Date.now()}`,
-						name: '', // Will be resolved by UserWithAvatar component
-						pubkey: hexPubkey,
-						percentage: newSharePercentage,
-					},
-				]
-			} else {
-				newSharePercentage = newRecipientShare / 100
-
-				const totalExistingPercentage = localShares.reduce((sum, share) => sum + share.percentage, 0)
-				const remainingPercentage = 1 - newSharePercentage
-				const ratio = remainingPercentage / totalExistingPercentage
-
-				updatedShares = localShares.map((share) => ({
-					...share,
-					percentage: share.percentage * ratio,
-				}))
-
-				updatedShares.push({
-					id: `new-${Date.now()}`,
-					name: '', // Will be resolved by UserWithAvatar component
-					pubkey: hexPubkey,
-					percentage: newSharePercentage,
-				})
-			}
+			const updatedShares = addRecipientToShares(localShares, hexPubkey, newRecipientShare)
 
 			setLocalShares(updatedShares)
 
@@ -182,90 +158,15 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 	}
 
 	const handleRemoveRecipient = (id: string) => {
-		const shareToRemove = localShares.find((share) => share.id === id)
-		if (!shareToRemove) return
-
-		const remainingShares = localShares.filter((share) => share.id !== id)
-
-		if (remainingShares.length === 0) {
-			setLocalShares([])
-		} else {
-			const totalRemainingPercentage = remainingShares.reduce((sum, share) => sum + share.percentage, 0)
-			const ratio = 1 / totalRemainingPercentage
-
-			const updatedShares = remainingShares.map((share) => ({
-				...share,
-				percentage: share.percentage * ratio,
-			}))
-
-			setLocalShares(updatedShares)
-		}
+		setLocalShares(removeRecipientFromShares(localShares, id))
 	}
 
 	const handleUpdatePercentage = (id: string, newPercentage: number) => {
-		const shareToUpdate = localShares.find((share) => share.id === id)
-		if (!shareToUpdate) return
-
-		const oldPercentage = shareToUpdate.percentage
-		const percentageDiff = newPercentage - oldPercentage
-
-		if (localShares.length === 1) {
-			setLocalShares([
-				{
-					...shareToUpdate,
-					percentage: 1,
-				},
-			])
-			return
-		}
-
-		const otherShares = localShares.filter((share) => share.id !== id)
-		const totalOtherPercentage = otherShares.reduce((sum, share) => sum + share.percentage, 0)
-
-		if (totalOtherPercentage - percentageDiff <= 0.01 && percentageDiff > 0) {
-			const minPerShare = 0.01
-			const totalMinForOthers = minPerShare * otherShares.length
-			const maxForUpdated = 1 - totalMinForOthers
-
-			const updatedShares = localShares.map((share) => ({
-				...share,
-				percentage: share.id === id ? maxForUpdated : minPerShare,
-			}))
-			setLocalShares(updatedShares)
-			return
-		}
-
-		const updatedShares = localShares.map((share) => {
-			if (share.id === id) {
-				return { ...share, percentage: newPercentage }
-			} else {
-				const adjustmentFactor = (totalOtherPercentage - percentageDiff) / totalOtherPercentage
-				return { ...share, percentage: share.percentage * adjustmentFactor }
-			}
-		})
-
-		const total = updatedShares.reduce((sum, share) => sum + share.percentage, 0)
-		if (Math.abs(total - 1) > 0.0001) {
-			const normalizedShares = updatedShares.map((share) => ({
-				...share,
-				percentage: share.percentage / total,
-			}))
-			setLocalShares(normalizedShares)
-		} else {
-			setLocalShares(updatedShares)
-		}
+		setLocalShares(updateSharePercentage(localShares, id, newPercentage))
 	}
 
 	const handleEqualizeAll = () => {
-		if (localShares.length === 0) return
-
-		const equalShare = 1 / localShares.length
-		const updatedShares = localShares.map((share) => ({
-			...share,
-			percentage: equalShare,
-		}))
-
-		setLocalShares(updatedShares)
+		setLocalShares(equalizeAllShares(localShares))
 	}
 
 	const saveShares = async (clearShares = false) => {
@@ -287,10 +188,7 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 				}
 			}
 
-			const sharesToSave = localShares.map((share) => ({
-				...share,
-				percentage: share.percentage * (totalV4VPercentage / 100),
-			}))
+			const sharesToSave = scaleSharesByTotal(localShares, totalV4VPercentage)
 
 			const result = await publishMutation.mutateAsync({
 				shares: sharesToSave,
