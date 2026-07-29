@@ -22,7 +22,7 @@
  */
 
 import { checkProofStateBatch, type CheckProofStateOptions } from '../../lib/cashu/nut7'
-import { createPolicyEnforcedRequest } from './mintDestination'
+import { checkMintProbeDestination, createPolicyEnforcedRequest } from './mintDestination'
 import {
 	aggregateProofStates,
 	collectLiveBids,
@@ -154,9 +154,19 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 	const refreshProofStates = async (entries: ProofQueryEntry[], observedAt: number, source: string): Promise<void> => {
 		if (!entries.length) return
 
+		// Pre-flight: when no operator allowlist is configured, mint
+		// probing is disabled — skip all NUT-7 calls and leave proof
+		// states as `unknown`. When an allowlist is configured, only
+		// mints on it are queried (in addition to passing the syntactic
+		// destination check).
+		const allowInsecureLocalhost = deps.mintProbePolicy?.allowInsecureLocalhost ?? false
+		const allowedMints = deps.mintProbePolicy?.allowedMints
+
 		// Policy-enforcing transport for the actual NUT-7 request boundary
-		// (validates the mint URL and every redirect hop before contact).
-		const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost: deps.mintProbePolicy?.allowInsecureLocalhost ?? false })
+		// (validates the mint URL against the allowlist + syntactic check,
+		// and every redirect hop against the syntactic check, before
+		// contact).
+		const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost, allowedMints })
 		const nut7Opts: CheckProofStateOptions = { ...deps.nut7Options, customRequest }
 
 		// Bucket Y → bid for each mint. The mint takes a flat
@@ -164,13 +174,24 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 		// originating bid state when the response arrives.
 		const buckets = new Map<string, MintBucket>()
 		for (const entry of entries) {
-			let bucket = buckets.get(entry.bidState.bid.mint)
+			const mintUrl = entry.bidState.bid.mint
+			// Pre-flight gate: skip mints not on the operator allowlist
+			// (or all mints when probing is disabled). The transport
+			// also enforces this, but filtering here avoids constructing
+			// requests that will just throw.
+			const dest = checkMintProbeDestination(mintUrl, { allowInsecureLocalhost, allowedMints })
+			if (!dest.allowed) {
+				logger.warn(`[validator-nut7] ${source} skipping mint ${mintUrl}: ${dest.reason}`)
+				continue
+			}
+			let bucket = buckets.get(mintUrl)
 			if (!bucket) {
-				bucket = { mintUrl: entry.bidState.bid.mint, entries: [] }
-				buckets.set(entry.bidState.bid.mint, bucket)
+				bucket = { mintUrl, entries: [] }
+				buckets.set(mintUrl, bucket)
 			}
 			bucket.entries.push(entry)
 		}
+		if (buckets.size === 0) return
 
 		// Run each mint's batch in parallel. Per-mint failures are
 		// non-fatal — we just leave that bucket's bids' Y states as

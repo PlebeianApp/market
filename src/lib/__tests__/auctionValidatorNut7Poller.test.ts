@@ -167,6 +167,45 @@ const buildPathRelease = (auction: ParsedAuctionEvent, bid: ParsedBidEvent): Par
 })
 
 describe('auction validator nut7 focused refresh', () => {
+	test('NUT-7 calls are skipped when no allowlist is configured (probing disabled)', async () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction({ settlementGrace: 100 })
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [[auction.mints[0]!, true]])
+
+		const bid = buildBid(auction)
+		const upserted = upsertBid(state, bid, bid.createdAt)
+		if (!upserted) throw new Error('expected bid to upsert')
+		upserted.bidState.currentClaim = 'won_pending_settlement'
+		recordPathRelease(state, buildPathRelease(auction, bid), auction.maxEndAt + 120)
+
+		const postGraceNow = auction.maxEndAt + auction.settlementGrace + 50
+		let proofCheckCalls = 0
+		const poller = createNut7Poller({
+			state,
+			// No mintProbePolicy → no allowedMints → probing disabled.
+			publisher: {
+				publishIfChanged: async () => ({ verdict: { claim: 'won_pending_settlement' }, published: true }),
+			} as any,
+			now: () => postGraceNow,
+			nut7Options: {
+				mintClient: {
+					check: async () => {
+						proofCheckCalls += 1
+						return { states: [] }
+					},
+				} as any,
+			},
+		})
+
+		await poller.refreshBidChain({ auctionRootEventId: auction.rootEventId, bidEventId: bid.id })
+
+		// No NUT-7 calls made — probing is disabled.
+		expect(proofCheckCalls).toBe(0)
+		// Bid state unchanged (still unknown, not spent).
+		expect(upserted.bidState.nut7States.get(bid.proofYs[0]!.toLowerCase())?.state).toBeUndefined()
+	})
+
 	test('refreshBidChain re-queries post-grace released bids and republishes on change', async () => {
 		const state = createValidatorState(VALIDATOR_PK)
 		const auction = buildAuction({ settlementGrace: 100 })
@@ -191,6 +230,7 @@ describe('auction validator nut7 focused refresh', () => {
 		const mintCalls: string[][] = []
 		const poller = createNut7Poller({
 			state,
+			mintProbePolicy: { allowedMints: ['https://mint.test'] },
 			publisher: {
 				publishIfChanged: async () => {
 					publishCalls += 1
@@ -241,6 +281,7 @@ describe('auction validator nut7 focused refresh', () => {
 		const mintCalls: string[][] = []
 		const poller = createNut7Poller({
 			state,
+			mintProbePolicy: { allowedMints: ['https://mint.test'] },
 			publisher: {
 				publishIfChanged: async () => ({ verdict: { claim: 'won_pending_settlement' }, published: true }),
 			} as any,
@@ -283,6 +324,7 @@ describe('auction validator nut7 post-grace retry scheduler', () => {
 		const publishCalls: number[] = []
 		const poller = createNut7Poller({
 			state,
+			mintProbePolicy: { allowedMints: ['https://mint.test'] },
 			publisher: {
 				publishIfChanged: async () => {
 					publishCalls.push(1)
@@ -329,6 +371,7 @@ describe('auction validator nut7 post-grace retry scheduler', () => {
 		let clock = auction.maxEndAt + auction.settlementGrace + 50
 		const poller = createNut7Poller({
 			state,
+			mintProbePolicy: { allowedMints: ['https://mint.test'] },
 			publisher: {
 				publishIfChanged: async () => ({ verdict: { claim: 'won_pending_settlement' }, published: true }),
 			} as any,

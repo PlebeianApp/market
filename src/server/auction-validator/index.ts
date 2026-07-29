@@ -34,9 +34,12 @@ export interface StartAuctionValidatorOptions {
 	lifecycleTickMs?: number
 	/**
 	 * Operator-controlled outbound-network + load policy for mint
-	 * reachability probes (destination allow-list, mint cap, concurrency,
-	 * cache TTL, insecure-localhost opt-in). Defaults are safe: private
-	 * destinations rejected, bounded concurrency, no cache.
+	 * reachability probes. **Probing is disabled by default** — the
+	 * validator makes no outbound network calls to mints until the
+	 * operator provides an explicit allowlist (`allowedMints`). Once
+	 * enabled, only allowlisted mints are probed, subject to the
+	 * syntactic destination check (private/loopback/reserved rejection,
+	 * https-only). Bounded concurrency + per-auction mint cap.
 	 */
 	mintProbePolicy?: MintProbePolicy
 	/** Logger override. Default `console`. */

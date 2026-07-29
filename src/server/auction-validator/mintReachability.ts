@@ -1,9 +1,15 @@
 import { checkMintReachability, type CheckProofStateOptions } from '../../lib/cashu/nut7'
-import { createPolicyEnforcedRequest, isMintDestinationAllowed } from './mintDestination'
+import { checkMintProbeDestination, createPolicyEnforcedRequest } from './mintDestination'
 import { setAuctionMintReachability, type ValidatorAuctionState } from './state'
 
 /**
  * Operator-controlled outbound-network + load policy for mint probes.
+ *
+ * **Probing is disabled by default.** When `allowedMints` is empty or
+ * undefined (the default), the validator makes no outbound network
+ * calls to mints — it operates in a passive, listen-only mode. The
+ * operator must explicitly provide an allowlist to enable probing.
+ *
  * Defaults are safe + deterministic: no cache (so tests/ephemeral mint
  * clients are unaffected), a sane per-auction mint cap, and bounded
  * concurrency. Production wiring overrides `cacheTtlSec` to avoid
@@ -18,6 +24,14 @@ export interface MintProbePolicy {
 	maxConcurrency?: number
 	/** Allow http://localhost for local dev. */
 	allowInsecureLocalhost?: boolean
+	/**
+	 * Operator-approved mint URLs. When empty/undefined (the default),
+	 * mint probing is **disabled** — no outbound network calls are
+	 * made. When provided, only mints whose origin matches an entry in
+	 * this list are probed (in addition to passing the syntactic
+	 * destination check).
+	 */
+	allowedMints?: string[]
 }
 
 const DEFAULT_MAX_MINTS = 8
@@ -48,10 +62,11 @@ export const refreshAuctionMintReachability = async (
 	const maxMints = policy?.maxMintsPerAuction ?? DEFAULT_MAX_MINTS
 	const maxConcurrency = policy?.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY
 	const allowInsecureLocalhost = policy?.allowInsecureLocalhost ?? false
-	// Policy-enforcing transport: validates the configured URL and every
-	// redirect hop before contact, so a mint that 302s to a private host
-	// is never contacted.
-	const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost })
+	const allowedMints = policy?.allowedMints
+	// Policy-enforcing transport: validates the configured URL (allowlist
+	// + syntactic check) and every redirect hop (syntactic check) before
+	// contact, so a mint that 302s to a private host is never contacted.
+	const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost, allowedMints })
 
 	const mintUrls = auctionState.rootAuction.mints
 	const results: Array<readonly [string, boolean]> = []
@@ -65,7 +80,7 @@ export const refreshAuctionMintReachability = async (
 			results.push([mintUrl, false])
 			continue
 		}
-		const dest = isMintDestinationAllowed(mintUrl, { allowInsecureLocalhost })
+		const dest = checkMintProbeDestination(mintUrl, { allowInsecureLocalhost, allowedMints })
 		if (!dest.allowed) {
 			results.push([mintUrl, false])
 			continue

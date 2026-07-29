@@ -1,28 +1,42 @@
 /**
- * Outbound-network policy for the validator's mint reachability probes.
+ * Outbound-network policy for the validator's mint probes.
  *
  * Seller-provided mint URLs are attacker-controllable inputs, so the
- * validator must not blindly issue requests to them. This module
- * validates a mint URL's *destination* before any network call:
+ * validator must not blindly issue requests to them. Probing is
+ * **disabled by default** and only enabled when the operator provides
+ * an explicit allowlist (`allowedMints`). Two layers:
  *
- *   - scheme must be `https` (plain `http` is rejected unless an
- *     operator explicitly allows insecure localhosts for local dev),
- *   - the host must not be a private/loopback/link-local/reserved
- *     address (`127.x`, `10.x`, `192.168.x`, `172.16–31.x`,
- *     `169.254.x`, `::1`, `fc00::/7`, …) or the literal `localhost`.
+ *   1. Allowlist gate (opt-in). When no `allowedMints` is configured the
+ *      validator makes **no outbound network calls** to mints — it
+ *      operates in a passive, listen-only mode. When an allowlist is
+ *      provided, only mints on it are probed.
+ *   2. Syntactic destination gate (interim containment). Even an
+ *      allowlisted mint must pass `isMintDestinationAllowed`:
+ *      scheme must be `https` (plain `http` is rejected unless an
+ *      operator explicitly allows insecure localhosts for local dev),
+ *      the host must not be a private/loopback/link-local/reserved
+ *      address (`127.x`, `10.x`, `192.168.x`, `172.16–31.x`,
+ *      `169.254.x`, `::1`, `fc00::/7`, …) or the literal `localhost`.
  *
- * This is a syntactic destination guard applied BEFORE any network
- * call. Redirect following is handled separately by
- * `createPolicyEnforcedRequest`, which validates every redirect hop via
- * this guard before contacting it.
- *
- * Note: DNS-rebinding (a public hostname resolving to a private IP at
- * request time) is out of scope for this syntactic guard.
+ * The syntactic check is applied BEFORE any network call and at every
+ * redirect hop by `createPolicyEnforcedRequest`. DNS-rebinding (a
+ * public hostname resolving to a private IP at request time) remains
+ * out of scope for this syntactic guard; DNS-aware enforcement can
+ * follow separately.
  */
 
 export interface MintDestinationPolicyOptions {
 	/** Allow `http://localhost` / `http://127.0.0.1` for local dev. Default false. */
 	allowInsecureLocalhost?: boolean
+	/**
+	 * Operator-approved mint URLs. When empty/undefined (the default),
+	 * mint probing is **disabled** — no outbound network calls are made.
+	 * When provided, only mints whose origin matches an entry in this
+	 * list are probed (in addition to passing the syntactic destination
+	 * check). Entries may be base URLs or full endpoint URLs; matching
+	 * is by normalized origin (`scheme://host[:port]`).
+	 */
+	allowedMints?: string[]
 }
 
 export type DestinationCheck = { allowed: true } | { allowed: false; reason: string }
@@ -99,6 +113,53 @@ export const isMintDestinationAllowed = (mintUrl: string, options: MintDestinati
 }
 
 /**
+ * Normalize a URL to its origin (`scheme://host[:port]`) with a trailing
+ * slash stripped. Used for allowlist matching so that
+ * `https://mint.example.com` and `https://mint.example.com/v1/checkstates`
+ * both match an allowlist entry of `https://mint.example.com`.
+ */
+export const normalizeMintUrlOrigin = (url: string): string => {
+	const parsed = new URL(url)
+	let origin = parsed.origin
+	if (origin.endsWith('/')) origin = origin.slice(0, -1)
+	return origin
+}
+
+/**
+ * Combined allowlist + syntactic gate for a mint URL. This is the
+ * pre-flight check: it returns `allowed: false` when probing is disabled
+ * (no operator allowlist), when the mint is not on the allowlist, or
+ * when the destination fails the syntactic check.
+ *
+ * `isMintDestinationAllowed` (the syntactic-only check) remains the
+ * containment layer applied at every redirect hop inside
+ * `createPolicyEnforcedRequest`.
+ */
+export const checkMintProbeDestination = (mintUrl: string, options: MintDestinationPolicyOptions = {}): DestinationCheck => {
+	const allowlist = options.allowedMints
+	if (!allowlist || allowlist.length === 0) {
+		return { allowed: false, reason: 'mint probing disabled — no operator allowlist configured' }
+	}
+	let origin: string
+	try {
+		origin = normalizeMintUrlOrigin(mintUrl)
+	} catch {
+		return { allowed: false, reason: 'unparseable mint URL' }
+	}
+	const allowlisted = allowlist.some((m) => {
+		try {
+			return normalizeMintUrlOrigin(m) === origin
+		} catch {
+			return false
+		}
+	})
+	if (!allowlisted) {
+		return { allowed: false, reason: 'mint not in operator allowlist' }
+	}
+	return isMintDestinationAllowed(mintUrl, options)
+}
+
+/**
  * Shape of cashu-ts's `request` options (subset we consume). The
  * `endpoint` is the FULL request URL (mint URL + path), built by
  * `CashuMint` before invoking the custom request.
@@ -118,12 +179,20 @@ export interface CashuRequestOptions {
  * `302` it issues to a private host) can never be contacted when
  * disallowed.
  *
+ * At the initial endpoint (hop 0) the **allowlist gate**
+ * (`checkMintProbeDestination`) applies: when no operator allowlist is
+ * configured the request is rejected before any network call. At every
+ * redirect hop the **syntactic destination gate**
+ * (`isMintDestinationAllowed`) applies: a redirect to a private host is
+ * rejected before contact. (DNS-aware enforcement of redirects is a
+ * follow-up; the syntactic check is the accepted interim containment.)
+ *
  * Redirects are followed manually (`redirect: 'manual'`) and each
- * `Location` is resolved against the current URL and re-validated via
- * `isMintDestinationAllowed` before contact; a disallowed hop throws
- * without fetching. Non-2xx final responses throw (callers catch and
- * treat the proof state as `unknown`); 2xx responses are parsed as JSON
- * and returned, matching cashu-ts's default `request` contract.
+ * `Location` is resolved against the current URL and re-validated
+ * before contact; a disallowed hop throws without fetching. Non-2xx
+ * final responses throw (callers catch and treat the proof state as
+ * `unknown`); 2xx responses are parsed as JSON and returned, matching
+ * cashu-ts's default `request` contract.
  */
 export const createPolicyEnforcedRequest = (
 	options: MintDestinationPolicyOptions = {},
@@ -145,7 +214,10 @@ export const createPolicyEnforcedRequest = (
 
 		let res: Response | undefined
 		for (let hop = 0; ; hop++) {
-			const dest = isMintDestinationAllowed(url, options)
+			// Hop 0: allowlist gate + syntactic check. Hops > 0: syntactic
+			// check only (redirect containment — DNS-aware enforcement of
+			// redirects is a follow-up).
+			const dest = hop === 0 ? checkMintProbeDestination(url, options) : isMintDestinationAllowed(url, options)
 			if (!dest.allowed) throw new Error(`mint destination not allowed: ${url} (${dest.reason})`)
 
 			const init: RequestInit = { ...baseInit, body }
