@@ -184,10 +184,15 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 				// republish the affected ones.
 				const dirtyBids = new Map<string, { auctionState: ValidatorAuctionState; bidState: ValidatorBidState }>()
 				for (const entry of bucket.entries) {
-					const next = response!.get(entry.proofY.toLowerCase()) ?? 'unknown'
-					const previous = entry.bidState.nut7States.get(entry.proofY.toLowerCase())?.state
+					const key = entry.proofY.toLowerCase()
+					const next = response!.get(key) ?? 'unknown'
+					// Compare the STORED state before and after so a stale
+					// write that recordNut7State ignores (older observedAt)
+					// does not spuriously flag the bid dirty / republish.
+					const before = entry.bidState.nut7States.get(key)?.state
 					recordNut7State(entry.bidState, entry.proofY, next, observedAt)
-					if (previous !== next) dirtyBids.set(entry.bidState.bid.id, { auctionState: entry.auctionState, bidState: entry.bidState })
+					const after = entry.bidState.nut7States.get(key)?.state
+					if (before !== after) dirtyBids.set(entry.bidState.bid.id, { auctionState: entry.auctionState, bidState: entry.bidState })
 				}
 
 				// Republish for the dirty bids only.

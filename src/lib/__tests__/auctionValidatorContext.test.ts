@@ -6,11 +6,13 @@ import {
 	aggregateProofStates,
 	collectLiveBids,
 	createValidatorState,
+	recordNut7State,
 	recordPathRelease,
 	recordSettlement,
 	setAuctionMintReachability,
 	upsertAuction,
 	upsertBid,
+	type ValidatorBidState,
 } from '../../server/auction-validator/state'
 
 const SELLER_PK = 'a'.repeat(64)
@@ -564,5 +566,40 @@ describe('auction validator per-mint availability scoping', () => {
 		setAuctionMintReachability(auctionState, [['https://mint-a.test', false]])
 		expect(auctionState.contextStatus).toBe('pending_mint_check')
 		expect(collectLiveBids(state, 1_600)).toEqual([])
+	})
+})
+
+describe('recordNut7State — monotonic write protection', () => {
+	const buildBidState = (): ValidatorBidState => ({
+		bid: { id: 'b'.repeat(64), proofYs: ['02' + 'c'.repeat(62)] } as unknown as ParsedBidEvent,
+		observedAt: 1_000,
+		nut7States: new Map(),
+		currentClaim: null,
+		currentReason: undefined,
+		currentDetail: undefined,
+		lastPublishedAt: null,
+		postCloseDecision: null,
+		postGraceRetry: null,
+	})
+
+	test('an older overlapping response does not overwrite a newer proof snapshot', () => {
+		const bidState = buildBidState()
+		const proofY = bidState.bid.proofYs[0]!
+		// Newer request (observedAt=2000) resolves first → 'spent'.
+		expect(recordNut7State(bidState, proofY, 'spent', 2_000).state).toBe('spent')
+		// Older request (observedAt=1000) resolves last → 'unknown'; ignored.
+		const kept = recordNut7State(bidState, proofY, 'unknown', 1_000)
+		expect(kept.state).toBe('spent')
+		expect(kept.observedAt).toBe(2_000)
+		// The stored snapshot is the newer one.
+		expect(bidState.nut7States.get(proofY.toLowerCase())).toEqual({ state: 'spent', observedAt: 2_000 })
+	})
+
+	test('a newer response still overwrites an older one', () => {
+		const bidState = buildBidState()
+		const proofY = bidState.bid.proofYs[0]!
+		recordNut7State(bidState, proofY, 'unknown', 1_000)
+		recordNut7State(bidState, proofY, 'spent', 2_000)
+		expect(bidState.nut7States.get(proofY.toLowerCase())).toEqual({ state: 'spent', observedAt: 2_000 })
 	})
 })

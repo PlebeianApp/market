@@ -452,8 +452,20 @@ export const recordNut7State = (
 	state: Nut7ProofState,
 	observedAt: number,
 ): ProofStateSnapshot => {
+	const key = proofY.toLowerCase()
+	// Monotonic write protection: tick, refreshBidChain, and
+	// refreshAuctionReleasedNonterminal can overlap (event handlers are
+	// fire-and-forget alongside the timer). Each captures observedAt
+	// before awaiting the mint; without this guard, an older request that
+	// resolves last would overwrite a newer proof snapshot and its
+	// timestamp. Ignore strictly-older writes so the newest observation
+	// wins regardless of completion order.
+	const existing = bidState.nut7States.get(key)
+	if (existing && observedAt < existing.observedAt) {
+		return existing
+	}
 	const snap: ProofStateSnapshot = { state, observedAt }
-	bidState.nut7States.set(proofY.toLowerCase(), snap)
+	bidState.nut7States.set(key, snap)
 	return snap
 }
 
