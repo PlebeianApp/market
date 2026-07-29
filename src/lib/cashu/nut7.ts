@@ -49,7 +49,28 @@ export interface CheckProofStateOptions {
 	 * pools (e.g. the validator process subscribed to many mints).
 	 */
 	mintClient?: CashuMint
+	/**
+	 * Policy-enforcing custom request transport for the CashuMint
+	 * constructor (`_customRequest`). When provided and no `mintClient`
+	 * is supplied, every NUT-7 request — including each redirect hop —
+	 * is validated against the outbound destination policy before
+	 * contact. See `createPolicyEnforcedRequest`.
+	 */
+	customRequest?: CashuCustomRequest
 }
+
+/**
+ * Shape of cashu-ts's `request` options (subset). `endpoint` is the full
+ * request URL. Used to type the custom request transport without
+ * importing cashu-ts's internal `RequestOptions`.
+ */
+export type CashuCustomRequest = (options: {
+	endpoint: string
+	method?: string
+	requestBody?: unknown
+	headers?: Record<string, string>
+	signal?: AbortSignal
+}) => Promise<unknown>
 
 /**
  * Query the state of a single proof at a mint.
@@ -71,7 +92,7 @@ export const checkProofState = async (mintUrl: string, proofY: string, options: 
 
 export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl)
+	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
 
 	try {
 		const response = await withTimeout(mint.check({ Ys: [NUT7_REACHABILITY_PROBE_Y] }), timeoutMs, `NUT-7 reachability ${mintUrl}`)
@@ -101,7 +122,7 @@ export const checkProofStateBatch = async (
 	for (const y of proofYs) out.set(y.toLowerCase(), 'unknown')
 
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl)
+	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
 
 	const batches: string[][] = []
 	for (let i = 0; i < proofYs.length; i += DEFAULT_NUT7_BATCH_SIZE) {

@@ -11,11 +11,10 @@
  *     address (`127.x`, `10.x`, `192.168.x`, `172.16–31.x`,
  *     `169.254.x`, `::1`, `fc00::/7`, …) or the literal `localhost`.
  *
- * This is a syntactic destination guard — it does NOT follow or audit
- * HTTP redirects. A robust redirect guard requires intercepting the
- * cashu-ts transport via its `_customRequest` hook and is tracked as a
- * follow-up; until then, disallowed configured destinations are never
- * contacted and the network surface is bounded.
+ * This is a syntactic destination guard applied BEFORE any network
+ * call. Redirect following is handled separately by
+ * `createPolicyEnforcedRequest`, which validates every redirect hop via
+ * this guard before contacting it.
  *
  * Note: DNS-rebinding (a public hostname resolving to a private IP at
  * request time) is out of scope for this syntactic guard.
@@ -97,4 +96,78 @@ export const isMintDestinationAllowed = (mintUrl: string, options: MintDestinati
 	if (parsed.username || parsed.password) return { allowed: false, reason: 'credentials in URL' }
 
 	return { allowed: true }
+}
+
+/**
+ * Shape of cashu-ts's `request` options (subset we consume). The
+ * `endpoint` is the FULL request URL (mint URL + path), built by
+ * `CashuMint` before invoking the custom request.
+ */
+export interface CashuRequestOptions {
+	endpoint: string
+	method?: string
+	requestBody?: unknown
+	headers?: Record<string, string>
+	signal?: AbortSignal
+}
+
+/**
+ * Build a `CashuMint._customRequest`-compatible transport that enforces
+ * the outbound destination policy at the actual HTTP request boundary —
+ * including every redirect hop — so a seller-provided mint URL (or a
+ * `302` it issues to a private host) can never be contacted when
+ * disallowed.
+ *
+ * Redirects are followed manually (`redirect: 'manual'`) and each
+ * `Location` is resolved against the current URL and re-validated via
+ * `isMintDestinationAllowed` before contact; a disallowed hop throws
+ * without fetching. Non-2xx final responses throw (callers catch and
+ * treat the proof state as `unknown`); 2xx responses are parsed as JSON
+ * and returned, matching cashu-ts's default `request` contract.
+ */
+export const createPolicyEnforcedRequest = (
+	options: MintDestinationPolicyOptions = {},
+): ((req: CashuRequestOptions) => Promise<unknown>) => {
+	const maxRedirects = 5
+	return async (req) => {
+		let url = req.endpoint
+		const baseInit: RequestInit = {
+			method: req.method ?? 'GET',
+			redirect: 'manual',
+			signal: req.signal,
+			headers: {
+				Accept: 'application/json, text/plain, */*',
+				...(req.requestBody !== undefined ? { 'Content-Type': 'application/json' } : {}),
+				...req.headers,
+			},
+		}
+		let body: BodyInit | undefined = req.requestBody !== undefined ? JSON.stringify(req.requestBody) : undefined
+
+		let res: Response | undefined
+		for (let hop = 0; ; hop++) {
+			const dest = isMintDestinationAllowed(url, options)
+			if (!dest.allowed) throw new Error(`mint destination not allowed: ${url} (${dest.reason})`)
+
+			const init: RequestInit = { ...baseInit, body }
+			// eslint-disable-next-line no-await-in-loop -- sequential redirect following
+			const response = await fetch(url, init)
+			if (response.status >= 300 && response.status < 400) {
+				if (hop >= maxRedirects) throw new Error(`too many redirects from ${req.endpoint}`)
+				const location = response.headers.get('location')
+				if (!location) throw new Error(`redirect with no Location from ${url}`)
+				// Re-resolve relative redirects against the current URL and
+				// re-validate the next hop at the top of the loop. Redirects
+				// must not carry the original body/headers onward.
+				url = new URL(location, url).toString()
+				body = undefined
+				baseInit.method = 'GET'
+				continue
+			}
+			res = response
+			break
+		}
+
+		if (!res || !res.ok) throw new Error(`HTTP ${res?.status ?? 'unknown'} from ${url}`)
+		return await res.json()
+	}
 }

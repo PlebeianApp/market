@@ -1,5 +1,5 @@
 import { checkMintReachability, type CheckProofStateOptions } from '../../lib/cashu/nut7'
-import { isMintDestinationAllowed } from './mintDestination'
+import { createPolicyEnforcedRequest, isMintDestinationAllowed } from './mintDestination'
 import { setAuctionMintReachability, type ValidatorAuctionState } from './state'
 
 /**
@@ -48,6 +48,10 @@ export const refreshAuctionMintReachability = async (
 	const maxMints = policy?.maxMintsPerAuction ?? DEFAULT_MAX_MINTS
 	const maxConcurrency = policy?.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY
 	const allowInsecureLocalhost = policy?.allowInsecureLocalhost ?? false
+	// Policy-enforcing transport: validates the configured URL and every
+	// redirect hop before contact, so a mint that 302s to a private host
+	// is never contacted.
+	const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost })
 
 	const mintUrls = auctionState.rootAuction.mints
 	const results: Array<readonly [string, boolean]> = []
@@ -77,7 +81,7 @@ export const refreshAuctionMintReachability = async (
 	}
 
 	await probeConcurrently(toProbe, maxConcurrency, async (mintUrl) => {
-		const reachable = await checkMintReachability(mintUrl, options)
+		const reachable = await checkMintReachability(mintUrl, { ...options, customRequest })
 		results.push([mintUrl, reachable])
 		if (cacheTtlSec > 0) reachabilityCache.set(mintUrl, { reachable, at: Date.now() / 1000 })
 	})

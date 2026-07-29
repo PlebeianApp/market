@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test'
-import { isMintDestinationAllowed } from '../../server/auction-validator/mintDestination'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { createPolicyEnforcedRequest, isMintDestinationAllowed } from '../../server/auction-validator/mintDestination'
 import { refreshAuctionMintReachability } from '../../server/auction-validator/mintReachability'
 import {
 	createValidatorState,
@@ -154,5 +154,56 @@ describe('mint reachability probing boundaries', () => {
 		expect(contactCount).toBe(1)
 		expect(auctionState.mintReachability.get('https://m2.example.com')).toBe('unreachable')
 		expect(auctionState.mintReachability.get('https://m3.example.com')).toBe('unreachable')
+	})
+})
+
+describe('createPolicyEnforcedRequest — outbound boundary + redirect guard', () => {
+	// Restore the real fetch after each test.
+	const realFetch = globalThis.fetch
+	afterEach(() => {
+		globalThis.fetch = realFetch
+	})
+
+	test('a disallowed destination is never contacted', async () => {
+		const contacted: string[] = []
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			contacted.push(typeof input === 'string' ? input : input.toString())
+			return new Response('ok', { status: 200 })
+		}) as unknown as typeof globalThis.fetch
+
+		const req = createPolicyEnforcedRequest()
+		await expect(req({ endpoint: 'http://169.254.169.254/v1/checkstate', method: 'POST', requestBody: {} })).rejects.toThrow(/not allowed/)
+		expect(contacted).toEqual([])
+	})
+
+	test('a redirect to a private host is not followed', async () => {
+		const contacted: string[] = []
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = typeof input === 'string' ? input : input.toString()
+			contacted.push(url)
+			// The allowed configured URL responds with a 302 to a private host.
+			if (url === 'https://mint.example.com/v1/checkstate') {
+				return new Response(null, { status: 302, headers: { location: 'http://192.168.1.5/secret' } })
+			}
+			return new Response('ok', { status: 200 })
+		}) as unknown as typeof globalThis.fetch
+
+		const req = createPolicyEnforcedRequest()
+		await expect(req({ endpoint: 'https://mint.example.com/v1/checkstate', method: 'POST', requestBody: {} })).rejects.toThrow(
+			/not allowed/,
+		)
+		// Only the allowed configured URL was contacted; the private redirect target was not.
+		expect(contacted).toEqual(['https://mint.example.com/v1/checkstate'])
+	})
+
+	test('an allowed destination returning JSON resolves', async () => {
+		globalThis.fetch = (async () =>
+			new Response(JSON.stringify({ states: [{ Y: 'y1', state: 'UNSPENT' }] }), { status: 200 })) as unknown as typeof globalThis.fetch
+
+		const req = createPolicyEnforcedRequest()
+		const res = (await req({ endpoint: 'https://mint.example.com/v1/checkstate', method: 'POST', requestBody: { Ys: ['y1'] } })) as {
+			states: unknown[]
+		}
+		expect(Array.isArray(res.states)).toBe(true)
 	})
 })

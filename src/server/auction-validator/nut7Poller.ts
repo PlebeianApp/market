@@ -22,6 +22,7 @@
  */
 
 import { checkProofStateBatch, type CheckProofStateOptions } from '../../lib/cashu/nut7'
+import { createPolicyEnforcedRequest } from './mintDestination'
 import {
 	aggregateProofStates,
 	collectLiveBids,
@@ -153,6 +154,11 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 	const refreshProofStates = async (entries: ProofQueryEntry[], observedAt: number, source: string): Promise<void> => {
 		if (!entries.length) return
 
+		// Policy-enforcing transport for the actual NUT-7 request boundary
+		// (validates the mint URL and every redirect hop before contact).
+		const customRequest = createPolicyEnforcedRequest({ allowInsecureLocalhost: deps.mintProbePolicy?.allowInsecureLocalhost ?? false })
+		const nut7Opts: CheckProofStateOptions = { ...deps.nut7Options, customRequest }
+
 		// Bucket Y → bid for each mint. The mint takes a flat
 		// `Ys: string[]`, but we need to map results back to the
 		// originating bid state when the response arrives.
@@ -174,7 +180,7 @@ export const createNut7Poller = (deps: Nut7PollerDeps): Nut7Poller => {
 				const allYs = bucket.entries.map((e) => e.proofY)
 				let response: Map<string, ReturnType<typeof aggregateProofStates>> | null = null
 				try {
-					response = await checkProofStateBatch(bucket.mintUrl, allYs, deps.nut7Options)
+					response = await checkProofStateBatch(bucket.mintUrl, allYs, nut7Opts)
 				} catch (err) {
 					logger.warn(`[validator-nut7] ${source} mint ${bucket.mintUrl} batch failed:`, err instanceof Error ? err.message : err)
 					return
