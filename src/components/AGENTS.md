@@ -19,6 +19,32 @@ under `src/components/ui/`.
 - Preserve accessible labels, roles, focus behavior, and existing shadcn/ui
   conventions when changing controls.
 
+## Directory structure (per ADR: Component UI Migration §1b)
+
+```
+src/components/
+  ui/              ← Shadcn primitives (generated, unmodified)
+  ui-wrappers/     ← Wrappers around ui/ primitives with custom styling/behavior
+  shared/          ← General-purpose reusable components (non-domain-specific)
+  nostr/           ← Nostr-domain components (users, products, auctions, profiles)
+  layout/          ← Structural components (Header, Footer, Sidebar)
+  dialogs/         ← Dialog compositions built on ui/dialog
+  theme-migration/ ← ThemeMigrationWrapper + scoped theme infrastructure
+```
+
+### Import hierarchy
+
+Components may only import from directories below them in the hierarchy:
+`ui` → `ui-wrappers` → `shared` / `nostr` / `layout` / `dialogs`. Any UI
+component currently living outside `src/components/` must be relocated. Each
+subdirectory's `AGENTS.md` file is the authoritative source for its import
+rules and exceptions.
+
+### Canonical import alias
+
+`@/components/{directory}/{component}`. Barrel exports per directory allowed.
+Routes must import UI exclusively from `src/components/`.
+
 ## Instructions
 
 - Prefer existing UI primitives and local component patterns before adding new
