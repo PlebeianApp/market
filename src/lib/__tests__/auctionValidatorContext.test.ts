@@ -212,10 +212,15 @@ describe('auction validator context guards', () => {
 		expect(replacement.status).toBe('updated')
 		expect(state.auctions.size).toBe(1)
 		expect(state.auctionsByCoordinate.size).toBe(1)
-		// The pinned root event id is retained; only the mutable event refreshed.
+		// The pinned root event id is retained on both rootAuction and
+		// the refreshed auction — downstream publisher/settlement/refresh
+		// paths consume auction.rootEventId, so it must stay pinned to the
+		// canonical namespace rather than splitting to the replacement id.
 		expect(replacement.auctionState.rootAuction.rootEventId).toBe(pinnedRootId)
-		expect(replacement.auctionState.auction.rootEventId).toBe('9'.repeat(64))
+		expect(replacement.auctionState.auction.rootEventId).toBe(pinnedRootId)
 		expect(replacement.auctionState.auction.title).toBe('Updated title')
+		// The latest replacement event id is retained in rawEvent.id.
+		expect(replacement.auctionState.auction.rawEvent.id).toBe('9'.repeat(64))
 		// Coordinate index still points at the original pinned root.
 		expect(state.auctionsByCoordinate.get(`30408:${SELLER_PK}:auction-test`)).toBe(pinnedRootId)
 	})

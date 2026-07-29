@@ -288,8 +288,14 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 			return { auctionState: existing, status: 'rejected_immutable' }
 		}
 		// Refresh the parsed event but keep the pinned root auction and
-		// all accumulated bid/settlement state.
-		existing.auction = auction
+		// all accumulated bid/settlement state. The protocol-facing root
+		// event id is pinned to the original first publish so downstream
+		// publisher/settlement/refresh paths consume the canonical
+		// namespace; the latest replacement event id is retained in
+		// rawEvent.id. Without this pin, a normal addressable replacement
+		// (no `auction_root_event_id` tag, rootEventId == own id) would
+		// split auction.rootEventId away from the map key / rootAuction.
+		existing.auction = { ...auction, rootEventId: existing.rootAuction.rootEventId }
 		return { auctionState: existing, status: 'updated' }
 	}
 
