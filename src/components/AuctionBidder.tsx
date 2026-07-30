@@ -23,7 +23,7 @@ import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auct
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
 import { InputGroup, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
@@ -189,6 +189,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
+	const [hasStartedEditingBidAmount, setHasStartedEditingBidAmount] = useState(false)
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
@@ -218,6 +219,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// Initialize input to min bid on mount or when min changes
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
+		setHasStartedEditingBidAmount(false)
 	}, [minBid])
 
 	useEffect(() => {
@@ -335,6 +337,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 
 		await submitPreparedBid(bidData)
+	}
+
+	const handleBidAmountInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (hasStartedEditingBidAmount) return
+		if (!event.key) return
+		if (String(bidAmountInput) !== String(minBid)) return
+		if (!/^[0-9.]$/.test(event.key)) return
+
+		setHasStartedEditingBidAmount(true)
+		setBidAmountInput('')
+	}
+
+	const handleBidAmountInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+		setHasStartedEditingBidAmount(true)
+		setBidAmountInput(event.target.value)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
@@ -460,7 +477,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							min={minBid}
 							step={bidStep}
 							value={bidAmountInput}
-							onChange={(e) => setBidAmountInput(e.target.value)}
+							onChange={handleBidAmountInputChange}
+							onKeyDown={handleBidAmountInputKeyDown}
 							placeholder={`Min: ${minBid.toLocaleString()}`}
 							disabled={isDisabledInput}
 							autoFocus
