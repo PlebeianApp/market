@@ -27,6 +27,7 @@ export function DetailTab() {
 		price,
 		fiatPrice,
 		quantity,
+		delivery,
 		currency,
 		status,
 		specs,
@@ -327,43 +328,47 @@ export function DetailTab() {
 				</div>
 			)}
 
-			<form.Field
-				name="quantity"
-				validators={{
-					onChange: (field) => {
-						if (!field.value) return 'Quantity is required'
-						if (!/^[0-9]*$/.test(field.value)) return 'Please enter a valid number'
-						return undefined
-					},
-				}}
-			>
-				{(field) => (
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor={field.name}>
-							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Quantity</span>
-						</Label>
-						<Input
-							id={field.name}
-							name={field.name}
-							value={field.state.value}
-							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ quantity: e.target.value })
-							}}
-							className="border-2"
-							placeholder="e.g. 100"
-							data-testid="product-quantity-input"
-							required
-							pattern="[0-9]*"
-							inputMode="numeric"
-						/>
-						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
-						)}
-					</div>
-				)}
-			</form.Field>
+			{delivery !== 'digital' ? (
+				<form.Field
+					name="quantity"
+					validators={{
+						onChange: (field) => {
+							if (!field.value) return 'Quantity is required'
+							if (!/^[0-9]*$/.test(field.value)) return 'Please enter a valid number'
+							return undefined
+						},
+					}}
+				>
+					{(field) => (
+						<div className="grid w-full gap-1.5">
+							<Label htmlFor={field.name}>
+								<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Quantity</span>
+							</Label>
+							<Input
+								id={field.name}
+								name={field.name}
+								value={field.state.value}
+								onBlur={field.handleBlur}
+								onChange={(e) => {
+									field.handleChange(e.target.value)
+									productFormActions.updateValues({ quantity: e.target.value })
+								}}
+								className="border-2"
+								placeholder="e.g. 100"
+								data-testid="product-quantity-input"
+								required
+								pattern="[0-9]*"
+								inputMode="numeric"
+							/>
+							{field.state.meta.errors?.length > 0 && field.state.meta.isTouched ? (
+								<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+							) : null}
+						</div>
+					)}
+				</form.Field>
+			) : (
+				<div className="text-sm text-muted-foreground">Digital products do not track stock.</div>
+			)}
 
 			<div className="grid w-full gap-1.5">
 				<Label>

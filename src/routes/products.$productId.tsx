@@ -619,7 +619,7 @@ function RouteComponent() {
 								showRootCurrency={true}
 							/>
 
-							{visibility === 'pre-order' ? (
+							{productType?.delivery === 'digital' ? null : visibility === 'pre-order' ? (
 								<Badge className="bg-blue-500">Pre-order</Badge>
 							) : (
 								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>

@@ -24,6 +24,7 @@ import {
 	getProductCollection,
 	getProductShippingOptions,
 } from '@/queries/products'
+import { fetchOrderStockItems } from './orderStockHelpers'
 
 interface ProductStockUpdate {
 	productRef: string // Format: 30402:pubkey:dtag
@@ -54,62 +55,24 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 		const fetchProductsData = async () => {
 			setLoading(true)
 			try {
-				// Get all item tags from the order
-				const itemTags = order.order.tags.filter((tag) => tag[0] === 'item')
-
+				const stockItems = await fetchOrderStockItems(order.order)
 				const productUpdates: ProductStockUpdate[] = []
 
-				for (const itemTag of itemTags) {
-					const productRef = itemTag[1] // Format: 30402:pubkey:dtag (or 30402:pubkey:eventId for legacy)
-					const quantity = parseInt(itemTag[2] || '1')
+				for (const item of stockItems) {
+					if (item.isDigital || !item.productEvent) continue
 
-					// Parse the product reference
-					const [kind, pubkey, identifier] = productRef.split(':')
-
-					if (kind !== '30402' || !pubkey || !identifier) {
-						console.warn('Invalid product reference:', productRef)
-						continue
-					}
-
-					let productEvent: NDKEvent | null = null
-
-					// First, try to fetch by d-tag (new format)
-					productEvent = await fetchProductByATag(pubkey, identifier)
-
-					// If not found and identifier looks like an event ID (64 hex chars), try fetching by event ID
-					if (!productEvent && /^[a-f0-9]{64}$/i.test(identifier)) {
-						try {
-							productEvent = await fetchProduct(identifier)
-							// Verify the product belongs to the expected seller
-							if (productEvent && productEvent.pubkey !== pubkey) {
-								console.warn('Product pubkey mismatch, ignoring:', productRef)
-								productEvent = null
-							}
-						} catch (error) {
-							console.warn('Failed to fetch product by event ID:', identifier)
-						}
-					}
-
-					if (!productEvent) {
-						console.warn('Product not found:', productRef)
-						continue
-					}
-
-					const productName = getProductTitle(productEvent)
-					const stockTag = getProductStock(productEvent)
+					const productName = getProductTitle(item.productEvent)
+					const stockTag = getProductStock(item.productEvent)
 					const currentStock = stockTag ? parseInt(stockTag[1]) : 0
-					const newStock = Math.max(0, currentStock - quantity)
-
-					// Get the actual d-tag for updates
-					const actualDTag = getProductId(productEvent)
+					const newStock = Math.max(0, currentStock - item.quantity)
 
 					productUpdates.push({
-						productRef: `30402:${pubkey}:${actualDTag}`, // Use proper d-tag format
+						productRef: item.productRef,
 						productName,
-						quantityOrdered: quantity,
+						quantityOrdered: item.quantity,
 						currentStock,
 						newStock,
-						productEvent,
+						productEvent: item.productEvent,
 					})
 				}
 
@@ -159,6 +122,8 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 				const isNsfw = isNSFWProduct(product.productEvent)
 
 				const formData: ProductFormData = {
+					// Determine delivery from type tag
+					delivery: typeTag?.[2] === 'digital' ? 'digital' : 'physical',
 					name: product.productName,
 					summary: getProductSummary(product.productEvent),
 					description: getProductDescription(product.productEvent),

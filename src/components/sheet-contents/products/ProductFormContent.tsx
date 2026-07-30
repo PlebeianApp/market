@@ -27,7 +27,7 @@ const PRODUCT_FORM_TAB_LABELS: Record<ProductFormTab, string> = {
 
 type ProductFormWorkflowState = Pick<
 	ProductFormState,
-	'name' | 'description' | 'price' | 'quantity' | 'mainCategory' | 'images' | 'shippings'
+	'name' | 'description' | 'price' | 'quantity' | 'mainCategory' | 'images' | 'shippings' | 'delivery'
 >
 
 function isValidNumberString(value: string): boolean {
@@ -45,7 +45,8 @@ function getTabValidationIssues(state: ProductFormWorkflowState, tab: ProductFor
 		case 'detail': {
 			const issues: string[] = []
 			if (!isValidNumberString(state.price)) issues.push('Valid product price is required')
-			if (!isValidNumberString(state.quantity)) issues.push('Valid product quantity is required')
+			// Quantity not required for digital products
+			if (state.delivery !== 'digital' && !isValidNumberString(state.quantity)) issues.push('Valid product quantity is required')
 			return issues
 		}
 		case 'category':

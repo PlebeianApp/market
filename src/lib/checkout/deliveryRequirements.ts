@@ -4,6 +4,8 @@ export type CheckoutDeliveryRequirementInput = {
 	products: Array<{
 		id: string
 		shippingMethodId?: string | null
+		// Optional product-level hint - "digital" | "physical" - when available
+		productType?: 'digital' | 'physical'
 	}>
 	servicesByShippingRef: Record<string, string | null | undefined>
 }
@@ -34,6 +36,18 @@ export function resolveCheckoutDeliveryRequirements(input: CheckoutDeliveryRequi
 	const unresolvedShippingRefs = new Set<string>()
 
 	for (const product of input.products) {
+		// If product explicitly declares its type as digital, treat it as digital delivery
+		if (product.productType === 'digital') {
+			hasDigitalDelivery = true
+			continue
+		}
+
+		// If product type is unknown, delivery requirements cannot be resolved by product type alone.
+		if (!product.productType) {
+			unresolvedShippingRefs.add(`product:${product.id}:missing-product-type`)
+			continue
+		}
+
 		const shippingRef = product.shippingMethodId?.trim()
 
 		if (!shippingRef) {
@@ -48,12 +62,21 @@ export function resolveCheckoutDeliveryRequirements(input: CheckoutDeliveryRequi
 			continue
 		}
 
-		if (mode === 'digital') {
-			hasDigitalDelivery = true
-		} else if (mode === 'pickup') {
-			hasPickupDelivery = true
+		if (product.productType === 'physical') {
+			if (mode === 'pickup') {
+				hasPickupDelivery = true
+			} else {
+				hasPhysicalDelivery = true
+			}
 		} else {
-			hasPhysicalDelivery = true
+			// This should not happen, but keep compatibility if type is unexpectedly set.
+			if (mode === 'digital') {
+				hasDigitalDelivery = true
+			} else if (mode === 'pickup') {
+				hasPickupDelivery = true
+			} else {
+				hasPhysicalDelivery = true
+			}
 		}
 	}
 

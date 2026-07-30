@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
 import { type OrderWithRelatedEvents } from '@/queries/orders'
-import { getProductId, productSmartQueryOptions } from '@/queries/products'
+import { getProductId, productSmartQueryOptions, getProductType } from '@/queries/products'
 import {
 	getShippingInfo,
 	getShippingPickupAddressString,
@@ -235,11 +235,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	// Extract shipping information
 	const shippingInfo = shippingOption ? getShippingInfo(shippingOption) : null
 	const isPickupService = shippingOption ? getShippingService(shippingOption)?.[1] === 'pickup' : false
-	const isDigitalService = shippingOption ? getShippingService(shippingOption)?.[1] === 'digital' : false
 	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
 	const shouldShowPrivateDetailsUnavailable = isOrderSeller && Boolean(shippingOption) && !isPickupService && !order.privateOrderDetails
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
+
+	// Determine if any order item is a digital product according to product metadata
+	const hasDigitalProduct = products.some((p) => getProductType(p)?.[2] === 'digital')
+	const isDigitalService = hasDigitalProduct
 
 	const openPaymentDialog = (invoiceList: PaymentInvoiceData[]) => {
 		if (!invoiceList.length) return

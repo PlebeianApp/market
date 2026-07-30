@@ -26,6 +26,7 @@ export interface ProductFormData {
 	weight: { value: string; unit: string } | null
 	dimensions: { value: string; unit: string } | null
 	isNSFW: boolean
+	delivery?: 'physical' | 'digital'
 }
 
 /**
@@ -38,6 +39,7 @@ export const createProductEvent = (
 	productId?: string, // Optional for updates
 	appPubkey?: string, // Optional app pubkey for client tag
 	handlerId?: string, // Optional handler ID for client tag
+	deliveryType: 'digital' | 'physical' = 'physical',
 ): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 30402 // Product listings kind
@@ -87,7 +89,7 @@ export const createProductEvent = (
 		['d', id], // Product identifier - this is the key for updates!
 		['title', formData.name],
 		['price', formData.price, formData.currency],
-		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
+		['type', formData.productType === 'single' ? 'simple' : 'variable', deliveryType],
 		['visibility', formData.status],
 		['stock', formData.quantity],
 		...(formData.summary ? [['summary', formData.summary] as NDKTag] : []),
@@ -122,8 +124,11 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 		throw new Error('Valid product price is required')
 	}
 
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
+	// Quantity is not required for digital delivery
+	if (formData.delivery !== 'digital') {
+		if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
+			throw new Error('Valid product quantity is required')
+		}
 	}
 
 	if (formData.images.length === 0) {
@@ -134,13 +139,16 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 		throw new Error('Main category is required')
 	}
 
-	// Validate shipping options
-	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
+	// Validate shipping options (not required for digital delivery)
+	const normalizedShippings = normalizeProductShippingSelections(formData.shippings)
+	const validShippings = normalizedShippings.filter((ship) => ship.shippingRef)
+	if (validShippings.length === 0 && formData.delivery !== 'digital') {
 		throw new Error('At least one shipping option is required')
 	}
 
-	const event = createProductEvent(formData, signer, ndk)
+	const deliveryType: 'digital' | 'physical' = formData.delivery ?? 'physical'
+
+	const event = createProductEvent(formData, signer, ndk, undefined, undefined, undefined, deliveryType)
 
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
@@ -174,8 +182,32 @@ export const updateProduct = async (
 		throw new Error('Valid product price is required')
 	}
 
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
+	// Determine whether this product should be considered digital for validation
+	let isDigitalForUpdate = formData.delivery === 'digital'
+	if (!isDigitalForUpdate) {
+		const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
+		if (validShippings.length > 0) {
+			for (const ship of validShippings) {
+				try {
+					const shippingId = parseShippingReference(ship.shippingRef)
+					const shippingEvent = await getShippingEvent(shippingId)
+					const serviceTag = shippingEvent ? getShippingService(shippingEvent) : undefined
+					if (serviceTag?.[1] === 'digital') {
+						isDigitalForUpdate = true
+						break
+					}
+				} catch (e) {
+					continue
+				}
+			}
+		}
+	}
+
+	// Quantity is not required for digital products
+	if (!isDigitalForUpdate) {
+		if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
+			throw new Error('Valid product quantity is required')
+		}
 	}
 
 	if (formData.images.length === 0) {
@@ -186,14 +218,31 @@ export const updateProduct = async (
 		throw new Error('Main category is required')
 	}
 
-	// Validate shipping options
+	// Validate shipping options (not required for digital delivery)
 	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
+	if (validShippings.length === 0 && formData.delivery !== 'digital') {
 		throw new Error('At least one shipping option is required')
+	}
+	// Determine delivery type for update as well
+	let deliveryType: 'digital' | 'physical' = formData.delivery ?? 'physical'
+	if (!formData.delivery) {
+		for (const ship of validShippings) {
+			try {
+				const shippingId = parseShippingReference(ship.shippingRef)
+				const shippingEvent = await getShippingEvent(shippingId)
+				const serviceTag = shippingEvent ? getShippingService(shippingEvent) : undefined
+				if (serviceTag?.[1] === 'digital') {
+					deliveryType = 'digital'
+					break
+				}
+			} catch (e) {
+				continue
+			}
+		}
 	}
 
 	// Create event with the same d tag to update the existing product
-	const event = createProductEvent(formData, signer, ndk, productDTag)
+	const event = createProductEvent(formData, signer, ndk, productDTag, undefined, undefined, deliveryType)
 
 	await event.sign(signer)
 	await ndkActions.publishEvent(event)
