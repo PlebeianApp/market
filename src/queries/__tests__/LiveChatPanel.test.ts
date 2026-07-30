@@ -30,7 +30,14 @@ function baseUsePublishLiveChatMessageMutation() {
 	}
 }
 
+// Import the real module so we can preserve non-hook exports (fetchLiveActivity)
+// while overriding only the hooks. Mocking the entire namespace would shadow
+// fetchLiveActivity and break liveChat.test.ts when Bun runs both files together.
+const realLiveChat = await import('@/queries/liveChat')
+
 mock.module('@/queries/liveChat', () => ({
+	fetchLiveActivity: realLiveChat.fetchLiveActivity,
+	fetchLiveChatMessages: realLiveChat.fetchLiveChatMessages,
 	useLiveActivity: () => baseUseLiveActivity(),
 	useLiveChatMessages: () => baseUseLiveChatMessages(),
 }))

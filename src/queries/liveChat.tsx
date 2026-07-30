@@ -51,7 +51,7 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 	// requested author set. Reject anything not signed by the configured CVM server.
 	const latest = sorted[0]
 	if (latest.pubkey !== cvmServerPubkey) {
-		console.warn('fetchLiveActivity: dropping live activity event from unexpected author', latest.pubkey)
+		console.warn('fetchLiveActivity: dropping live activity event from unexpected author', latest.pubkey.slice(0, 16))
 		return null
 	}
 

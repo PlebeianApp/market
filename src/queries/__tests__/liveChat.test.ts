@@ -11,6 +11,10 @@ let fetchedFilters: Record<string, unknown>[] = []
 let relayEvents: Set<Record<string, unknown>> = new Set()
 
 mock.module('@/lib/stores/ndk', () => ({
+	ndkStore: {
+		state: { ndk: null, explicitRelayUrls: [], writeRelayUrls: [], health: 'unknown', connectedRelayCount: 0 },
+	},
+	getWriteRelays: () => [],
 	ndkActions: {
 		getNDK: () => ({}),
 		fetchEventsWithTimeout: mock(async (filters: Record<string, unknown>[]) => {
@@ -58,14 +62,13 @@ describe('liveChat queries', () => {
 		})
 	})
 
-	describe('stale handling', () => {
-		test('stale live event shows health warning but status remains live', () => {
-			// The staleness check is a UI warning only - it does NOT override the CVM status
-			// This test documents the UI behavior, not the status resolution logic
+	describe('status passthrough', () => {
+		test('live event status is preserved regardless of event age', () => {
+			// The staleness check is a UI warning only (via React Query dataUpdatedAt
+			// in LiveChatPanel) - it does NOT override the CVM status tag.
 			const oldEvent = {
 				pubkey: 'c'.repeat(64),
 				created_at: Math.floor(Date.now() / 1000) - 7200, // 2 hours old
-				updated_at: Math.floor(Date.now() / 1000) - 3600, // 1 hour old
 				tags: [
 					['d', 'auction:abcd:old'],
 					['status', 'live'],
