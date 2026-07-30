@@ -25,8 +25,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
-import { CircleX } from 'lucide-react'
-import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
+import { InputGroup, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
 import { useStore } from '@tanstack/react-store'
@@ -466,9 +465,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							disabled={isDisabledInput}
 							autoFocus
 						/>
-						<InputGroupAddon align="inline-end">
-							<CircleX onClick={() => setBidAmountInput(String(minBid))} className="size-4 cursor-pointer" />
-						</InputGroupAddon>
 					</InputGroup>
 				)}
 
