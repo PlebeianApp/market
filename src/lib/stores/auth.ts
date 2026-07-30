@@ -1,6 +1,7 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { extractRelayUrlsFromConnectionUrl } from '@/lib/nostr/nip46'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
@@ -25,6 +26,94 @@ interface AuthState {
 
 interface Nip46LoginOptions {
 	onAuthUrl?: (url: string) => void
+	remotePubkey?: string
+	timeoutMs?: number
+}
+
+function getAuthStorage(): Storage | undefined {
+	if (typeof window !== 'undefined' && window.localStorage) {
+		return window.localStorage
+	}
+
+	if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis) {
+		const storage = (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage
+		if (storage) {
+			return storage
+		}
+	}
+
+	return undefined
+}
+
+export function persistAuthenticatedLoginState(
+	user: Pick<NDKUser, 'pubkey'> | null | undefined,
+	privateKey?: string,
+	connectionUrl?: string,
+): void {
+	const storage = getAuthStorage()
+	if (!storage) {
+		return
+	}
+
+	if (user?.pubkey) {
+		storage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+	}
+
+	if (privateKey) {
+		storage.setItem(NOSTR_LOCAL_SIGNER_KEY, privateKey)
+	}
+
+	if (connectionUrl) {
+		storage.setItem(NOSTR_CONNECT_KEY, connectionUrl)
+	}
+}
+
+export async function completeNip46LoginHandshake(
+	signer: NDKNip46Signer,
+	fallbackPubkey?: string,
+	timeoutMs = 8000,
+	ndk?: ReturnType<typeof ndkActions.getNDK>,
+): Promise<NDKUser | null> {
+	const resolvedNdk = ndk ?? ndkActions.getNDK()
+	if (!resolvedNdk) {
+		throw new Error('NDK not initialized for NIP-46 fallback')
+	}
+
+	const candidatePubkeys = Array.from(new Set([fallbackPubkey, signer.userPubkey].filter((value): value is string => Boolean(value))))
+	let timeout: ReturnType<typeof setTimeout> | undefined
+
+	try {
+		const user = await Promise.race<NDKUser | null>([
+			signer.blockUntilReady(),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => reject(new Error('NIP-46 handshake timed out')), timeoutMs)
+			}),
+		])
+
+		if (user?.pubkey) {
+			return user
+		}
+	} catch (error) {
+		console.warn('[NIP46] full handshake did not complete, using fallback pubkey', error)
+	} finally {
+		if (timeout) clearTimeout(timeout)
+	}
+
+	for (const pubkey of candidatePubkeys) {
+		try {
+			signer.userPubkey = pubkey
+			const user = resolvedNdk.getUser({ pubkey })
+			// NDK stores the ready user privately. Without priming that cache,
+			// subsequent signer.user() calls invoke blockUntilReady() and send a
+			// second connect request after the login handshake has already resolved.
+			;(signer as unknown as { _user?: NDKUser })._user = user
+			return user
+		} catch (error) {
+			console.warn('[NIP46] fallback pubkey failed', pubkey, error)
+		}
+	}
+
+	return null
 }
 
 const initialState: AuthState = {
@@ -63,7 +152,9 @@ export const authActions = {
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 
 			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
+				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
+					remotePubkey: localStorage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
+				})
 				authActions.checkAndShowTermsDialog()
 				return
 			}
@@ -211,9 +302,7 @@ export const authActions = {
 				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
 			}
 
-			// Store user pubkey and enable auto-login for persistence
-			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
-			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+			persistAuthenticatedLoginState(user)
 
 			authStore.setState((state) => ({
 				...state,
@@ -241,7 +330,13 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+			const relayUrls = extractRelayUrlsFromConnectionUrl(bunkerUrl)
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+
+			if (relayUrls.length > 0) {
+				signer.relayUrls = relayUrls
+				signer.rpc.updateRelays(relayUrls)
+			}
 
 			if (options?.onAuthUrl) {
 				signer.on('authUrl', (url) => {
@@ -251,14 +346,18 @@ export const authActions = {
 				})
 			}
 
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			const user = await signer.user()
+			const user = await completeNip46LoginHandshake(signer, options?.remotePubkey, options?.timeoutMs, ndk)
 
-			// Wait until user is logged in successfully before saving the bunkerURL/private key.
+			if (!user?.pubkey) {
+				throw new Error('Failed to resolve the remote signer pubkey for login')
+			}
 
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
-			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
+			// The handshake above establishes the signer. Relay and wallet bootstrap
+			// can continue in the background; it must not delay the confirmed login.
+			void ndkActions.setSigner(signer).catch((error) => {
+				console.error('[NIP46] post-login signer setup failed', error)
+			})
+			persistAuthenticatedLoginState(user, localSigner.privateKey || '', bunkerUrl)
 
 			authStore.setState((state) => ({
 				...state,

@@ -3,9 +3,10 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
+import { buildBunkerUrl, buildNostrConnectUrl, getNip46RelayUrls, normalizeRelayUrls } from '@/lib/nostr/nip46'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
-import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { CopyIcon, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
@@ -36,12 +37,13 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const activeSubscriptionRef = useRef<any>(null)
 	const isMountedRef = useRef(true)
 	const hasTriggeredSuccessRef = useRef(false)
+	const hasAppliedConfigRelayRef = useRef(false)
 	const nip46NdkRef = useRef<NDK | null>(null)
 
-	const cleanup = useCallback(() => {
-		if (!isMountedRef.current) return
-
-		isLoggingInRef.current = false
+	const cleanup = useCallback((preserveLoggingIn = false) => {
+		if (!preserveLoggingIn) {
+			isLoggingInRef.current = false
+		}
 
 		if (activeSubscriptionRef.current) {
 			try {
@@ -61,7 +63,9 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			}
 		}
 
-		setListening(false)
+		if (isMountedRef.current) {
+			setListening(false)
+		}
 	}, [])
 
 	useEffect(() => {
@@ -69,17 +73,9 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 		return () => {
 			isMountedRef.current = false
-
-			if (activeSubscriptionRef.current) {
-				try {
-					activeSubscriptionRef.current.stop()
-				} catch (e) {
-					console.error('Error stopping subscription:', e)
-				}
-				activeSubscriptionRef.current = null
-			}
+			cleanup()
 		}
-	}, [])
+	}, [cleanup])
 
 	useEffect(() => {
 		setGeneratingConnectionUrl(true)
@@ -101,37 +97,46 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			})
 	}, [])
 
+	useEffect(() => {
+		const configuredRelay = config?.nip46Relay?.trim()
+		if (!configuredRelay || hasAppliedConfigRelayRef.current) return
+
+		hasAppliedConfigRelayRef.current = true
+
+		if (DEFAULT_NIP46_RELAYS.some((relay) => relay.value === configuredRelay)) {
+			setSelectedRelay(configuredRelay)
+			return
+		}
+
+		setSelectedRelay('custom')
+		setCustomRelay(configuredRelay)
+	}, [config?.nip46Relay])
+
+	const relayUrls = useMemo(() => {
+		if (!config) return []
+		if (isCustomRelay && !customRelay.trim()) return []
+		if (!activeRelay.trim()) return []
+
+		return getNip46RelayUrls([activeRelay])
+	}, [activeRelay, config, customRelay, isCustomRelay])
+
+	const explicitRelayUrls = useMemo(() => normalizeRelayUrls(relayUrls), [relayUrls])
+
 	const connectionUrl = useMemo(() => {
 		if (!localPubkey || !config) return null
 		if (isCustomRelay && !customRelay) return null
+		if (explicitRelayUrls.length === 0) return null
 
-		const params = new URLSearchParams()
-		params.set('relay', activeRelay)
-		params.set(
-			'metadata',
-			JSON.stringify({
-				name: 'Plebeian.market',
-				description: 'Connect with Plebeian.market',
-				url: window.location.origin,
-				icons: [],
-			}),
-		)
-		params.set('token', tempSecret)
-
-		return `nostrconnect://${localPubkey}?` + params.toString()
-	}, [localPubkey, config, tempSecret, activeRelay, isCustomRelay, customRelay])
+		return buildNostrConnectUrl(localPubkey, explicitRelayUrls, tempSecret, {
+			name: 'Plebeian.market',
+			url: window.location.origin,
+			image: `${window.location.origin}/manifest.json`,
+		})
+	}, [localPubkey, config, tempSecret, isCustomRelay, customRelay, explicitRelayUrls])
 
 	const constructBunkerUrl = useCallback(
-		(event: NDKEvent) => {
-			const baseUrl = `bunker://${event.pubkey}?`
-
-			const params = new URLSearchParams()
-			params.set('relay', activeRelay)
-			params.set('secret', tempSecret)
-
-			return baseUrl + params.toString()
-		},
-		[activeRelay, tempSecret],
+		(event: NDKEvent) => buildBunkerUrl(event.pubkey, explicitRelayUrls, tempSecret),
+		[explicitRelayUrls, tempSecret],
 	)
 
 	const triggerSuccess = useCallback(() => {
@@ -159,7 +164,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			try {
 				isLoggingInRef.current = true
-				cleanup()
+				cleanup(true)
 
 				const bunkerUrl = constructBunkerUrl(event)
 				if (!localSigner) {
@@ -167,7 +172,9 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				}
 
 				setConnectionStatus('connected')
-				await authActions.loginWithNip46(bunkerUrl, localSigner)
+				await authActions.loginWithNip46(bunkerUrl, localSigner, {
+					remotePubkey: event.pubkey,
+				})
 
 				triggerSuccess()
 			} catch (err) {
@@ -199,12 +206,15 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			return
 		}
 
+		let timeout: ReturnType<typeof setTimeout> | undefined
+		let disposed = false
+
 		const initNip46Connection = async () => {
 			setListening(true)
 			setConnectionStatus('connecting')
 
 			const ndk = new NDK({
-				explicitRelayUrls: [activeRelay],
+				explicitRelayUrls: explicitRelayUrls,
 			})
 
 			nip46NdkRef.current = ndk
@@ -212,14 +222,19 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			try {
 				await ndk.connect()
 			} catch (error) {
-				console.error('Failed to connect to NIP-46 relay:', error)
+				if (disposed) return
+				console.error('[NIP46] failed to connect to relays', { explicitRelayUrls, error })
 				setConnectionStatus('error')
 				if (onError) onError('Failed to connect to NIP-46 relay')
 				return
 			}
 
+			if (disposed) return
+
 			const processedRequestIds = new Set<string>()
-			const processedAckIds = new Set<string>()
+			const processedResponseIds = new Set<string>()
+			const approvedSignerPubkeys = new Set<string>()
+			const relaySet = NDKRelaySet.fromRelayUrls(explicitRelayUrls, ndk)
 
 			const sub = ndk.subscribe(
 				{
@@ -227,6 +242,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 					'#p': [localPubkey],
 				},
 				{ closeOnEose: false },
+				relaySet,
 			)
 
 			activeSubscriptionRef.current = sub
@@ -249,7 +265,13 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							processedRequestIds.add(request.id)
 						}
 
-						if (request.params && request.params.token === tempSecret) {
+						const connectSecret = Array.isArray(request.params)
+							? (request.params[1] ?? request.params[0])
+							: (request.params?.secret ?? request.params?.token)
+
+						if (connectSecret === tempSecret) {
+							approvedSignerPubkeys.add(event.pubkey)
+
 							const response = {
 								id: request.id,
 								result: tempSecret,
@@ -266,7 +288,8 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 								// @ts-ignore - The NDK API requires a string pubkey here despite type definitions
 								await responseEvent.encrypt(undefined, localSigner, event.pubkey)
 								await responseEvent.sign(localSigner)
-								await responseEvent.publish()
+								await responseEvent.publish(relaySet)
+								await handleLoginWithNip46Signer(event)
 							} catch (err) {
 								console.error('Error sending NIP-46 approval:', err)
 								if (isMountedRef.current && !hasTriggeredSuccessRef.current) {
@@ -275,12 +298,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 								}
 							}
 						}
-					} else if (request.result === 'ack') {
-						if (processedAckIds.has(event.id)) {
+					} else if (request.result === tempSecret || (request.result === 'ack' && approvedSignerPubkeys.has(event.pubkey))) {
+						if (processedResponseIds.has(event.id)) {
 							return
 						}
 
-						processedAckIds.add(event.id)
+						processedResponseIds.add(event.id)
 						await handleLoginWithNip46Signer(event)
 					}
 				} catch (error) {
@@ -292,8 +315,8 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				}
 			})
 
-			const timeout = setTimeout(() => {
-				if (isMountedRef.current && !hasTriggeredSuccessRef.current && connectionStatus !== 'connected' && !isLoggingInRef.current) {
+			timeout = setTimeout(() => {
+				if (isMountedRef.current && !hasTriggeredSuccessRef.current && !isLoggingInRef.current) {
 					cleanup()
 					setConnectionStatus('error')
 					if (onError) onError('Connection timed out. Please try again.')
@@ -301,13 +324,25 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			}, 300000) // 5 minutes
 
 			return () => {
-				clearTimeout(timeout)
+				if (timeout) clearTimeout(timeout)
 				cleanup()
 			}
 		}
 
-		initNip46Connection()
-	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup, activeRelay])
+		const cleanupPromise = initNip46Connection()
+
+		return () => {
+			disposed = true
+			if (timeout) clearTimeout(timeout)
+			cleanup()
+			cleanupPromise
+				.then((effectCleanup) => effectCleanup?.())
+				.catch((error) => {
+					console.error('Failed to clean up NIP-46 connection:', error)
+					cleanup()
+				})
+		}
+	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup, explicitRelayUrls])
 
 	return (
 		<div className="flex flex-col items-center gap-4 py-4 w-full max-w-full overflow-hidden">

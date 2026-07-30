@@ -190,12 +190,10 @@ export class Nip46Mock {
 	/**
 	 * Complete the nostrconnect:// handshake and start the signer loop.
 	 *
-	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, token
+	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, secret
 	 * 2. Connect to relay and subscribe
-	 * 3. Set up event handler for responses
-	 * 4. Publish a `connect` request with the token
-	 * 5. Event handler processes approval → sends ack
-	 * 6. Event handler processes signer requests (connect, get_public_key, sign_event)
+	 * 3. Publish a `connect` response with the secret
+	 * 4. Handle subsequent signer requests (connect, get_public_key, sign_event)
 	 *
 	 * Returns a cleanup function.
 	 */
@@ -205,35 +203,27 @@ export class Nip46Mock {
 		const localPubkey = withoutProtocol.slice(0, qIdx)
 		const params = new URLSearchParams(withoutProtocol.slice(qIdx + 1))
 		const relayUrl = params.get('relay')!
-		const token = params.get('token')!
+		const secret = params.get('secret') ?? params.get('token') ?? ''
 
 		// Connect and wait for subscription EOSE
 		await this.connectAndSubscribe(relayUrl)
-
-		let qrHandshakeDone = false
 
 		// Set up event handler (also drains any buffered events)
 		this.setEventHandler(async (event) => {
 			const decrypted = await this.decryptContent(event.pubkey, event.content)
 			const msg = JSON.parse(decrypted)
 
-			if (!qrHandshakeDone && msg.result !== undefined && !msg.method) {
-				// App's approval response to our connect request
-				qrHandshakeDone = true
-				await this.sendEncrypted(localPubkey, { result: 'ack' })
-			} else if (msg.method) {
-				// Signer request from NDKNip46Signer
+			if (msg.method) {
 				await this.handleSignerRequest(event.pubkey, msg)
 			}
 		})
 
-		// Publish the connect request
-		const connectRequest = {
+		// Publish the NIP-46 client-initiated connect response.
+		const connectResponse = {
 			id: crypto.randomUUID(),
-			method: 'connect',
-			params: { token },
+			result: secret,
 		}
-		await this.sendEncrypted(localPubkey, connectRequest)
+		await this.sendEncrypted(localPubkey, connectResponse)
 
 		return () => this.close()
 	}
