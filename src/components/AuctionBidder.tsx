@@ -218,9 +218,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	// Initialize input to min bid on mount or when min changes
 	useEffect(() => {
+		if (hasStartedEditingBidAmount) return
 		setBidAmountInput(String(minBid))
-		setHasStartedEditingBidAmount(false)
-	}, [minBid])
+	}, [minBid, hasStartedEditingBidAmount])
 
 	useEffect(() => {
 		if (!auctionRulesAckKey || typeof window === 'undefined') {
