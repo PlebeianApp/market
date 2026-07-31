@@ -481,7 +481,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							onKeyDown={handleBidAmountInputKeyDown}
 							placeholder={`Min: ${minBid.toLocaleString()}`}
 							disabled={isDisabledInput}
-							autoFocus
 						/>
 					</InputGroup>
 				)}
