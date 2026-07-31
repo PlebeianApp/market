@@ -40,13 +40,7 @@ import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-ro
 import { useSelector } from '@tanstack/react-store'
 import { CheckCheck, Clock, ExternalLink, Gavel, Hourglass, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import {
-	auctionSortOptionValues,
-	defaultAuctionFilters,
-	getAuctionSortOptionTitle,
-	useFilteredAuctions,
-	type AuctionSortOption,
-} from '@/lib/utils/auctions'
+import { auctionSortOptionValues, getAuctionSortOptionTitle, useFilteredAuctions, type AuctionSortOption } from '@/lib/utils/auctions'
 
 type AuctionStatus = 'Scheduled' | 'Live' | 'Settlement' | 'Ended'
 
@@ -520,7 +514,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 function AuctionsOverviewComponent() {
 	const { user, isAuthenticated } = useSelector(authStore)
 	const matchRoute = useMatchRoute()
-	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
+	const [sort, setSort] = useState<AuctionSortOption>('newest')
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
