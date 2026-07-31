@@ -1,5 +1,5 @@
 import { fetchProductSmart, getProductId, getProductType } from '@/queries/products'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getOrderItems } from './orderDetailHelpers'
 
 export type OrderStockItem = {
