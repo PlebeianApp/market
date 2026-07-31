@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
 	AUCTION_MIN_DURATION_SECONDS,
@@ -22,11 +23,9 @@ import { configStore } from '@/lib/stores/config'
 import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import {
-	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
 	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
 	AUCTION_SETTLEMENT_GRACE_PRESETS,
 	usePublishAuctionMutation,
-	type AuctionAntiSnipeWindowMinutesPreset,
 	type AuctionFormData,
 	type AuctionMinBidCurvePeakPreset,
 	type AuctionMinBidCurveShape,
@@ -57,8 +56,8 @@ const INITIAL_FORM: AuctionFormData = {
 	reserve: undefined,
 	startAt: '',
 	endAt: '',
-	// Anti-snipe defaults: 5-minute window, linear curve, 2x peak, 1h settlement grace.
-	antiSnipeWindowMinutes: 5,
+	// Default to no anti-snipe window.
+	antiSnipeWindowMinutes: 0,
 	minBidCurveShape: 'linear',
 	minBidCurvePeakMultiplier: 2,
 	settlementGracePreset: '1h',
@@ -624,10 +623,10 @@ function formatAbsoluteCompact(tsSeconds: number): string {
 }
 
 /**
- * Anti-snipe window + curve picker. Single card on the auction form
- * with three rows of preset buttons:
+ * Anti-snipe toggle + curve picker. Single card on the auction form
+ * with basic anti-snipe enablement and curve controls:
  *
- *   1. Anti-snipe window (0 / 5 / 15 / 30 minutes added to end_at).
+ *   1. Anti-snipe On/Off (Off = 0 min window, On = 5 min window).
  *   2. Curve shape (none / linear / exponential).
  *   3. Peak multiplier (2× / 5× / 10×) — disabled when shape = none.
  *
@@ -658,7 +657,6 @@ function AntiSnipeCurveSettings({
 	bidIncrement: number
 	reserve: number
 }) {
-	const windowOptions: AuctionAntiSnipeWindowMinutesPreset[] = [...AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES]
 	const shapeOptions: Array<{ value: AuctionMinBidCurveShape; label: string; sub: string }> = [
 		{ value: 'none', label: 'None', sub: 'flat floor' },
 		{ value: 'linear', label: 'Linear', sub: 'straight ramp' },
@@ -666,7 +664,7 @@ function AntiSnipeCurveSettings({
 	]
 	const peakOptions: AuctionMinBidCurvePeakPreset[] = [...AUCTION_MIN_BID_CURVE_PEAK_PRESETS]
 
-	// `windowDisabled = true` when the seller picked "No window" —
+	// `windowDisabled = true` when anti-snipe is Off —
 	// disables curve shape AND peak multiplier in one go. With no window,
 	// `max_end_at = end_at`, the curve has zero duration, and a non-`none`
 	// shape would have no effect anyway. Disabling the controls visually
@@ -677,44 +675,34 @@ function AntiSnipeCurveSettings({
 	return (
 		<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
 			<div>
-				<Label className="text-zinc-950">Anti-snipe</Label>
-				<p className="mt-1 text-xs text-zinc-500">
-					After flat bidding ends, bids can still land during the anti-snipe window — but the minimum bid ramps up to make sniping
-					expensive. The auction end is fixed at publish time.
-				</p>
-			</div>
-
-			<div className="grid gap-1.5">
-				<Label className="text-xs uppercase tracking-wide text-zinc-500">Window</Label>
-				<div className="flex flex-wrap gap-2">
-					{windowOptions.map((minutes) => {
-						const isActive = formData.antiSnipeWindowMinutes === minutes
-						return (
-							<button
-								key={minutes}
-								type="button"
-								onClick={() =>
-									// Setting window=0 also resets curve to `none` —
-									// keeps the form state coherent so a re-enable
-									// doesn't surface a leftover shape the seller
-									// can't see.
-									setFormData((prev) =>
-										minutes === 0
-											? { ...prev, antiSnipeWindowMinutes: minutes, minBidCurveShape: 'none' }
-											: { ...prev, antiSnipeWindowMinutes: minutes },
-									)
-								}
-								className={`rounded-md border px-3 py-1.5 text-xs ${
-									isActive
-										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
-								}`}
-							>
-								{minutes === 0 ? 'No window' : `${minutes} min`}
-							</button>
-						)
-					})}
+				<div className="flex items-center justify-between gap-3">
+					<Label className="text-zinc-950">Anti-snipe</Label>
+					<div className="ml-auto flex items-center gap-3">
+						<span className={`text-xs ${windowDisabled ? 'text-zinc-900' : 'text-zinc-500'}`}>Off</span>
+						<Switch
+							id="auction-anti-snipe-enabled"
+							checked={!windowDisabled}
+							onCheckedChange={(checked) =>
+								setFormData((prev) =>
+									checked
+										? {
+												...prev,
+												antiSnipeWindowMinutes: 5,
+												minBidCurveShape: 'linear',
+												minBidCurvePeakMultiplier: 2,
+											}
+										: { ...prev, antiSnipeWindowMinutes: 0, minBidCurveShape: 'none' },
+								)
+							}
+						/>
+						<span className={`text-xs ${!windowDisabled ? 'text-zinc-900' : 'text-zinc-500'}`}>On</span>
+					</div>
 				</div>
+				<p className="mt-1 text-xs text-zinc-500">
+					Enable anti-snipe to add a 5-minute extension window after flat bidding ends. During that window, the minimum bid ramps up to make
+					sniping expensive. The auction end is fixed at publish time.
+				</p>
+				{!windowDisabled && <p className="mt-1 text-[11px] text-zinc-500">Window: 5 minutes</p>}
 			</div>
 
 			<div className="grid gap-1.5">
@@ -740,7 +728,7 @@ function AntiSnipeCurveSettings({
 						)
 					})}
 				</div>
-				{windowDisabled && <p className="text-[11px] text-amber-700">Pick a window above to enable the curve.</p>}
+				{windowDisabled && <p className="text-[11px] text-amber-700">Turn anti-snipe On to enable the curve.</p>}
 			</div>
 
 			<div className="grid gap-1.5">
