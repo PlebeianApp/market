@@ -1087,10 +1087,11 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid w-full gap-1.5">
+			<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
 				<Label htmlFor="auction-starting-bid">
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
 				</Label>
+				<p className="text-xs text-zinc-500">Amount bidders must meet or exceed to place the first bid.</p>
 				<Input
 					id="auction-starting-bid"
 					type="number"
