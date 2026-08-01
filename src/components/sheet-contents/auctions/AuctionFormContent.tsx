@@ -23,9 +23,11 @@ import { configStore } from '@/lib/stores/config'
 import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import {
+	AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES,
 	AUCTION_MIN_BID_CURVE_PEAK_PRESETS,
 	AUCTION_SETTLEMENT_GRACE_PRESETS,
 	usePublishAuctionMutation,
+	type AuctionAntiSnipeWindowMinutesPreset,
 	type AuctionFormData,
 	type AuctionMinBidCurvePeakPreset,
 	type AuctionMinBidCurveShape,
@@ -59,7 +61,7 @@ const INITIAL_FORM: AuctionFormData = {
 	// Default to no anti-snipe window.
 	antiSnipeWindowMinutes: 0,
 	minBidCurveShape: 'linear',
-	minBidCurvePeakMultiplier: 2,
+	minBidCurvePeakMultiplier: 5,
 	settlementGracePreset: '1h',
 	mainCategory: '',
 	categories: [],
@@ -657,6 +659,7 @@ function AntiSnipeCurveSettings({
 	bidIncrement: number
 	reserve: number
 }) {
+	const windowOptions: AuctionAntiSnipeWindowMinutesPreset[] = [...AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES]
 	const shapeOptions: Array<{ value: AuctionMinBidCurveShape; label: string; sub: string }> = [
 		{ value: 'none', label: 'None', sub: 'flat floor' },
 		{ value: 'linear', label: 'Linear', sub: 'straight ramp' },
@@ -664,7 +667,9 @@ function AntiSnipeCurveSettings({
 	]
 	const peakOptions: AuctionMinBidCurvePeakPreset[] = [...AUCTION_MIN_BID_CURVE_PEAK_PRESETS]
 
-	// `windowDisabled = true` when anti-snipe is Off —
+	const antiSnipeEnabled = formData.antiSnipeWindowMinutes > 0 || formData.minBidCurveShape !== 'none'
+
+	// `windowDisabled = true` when no anti-snipe window is selected —
 	// disables curve shape AND peak multiplier in one go. With no window,
 	// `max_end_at = end_at`, the curve has zero duration, and a non-`none`
 	// shape would have no effect anyway. Disabling the controls visually
@@ -675,38 +680,66 @@ function AntiSnipeCurveSettings({
 	return (
 		<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
 			<div>
-				<div className="flex items-center justify-between gap-3">
+				<div className="flex items-center gap-3">
 					<Label className="text-zinc-950">Anti-snipe</Label>
-					<div className="ml-auto flex items-center gap-3">
-						<span className={`text-xs ${windowDisabled ? 'text-zinc-900' : 'text-zinc-500'}`}>Off</span>
+					<div className="flex items-center gap-3">
+						<span className={`text-xs ${!antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>Off</span>
 						<Switch
 							id="auction-anti-snipe-enabled"
-							checked={!windowDisabled}
+							checked={antiSnipeEnabled}
 							onCheckedChange={(checked) =>
 								setFormData((prev) =>
 									checked
 										? {
 												...prev,
-												antiSnipeWindowMinutes: 5,
+												antiSnipeWindowMinutes: 0,
 												minBidCurveShape: 'linear',
-												minBidCurvePeakMultiplier: 2,
+												minBidCurvePeakMultiplier: 5,
 											}
 										: { ...prev, antiSnipeWindowMinutes: 0, minBidCurveShape: 'none' },
 								)
 							}
 						/>
-						<span className={`text-xs ${!windowDisabled ? 'text-zinc-900' : 'text-zinc-500'}`}>On</span>
+						<span className={`text-xs ${antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>On</span>
 					</div>
 				</div>
-				<p className="mt-1 text-xs text-zinc-500">
-					Enable anti-snipe to add a 5-minute extension window after flat bidding ends. During that window, the minimum bid ramps up to make
-					sniping expensive. The auction end is fixed at publish time.
-				</p>
-				{!windowDisabled && <p className="mt-1 text-[11px] text-zinc-500">Window: 5 minutes</p>}
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Curve shape</Label>
+				<Label className="text-xs uppercase tracking-wide text-zinc-500">Anti-snipe protection window</Label>
+				<p className="text-xs text-zinc-500">
+					Adds extra minutes to the end of the auction, where the minimum bid increment rises to make sniping more expensive
+				</p>
+				<div className="flex flex-wrap gap-2">
+					{windowOptions.map((minutes) => {
+						const isActive = formData.antiSnipeWindowMinutes === minutes
+						return (
+							<button
+								key={minutes}
+								type="button"
+								onClick={() =>
+									setFormData((prev) =>
+										minutes === 0
+											? { ...prev, antiSnipeWindowMinutes: minutes, minBidCurveShape: 'none' }
+											: { ...prev, antiSnipeWindowMinutes: minutes },
+									)
+								}
+								className={`rounded-md border px-3 py-1.5 text-xs ${
+									isActive
+										? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+										: 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400'
+								}`}
+							>
+								{minutes === 0 ? 'No window' : `${minutes} min`}
+							</button>
+						)
+					})}
+				</div>
+			</div>
+
+			<div className="grid gap-1.5">
+				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Bid curve</Label>
+				<p className={`text-xs ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>The shape of the bid curve</p>
 				<div className="flex flex-wrap gap-2">
 					{shapeOptions.map((option) => {
 						const isActive = formData.minBidCurveShape === option.value
@@ -728,11 +761,14 @@ function AntiSnipeCurveSettings({
 						)
 					})}
 				</div>
-				{windowDisabled && <p className="text-[11px] text-amber-700">Turn anti-snipe On to enable the curve.</p>}
+				{windowDisabled && <p className="text-[11px] text-amber-700">Pick a window above to enable the curve.</p>}
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Peak multiplier</Label>
+				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Multiplier</Label>
+				<p className={`text-xs ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>
+					How much the bidding floor raises relative to the last bid
+				</p>
 				<div className="flex flex-wrap gap-2">
 					{peakOptions.map((peak) => {
 						const isActive = formData.minBidCurvePeakMultiplier === peak
