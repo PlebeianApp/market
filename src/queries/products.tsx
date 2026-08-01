@@ -22,6 +22,7 @@ import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { isValidHexKey } from '@/lib/utils'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -372,6 +373,7 @@ export const productsByPubkeyQueryOptions = (pubkey: string, includeHidden: bool
 	queryOptions({
 		queryKey: includeHidden ? [...productKeys.byPubkey(pubkey), 'includeHidden'] : productKeys.byPubkey(pubkey),
 		queryFn: () => fetchProductsByPubkey(pubkey, includeHidden),
+		enabled: isValidHexKey(pubkey),
 	})
 
 /**
