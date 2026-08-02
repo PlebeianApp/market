@@ -4,7 +4,7 @@ import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 import {
 	CashuMintMock,
 	MOCK_TOKENS,
@@ -86,7 +86,7 @@ async function seedEndedAuction(
 				['key_scheme', 'hd_p2pk'],
 				['p2pk_xpub', MOCK_XPUB],
 				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
-				['auditors', '[]'],
+				['auditors', devUser3.pk],
 				['auditor_quorum', '1'],
 				['max_skew_sec', '30'],
 				['fallback_delay_sec', '150'],
@@ -120,7 +120,7 @@ async function seedBid(
 	const event = finalizeEvent(
 		{
 			kind: 1023,
-			created_at: auction.endAt > 1 ? auction.endAt - 60 : 1,
+			created_at: Math.max(1, auction.endAt - 60),
 			content: '',
 			tags: [
 				['e', auction.auctionRootEventId],
@@ -221,12 +221,13 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
 			} finally {
 				relay.close()
 			}
@@ -241,13 +242,14 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
-				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
 			} finally {
 				relay.close()
 			}
@@ -256,13 +258,14 @@ test.describe('Auction Settlement Descriptor', () => {
 			await merchantPage.waitForLoadState('networkidle')
 
 			await expect(merchantPage.getByText(/settlement ready/i)).toBeVisible({ timeout: 15_000 })
-			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible()
+			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 15_000 })
 		})
 
 		test('seller sees reserve-not-met when no bid meets reserve', async ({ merchantPage }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
@@ -277,20 +280,21 @@ test.describe('Auction Settlement Descriptor', () => {
 			await merchantPage.waitForLoadState('networkidle')
 
 			await expect(merchantPage.getByText(/reserve not met/i)).toBeVisible({ timeout: 15_000 })
-			await expect(merchantPage.getByRole('button', { name: /close auction/i })).toBeVisible()
+			await expect(merchantPage.getByRole('button', { name: /close auction/i })).toBeVisible({ timeout: 15_000 })
 		})
 
 		test('seller sees order-received after settlement with claim order', async ({ merchantPage }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
-				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
 				await seedSettlement(relay, devUser1.sk, auction, {
 					status: 'settled',
 					winningBidId: bidId,
@@ -315,34 +319,44 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
+			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
+			const token = MOCK_TOKENS.unspentFuture
+			let bidId: string
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
 			} finally {
 				relay.close()
 			}
 
+			// Navigate first so auth context is ready, then inject bidder record.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+			await buyerPage.waitForLoadState('networkidle')
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+
+			// Reload so the component picks up the localStorage record.
+			await buyerPage.reload()
 			await buyerPage.waitForLoadState('networkidle')
 
 			await expect(buyerPage.getByText(/you won.*release your path/i)).toBeVisible({ timeout: 15_000 })
-			await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible()
+			await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible({ timeout: 15_000 })
 		})
 
 		test('winner sees path-released after publishing path release', async ({ buyerPage }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
+			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
-				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
 			} finally {
 				relay.close()
 			}
@@ -357,13 +371,14 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
+			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
-				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
 				await seedSettlement(relay, devUser1.sk, auction, {
 					status: 'settled',
 					winningBidId: bidId,
@@ -379,7 +394,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await buyerPage.waitForLoadState('networkidle')
 
 			await expect(buyerPage.getByText(/you won this auction/i)).toBeVisible({ timeout: 15_000 })
-			await expect(buyerPage.getByRole('button', { name: /submit shipping/i })).toBeVisible()
+			await expect(buyerPage.getByRole('button', { name: /submit shipping/i })).toBeVisible({ timeout: 15_000 })
 		})
 	})
 
@@ -388,6 +403,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
@@ -411,6 +427,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
@@ -432,6 +449,25 @@ test.describe('Auction Settlement Descriptor', () => {
 // ---------------------------------------------------------------------------
 // Helpers for UI interaction tests
 // ---------------------------------------------------------------------------
+
+/**
+ * Dismiss the PII exposure modal that auto-opens on page load.
+ * Sets a sessionStorage flag so the modal doesn't reappear on future navigations,
+ * and clicks the "DISMISS WARNING" button if the dialog is currently open.
+ */
+async function dismissPiiModal(page: import('@playwright/test').Page, userPubkey: string) {
+	await page.evaluate((pk) => {
+		const key = 'pii-warning-dismissed'
+		const list = JSON.parse(sessionStorage.getItem(key) || '[]')
+		if (!list.includes(pk)) list.push(pk)
+		sessionStorage.setItem(key, JSON.stringify(list))
+	}, userPubkey)
+	// Close the dialog if it's already open from the fixture's initial navigation
+	const dismissBtn = page.getByRole('button', { name: /dismiss warning/i })
+	if (await dismissBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+		await dismissBtn.click()
+	}
+}
 
 /**
  * Inject a bidder record into the browser's localStorage so that
@@ -524,6 +560,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
+			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const token = MOCK_TOKENS.unspentFuture
 			const relay = await Relay.connect(RELAY_URL)
@@ -582,15 +619,16 @@ test.describe('UI interaction — publish events to relay', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			let bidId: string
 			let prId: string
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
-				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
 			} finally {
 				relay.close()
 			}
@@ -627,6 +665,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
+			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
