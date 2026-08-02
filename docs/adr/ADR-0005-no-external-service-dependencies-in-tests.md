@@ -68,7 +68,6 @@ This rule applies to:
 
 - `e2e/` — Playwright end-to-end tests
 - `src/lib/__tests__/` — unit tests
-- `src/server/auction-validator/` — validator tests
 - Any future test suite
 
 ### What This Does NOT Prohibit
@@ -99,29 +98,6 @@ Trade-offs:
 - Mocks must be maintained alongside the real services they simulate.
 - Some mock setups are complex (Lightning, NIP-46) — but the complexity
   is already paid for and working.
-
-## Known Violations Requiring Remediation
-
-The following test files currently import `getEncodedToken` from
-`@cashu/cashu-ts`. This is a **pure function** (no network calls) and is
-acceptable for unit tests where the code under test uses the same
-function. However, e2e tests should prefer pre-computed fixture data:
-
-1. `e2e/tests/auction-settlement.spec.ts` — should use a pre-computed
-   token string instead of importing `getEncodedToken`.
-2. `src/lib/__tests__/settlementDescriptor.test.ts` — acceptable (unit
-   test, tests the descriptor which calls `validatePathRelease` which
-   calls `getDecodedToken`).
-3. `src/lib/__tests__/auctionSettlementCompleteness.test.ts` —
-   acceptable (unit test for the validator itself).
-4. `src/lib/__tests__/auctionValidatorLifecycle.test.ts` — acceptable.
-5. `src/lib/__tests__/auctionSettlementP2pk.test.ts` — acceptable.
-
-E2e tests referencing external mint URLs as data (not making calls):
-
-- `e2e/tests/auction-live-chat*.spec.ts` — `https://mint.minibits.cash/Bitcoin`
-  in seeded event tags. Acceptable: the URL is inert data; no request is
-  made to the mint.
 
 ## Related
 
