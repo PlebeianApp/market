@@ -15,6 +15,7 @@ import {
 	MOCK_REFUND_PUBKEY,
 	MOCK_XPUB,
 	MOCK_PROOF_AMOUNT,
+	MOCK_KEYSET_ID,
 	type MockToken,
 } from '../utils/cashu-mint-mock'
 
@@ -424,6 +425,239 @@ test.describe('Auction Settlement Descriptor', () => {
 			await merchantPage.waitForLoadState('networkidle')
 
 			await expect(merchantPage.getByText(/settlement window expired/i)).toBeVisible({ timeout: 15_000 })
+		})
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Helpers for UI interaction tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Inject a bidder record into the browser's localStorage so that
+ * `walkBidderRecordChain` can find it when the user clicks
+ * "Release Path". The record must match the bid event's id and
+ * contain enough crypto data for `publishBidderPathRelease` to
+ * construct and sign a kind-1025 event.
+ */
+async function seedBidderRecordToBrowser(
+	page: import('@playwright/test').Page,
+	bidEventId: string,
+	auction: SeededAuction,
+	token: MockToken,
+) {
+	const bidderPk = devUser2.pk
+	const storageKey = `auction_bidder_records_v1_${bidderPk.slice(0, 8)}`
+
+	const proof = {
+		id: MOCK_KEYSET_ID,
+		amount: MOCK_PROOF_AMOUNT,
+		secret: token.lockSecret,
+		C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
+	}
+
+	const record = {
+		bidEventId,
+		auctionRootEventId: auction.auctionRootEventId,
+		auctionCoordinate: auction.auctionCoordinate,
+		sellerPubkey: auction.sellerPk,
+		p2pkXpub: MOCK_XPUB,
+		derivationPath: 'm/0',
+		childPubkey: MOCK_CHILD_PUBKEY,
+		refundPubkey: MOCK_REFUND_PUBKEY,
+		refundPrivateKey: 'e61ae5a4f505026e3d2b5aeba82c748b6b799346a1e98e266d7252cddb8f502b',
+		mintUrl: MOCK_MINT_URL,
+		amount: MOCK_PROOF_AMOUNT,
+		legLockedAmount: MOCK_PROOF_AMOUNT,
+		prevBidEventId: null,
+		locktime: auction.locktime,
+		proofs: [proof],
+		lockSecrets: [token.lockSecret],
+		proofYs: [token.proofY],
+		createdAt: Math.floor(Date.now() / 1000) - 60,
+		status: 'live',
+	}
+
+	await page.evaluate(
+		({ key, data }) => {
+			localStorage.setItem(key, JSON.stringify([data]))
+		},
+		{ key: storageKey, data: record },
+	)
+}
+
+/**
+ * Subscribe to a relay and wait for an event matching the given kind
+ * and tag filter. Returns the event or null on timeout.
+ */
+async function waitForRelayEvent(
+	relay: Relay,
+	kind: number,
+	tagName: string,
+	tagValue: string,
+	timeoutMs = 15_000,
+): Promise<{ id: string; kind: number; pubkey: string; tags: string[][]; content: string } | null> {
+	return new Promise((resolve) => {
+		const sub = relay.subscribe([{ kinds: [kind], [`#${tagName}`]: [tagValue] }])
+		const timer = setTimeout(() => {
+			sub.close()
+			resolve(null)
+		}, timeoutMs)
+
+		relay.on('event', (event) => {
+			if (event.kind !== kind) return
+			if (!event.tags.some((t) => t[0] === tagName && t[1] === tagValue)) return
+			clearTimeout(timer)
+			sub.close()
+			resolve(event as any)
+		})
+	})
+}
+
+// ---------------------------------------------------------------------------
+// UI interaction tests — click buttons and verify events on the relay
+// ---------------------------------------------------------------------------
+
+test.describe('UI interaction — publish events to relay', () => {
+	test.describe('winning-bidder clicks Release Path', () => {
+		test('clicking Release Path publishes a kind-1025 event to the relay', async ({ buyerPage }) => {
+			test.setTimeout(60_000)
+
+			await CashuMintMock.setup(buyerPage)
+
+			const token = MOCK_TOKENS.unspentFuture
+			const relay = await Relay.connect(RELAY_URL)
+			let auction: SeededAuction
+			let bidId: string
+			try {
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+			} finally {
+				relay.close()
+			}
+
+			// Navigate first so the app loads and the auth context is ready,
+			// then inject the bidder record into localStorage.
+			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+			await buyerPage.waitForLoadState('networkidle')
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+
+			// Reload so the component picks up the localStorage record.
+			await buyerPage.reload()
+			await buyerPage.waitForLoadState('networkidle')
+
+			// Wait for the Release Path button to appear.
+			await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible({ timeout: 15_000 })
+
+			// Open a relay subscription BEFORE clicking.
+			const subRelay = await Relay.connect(RELAY_URL)
+			try {
+				// Click the button — this triggers handleReleasePath → publishBidderPathRelease.
+				await buyerPage.getByRole('button', { name: /release path/i }).click()
+
+				// Wait for a kind-1025 event on the relay referencing this auction.
+				const event = await waitForRelayEvent(subRelay, 1025, 'a', auction.auctionCoordinate, 15_000)
+
+				expect(event, 'kind-1025 path release event should arrive on the relay').not.toBeNull()
+				expect(event!.pubkey).toBe(devUser2.pk)
+
+				// Verify required tags.
+				const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
+				expect(tagMap.get('e')).toBe(bidId)
+				expect(tagMap.get('a')).toBe(auction.auctionCoordinate)
+				expect(tagMap.get('p')).toBe(auction.sellerPk)
+				expect(tagMap.get('derivation_path')).toBe('m/0')
+				expect(tagMap.get('child_pubkey')).toBe(MOCK_CHILD_PUBKEY)
+				expect(tagMap.get('release_reason')).toBe('settlement')
+				expect(tagMap.has('cashu_token')).toBe(true)
+				expect(tagMap.get('cashu_token')!.startsWith('cashuB')).toBe(true)
+			} finally {
+				subRelay.close()
+			}
+		})
+	})
+
+	test.describe('seller clicks Publish Settlement', () => {
+		test('clicking Publish Settlement publishes a kind-1024 event to the relay', async ({ merchantPage }) => {
+			test.setTimeout(60_000)
+
+			await CashuMintMock.setup(merchantPage)
+
+			const relay = await Relay.connect(RELAY_URL)
+			let auction: SeededAuction
+			let bidId: string
+			let prId: string
+			try {
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspent)
+			} finally {
+				relay.close()
+			}
+
+			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
+			await merchantPage.waitForLoadState('networkidle')
+
+			// Wait for the Publish Settlement button to appear.
+			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 15_000 })
+
+			// Open a relay subscription BEFORE clicking.
+			const subRelay = await Relay.connect(RELAY_URL)
+			try {
+				await merchantPage.getByRole('button', { name: /publish settlement/i }).click()
+
+				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 15_000)
+
+				expect(event, 'kind-1024 settlement event should arrive on the relay').not.toBeNull()
+				expect(event!.pubkey).toBe(devUser1.pk)
+
+				const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
+				expect(tagMap.get('status')).toBe('settled')
+				expect(tagMap.get('winning_bid')).toBe(bidId)
+				expect(tagMap.get('winner')).toBe(devUser2.pk)
+				expect(tagMap.get('path_release')).toBe(prId)
+			} finally {
+				subRelay.close()
+			}
+		})
+	})
+
+	test.describe('seller clicks Close Auction (reserve not met)', () => {
+		test('clicking Close Auction publishes a kind-1024 event with status=reserve_not_met', async ({ merchantPage }) => {
+			test.setTimeout(60_000)
+
+			await CashuMintMock.setup(merchantPage)
+
+			const relay = await Relay.connect(RELAY_URL)
+			let auction: SeededAuction
+			try {
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 100000 })
+				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+			} finally {
+				relay.close()
+			}
+
+			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
+			await merchantPage.waitForLoadState('networkidle')
+
+			// Wait for the Close Auction button to appear.
+			await expect(merchantPage.getByRole('button', { name: /close auction/i })).toBeVisible({ timeout: 15_000 })
+
+			// Open a relay subscription BEFORE clicking.
+			const subRelay = await Relay.connect(RELAY_URL)
+			try {
+				await merchantPage.getByRole('button', { name: /close auction/i }).click()
+
+				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 15_000)
+
+				expect(event, 'kind-1024 settlement event should arrive on the relay').not.toBeNull()
+				expect(event!.pubkey).toBe(devUser1.pk)
+
+				const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
+				expect(tagMap.get('status')).toBe('reserve_not_met')
+			} finally {
+				subRelay.close()
+			}
 		})
 	})
 })

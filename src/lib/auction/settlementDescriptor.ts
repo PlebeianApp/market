@@ -184,11 +184,6 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 
 	// 1. Validate the top bid — reject structurally invalid bids.
 	const topBid = rawTopBid && isBidValid(auction, rawTopBid, input.topBidNut7State, input.bids) ? rawTopBid : null
-	console.log(
-		'[settlement] deriveState: rawTopBid=%s validatedTopBid=%s',
-		rawTopBid?.id?.slice(0, 8) ?? 'null',
-		topBid?.id?.slice(0, 8) ?? 'null',
-	)
 
 	// 2. Validate bids — filter to only structurally valid bids.
 	const validatedBids = input.bids.filter((b) => isBidValid(auction, b, undefined, input.bids))
@@ -309,15 +304,6 @@ export function getSettlementDescriptor(input: GetSettlementDescriptorInput): Se
 	const d = deriveState(input)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)
-	console.log(
-		'[settlement] descriptor: role=%s phase=%s ended=%s reserveMet=%s hasTopBid=%s windowExpired=%s',
-		role,
-		phase,
-		d.ended,
-		d.reserveMet,
-		!!d.validatedTopBid,
-		d.settlementWindowExpired,
-	)
 	const { auction, myTopBidEvent, hasBidderRecord, hasPlacedBid } = input
 
 	const claimDialogPayload = {
