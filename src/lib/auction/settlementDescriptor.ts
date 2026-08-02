@@ -97,7 +97,6 @@ function isBidValid(auction: ParsedAuctionEvent, bid: ParsedBidEvent, nut7State?
 
 	const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State, bidChainLegAmount })
 	if (verdict.claim === 'bid_invalid') {
-		console.warn('[settlement] validateBid REJECTED bid', bid.id?.slice(0, 8), 'reason:', verdict.reason, 'detail:', verdict.detail)
 	}
 	return verdict.claim !== 'bid_invalid'
 }

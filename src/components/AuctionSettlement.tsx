@@ -115,11 +115,14 @@ export function AuctionSettlement({
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
+			console.log('[settlement] handleReleasePath: bidEventId=', myTopBidEvent.id, 'auctionCoordinates=', auctionCoordinates)
 			const result = await nip60Actions.settleAuctionAsWinner({
 				bidEventId: myTopBidEvent.id,
 				releaseReason: 'settlement',
 			})
-			toast.success('Path release published — seller can now redeem')
+			console.log('[settlement] handleReleasePath: publish succeeded, pathReleaseEventId=', result.pathReleaseEventId)
+			// Optimistic UI: append synthetic release so the descriptor transitions
+			// immediately to 'Path release published' (ADR-0004 Decision 4).
 			if (!optimisticReleaseRef.current) {
 				const synthetic: ParsedPathReleaseEvent = {
 					rawEvent: { id: 'optimistic', pubkey: currentUserPubkey!, kind: 1025, tags: [], content: '' },
@@ -127,7 +130,7 @@ export function AuctionSettlement({
 					bidderPubkey: currentUserPubkey!,
 					createdAt: Math.floor(Date.now() / 1000),
 					bidEventId: myTopBidEvent.id,
-					auctionCoordinate,
+					auctionCoordinates,
 					sellerPubkey: auction.sellerPubkey,
 					derivationPath: '',
 					childPubkey: '',
@@ -137,11 +140,14 @@ export function AuctionSettlement({
 				}
 				optimisticReleaseRef.current = synthetic
 				setOptimisticRelease(synthetic)
+				console.log('[settlement] handleReleasePath: optimistic release set')
 			}
 			void result.pathReleaseEventId
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(auctionRootEventId) })
+			toast.success('Path release published — seller can now redeem')
 		} catch (err) {
+			console.error('[settlement] handleReleasePath: FAILED:', err)
 			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
 		} finally {
 			setIsReleasing(false)

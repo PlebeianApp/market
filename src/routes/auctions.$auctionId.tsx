@@ -481,24 +481,17 @@ function AuctionDetailRoute() {
 	const parsedAuctionForSettlement = useMemo(() => {
 		if (!auction) return null
 		const result = parseAuctionEvent(auction.rawEvent())
-		if (!result.ok) {
-			console.warn('[settlement] parseAuctionEvent failed:', result.error)
-		}
 		return result.ok ? result.value : null
 	}, [auction])
 
-	const parsedBidsForSettlement = useMemo(() => {
-		const results = bids.map((b) => {
-			const r = parseBidEvent(b.rawEvent())
-			if (!r.ok) {
-				console.warn('[settlement] parseBidEvent failed for bid', b.id?.slice(0, 8), ':', r.error)
-			}
-			return r
-		})
-		const ok = results.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok).map((r) => r.value)
-		console.log('[settlement] bids: raw=%d parsed=%d', bids.length, ok.length)
-		return ok
-	}, [bids])
+	const parsedBidsForSettlement = useMemo(
+		() =>
+			bids
+				.map((b) => parseBidEvent(b.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok)
+				.map((r) => r.value),
+		[bids],
+	)
 
 	const parsedTopBidForSettlement = useMemo(() => {
 		if (!parsedBidsForSettlement.length) return null
