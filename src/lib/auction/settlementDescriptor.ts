@@ -87,8 +87,15 @@ interface DerivedState {
 	validatedBids: ParsedBidEvent[]
 }
 
-function isBidValid(auction: ParsedAuctionEvent, bid: ParsedBidEvent, nut7State?: Nut7ProofState): boolean {
-	const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State })
+function isBidValid(auction: ParsedAuctionEvent, bid: ParsedBidEvent, nut7State?: Nut7ProofState, allBids?: ParsedBidEvent[]): boolean {
+	// Compute replacement-chain leg amount if the bid references a previous bid.
+	let bidChainLegAmount: number | undefined
+	if (bid.prevBidId && allBids) {
+		const prevBid = allBids.find((b) => b.id === bid.prevBidId)
+		if (prevBid) bidChainLegAmount = bid.amount - prevBid.amount
+	}
+
+	const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State, bidChainLegAmount })
 	if (verdict.claim === 'bid_invalid') {
 		console.warn('[settlement] validateBid REJECTED bid', bid.id?.slice(0, 8), 'reason:', verdict.reason, 'detail:', verdict.detail)
 	}
@@ -177,7 +184,7 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
 
 	// 1. Validate the top bid — reject structurally invalid bids.
-	const topBid = rawTopBid && isBidValid(auction, rawTopBid, input.topBidNut7State) ? rawTopBid : null
+	const topBid = rawTopBid && isBidValid(auction, rawTopBid, input.topBidNut7State, input.bids) ? rawTopBid : null
 	console.log(
 		'[settlement] deriveState: rawTopBid=%s validatedTopBid=%s',
 		rawTopBid?.id?.slice(0, 8) ?? 'null',
@@ -185,7 +192,7 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 	)
 
 	// 2. Validate bids — filter to only structurally valid bids.
-	const validatedBids = input.bids.filter((b) => isBidValid(auction, b))
+	const validatedBids = input.bids.filter((b) => isBidValid(auction, b, undefined, input.bids))
 
 	// 3. Determine postCloseDecision from raw settlement data.
 	const rawSettlementWinner = rawSettlements[0]?.winnerPubkey ?? ''
