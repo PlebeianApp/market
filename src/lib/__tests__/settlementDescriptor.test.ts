@@ -213,9 +213,10 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.role).toBe('outbid-bidder')
 		})
 
-		test('non-participant: no pubkey -> null', () => {
+		test('non-participant: no pubkey -> observer state', () => {
 			const d = getSettlementDescriptor(makeInput({ currentUserPubkey: undefined, now: 120 }))
-			expect(d).toBeNull()
+			expect(d?.role).toBe('non-participant')
+			expect(d?.title).toBe('Auction Ended')
 		})
 
 		test('non-participant: pubkey not in any bid, placed a bid that failed validation', () => {
@@ -511,10 +512,11 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('non-participant states', () => {
-		test('no card: non-participant with no bid', () => {
+		test('observer: non-participant with no bid sees auction status', () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
 			const d = getSettlementDescriptor(makeInput({ bids: [topBid], topBid, currentUserPubkey: OTHER_BIDDER_PUBKEY, now: 120 }))
-			expect(d).toBeNull()
+			expect(d?.role).toBe('non-participant')
+			expect(d?.title).toBe('Awaiting Settlement')
 		})
 
 		test('bid-invalid: placed a bid but it failed validation (non-participant in validated terms)', () => {

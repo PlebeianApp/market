@@ -1,5 +1,4 @@
 import { AuctionCard } from '@/components/AuctionCard'
-import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Comments } from '@/components/Comments'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -76,6 +75,11 @@ import { AuctionBidder } from '@/components/AuctionBidder'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
+import { AuctionSettlement } from '@/components/AuctionSettlement'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@/lib/auction/events'
 import { formatAuctionEndTimeLabel } from '@/lib/auctionCountdownLabels'
 import AuctionTimelineChart from '@/components/AuctionTimelineChart'
 import { AuctionBidsContainer } from '@/components/AuctionBidsContainer'
@@ -341,7 +345,6 @@ function AuctionDetailRoute() {
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState('')
 	const activeUserPubkey = authUser?.pubkey || currentUserPubkey
-	const [claimDialogOpen, setClaimDialogOpen] = useState(false)
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const auctionQuery = useQuery({
@@ -474,6 +477,62 @@ function AuctionDetailRoute() {
 	const pathReleases = pathReleasesQuery.data ?? []
 	const queryClient = useQueryClient()
 
+	// Parse raw NDK events into typed structs for the settlement descriptor.
+	const parsedAuctionForSettlement = useMemo(() => {
+		if (!auction) return null
+		const result = parseAuctionEvent(auction.rawEvent())
+		if (!result.ok) {
+			console.warn('[settlement] parseAuctionEvent failed:', result.error)
+		}
+		return result.ok ? result.value : null
+	}, [auction])
+
+	const parsedBidsForSettlement = useMemo(() => {
+		const results = bids.map((b) => {
+			const r = parseBidEvent(b.rawEvent())
+			if (!r.ok) {
+				console.warn('[settlement] parseBidEvent failed for bid', b.id?.slice(0, 8), ':', r.error)
+			}
+			return r
+		})
+		const ok = results.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok).map((r) => r.value)
+		console.log('[settlement] bids: raw=%d parsed=%d', bids.length, ok.length)
+		return ok
+	}, [bids])
+
+	const parsedTopBidForSettlement = useMemo(() => {
+		if (!parsedBidsForSettlement.length) return null
+		return parsedBidsForSettlement.reduce((best, bid) => {
+			const delta = bid.amount - best.amount
+			if (delta > 0) return bid
+			if (delta < 0) return best
+			return bid.createdAt < best.createdAt ? bid : best
+		}, parsedBidsForSettlement[0])
+	}, [parsedBidsForSettlement])
+
+	const parsedSettlementsForSettlement = useMemo(
+		() =>
+			(settlementsQuery.data ?? [])
+				.map((s) => parseSettlementEvent(s.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
+				.map((r) => r.value),
+		[settlementsQuery.data],
+	)
+
+	const parsedPathReleasesForSettlement = useMemo(
+		() =>
+			(pathReleasesQuery.data ?? [])
+				.map((pr) => parsePathReleaseEvent(pr.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
+				.map((r) => r.value),
+		[pathReleasesQuery.data],
+	)
+
+	const parsedClaimOrdersForSettlement = useMemo(
+		() => (claimOrdersQuery.data ?? []).map((o) => ({ id: o.id, pubkey: o.pubkey })),
+		[claimOrdersQuery.data],
+	)
+
 	const myTopBidEvent = useMemo(() => {
 		if (!activeUserPubkey) return null
 		const mine = bids.filter((b) => b.pubkey === activeUserPubkey)
@@ -562,12 +621,11 @@ function AuctionDetailRoute() {
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
-			const result = await nip60Actions.settleAuctionAsWinner({
+			await nip60Actions.settleAuctionAsWinner({
 				bidEventId: myTopBidEvent.id,
 				releaseReason: 'settlement',
 			})
 			toast.success('Path release published — seller can now redeem')
-			void result.pathReleaseEventId
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId || auctionId) })
 		} catch (err) {
 			toast.error(`Failed to release path: ${err instanceof Error ? err.message : String(err)}`)
@@ -750,72 +808,24 @@ function AuctionDetailRoute() {
 								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(biddingCutoffAt, false)}</span>}
 							</div>
 							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
-						</div>
-					</div>
-				</div>
-			</div>
-
-			{/* Bidder settle action — shown to the top bidder once the auction ends
-			    so they can publish their kind-1025 path release. The seller can't
-			    redeem (and therefore can't publish kind-1024) until this lands. */}
-			{canReleaseNow && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
-						<div className="flex flex-wrap items-center justify-between gap-4">
-							<div className="flex items-center gap-3">
-								<div className="rounded-full bg-sky-100 p-2">
-									<Gavel className="h-5 w-5 text-sky-700" />
-								</div>
-								<div>
-									<h3 className="text-lg font-semibold text-sky-950">You won — release your path to settle</h3>
-									<p className="text-sm text-sky-800">
-										Bid: <span className="font-semibold">{getBidAmount(myTopBidEvent!).toLocaleString()} sats</span>. Publishing your
-										kind-1025 reveals the derivation path so the seller can redeem your locked proofs.
-									</p>
-								</div>
-							</div>
-							<Button onClick={() => void handleReleasePath()} disabled={isReleasing}>
-								{isReleasing ? 'Releasing…' : 'Release path & settle'}
-							</Button>
-						</div>
-					</div>
-				</div>
-			)}
-			{isMyBidTop && ended && myAlreadyReleased && settlementStatus !== 'settled' && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-						Path release published — waiting for seller to redeem and publish settlement.
-					</div>
-				</div>
-			)}
-
-			{/* Winner banner — shown to the auction winner after settlement */}
-			{isWinner && settlementStatus === 'settled' && (
-				<div className="mx-auto w-full max-w-7xl px-4">
-					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-						<div className="flex flex-wrap items-center justify-between gap-4">
-							<div className="flex items-center gap-3">
-								<div className="rounded-full bg-emerald-100 p-2">
-									<Trophy className="h-5 w-5 text-emerald-700" />
-								</div>
-								<div>
-									<h3 className="text-lg font-semibold text-emerald-950">You won this auction!</h3>
-									<p className="text-sm text-emerald-800">
-										Final price: <span className="font-semibold">{settlementFinalAmount.toLocaleString()} sats</span>
-									</p>
-								</div>
-							</div>
-							{hasClaimOrder ? (
-								<div className="rounded-lg border border-emerald-300 bg-background px-4 py-2 text-sm font-medium text-emerald-800">
-									Shipping details submitted — awaiting seller
-								</div>
-							) : (
-								<Button onClick={() => setClaimDialogOpen(true)}>Submit Shipping Address</Button>
+							{parsedAuctionForSettlement && (
+								<AuctionSettlement
+									auction={parsedAuctionForSettlement}
+									bids={parsedBidsForSettlement}
+									topBid={parsedTopBidForSettlement}
+									settlements={parsedSettlementsForSettlement}
+									pathReleases={parsedPathReleasesForSettlement}
+									claimOrders={parsedClaimOrdersForSettlement}
+									hasPlacedBid={bids.some((b) => b.pubkey === activeUserPubkey)}
+									auctionRootEventId={auctionRootEventId || auctionId}
+									auctionCoordinates={auctionCoordinates}
+									className="mt-2"
+								/>
 							)}
 						</div>
 					</div>
 				</div>
-			)}
+			</div>
 
 			<div className="mx-auto w-full max-w-7xl px-4 py-6">
 				<Tabs defaultValue="overview" className="w-full">
@@ -1085,18 +1095,6 @@ function AuctionDetailRoute() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
-
-			{isWinner && latestSettlement && auction && (
-				<AuctionClaimDialog
-					open={claimDialogOpen}
-					onOpenChange={setClaimDialogOpen}
-					auctionEventId={auctionRootEventId || auction.id}
-					auctionCoordinates={auctionCoordinates}
-					settlementEventId={latestSettlement.id}
-					sellerPubkey={auction.pubkey}
-					finalAmount={settlementFinalAmount}
-				/>
-			)}
 		</div>
 	)
 }

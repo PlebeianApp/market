@@ -89,6 +89,9 @@ interface DerivedState {
 
 function isBidValid(auction: ParsedAuctionEvent, bid: ParsedBidEvent, nut7State?: Nut7ProofState): boolean {
 	const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State })
+	if (verdict.claim === 'bid_invalid') {
+		console.warn('[settlement] validateBid REJECTED bid', bid.id?.slice(0, 8), 'reason:', verdict.reason, 'detail:', verdict.detail)
+	}
 	return verdict.claim !== 'bid_invalid'
 }
 
@@ -175,6 +178,11 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 
 	// 1. Validate the top bid — reject structurally invalid bids.
 	const topBid = rawTopBid && isBidValid(auction, rawTopBid, input.topBidNut7State) ? rawTopBid : null
+	console.log(
+		'[settlement] deriveState: rawTopBid=%s validatedTopBid=%s',
+		rawTopBid?.id?.slice(0, 8) ?? 'null',
+		topBid?.id?.slice(0, 8) ?? 'null',
+	)
 
 	// 2. Validate bids — filter to only structurally valid bids.
 	const validatedBids = input.bids.filter((b) => isBidValid(auction, b))
@@ -295,6 +303,15 @@ export function getSettlementDescriptor(input: GetSettlementDescriptorInput): Se
 	const d = deriveState(input)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)
+	console.log(
+		'[settlement] descriptor: role=%s phase=%s ended=%s reserveMet=%s hasTopBid=%s windowExpired=%s',
+		role,
+		phase,
+		d.ended,
+		d.reserveMet,
+		!!d.validatedTopBid,
+		d.settlementWindowExpired,
+	)
 	const { auction, myTopBidEvent, hasBidderRecord, hasPlacedBid } = input
 
 	const claimDialogPayload = {
@@ -581,7 +598,92 @@ export function getSettlementDescriptor(input: GetSettlementDescriptorInput): Se
 					verifiedBadge,
 				)
 			}
-			return null
+
+			// Outside-observer transparency states
+			if (d.hasLatestSettlement) {
+				if (d.settlementStatus === 'settled') {
+					return build(
+						role,
+						phase,
+						'Auction Settled',
+						d.settlementFinalAmount > 0
+							? `This auction settled for ${sats(d.settlementFinalAmount)} sats.`
+							: 'This auction has been settled.',
+						'completed',
+						'check',
+						noCta,
+						0,
+						verifiedBadge,
+					)
+				}
+				return build(
+					role,
+					phase,
+					d.settlementStatus === 'reserve_not_met' ? 'Auction Closed — Reserve Not Met' : 'Auction Closed',
+					d.settlementStatus === 'reserve_not_met'
+						? 'The auction closed with no bid meeting the reserve.'
+						: 'This auction was closed without a settled winner.',
+					'completed',
+					'ban',
+					noCta,
+					0,
+					verifiedBadge,
+				)
+			}
+
+			if (d.hasPathReleaseForTopBid) {
+				return build(
+					role,
+					phase,
+					'Settlement in Process',
+					'The winning bidder has released their path. Waiting for the seller to redeem and publish settlement.',
+					'waiting',
+					'clock',
+					noCta,
+					0,
+					verifiedBadge,
+				)
+			}
+
+			if (d.settlementWindowExpired) {
+				return build(
+					role,
+					phase,
+					'Settlement Window Expired',
+					'The settlement window closed without a path release from the winning bidder.',
+					'completed',
+					'ban',
+					noCta,
+					0,
+					verifiedBadge,
+				)
+			}
+
+			if (d.reserveMet || (!d.hasReserve && d.validatedTopBid)) {
+				return build(
+					role,
+					phase,
+					'Awaiting Settlement',
+					'The auction ended with a winning bid. Waiting for the bidder to release their path.',
+					'waiting',
+					'clock',
+					noCta,
+					0,
+					verifiedBadge,
+				)
+			}
+
+			return build(
+				role,
+				phase,
+				d.hasReserve ? 'Reserve Not Met' : 'Auction Ended',
+				d.hasReserve ? 'No bid met the reserve price.' : 'This auction received no qualifying bids.',
+				'completed',
+				'ban',
+				noCta,
+				0,
+				verifiedBadge,
+			)
 		}
 
 		default:
