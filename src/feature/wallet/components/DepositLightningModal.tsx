@@ -158,7 +158,9 @@ export function DepositLightningModal({
 		setIsGenerating(true)
 		resetNwcPaymentState()
 		try {
-			await nip60Actions.startDeposit(amountNum, selectedMint)
+			await nip60Actions.startDeposit(amountNum, selectedMint, {
+				includeFeePadding: !!allowedMints?.length,
+			})
 		} finally {
 			setIsGenerating(false)
 		}

@@ -46,6 +46,18 @@ export interface Nip60LightningPaymentResult {
 	preimage?: string
 }
 
+export interface Nip60DepositOptions {
+	includeFeePadding?: boolean
+}
+
+export interface Nip60DepositQuoteEstimate {
+	requestedAmount: number
+	totalDepositAmount: number
+	mintFeeAmount: number
+	lightningFeePaddingAmount: number
+	usedFallbackEstimate: boolean
+}
+
 export interface Nip60NutzapResult {
 	eventId: string
 	event: NDKNutzap
@@ -173,6 +185,9 @@ const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[nu
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
 const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
+const AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS = 300
+const AUCTION_DEPOSIT_FALLBACK_MINT_FEE_PADDING_SATS = 700
+const AUCTION_DEPOSIT_FALLBACK_TOTAL_PADDING_SATS = AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS + AUCTION_DEPOSIT_FALLBACK_MINT_FEE_PADDING_SATS
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
@@ -294,6 +309,54 @@ const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
 
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+const toNonNegativeInteger = (value: unknown): number | null => {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		const rounded = Math.ceil(value)
+		return rounded >= 0 ? rounded : null
+	}
+	if (typeof value === 'string' && value.trim() !== '') {
+		const parsed = Number(value)
+		if (Number.isFinite(parsed)) {
+			const rounded = Math.ceil(parsed)
+			return rounded >= 0 ? rounded : null
+		}
+	}
+	return null
+}
+
+const readFeeCandidate = (value: unknown): number | null => {
+	if (value === null || value === undefined) return null
+	if (typeof value === 'object' && !Array.isArray(value)) {
+		const nested = value as Record<string, unknown>
+		for (const key of ['total', 'mint', 'reserve', 'fee', 'fee_reserve', 'feeReserve']) {
+			const candidate = toNonNegativeInteger(nested[key])
+			if (candidate !== null) return candidate
+		}
+		return null
+	}
+	return toNonNegativeInteger(value)
+}
+
+const extractMintFeeFromQuote = (quote: unknown, requestedAmount: number): number | null => {
+	if (!quote || typeof quote !== 'object') return null
+	const quoteRecord = quote as Record<string, unknown>
+
+	for (const key of ['mintFee', 'mint_fee', 'feeReserve', 'fee_reserve', 'fee']) {
+		const candidate = readFeeCandidate(quoteRecord[key])
+		if (candidate !== null) return candidate
+	}
+
+	const feesCandidate = readFeeCandidate(quoteRecord.fees)
+	if (feesCandidate !== null) return feesCandidate
+
+	const quotedAmount = toNonNegativeInteger(quoteRecord.amount)
+	if (quotedAmount !== null && quotedAmount > requestedAmount) {
+		return quotedAmount - requestedAmount
+	}
+
+	return null
+}
 
 const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk']): void => {
 	if (!ndk) return
@@ -1362,11 +1425,21 @@ export const nip60Actions = {
 	 * @param amount Amount in sats to deposit
 	 * @param mint Optional mint URL (uses default if not specified)
 	 */
-	startDeposit: async (amount: number, mint?: string): Promise<string | null> => {
+	startDeposit: async (amount: number, mint?: string, options?: Nip60DepositOptions): Promise<string | null> => {
 		const wallet = nip60Store.state.wallet
 		const state = nip60Store.state
 		if (!wallet) {
 			console.warn('[nip60] Cannot deposit without wallet')
+			return null
+		}
+
+		const requestedAmount = Math.floor(amount)
+		if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'error',
+				error: 'Deposit amount must be a positive integer.',
+			}))
 			return null
 		}
 
@@ -1395,7 +1468,13 @@ export const nip60Actions = {
 
 			await primeDevTestMintDepositWalletCache(wallet, targetMint)
 
-			const deposit = wallet.deposit(amount, targetMint)
+			let depositAmount = requestedAmount
+			if (options?.includeFeePadding) {
+				const estimate = await nip60Actions.estimateDepositQuote(requestedAmount, targetMint)
+				depositAmount = estimate.totalDepositAmount
+			}
+
+			const deposit = wallet.deposit(depositAmount, targetMint)
 			const invoice = await deposit.start()
 
 			nip60Store.setState((s) => ({
@@ -1438,6 +1517,46 @@ export const nip60Actions = {
 				depositInvoice: null,
 			}))
 			return null
+		}
+	},
+
+	estimateDepositQuote: async (amount: number, mintUrl: string): Promise<Nip60DepositQuoteEstimate> => {
+		const requestedAmount = Math.floor(amount)
+		const targetMint = normalizeMintUrl(mintUrl)
+		if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+			throw new Error('Deposit quote amount must be a positive integer')
+		}
+		if (!targetMint) {
+			throw new Error('Mint URL is required for deposit quote estimation')
+		}
+
+		const fallbackEstimate: Nip60DepositQuoteEstimate = {
+			requestedAmount,
+			totalDepositAmount: requestedAmount + AUCTION_DEPOSIT_FALLBACK_TOTAL_PADDING_SATS,
+			mintFeeAmount: AUCTION_DEPOSIT_FALLBACK_MINT_FEE_PADDING_SATS,
+			lightningFeePaddingAmount: AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS,
+			usedFallbackEstimate: true,
+		}
+
+		try {
+			const { cashuWallet } = await createCashuWalletForMint(targetMint)
+			const quote = await cashuWallet.createMintQuote(requestedAmount)
+			const mintFeeAmount = extractMintFeeFromQuote(quote, requestedAmount)
+
+			if (mintFeeAmount === null) {
+				return fallbackEstimate
+			}
+
+			return {
+				requestedAmount,
+				totalDepositAmount: requestedAmount + mintFeeAmount + AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS,
+				mintFeeAmount,
+				lightningFeePaddingAmount: AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS,
+				usedFallbackEstimate: false,
+			}
+		} catch (err) {
+			console.warn('[nip60] Deposit quote estimation failed, using conservative fallback:', getErrorMessage(err))
+			return fallbackEstimate
 		}
 	},
 
