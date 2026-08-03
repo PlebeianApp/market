@@ -195,6 +195,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
+	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
 	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
 
@@ -269,6 +270,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return 'Place Bid'
 	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
+	const createBidSubmission = (): AuctionBidFormData => ({
+		auctionEventId: auctionRootEventId || auction.id,
+		auctionCoordinates,
+		amount: parsedBidAmount,
+		auctionStartAt: startAt,
+		auctionEffectiveEndAt: biddingCutoffAt,
+		auctionLocktimeAt: biddingCutoffAt,
+		settlementGraceSeconds: getAuctionSettlementGrace(auction),
+		sellerPubkey: auction.pubkey,
+		p2pkXpub: p2pkXpub || '',
+		mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
+	})
+
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
 		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
 
@@ -292,25 +306,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return null
 		}
 
+		if (!p2pkXpub) {
+			toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
+			return null
+		}
+
 		if (hasInsufficientBidFunds) {
 			if (!depositMint) {
 				toast.error(mintError || 'No suitable mint available for bidding.')
 				return null
 			}
 
+			setPendingBidSubmission(createBidSubmission())
 			setDepositAmount(Math.ceil(deltaAmount))
 			setPreferredDepositMint(depositMint)
 			setIsDepositOpen(true)
-			return null
-		}
-
-		// Under `cashu_p2pk_bidder_path_v1` the bidder generates the
-		// derivation path locally and never consults a "path issuer"
-		// oracle - that was the v1 CVM-coordinator scheme. The only
-		// auction tag the bidder actually needs is `p2pk_xpub`; if
-		// it's absent the auction isn't biddable.
-		if (!p2pkXpub) {
-			toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
 			return null
 		}
 		if (!selectedMint) {
@@ -323,29 +333,33 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 
 		return {
-			auctionEventId: auctionRootEventId || auction.id,
-			auctionCoordinates,
+			...createBidSubmission(),
 			amount: parsedAmount,
-			auctionStartAt: startAt,
-			auctionEffectiveEndAt: biddingCutoffAt,
-			auctionLocktimeAt: biddingCutoffAt,
-			settlementGraceSeconds: getAuctionSettlementGrace(auction),
-			sellerPubkey: auction.pubkey,
-			p2pkXpub,
-			mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
 		}
 	}
 
-	const submitPreparedBid = async (bidData: AuctionBidFormData) => {
-		try {
-			await bidMutation.mutateAsync(bidData)
-			toast.success('Bid placed successfully')
-			setIsEditing(false)
-			onBidSuccess?.()
-		} catch {
-			// Error handled by mutation
-		}
-	}
+	const submitPreparedBid = useCallback(
+		async (bidData: AuctionBidFormData) => {
+			try {
+				await bidMutation.mutateAsync(bidData)
+				toast.success('Bid placed successfully')
+				setIsEditing(false)
+				setPendingBidSubmission(null)
+				setIsDepositOpen(false)
+				onBidSuccess?.()
+				return true
+			} catch {
+				toast.error('Funding completed, but bid publishing failed. Please try submitting the bid again.')
+				return false
+			}
+		},
+		[bidMutation, onBidSuccess],
+	)
+
+	const handleFundingSuccess = useCallback(() => {
+		if (!pendingBidSubmission) return
+		void submitPreparedBid(pendingBidSubmission)
+	}, [pendingBidSubmission, submitPreparedBid])
 
 	const handleSubmitBid = async () => {
 		const bidData = prepareBidSubmission()
@@ -361,6 +375,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
 		setIsRulesDialogOpen(open)
+	}
+
+	const handleDepositModalClose = () => {
+		setIsDepositOpen(false)
+		setPendingBidSubmission(null)
 	}
 
 	const handleConfirmRules = () => {
@@ -383,10 +402,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		<div className="flex flex-col gap-2 w-full">
 			<DepositLightningModal
 				open={isDepositOpen}
-				onClose={() => setIsDepositOpen(false)}
+				onClose={handleDepositModalClose}
 				initialAmount={depositAmount}
 				preferredMint={preferredDepositMint}
 				allowedMints={trustedMints}
+				onSuccess={handleFundingSuccess}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">

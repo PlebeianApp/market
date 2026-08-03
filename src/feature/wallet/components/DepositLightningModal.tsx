@@ -32,11 +32,19 @@ interface DepositLightningModalProps {
 	initialAmount?: number
 	preferredMint?: string
 	allowedMints?: string[]
+	onSuccess?: () => void
 }
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
-export function DepositLightningModal({ open, onClose, initialAmount, preferredMint, allowedMints }: DepositLightningModalProps) {
+export function DepositLightningModal({
+	open,
+	onClose,
+	initialAmount,
+	preferredMint,
+	allowedMints,
+	onSuccess,
+}: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
@@ -51,6 +59,7 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 	const isPayingWithNwc = nwcPaymentStatus === 'paying'
 	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
+	const successNotifiedRef = useRef(false)
 	const filteredMints = useMemo(() => {
 		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
 		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
@@ -122,6 +131,17 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 			resetNwcPaymentState()
 		}
 	}, [depositInvoice, depositStatus, resetNwcPaymentState])
+
+	useEffect(() => {
+		if (depositStatus !== 'success') {
+			successNotifiedRef.current = false
+			return
+		}
+
+		if (successNotifiedRef.current) return
+		successNotifiedRef.current = true
+		onSuccess?.()
+	}, [depositStatus, onSuccess])
 
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)
@@ -200,6 +220,7 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 		setAmount('')
 		setCopied(false)
 		resetNwcPaymentState()
+		successNotifiedRef.current = false
 		onClose()
 	}
 
