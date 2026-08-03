@@ -18,6 +18,7 @@ import {
 	MOCK_KEYSET_ID,
 	type MockToken,
 } from '../utils/cashu-mint-mock'
+import type { Page } from 'playwright/test'
 
 useWebSocketImplementation(WebSocket)
 
@@ -197,6 +198,10 @@ async function seedSettlement(
 	if (opts.winningBidId) tags.push(['winning_bid', opts.winningBidId])
 	if (opts.winnerPubkey) tags.push(['winner', opts.winnerPubkey])
 	if (opts.pathReleaseEventId) tags.push(['path_release', opts.pathReleaseEventId])
+	// validateSettlementCompleteness requires payout tags for settled status
+	if (opts.status === 'settled' && opts.winningBidId && opts.finalAmount) {
+		tags.push(['payout', opts.winningBidId, String(opts.finalAmount), 'redeemed'])
+	}
 
 	const event = finalizeEvent(
 		{
@@ -217,7 +222,11 @@ async function seedSettlement(
 
 test.describe('Auction Settlement Descriptor', () => {
 	test.describe('seller view', () => {
-		test('seller sees awaiting-path-release when auction ended, reserve met, no path release', async ({ merchantPage }) => {
+		test('seller sees awaiting-path-release when auction ended, reserve met, no path release', async ({
+			merchantPage,
+		}: {
+			merchantPage: Page
+		}) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -238,7 +247,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await expect(merchantPage.getByText(/awaiting path release/i)).toBeVisible({ timeout: 15_000 })
 		})
 
-		test('seller sees settlement-ready when path release published', async ({ merchantPage }) => {
+		test('seller sees settlement-ready when path release published', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -261,7 +270,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 15_000 })
 		})
 
-		test('seller sees reserve-not-met when no bid meets reserve', async ({ merchantPage }) => {
+		test('seller sees reserve-not-met when no bid meets reserve', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -283,7 +292,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await expect(merchantPage.getByRole('button', { name: /close auction/i })).toBeVisible({ timeout: 15_000 })
 		})
 
-		test('seller sees order-received after settlement with claim order', async ({ merchantPage }) => {
+		test('seller sees order-received after settlement with claim order', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -315,7 +324,7 @@ test.describe('Auction Settlement Descriptor', () => {
 	})
 
 	test.describe('winning-bidder view', () => {
-		test('winner sees release-path card when auction ended, reserve met, window open', async ({ buyerPage }) => {
+		test('winner sees release-path card when auction ended, reserve met, window open', async ({ buyerPage }: { buyerPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
@@ -345,7 +354,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible({ timeout: 15_000 })
 		})
 
-		test('winner sees path-released after publishing path release', async ({ buyerPage }) => {
+		test('winner sees path-released after publishing path release', async ({ buyerPage }: { buyerPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
@@ -367,7 +376,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 15_000 })
 		})
 
-		test('winner sees you-won after settlement', async ({ buyerPage }) => {
+		test('winner sees you-won after settlement', async ({ buyerPage }: { buyerPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
@@ -399,7 +408,7 @@ test.describe('Auction Settlement Descriptor', () => {
 	})
 
 	test.describe('outbid-bidder view', () => {
-		test('outbid bidder sees no settlement card (null descriptor)', async ({ merchantPage }) => {
+		test('outbid bidder sees no settlement card (null descriptor)', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -423,7 +432,7 @@ test.describe('Auction Settlement Descriptor', () => {
 	})
 
 	test.describe('settlement window expired', () => {
-		test('seller sees settlement-window-expired when no path release after grace', async ({ merchantPage }) => {
+		test('seller sees settlement-window-expired when no path release after grace', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -534,18 +543,19 @@ async function waitForRelayEvent(
 	timeoutMs = 15_000,
 ): Promise<{ id: string; kind: number; pubkey: string; tags: string[][]; content: string } | null> {
 	return new Promise((resolve) => {
-		const sub = relay.subscribe([{ kinds: [kind], [`#${tagName}`]: [tagValue] }])
 		const timer = setTimeout(() => {
 			sub.close()
 			resolve(null)
 		}, timeoutMs)
 
-		relay.on('event', (event) => {
-			if (event.kind !== kind) return
-			if (!event.tags.some((t) => t[0] === tagName && t[1] === tagValue)) return
-			clearTimeout(timer)
-			sub.close()
-			resolve(event as any)
+		const sub = relay.subscribe([{ kinds: [kind], [`#${tagName}`]: [tagValue] }], {
+			onevent: (event) => {
+				if (event.kind !== kind) return
+				if (!event.tags.some((t) => t[0] === tagName && t[1] === tagValue)) return
+				clearTimeout(timer)
+				sub.close()
+				resolve(event as any)
+			},
 		})
 	})
 }
@@ -556,7 +566,7 @@ async function waitForRelayEvent(
 
 test.describe('UI interaction — publish events to relay', () => {
 	test.describe('winning-bidder clicks Release Path', () => {
-		test('clicking Release Path publishes a kind-1025 event to the relay', async ({ buyerPage }) => {
+		test('clicking Release Path publishes a kind-1025 event to the relay', async ({ buyerPage }: { buyerPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(buyerPage)
@@ -615,7 +625,7 @@ test.describe('UI interaction — publish events to relay', () => {
 	})
 
 	test.describe('seller clicks Publish Settlement', () => {
-		test('clicking Publish Settlement publishes a kind-1024 event to the relay', async ({ merchantPage }) => {
+		test('clicking Publish Settlement publishes a kind-1024 event to the relay', async ({ merchantPage }: { merchantPage: Page }) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)
@@ -661,7 +671,11 @@ test.describe('UI interaction — publish events to relay', () => {
 	})
 
 	test.describe('seller clicks Close Auction (reserve not met)', () => {
-		test('clicking Close Auction publishes a kind-1024 event with status=reserve_not_met', async ({ merchantPage }) => {
+		test('clicking Close Auction publishes a kind-1024 event with status=reserve_not_met', async ({
+			merchantPage,
+		}: {
+			merchantPage: Page
+		}) => {
 			test.setTimeout(60_000)
 
 			await CashuMintMock.setup(merchantPage)

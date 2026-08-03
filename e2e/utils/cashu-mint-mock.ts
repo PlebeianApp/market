@@ -213,8 +213,9 @@ export class CashuMintMock {
 				return
 			}
 
-			// Fallback: pass through (should not happen in settlement tests)
-			await route.continue()
+			// ADR-0005: no external service dependencies in tests.
+			// Abort unmocked requests instead of forwarding to the real mint.
+			await route.abort('failed', `CashuMintMock: unmocked ${method} ${url}`)
 		})
 
 		return mock
