@@ -308,10 +308,15 @@ export const ndkActions = {
 			},
 		})
 
-		// Always monitor zap receipts on public ZAP_RELAYS (plus the app relay).
-		// LSPs publish zap receipts to their own public relays, not the local/app relay,
-		// so we must subscribe there to detect paid invoices.
-		const zapNdk = new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] })
+		// Monitor zap receipts on public ZAP_RELAYS (plus the app relay) in
+		// production. LSPs publish zap receipts to their own public relays,
+		// not the local/app relay, so we must subscribe there to detect paid
+		// invoices. In development/staging, skip external relays — the local
+		// relay won't receive external zaps and the WebSocket connections
+		// hang E2E tests (networkidle never fires while they slowly fail).
+		const zapNdk = new NDK({
+			explicitRelayUrls: stage === 'development' || stage === 'staging' ? explicitRelays : [...new Set([...ZAP_RELAYS, ...explicitRelays])],
+		})
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
@@ -354,8 +359,12 @@ export const ndkActions = {
 				ndkStore.setState((s) => ({ ...s, isConnected: connected }))
 				if (connected) console.log('✅ NDK connected to relays')
 
-				// Also connect zap NDK in background (if available - skipped in local-relay-only mode)
-				if (state.zapNdk) {
+				// Connect zap NDK in background — only in production where
+				// external zap receipts arrive on public relays. In dev/staging
+				// the zap NDK has no external relays, so connecting it just
+				// duplicates the main NDK's connection.
+				const zapStage = getCurrentStage()
+				if (state.zapNdk && zapStage !== 'development' && zapStage !== 'staging') {
 					void ndkActions.connectZapNdk(5000)
 				}
 			} finally {

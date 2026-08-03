@@ -126,8 +126,14 @@ export class EventHandler {
 				console.warn('⚠️ App relay NDK setup failed, continuing anyway:', e)
 			}
 
-			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
-			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
+			// Subscribe on dedicated zap relays in production; some LSPs do not
+			// publish receipts to the app relay. Skip external relays in
+			// development/test (LOCAL_RELAY_ONLY) — they waste 15s waiting for
+			// connections that will never succeed and aren't needed locally.
+			const isLocalOnly = process.env.LOCAL_RELAY_ONLY === 'true'
+			const zapRelayUrls = isLocalOnly
+				? [config.relayUrl].filter(Boolean)
+				: Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
 			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
 			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
 			try {
