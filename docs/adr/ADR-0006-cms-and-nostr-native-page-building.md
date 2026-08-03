@@ -1,4 +1,4 @@
-# ADR-0004: Nostr-Native Page Building System (Plebeian Market CMS)
+# ADR-0006: Nostr-Native Page Building System (Plebeian Market CMS)
 
 ## Status
 
@@ -11,8 +11,9 @@ Proposed
 ## Related
 
 - Issue: #900 (original CMS feature request — this ADR supersedes its scope)
-- Issue: #1153 (UI Components Migration & Widget Book — component architecture foundation)
+- Issue: #1153 (UI Components Migration & Widget Book — original issue, now formalized as ADR-0007)
 - ADR-0001 (AGENTS.md / ADR governance model)
+- ADR-0007 (Component/UI Migration & Widget Book — component architecture foundation, token system, and test harness that this ADR depends on)
 - ADR-013 / ADR-014 (NIP-17 order transport — pattern for multi-event, staged ADRs)
 - NIP-5A (nsite — static website hosting from Blossom assets)
 - NIP-B7 / BUDs (Blossom — media server protocol)
@@ -25,6 +26,56 @@ Proposed
 - `src/routes/$vanityName.tsx` (existing vanity URL catch-all route)
 - `docs/vanity-urls.md` (existing vanity URL documentation)
 - `gamma_spec.md` (marketplace protocol — event kinds 30402, 30405, etc.)
+
+---
+
+## Component Migration Coherence (Cross-ADR with ADR-0007)
+
+This ADR defines the CMS design. ADR-0007 defines the component architecture, token system, and test harness the CMS is built on. The two are designed to be implemented in concert.
+
+### Dependency: ADR-0007 Foundation Must Land First
+
+ADR-0007 PR 1 (Foundation: Styles) and PR 2 (Foundation: Test Harness) must land before CMS component work resumes. The existing Puck components on `feat/plebeian-cms-puck` are a prototype — the production CMS re-integrates on top of the ADR-0007 foundation.
+
+### The Component Contract
+
+The CMS does not own presentational components. It owns **metadata** about them. Each CMS-eligible component has three layers:
+
+```
+src/components/nostr/ProductCard.tsx     ← migrated, standardized (ADR-0007)
+src/components/cms/ProductCard.cms.tsx   ← CMS metadata: data contract + Puck fields (this ADR)
+widget-book/nostr/ProductCard.spec.ts    ← test coverage (ADR-0007)
+```
+
+The base component is unaware of the CMS. The `.cms.tsx` sidecar declares:
+- **Data contract**: what Nostr queries the component needs (declarative, not implementation)
+- **Puck field schema**: what props the CMS editor exposes for this component
+- **Render binding**: how query results map to component props
+
+### Theme Integration
+
+The CMS theme system **overrides the standard token names** (`--primary`, `--card`, `--background`, `--foreground`, etc.) on a wrapper element. This is the correct design — components are agnostic to whether they're in the main app or inside a custom-themed CMS page. They use the same token-based classes (`text-primary`, `bg-card`, `text-muted-foreground`) everywhere, and the browser resolves the CSS custom property cascade from whichever ancestor defines the values.
+
+**Mechanism:** The CMS fetches a theme CSS file (e.g., `public/themes/caffeine.css`), which defines the same standard token names using `oklch` values, plus `.dark` variants. It parses the variables and sets them as inline styles on a wrapper element. Because CSS custom properties cascade through the DOM, all child components pick up the overridden values automatically — no component-level awareness required.
+
+```
+<div ref={themeRoot} style="--primary: oklch(...); --card: oklch(...); ...">
+  <ProductCard ... />            ← reads --primary, --card from nearest scope (the wrapper)
+  <ProductGrid ... />           ← same — agnostic to where tokens are defined
+</div>
+```
+
+This works regardless of whether the app's default tokens come from `:root` (pre-migration) or `.theme-new` (post-ADR-0007 migration), because the CMS override takes precedence at a closer DOM scope. `ThemeMigrationWrapper` (ADR-0007 §1a) is the app's migration mechanism — it is **not** part of the CMS theme system. CMS theming is independent: it overrides the same token names at a wrapper element, and components resolve the cascade.
+
+The existing Puck branch's `src/lib/utils/theme.ts` and `public/themes/*.css` already implement this pattern correctly. The theme files use `oklch` (matching ADR-0007's color standard) and define the same token names. The `applyLocalTheme` function is the right mechanism — it may be simplified during integration, but the core approach (override standard tokens on a wrapper element) stays. See ADR-0007 §3c for the full specification.
+
+### Migration Slices Are CMS Registry Growth
+
+ADR-0007's migration slices (PR 3: Home Page, PR 4: Layout, etc.) each add CMS sidecars for the components they migrate. The CMS component registry grows as the migration progresses — there is no separate "CMS components" PR sequence.
+
+### Widget Book as CMS Gallery
+
+ADR-0007's Widget Book test harness doubles as the CMS component gallery. `LIBRARY=cms` mode renders CMS-wrapped components with mock Nostr data, serving as both regression tests and a live preview of what the CMS editor can compose with.
 
 ---
 
@@ -63,9 +114,9 @@ The system decomposes into five modules that can be developed and shipped indepe
 
 A registry of available UI components, their prop schemas, and their data contracts.
 
-**V1:** Closed set of Plebeian-defined components. These map directly to the component architecture established by issue #1153 (UI Components Migration): `src/components/nostr/` data components (product cards, author bios, feed displays — the sanctioned exception that allows Nostr data hooks), `src/components/shared/` reusable composites, and `src/components/layout/` structural containers.
+**V1:** Closed set of Plebeian-defined components. These map directly to the component architecture established by ADR-0007 (Component/UI Migration): `src/components/nostr/` data components (product cards, author bios, feed displays — the sanctioned exception that allows Nostr data hooks), `src/components/shared/` reusable composites, and `src/components/layout/` structural containers. See the [Component Migration Coherence](#component-migration-coherence-cross-adr-with-adr-0007) section for the full contract between this ADR and ADR-0007.
 
-Components declare their data contract as metadata — "this component needs a kind 30402 feed with optional `#t` tag filter and renders a grid of product cards" — not as implementation. The CMS editor uses that metadata to configure queries and bindings.
+Components declare their data contract as metadata — "this component needs a kind 30402 feed with optional `#t` tag filter and renders a grid of product cards" — not as implementation. The CMS editor uses that metadata to configure queries and bindings. This metadata lives in a `.cms.tsx` sidecar file alongside the base component (see ADR-0007 §3a).
 
 **V1 example components (non-exhaustive, one set within a dynamic ecosystem):**
 
@@ -233,7 +284,7 @@ Can pages themselves be components — i.e., can a built page be embedded as a b
 
 **Cost of not designing for it:** Painful V2 schema migration, renderer rewrite, and potential breakage of existing page definitions.
 
-**The #1153 architecture already supports this.** The component hierarchy from the UI Components Migration ADR (UI-only components, data-isolated `nostr/` components, layout components that decide how data is presented) is exactly the composability model needed. A "composite component" is just a layout component that renders a child block tree — which is what layout components already do in React.
+**The ADR-0007 architecture already supports this.** The component hierarchy from the Component/UI Migration ADR (UI-only components, data-isolated `nostr/` components, layout components that decide how data is presented) is exactly the composability model needed. A "composite component" is just a layout component that renders a child block tree — which is what layout components already do in React.
 
 **Recommendation:** V1 ships with flat pages (technically depth-1 trees). The schema permits nesting. The renderer is recursive-ready. V2 unlocks nesting via editor UI and scoped data inheritance, with zero schema changes.
 
@@ -272,7 +323,7 @@ This ADR is the design anchor. The following sub-ADRs fill in the detail, each a
 | Sub-ADR | Scope |
 |---|---|
 | Page Definition Format | JSON schema, block tree, query definitions, binding syntax, content-vs-blob field decision, dedicated Nostr kind number |
-| Component Registry Protocol | Component metadata format, data contract declaration, slot model, V1 seed set, V2 open registry via Nostr + Blossom |
+| Component Registry Protocol | Component metadata format (`.cms.tsx` sidecar), data contract declaration, slot model, V1 seed set, V2 open registry via Nostr + Blossom. Coordinates with ADR-0007 §3a (Component Contract). |
 | Routing & Vanity URL Extension | Extension of existing kind 30000 registry, sub-path resolution, app-signed proof event format, catch-all route implementation |
 | Publishing Gate Policy | `ZapPurchaseManager` generalization, gate decomposition (identity / rate / cost), PoW alternative, whitelist bypass |
 | Compilation & nsite Deployment | (V2) Page-to-static-asset compiler, Blossom upload, NIP-5A manifest publishing, `app` tag linkage |
@@ -305,7 +356,7 @@ This ADR is the design anchor. The following sub-ADRs fill in the detail, each a
 
 ## Implementation Principles
 
-1. **Reuse before reinvent.** The vanity URL system, zap-purchase framework, Nostr query infrastructure, and component architecture from #1153 all exist. The CMS builds on them, not around them.
+1. **Reuse before reinvent.** The vanity URL system, zap-purchase framework, Nostr query infrastructure, and component architecture from ADR-0007 all exist. The CMS builds on them, not around them.
 
 2. **Design for V2 in V1.** The block tree is recursive, the schema permits nesting, the registry is structured for openness. V1 constrains the *editor* and *renderer*, not the *format*.
 
