@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
+import { DepositLightningModal, type AuctionFundingFailureReason } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
@@ -57,8 +57,9 @@ type AuctionBidFundingLifecycleState =
 	| 'ecash_minted'
 	| 'bid_publish_attempted'
 	| 'bid_published'
-	| 'funding_failed_reclaimable'
-	| 'bid_publish_failed_reclaimable'
+	| 'invoice_unpaid_or_expired_reclaimable'
+	| 'invoice_paid_mint_failed_reclaimable'
+	| 'mint_succeeded_bid_publish_failed_reclaimable'
 	| 'funding_canceled'
 
 export function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
@@ -332,7 +333,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (hasInsufficientBidFunds) {
 			if (!depositMint) {
 				toast.error(mintError || 'No suitable mint available for bidding.')
-				transitionFundingState('funding_failed_reclaimable')
+				transitionFundingState('invoice_unpaid_or_expired_reclaimable')
 				return null
 			}
 
@@ -371,7 +372,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onBidSuccess?.()
 				return true
 			} catch {
-				transitionFundingState('bid_publish_failed_reclaimable')
+				transitionFundingState('mint_succeeded_bid_publish_failed_reclaimable')
 				toast.error('Funding completed, but bid publishing failed. Please try submitting the bid again.')
 				return false
 			}
@@ -393,7 +394,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			const selectedFundingMint = pendingBidSubmission.mintCandidates[0]
 			if (!selectedFundingMint) {
-				transitionFundingState('funding_failed_reclaimable')
+				transitionFundingState('invoice_paid_mint_failed_reclaimable')
 				toast.error('Invoice was paid, but no funding mint was selected for bid locking. Please retry the bid submission.')
 				return
 			}
@@ -403,7 +404,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			const mintBalance = latestNip60State.mintBalances[selectedFundingMint] ?? 0
 
 			if (mintBalance < requiredDelta) {
-				transitionFundingState('funding_failed_reclaimable')
+				transitionFundingState('invoice_paid_mint_failed_reclaimable')
 				toast.error('Invoice was paid, but minted funds are not yet spendable on the selected mint. Please retry once minting completes.')
 				return
 			}
@@ -424,9 +425,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		transitionFundingState('minting_started')
 	}, [transitionFundingState])
 
-	const handleFundingFailed = useCallback(() => {
-		transitionFundingState('funding_failed_reclaimable')
-	}, [transitionFundingState])
+	const handleFundingFailed = useCallback(
+		(reason: AuctionFundingFailureReason) => {
+			transitionFundingState(reason)
+		},
+		[transitionFundingState],
+	)
 
 	const handleSubmitBid = async () => {
 		const bidData = prepareBidSubmission()
@@ -445,7 +449,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}
 
 	const handleDepositModalClose = () => {
-		if (bidFundingLifecycleState !== 'bid_published' && bidFundingLifecycleState !== 'bid_publish_failed_reclaimable') {
+		if (
+			bidFundingLifecycleState !== 'bid_published' &&
+			bidFundingLifecycleState !== 'invoice_unpaid_or_expired_reclaimable' &&
+			bidFundingLifecycleState !== 'invoice_paid_mint_failed_reclaimable' &&
+			bidFundingLifecycleState !== 'mint_succeeded_bid_publish_failed_reclaimable'
+		) {
 			transitionFundingState('funding_canceled')
 		}
 		setIsDepositOpen(false)

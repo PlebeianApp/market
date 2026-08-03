@@ -36,8 +36,10 @@ interface DepositLightningModalProps {
 	onInvoiceCreated?: (invoice: string) => void
 	onPaymentAcknowledged?: () => void
 	onMintingStarted?: () => void
-	onFundingFailed?: (reason: string) => void
+	onFundingFailed?: (reason: AuctionFundingFailureReason) => void
 }
+
+export type AuctionFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
@@ -68,6 +70,8 @@ export function DepositLightningModal({
 	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
 	const successNotifiedRef = useRef(false)
+	const paymentAcknowledgedRef = useRef(false)
+	const failureNotifiedRef = useRef(false)
 	const filteredMints = useMemo(() => {
 		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
 		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
@@ -147,13 +151,16 @@ export function DepositLightningModal({
 
 	useEffect(() => {
 		if (nwcPaymentStatus !== 'sent' && !nwcPaymentSentForCurrentInvoice) return
+		paymentAcknowledgedRef.current = true
 		onPaymentAcknowledged?.()
 		onMintingStarted?.()
 	}, [nwcPaymentSentForCurrentInvoice, nwcPaymentStatus, onMintingStarted, onPaymentAcknowledged])
 
 	useEffect(() => {
 		if (depositStatus !== 'error') return
-		onFundingFailed?.('invoice_or_mint_failed_reclaimable')
+		if (failureNotifiedRef.current) return
+		failureNotifiedRef.current = true
+		onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
 	}, [depositStatus, onFundingFailed])
 
 	useEffect(() => {
@@ -164,6 +171,7 @@ export function DepositLightningModal({
 
 		if (successNotifiedRef.current) return
 		successNotifiedRef.current = true
+		failureNotifiedRef.current = false
 		onSuccess?.()
 	}, [depositStatus, onSuccess])
 
@@ -182,7 +190,6 @@ export function DepositLightningModal({
 		setIsGenerating(true)
 		resetNwcPaymentState()
 		try {
-			onMintingStarted?.()
 			const invoice = await nip60Actions.startDeposit(amountNum, selectedMint, {
 				includeFeePadding: !!allowedMints?.length,
 			})
@@ -241,6 +248,8 @@ export function DepositLightningModal({
 		const isTerminalDepositState = depositStatus === 'success' || depositStatus === 'error'
 
 		if (depositStatus === 'pending' && !hasSentNwcPayment) {
+			onFundingFailed?.('invoice_unpaid_or_expired_reclaimable')
+			failureNotifiedRef.current = true
 			nip60Actions.cancelDeposit()
 		}
 		if (isTerminalDepositState) {
@@ -251,6 +260,8 @@ export function DepositLightningModal({
 		setCopied(false)
 		resetNwcPaymentState()
 		successNotifiedRef.current = false
+		paymentAcknowledgedRef.current = false
+		failureNotifiedRef.current = false
 		onClose()
 	}
 
