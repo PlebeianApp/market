@@ -15,11 +15,12 @@ interface DepositLightningModalProps {
 	onClose: () => void
 	initialAmount?: number
 	preferredMint?: string
+	allowedMints?: string[]
 }
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
 
-export function DepositLightningModal({ open, onClose, initialAmount, preferredMint }: DepositLightningModalProps) {
+export function DepositLightningModal({ open, onClose, initialAmount, preferredMint, allowedMints }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
@@ -34,6 +35,12 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 	const isPayingWithNwc = nwcPaymentStatus === 'paying'
 	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
+	const filteredMints = useMemo(() => {
+		if (!allowedMints?.length) return mints
+		const allowedMintSet = new Set(allowedMints.map(normalizeMintUrl))
+		return mints.filter((mint) => allowedMintSet.has(normalizeMintUrl(mint)))
+	}, [allowedMints, mints])
+	const hasAllowedMints = filteredMints.length > 0
 
 	const savedNwcWallets = useMemo(() => wallets.filter((wallet) => !!wallet.nwcUri), [wallets])
 
@@ -47,16 +54,26 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 			return
 		}
 
-		if (wasOpenRef.current) return
-		wasOpenRef.current = true
+		const preferred = preferredMint ? filteredMints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(preferredMint)) : ''
+		const defaultAllowedMint = defaultMint ? filteredMints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(defaultMint)) : ''
+		const nextSelectedMint = preferred || defaultAllowedMint || filteredMints[0] || ''
 
-		const preferred = preferredMint ? mints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(preferredMint)) : ''
-		setSelectedMint(preferred || defaultMint || mints[0] || '')
-
-		if (typeof initialAmount === 'number' && Number.isFinite(initialAmount) && initialAmount > 0) {
-			setAmount(String(Math.ceil(initialAmount)))
+		if (!wasOpenRef.current) {
+			wasOpenRef.current = true
+			setSelectedMint(nextSelectedMint)
+			if (typeof initialAmount === 'number' && Number.isFinite(initialAmount) && initialAmount > 0) {
+				setAmount(String(Math.ceil(initialAmount)))
+			}
+			return
 		}
-	}, [open, defaultMint, mints, initialAmount, preferredMint])
+
+		setSelectedMint((currentMint) => {
+			if (currentMint && filteredMints.some((mint) => normalizeMintUrl(mint) === normalizeMintUrl(currentMint))) {
+				return currentMint
+			}
+			return nextSelectedMint
+		})
+	}, [open, defaultMint, filteredMints, initialAmount, preferredMint])
 
 	useEffect(() => {
 		if (open && !walletsInitialized && !walletsLoading) {
@@ -263,17 +280,23 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 
 						<div className="space-y-2">
 							<label className="text-sm font-medium">Mint</label>
-							<select
-								value={selectedMint}
-								onChange={(e) => setSelectedMint(e.target.value)}
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-							>
-								{mints.map((mint) => (
-									<option key={mint} value={mint}>
-										{new URL(mint).hostname}
-									</option>
-								))}
-							</select>
+							{hasAllowedMints ? (
+								<select
+									value={selectedMint}
+									onChange={(e) => setSelectedMint(e.target.value)}
+									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								>
+									{filteredMints.map((mint) => (
+										<option key={mint} value={mint}>
+											{new URL(mint).hostname}
+										</option>
+									))}
+								</select>
+							) : (
+								<p className="text-sm text-destructive">
+									{allowedMints?.length ? 'No accepted auction mints are available in this wallet.' : 'No mints available.'}
+								</p>
+							)}
 						</div>
 
 						{depositStatus === 'error' && <p className="text-sm text-destructive">Failed to generate invoice. Please try again.</p>}
@@ -282,7 +305,7 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 							<Button variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleGenerateInvoice} disabled={isGenerating || !amount || !selectedMint}>
+							<Button onClick={handleGenerateInvoice} disabled={isGenerating || !amount || !selectedMint || !hasAllowedMints}>
 								{isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Generate Invoice
 							</Button>

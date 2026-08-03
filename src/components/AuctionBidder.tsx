@@ -386,6 +386,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onClose={() => setIsDepositOpen(false)}
 				initialAmount={depositAmount}
 				preferredMint={preferredDepositMint}
+				allowedMints={trustedMints}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">
