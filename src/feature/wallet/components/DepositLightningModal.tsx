@@ -8,7 +8,23 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
-import { normalizeMintUrl } from '@/lib/wallet'
+import { getMintHostname, normalizeMintUrl } from '@/lib/wallet'
+
+const isValidMintUrl = (mintUrl: string): boolean => {
+	const normalizedMintUrl = normalizeMintUrl(mintUrl)
+	if (!normalizedMintUrl) return false
+	try {
+		new URL(normalizedMintUrl)
+		return true
+	} catch {
+		return false
+	}
+}
+
+const normalizeValidMintUrl = (mintUrl: string): string | null => {
+	const normalizedMintUrl = normalizeMintUrl(mintUrl)
+	return isValidMintUrl(normalizedMintUrl) ? normalizedMintUrl : null
+}
 
 interface DepositLightningModalProps {
 	open: boolean
@@ -36,9 +52,13 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
 	const filteredMints = useMemo(() => {
-		if (!allowedMints?.length) return mints
-		const allowedMintSet = new Set(allowedMints.map(normalizeMintUrl))
-		return mints.filter((mint) => allowedMintSet.has(normalizeMintUrl(mint)))
+		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
+		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
+
+		if (!allowedMints?.length) return normalizedWalletMints
+
+		const allowedMintSet = new Set(normalizedAllowedMints)
+		return normalizedWalletMints.filter((mint) => allowedMintSet.has(mint))
 	}, [allowedMints, mints])
 	const hasAllowedMints = filteredMints.length > 0
 
@@ -54,8 +74,10 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 			return
 		}
 
-		const preferred = preferredMint ? filteredMints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(preferredMint)) : ''
-		const defaultAllowedMint = defaultMint ? filteredMints.find((mint) => normalizeMintUrl(mint) === normalizeMintUrl(defaultMint)) : ''
+		const normalizedPreferredMint = normalizeValidMintUrl(preferredMint ?? '')
+		const normalizedDefaultMint = normalizeValidMintUrl(defaultMint ?? '')
+		const preferred = normalizedPreferredMint ? filteredMints.find((mint) => mint === normalizedPreferredMint) : ''
+		const defaultAllowedMint = normalizedDefaultMint ? filteredMints.find((mint) => mint === normalizedDefaultMint) : ''
 		const nextSelectedMint = preferred || defaultAllowedMint || filteredMints[0] || ''
 
 		if (!wasOpenRef.current) {
@@ -68,7 +90,8 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 		}
 
 		setSelectedMint((currentMint) => {
-			if (currentMint && filteredMints.some((mint) => normalizeMintUrl(mint) === normalizeMintUrl(currentMint))) {
+			const normalizedCurrentMint = normalizeValidMintUrl(currentMint)
+			if (normalizedCurrentMint && filteredMints.includes(normalizedCurrentMint)) {
 				return currentMint
 			}
 			return nextSelectedMint
@@ -288,7 +311,7 @@ export function DepositLightningModal({ open, onClose, initialAmount, preferredM
 								>
 									{filteredMints.map((mint) => (
 										<option key={mint} value={mint}>
-											{new URL(mint).hostname}
+											{getMintHostname(mint)}
 										</option>
 									))}
 								</select>
