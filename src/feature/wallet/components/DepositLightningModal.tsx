@@ -33,6 +33,10 @@ interface DepositLightningModalProps {
 	preferredMint?: string
 	allowedMints?: string[]
 	onSuccess?: () => void
+	onInvoiceCreated?: (invoice: string) => void
+	onPaymentAcknowledged?: () => void
+	onMintingStarted?: () => void
+	onFundingFailed?: (reason: string) => void
 }
 
 type NwcDepositPaymentStatus = 'idle' | 'paying' | 'sent'
@@ -44,6 +48,10 @@ export function DepositLightningModal({
 	preferredMint,
 	allowedMints,
 	onSuccess,
+	onInvoiceCreated,
+	onPaymentAcknowledged,
+	onMintingStarted,
+	onFundingFailed,
 }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
@@ -133,6 +141,22 @@ export function DepositLightningModal({
 	}, [depositInvoice, depositStatus, resetNwcPaymentState])
 
 	useEffect(() => {
+		if (!depositInvoice || depositStatus !== 'pending') return
+		onInvoiceCreated?.(depositInvoice)
+	}, [depositInvoice, depositStatus, onInvoiceCreated])
+
+	useEffect(() => {
+		if (nwcPaymentStatus !== 'sent' && !nwcPaymentSentForCurrentInvoice) return
+		onPaymentAcknowledged?.()
+		onMintingStarted?.()
+	}, [nwcPaymentSentForCurrentInvoice, nwcPaymentStatus, onMintingStarted, onPaymentAcknowledged])
+
+	useEffect(() => {
+		if (depositStatus !== 'error') return
+		onFundingFailed?.('invoice_or_mint_failed_reclaimable')
+	}, [depositStatus, onFundingFailed])
+
+	useEffect(() => {
 		if (depositStatus !== 'success') {
 			successNotifiedRef.current = false
 			return
@@ -158,9 +182,13 @@ export function DepositLightningModal({
 		setIsGenerating(true)
 		resetNwcPaymentState()
 		try {
-			await nip60Actions.startDeposit(amountNum, selectedMint, {
+			onMintingStarted?.()
+			const invoice = await nip60Actions.startDeposit(amountNum, selectedMint, {
 				includeFeePadding: !!allowedMints?.length,
 			})
+			if (invoice) {
+				onInvoiceCreated?.(invoice)
+			}
 		} finally {
 			setIsGenerating(false)
 		}
