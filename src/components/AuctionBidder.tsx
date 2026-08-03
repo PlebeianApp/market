@@ -371,9 +371,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				setIsDepositOpen(false)
 				onBidSuccess?.()
 				return true
-			} catch {
+			} catch (error) {
 				transitionFundingState('mint_succeeded_bid_publish_failed_reclaimable')
-				toast.error('Funding completed, but bid publishing failed. Please try submitting the bid again.')
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
 				return false
 			}
 		},
@@ -392,8 +393,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				// Best-effort refresh; we still evaluate from current wallet state below.
 			}
 
-			const selectedFundingMint = pendingBidSubmission.mintCandidates[0]
-			if (!selectedFundingMint) {
+			const fundingMintCandidates = pendingBidSubmission.mintCandidates
+			if (!fundingMintCandidates.length) {
 				transitionFundingState('invoice_paid_mint_failed_reclaimable')
 				toast.error('Invoice was paid, but no funding mint was selected for bid locking. Please retry the bid submission.')
 				return
@@ -401,15 +402,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			const latestNip60State = nip60Store.state
 			const requiredDelta = Math.max(0, pendingBidSubmission.amount - previousBidAmount)
-			const mintBalance = latestNip60State.mintBalances[selectedFundingMint] ?? 0
+			const fundableMint = fundingMintCandidates.find((mintUrl) => (latestNip60State.mintBalances[mintUrl] ?? 0) >= requiredDelta)
 
-			if (mintBalance < requiredDelta) {
+			if (!fundableMint) {
 				transitionFundingState('invoice_paid_mint_failed_reclaimable')
-				toast.error('Invoice was paid, but minted funds are not yet spendable on the selected mint. Please retry once minting completes.')
+				toast.error('Invoice was paid, but minted funds are not yet spendable on any accepted mint. Please retry once minting completes.')
 				return
 			}
 
-			await submitPreparedBid(pendingBidSubmission)
+			const orderedMintCandidates = [fundableMint, ...fundingMintCandidates.filter((mintUrl) => mintUrl !== fundableMint)]
+			await submitPreparedBid({ ...pendingBidSubmission, mintCandidates: orderedMintCandidates })
 		})()
 	}, [pendingBidSubmission, previousBidAmount, submitPreparedBid, transitionFundingState])
 
