@@ -31,7 +31,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
 import { useStore } from '@tanstack/react-store'
-import { nip60Store } from '@/lib/stores/nip60'
+import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
@@ -380,10 +380,37 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	)
 
 	const handleFundingSuccess = useCallback(() => {
-		transitionFundingState('ecash_minted')
 		if (!pendingBidSubmission) return
-		void submitPreparedBid(pendingBidSubmission)
-	}, [pendingBidSubmission, submitPreparedBid, transitionFundingState])
+
+		void (async () => {
+			transitionFundingState('ecash_minted')
+
+			try {
+				await nip60Actions.refresh()
+			} catch {
+				// Best-effort refresh; we still evaluate from current wallet state below.
+			}
+
+			const selectedFundingMint = pendingBidSubmission.mintCandidates[0]
+			if (!selectedFundingMint) {
+				transitionFundingState('funding_failed_reclaimable')
+				toast.error('Invoice was paid, but no funding mint was selected for bid locking. Please retry the bid submission.')
+				return
+			}
+
+			const latestNip60State = nip60Store.state
+			const requiredDelta = Math.max(0, pendingBidSubmission.amount - previousBidAmount)
+			const mintBalance = latestNip60State.mintBalances[selectedFundingMint] ?? 0
+
+			if (mintBalance < requiredDelta) {
+				transitionFundingState('funding_failed_reclaimable')
+				toast.error('Invoice was paid, but minted funds are not yet spendable on the selected mint. Please retry once minting completes.')
+				return
+			}
+
+			await submitPreparedBid(pendingBidSubmission)
+		})()
+	}, [pendingBidSubmission, previousBidAmount, submitPreparedBid, transitionFundingState])
 
 	const handleInvoiceCreated = useCallback(() => {
 		transitionFundingState('invoice_created')
