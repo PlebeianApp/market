@@ -48,25 +48,32 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 	const sorted = Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
 
 	// Belt-and-suspenders: relays or subscriptions may return events outside the
-	// requested author set. Reject anything not signed by the configured CVM server.
-	const latest = sorted[0]
-	if (latest.pubkey !== cvmServerPubkey) {
-		console.warn('fetchLiveActivity: dropping live activity event from unexpected author', latest.pubkey.slice(0, 16))
-		return null
+	// requested author set. Scan the full sorted array and return the first event
+	// that passes all validation checks, so one misbehaving relay cannot suppress
+	// status by injecting an invalid event at sorted[0].
+	for (const candidate of sorted) {
+		if (candidate.pubkey !== cvmServerPubkey) {
+			console.warn('fetchLiveActivity: skipping live activity event from unexpected author', candidate.pubkey.slice(0, 16))
+			continue
+		}
+
+		if (candidate.kind !== LIVE_ACTIVITY_KIND_NDK) {
+			console.warn('fetchLiveActivity: skipping event with unexpected kind', candidate.kind)
+			continue
+		}
+
+		const hasDTag = candidate.tags?.some((t: string[]) => t[0] === 'd' && t[1])
+		if (!hasDTag) {
+			console.warn('fetchLiveActivity: skipping live activity event missing required d tag')
+			continue
+		}
+
+		return parseLiveActivity(candidate)
 	}
 
-	if (latest.kind !== LIVE_ACTIVITY_KIND_NDK) {
-		console.warn('fetchLiveActivity: dropping event with unexpected kind', latest.kind)
-		return null
-	}
-
-	const hasDTag = latest.tags?.some((t: string[]) => t[0] === 'd' && t[1])
-	if (!hasDTag) {
-		console.warn('fetchLiveActivity: dropping live activity event missing required d tag')
-		return null
-	}
-
-	return parseLiveActivity(latest)
+	// No events passed validation
+	console.warn('fetchLiveActivity: no valid live activity events found after scanning', sorted.length, 'candidates')
+	return null
 }
 
 export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<LiveChatMessage[]> => {
