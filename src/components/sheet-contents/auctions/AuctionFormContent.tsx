@@ -58,10 +58,10 @@ const INITIAL_FORM: AuctionFormData = {
 	reserve: undefined,
 	startAt: '',
 	endAt: '',
-	// Default to no anti-snipe window.
+	// Default anti-snipe to off; enabling applies the 5-min linear 2x preset.
 	antiSnipeWindowMinutes: 0,
-	minBidCurveShape: 'linear',
-	minBidCurvePeakMultiplier: 5,
+	minBidCurveShape: 'none',
+	minBidCurvePeakMultiplier: 2,
 	settlementGracePreset: '1h',
 	mainCategory: '',
 	categories: [],
@@ -692,9 +692,9 @@ function AntiSnipeCurveSettings({
 									checked
 										? {
 												...prev,
-												antiSnipeWindowMinutes: 0,
+												antiSnipeWindowMinutes: 5,
 												minBidCurveShape: 'linear',
-												minBidCurvePeakMultiplier: 5,
+												minBidCurvePeakMultiplier: 2,
 											}
 										: { ...prev, antiSnipeWindowMinutes: 0, minBidCurveShape: 'none' },
 								)
