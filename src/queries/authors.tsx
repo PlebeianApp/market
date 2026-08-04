@@ -3,6 +3,7 @@ import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
+import { isValidHexKey } from '@/lib/utils'
 
 export type NostrAuthor = {
 	id: string
@@ -21,6 +22,10 @@ const transformEvent = (event: NDKEvent): NostrAuthor => ({
 })
 
 export const fetchAuthor = async (pubkey: string) => {
+	// Reject an invalid pubkey before constructing the filter — a malformed
+	// value in { authors: [...] } trips NDK's strict filter validation.
+	if (!isValidHexKey(pubkey)) throw new Error('Author pubkey is required')
+
 	const filter: NDKFilter = {
 		kinds: [0], // kind 0 is metadata
 		authors: [pubkey],
@@ -45,4 +50,5 @@ export const authorQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: authorKeys.details(pubkey),
 		queryFn: () => fetchAuthor(pubkey),
+		enabled: isValidHexKey(pubkey),
 	})

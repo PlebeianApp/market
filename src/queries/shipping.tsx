@@ -1,6 +1,7 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
+import { isValidHexKey } from '@/lib/utils'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -145,6 +146,10 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+	// A malformed (not just empty) pubkey would build { authors: [...] } that
+	// trips NDK's strict filter validation. Reject before constructing it.
+	if (!isValidHexKey(pubkey)) return []
+
 	const filter: NDKFilter = {
 		kinds: [SHIPPING_KIND],
 		authors: [pubkey],
@@ -196,6 +201,7 @@ export const shippingOptionsByPubkeyQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: shippingKeys.byPubkey(pubkey),
 		queryFn: () => fetchShippingOptionsByPubkey(pubkey),
+		enabled: isValidHexKey(pubkey),
 		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
 	})
 
@@ -691,7 +697,6 @@ export const useShippingService = (id: string) => {
 export const useShippingOptionsByPubkey = (pubkey: string) => {
 	return useQuery({
 		...shippingOptionsByPubkeyQueryOptions(pubkey),
-		enabled: !!pubkey,
 	})
 }
 
