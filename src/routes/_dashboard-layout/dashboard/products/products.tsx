@@ -233,13 +233,14 @@ function ProductsOverviewComponent() {
 			fuzzy: true,
 		})
 
+	const dashboardProductOptions = productsByPubkeyQueryOptions(user?.pubkey ?? '', true) // Include hidden products for own dashboard
 	const {
 		data: products,
 		isLoading,
 		error,
 	} = useQuery({
-		...productsByPubkeyQueryOptions(user?.pubkey ?? '', true), // Include hidden products for own dashboard
-		enabled: !!user?.pubkey && isAuthenticated,
+		...dashboardProductOptions,
+		enabled: dashboardProductOptions.enabled && isAuthenticated,
 	})
 
 	// Sort products based on orderBy

@@ -1,18 +1,66 @@
-import NDK, { type NDKFilter, type NostrEvent } from '@nostr-dev-kit/ndk'
+import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
+import { isValidHexKey } from './utils'
+
+/** Kind for NIP-89 handler information / app-config events. */
+export const APP_SETTINGS_KIND = 31990
+/** Exact d tag that identifies the Plebeian Market app-settings event. */
+export const APP_SETTINGS_D_TAG = 'plebeian-market-handler'
+
+/**
+ * Structural shape needed to verify app-settings publisher authority. Kept
+ * minimal (and independent of the NDKEvent class) so it is easy to construct
+ * in tests.
+ */
+export interface AppSettingsEventLike {
+	kind?: number
+	pubkey: string
+	tags: Array<string[]>
+	created_at?: number
+	content: string
+}
+
+/**
+ * Select the latest app-settings event that matches the expected publisher
+ * authority: the event must be kind 31990, authored by `appPubkey`, and carry
+ * the exact d tag 'plebeian-market-handler'. Events from any other publisher
+ * (or with a different kind / d tag) are rejected — the content schema
+ * validates shape, not authority, so a spoofed event that passes the schema
+ * must still be refused here.
+ */
+export function selectAuthoritativeAppSettingsEvent(
+	events: ReadonlyArray<AppSettingsEventLike>,
+	appPubkey: string,
+): AppSettingsEventLike | undefined {
+	return events
+		.filter(
+			(e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === APP_SETTINGS_D_TAG),
+		)
+		.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+}
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
+
+	// Reject a malformed app pubkey before creating an NDK instance or issuing
+	// any relay request. NDK's strict filter validation would also fail closed,
+	// but validating here gives a clear, early failure and guarantees the
+	// authors constraint is never satisfied by an unrelated publisher.
+	if (!isValidHexKey(appPubkey)) {
+		console.error('Invalid app pubkey provided:', appPubkey)
+		return null
+	}
 
 	try {
 		// Create a fresh NDK instance for server-side initialization
 		// to avoid shared store issues with ndkActions
 		const ndk = new NDK({
 			explicitRelayUrls: [relayUrl],
-			// Skip AI guardrails that might filter out events during fetch
-			aiGuardrails: {
-				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
-			},
+			// Server-side, one-off fetch of app-config events. AI guardrails are a
+			// dev-time educational tool and have no place here. NDK's default strict
+			// filter validation is retained (a malformed appPubkey fails closed
+			// rather than broadening the query).
+			aiGuardrails: false,
 		})
 
 		// Connect with timeout
@@ -56,7 +104,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 				})
 			})
 
-		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<any>
+		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<NDKEvent>
 		const eventArray = Array.from(events)
 		console.log(`Fetch returned ${eventArray.length} events`)
 
@@ -66,10 +114,20 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		}
 
 		console.log(`Found ${eventArray.length} app settings events`)
-		const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+		// Verify publisher authority before accepting content: select only the
+		// event authored by the expected app pubkey, with kind 31990 and the exact
+		// d tag 'plebeian-market-handler'. A relay could return an event from a
+		// different publisher whose content passes the shape schema; reject it
+		// here (see selectAuthoritativeAppSettingsEvent).
+		const authoritativeEvent = selectAuthoritativeAppSettingsEvent(eventArray, appPubkey)
+		if (!authoritativeEvent) {
+			console.warn(`No app settings event from expected publisher: ${appPubkey}`)
+			return null
+		}
 
 		try {
-			const parsedContent = JSON.parse(latestEvent.content)
+			const parsedContent = JSON.parse(authoritativeEvent.content)
 			const validatedSettings = AppSettingsSchema.parse(parsedContent)
 
 			return validatedSettings

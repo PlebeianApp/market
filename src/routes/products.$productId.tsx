@@ -341,9 +341,10 @@ function RouteComponent() {
 		}
 	}
 
+	const sellerProductOptions = productsByPubkeyQueryOptions(pubkey)
 	const sellerProductsQuery = useQuery({
-		...productsByPubkeyQueryOptions(pubkey),
-		enabled: !!pubkey,
+		...sellerProductOptions,
+		enabled: sellerProductOptions.enabled,
 	})
 	const sellerProducts = sellerProductsQuery.data ?? []
 

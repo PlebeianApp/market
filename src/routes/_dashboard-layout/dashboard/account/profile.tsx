@@ -26,9 +26,10 @@ function ProfileComponent() {
 	const pubkey = ndk?.activeUser?.pubkey
 
 	// Fetch profile data with Tanstack Query
+	const profileOptions = profileByIdentifierQueryOptions(pubkey || '')
 	const { data: fetchedData, isLoading: isLoadingProfile } = useQuery({
-		...profileByIdentifierQueryOptions(pubkey || ''),
-		enabled: !!pubkey,
+		...profileOptions,
+		enabled: profileOptions.enabled && !!pubkey,
 	})
 
 	// Extract profile from the query result
