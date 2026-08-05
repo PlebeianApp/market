@@ -115,14 +115,16 @@ Entries sort by:
 1. role order: `validator` before `v4v`;
 2. recipient pubkey decoded to 32 bytes, ascending lexicographically.
 
-### D7 — Cross-role identity reuse remains open
+### D7 — Recipient pubkeys are globally unique
 
-This packet does not decide whether the same Nostr pubkey may occupy both
-`validator` and `v4v` roles. No conformance vector accepts or rejects that
-shape. Focused approval must choose:
+A `recipient_pubkey` MUST appear in at most one schedule entry, regardless of
+role. After same-role duplicate detection, compilation and parsing reject a
+pubkey reused across `validator` and `v4v` roles as
+`schedule_recipient_reused_across_roles`.
 
-- **Option A:** reject cross-role identity reuse; or
-- **Option B:** allow two separately committed role obligations.
+This is a wire-semantics and implementation-safety boundary. It does not prove
+that different pubkeys represent different people or prevent one operator from
+controlling multiple keys.
 
 ### D8 — Canonical text framing
 
@@ -160,6 +162,25 @@ This packet records that inherited consequence and provides its conformance
 vector. A future requirement for positive seller proceeds would require an
 architecture or minimum-payout-policy amendment.
 
+### D12 — V1 resource limits are fixed
+
+The V1 schedule contains between 1 and 16 auxiliary entries.
+
+`parse_canonical_schedule(bytes)` rejects any raw input longer than 4,096 bytes
+before decoding, scanning, line splitting, header parsing, or allocation based
+on attacker-controlled fields. `compile_source_schedule(source_entries)` rejects
+more than 16 source entries before per-entry validation and rejects canonical
+serialized output longer than 4,096 bytes before commitment computation.
+
+Under all V1 invariants, the largest valid 16-entry all-validator schedule is
+3,449 bytes: aggregate allocation remains at or below 10,000 basis points while
+maximizing decimal field widths. The raw-input limit therefore leaves 647 bytes
+of defensive margin.
+
+An implementation MUST NOT raise either V1 limit while continuing to identify
+the data as the same V1 wire format. Expansion requires a new schedule version
+or profile.
+
 ## Semantic source-entry boundary
 
 The source model distinguishes semantic data from wire framing:
@@ -185,39 +206,46 @@ signature, and equality between the capability author and
 ### `compile_source_schedule(source_entries)`
 
 1. require D10 for the multiparty profile;
-2. validate the semantic source-entry schema;
-3. validate every primitive and role-specific field;
-4. validate same-role recipient uniqueness and total allocation;
-5. apply the eventual D7 decision once approved;
-6. sort by D6;
-7. derive sequential indexes;
-8. serialize exact canonical bytes; and
-9. compute the D9 commitment.
+2. reject more than 16 source entries;
+3. validate the semantic source-entry schema;
+4. validate every primitive and role-specific field;
+5. validate same-role recipient uniqueness;
+6. reject recipient pubkeys reused across roles;
+7. validate total allocation;
+8. sort by D6;
+9. derive sequential indexes;
+10. serialize exact canonical bytes;
+11. reject serialized output longer than 4,096 bytes; and
+12. compute the D9 commitment.
 
 ### `parse_canonical_schedule(bytes)`
 
-1. reject BOM, CR, non-ASCII bytes, and a missing final LF in that order;
-2. parse the first LF-terminated header and validate its four fields in the
+1. reject raw input longer than 4,096 bytes;
+2. reject BOM, CR, non-ASCII bytes, and a missing final LF in that order;
+3. parse the first LF-terminated header and validate its four fields in the
    protocol's declared order;
-3. locate exactly `entry_count` subsequent LF-terminated row slices;
-4. reject too few declared rows as `schedule_entry_count_mismatch`;
-5. reject an empty slice among those declared rows as
+4. validate `entry_count` canonically and reject values above 16 before numeric
+   conversion or row allocation;
+5. locate exactly `entry_count` subsequent LF-terminated row slices;
+6. reject too few declared rows as `schedule_entry_count_mismatch`;
+7. reject an empty slice among those declared rows as
    `schedule_blank_line_forbidden`;
-6. reject any remaining byte after the declared rows as
+8. reject any remaining byte after the declared rows as
    `schedule_trailing_bytes` without inspecting the remainder;
-7. validate every declared row's column count, primitive, and role-specific
+9. validate every declared row's column count, primitive, and role-specific
    field;
-8. revalidate indexes, semantic invariants, duplicate rules, total allocation,
-   and canonical row order;
-9. reserialize successfully parsed data as an implementation assertion; and
-10. compute the D9 commitment.
+10. revalidate indexes, same-role duplicates, cross-role recipient reuse, total
+    allocation, and canonical row order;
+11. reserialize successfully parsed data as an implementation assertion; and
+12. compute the D9 commitment.
 
 A parser must not trust sequential indexes as evidence that row order is
-canonical. Surplus data takes precedence over declared-row column, primitive,
-role-specific, and semantic failures because complete-byte consumption is
-checked before those validations. An empty declared row slice remains an
-earlier structural failure. A successful parse whose reserialization differs
-indicates an implementation defect, not a separate wire failure.
+canonical. The raw byte limit precedes every other parser failure. Surplus data
+takes precedence over declared-row column, primitive, role-specific, and
+semantic failures because complete-byte consumption is checked before those
+validations. An empty declared row slice remains an earlier structural failure.
+A successful parse whose reserialization differs indicates an implementation
+defect, not a separate wire failure.
 
 ## Fixture-stage model
 
@@ -236,18 +264,20 @@ combinatorial fault matrix.
 
 ## Deferred production gate
 
-The hard maximum `entry_count` remains unresolved in this first packet.
-Therefore no production parser, root activation path, wallet mutation, or relay
-publication is authorized until a normative resource limit is selected and
-covered by vectors.
+D7 and the schedule codec's V1 resource limits are resolved in this packet and
+covered by conformance vectors. This does not authorize a production parser,
+root activation path, wallet mutation, or relay publication. Those remain
+blocked until focused approval and completion of the remaining wire sections
+and their own proof, token, event, query, and lifecycle resource limits.
 
 ## Acceptance gate
 
 Repository inclusion for review does not make the profile normative. Focused
 approval must:
 
-- accept or revise D1–D6 and D8–D11;
-- resolve D7;
-- reproduce every fixture byte-for-byte; and
+- accept or revise D1–D12;
+- reproduce every fixture byte-for-byte, including the fixed limit and D7
+  precedence vectors;
+- verify the 3,449-byte maximum-valid-schedule calculation; and
 - preserve the production prohibition until the remaining wire sections and
-  resource limits are approved.
+  their resource limits are approved.
