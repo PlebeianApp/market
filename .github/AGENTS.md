@@ -7,11 +7,15 @@ This directory follows the repository-level AGENTS.md.
 GitHub configuration currently includes issue templates and these workflows:
 
 - `.github/workflows/ci-unit.yml`
+- `.github/workflows/ci-ndk-guard.yml`
+- `.github/workflows/coverage-gate.yml`
 - `.github/workflows/deploy.yml`
 - `.github/workflows/deploy-auctionsdev.yml`
 - `.github/workflows/deploy-relay.yml`
 - `.github/workflows/e2e.yml`
+- `.github/workflows/mutation.yml`
 - `.github/workflows/prettier.yml`
+- `.github/workflows/preview-deploy.yml`
 - `.github/workflows/promote-production.yml`
 - `.github/workflows/release.yml`
 

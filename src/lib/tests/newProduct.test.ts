@@ -21,7 +21,14 @@ const TEST_PRODUCT = {
 	productType: 'single' as const,
 	mainCategory: 'Bitcoin',
 	specs: [{ key: 'Weight', value: '5 kg' }],
-	images: [{ imageUrl: 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png', imageOrder: 0 }],
+	images: [
+		{
+			imageUrl:
+				process.env.E2E_TEST_IMAGE_URL ||
+				'https://blossom2.orangesync.tech/f03167b3052fb1311af8f75dcd2e6a8d5e3d5f01920a9eb4004f97fd04b47546.png',
+			imageOrder: 0,
+		},
+	],
 	categories: [{ key: 'cat1', name: 'Bitcoin Miners', checked: true }],
 }
 

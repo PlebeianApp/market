@@ -1,0 +1,18 @@
+{
+	"$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+	"_comment": "Base config for diff-scoped mutation testing. The `mutate` array is NOT set here — it is injected dynamically by `scripts/stryker-changed-files.ts` (which scopes Stryker to the .ts/.tsx files changed in the PR) into a generated `stryker.run.json`. Run via `bun run mutation:diff`, not `stryker run` directly.",
+	"testRunner": "command",
+	"commandRunner": {
+		"_comment": "There is no native Stryker test runner for `bun test` (no @stryker-mutator/bun-runner exists on npm). The built-in `command` runner wraps an arbitrary shell command and infers pass/fail from the exit code, spawning a fresh process per mutant with the active-mutant id in the env. Consequence: coverageAnalysis MUST be 'off' (the command runner reports no per-test coverage, so perTest is unavailable). The command runs the FULL unit suite (mirrors `test:unit` / coverage-gate.yml, excludes integration tests that need a relay) for every mutant — slower than perTest but correct, and bounded by the changed-files scope. Override with STRYKER_TEST_COMMAND env if you want a targeted subset.",
+		"command": "bun test $(find contextvm src/queries/__tests__ src/lib/__tests__ scripts -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort | tr '\\n' ' ')"
+	},
+	"coverageAnalysis": "off",
+	"mutator": {},
+	"thresholds": { "high": 80, "low": 60, "break": 50 },
+	"reporters": ["json", "clear-text"],
+	"concurrency": 2,
+	"disableTypeChecks": true,
+	"tempDirName": ".stryker-tmp",
+	"cleanTempDir": true,
+	"ignorePatterns": ["e2e", "coverage", "public", "docs"]
+}

@@ -78,6 +78,20 @@ already exists.
 - Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
   or broad rewrite instructions.
 
+## PR Trust Pipeline — Human-Consumption Merge Gate
+
+Every PR into `master` must keep a human in the loop — this is the explicit
+anti-AI-vs-AI-loop gate. See `docs/plans/pr-trust-pipeline.md` § Layer H.
+
+- `.github/pull_request_template.md` renders a human-consumption checklist on
+  every PR (trace/video evidence, live preview, coverage report, E2E results).
+  A human must tick these boxes personally; an automated/AI reviewer must not.
+- Merge requires review approval, conversation resolution, and (after the
+  pipeline branch merges) the `coverage-gate` and `e2e-pricing` status checks.
+- Codecov was removed (`8d02c25`); the coverage status check is `coverage-gate`,
+  not `codecov/patch`. Branch protection is GitHub metadata, not version
+  controlled — set it as a deliberate admin step.
+
 ## Safe Checks
 
 For docs-only changes:

@@ -36,6 +36,34 @@ bun run scripts/migrate-relay.ts
 - `DRY_RUN` - Set to `true` to fetch without publishing
 - `MAX_WAIT_MS` - Relay subscription timeout
 
+### `check-coverage.ts`
+
+Diff-aware coverage gate. Runs `bun test --coverage`, parses the LCOV output,
+and cross-references the uncovered lines against the lines added/modified in the
+current branch's git diff. Only MODIFIED `.ts`/`.tsx` lines are gated; pre-existing
+untested code is never blocked.
+
+**Side effects:** spawns `bun test` (runs the unit suite under coverage); writes
+a temporary `lcov.info` under the system temp dir and removes it afterwards.
+
+**Usage:**
+
+```bash
+# default: diff against origin/master, coverage from src + contextvm
+bun run check-coverage
+
+# custom base ref
+bun run scripts/check-coverage.ts --base origin/dev
+
+# CI sets the base via env
+COVERAGE_BASE_REF=origin/master bun run check-coverage
+```
+
+**Env:** `COVERAGE_BASE_REF`, `COVERAGE_TEST_PATHSPEC`, `COVERAGE_BUN`,
+`COVERAGE_GATE_SKIP=1` (silence the pre-push soft gate).
+
+Exits `0` (covered), `1` (uncovered modified lines), or `2` (internal error).
+
 ### `seed.ts`
 
 Main seeding script that creates a complete test environment.

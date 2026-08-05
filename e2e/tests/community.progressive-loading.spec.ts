@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { TEST_IMAGE_URL } from '../test-config'
 import {
 	COMMUNITY_QUERY_FIXTURE_CALLS_STORAGE_KEY_PREFIX,
 	COMMUNITY_QUERY_FIXTURE_STORAGE_KEY,
@@ -41,7 +42,7 @@ function collectionFixture({
 			['d', dTag],
 			['title', title],
 			['summary', summary],
-			['image', 'https://placehold.co/600x600/png'],
+			['image', TEST_IMAGE_URL],
 		],
 		content: summary,
 		sig: 'fixture',

@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures'
 import { devUser3 } from '../../src/lib/fixtures'
 import { resetV4VForUser } from '../scenarios'
+import { TEST_IMAGE_URL } from '../test-config'
 
 test.use({ scenario: 'base' })
 
@@ -58,7 +59,7 @@ test.describe('V4V Product Creation Flow', () => {
 		// --- Images Tab ---
 		const imageInput = newUserPage.getByTestId('image-url-input')
 		await expect(imageInput).toBeVisible({ timeout: 5_000 })
-		await imageInput.fill('https://placehold.co/600x600')
+		await imageInput.fill(TEST_IMAGE_URL)
 		await newUserPage.getByTestId('image-save-button').click()
 		await newUserPage.getByTestId('product-next-button').click()
 

@@ -17,3 +17,18 @@ export const RELAY_URL = 'ws://localhost:10547'
 // and to avoid common local conflicts on more frequently used low ports.
 export const TEST_PORT = 34567
 export const BASE_URL = `http://localhost:${TEST_PORT}`
+
+/**
+ * Hermetic test image URL.
+ *
+ * In CI, the relay process (`nak serve`) runs with `--blossom`, exposing a
+ * local Blossom media server on the same port (10547). A test image fixture
+ * (`e2e/fixtures/test-image.png`) is seeded to it via `nak blossom upload`
+ * and its URL is exported as `TEST_IMAGE_URL` before the tests run — so every
+ * image the app fetches during e2e comes from localhost, never an external host
+ * (placehold.co). See `docs/plans/pr-trust-pipeline.md` § Step B1.
+ *
+ * Locally — where no Blossom server is started — this falls back to placehold.co
+ * so `bun run test:e2e` keeps working without extra setup.
+ */
+export const TEST_IMAGE_URL = process.env.TEST_IMAGE_URL || 'https://placehold.co/600x600'

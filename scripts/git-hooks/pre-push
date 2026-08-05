@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# Pre-push hook: SOFT diff-aware coverage gate.
+#
+# Runs `bun run check-coverage`. On failure it prints a warning but does NOT
+# block the push (soft gate). The HARD gate is enforced in CI via
+# .github/workflows/coverage-gate.yml.
+#
+# Side effects: runs the unit test suite under coverage (spawns `bun test`).
+#
+# Install: bun run prepare   (auto-installs via package.json)
+#   Or:    ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+#
+# Opt out: COVERAGE_GATE_SKIP=1
+
+set -uo pipefail
+
+if [ -n "${COVERAGE_GATE_SKIP:-}" ]; then
+  exit 0
+fi
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "coverage-gate [pre-push]: bun not found — skipping soft coverage check."
+  exit 0
+fi
+
+echo "coverage-gate [pre-push]: running diff-aware coverage check (soft gate)…"
+
+if ! bun run check-coverage; then
+  echo ""
+  echo "⚠️  coverage-gate [pre-push]: uncovered modified lines detected."
+  echo "    This is a SOFT gate — the push proceeds. CI enforces coverage on the PR."
+  echo "    Add tests for the flagged lines, or set COVERAGE_GATE_SKIP=1 to silence."
+  echo ""
+  exit 0
+fi
+
+echo "coverage-gate [pre-push]: all modified lines covered."
+exit 0

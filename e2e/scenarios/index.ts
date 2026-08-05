@@ -355,7 +355,11 @@ export async function seedProduct(
 			['price', opts.price, opts.currency],
 			['status', opts.status],
 			['t', opts.category],
-			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
+			[
+				'image',
+				process.env.E2E_TEST_IMAGE_URL ||
+					'https://blossom2.orangesync.tech/f03167b3052fb1311af8f75dcd2e6a8d5e3d5f01920a9eb4004f97fd04b47546.png',
+			],
 			...(opts.stock ? [['stock', opts.stock]] : []),
 			...(opts.shippingOptions ? opts.shippingOptions.map((ref) => ['shipping_option', ref]) : []),
 		],

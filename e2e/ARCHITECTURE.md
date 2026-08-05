@@ -208,7 +208,7 @@ Publishes three events:
 - **Kind 30000** (Admin list) - the test app public key as admin
 - **Kind 10002** (Relay list) - the test relay URL
 
-> **Pitfall**: The `AppSettingsSchema` validates `picture` and `banner` as `z.string().url()`, so empty strings are rejected. Use placeholder URLs like `https://placehold.co/200x200`.
+> **Pitfall**: The `AppSettingsSchema` validates `picture` and `banner` as `z.string().url()`, so empty strings are rejected. Use `TEST_IMAGE_URL` from `test-config.ts` (hermetic local Blossom server in CI, placehold.co fallback locally).
 
 ### Global Setup: `global-setup.ts`
 
@@ -1015,7 +1015,7 @@ test.describe('Product Management', () => {
 
 		// --- Images Tab (required!) ---
 		const imageInput = merchantPage.getByTestId('image-url-input')
-		await imageInput.fill('https://placehold.co/600x600')
+		await imageInput.fill(TEST_IMAGE_URL)
 		await merchantPage.getByTestId('image-save-button').click()
 		await merchantPage.getByTestId('product-next-button').click()
 

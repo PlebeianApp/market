@@ -16,6 +16,7 @@ export const BLOSSOM_SERVERS: BlossomServer[] = [
 	{ name: '24242', url: 'https://24242.io', plan: 'public' },
 	{ name: 'f7z Blossom', url: 'https://blossom.f7z.io', plan: 'public' },
 	{ name: 'nostr.download', url: 'https://nostr.download', plan: 'public' },
+	{ name: 'Orangesync', url: 'https://blossom2.orangesync.tech', plan: 'public' },
 ]
 
 export interface UploadOptions {

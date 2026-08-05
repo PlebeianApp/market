@@ -18,7 +18,12 @@ jobs:
   e2e-pricing:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write # post idempotent E2E dashboard comment
+    env:
+      E2E_TEST_IMAGE_URL: ${{ secrets.E2E_TEST_IMAGE_URL }}
 
     steps:
       - name: Checkout code
@@ -80,27 +85,61 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Start relay
+      - name: Start relay + dual Blossom servers
         run: |
-          nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+          nohup nak serve --hostname 0.0.0.0 --blossom > /tmp/relay.log 2>&1 &
           echo "Waiting for relay on port 10547..."
-          for i in $(seq 1 10); do
+          for _ in $(seq 1 10); do
             if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
-              echo "Relay is ready"
-              exit 0
+              echo "Relay + Blossom #1 is ready"
+              break
             fi
             sleep 1
           done
-          echo "::error::Relay failed to start. Logs:"
-          cat /tmp/relay.log
-          exit 1
+          nohup nak serve --port 10548 --hostname 0.0.0.0 --blossom > /tmp/blossom2.log 2>&1 &
+          echo "Waiting for Blossom #2 on port 10548..."
+          for _ in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10548) 2>/dev/null; then
+              echo "Blossom #2 is ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
+            echo "::error::Relay failed to start. Logs:"
+            cat /tmp/relay.log
+            exit 1
+          fi
+
+      - name: Seed hermetic test image to local Blossom server
+        env:
+          BLOSSOM_SEED_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+        continue-on-error: true # best-effort — fall back to E2E_TEST_IMAGE_URL secret
+        run: |
+          # Try hermetic local Blossom seed. If it fails, fall back to the
+          # E2E_TEST_IMAGE_URL secret so tests still run.
+          HASH=$(nak blossom upload \
+            --server http://localhost:10547 \
+            --sec "$BLOSSOM_SEED_KEY" \
+            e2e/fixtures/test-image.png 2>/dev/null \
+            | jq -r '.sha256 // empty')
+          if [ -n "$HASH" ]; then
+            URL="http://localhost:10547/${HASH}.png"
+            if curl -sf -o /dev/null "$URL"; then
+              echo "TEST_IMAGE_URL=$URL" >> "$GITHUB_ENV"
+              echo "Hermetic test image ready: $URL"
+              exit 0
+            fi
+          fi
+          echo "::warning::Local Blossom seed failed, using E2E_TEST_IMAGE_URL secret"
+          echo "TEST_IMAGE_URL=${E2E_TEST_IMAGE_URL}" >> "$GITHUB_ENV"
 
       - name: Seed relay and start dev server
         run: |
           bun e2e/seed-relay.ts
           nohup bun dev > /tmp/devserver.log 2>&1 &
           echo "Waiting for dev server on port 34567..."
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sf http://localhost:34567/api/config > /dev/null 2>&1; then
               echo "Dev server is ready"
               exit 0
@@ -119,6 +158,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run pricing E2E tests
+        id: e2e-test
         run: bun run test:e2e -- --grep 'Product Page - View Only'
 
       - name: Show server logs on failure
@@ -130,6 +170,39 @@ jobs:
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
 
+      - name: Normalize video FPS to ~12 (WebM, 720p)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg not installed; skipping FPS normalization (WebM stays at browser-capture rate)."
+            exit 0
+          fi
+          # Video is already WebM at 720p (Desktop Chrome viewport 1280x720).
+          # Re-encode to 12 FPS to cap artifact size (target: 10-15 FPS).
+          shopt -s nullglob globstar
+          for f in test-results/**/*.webm; do
+            tmp="${f%.webm}.12fps.webm"
+            if ffmpeg -y -i "$f" -r 12 "$tmp" >/dev/null 2>&1; then
+              mv "$tmp" "$f"
+            else
+              rm -f "$tmp"
+              echo "ffmpeg failed for $f; keeping original"
+            fi
+          done
+
+      - name: Upload Playwright trace + video + screenshots (visual proof)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-visual-proof-pricing
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.webm
+            test-results/**/*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Upload pricing test results
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -138,6 +211,96 @@ jobs:
           path: test-results/
           retention-days: 7
 
+      # ── Layer 2b: GitHub-artifacts-only E2E report (no nsite) ───────────────
+      # Parses Playwright JSON results and posts an idempotent PR comment with
+      # pass/fail/flaky summary, per-test table, collapsible failure details, and
+      # links to the trace/video/screenshot artifacts (downloadable from the
+      # workflow run). Separate marker from the nsite dashboard comment.
+      # Runs even when tests fail (results.json is always written in CI).
+      - name: Post E2E results report comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true # comment is a nice-to-have; don't fail the job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RESULTS_JSON: test-results/results.json
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_NAMES: playwright-visual-proof-pricing,test-results-pricing
+          ARTIFACT_RETENTION: '14'
+          E2E_JOB_OUTCOME: ${{ steps.e2e-test.outcome }}
+        run: bun scripts/e2e-report-comment.ts
+
+      # ── Layer 2c: render + publish the nsite dashboard ──────────────────────
+      # Runs even when tests fail so reviewers can see what broke.
+      - name: Render E2E dashboard
+        id: render-dashboard
+        if: ${{ !cancelled() }}
+        uses: felixfelix-bot/plebeian-testing-nsite-actions/.github/actions/render-dashboard@a92f4d9492b8925f5805a12a52c4262d47b82aa1
+        with:
+          results-dir: test-results
+          output-dir: e2e-dashboard
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          base-url: http://localhost:34567
+
+      - name: Publish dashboard to nsite
+        id: publish-nsite
+        if: ${{ !cancelled() && steps.render-dashboard.outcome == 'success' }}
+        timeout-minutes: 5 # prevent 20+ minute hangs on flaky Blossom/relay infra
+        continue-on-error: true # nsite publish is best-effort — never block on Blossom/relay infra
+        uses: felixfelix-bot/plebeian-testing-nsite-actions/.github/actions/publish-nsite@a92f4d9492b8925f5805a12a52c4262d47b82aa1
+        with:
+          dashboard-dir: e2e-dashboard
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          # Fully hermetic Blossom: both servers run locally as nak --blossom
+          # instances (port 10547 + 10548), started in the "Start relay" step
+          # above. Zero external dependencies — no flaky public Blossom servers.
+          # min-success=2 means both local servers must accept the upload.
+          blossom-servers: 'http://localhost:10547 http://localhost:10548 https://blossom1.orangesync.tech https://blossom2.orangesync.tech https://24242.io https://cdn.satellite.earth https://blossom.primal.net https://nostr.download'
+          blossom-min-success: '2'
+          # Public relays for nsite + Kind 1985 events. Must stay reachable
+          # after CI completes — local nak dies with the runner.
+          relays: 'wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://relay.primal.net wss://relay.nostr.band wss://offchain.pub'
+          # pr-number intentionally omitted: the action posts a basic one-line
+          # comment of its own. We post a richer, idempotent (update-not-
+          # duplicate) comment in the next step instead.
+
+      # Post a single updatable PR comment. Re-runs edit the same comment
+      # (located via the marker tag) instead of spamming duplicates.
+      - name: Post idempotent dashboard PR comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.publish-nsite.outputs.nsite-url != '' }}
+        continue-on-error: true # comment is a nice-to-have; don't fail the job on gh API errors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NSITE_URL: ${{ steps.publish-nsite.outputs.nsite-url }}
+          TEST_STATUS: ${{ steps.e2e-test.outcome == 'success' && 'passed' || 'failed' }}
+          RESULTS_JSON: test-results/results.json
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun scripts/e2e-pr-comment.ts
+
+      - name: Notify Buzz (#ci)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          CI_BUZZ_RELAY_URL: ${{ secrets.CI_BUZZ_RELAY_URL }}
+          CI_BUZZ_PRIVATE_KEY: ${{ secrets.CI_BUZZ_PRIVATE_KEY }}
+        run: |
+          chmod +x scripts/buzz-notify.sh
+          ./scripts/buzz-notify.sh \
+            --status ${{ steps.e2e-test.outcome == 'success' && 'pass' || 'fail' }} \
+            --pr ${{ github.event.pull_request.number || '' }} \
+            --job "E2E Pricing Tests" \
+            --detail "${{ github.sha }}"
+
   e2e-full:
     # Keep the broader inherited-flaky suite off the pricing PR path.
     # It remains available for scheduled/manual comparison runs while the
@@ -145,6 +308,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      E2E_TEST_IMAGE_URL: ${{ secrets.E2E_TEST_IMAGE_URL }}
 
     steps:
       - name: Checkout code
@@ -207,27 +372,61 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Start relay
+      - name: Start relay + dual Blossom servers
         run: |
-          nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+          nohup nak serve --hostname 0.0.0.0 --blossom > /tmp/relay.log 2>&1 &
           echo "Waiting for relay on port 10547..."
-          for i in $(seq 1 10); do
+          for _ in $(seq 1 10); do
             if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
-              echo "Relay is ready"
-              exit 0
+              echo "Relay + Blossom #1 is ready"
+              break
             fi
             sleep 1
           done
-          echo "::error::Relay failed to start. Logs:"
-          cat /tmp/relay.log
-          exit 1
+          nohup nak serve --port 10548 --hostname 0.0.0.0 --blossom > /tmp/blossom2.log 2>&1 &
+          echo "Waiting for Blossom #2 on port 10548..."
+          for _ in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10548) 2>/dev/null; then
+              echo "Blossom #2 is ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
+            echo "::error::Relay failed to start. Logs:"
+            cat /tmp/relay.log
+            exit 1
+          fi
+
+      - name: Seed hermetic test image to local Blossom server
+        env:
+          BLOSSOM_SEED_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+        continue-on-error: true # best-effort — fall back to E2E_TEST_IMAGE_URL secret
+        run: |
+          # Try hermetic local Blossom seed. If it fails, fall back to the
+          # E2E_TEST_IMAGE_URL secret so tests still run.
+          HASH=$(nak blossom upload \
+            --server http://localhost:10547 \
+            --sec "$BLOSSOM_SEED_KEY" \
+            e2e/fixtures/test-image.png 2>/dev/null \
+            | jq -r '.sha256 // empty')
+          if [ -n "$HASH" ]; then
+            URL="http://localhost:10547/${HASH}.png"
+            if curl -sf -o /dev/null "$URL"; then
+              echo "TEST_IMAGE_URL=$URL" >> "$GITHUB_ENV"
+              echo "Hermetic test image ready: $URL"
+              exit 0
+            fi
+          fi
+          echo "::warning::Local Blossom seed failed, using E2E_TEST_IMAGE_URL secret"
+          echo "TEST_IMAGE_URL=${E2E_TEST_IMAGE_URL}" >> "$GITHUB_ENV"
 
       - name: Seed relay and start dev server
         run: |
           bun e2e/seed-relay.ts
           nohup bun dev > /tmp/devserver.log 2>&1 &
           echo "Waiting for dev server on port 34567..."
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sf http://localhost:34567/api/config > /dev/null 2>&1; then
               echo "Dev server is ready"
               exit 0
@@ -246,6 +445,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
+        id: e2e-full-test
         env:
           TEST_GREP: ${{ inputs.test_grep }}
         run: |
@@ -264,6 +464,37 @@ jobs:
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
 
+      - name: Normalize video FPS to ~12 (WebM, 720p)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg not installed; skipping FPS normalization (WebM stays at browser-capture rate)."
+            exit 0
+          fi
+          shopt -s nullglob globstar
+          for f in test-results/**/*.webm; do
+            tmp="${f%.webm}.12fps.webm"
+            if ffmpeg -y -i "$f" -r 12 "$tmp" >/dev/null 2>&1; then
+              mv "$tmp" "$f"
+            else
+              rm -f "$tmp"
+              echo "ffmpeg failed for $f; keeping original"
+            fi
+          done
+
+      - name: Upload Playwright trace + video + screenshots (visual proof)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-visual-proof-full
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.webm
+            test-results/**/*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Upload full test results
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -271,3 +502,17 @@ jobs:
           name: test-results-full
           path: test-results/
           retention-days: 7
+
+      - name: Notify Buzz (#ci)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          CI_BUZZ_RELAY_URL: ${{ secrets.CI_BUZZ_RELAY_URL }}
+          CI_BUZZ_PRIVATE_KEY: ${{ secrets.CI_BUZZ_PRIVATE_KEY }}
+        run: |
+          chmod +x scripts/buzz-notify.sh
+          ./scripts/buzz-notify.sh \
+            --status ${{ steps.e2e-full-test.outcome == 'success' && 'pass' || 'fail' }} \
+            --pr ${{ github.event.pull_request.number || '' }} \
+            --job "E2E Full Suite" \
+            --detail "${{ github.sha }}"

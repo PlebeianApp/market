@@ -8,7 +8,7 @@ import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1 } from '../src/lib/fixtures'
-import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-config'
+import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL, TEST_IMAGE_URL } from './test-config'
 
 const skBytes = hexToBytes(TEST_APP_PRIVATE_KEY)
 
@@ -31,8 +31,8 @@ async function main() {
 		content: JSON.stringify({
 			name: 'Test Market',
 			displayName: 'Test Market',
-			picture: 'https://placehold.co/200x200',
-			banner: 'https://placehold.co/800x200',
+			picture: TEST_IMAGE_URL,
+			banner: TEST_IMAGE_URL,
 			ownerPk: TEST_APP_PUBLIC_KEY,
 			allowRegister: true,
 			defaultCurrency: 'USD',

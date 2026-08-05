@@ -2,6 +2,7 @@ import type { Browser, Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { setupAuthContext } from '../fixtures/auth'
 import { ensureScenario } from '../scenarios'
+import { TEST_IMAGE_URL } from '../test-config'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
@@ -13,7 +14,7 @@ async function waitForProductForm(page: Page) {
 	return productForm
 }
 
-async function addProductImage(page: Page, imageUrl = 'https://placehold.co/600x600') {
+async function addProductImage(page: Page, imageUrl = TEST_IMAGE_URL) {
 	const imageInput = page.getByTestId('image-url-input')
 	await expect(imageInput).toBeVisible({ timeout: 5_000 })
 	await imageInput.fill(imageUrl)
@@ -276,7 +277,7 @@ test.describe('Product Management', () => {
 		// Enter a remote image URL (required field)
 		const imageInput = merchantPage.getByTestId('image-url-input')
 		await expect(imageInput).toBeVisible({ timeout: 5_000 })
-		await imageInput.fill('https://placehold.co/600x600')
+		await imageInput.fill(TEST_IMAGE_URL)
 		// Click Save to add the image
 		await merchantPage.getByTestId('image-save-button').click()
 

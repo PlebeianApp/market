@@ -1,0 +1,255 @@
+name: Coverage Gate
+
+# Unified self-hosted coverage pipeline (no third-party SaaS / OAuth app):
+#
+#   1. Run the unit suite ONCE with LCOV coverage.
+#   2. DIY diff-aware gate (scripts/check-coverage.ts) — the HARD merge gate.
+#      Reuses the LCOV from step 1 via COVERAGE_LCOV_FILE (no second test run).
+#   3. Render a browsable HTML report from the LCOV (genhtml / lcov).
+#   4. Publish the HTML report to Blossom via nsite (same mechanism as the E2E
+#      dashboard), yielding a public URL reviewers can click.
+#   5. Post an idempotent PR comment + Buzz (#ci) notification carrying the URL.
+#
+# The gate (step 2) is the only step that can fail the job (block merge). The
+# report / publish / comment / Buzz steps are best-effort (continue-on-error) so
+# a transient Blossom or relay outage never blocks a PR.
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write # idempotent coverage-report PR comment
+
+jobs:
+  coverage-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout (full history for accurate diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate routes
+        run: bun run generate-routes
+
+      # ── 1. Generate LCOV coverage (unit suite — mirrors `test:unit`) ────────
+      # Integration tests need a relay + currency server and are excluded.
+      - name: Generate LCOV coverage
+        id: cov
+        run: |
+          set -euo pipefail
+          UNIT_TESTS="$(
+            # NOTE: This mirrors `test:unit` in package.json plus `scripts/`.
+            # If test:unit scope changes, update both to prevent coverage drift.
+            find contextvm src/queries/__tests__ src/lib/__tests__ scripts \
+              -type f -name '*.test.ts' ! -name '*.integration.test.ts' \
+              | sort | tr '\n' ' '
+          )"
+          bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage $UNIT_TESTS
+
+      # ── 2. DIY diff-aware gate (HARD) ──────────────────────────────────────
+      # Reuses the LCOV from step 1 (COVERAGE_LCOV_FILE) so the suite runs once.
+      # Only modified .ts/.tsx lines are gated; pre-existing untested code is
+      # never blocked. This step's failure is the only one that blocks merge.
+      - name: Coverage gate (diff-aware, hard)
+        id: gate
+        if: ${{ steps.cov.outcome == 'success' }}
+        env:
+          COVERAGE_BASE_REF: origin/${{ github.base_ref || 'master' }}
+          COVERAGE_LCOV_FILE: coverage/lcov.info
+        run: bun run check-coverage
+
+      # ── 3. Render a browsable HTML report from the LCOV ────────────────────
+      # Everything below is best-effort: a report/publish failure must NEVER
+      # block a merge, so each step continues on error.
+      - name: Install lcov (genhtml)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lcov
+
+      - name: Generate HTML coverage report
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          genhtml coverage/lcov.info \
+            --output-directory=coverage/html \
+            --no-branch-coverage \
+            --ignore-errors=source \
+            --title="Plebeian Market coverage — ${{ github.sha }}"
+
+      # ── 3b. Upload coverage HTML as a GH artifact (always-downloadable) ─────
+      # The Blossom (nsite) publish below is best-effort and can be slow for the
+      # full genhtml report (hundreds of files). This GH artifact is the reliable
+      # download path — reviewers can unzip and open index.html locally.
+      - name: Upload coverage HTML artifact
+        if: ${{ !cancelled() && hashFiles('coverage/html/index.html') != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage/html/
+          retention-days: 14
+
+      # ── 4. Publish the HTML report to Blossom (nsite) ──────────────────────
+      # Mirrors the E2E dashboard publish. Deploys with an EPHEMERAL key so it
+      # works even without CI_ANNOUNCE_NSEC; that secret only signs the
+      # discoverability announcement. Outputs nsite-url.
+      #
+      # The publish-nsite action's publish.sh needs `nak` for ephemeral keypair
+      # generation. The coverage job does NOT need nak for anything else, so we
+      # install it here (best-effort — continue-on-error) right before publish.
+      # Without nak, key generation falls back to raw hex which nak key public
+      # cannot parse, yielding "Could not derive public key from ephemeral nsec".
+      - name: Setup Go
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22'
+
+      - name: Install nak
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          # Pinned to b6568388 — see e2e.yml for the upstream go.mod regression
+          # rationale (fiatjaf/nostr replace directive breaks CI builds).
+          git clone https://github.com/fiatjaf/nak.git /tmp/nak
+          cd /tmp/nak
+          git checkout b65683886b58382890888fbdda90e5c2129df488
+          GOBIN="$(go env GOPATH)/bin"
+          mkdir -p "$GOBIN"
+          go build -o "$GOBIN/nak" .
+          echo "nak installed at: $(which nak)"
+
+      - name: Start local Blossom server
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          # Mirror e2e.yml: run `nak serve --blossom` locally so the nsite
+          # publish step has a hermetic Blossom endpoint that never depends on
+          # flaky external public servers. See pr-trust-pipeline.md § Step B1.
+          nohup nak serve --hostname 0.0.0.0 --blossom > /tmp/blossom.log 2>&1 &
+          echo "Waiting for Blossom #1 on port 10547..."
+          for _ in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
+              echo "Blossom #1 is ready"
+              break
+            fi
+            sleep 1
+          done
+          nohup nak serve --port 10548 --hostname 0.0.0.0 --blossom > /tmp/blossom2.log 2>&1 &
+          echo "Waiting for Blossom #2 on port 10548..."
+          for _ in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10548) 2>/dev/null; then
+              echo "Blossom #2 is ready"
+              break
+            fi
+            sleep 1
+          done
+          echo "::warning::Local Blossom servers may not have started. Logs:"
+          cat /tmp/blossom.log 2>/dev/null || true
+          cat /tmp/blossom2.log 2>/dev/null || true
+          # Non-fatal (continue-on-error): publish step also has continue-on-error.
+
+      - name: Publish coverage report to nsite
+        id: publish-nsite
+        if: ${{ !cancelled() && hashFiles('coverage/html/index.html') != '' }}
+        continue-on-error: true
+        # nsyte uploads hundreds of genhtml files; give it maximum room.
+        # continue-on-error keeps a hang non-fatal. The PR comment below falls
+        # back to the GH artifact when this still times out. (t_26317db1)
+        timeout-minutes: 5
+        uses: felixfelix-bot/plebeian-testing-nsite-actions/.github/actions/publish-nsite@a92f4d9492b8925f5805a12a52c4262d47b82aa1
+        with:
+          dashboard-dir: coverage/html
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          # Fully hermetic Blossom: both servers run locally as nak --blossom
+          # instances (port 10547 + 10548), started in the "Start local Blossom
+          # server" step above. Zero external dependencies — no flaky public
+          # Blossom servers. min-success=2 means both local servers must accept.
+          blossom-servers: 'http://localhost:10547 http://localhost:10548 https://blossom1.orangesync.tech https://blossom2.orangesync.tech https://24242.io https://cdn.satellite.earth https://blossom.primal.net https://nostr.download'
+          # Public relays for nsite + Kind 1985 events. Must stay reachable
+          # after CI completes — local nak dies with the runner.
+          relays: 'wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://relay.primal.net wss://relay.nostr.band wss://offchain.pub'
+          # pr-number intentionally omitted: the action's built-in comment says
+          # "E2E test dashboard". We post a coverage-specific comment below.
+
+      # ── 5a. Idempotent PR comment with the report URL ──────────────────────
+      # Re-runs UPDATE the same comment (found via the marker tag) instead of
+      # posting duplicates. Posts whenever the coverage HTML was generated — even
+      # when the nsite publish timed out — by falling back to the always-uploaded
+      # `coverage-html` GitHub artifact. (t_26317db1)
+      - name: Comment coverage report on PR
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && hashFiles('coverage/html/index.html') != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          NSITE_URL="${{ steps.publish-nsite.outputs.nsite-url }}"
+          GATE_STATUS="${{ steps.gate.outcome }}"
+          PR="${{ github.event.pull_request.number }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MARKER="<!-- pr-coverage-report -->"
+          # Prefer the nsite (Blossom) URL when the publish succeeded; otherwise
+          # link the always-uploaded `coverage-html` artifact so the report is
+          # still reachable (download → unzip → open index.html).
+          if [ -n "$NSITE_URL" ]; then
+            REPORT_LINE="🌐 Browsable report (nsite): $NSITE_URL"
+          else
+            REPORT_LINE="📦 Browsable report (GH artifact \`coverage-html\` — download, unzip, open \`index.html\`): $RUN_URL"
+          fi
+          case "$GATE_STATUS" in
+            success) EMOJI="✅" ;;
+            failure) EMOJI="🔴" ;;
+            *) EMOJI="🟡" ;;
+          esac
+          BODY=$(cat <<EOF
+          $MARKER
+          $EMOJI **Diff-aware coverage report**
+          $REPORT_LINE
+
+          - Gate: \`$GATE_STATUS\`
+          - Commit: \`${{ github.sha }}\`
+          - Run: $RUN_URL
+          EOF
+          )
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi
+
+      # ── 5b. Buzz (#ci) notification carrying the report URL ────────────────
+      - name: Notify Buzz (#ci)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          CI_BUZZ_RELAY_URL: ${{ secrets.CI_BUZZ_RELAY_URL }}
+          CI_BUZZ_PRIVATE_KEY: ${{ secrets.CI_BUZZ_PRIVATE_KEY }}
+        run: |
+          chmod +x scripts/buzz-notify.sh
+          ./scripts/buzz-notify.sh \
+            --status ${{ job.status == 'success' && 'pass' || 'fail' }} \
+            --pr ${{ github.event.pull_request.number || '' }} \
+            --job "Coverage Gate" \
+            --detail "${{ github.sha }}" \
+            --url "${{ steps.publish-nsite.outputs.nsite-url }}"

@@ -1,0 +1,96 @@
+name: Mutation Testing
+
+# Diff-scoped Stryker mutation testing (Layer 1D — see
+# docs/plans/pr-trust-pipeline.md). WARNING-ONLY by design: a low mutation score
+# NEVER blocks merge. Stryker mutates the production code changed in the PR and
+# checks whether the unit suite catches each mutation — the only coverage metric
+# that resists the "touch a function without asserting" gaming attack that
+# defeats line/branch/AST coverage.
+#
+# Flow:
+#   1. scripts/stryker-changed-files.ts scopes Stryker to the mutable .ts/.tsx
+#      files changed in the PR (git diff vs base ref).
+#   2. `stryker run` mutates those files and runs the unit suite per mutant.
+#   3. scripts/mutation-comment.ts renders a score comment (idempotent marker
+#      tag <!-- pr-mutation-report -->).
+#   4. The comment is posted/updated on the PR alongside the coverage report.
+#
+# A score below the 50% break threshold emits a visible ⚠️ warning in the
+# comment but does not fail the job. Promotion to a hard gate is a deliberate
+# later step (see the plan doc).
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write # idempotent mutation-score PR comment
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # warning-only signal; don't let a huge diff stall CI
+
+    steps:
+      - name: Checkout (full history for accurate diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate routes
+        run: bun run generate-routes
+
+      # ── 1. Diff-scoped mutation testing (WARNING-ONLY) ─────────────────────
+      # continue-on-error: a Stryker crash or low score must NEVER block merge.
+      # The score is read from the JSON report and posted as a PR comment below.
+      - name: Run Stryker on changed files
+        id: stryker
+        continue-on-error: true
+        env:
+          MUTATION_BASE_REF: origin/${{ github.base_ref || 'master' }}
+        run: bun run mutation:diff
+
+      # ── 2. Render the score comment ────────────────────────────────────────
+      # Best-effort: if Stryker didn't write a report (no mutable files changed,
+      # or it crashed), mutation-comment.ts emits a clean "no mutants" note.
+      - name: Render mutation-score comment
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          MUTATION_SHA: ${{ github.sha }}
+          MUTATION_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p reports/mutation
+          bun run mutation:comment > reports/mutation/comment.md
+
+      # ── 3. Post / update the PR comment (idempotent) ───────────────────────
+      # Re-runs UPDATE the same comment (found via the marker tag) instead of
+      # posting duplicates — same pattern as the coverage-report comment.
+      - name: Comment mutation score on PR
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          MARKER="<!-- pr-mutation-report -->"
+          BODY="$(cat reports/mutation/comment.md)"
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi
