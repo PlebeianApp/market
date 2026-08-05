@@ -1,0 +1,318 @@
+name: Preview Deploy
+
+# Per-PR Docker-based preview deployment on the shared test VPS (Layer G of
+# docs/plans/pr-trust-pipeline.md):
+#   - PR opened/synchronize: build, ship a deploy package to the VPS, bring up
+#     per-PR `docker compose` services (market app + nak relay on offset ports),
+#     create the Cloudflare A record pr{N}.test-market.orangesync.tech → VPS IP,
+#     wait for Caddy to pick up the new subdomain, health-check, and post an
+#     idempotent PR comment with the live URL.
+#   - PR closed: `docker compose down`, delete the DNS A record, update the
+#     comment to "Preview torn down".
+#
+# Port offsets (PR_OFFSET = (PR_NUMBER % 100) * 10) keep concurrent previews
+# from colliding; Caddy on the VPS uses on-demand TLS to serve each
+# pr{N}.test-market.orangesync.tech subdomain.
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 'latest'
+
+jobs:
+  deploy:
+    name: Deploy preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Preview Deploy is a follow-up enhancement (Layer G), not a trust-pipeline
+    # blocker. The PR Trust Pipeline merge gate (Layer H) does not require this
+    # check. continue-on-error keeps preview-deploy flakiness (VPS provisioning,
+    # DNS propagation, SSH key rotation) from blocking PR merge while we iterate
+    # on the VPS side. Individual step failures still surface in the run log and
+    # the PR comment reports the live URL (or warming-up status) when it works.
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write # post / update the idempotent preview-URL comment
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        run: |
+          bun run generate-routes
+          bun run build
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy-package
+          cp -r dist deploy-package/
+          cp -r src deploy-package/
+          cp -r contextvm deploy-package/
+          cp package.json bun.lock tsconfig.json deploy-package/
+
+      - name: Compute per-PR ports
+        id: ports
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_OFFSET=$(( (PR_NUMBER % 100) * 10 ))
+          APP_PORT=$(( 3000 + PR_OFFSET ))
+          RELAY_PORT=$(( 10547 + PR_OFFSET ))
+          {
+            echo "pr_offset=$PR_OFFSET"
+            echo "app_port=$APP_PORT"
+            echo "relay_port=$RELAY_PORT"
+            echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ensure remote preview directory exists
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PREVIEW_VPS_HOST }}
+          username: ${{ secrets.PREVIEW_VPS_USER }}
+          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          script: |
+            mkdir -p "$HOME/previews/pr-${{ github.event.pull_request.number }}"
+
+      - name: Upload deploy package to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PREVIEW_VPS_HOST }}
+          username: ${{ secrets.PREVIEW_VPS_USER }}
+          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          source: 'deploy-package/*'
+          target: '/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package'
+          strip_components: 1
+
+      - name: Write docker-compose.yml and bring up services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PREVIEW_VPS_HOST }}
+          username: ${{ secrets.PREVIEW_VPS_USER }}
+          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            APP_PORT="${{ steps.ports.outputs.app_port }}"
+            RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+            APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+            cd "$APP_DIR"
+            cat > docker-compose.yml <<EOF
+            services:
+              market-app:
+                image: oven/bun:latest
+                working_dir: /app
+                volumes:
+                  - ./deploy-package:/app
+                command: sh -c "bun install --production && bun run start:production"
+                ports:
+                  - "${APP_PORT}:3000"
+                environment:
+                  - NODE_ENV=production
+                  - PORT=3000
+                  - APP_RELAY_URL=ws://nak-relay:10547
+                  - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
+                  - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
+                restart: unless-stopped
+                depends_on:
+                  - nak-relay
+              nak-relay:
+                image: ghcr.io/fiatjaf/nak:latest
+                command: serve --hostname 0.0.0.0
+                ports:
+                  - "${RELAY_PORT}:10547"
+                restart: unless-stopped
+            EOF
+            docker compose up -d --remove-orphans
+            docker compose ps
+
+      - name: Upsert Cloudflare DNS A record
+        env:
+          CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+          SUBDOMAIN: ${{ steps.ports.outputs.subdomain }}
+          VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+        run: |
+          set -euo pipefail
+          # Resolve VPS public IP (the host secret may be a hostname or an IP).
+          VPS_IP="$(getent ahostsv4 "$VPS_HOST" | awk '{print $1}' | head -1)"
+          if [ -z "$VPS_IP" ]; then
+            VPS_IP="$(dig +short "$VPS_HOST" A | tail -1)"
+          fi
+          if [ -z "$VPS_IP" ]; then
+            echo "::error::Could not resolve VPS IP for $VPS_HOST"
+            exit 1
+          fi
+          echo "VPS public IP: $VPS_IP"
+
+          # Upsert: delete any existing A record for this subdomain, then create.
+          # GitHub Actions log redaction masks $CF_TOKEN automatically.
+          LIST_RESPONSE=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=$SUBDOMAIN" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json")
+          EXISTING_IDS=$(echo "$LIST_RESPONSE" | jq -r '.result[].id // empty')
+          for rid in $EXISTING_IDS; do
+            echo "Deleting existing A record $rid for $SUBDOMAIN"
+            curl -sS -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$rid" \
+              -H "Authorization: Bearer $CF_TOKEN" >/dev/null
+          done
+          echo "Creating A record $SUBDOMAIN → $VPS_IP"
+          curl -sS -X POST \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{\"type\":\"A\",\"name\":\"$SUBDOMAIN\",\"content\":\"$VPS_IP\",\"ttl\":60,\"proxied\":false}" \
+            | jq .
+
+      - name: Wait for Caddy auto-discovery
+        run: sleep 15
+
+      - name: Health check
+        id: health
+        continue-on-error: true
+        run: |
+          PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          for _ in $(seq 1 12); do
+            if curl -sf -o /dev/null --max-time 10 "$PREVIEW_URL"; then
+              echo "Preview is live: $PREVIEW_URL"
+              echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::Preview health check failed for $PREVIEW_URL"
+          echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Post / update preview URL PR comment
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          HEALTH="${{ steps.health.outcome }}"
+          APP_PORT="${{ steps.ports.outputs.app_port }}"
+          RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+          if [ "$HEALTH" = "success" ]; then
+            STATUS_LINE="✅ Preview is live"
+          else
+            STATUS_LINE="🟡 Preview deployed (health check still warming up — give it a minute)"
+          fi
+          MARKER="<!-- preview-deploy -->"
+          BODY=$(cat <<EOF
+          $MARKER
+          ## 🚀 Preview deployment
+
+          $STATUS_LINE
+
+          - URL: $PREVIEW_URL
+          - App host port: \`$APP_PORT\` · Relay host port: \`$RELAY_PORT\`
+          - Commit: \`${{ github.sha }}\`
+
+          The preview is torn down automatically when this PR is closed.
+          EOF
+          )
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi
+
+  teardown:
+    name: Tear down preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Compute subdomain
+        id: ports
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
+
+      - name: Stop containers and clean up VPS directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PREVIEW_VPS_HOST }}
+          username: ${{ secrets.PREVIEW_VPS_USER }}
+          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          script: |
+            set -uo pipefail
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+            if [ -f "$APP_DIR/docker-compose.yml" ]; then
+              cd "$APP_DIR"
+              docker compose down --remove-orphans --volumes || true
+            fi
+            rm -rf "$APP_DIR"
+
+      - name: Delete Cloudflare DNS record
+        env:
+          CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+          SUBDOMAIN: ${{ steps.ports.outputs.subdomain }}
+        run: |
+          set -uo pipefail
+          LIST_RESPONSE=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=$SUBDOMAIN" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json")
+          EXISTING_IDS=$(echo "$LIST_RESPONSE" | jq -r '.result[].id // empty')
+          for rid in $EXISTING_IDS; do
+            echo "Deleting DNS record $rid for $SUBDOMAIN"
+            curl -sS -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$rid" \
+              -H "Authorization: Bearer $CF_TOKEN" >/dev/null
+          done
+
+      - name: Update PR comment (torn down)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          MARKER="<!-- preview-deploy -->"
+          BODY=$(cat <<EOF
+          $MARKER
+          ## 🧹 Preview torn down
+
+          The preview deployment for this PR has been removed and its DNS record deleted.
+          EOF
+          )
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi

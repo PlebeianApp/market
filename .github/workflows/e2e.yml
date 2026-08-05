@@ -18,7 +18,10 @@ jobs:
   e2e-pricing:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write # post nsite dashboard PR comment
 
     steps:
       - name: Checkout code
@@ -80,27 +83,38 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
-      - name: Start relay
+      - name: Start relay + dual Blossom servers
         run: |
-          nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+          nohup nak serve --hostname 0.0.0.0 --blossom > /tmp/relay.log 2>&1 &
           echo "Waiting for relay on port 10547..."
-          for i in $(seq 1 10); do
+          for _ in $(seq 1 10); do
             if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
-              echo "Relay is ready"
-              exit 0
+              echo "Relay + Blossom #1 is ready"
+              break
             fi
             sleep 1
           done
-          echo "::error::Relay failed to start. Logs:"
-          cat /tmp/relay.log
-          exit 1
+          nohup nak serve --port 10548 --hostname 0.0.0.0 --blossom > /tmp/blossom2.log 2>&1 &
+          echo "Waiting for Blossom #2 on port 10548..."
+          for _ in $(seq 1 10); do
+            if (echo > /dev/tcp/localhost/10548) 2>/dev/null; then
+              echo "Blossom #2 is ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
+            echo "::error::Relay failed to start. Logs:"
+            cat /tmp/relay.log
+            exit 1
+          fi
 
       - name: Seed relay and start dev server
         run: |
           bun e2e/seed-relay.ts
           nohup bun dev > /tmp/devserver.log 2>&1 &
           echo "Waiting for dev server on port 34567..."
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sf http://localhost:34567/api/config > /dev/null 2>&1; then
               echo "Dev server is ready"
               exit 0
@@ -119,6 +133,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run pricing E2E tests
+        id: e2e-test
         run: bun run test:e2e -- --grep 'Product Page - View Only'
 
       - name: Show server logs on failure
@@ -137,6 +152,44 @@ jobs:
           name: test-results-pricing
           path: test-results/
           retention-days: 7
+
+      # ── nsite dashboard publish ─────────────────────────────────────────────
+      # Renders a Playwright test dashboard and publishes it to nsite via
+      # Blossom. Runs even when tests fail so reviewers can see what broke.
+      # The publish-nsite action posts a basic PR comment with the dashboard URL
+      # when pr-number is provided.
+      - name: Render E2E dashboard
+        id: render-dashboard
+        if: ${{ !cancelled() }}
+        uses: felixfelix-bot/plebeian-testing-nsite-actions/.github/actions/render-dashboard@a92f4d9492b8925f5805a12a52c4262d47b82aa1
+        with:
+          results-dir: test-results
+          output-dir: e2e-dashboard
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          base-url: http://localhost:34567
+
+      - name: Publish dashboard to nsite
+        id: publish-nsite
+        if: ${{ !cancelled() && steps.render-dashboard.outcome == 'success' }}
+        timeout-minutes: 5 # prevent 20+ minute hangs on flaky Blossom/relay infra
+        continue-on-error: true # nsite publish is best-effort — never block on Blossom/relay infra
+        uses: felixfelix-bot/plebeian-testing-nsite-actions/.github/actions/publish-nsite@a92f4d9492b8925f5805a12a52c4262d47b82aa1
+        with:
+          dashboard-dir: e2e-dashboard
+          announce-nsec: ${{ secrets.CI_ANNOUNCE_NSEC }}
+          branch: ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          # Dual local Blossom servers (nak --blossom on ports 10547 + 10548)
+          # provide hermetic uploads. Public servers are fallbacks.
+          blossom-servers: 'http://localhost:10547 http://localhost:10548 https://blossom1.orangesync.tech https://blossom2.orangesync.tech https://24242.io https://cdn.satellite.earth https://blossom.primal.net https://nostr.download'
+          blossom-min-success: '2'
+          # Public relays for nsite + Kind 1985 events. Must stay reachable
+          # after CI completes — local nak dies with the runner.
+          relays: 'wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://relay.primal.net wss://relay.nostr.band wss://offchain.pub'
+          # The action posts a basic one-line PR comment with the nsite URL.
+          pr-number: ${{ github.event.pull_request.number || '' }}
 
   e2e-full:
     # Keep the broader inherited-flaky suite off the pricing PR path.
