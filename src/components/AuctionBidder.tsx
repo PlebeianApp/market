@@ -197,11 +197,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
-	const auctionRulesAuctionIdentity = auctionRootEventId || auction.id
 	const auctionRulesAckKey =
-		hasSignedInBidder && auctionRulesBidderPubkey && auctionRulesAuctionIdentity
-			? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}:${auctionRulesAuctionIdentity}`
-			: null
+		hasSignedInBidder && auctionRulesBidderPubkey ? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}` : null
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
@@ -435,13 +432,13 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	)
 
 	const handleSubmitBid = async () => {
-		const bidData = prepareBidSubmission()
-		if (!bidData) return
-
-		if (!hasAcknowledgedAuctionRules) {
+		if (hasSignedInBidder && !hasAcknowledgedAuctionRules) {
 			setIsRulesDialogOpen(true)
 			return
 		}
+
+		const bidData = prepareBidSubmission()
+		if (!bidData) return
 
 		await submitPreparedBid(bidData)
 	}
