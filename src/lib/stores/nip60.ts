@@ -57,8 +57,11 @@ export interface Nip60DepositQuoteEstimate {
 	mintFeePaddingAmount: number
 	mintFeeAmount: number
 	lightningFeePaddingAmount: number
+	lightningFeeAmount: number
 	usedFallbackEstimate: boolean
 	feeSource: 'quote' | 'fallback'
+	mintFeeSource: 'quote' | 'fallback'
+	lightningFeeSource: 'quote' | 'fallback'
 }
 
 export interface Nip60NutzapResult {
@@ -188,8 +191,9 @@ const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[nu
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
 const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
-const AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS = 300
-const AUCTION_DEPOSIT_FALLBACK_MINT_FEE_PADDING_SATS = 700
+const AUCTION_DEPOSIT_PADDING_RATE = 0.005
+const AUCTION_DEPOSIT_MIN_PADDING_SATS = 5
+const AUCTION_DEPOSIT_MAX_PADDING_SATS = 100
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
@@ -228,6 +232,19 @@ const AUCTION_RECLAIM_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200]
  */
 const AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS = ['witness is missing', 'signature is not valid', 'spending conditions not met']
 let auctionAutoReclaimLastSweepMs = 0
+
+/**
+ * Returns the bounded safety buffer for an auction funding deposit.
+ *
+ * The buffer is 0.5% of the requested deposit, rounded up, with a 5 sat
+ * minimum and 100 sat maximum. It is used only when the mint quote does not
+ * provide a fee component; it is not a fee reported by the mint.
+ */
+export const getAuctionDepositFeePadding = (depositAmount: number): number =>
+	Math.min(
+		Math.max(Math.ceil(depositAmount * AUCTION_DEPOSIT_PADDING_RATE), AUCTION_DEPOSIT_MIN_PADDING_SATS),
+		AUCTION_DEPOSIT_MAX_PADDING_SATS,
+	)
 
 /**
  * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
@@ -340,17 +357,42 @@ const readFeeCandidate = (value: unknown): number | null => {
 	return toNonNegativeInteger(value)
 }
 
-const extractMintFeeFromQuote = (quote: unknown, requestedAmount: number): number | null => {
+const extractMintFeeFromQuote = (quote: unknown): number | null => {
 	if (!quote || typeof quote !== 'object') return null
 	const quoteRecord = quote as Record<string, unknown>
 
-	for (const key of ['mintFee', 'mint_fee', 'feeReserve', 'fee_reserve', 'fee']) {
+	for (const key of ['mintFee', 'mint_fee', 'mintingFee', 'minting_fee']) {
 		const candidate = readFeeCandidate(quoteRecord[key])
 		if (candidate !== null) return candidate
 	}
 
-	const feesCandidate = readFeeCandidate(quoteRecord.fees)
-	if (feesCandidate !== null) return feesCandidate
+	if (quoteRecord.fees && typeof quoteRecord.fees === 'object' && !Array.isArray(quoteRecord.fees)) {
+		const fees = quoteRecord.fees as Record<string, unknown>
+		for (const key of ['mint', 'minting', 'mintFee', 'mint_fee']) {
+			const candidate = readFeeCandidate(fees[key])
+			if (candidate !== null) return candidate
+		}
+	}
+
+	return null
+}
+
+const extractLightningFeeFromQuote = (quote: unknown, requestedAmount: number): number | null => {
+	if (!quote || typeof quote !== 'object') return null
+	const quoteRecord = quote as Record<string, unknown>
+
+	for (const key of ['lightningFee', 'lightning_fee', 'routingFee', 'routing_fee', 'feeReserve', 'fee_reserve', 'fee']) {
+		const candidate = readFeeCandidate(quoteRecord[key])
+		if (candidate !== null) return candidate
+	}
+
+	if (quoteRecord.fees && typeof quoteRecord.fees === 'object' && !Array.isArray(quoteRecord.fees)) {
+		const fees = quoteRecord.fees as Record<string, unknown>
+		for (const key of ['lightning', 'routing', 'reserve', 'feeReserve', 'fee_reserve', 'fee']) {
+			const candidate = readFeeCandidate(fees[key])
+			if (candidate !== null) return candidate
+		}
+	}
 
 	const quotedAmount = toNonNegativeInteger(quoteRecord.amount)
 	if (quotedAmount !== null && quotedAmount > requestedAmount) {
@@ -370,10 +412,11 @@ const buildDepositQuoteEstimate = (params: {
 	requiredBidFundingAmount: number
 	mintFeePaddingAmount: number
 	lightningFeePaddingAmount: number
-	usedFallbackEstimate: boolean
-	feeSource: 'quote' | 'fallback'
+	mintFeeSource: 'quote' | 'fallback'
+	lightningFeeSource: 'quote' | 'fallback'
 }): Nip60DepositQuoteEstimate => {
-	const { requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount, usedFallbackEstimate, feeSource } = params
+	const { requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount, mintFeeSource, lightningFeeSource } = params
+	const usedFallbackEstimate = mintFeeSource === 'fallback' || lightningFeeSource === 'fallback'
 	return {
 		requiredBidFundingAmount,
 		requestedAmount: requiredBidFundingAmount,
@@ -381,8 +424,11 @@ const buildDepositQuoteEstimate = (params: {
 		mintFeePaddingAmount,
 		mintFeeAmount: mintFeePaddingAmount,
 		lightningFeePaddingAmount,
+		lightningFeeAmount: lightningFeePaddingAmount,
 		usedFallbackEstimate,
-		feeSource,
+		feeSource: usedFallbackEstimate ? 'fallback' : 'quote',
+		mintFeeSource,
+		lightningFeeSource,
 	}
 }
 
@@ -1558,29 +1604,28 @@ export const nip60Actions = {
 			throw new Error('Mint URL is required for deposit quote estimation')
 		}
 
+		const fallbackPaddingAmount = getAuctionDepositFeePadding(requiredBidFundingAmount)
 		const fallbackEstimate = buildDepositQuoteEstimate({
 			requiredBidFundingAmount,
-			mintFeePaddingAmount: AUCTION_DEPOSIT_FALLBACK_MINT_FEE_PADDING_SATS,
-			lightningFeePaddingAmount: AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS,
-			usedFallbackEstimate: true,
-			feeSource: 'fallback',
+			mintFeePaddingAmount: 0,
+			lightningFeePaddingAmount: fallbackPaddingAmount,
+			mintFeeSource: 'fallback',
+			lightningFeeSource: 'fallback',
 		})
 
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 			const quote = await cashuWallet.createMintQuote(requiredBidFundingAmount)
-			const mintFeePaddingAmount = extractMintFeeFromQuote(quote, requiredBidFundingAmount)
-
-			if (mintFeePaddingAmount === null) {
-				return fallbackEstimate
-			}
+			const mintFeeAmount = extractMintFeeFromQuote(quote)
+			const lightningFeeAmount = extractLightningFeeFromQuote(quote, requiredBidFundingAmount)
+			const unknownFeePaddingAmount = mintFeeAmount === null || lightningFeeAmount === null ? fallbackPaddingAmount : 0
 
 			return buildDepositQuoteEstimate({
 				requiredBidFundingAmount,
-				mintFeePaddingAmount,
-				lightningFeePaddingAmount: AUCTION_DEPOSIT_LIGHTNING_FEE_PADDING_SATS,
-				usedFallbackEstimate: false,
-				feeSource: 'quote',
+				mintFeePaddingAmount: mintFeeAmount ?? 0,
+				lightningFeePaddingAmount: (lightningFeeAmount ?? 0) + unknownFeePaddingAmount,
+				mintFeeSource: mintFeeAmount === null ? 'fallback' : 'quote',
+				lightningFeeSource: lightningFeeAmount === null ? 'fallback' : 'quote',
 			})
 		} catch (err) {
 			console.warn('[nip60] Deposit quote estimation failed, using conservative fallback:', getErrorMessage(err))
