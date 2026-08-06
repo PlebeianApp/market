@@ -42,6 +42,29 @@ const TERMINAL_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
 	'mint_succeeded_bid_publish_failed_reclaimable',
 ]
 
+const FUNDED_IN_FLIGHT_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
+	'payment_acknowledged',
+	'minting_started',
+	'ecash_minted',
+	'bid_publish_attempted',
+]
+
+const CLOSE_NO_CANCEL_FUNDING_STATES = new Set<AuctionBidFundingLifecycleState>([
+	...TERMINAL_FUNDING_STATES,
+	...FUNDED_IN_FLIGHT_FUNDING_STATES,
+])
+
+const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecycleState>([
+	...FUNDED_IN_FLIGHT_FUNDING_STATES,
+	'mint_succeeded_bid_publish_failed_reclaimable',
+])
+
+export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
+	!CLOSE_NO_CANCEL_FUNDING_STATES.has(state)
+
+export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
+	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
+
 export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSuccess }: UseAuctionBidFundingOptions) {
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
@@ -160,11 +183,13 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 	)
 
 	const handleDepositModalClose = useCallback(() => {
-		if (!TERMINAL_FUNDING_STATES.includes(bidFundingLifecycleState)) {
+		if (shouldCancelFundingOnModalClose(bidFundingLifecycleState)) {
 			transitionFundingState('funding_canceled')
 		}
 		setIsDepositOpen(false)
-		setPendingBidSubmission(null)
+		if (!shouldPreservePendingBidSubmissionOnModalClose(bidFundingLifecycleState)) {
+			setPendingBidSubmission(null)
+		}
 	}, [bidFundingLifecycleState, transitionFundingState])
 
 	return {
