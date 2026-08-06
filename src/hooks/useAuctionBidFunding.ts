@@ -19,6 +19,17 @@ export type AuctionBidFundingLifecycleState =
 
 export type AuctionBidFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
 
+export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingLifecycleState[] = [
+	'invoice_unpaid_or_expired_reclaimable',
+	'invoice_paid_mint_failed_reclaimable',
+	'mint_succeeded_bid_publish_failed_reclaimable',
+]
+
+const AUCTION_BID_FUNDING_RECLAIMABLE_STATE_SET = new Set<AuctionBidFundingLifecycleState>(AUCTION_BID_FUNDING_RECLAIMABLE_STATES)
+
+export const isAuctionBidFundingReclaimableState = (state: AuctionBidFundingLifecycleState): boolean =>
+	AUCTION_BID_FUNDING_RECLAIMABLE_STATE_SET.has(state)
+
 interface StartFundingForBidInput {
 	bidData: AuctionBidFormData
 	hasInsufficientBidFunds: boolean
@@ -59,6 +70,26 @@ const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecy
 	'mint_succeeded_bid_publish_failed_reclaimable',
 ])
 
+const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycleState, ReadonlySet<AuctionBidFundingLifecycleState>> = {
+	idle: new Set(['funding_session_created', 'invoice_unpaid_or_expired_reclaimable', 'bid_publish_attempted', 'funding_canceled']),
+	funding_session_created: new Set(['invoice_created', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
+	invoice_created: new Set(['payment_acknowledged', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
+	payment_acknowledged: new Set(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
+	minting_started: new Set(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
+	ecash_minted: new Set(['bid_publish_attempted', 'invoice_paid_mint_failed_reclaimable']),
+	bid_publish_attempted: new Set(['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable']),
+	bid_published: new Set(['funding_session_created']),
+	invoice_unpaid_or_expired_reclaimable: new Set(['funding_session_created']),
+	invoice_paid_mint_failed_reclaimable: new Set(['funding_session_created']),
+	mint_succeeded_bid_publish_failed_reclaimable: new Set(['bid_publish_attempted', 'funding_session_created']),
+	funding_canceled: new Set(['funding_session_created']),
+}
+
+export const canTransitionAuctionBidFundingState = (
+	from: AuctionBidFundingLifecycleState,
+	to: AuctionBidFundingLifecycleState,
+): boolean => from === to || AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS[from].has(to)
+
 export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	!CLOSE_NO_CANCEL_FUNDING_STATES.has(state)
 
@@ -73,7 +104,9 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
 
 	const transitionFundingState = useCallback((nextState: AuctionBidFundingLifecycleState) => {
-		setBidFundingLifecycleState(nextState)
+		setBidFundingLifecycleState((currentState) =>
+			canTransitionAuctionBidFundingState(currentState, nextState) ? nextState : currentState,
+		)
 	}, [])
 
 	const submitPreparedBid = useCallback(

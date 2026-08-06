@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
 	getAuctionDepositFeePadding,
 	getAuctionDepositMaxMintQuoteFeeSats,
+	NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
 	nip60Actions,
 	nip60Store,
 	validateAuctionDepositInvoiceQuote,
@@ -52,6 +53,10 @@ describe('getAuctionDepositFeePadding', () => {
 })
 
 describe('waitForDepositConfirmation', () => {
+	test('uses a 15s default confirmation timeout', () => {
+		expect(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).toBe(15_000)
+	})
+
 	test('rejects when confirmation times out', async () => {
 		const deposit = createMockDeposit()
 
