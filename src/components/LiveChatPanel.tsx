@@ -4,7 +4,7 @@ import { useLiveChatMessages, useLiveActivity } from '@/queries/liveChat'
 import { usePublishLiveChatMessageMutation } from '@/publish/liveChat'
 import { deriveLiveActivityStatus, type LiveActivityStatus } from '@/lib/nip53'
 import { getAuctionId } from '@/queries/auctions'
-import { getAuctionStartAt, getAuctionMaxEndAt } from '@/lib/auctionSettlement'
+import { getAuctionStartAt, getAuctionBiddingCutoffAt } from '@/lib/auctionSettlement'
 import { LiveChatMessageBubble } from './LiveChatMessage'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
@@ -31,15 +31,30 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 	const { user } = useStore(authStore)
 	const dTag = getAuctionId(auctionEvent)
 
-	const liveActivityQuery = useLiveActivity(auctionEvent)
+	const startsAt = getAuctionStartAt(auctionEvent)
+	const biddingCutoffAt = getAuctionBiddingCutoffAt(auctionEvent)
+
+	// Derive a preliminary status from auction timestamps for the refetch
+	// interval and as a fallback before the live activity query loads.
+	const preliminaryStatus = deriveLiveActivityStatus(startsAt, biddingCutoffAt)
+
+	// Poll faster (15s) while planned so the live chat activates promptly
+	// when the auction starts, instead of waiting up to 60s.
+	const liveActivityRefetchMs = preliminaryStatus === 'planned' ? 15_000 : 60_000
+	const liveActivityQuery = useLiveActivity(auctionEvent, { refetchInterval: liveActivityRefetchMs })
 	const liveActivity = liveActivityQuery.data
 	const liveActivityCoord = liveActivity?.coord ?? ''
 
-	const startsAt = getAuctionStartAt(auctionEvent)
-	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
-	const status = deriveLiveActivityStatus(startsAt, maxEndAt)
+	// Status comes directly from CVM - no timestamp overrides
+	const status = liveActivity?.status ?? null
 	const isLive = status === 'live'
 	const canChat = isLive
+
+	// Check for staleness: show warning if React Query's last successful
+	// data update is older than 2x the refetch interval. Use dataUpdatedAt
+	// (ms epoch) so the comparison stays in a single unit.
+	const isStale =
+		liveActivity && liveActivityQuery.dataUpdatedAt > 0 && Date.now() - liveActivityQuery.dataUpdatedAt > liveActivityRefetchMs * 2
 
 	const chatQuery = useLiveChatMessages(liveActivityCoord, isLive)
 	const messages = chatQuery.data ?? []
@@ -100,7 +115,25 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 		}
 	}, [sendMessageMutation.status])
 
-	if (!liveActivity) {
+	const handleSend = useCallback(() => {
+		const trimmed = input.trim()
+		if (!trimmed || sendMessageMutation.isPending || !liveActivityCoord || !canChat) return
+		sendMessageMutation.mutate({ liveActivityCoord, content: trimmed }, { onSuccess: () => setInput('') })
+	}, [input, sendMessageMutation, liveActivityCoord, canChat])
+
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if (e.key === 'Enter' && !e.shiftKey) {
+				e.preventDefault()
+				handleSend()
+			}
+		},
+		[handleSend],
+	)
+
+	// All hooks above must run unconditionally. Return the empty state UI
+	// only after every hook has been declared.
+	if (!status) {
 		return (
 			<div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
 				<MessageCircle className="h-8 w-8 text-muted-foreground" />
@@ -109,25 +142,18 @@ export function LiveChatPanel({ auctionEvent }: LiveChatPanelProps) {
 		)
 	}
 
-	const handleSend = () => {
-		const trimmed = input.trim()
-		if (!trimmed || sendMessageMutation.isPending || !liveActivityCoord || !canChat) return
-		sendMessageMutation.mutate({ liveActivityCoord, content: trimmed }, { onSuccess: () => setInput('') })
-	}
-
-	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault()
-			handleSend()
-		}
-	}
-
 	return (
 		<div className="relative flex h-full flex-col bg-white">
 			<div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
 				<div className="flex items-center gap-2">
 					<div className={`h-2 w-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-zinc-300'}`} />
 					<span className="text-sm font-medium text-zinc-700">Live Chat</span>
+					{isStale && (
+						<div className="ml-2 flex items-center gap-1 rounded bg-yellow-50 px-2 py-1">
+							<div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+							<span className="text-xs text-yellow-700">Chat may be experiencing connectivity issues</span>
+						</div>
+					)}
 				</div>
 				<span className="text-xs text-zinc-400">{messages.length} messages</span>
 			</div>

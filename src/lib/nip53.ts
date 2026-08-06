@@ -25,10 +25,10 @@ export interface LiveChatMessage {
 	event: any
 }
 
-export function deriveLiveActivityStatus(startsAt: number, maxEndAt: number, now?: number): LiveActivityStatus {
+export function deriveLiveActivityStatus(startsAt: number, endAt: number, now?: number): LiveActivityStatus {
 	const t = now ?? Math.floor(Date.now() / 1000)
 	if (startsAt > 0 && t < startsAt) return 'planned'
-	if (maxEndAt > 0 && t >= maxEndAt) return 'ended'
+	if (endAt > 0 && t >= endAt) return 'ended'
 	return 'live'
 }
 
