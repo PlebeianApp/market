@@ -435,10 +435,14 @@ export const ndkActions = {
 			aiGuardrails: enableGuardrails ? { skip: new Set(['ndk-no-cache', 'fetch-events-usage']) } : false,
 		})
 
-		// Zap NDK monitors zap receipts on public relays — LSPs broadcast
-		// receipts to their own pools, not the app relay. Always uses the
-		// union of ZAP_RELAYS + the main read set.
-		const zapNdk = new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls) })
+		// Monitor zap receipts on public ZAP_RELAYS (plus the app relay) in
+		// production. LSPs publish zap receipts to their own public relays,
+		// not the local/app relay, so we must subscribe there to detect paid
+		// invoices. The server computes externalZapRelaysEnabled in /api/config
+		// and sends it to the browser — one decision point, no client/server
+		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
+		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
+		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls) }) : null
 
 		ndkStore.setState((s) => ({ ...s, ndk, zapNdk, explicitRelayUrls, writeRelayUrls }))
 
@@ -472,7 +476,9 @@ export const ndkActions = {
 				ndkStore.setState((s) => ({ ...s, isConnected: connected }))
 				if (connected) console.log('✅ NDK connected to relays')
 
-				// Also connect zap NDK in background (if available - skipped in local-relay-only mode)
+				// Connect zap NDK in background — it's null when external
+				// zap relays are disabled (staging/CI), so the guard inside
+				// connectZapNdk handles that automatically.
 				if (state.zapNdk) {
 					void ndkActions.connectZapNdk(5000)
 				}

@@ -28,6 +28,28 @@ infrastructure.
 - Keep protocol assertions explicit: validate event kind, tags, author, and
   expected relay behavior where tests inspect Nostr events.
 
+## Test Isolation
+
+Tests must not make network calls to external services. Only the local
+relay (`nak serve`) and local dev server (port 3333) are allowed. All
+external services (CDNs, mints, Lightning nodes) must be mocked or
+intercepted via `page.route()` / `context.route()`.
+
+See ADR-0005 and the repository-level AGENTS.md "Test Isolation" section
+for the full policy and established mock patterns.
+
+### Mocks Available
+
+- `e2e/utils/lightning-mock.ts` — LNURL, WebLN, zap receipts
+- `e2e/utils/nip46-mock.ts` — NIP-46 remote signer
+- `e2e/helpers/lnurl-mock.ts` — LNURL discovery interception
+
+### Intercepting External Requests
+
+Use `page.route()` to intercept requests to external domains and serve
+local fixtures or mock responses. See `e2e/tests/product-page.spec.ts`
+for the CDN image interception pattern.
+
 ## Safe Checks
 
 - `git diff --check`
