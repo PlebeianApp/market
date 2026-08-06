@@ -32,6 +32,7 @@ import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, t
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
+import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
 import { configStore } from './config'
 import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
@@ -197,6 +198,9 @@ export const NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS = 15_000
 const AUCTION_DEPOSIT_PADDING_RATE = 0.005
 const AUCTION_DEPOSIT_MIN_PADDING_SATS = 5
 const AUCTION_DEPOSIT_MAX_PADDING_SATS = 100
+const AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS = 25
+const AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE = 0.1
+const AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS = 2000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
@@ -248,6 +252,59 @@ export const getAuctionDepositFeePadding = (depositAmount: number): number =>
 		Math.max(Math.ceil(depositAmount * AUCTION_DEPOSIT_PADDING_RATE), AUCTION_DEPOSIT_MIN_PADDING_SATS),
 		AUCTION_DEPOSIT_MAX_PADDING_SATS,
 	)
+
+export const getAuctionDepositMaxMintQuoteFeeSats = (requestedAmount: number): number => {
+	const relativeCap = Math.ceil(requestedAmount * AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE)
+	return Math.min(AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS, Math.max(AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS, relativeCap))
+}
+
+const extractInvoiceAmountSats = (invoice: string): number | null => {
+	const normalizedInvoice = invoice.trim().replace(/^lightning:/i, '')
+	if (!normalizedInvoice) return null
+
+	try {
+		const decoded = decodeBolt11(normalizedInvoice)
+		const amountMillisatsRaw = decoded.sections.find((section) => section.name === 'amount')?.value
+		if (amountMillisatsRaw == null) return null
+
+		const amountMillisats =
+			typeof amountMillisatsRaw === 'number'
+				? amountMillisatsRaw
+				: Number.parseInt(typeof amountMillisatsRaw === 'string' ? amountMillisatsRaw : String(amountMillisatsRaw), 10)
+
+		if (!Number.isFinite(amountMillisats) || amountMillisats <= 0) return null
+		return Math.ceil(amountMillisats / 1000)
+	} catch {
+		return null
+	}
+}
+
+export const validateAuctionDepositInvoiceQuote = (params: {
+	requestedAmount: number
+	depositAmount: number
+	invoiceAmountSats: number
+	mintUrl: string
+}): void => {
+	const { requestedAmount, depositAmount, invoiceAmountSats, mintUrl } = params
+	if (!Number.isFinite(invoiceAmountSats) || invoiceAmountSats <= 0) {
+		throw new Error('Mint returned an invalid Lightning invoice amount. Please retry with a different mint.')
+	}
+
+	if (invoiceAmountSats < depositAmount) {
+		throw new Error(
+			`Mint ${getMintHostname(mintUrl)} returned an invoice below the requested deposit amount. Please retry with a different mint.`,
+		)
+	}
+
+	const quoteFeeSats = invoiceAmountSats - depositAmount
+	const maxAllowedQuoteFeeSats = getAuctionDepositMaxMintQuoteFeeSats(requestedAmount)
+	if (quoteFeeSats > maxAllowedQuoteFeeSats) {
+		throw new Error(
+			`Mint ${getMintHostname(mintUrl)} returned an unusually high Lightning fee quote (${quoteFeeSats} sats on a ${requestedAmount} sat deposit). ` +
+				`Maximum allowed is ${maxAllowedQuoteFeeSats} sats. Please choose another mint.`,
+		)
+	}
+}
 
 /**
  * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
@@ -1516,6 +1573,19 @@ export const nip60Actions = {
 
 			const deposit = wallet.deposit(depositAmount, targetMint)
 			const invoice = await deposit.start()
+
+			if (invoice) {
+				const invoiceAmountSats = extractInvoiceAmountSats(invoice)
+				if (invoiceAmountSats == null) {
+					throw new Error('Mint returned an invoice without a parseable amount. Please retry with a different mint.')
+				}
+				validateAuctionDepositInvoiceQuote({
+					requestedAmount,
+					depositAmount,
+					invoiceAmountSats,
+					mintUrl: targetMint,
+				})
+			}
 
 			nip60Store.setState((s) => ({
 				...s,

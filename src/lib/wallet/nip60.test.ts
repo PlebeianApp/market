@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { getAuctionDepositFeePadding, nip60Actions, nip60Store, waitForDepositConfirmation } from '@/lib/stores/nip60'
+import {
+	getAuctionDepositFeePadding,
+	getAuctionDepositMaxMintQuoteFeeSats,
+	nip60Actions,
+	nip60Store,
+	validateAuctionDepositInvoiceQuote,
+	waitForDepositConfirmation,
+} from '@/lib/stores/nip60'
 
 type DepositEventName = 'success' | 'error'
 
@@ -94,5 +101,48 @@ describe('estimateDepositQuote', () => {
 		expect(estimate.lightningFeeAmount).toBe(50)
 		expect(estimate.feeSource).toBe('fallback')
 		expect(estimate.usedFallbackEstimate).toBe(true)
+	})
+})
+
+describe('mint quote fee bounds', () => {
+	test.each([
+		[100, 25],
+		[10_000, 1_000],
+		[50_000, 2_000],
+	])('caps mint quote fees for %d sats at %d sats', (requestedAmount, expectedMax) => {
+		expect(getAuctionDepositMaxMintQuoteFeeSats(requestedAmount)).toBe(expectedMax)
+	})
+
+	test('accepts invoice quote fee within cap', () => {
+		expect(() =>
+			validateAuctionDepositInvoiceQuote({
+				requestedAmount: 10_000,
+				depositAmount: 10_050,
+				invoiceAmountSats: 10_500,
+				mintUrl: 'https://mint.minibits.cash',
+			}),
+		).not.toThrow()
+	})
+
+	test('rejects invoice quote fee that exceeds cap', () => {
+		expect(() =>
+			validateAuctionDepositInvoiceQuote({
+				requestedAmount: 10_000,
+				depositAmount: 10_050,
+				invoiceAmountSats: 30_000,
+				mintUrl: 'https://mint.minibits.cash',
+			}),
+		).toThrow('unusually high Lightning fee quote')
+	})
+
+	test('rejects invoice amount below requested deposit', () => {
+		expect(() =>
+			validateAuctionDepositInvoiceQuote({
+				requestedAmount: 10_000,
+				depositAmount: 10_050,
+				invoiceAmountSats: 9_000,
+				mintUrl: 'https://mint.minibits.cash',
+			}),
+		).toThrow('invoice below the requested deposit amount')
 	})
 })

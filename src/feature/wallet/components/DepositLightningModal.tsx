@@ -55,7 +55,7 @@ export function DepositLightningModal({
 	onMintingStarted,
 	onFundingFailed,
 }: DepositLightningModalProps) {
-	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
+	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
@@ -404,7 +404,9 @@ export function DepositLightningModal({
 							)}
 						</div>
 
-						{depositStatus === 'error' && <p className="text-sm text-destructive">Failed to generate invoice. Please try again.</p>}
+						{depositStatus === 'error' && (
+							<p className="text-sm text-destructive">{depositError || 'Failed to generate invoice. Please try again.'}</p>
+						)}
 
 						<div className="flex justify-end gap-2">
 							<Button variant="outline" onClick={handleClose}>
