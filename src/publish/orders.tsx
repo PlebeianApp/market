@@ -15,10 +15,12 @@ import {
 import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
+import { fetchProductSmart, getProductType } from '@/queries/products'
 import type { Event } from 'nostr-tools'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
 
 async function resolveDeliveryRequirementsForProducts(
+	sellerPubkey: string,
 	products: Array<{ id: string; shippingMethodId?: string | null }>,
 ): Promise<CheckoutDeliveryRequirements> {
 	const shippingRefs = Array.from(new Set(products.map((product) => product.shippingMethodId?.trim()).filter(Boolean) as string[]))
@@ -36,8 +38,25 @@ async function resolveDeliveryRequirementsForProducts(
 		}),
 	)
 
+	// Fetch product type metadata when available so digital products can be detected
+	const productsWithType: Array<{ id: string; shippingMethodId?: string | null; productType?: 'digital' | 'physical' }> = []
+
+	await Promise.all(
+		products.map(async (p) => {
+			try {
+				const productEvent = await fetchProductSmart(p.id, sellerPubkey)
+				const typeTag = getProductType(productEvent as any)
+				const productType = typeTag?.[2] === 'digital' ? 'digital' : undefined
+				productsWithType.push({ ...p, productType })
+			} catch (error) {
+				// If product fetch fails, fall back to original product info
+				productsWithType.push({ ...p })
+			}
+		}),
+	)
+
 	return resolveCheckoutDeliveryRequirements({
-		products,
+		products: productsWithType,
 		servicesByShippingRef,
 	})
 }
@@ -832,7 +851,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 
 		if (sellerProducts.length === 0 || !data) continue
 
-		const requirements = await resolveDeliveryRequirementsForProducts(sellerProducts)
+		const requirements = await resolveDeliveryRequirementsForProducts(sellerPubkey, sellerProducts)
 		if (!requirements.isResolved) {
 			throw new Error('Delivery requirements could not be verified for one or more selected shipping options')
 		}

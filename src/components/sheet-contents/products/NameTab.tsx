@@ -8,7 +8,7 @@ import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
 
 export function NameTab() {
-	const { productType, name, summary, description, selectedCollection } = useStore(productFormStore)
+	const { productType, delivery, name, summary, description, selectedCollection } = useStore(productFormStore)
 	const { user } = useStore(authStore)
 
 	// Fetch user's collections
@@ -21,6 +21,7 @@ export function NameTab() {
 			description: description,
 			collection: selectedCollection || '',
 			productType: productType,
+			delivery: delivery,
 		},
 		onSubmit: async ({ value }) => {
 			productFormActions.updateValues({
@@ -28,6 +29,7 @@ export function NameTab() {
 				summary: value.summary,
 				description: value.description,
 				productType: value.productType as 'single' | 'variable',
+				delivery: value.delivery as 'physical' | 'digital',
 			})
 		},
 	})
@@ -77,6 +79,27 @@ export function NameTab() {
 					<SelectContent>
 						<SelectItem value="single">Single Product</SelectItem>
 						<SelectItem value="variable">Product with variants</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
+
+			<div className="grid w-full gap-1.5">
+				<Select
+					value={delivery}
+					onValueChange={(value) =>
+						productFormActions.updateValues({
+							delivery: value as 'physical' | 'digital',
+							// Clear quantity for digital products
+							...(value === 'digital' ? { quantity: '' } : {}),
+						})
+					}
+				>
+					<SelectTrigger className="border-2">
+						<SelectValue placeholder="Physical or Digital" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="physical">Physical</SelectItem>
+						<SelectItem value="digital">Digital</SelectItem>
 					</SelectContent>
 				</Select>
 			</div>

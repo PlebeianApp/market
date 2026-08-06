@@ -38,8 +38,11 @@ export const publishMigratedProduct = async (
 		throw new Error('Valid product price is required')
 	}
 
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
+	// Quantity is not required for digital delivery
+	if (formData.delivery !== 'digital') {
+		if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
+			throw new Error('Valid product quantity is required')
+		}
 	}
 
 	if (formData.images.length === 0) {

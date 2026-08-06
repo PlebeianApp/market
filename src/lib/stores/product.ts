@@ -72,6 +72,7 @@ export interface ProductFormState {
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
+	delivery: 'physical' | 'digital'
 	mainCategory: string | null
 	selectedCollection: string | null
 	specs: ProductSpec[]
@@ -101,6 +102,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	currency: 'SATS',
 	status: 'on-sale',
 	productType: 'single',
+	delivery: 'physical',
 	mainCategory: null,
 	selectedCollection: null,
 	specs: [],
@@ -275,6 +277,7 @@ export const productFormActions = {
 					quantity: stockTag?.[1] || '',
 					status: visibilityTag?.[1] || 'hidden',
 					productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
+					delivery: typeTag?.[2] === 'digital' ? 'digital' : 'physical',
 					mainCategory: mainCategoryFromTags || null,
 					selectedCollection: collection,
 					categories: subCategoriesFromTags || [],
@@ -470,6 +473,7 @@ export const productFormActions = {
 			images: state.images,
 			specs: state.specs,
 			shippings: normalizeProductShippingSelections(state.shippings),
+			delivery: state.delivery,
 			weight: state.weight,
 			dimensions: state.dimensions,
 			isNSFW: state.isNSFW,

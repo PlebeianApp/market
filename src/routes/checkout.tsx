@@ -14,6 +14,7 @@ import {
 	resolveCheckoutDeliveryRequirements,
 	type CheckoutDeliveryRequirements,
 } from '@/lib/checkout/deliveryRequirements'
+import { fetchProductSmart, getProductType } from '@/queries/products'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
@@ -183,12 +184,38 @@ function RouteComponent() {
 			}
 
 			if (!hasAllShippingMethods) {
-				setDeliveryRequirements(
-					resolveCheckoutDeliveryRequirements({
-						products: cartProducts,
-						servicesByShippingRef: {},
-					}),
-				)
+				// Try to enrich cart products with productType hints before resolving delivery requirements
+				try {
+					const enriched: Array<{ id: string; shippingMethodId?: string | null; productType?: 'digital' | 'physical' }> = []
+					await Promise.all(
+						cartProducts.map(async (prod) => {
+							try {
+								const ev = await fetchProductSmart(prod.id, prod.sellerPubkey)
+								const typeTag = getProductType(ev as any)
+								enriched.push({ ...prod, productType: typeTag?.[2] === 'digital' ? 'digital' : undefined })
+							} catch {
+								enriched.push({ ...prod })
+							}
+						}),
+					)
+
+					setDeliveryRequirements(
+						resolveCheckoutDeliveryRequirements({
+							products: enriched,
+							servicesByShippingRef: {},
+						}),
+					)
+				} catch (e) {
+					setDeliveryRequirements(
+						resolveCheckoutDeliveryRequirements({
+							products: cartProducts.map((prod) => ({
+								...prod,
+								productType: undefined,
+							})),
+							servicesByShippingRef: {},
+						}),
+					)
+				}
 				setIsDeliveryRequirementsLoading(false)
 				setDeliveryRequirementsError(null)
 				return
@@ -211,12 +238,37 @@ function RouteComponent() {
 
 				if (isCancelled) return
 
-				setDeliveryRequirements(
-					resolveCheckoutDeliveryRequirements({
-						products: cartProducts,
-						servicesByShippingRef,
-					}),
-				)
+				try {
+					const enriched: Array<{ id: string; shippingMethodId?: string | null; productType?: 'digital' | 'physical' }> = []
+					await Promise.all(
+						cartProducts.map(async (prod) => {
+							try {
+								const ev = await fetchProductSmart(prod.id, prod.sellerPubkey)
+								const typeTag = getProductType(ev as any)
+								enriched.push({ ...prod, productType: typeTag?.[2] === 'digital' ? 'digital' : undefined })
+							} catch {
+								enriched.push({ ...prod })
+							}
+						}),
+					)
+
+					setDeliveryRequirements(
+						resolveCheckoutDeliveryRequirements({
+							products: enriched,
+							servicesByShippingRef,
+						}),
+					)
+				} catch (e) {
+					setDeliveryRequirements(
+						resolveCheckoutDeliveryRequirements({
+							products: cartProducts.map((prod) => ({
+								...prod,
+								productType: undefined,
+							})),
+							servicesByShippingRef,
+						}),
+					)
+				}
 				setIsDeliveryRequirementsLoading(false)
 			} catch (error) {
 				console.error('Failed to resolve checkout delivery requirements:', error)
@@ -224,7 +276,10 @@ function RouteComponent() {
 
 				setDeliveryRequirements(
 					resolveCheckoutDeliveryRequirements({
-						products: cartProducts,
+						products: cartProducts.map((prod) => ({
+							...prod,
+							productType: undefined,
+						})),
 						servicesByShippingRef,
 					}),
 				)
