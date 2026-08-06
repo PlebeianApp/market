@@ -72,6 +72,7 @@ export function DepositLightningModal({
 	const successNotifiedRef = useRef(false)
 	const paymentAcknowledgedRef = useRef(false)
 	const failureNotifiedRef = useRef(false)
+	const notifiedInvoiceRef = useRef<string | null>(null)
 	const filteredMints = useMemo(() => {
 		const normalizedWalletMints = mints.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null)
 		const normalizedAllowedMints = allowedMints?.map(normalizeValidMintUrl).filter((mintUrl): mintUrl is string => mintUrl !== null) ?? []
@@ -145,7 +146,12 @@ export function DepositLightningModal({
 	}, [depositInvoice, depositStatus, resetNwcPaymentState])
 
 	useEffect(() => {
-		if (!depositInvoice || depositStatus !== 'pending') return
+		if (!depositInvoice || depositStatus !== 'pending') {
+			if (!depositInvoice) notifiedInvoiceRef.current = null
+			return
+		}
+		if (notifiedInvoiceRef.current === depositInvoice) return
+		notifiedInvoiceRef.current = depositInvoice
 		onInvoiceCreated?.(depositInvoice)
 	}, [depositInvoice, depositStatus, onInvoiceCreated])
 
@@ -190,12 +196,9 @@ export function DepositLightningModal({
 		setIsGenerating(true)
 		resetNwcPaymentState()
 		try {
-			const invoice = await nip60Actions.startDeposit(amountNum, selectedMint, {
+			await nip60Actions.startDeposit(amountNum, selectedMint, {
 				includeFeePadding: !!allowedMints?.length,
 			})
-			if (invoice) {
-				onInvoiceCreated?.(invoice)
-			}
 		} finally {
 			setIsGenerating(false)
 		}
