@@ -208,7 +208,14 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 	const hasReserve = reserve > 0
 	const reserveMet = !!topBid && topBid.amount >= reserve
 
-	const latestSettlement = settlements[0] ?? null
+	// Prefer 'settled' over 'reserve_not_met' (a settled event redeems proofs
+	// and cannot be overridden by a later reserve_not_met). Among same-status
+	// events, prefer the latest by created_at.
+	const latestSettlement = settlements.length
+		? settlements.reduce((best, s) =>
+				s.status === 'settled' && best.status !== 'settled' ? s : s.status === best.status && s.createdAt > best.createdAt ? s : best,
+			)
+		: null
 	const hasLatestSettlement = !!latestSettlement
 	const settlementStatus = latestSettlement?.status ?? 'unknown'
 	const settlementWinner = latestSettlement?.winnerPubkey ?? ''
@@ -369,6 +376,19 @@ export function getSettlementDescriptor(input: GetSettlementDescriptorInput): Se
 			}
 
 			if (d.hasPathReleaseForTopBid) {
+				if (d.settlementWindowExpired) {
+					return build(
+						role,
+						phase,
+						'Late Settlement (Best-Effort)',
+						'The settlement window has expired. The winning bidder can now claim a refund. Publishing a settlement may still succeed but is not guaranteed.',
+						'action',
+						'gavel',
+						cta('submit-settlement', 'Publish Settlement'),
+						0,
+						verifiedBadge,
+					)
+				}
 				return build(
 					role,
 					phase,

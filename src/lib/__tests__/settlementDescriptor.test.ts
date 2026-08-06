@@ -266,6 +266,47 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.tone).toBe('action')
 		})
 
+		test('late-settlement: path released but settlement window expired', () => {
+			const topBid = makeBid({ amount: 50000 })
+			const d = getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 40000 }),
+					bids: [topBid],
+					topBid,
+					currentUserPubkey: SELLER_PUBKEY,
+					pathReleases: [makePathRelease({ bidEventId: topBid.id })],
+					now: AUCTION_LOCKTIME + 10,
+				}),
+			)
+			expect(d?.title).toBe('Late Settlement (Best-Effort)')
+			expect(d?.cta?.kind).toBe('submit-settlement')
+			expect(d?.tone).toBe('action')
+			expect(d?.message).toContain('refund')
+		})
+
+		test('latestSettlement prefers latest by created_at among same status', () => {
+			const topBid = makeBid({ amount: 50000 })
+			const older = makeSettlement({
+				status: 'reserve_not_met',
+				createdAt: 200,
+			})
+			const newer = makeSettlement({
+				status: 'reserve_not_met',
+				createdAt: 300,
+			})
+			const d = getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 100000 }),
+					bids: [topBid],
+					topBid,
+					currentUserPubkey: SELLER_PUBKEY,
+					settlements: [older, newer],
+					now: 120,
+				}),
+			)
+			expect(d?.title).toBe('Auction Closed — Reserve Not Met')
+		})
+
 		test('close-auction (reserve not met): high reserve, no qualifying bid', () => {
 			const topBid = makeBid({ amount: 30000 })
 			const d = getSettlementDescriptor(
