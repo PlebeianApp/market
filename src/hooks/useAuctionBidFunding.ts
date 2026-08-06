@@ -19,6 +19,24 @@ export type AuctionBidFundingLifecycleState =
 
 export type AuctionBidFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
 
+/**
+ * ADR lifecycle mapping note:
+ * - ADR `bid_lock_conversion_attempted` maps to `bid_publish_attempted`.
+ * - ADR `bid_lock_conversion_complete` is represented by terminal outcomes after
+ *   the publish attempt finishes:
+ *   - `bid_published` when lock conversion and bid publish both succeed.
+ *   - `mint_succeeded_bid_publish_failed_reclaimable` when lock conversion
+ *     succeeded but bid publish failed and funds remain reclaimable.
+ *
+ * We intentionally keep lock conversion under the publish-attempt phase instead
+ * of adding separate conversion-only states to avoid splitting one atomic UX
+ * step into multiple user-visible transitions.
+ */
+export const AUCTION_BID_FUNDING_ADR_STATE_MAPPING = {
+	bid_lock_conversion_attempted: 'bid_publish_attempted',
+	bid_lock_conversion_complete: ['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable'],
+} as const
+
 export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingLifecycleState[] = [
 	'invoice_unpaid_or_expired_reclaimable',
 	'invoice_paid_mint_failed_reclaimable',
