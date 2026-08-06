@@ -67,6 +67,7 @@ export function DepositLightningModal({
 	const sentNwcInvoiceRef = useRef<string | null>(null)
 	const nwcPaymentSentForCurrentInvoice = !!depositInvoice && sentNwcInvoiceRef.current === depositInvoice
 	const isPayingWithNwc = nwcPaymentStatus === 'paying'
+	const needsConfirmationRetry = depositStatus === 'awaiting_confirmation_retry'
 	const nwcPaymentSent = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
 	const nwcPaymentAttempted = nwcPaymentStatus !== 'idle' || nwcPaymentSentForCurrentInvoice
 	const successNotifiedRef = useRef(false)
@@ -244,6 +245,10 @@ export function DepositLightningModal({
 		}
 	}
 
+	const handleRetryConfirmation = () => {
+		nip60Actions.retryDepositConfirmation()
+	}
+
 	const handleClose = () => {
 		if (isPayingWithNwc) return
 
@@ -341,11 +346,23 @@ export function DepositLightningModal({
 							</div>
 						)}
 						<p className="text-sm text-muted-foreground text-center">
-							{nwcPaymentSent ? 'Payment sent. Waiting for mint confirmation...' : 'Waiting for payment...'}
+							{needsConfirmationRetry
+								? 'Confirmation timed out. Retry to check the mint again.'
+								: nwcPaymentSent
+									? 'Payment sent. Waiting for mint confirmation...'
+									: 'Waiting for payment...'}
 						</p>
-						<div className="flex justify-center">
-							<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-						</div>
+						{needsConfirmationRetry ? (
+							<div className="flex justify-center">
+								<Button type="button" onClick={handleRetryConfirmation}>
+									Retry confirmation
+								</Button>
+							</div>
+						) : (
+							<div className="flex justify-center">
+								<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+							</div>
+						)}
 						<div className="flex justify-end gap-2">
 							<Button variant="outline" onClick={handleClose} disabled={isPayingWithNwc}>
 								{nwcPaymentAttempted ? 'Close' : 'Cancel'}

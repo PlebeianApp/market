@@ -50,6 +50,8 @@ export interface Nip60DepositOptions {
 	includeFeePadding?: boolean
 }
 
+export type Nip60DepositStatus = 'idle' | 'pending' | 'awaiting_confirmation_retry' | 'success' | 'error'
+
 export interface Nip60DepositQuoteEstimate {
 	requiredBidFundingAmount: number
 	requestedAmount: number
@@ -159,7 +161,7 @@ export interface Nip60State {
 	// Active deposit tracking
 	activeDeposit: NDKCashuDeposit | null
 	depositInvoice: string | null
-	depositStatus: 'idle' | 'pending' | 'success' | 'error'
+	depositStatus: Nip60DepositStatus
 	// Pending tokens tracking (tokens generated but not yet claimed by recipient)
 	pendingTokens: PendingNip60Token[]
 }
@@ -191,6 +193,7 @@ const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[nu
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
 const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
+export const NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS = 15_000
 const AUCTION_DEPOSIT_PADDING_RATE = 0.005
 const AUCTION_DEPOSIT_MIN_PADDING_SATS = 5
 const AUCTION_DEPOSIT_MAX_PADDING_SATS = 100
@@ -696,6 +699,41 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: str
 	} finally {
 		if (timer) clearTimeout(timer)
 	}
+}
+
+const DEPOSIT_CONFIRMATION_TIMEOUT_LABEL = 'wallet acknowledgment and mint confirmation'
+
+const getDepositConfirmationTimeoutMessage = (timeoutMs: number): string =>
+	`${DEPOSIT_CONFIRMATION_TIMEOUT_LABEL} timeout after ${timeoutMs}ms`
+
+export const waitForDepositConfirmation = async (
+	deposit: Pick<NDKCashuDeposit, 'on'>,
+	timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
+): Promise<void> =>
+	withTimeout(
+		new Promise<void>((resolve, reject) => {
+			deposit.on('success', () => resolve())
+			deposit.on('error', (error) => reject(new Error(typeof error === 'string' ? error : String(error))))
+		}),
+		timeoutMs,
+		DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
+	)
+
+const isDepositConfirmationTimeoutError = (error: unknown, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): boolean =>
+	error instanceof Error && error.message === getDepositConfirmationTimeoutMessage(timeoutMs)
+
+const monitorDepositConfirmation = (deposit: NDKCashuDeposit, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
+	void waitForDepositConfirmation(deposit, timeoutMs).catch((error) => {
+		const state = nip60Store.state
+		if (state.activeDeposit !== deposit || state.depositStatus !== 'pending') return
+		if (!isDepositConfirmationTimeoutError(error, timeoutMs)) return
+
+		nip60Store.setState((current) => ({
+			...current,
+			depositStatus: 'awaiting_confirmation_retry',
+			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
+		}))
+	})
 }
 
 function extractPreimageCandidate(result: unknown): string | undefined {
@@ -1580,6 +1618,8 @@ export const nip60Actions = {
 				}))
 			})
 
+			monitorDepositConfirmation(deposit)
+
 			return invoice ?? null
 		} catch (err) {
 			console.error('[nip60] Failed to start deposit:', err)
@@ -1592,6 +1632,22 @@ export const nip60Actions = {
 			}))
 			return null
 		}
+	},
+
+	retryDepositConfirmation: (): void => {
+		const { activeDeposit, depositStatus } = nip60Store.state
+		if (!activeDeposit || depositStatus !== 'awaiting_confirmation_retry') return
+
+		nip60Store.setState((state) => ({
+			...state,
+			depositStatus: 'pending',
+			error: null,
+		}))
+
+		monitorDepositConfirmation(activeDeposit)
+		void activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
+			console.error('[nip60] Deposit confirmation retry failed:', error)
+		})
 	},
 
 	estimateDepositQuote: async (amount: number, mintUrl: string): Promise<Nip60DepositQuoteEstimate> => {
