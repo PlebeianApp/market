@@ -55,12 +55,9 @@ export type Nip60DepositStatus = 'idle' | 'pending' | 'awaiting_confirmation_ret
 
 export interface Nip60DepositQuoteEstimate {
 	requiredBidFundingAmount: number
-	requestedAmount: number
 	totalDepositAmount: number
 	mintFeePaddingAmount: number
-	mintFeeAmount: number
 	lightningFeePaddingAmount: number
-	lightningFeeAmount: number
 	usedFallbackEstimate: boolean
 	feeSource: 'quote' | 'fallback'
 	mintFeeSource: 'quote' | 'fallback'
@@ -406,12 +403,9 @@ const buildDepositQuoteEstimate = (params: {
 	const usedFallbackEstimate = mintFeeSource === 'fallback' || lightningFeeSource === 'fallback'
 	return {
 		requiredBidFundingAmount,
-		requestedAmount: requiredBidFundingAmount,
 		totalDepositAmount: computePaddedDepositAmount(requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount),
 		mintFeePaddingAmount,
-		mintFeeAmount: mintFeePaddingAmount,
 		lightningFeePaddingAmount,
-		lightningFeeAmount: lightningFeePaddingAmount,
 		usedFallbackEstimate,
 		feeSource: usedFallbackEstimate ? 'fallback' : 'quote',
 		mintFeeSource,

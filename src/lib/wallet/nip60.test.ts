@@ -102,8 +102,8 @@ describe('estimateDepositQuote', () => {
 
 		expect(estimate.requiredBidFundingAmount).toBe(10_000)
 		expect(estimate.totalDepositAmount).toBe(10_050)
-		expect(estimate.mintFeeAmount).toBe(0)
-		expect(estimate.lightningFeeAmount).toBe(50)
+		expect(estimate.mintFeePaddingAmount).toBe(0)
+		expect(estimate.lightningFeePaddingAmount).toBe(50)
 		expect(estimate.feeSource).toBe('fallback')
 		expect(estimate.usedFallbackEstimate).toBe(true)
 	})
