@@ -10,6 +10,11 @@
  * fixed P2PK lock secrets, so the proof_y, lockSecret, and cashuB token
  * string are all deterministic and can be imported directly in tests.
  *
+ * The mock also handles /v1/swap for the publishAuctionSettlement pipeline
+ * (receiveLockedEcash). The swap handler echoes back blinded messages as
+ * signatures — the resulting proofs are invalid but the swap call succeeds,
+ * allowing the settlement event to be published.
+ *
  * Usage:
  *   await CashuMintMock.setup(page, MINT_URL)
  *   // ... later, in a test:
@@ -49,13 +54,21 @@ export const MOCK_LOCKTIME_PAST = 150
 export const MOCK_LOCKTIME_FUTURE = 2000000000
 
 /** Fixed keyset ID used by all mock tokens. */
-export const MOCK_KEYSET_ID = '00000000000000000000000000000000'
+export const MOCK_KEYSET_ID = '0000000000000000'
 
-/** Shared xpub used to derive the child pubkey in all mock tokens. */
-export const MOCK_XPUB = 'xpub661MyMwAqRbcH1vUiLWqq4r4aHLuY7SU3m5CbuExkFfL6HohdcUmqbJfhccvv3g5zwMBu57oq59icgs1sCnsMXeDdVZQrvTLcS1fokbsGMT'
+/**
+ * Auction p2pk_xpub. In passive tests (1-9) this is used directly in
+ * the auction event's p2pk_xpub tag. In the Publish Settlement UI test,
+ * the xpub is computed dynamically from the wallet's actual keys via
+ * deriveDynamicWalletKeys(), so this value is only used by passive tests.
+ *
+ * Computed from a fixed wallet key pair via:
+ *   HDKey.fromMasterSeed(sha512(context:p2pk:privkey)).derive("m/30408'/0'/0'")
+ */
+export const MOCK_XPUB = 'xpub6CHGS91EATnrt7a3wBLqCeJ13KvVXQp3m39ufe1TYiFxHHmAK1TiwfrT1N89CAHNLa9YQgbJAyysBZTiRRH38wTvYeBiYvgRrqxALmvghTH'
 
-/** HD derivation child pubkey (compressed secp256k1, 66 hex). */
-export const MOCK_CHILD_PUBKEY = '029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7'
+/** HD derivation child pubkey (compressed secp256k1, 66 hex) at m/0. */
+export const MOCK_CHILD_PUBKEY = '02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0'
 
 /** Refund pubkey (compressed secp256k1, 66 hex). */
 export const MOCK_REFUND_PUBKEY = '0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5'
@@ -66,50 +79,50 @@ export const MOCK_PROOF_AMOUNT = 50000
 /**
  * Pre-computed P2PK tokens with known NUT-7 states.
  *
- * Each token uses the same xpub-derived child pubkey and refund key but
+ * Each token uses the same wallet-derived child pubkey and refund key but
  * a different nonce, producing distinct proof_y values. The mock mint
  * will return the associated `nut7State` for each proof_y in a NUT-7
  * checkstate query.
  *
  * Shared crypto values (identical across all tokens):
- *   xpub:        xpub661MyMwAqRbcH1vUiLWqq4r4aHLuY7SU3m5CbuExkFfL6HohdcUmqbJfhccvv3g5zwMBu57oq59icgs1sCnsMXeDdVZQrvTLcS1fokbsGMT
- *   childPubkey: 029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7
+ *   xpub:        xpub6CHGS91EATnrt7a3wBLqCeJ13KvVXQp3m39ufe1TYiFxHHmAK1TiwfrT1N89CAHNLa9YQgbJAyysBZTiRRH38wTvYeBiYvgRrqxALmvghTH
+ *   childPubkey: 02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0
  *   refundKey:   0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5
  *   C:           034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa
  *   amount:      50000
  */
 export const MOCK_TOKENS = {
 	unspent: {
-		proofY: '027b78fbe27f4098f45e1e9e7d7e9fd9fb8f462f2109272153ee1ab2711cda7244',
+		proofY: '023d5fb1f71aa08f907ce34a0cdebea8c52d35648756dd6392254b1cbf897944bc',
 		token:
-			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiZGF0YSI6IjAyOWQ3ZDJlNDM4Mzk0YjNjZDM3OTk4MDY0OGJjM2NkMWY1MTQ2ZGUyYzI0OTViZmFkZTZmYjViMGRmNzM5MWNlNyIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
+			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiZGF0YSI6IjAyYzcxM2UwOTZkZjRmMzc0YjMyZDFjYjBlOTZkNzE2ZjE4MmZiNjJjMTVjZjdiZDk5YzNhODE2ZmFkMzJmMzBlMCIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
 		lockSecret:
-			'["P2PK",{"nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","data":"029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
+			'["P2PK",{"nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","data":"02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
 		nut7State: 'UNSPENT' as const,
 	},
 	spent: {
-		proofY: '02c341da22e82ea1a6bf0c324aef5f316dcdc8d058cf65068df9c17e79c5ac424a',
+		proofY: '02844eeb7c0110a286712cf8e2a63b396aae08bb41515828e80af449dc31515f82',
 		token:
-			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZGF0YSI6IjAyOWQ3ZDJlNDM4Mzk0YjNjZDM3OTk4MDY0OGJjM2NkMWY1MTQ2ZGUyYzI0OTViZmFkZTZmYjViMGRmNzM5MWNlNyIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
+			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZGF0YSI6IjAyYzcxM2UwOTZkZjRmMzc0YjMyZDFjYjBlOTZkNzE2ZjE4MmZiNjJjMTVjZjdiZDk5YzNhODE2ZmFkMzJmMzBlMCIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
 		lockSecret:
-			'["P2PK",{"nonce":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","data":"029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
+			'["P2PK",{"nonce":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","data":"02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
 		nut7State: 'SPENT' as const,
 	},
 	pending: {
-		proofY: '02d55d252dac1e828b10b20e21dd8ad72b8aed5c0cae5050a6970421c938f9153d',
+		proofY: '02e015e38e0c6097cef803558a77f73e7702044f3bb871f7960c33e248ff571688',
 		token:
-			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjIiwiZGF0YSI6IjAyOWQ3ZDJlNDM4Mzk0YjNjZDM3OTk4MDY0OGJjM2NkMWY1MTQ2ZGUyYzI0OTViZmFkZTZmYjViMGRmNzM5MWNlNyIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
+			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBK1siUDJQSyIseyJub25jZSI6ImNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjIiwiZGF0YSI6IjAyYzcxM2UwOTZkZjRmMzc0YjMyZDFjYjBlOTZkNzE2ZjE4MmZiNjJjMTVjZjdiZDk5YzNhODE2ZmFkMzJmMzBlMCIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMTUwIl0sWyJyZWZ1bmQiLCIwMjY4NjgwNzM3Yzc2ZGFiYjgwMWNiMjIwNGY1N2RiZTRlNDU3OWU0ZjcxMGNkNjdkYzFiNDIyNzU5MmM4MWU5YjUiXSxbIm5fc2lnc19yZWZ1bmQiLCIxIl0sWyJzaWdmbGFnIiwiU0lHX0lOUFVUUyJdXX1dYWNYIQNPNVvct8wK9yjvPM65YV2QaEu1sspfhZqw8LcEB1hxqg',
 		lockSecret:
-			'["P2PK",{"nonce":"cccccccccccccccccccccccccccccccc","data":"029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
+			'["P2PK",{"nonce":"cccccccccccccccccccccccccccccccc","data":"02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0","tags":[["n_sigs","1"],["locktime","150"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
 		nut7State: 'PENDING' as const,
 	},
 	/** Token with a future locktime (year 2033) — settlement window still open. */
 	unspentFuture: {
-		proofY: '020104e1cca732603ae24f138994a00059bef85ebf471d70755c9ee5b2befee5ab',
+		proofY: '0205110fc3ac905384000bdd11f2977d22148ff7fe1cab680971389626fdf8b06e',
 		token:
-			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBMlsiUDJQSyIseyJub25jZSI6ImRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkIiwiZGF0YSI6IjAyOWQ3ZDJlNDM4Mzk0YjNjZDM3OTk4MDY0OGJjM2NkMWY1MTQ2ZGUyYzI0OTViZmFkZTZmYjViMGRmNzM5MWNlNyIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMjAwMDAwMDAwMCJdLFsicmVmdW5kIiwiMDI2ODY4MDczN2M3NmRhYmI4MDFjYjIyMDRmNTdkYmU0ZTQ1NzllNGY3MTBjZDY3ZGMxYjQyMjc1OTJjODFlOWI1Il0sWyJuX3NpZ3NfcmVmdW5kIiwiMSJdLFsic2lnZmxhZyIsIlNJR19JTlBVVFMiXV19XWFjWCEDTzVb3LfMCvco7zzOuWFdkGhLtbLKX4WasPC3BAdYcao',
+			'cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlIAAAAAAAAAABhcIGjYWEZw1Bhc3kBMlsiUDJQSyIseyJub25jZSI6ImRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkIiwiZGF0YSI6IjAyYzcxM2UwOTZkZjRmMzc0YjMyZDFjYjBlOTZkNzE2ZjE4MmZiNjJjMTVjZjdiZDk5YzNhODE2ZmFkMzJmMzBlMCIsInRhZ3MiOltbIm5fc2lncyIsIjEiXSxbImxvY2t0aW1lIiwiMjAwMDAwMDAwMCJdLFsicmVmdW5kIiwiMDI2ODY4MDczN2M3NmRhYmI4MDFjYjIyMDRmNTdkYmU0ZTQ1NzllNGY3MTBjZDY3ZGMxYjQyMjc1OTJjODFlOWI1Il0sWyJuX3NpZ3NfcmVmdW5kIiwiMSJdLFsic2lnZmxhZyIsIlNJR19JTlBVVFMiXV19XWFjWCEDTzVb3LfMCvco7zzOuWFdkGhLtbLKX4WasPC3BAdYcao',
 		lockSecret:
-			'["P2PK",{"nonce":"dddddddddddddddddddddddddddddddd","data":"029d7d2e438394b3cd379980648bc3cd1f5146de2c2495bfade6fb5b0df7391ce7","tags":[["n_sigs","1"],["locktime","2000000000"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
+			'["P2PK",{"nonce":"dddddddddddddddddddddddddddddddd","data":"02c713e096df4f374b32d1cb0e96d716f182fb62c15cf7bd99c3a816fad32f30e0","tags":[["n_sigs","1"],["locktime","2000000000"],["refund","0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5"],["n_sigs_refund","1"],["sigflag","SIG_INPUTS"]]}]',
 		nut7State: 'UNSPENT' as const,
 	},
 } satisfies Record<string, MockToken>
@@ -176,7 +189,7 @@ export class CashuMintMock {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
-					body: JSON.stringify(mock.handleCheckState(route.request().postData())),
+					body: JSON.stringify(mock.handleCheckState(route.request().postData() ?? undefined)),
 				})
 				return
 			}
@@ -202,20 +215,48 @@ export class CashuMintMock {
 			}
 
 			// Keys (mint public keys for blind signature verification)
+			// Provide dummy keys for all power-of-2 amounts up to 2^16.
+			// The mock /v1/swap handler echoes B_ as C_ without real
+			// signing, so the keys don't need to be cryptographically valid.
 			if (url.includes('/v1/keys') && method === 'GET') {
+				const dummyKey = '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa'
+				const keys: Record<string, string> = {}
+				for (let i = 0; i <= 16; i++) {
+					keys[String(2 ** i)] = dummyKey
+				}
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
 					body: JSON.stringify({
-						keysets: [{ id: MOCK_KEYSET_ID, unit: 'sat', keys: {} }],
+						keysets: [{ id: MOCK_KEYSET_ID, unit: 'sat', keys }],
 					}),
+				})
+				return
+			}
+
+			// NUT-12: swap (for receiveLockedEcash in publishAuctionSettlement)
+			if (url.endsWith('/v1/swap') && method === 'POST') {
+				const body = JSON.parse(route.request().postData() ?? '{}')
+				const outputs: Array<{ amount: number; id: string; B_: string }> = body.outputs ?? []
+				// Echo back blinded messages as signatures. The resulting proofs
+				// are cryptographically invalid, but the swap call succeeds,
+				// allowing the settlement pipeline to publish kind-1024.
+				const signatures = outputs.map((o) => ({
+					amount: o.amount,
+					id: o.id,
+					C_: o.B_,
+				}))
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ signatures }),
 				})
 				return
 			}
 
 			// ADR-0005: no external service dependencies in tests.
 			// Abort unmocked requests instead of forwarding to the real mint.
-			await route.abort('failed', `CashuMintMock: unmocked ${method} ${url}`)
+			await route.abort('external-test-dependency-blocked')
 		})
 
 		return mock

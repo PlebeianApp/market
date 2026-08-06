@@ -898,6 +898,12 @@ export const nip60Actions = {
 				wallet,
 			}))
 
+			// Debug hook for e2e tests — allows deriveDynamicWalletKeys
+			// to read wallet p2pk/privkey via page.evaluate().
+			if (typeof window !== 'undefined') {
+				;(window as any).__nip60Wallet = wallet
+			}
+
 			// Subscribe to balance updates
 			wallet.on('balance_updated', () => {
 				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
