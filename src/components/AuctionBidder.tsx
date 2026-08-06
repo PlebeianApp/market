@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DepositLightningModal, type AuctionFundingFailureReason } from '@/feature/wallet/components/DepositLightningModal'
+import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
@@ -31,11 +31,12 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
 import { useStore } from '@tanstack/react-store'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { nip60Store } from '@/lib/stores/nip60'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
+import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
@@ -47,20 +48,6 @@ interface AuctionBidderProps {
 	onBidSuccess?: () => void
 	compact?: boolean
 }
-
-type AuctionBidFundingLifecycleState =
-	| 'idle'
-	| 'funding_session_created'
-	| 'invoice_created'
-	| 'payment_acknowledged'
-	| 'minting_started'
-	| 'ecash_minted'
-	| 'bid_publish_attempted'
-	| 'bid_published'
-	| 'invoice_unpaid_or_expired_reclaimable'
-	| 'invoice_paid_mint_failed_reclaimable'
-	| 'mint_succeeded_bid_publish_failed_reclaimable'
-	| 'funding_canceled'
 
 export function useAuctionMintSelection(trustedMints: string[], bidAmount: number, previousBidAmount: number = 0) {
 	const nip60State = useStore(nip60Store)
@@ -203,11 +190,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
 	const [isEditing, setIsEditing] = useState(false)
-	const [isDepositOpen, setIsDepositOpen] = useState(false)
-	const [depositAmount, setDepositAmount] = useState(0)
-	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
-	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
-	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
 	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
 
@@ -219,6 +201,27 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const { selectedMint, depositMint, availableMints, showMintSelector, mintError, setSelectedMint, canFund, deltaAmount } =
 		useAuctionMintSelection(trustedMints, Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0, previousBidAmount)
+
+	const {
+		isDepositOpen,
+		depositAmount,
+		preferredDepositMint,
+		startFundingForBid,
+		submitPreparedBid,
+		handleFundingSuccess,
+		handleInvoiceCreated,
+		handlePaymentAcknowledged,
+		handleMintingStarted,
+		handleFundingFailed,
+		handleDepositModalClose,
+	} = useAuctionBidFunding({
+		previousBidAmount,
+		publishBid: bidMutation.mutateAsync,
+		onBidSuccess: () => {
+			setIsEditing(false)
+			onBidSuccess?.()
+		},
+	})
 
 	const hasInsufficientBidFunds =
 		hasSignedInBidder &&
@@ -295,10 +298,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
 	})
 
-	const transitionFundingState = useCallback((nextState: AuctionBidFundingLifecycleState) => {
-		setBidFundingLifecycleState(nextState)
-	}, [])
-
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
 		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
 
@@ -327,109 +326,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return null
 		}
 
-		if (hasInsufficientBidFunds) {
-			if (!depositMint) {
-				toast.error(mintError || 'No suitable mint available for bidding.')
-				transitionFundingState('invoice_unpaid_or_expired_reclaimable')
-				return null
-			}
-
-			transitionFundingState('funding_session_created')
-			setPendingBidSubmission(createBidSubmission())
-			setDepositAmount(Math.ceil(deltaAmount))
-			setPreferredDepositMint(depositMint)
-			setIsDepositOpen(true)
-			return null
-		}
-		if (!selectedMint) {
-			toast.error(mintError || 'No suitable mint available for bidding.')
-			return null
-		}
-		if (!canFund) {
-			toast.error('Insufficient balance on selected mint to cover the required delta.')
-			return null
-		}
-
 		return {
 			...createBidSubmission(),
 			amount: parsedAmount,
 		}
 	}
-
-	const submitPreparedBid = useCallback(
-		async (bidData: AuctionBidFormData) => {
-			transitionFundingState('bid_publish_attempted')
-			try {
-				await bidMutation.mutateAsync(bidData)
-				transitionFundingState('bid_published')
-				toast.success('Bid placed successfully')
-				setIsEditing(false)
-				setPendingBidSubmission(null)
-				setIsDepositOpen(false)
-				onBidSuccess?.()
-				return true
-			} catch (error) {
-				transitionFundingState('mint_succeeded_bid_publish_failed_reclaimable')
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
-				return false
-			}
-		},
-		[bidMutation, onBidSuccess, transitionFundingState],
-	)
-
-	const handleFundingSuccess = useCallback(() => {
-		if (!pendingBidSubmission) return
-
-		void (async () => {
-			transitionFundingState('ecash_minted')
-
-			try {
-				await nip60Actions.refresh()
-			} catch {
-				// Best-effort refresh; we still evaluate from current wallet state below.
-			}
-
-			const fundingMintCandidates = pendingBidSubmission.mintCandidates
-			if (!fundingMintCandidates.length) {
-				transitionFundingState('invoice_paid_mint_failed_reclaimable')
-				toast.error('Invoice was paid, but no funding mint was selected for bid locking. Please retry the bid submission.')
-				return
-			}
-
-			const latestNip60State = nip60Store.state
-			const requiredDelta = Math.max(0, pendingBidSubmission.amount - previousBidAmount)
-			const fundableMint = fundingMintCandidates.find((mintUrl) => (latestNip60State.mintBalances[mintUrl] ?? 0) >= requiredDelta)
-
-			if (!fundableMint) {
-				transitionFundingState('invoice_paid_mint_failed_reclaimable')
-				toast.error('Invoice was paid, but minted funds are not yet spendable on any accepted mint. Please retry once minting completes.')
-				return
-			}
-
-			const orderedMintCandidates = [fundableMint, ...fundingMintCandidates.filter((mintUrl) => mintUrl !== fundableMint)]
-			await submitPreparedBid({ ...pendingBidSubmission, mintCandidates: orderedMintCandidates })
-		})()
-	}, [pendingBidSubmission, previousBidAmount, submitPreparedBid, transitionFundingState])
-
-	const handleInvoiceCreated = useCallback(() => {
-		transitionFundingState('invoice_created')
-	}, [transitionFundingState])
-
-	const handlePaymentAcknowledged = useCallback(() => {
-		transitionFundingState('payment_acknowledged')
-	}, [transitionFundingState])
-
-	const handleMintingStarted = useCallback(() => {
-		transitionFundingState('minting_started')
-	}, [transitionFundingState])
-
-	const handleFundingFailed = useCallback(
-		(reason: AuctionFundingFailureReason) => {
-			transitionFundingState(reason)
-		},
-		[transitionFundingState],
-	)
 
 	const handleSubmitBid = async () => {
 		if (hasSignedInBidder && !hasAcknowledgedAuctionRules) {
@@ -440,24 +341,22 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
-		await submitPreparedBid(bidData)
+		const readyBidData = startFundingForBid({
+			bidData,
+			hasInsufficientBidFunds,
+			depositMint,
+			deltaAmount,
+			mintError,
+			selectedMint,
+			canFund,
+		})
+		if (!readyBidData) return
+
+		await submitPreparedBid(readyBidData)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
 		setIsRulesDialogOpen(open)
-	}
-
-	const handleDepositModalClose = () => {
-		if (
-			bidFundingLifecycleState !== 'bid_published' &&
-			bidFundingLifecycleState !== 'invoice_unpaid_or_expired_reclaimable' &&
-			bidFundingLifecycleState !== 'invoice_paid_mint_failed_reclaimable' &&
-			bidFundingLifecycleState !== 'mint_succeeded_bid_publish_failed_reclaimable'
-		) {
-			transitionFundingState('funding_canceled')
-		}
-		setIsDepositOpen(false)
-		setPendingBidSubmission(null)
 	}
 
 	const handleConfirmRules = () => {
