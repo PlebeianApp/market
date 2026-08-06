@@ -83,3 +83,16 @@ describe('retryDepositConfirmation', () => {
 		expect(deposit.getCheckCalls()).toBe(1)
 	})
 })
+
+describe('estimateDepositQuote', () => {
+	test('returns deterministic fallback padding without depending on mint quote side effects', async () => {
+		const estimate = await nip60Actions.estimateDepositQuote(10_000, 'https://mint.minibits.cash/Bitcoin')
+
+		expect(estimate.requiredBidFundingAmount).toBe(10_000)
+		expect(estimate.totalDepositAmount).toBe(10_050)
+		expect(estimate.mintFeeAmount).toBe(0)
+		expect(estimate.lightningFeeAmount).toBe(50)
+		expect(estimate.feeSource).toBe('fallback')
+		expect(estimate.usedFallbackEstimate).toBe(true)
+	})
+})
