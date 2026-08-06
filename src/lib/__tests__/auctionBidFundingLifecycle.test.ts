@@ -80,10 +80,13 @@ describe('auction bid funding state machine integrity', () => {
 		expect(isAuctionBidFundingReclaimableState(state)).toBe(true)
 	})
 
-	test.each<AuctionBidFundingLifecycleState>(['idle', 'funding_session_created', 'invoice_created', 'payment_acknowledged', 'bid_published'])(
-		'%s is not reclaimable',
-		(state) => {
-			expect(isAuctionBidFundingReclaimableState(state)).toBe(false)
-		},
-	)
+	test.each<AuctionBidFundingLifecycleState>([
+		'idle',
+		'funding_session_created',
+		'invoice_created',
+		'payment_acknowledged',
+		'bid_published',
+	])('%s is not reclaimable', (state) => {
+		expect(isAuctionBidFundingReclaimableState(state)).toBe(false)
+	})
 })
