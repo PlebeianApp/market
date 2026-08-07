@@ -26,6 +26,7 @@ interface SignerLoopOptions {
 	requireAuthForSecretless?: boolean
 	authUrl?: string
 	authAckDelayMs?: number
+	connectAckDelayMs?: number
 }
 
 export class Nip46Mock {
@@ -197,7 +198,7 @@ export class Nip46Mock {
 	 *
 	 * Returns a cleanup function.
 	 */
-	async respondToConnect(nostrconnectUrl: string): Promise<() => void> {
+	async respondToConnect(nostrconnectUrl: string, options: SignerLoopOptions = {}): Promise<() => void> {
 		const withoutProtocol = nostrconnectUrl.replace('nostrconnect://', '')
 		const qIdx = withoutProtocol.indexOf('?')
 		const localPubkey = withoutProtocol.slice(0, qIdx)
@@ -214,7 +215,7 @@ export class Nip46Mock {
 			const msg = JSON.parse(decrypted)
 
 			if (msg.method) {
-				await this.handleSignerRequest(event.pubkey, msg)
+				await this.handleSignerRequest(event.pubkey, msg, options)
 			}
 		})
 
@@ -266,6 +267,9 @@ export class Nip46Mock {
 						error: options.authUrl || 'https://signer.test/approve',
 					})
 					await new Promise((resolve) => setTimeout(resolve, options.authAckDelayMs ?? 250))
+				}
+				if (options.connectAckDelayMs) {
+					await new Promise((resolve) => setTimeout(resolve, options.connectAckDelayMs))
 				}
 				response = { id: request.id, result: 'ack' }
 				break
