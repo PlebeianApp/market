@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { ndkActions } from '@/lib/stores/ndk'
 import { getShippingEvent } from '../shipping'
+
+type ShippingEvent = NonNullable<Awaited<ReturnType<typeof getShippingEvent>>>
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const SHIPPING_D_TAG = 'worldwide-standard'
@@ -25,7 +26,9 @@ describe('getShippingEvent', () => {
 			],
 			id: '0'.repeat(64),
 			created_at: Math.floor(Date.now() / 1000),
-		} as unknown as NDKEvent
+			// `sig` is required by NostrEvent, but we use a cast for test mocking.
+			sig: '0'.repeat(128),
+		} as unknown as ShippingEvent
 		let fetchedReference: string | undefined
 		;(ndkActions as { getNDK: () => unknown }).getNDK = () => ({
 			fetchEvent: async (reference: string) => {
