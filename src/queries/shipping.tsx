@@ -653,13 +653,25 @@ export const getShippingInfo = (event: NDKEvent) => {
 }
 
 /**
- * Gets the event that created a shipping option based on its ID
- * @param id The shipping option event ID
- * @returns A promise that resolves to the NDKEvent or null if not found
+ * Gets a shipping option event from either an addressable shipping coordinate
+ * or a legacy event ID.
+ *
+ * Cart selections use the canonical `30406:<pubkey>:<d-tag>` coordinate, so
+ * they must be fetched by coordinates rather than treated as an event ID.
  */
 export const getShippingEvent = async (id: string) => {
 	try {
-		return await fetchShippingOption(id)
+		const reference = parseShippingReference(id)
+
+		if (reference.pubkey && reference.dTag) {
+			return await fetchShippingOptionByCoordinates(reference.pubkey, reference.dTag)
+		}
+
+		if (reference.id) {
+			return await fetchShippingOption(reference.id)
+		}
+
+		return null
 	} catch (error) {
 		console.error(`Failed to fetch shipping event: ${id}`, error)
 		return null
