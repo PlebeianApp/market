@@ -250,6 +250,7 @@ export const server = serve({
 					cvmServerPubkey: getCvmServerPublicKey(),
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,
+					externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
 				})
 			},
 		},

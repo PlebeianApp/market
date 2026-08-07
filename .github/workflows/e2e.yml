@@ -15,7 +15,7 @@ on:
     - cron: '0 6 * * 1'
 
 jobs:
-  e2e-pricing:
+  e2e-grep:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -118,8 +118,8 @@ jobs:
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
 
-      - name: Run pricing E2E tests
-        run: bun run test:e2e -- --grep 'Product Page - View Only'
+      - name: Run E2E tests
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only'
 
       - name: Show server logs on failure
         if: failure()
@@ -130,18 +130,20 @@ jobs:
           echo "=== Dev server logs ==="
           cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
 
-      - name: Upload pricing test results
+      - name: Upload test results
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: test-results-pricing
+          name: test-results
           path: test-results/
           retention-days: 7
 
   e2e-full:
-    # Keep the broader inherited-flaky suite off the pricing PR path.
-    # It remains available for scheduled/manual comparison runs while the
-    # separate test-fix branch carries the inherited failure work.
+    # The e2e-grep job runs reliable test families on every PR/push.
+    # Families with pre-existing failures (Authentication, App Settings,
+    # NWC, Cart, PII, Products, Multi-Merchant Cart, Zaps, Buyer Purchase,
+    # Auction Mint State, Auction Shipping, Product Page Interactions)
+    # remain in the scheduled e2e-full job.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -252,7 +254,7 @@ jobs:
           if [ -n "$TEST_GREP" ]; then
             bun run test:e2e -- --grep "$TEST_GREP"
           else
-            bun run test:e2e -- --grep-invert 'Product Page - View Only|Collection Management'
+            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management'
           fi
 
       - name: Show server logs on failure

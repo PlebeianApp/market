@@ -78,6 +78,32 @@ already exists.
 - Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
   or broad rewrite instructions.
 
+## Test Isolation
+
+Tests must not make network calls to external services. The only allowed
+network dependencies are local services started in CI workflows (local
+relay via `nak serve`, local dev server on port 3333, ContextVM). All
+other external services (CDNs, Cashu mints, Lightning nodes, third-party
+APIs) must be mocked or intercepted.
+
+See ADR-0005 for the full decision and established mock patterns.
+
+### Established Patterns
+
+- `page.route()` / `context.route()` — intercept HTTP requests to
+  external domains and serve local fixtures or mock responses.
+- `e2e/utils/lightning-mock.ts` — mocks LNURL, WebLN, and zap receipts.
+- `e2e/utils/nip46-mock.ts` — mocks NIP-46 remote signer.
+- `e2e/helpers/lnurl-mock.ts` — intercepts LNURL discovery.
+
+### What Is Allowed
+
+- Importing external npm packages (e.g., `@cashu/cashu-ts`) for pure
+  functions with no network calls.
+- Referencing external URLs as inert data in test fixtures (e.g., mint
+  URLs in seeded Nostr events).
+- Starting local services that are part of the CI workflow.
+
 ## Safe Checks
 
 For docs-only changes:
