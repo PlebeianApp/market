@@ -42,28 +42,59 @@ describe('persistAuthenticatedLoginState', () => {
 
 		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
 	})
+
+	test('enables auto-login by default for a first successful login', () => {
+		persistAuthenticatedLoginState({ pubkey: 'remote-pubkey' } as any)
+
+		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
+	})
 })
 
 describe('completeNip46LoginHandshake', () => {
-	test('caches the verified remote pubkey when the handshake call stalls', async () => {
+	test('wraps the fallback signer without depending on NDK private state', async () => {
 		const signer = {
 			blockUntilReady: mock(async () => {
 				throw new Error('relay handshake stalled')
 			}),
 			userPubkey: undefined as string | undefined,
-			_user: undefined as { pubkey: string } | undefined,
+			rpc: {
+				eventNames: mock(() => []),
+				removeAllListeners: mock(() => {}),
+			},
 		}
-		const user = mock(async () => signer._user ?? signer.blockUntilReady())
 		const ndk = {
 			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
 		}
 
-		const authenticatedUser = await completeNip46LoginHandshake(signer as any, 'fallback-pubkey', 1, ndk as any)
+		const loginResult = await completeNip46LoginHandshake(signer as any, 'fallback-pubkey', 1, ndk as any)
 
-		expect(authenticatedUser?.pubkey).toBe('fallback-pubkey')
-		expect(signer.userPubkey).toBe('fallback-pubkey')
-		expect((signer as any)._user?.pubkey).toBe('fallback-pubkey')
-		expect((await user())?.pubkey).toBe('fallback-pubkey')
+		expect(loginResult?.user.pubkey).toBe('fallback-pubkey')
 		expect(signer.blockUntilReady).toHaveBeenCalledTimes(1)
+		expect(signer.userPubkey).toBe('fallback-pubkey')
+		expect((signer as any)._user).toBeUndefined()
+		expect((await loginResult?.signer.user())?.pubkey).toBe('fallback-pubkey')
+		expect(loginResult?.signer.userSync.pubkey).toBe('fallback-pubkey')
+	})
+
+	test('cancels the timed-out handshake response listener before using the fallback', async () => {
+		let eventNamesCalls = 0
+		const removeAllListeners = mock(() => {})
+		const signer = {
+			bunkerPubkey: 'bunker-pubkey',
+			blockUntilReady: mock(() => new Promise(() => {})),
+			userPubkey: undefined as string | undefined,
+			rpc: {
+				eventNames: () => (eventNamesCalls++ === 0 ? [] : ['response-connect']),
+				removeAllListeners,
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 1, ndk as any)
+
+		expect(loginResult?.user.pubkey).toBe('bunker-pubkey')
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
 	})
 })

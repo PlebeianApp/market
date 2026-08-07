@@ -20,7 +20,7 @@ interface LoginDialogProps {
 
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 	const [activeTab, setActiveTab] = useState('extension')
-	const [enableAutoLogin, setEnableAutoLogin] = useState(localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true')
+	const [enableAutoLogin, setEnableAutoLogin] = useState(localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'false')
 	const [extensionError, setExtensionError] = useState<string | null>(null)
 	const { loginWithExtension } = useAuth()
 
