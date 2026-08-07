@@ -19,7 +19,12 @@ import {
 	getAuctionCurrentPriceFromBids,
 	getAuctionBidCountFromBids,
 	getBidAmount,
+	getAuctionTitle,
+	getAuctionImages,
+	getAuctionAuditors,
 } from '@/queries/auctions'
+import { UserCard } from './UserCard'
+import { AvatarUser } from './AvatarUser'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -182,6 +187,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const minBid = Math.max(flatFloor, curveFloor)
 	const inCurveWindow = countdown.now > endAt && countdown.now < biddingCutoffAt
 
+	const auctionTitle = getAuctionTitle(auction)
+	const auctionThumbnailUrl = getAuctionImages(auction)[0]?.[1] || ''
+	const auctionValidators = useMemo(() => getAuctionAuditors(auction), [auction])
+
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
 	const auctionRulesAckKey =
@@ -192,6 +201,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [isEditing, setIsEditing] = useState(false)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
 	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
+	const [isConfirmBidDialogOpen, setIsConfirmBidDialogOpen] = useState(false)
+	const [pendingBidData, setPendingBidData] = useState<AuctionBidFormData | null>(null)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -341,8 +352,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
+		setPendingBidData(bidData)
+		setIsConfirmBidDialogOpen(true)
+	}
+
+	const handleConfirmBidDialogOpenChange = (open: boolean) => {
+		setIsConfirmBidDialogOpen(open)
+		if (!open) setPendingBidData(null)
+	}
+
+	const handleConfirmBid = async () => {
+		if (!pendingBidData) return
+		setIsConfirmBidDialogOpen(false)
+
 		const readyBidData = startFundingForBid({
-			bidData,
+			bidData: pendingBidData,
 			hasInsufficientBidFunds,
 			depositMint,
 			deltaAmount,
@@ -350,6 +374,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			selectedMint,
 			canFund,
 		})
+		setPendingBidData(null)
 		if (!readyBidData) return
 
 		await submitPreparedBid(readyBidData)
@@ -427,6 +452,56 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						</Button>
 						<Button onClick={handleConfirmRules} disabled={bidMutation.isPending}>
 							I understand these rules
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+			<Dialog open={isConfirmBidDialogOpen} onOpenChange={handleConfirmBidDialogOpenChange}>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Confirm Bid</DialogTitle>
+						<DialogDescription>Review the auction details before placing your bid.</DialogDescription>
+					</DialogHeader>
+					<div className="flex gap-4 py-2">
+						{auctionThumbnailUrl && (
+							<img src={auctionThumbnailUrl} alt={auctionTitle} className="w-20 h-20 rounded object-cover shrink-0 border border-border" />
+						)}
+						<div className="flex flex-col gap-2 min-w-0 grow text-sm">
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Auction Name</div>
+								<div className="font-medium truncate">{auctionTitle}</div>
+							</div>
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Seller</div>
+								<UserCard pubkey={auction.pubkey} size="xs" subtitle="none" onPress="none" />
+							</div>
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Selected Mint</div>
+								<div className="font-medium truncate">
+									{selectedMint ? (availableMints.find((m) => m.mintUrl === selectedMint)?.hostname ?? selectedMint) : 'Not selected'}
+								</div>
+							</div>
+							{auctionValidators.length > 0 && (
+								<div className="min-w-0">
+									<div className="text-xs text-foreground/60">Validators</div>
+									<div className="flex items-center gap-1 mt-0.5">
+										{auctionValidators.map((pubkey) => (
+											<AvatarUser key={pubkey} pubkey={pubkey} colored deterministicFallbackText className="h-5 w-5" />
+										))}
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+					<div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-center text-2xl font-bold">
+						{Number.isFinite(parsedBidAmount) ? parsedBidAmount.toLocaleString() : 0} sats
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
+							Cancel
+						</Button>
+						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending}>
+							{bidMutation.isPending ? 'Submitting...' : 'Confirm'}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
