@@ -68,3 +68,31 @@ export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof
 	const proofsByMint = extractProofsByMint(wallet, [mintUrl])
 	return proofsByMint.get(mintUrl) || []
 }
+
+/**
+ * Get proofs that are currently spendable from wallet state.
+ * This intentionally avoids proofs already marked as spent/deleted so they
+ * cannot be reused for a new bid or ecash send.
+ */
+export function getSpendableProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
+	if (typeof wallet.state?.getProofs === 'function') {
+		try {
+			const proofs = wallet.state.getProofs({
+				mint: mintUrl,
+				includeDeleted: false,
+				onlyAvailable: true,
+			})
+			if (Array.isArray(proofs)) {
+				return proofs as Proof[]
+			}
+		} catch {
+			// Fall back to the dump-based extraction below.
+		}
+	}
+
+	const proofs = getProofsForMint(wallet, mintUrl)
+	return proofs.filter((proof) => {
+		const state = (proof as unknown as { state?: string }).state
+		return state !== 'spent' && state !== 'deleted'
+	})
+}

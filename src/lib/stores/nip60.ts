@@ -1,6 +1,7 @@
 import {
 	getMintHostname,
 	getProofsForMint,
+	getSpendableProofsForMint,
 	loadUserData,
 	saveUserData,
 	type AuctionBidPendingTokenContext,
@@ -965,18 +966,18 @@ function getAllMints(wallet: NDKCashuWallet): string[] {
  * wallet.state.dump() provides the source of truth for proofs and balances.
  */
 function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; mintBalances: Record<string, number> } {
-	const dump = wallet.state.dump()
-	const mintBalances = { ...dump.balances }
+		const mintBalances: Record<string, number> = {}
+	let totalBalance = 0
 
-	// Ensure all configured mints are present (even with 0 balance)
-	for (const mint of wallet.mints ?? []) {
-		if (!(mint in mintBalances)) {
-			mintBalances[mint] = 0
-		}
+	for (const mint of getAllMints(wallet)) {
+		const spendableProofs = getSpendableProofsForMint(wallet, mint)
+		const balance = spendableProofs.reduce((sum, proof) => sum + proof.amount, 0)
+		mintBalances[mint] = balance
+		totalBalance += balance
 	}
 
 	return {
-		totalBalance: dump.totalBalance,
+		totalBalance,
 		mintBalances,
 	}
 }
@@ -1893,7 +1894,7 @@ export const nip60Actions = {
 			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
 		}
 
-		const mintProofs = getProofsForMint(wallet, targetMint)
+		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
 		if (mintProofs.length === 0) {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
 		}
@@ -1950,7 +1951,7 @@ export const nip60Actions = {
 						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
 					}
 
-					const refreshedProofs = getProofsForMint(wallet, targetMint)
+					const refreshedProofs = getSpendableProofsForMint(wallet, targetMint)
 					const retryAfterConsolidate = await lockAuctionBidProofs(cashuWallet, amount, refreshedProofs, buildLockOptions(false))
 					lockedProofs = retryAfterConsolidate.send
 					changeProofs = retryAfterConsolidate.keep
@@ -2093,7 +2094,7 @@ export const nip60Actions = {
 		}
 
 		// Get proofs for this mint using shared utility
-		const mintProofs = getProofsForMint(wallet, targetMint)
+		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
 
 		if (mintProofs.length === 0) {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
