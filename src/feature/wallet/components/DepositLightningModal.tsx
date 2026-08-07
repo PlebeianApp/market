@@ -37,6 +37,12 @@ interface DepositLightningModalProps {
 	onPaymentAcknowledged?: () => void
 	onMintingStarted?: () => void
 	onFundingFailed?: (reason: AuctionFundingFailureReason) => void
+	/**
+	 * 'bid' renders the compact "Bid with lightning" quick-pay view: fixed
+	 * (non-editable) amount, auto-generated QR once a mint resolves, and a
+	 * "Top up your wallet" escape hatch into the classic form below.
+	 */
+	variant?: 'bid' | 'topup'
 }
 
 export type AuctionFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
@@ -54,6 +60,7 @@ export function DepositLightningModal({
 	onPaymentAcknowledged,
 	onMintingStarted,
 	onFundingFailed,
+	variant = 'topup',
 }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
@@ -63,6 +70,10 @@ export function DepositLightningModal({
 	const [copied, setCopied] = useState(false)
 	const [selectedNwcWalletId, setSelectedNwcWalletId] = useState('')
 	const [nwcPaymentStatus, setNwcPaymentStatus] = useState<NwcDepositPaymentStatus>('idle')
+	const [showClassicTopUp, setShowClassicTopUp] = useState(false)
+	const [isCheckingDeposit, setIsCheckingDeposit] = useState(false)
+	const isBidQuickView = variant === 'bid' && !showClassicTopUp
+	const autoGenerateAttemptedKeyRef = useRef<string | null>(null)
 	const wasOpenRef = useRef(false)
 	const sentNwcInvoiceRef = useRef<string | null>(null)
 	const nwcPaymentSentForCurrentInvoice = !!depositInvoice && sentNwcInvoiceRef.current === depositInvoice
@@ -182,6 +193,36 @@ export function DepositLightningModal({
 		onSuccess?.()
 	}, [depositStatus, onSuccess])
 
+	// Bid quick view has no "Generate Invoice" button — once a mint resolves
+	// (auto-picked from preferredMint/defaultMint/filteredMints), immediately
+	// start the deposit so the QR appears without an extra click.
+	useEffect(() => {
+		if (!isBidQuickView || !open || !selectedMint) return
+		if (depositInvoice || depositStatus === 'pending' || depositStatus === 'success') return
+
+		const amountNum = parseInt(amount, 10)
+		if (!Number.isFinite(amountNum) || amountNum <= 0) return
+
+		const genKey = `${selectedMint}:${amountNum}`
+		if (autoGenerateAttemptedKeyRef.current === genKey) return
+		autoGenerateAttemptedKeyRef.current = genKey
+
+		setIsGenerating(true)
+		resetNwcPaymentState()
+		void nip60Actions
+			.startDeposit(amountNum, selectedMint, { includeFeePadding: !!allowedMints?.length })
+			.finally(() => setIsGenerating(false))
+	}, [isBidQuickView, open, selectedMint, depositInvoice, depositStatus, amount, allowedMints, resetNwcPaymentState])
+
+	const handleConfirmCheckNow = async () => {
+		setIsCheckingDeposit(true)
+		try {
+			await nip60Actions.checkDepositNow()
+		} finally {
+			setIsCheckingDeposit(false)
+		}
+	}
+
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)
 		if (isNaN(amountNum) || amountNum <= 0) {
@@ -270,6 +311,9 @@ export function DepositLightningModal({
 		successNotifiedRef.current = false
 		paymentAcknowledgedRef.current = false
 		failureNotifiedRef.current = false
+		setShowClassicTopUp(false)
+		setIsCheckingDeposit(false)
+		autoGenerateAttemptedKeyRef.current = null
 		onClose()
 	}
 
@@ -279,9 +323,11 @@ export function DepositLightningModal({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<Zap className="w-5 h-5 text-yellow-500" />
-						Deposit Lightning
+						{isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
 					</DialogTitle>
-					<DialogDescription>Generate a Lightning invoice to mint eCash</DialogDescription>
+					<DialogDescription>
+						{isBidQuickView ? 'Pay this invoice to fund your bid.' : 'Generate a Lightning invoice to mint eCash'}
+					</DialogDescription>
 				</DialogHeader>
 
 				{depositStatus === 'success' ? (
@@ -294,6 +340,50 @@ export function DepositLightningModal({
 						<Button onClick={handleClose} className="mt-4">
 							Done
 						</Button>
+					</div>
+				) : isBidQuickView ? (
+					<div className="space-y-4">
+						<div className="flex justify-center">
+							<div className="w-[216px] h-[216px] flex items-center justify-center bg-white rounded-lg p-4">
+								{depositInvoice ? (
+									<button type="button" onClick={handleCopyInvoice} className="cursor-pointer outline-none" title="Click to copy invoice">
+										<QRCodeSVG value={depositInvoice} size={184} />
+									</button>
+								) : (
+									<div className="text-xs text-muted-foreground text-center px-2">
+										{selectedMint || isGenerating ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'No mint selected yet'}
+									</div>
+								)}
+							</div>
+						</div>
+
+						<p className="text-center text-2xl font-bold">
+							{Number.isFinite(parseInt(amount, 10)) ? parseInt(amount, 10).toLocaleString() : 0} sats
+						</p>
+
+						{copied && <p className="text-xs text-center text-muted-foreground">Invoice copied to clipboard</p>}
+
+						{depositStatus === 'error' && (
+							<p className="text-sm text-destructive text-center">{depositError || 'Failed to generate invoice. Please try again.'}</p>
+						)}
+						{!hasAllowedMints && !depositInvoice && (
+							<p className="text-sm text-destructive text-center">No accepted auction mints are available in this wallet.</p>
+						)}
+
+						<div className="flex items-center justify-between gap-2 pt-1">
+							<Button
+								type="button"
+								variant="link"
+								className="h-auto px-0 text-sm text-muted-foreground"
+								onClick={() => setShowClassicTopUp(true)}
+							>
+								OR Top up your wallet
+							</Button>
+							<Button type="button" onClick={handleConfirmCheckNow} disabled={!depositInvoice || isCheckingDeposit}>
+								{isCheckingDeposit ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+								Confirm
+							</Button>
+						</div>
 					</div>
 				) : depositInvoice ? (
 					<div className="space-y-4">

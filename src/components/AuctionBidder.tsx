@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
@@ -203,6 +204,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
 	const [isConfirmBidDialogOpen, setIsConfirmBidDialogOpen] = useState(false)
 	const [pendingBidData, setPendingBidData] = useState<AuctionBidFormData | null>(null)
+	const [isConfirmBidMintChosen, setIsConfirmBidMintChosen] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -353,12 +355,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (!bidData) return
 
 		setPendingBidData(bidData)
+		setIsConfirmBidMintChosen(false)
 		setIsConfirmBidDialogOpen(true)
 	}
 
 	const handleConfirmBidDialogOpenChange = (open: boolean) => {
 		setIsConfirmBidDialogOpen(open)
-		if (!open) setPendingBidData(null)
+		if (!open) {
+			setPendingBidData(null)
+			setIsConfirmBidMintChosen(false)
+		}
 	}
 
 	const handleConfirmBid = async () => {
@@ -413,6 +419,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onPaymentAcknowledged={handlePaymentAcknowledged}
 				onMintingStarted={handleMintingStarted}
 				onFundingFailed={handleFundingFailed}
+				variant="bid"
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">
@@ -477,9 +484,28 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							</div>
 							<div className="min-w-0">
 								<div className="text-xs text-foreground/60">Selected Mint</div>
-								<div className="font-medium truncate">
-									{selectedMint ? (availableMints.find((m) => m.mintUrl === selectedMint)?.hostname ?? selectedMint) : 'Not selected'}
-								</div>
+								{availableMints.length > 0 ? (
+									<Select
+										value={isConfirmBidMintChosen ? (selectedMint ?? '') : ''}
+										onValueChange={(val) => {
+											setSelectedMint(val)
+											setIsConfirmBidMintChosen(true)
+										}}
+									>
+										<SelectTrigger size="sm" className="w-full mt-0.5">
+											<SelectValue placeholder="Select a mint" />
+										</SelectTrigger>
+										<SelectContent>
+											{availableMints.map((m) => (
+												<SelectItem key={m.mintUrl} value={m.mintUrl}>
+													{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								) : (
+									<div className="font-medium truncate">Not selected</div>
+								)}
 							</div>
 							{auctionValidators.length > 0 && (
 								<div className="min-w-0">
@@ -500,7 +526,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
 							Cancel
 						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending}>
+						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || (availableMints.length > 0 && !isConfirmBidMintChosen)}>
 							{bidMutation.isPending ? 'Submitting...' : 'Confirm'}
 						</Button>
 					</DialogFooter>

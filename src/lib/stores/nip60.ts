@@ -1642,6 +1642,29 @@ export const nip60Actions = {
 		})
 	},
 
+	/**
+	 * Manual "check now" for a "Confirm" button — unlike `retryDepositConfirmation`,
+	 * this isn't gated behind the `awaiting_confirmation_retry` timeout state, so it
+	 * works while a deposit is still `pending`. Reuses the success/error listeners
+	 * `startDeposit` already attached to `activeDeposit`, so a payment found here
+	 * still transitions `depositStatus` normally.
+	 */
+	checkDepositNow: async (): Promise<void> => {
+		const { activeDeposit, depositStatus } = nip60Store.state
+		if (!activeDeposit || (depositStatus !== 'pending' && depositStatus !== 'awaiting_confirmation_retry')) return
+
+		if (depositStatus === 'awaiting_confirmation_retry') {
+			nip60Actions.retryDepositConfirmation()
+			return
+		}
+
+		try {
+			await activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
+		} catch (error) {
+			console.error('[nip60] Manual deposit check failed:', error)
+		}
+	},
+
 	estimateDepositQuote: async (amount: number, mintUrl: string): Promise<Nip60DepositQuoteEstimate> => {
 		const requiredBidFundingAmount = Math.ceil(amount)
 		const targetMint = normalizeMintUrl(mintUrl)
