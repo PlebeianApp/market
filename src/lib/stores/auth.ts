@@ -242,6 +242,8 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
+		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKPrivateKeySigner(privateKey)
@@ -256,7 +258,7 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -290,6 +292,8 @@ export const authActions = {
 			throw new Error('No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x) before logging in.')
 		}
 
+		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip07Signer()
@@ -310,7 +314,7 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -327,6 +331,8 @@ export const authActions = {
 	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
+
+		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
@@ -365,7 +371,7 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {

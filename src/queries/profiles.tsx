@@ -2,6 +2,8 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { NDKWoT } from '@nostr-dev-kit/wot'
 import { queryOptions, useQuery } from '@tanstack/react-query'
+import { validateProfileIdentifier } from '@/lib/utils/profileValidation'
+import { isValidHexKey } from '@/lib/utils'
 import { profileKeys } from './queryKeyFactory'
 
 export function normalizeOptionalString(value: unknown): string | null {
@@ -66,22 +68,42 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const timeoutMs = 8000
-	try {
-		const result = await Promise.race([
-			(async () => {
-				const user = await ndk.fetchUser(identifier)
-				if (!user) return { profile: null, user: null }
-				const profile = await user.fetchProfile()
-				return { profile, user }
-			})(),
-			new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), timeoutMs)),
-		])
-		return result
-	} catch (e) {
-		console.error('Failed to fetch profile with identifier:', e)
+	// Reject invalid identifiers (empty, whitespace, truncated, or otherwise
+	// malformed) before any relay request — ndk.fetchUser builds an NDKUser
+	// whose pubkey ends up in a { kinds: [0], authors: [...] } filter, and an
+	// invalid value trips NDK's strict filter validation. This accepts hex,
+	// npub, nprofile, and nip05 (everything ndk.fetchUser accepts).
+	if (!validateProfileIdentifier(identifier).isValid) {
 		return { profile: null, user: null }
 	}
+
+	// Distinguish transient failures (timeout, relay errors) from genuine
+	// profile absence. Transient failures must THROW so React Query treats
+	// them as `isError` and retains any previously-loaded profile (see
+	// `placeholderData: keepPreviousData` in ProfilePage) instead of
+	// committing a null-shaped "success" that clobbers a loaded profile. Only
+	// genuine absence — fetchProfile() resolved to null — returns the
+	// null-shaped value.
+	//
+	// No preflight relay-connection check: zero connected relays is a normal
+	// transient state while the app's background connect() completes. A
+	// preflight throw would fail an otherwise-valid initial query before the
+	// relay is ready. Instead, let the timeout below determine failure — if no
+	// relay connects within the timeout window, the race rejects (transient,
+	// retryable). (Behavioral cases covered in profilesFetch.test.ts.)
+	const timeoutMs = 8000
+	// No try/catch: let the timeout and fetchUser/fetchProfile rejections
+	// propagate as query errors. Only fetchProfile() resolving to null
+	// (genuine absence) produces the null-shaped success below.
+	return await Promise.race([
+		(async () => {
+			const user = await ndk.fetchUser(identifier)
+			if (!user) return { profile: null, user: null }
+			const profile = await user.fetchProfile()
+			return { profile, user }
+		})(),
+		new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), timeoutMs)),
+	])
 }
 
 export const profileQueryOptions = (npub: string) =>
@@ -100,6 +122,11 @@ export const profileByIdentifierQueryOptions = (identifier: string) =>
 	queryOptions({
 		queryKey: profileKeys.details(identifier),
 		queryFn: () => fetchProfileByIdentifier(identifier),
+		// Gate at the shared factory so every consumer — hooks, route loaders,
+		// and direct useQuery callers — gets the same validation. Callers that
+		// need additional conditions must COMBINE (not overwrite) this base,
+		// e.g. `enabled: options.enabled && myCondition`.
+		enabled: validateProfileIdentifier(identifier).isValid,
 	})
 
 export const validateNip05 = async (pubkey: string): Promise<boolean | null> => {
@@ -153,10 +180,10 @@ export const useProfileNip05 = (pubkey: string) => {
 }
 
 export const useProfile = (pubkey: string | undefined) => {
+	const options = profileByIdentifierQueryOptions(pubkey ?? '')
 	return useQuery({
-		queryKey: profileKeys.details(pubkey ?? ''),
-		queryFn: () => fetchProfileByIdentifier(pubkey!),
-		enabled: !!pubkey,
+		...options,
+		enabled: options.enabled,
 		staleTime: 5 * 60 * 1000,
 		retry: 2,
 	})
@@ -327,7 +354,7 @@ export const wotScoreQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: profileKeys.wot(pubkey),
 		queryFn: () => getWotScore(pubkey),
-		enabled: !!pubkey,
+		enabled: isValidHexKey(pubkey),
 		retry: 2,
 		retryDelay: 1000,
 	})
@@ -335,6 +362,5 @@ export const wotScoreQueryOptions = (pubkey: string) =>
 export const useWotScore = (pubkey: string) => {
 	return useQuery({
 		...wotScoreQueryOptions(pubkey),
-		enabled: !!pubkey,
 	})
 }

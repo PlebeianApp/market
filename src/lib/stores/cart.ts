@@ -505,7 +505,18 @@ export const cartActions = {
 		await cartActions.fetchAndSetSellerShippingOptions()
 	},
 
-	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null) => {
+	// Keeps local cart items as source of truth during manual login reconciliation.
+	// Remote items are intentionally ignored to avoid changing local quantities.
+	mergeGuestWithRemote: (guest: NormalizedCart, remote: NormalizedCart): NormalizedCart => {
+		return {
+			sellers: { ...guest.sellers },
+			products: { ...guest.products },
+			orders: { ...guest.orders },
+			invoices: { ...guest.invoices },
+		}
+	},
+
+	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null, wasLoggedOut: boolean = false) => {
 		if (!pubkey || !signer || !ndk) return
 
 		clearRemotePublishTimeout()
@@ -516,6 +527,22 @@ export const cartActions = {
 		}))
 
 		try {
+			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
+
+			if (wasLoggedOut && localHasItems) {
+				// Manual login with local cart items: keep local cart unchanged and publish it.
+
+				cartStore.setState((state) => ({
+					...state,
+					hasRemoteCartHydrated: true,
+					isReconcilingRemoteCart: false,
+					suppressRemotePublish: false,
+				}))
+				cartActions.scheduleRemotePublish()
+				return
+			}
+
+			// Auto-login or empty local cart: fetch remote and apply if it is newer
 			const remoteSnapshot = await cartSyncDependencies.fetchLatestCartSnapshot(pubkey)
 			if (!remoteSnapshot) {
 				cartStore.setState((state) => ({
@@ -529,16 +556,8 @@ export const cartActions = {
 
 			const normalizedRemote = normalizePersistedCart(remoteSnapshot)
 			const localUpdatedAt = cartStore.state.lastCartIntentUpdatedAt
-			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
 
-			let shouldAdoptRemote = false
-			if (!localHasItems) {
-				shouldAdoptRemote = true
-			} else if (localUpdatedAt && localUpdatedAt > 0) {
-				shouldAdoptRemote = normalizedRemote.updatedAt > localUpdatedAt
-			} else {
-				shouldAdoptRemote = false
-			}
+			const shouldAdoptRemote = !localHasItems || !localUpdatedAt || normalizedRemote.updatedAt > localUpdatedAt
 
 			if (shouldAdoptRemote) {
 				const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}

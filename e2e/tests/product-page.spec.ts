@@ -5,6 +5,28 @@ import { devUser1, devUser2, devUser3 } from '@/lib/fixtures'
 import { kinds, type VerifiedEvent } from 'nostr-tools'
 import type { Locator, Page } from '@playwright/test'
 import { seedComment, seedProduct, seedReaction } from '../scenarios'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Path to a local image fixture used to intercept external CDN requests in CI.
+const __filename = fileURLToPath(import.meta.url)
+const LOCAL_IMAGE_PATH = path.join(path.dirname(__filename), '..', 'fixtures', 'test-product-image.png')
+
+/**
+ * Intercepts requests to cdn.satellite.earth and serves a local fixture image.
+ * This prevents flaky CI failures when the external CDN is unreachable from
+ * GitHub Actions runners — the <img> always loads, so toBeVisible() passes.
+ * The src attribute remains the original CDN URL, so src assertions still work.
+ */
+async function interceptCdnImages(page: Page) {
+	await page.route('**/cdn.satellite.earth/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/png',
+			path: LOCAL_IMAGE_PATH,
+		})
+	})
+}
 
 // ==========================================
 // == GLOBAL STATE & SEEDING               ==
@@ -200,6 +222,11 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 
 	test('should show product image', async ({ unauthenticatedPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
+
+		// Intercept external CDN image requests to avoid flaky CI failures.
+		// The local fixture is served instead, so the image always loads.
+		await interceptCdnImages(unauthenticatedPage)
+
 		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
 		const headerContent = unauthenticatedPage.locator('.hero-content-product')
