@@ -93,8 +93,16 @@ export function AuctionSettlement({
 	useEffect(() => {
 		if (!ended || !auction.mints?.length) return
 		let cancelled = false
-		nip60Actions.loadAuctionMintKeysets(auction.mints[0]).then((keysets) => {
+		const mintUrl = auction.mints[0]
+		console.log('[path-release] FETCHING keysets for', mintUrl)
+		nip60Actions.loadAuctionMintKeysets(mintUrl).then((keysets) => {
+			console.log('[path-release] KEYSETS result', {
+				mintUrl,
+				count: keysets.length,
+				ids: keysets.map((k) => k.id),
+			})
 			if (!cancelled && keysets.length) setMintKeysets(keysets)
+			else console.log('[path-release] KEYSETS empty or cancelled')
 		})
 		return () => {
 			cancelled = true

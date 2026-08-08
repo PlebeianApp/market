@@ -112,6 +112,15 @@ function isValidPathRelease(
 	mintKeysets?: MintKeyset[],
 ): boolean {
 	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
+	if (!result.isValid) {
+		console.log('[path-release] VALIDATE FAILED', {
+			id: release.id?.slice(0, 12),
+			failureCode: result.failureCode,
+			detail: result.detail?.slice(0, 80),
+			hasKeysets: !!mintKeysets,
+			keysetCount: mintKeysets?.length ?? 0,
+		})
+	}
 	return result.isValid
 }
 
