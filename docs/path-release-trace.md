@@ -11,6 +11,7 @@ handleReleasePath()
 ```
 
 The CTA appears when `descriptor.cta.kind === 'release-path'`, which requires:
+
 - `role === 'winner'`
 - `ended === true`
 - `!myAlreadyReleased` (no existing path release for this bid)
@@ -36,6 +37,7 @@ walkBidderRecordChain(bidEventId)  → chain: BidderBidRecord[]
 ```
 
 ### Published event structure (kind 1025):
+
 ```
 {
   kind: 1025,
@@ -54,6 +56,7 @@ walkBidderRecordChain(bidEventId)  → chain: BidderBidRecord[]
 ```
 
 ### Relay delivery:
+
 - `publishEvent(event, getWriteRelaySet())`
 - `getWriteRelaySet()` in dev/staging → `NDKRelaySet.fromRelayUrls([getMainRelay()], ndk)`
 - In production → `undefined` (all connected relays)
@@ -75,9 +78,11 @@ staleTime: 5000, refetchInterval: 5000  (refetches every 5 seconds)
 ```
 
 ### `isAuctionPathReleaseForCoordinate`:
+
 ```ts
-event.tags.some(tag => tag[0] === 'a' && tag[1] === auctionCoordinates)
+event.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
 ```
+
 This double-checks the `a` tag matches the coordinate. The relay filter `#a` already does this, but this is a client-side safety net.
 
 ## 4. Parse (route `auctions.$auctionId.tsx`)
@@ -90,17 +95,18 @@ pathReleasesQuery.data (NDKEvent[])
 ```
 
 ### `parsePathReleaseEvent` extracts:
-| Tag           | Parsed field        | Zod validation                          |
-|---------------|---------------------|-----------------------------------------|
-| `e`           | bidEventId          | nostrEventIdHex (64 hex)                |
-| `a`           | auctionCoordinate   | addressableCoordinate                   |
-| `p`           | sellerPubkey        | nostrPubkeyHex                           |
-| `derivation_path` | derivationPath | bip32Path                               |
-| `child_pubkey`| childPubkey         | compressedPubkeyHex (33 hex, 02/03)     |
-| `release_reason` | releaseReason  | enum: settlement, fallback_settlement, voluntary_late |
-| `cashu_token` | cashuToken          | string.min(1), optional                 |
-| `auditor_ref` | auditorRefs         | array, default []                       |
-| `fallback_offer` | fallbackOfferId | optional                               |
+
+| Tag               | Parsed field      | Zod validation                                        |
+| ----------------- | ----------------- | ----------------------------------------------------- |
+| `e`               | bidEventId        | nostrEventIdHex (64 hex)                              |
+| `a`               | auctionCoordinate | addressableCoordinate                                 |
+| `p`               | sellerPubkey      | nostrPubkeyHex                                        |
+| `derivation_path` | derivationPath    | bip32Path                                             |
+| `child_pubkey`    | childPubkey       | compressedPubkeyHex (33 hex, 02/03)                   |
+| `release_reason`  | releaseReason     | enum: settlement, fallback_settlement, voluntary_late |
+| `cashu_token`     | cashuToken        | string.min(1), optional                               |
+| `auditor_ref`     | auditorRefs       | array, default []                                     |
+| `fallback_offer`  | fallbackOfferId   | optional                                              |
 
 **Any Zod parse failure → event silently dropped** (`.filter(r => r.ok)`)
 
@@ -118,33 +124,34 @@ pathReleases = topBid
 
 ### `isValidPathRelease` → `validatePathRelease` checks (IN ORDER):
 
-| # | Check                                   | Failure code                    |
-|---|-----------------------------------------|---------------------------------|
-| 1 | release.bidderPubkey === bid.bidderPubkey | unauthorized_signer          |
-| 2 | release.bidEventId === bid.id            | bid_reference_mismatch          |
-| 3 | release.auctionCoordinate === bid.auctionCoordinate === auction.coordinate | auction_mismatch |
-| 4 | release.sellerPubkey === bid.sellerPubkey === auction.sellerPubkey | seller_mismatch |
-| 5 | validateReleaseReason(postCloseDecision, releaseReason) | release_reason_invalid |
-| 6 | deriveAuctionChildP2pkPubkeyFromXpub(auction.p2pkXpub, release.derivationPath) succeeds | derivation_invalid |
-| 7 | derivedChildPubkey === release.childPubkey | child_pubkey_mismatch        |
-| 8 | derivedChildPubkey === bid.childPubkey  | child_pubkey_mismatch           |
-| 9 | release.cashuToken exists               | cashu_token_missing            |
-| 10 | getDecodedToken(release.cashuToken) succeeds | cashu_token_decode_failed  |
-| 11 | decodedToken.proofs.length > 0          | cashu_token_proof_count_mismatch |
-| 12 | decodedToken.proofs.length === bid.proofYs.length | cashu_token_proof_count_mismatch |
-| 13 | decodedToken.mint === bid.mint (normalized) | cashu_token_mint_mismatch  |
-| 14 | For each proof: parseAuctionLockSecret matches bid's locktime, childPubkey, refundPubkey | cashu_token_lock_mismatch |
-| 15 | Each proof.secret is in bid.lockSecrets | cashu_token_secret_mismatch     |
-| 16 | hashToCurve(proof.secret) is in bid.proofYs | cashu_token_proof_y_mismatch |
-| 17 | All bid secrets consumed (no missing)   | cashu_token_secret_mismatch     |
-| 18 | All bid proofYs consumed                | cashu_token_proof_y_mismatch    |
-| 19 | sum(proof.amounts) === bid.amount       | cashu_token_amount_mismatch     |
+| #   | Check                                                                                    | Failure code                     |
+| --- | ---------------------------------------------------------------------------------------- | -------------------------------- |
+| 1   | release.bidderPubkey === bid.bidderPubkey                                                | unauthorized_signer              |
+| 2   | release.bidEventId === bid.id                                                            | bid_reference_mismatch           |
+| 3   | release.auctionCoordinate === bid.auctionCoordinate === auction.coordinate               | auction_mismatch                 |
+| 4   | release.sellerPubkey === bid.sellerPubkey === auction.sellerPubkey                       | seller_mismatch                  |
+| 5   | validateReleaseReason(postCloseDecision, releaseReason)                                  | release_reason_invalid           |
+| 6   | deriveAuctionChildP2pkPubkeyFromXpub(auction.p2pkXpub, release.derivationPath) succeeds  | derivation_invalid               |
+| 7   | derivedChildPubkey === release.childPubkey                                               | child_pubkey_mismatch            |
+| 8   | derivedChildPubkey === bid.childPubkey                                                   | child_pubkey_mismatch            |
+| 9   | release.cashuToken exists                                                                | cashu_token_missing              |
+| 10  | getDecodedToken(release.cashuToken) succeeds                                             | cashu_token_decode_failed        |
+| 11  | decodedToken.proofs.length > 0                                                           | cashu_token_proof_count_mismatch |
+| 12  | decodedToken.proofs.length === bid.proofYs.length                                        | cashu_token_proof_count_mismatch |
+| 13  | decodedToken.mint === bid.mint (normalized)                                              | cashu_token_mint_mismatch        |
+| 14  | For each proof: parseAuctionLockSecret matches bid's locktime, childPubkey, refundPubkey | cashu_token_lock_mismatch        |
+| 15  | Each proof.secret is in bid.lockSecrets                                                  | cashu_token_secret_mismatch      |
+| 16  | hashToCurve(proof.secret) is in bid.proofYs                                              | cashu_token_proof_y_mismatch     |
+| 17  | All bid secrets consumed (no missing)                                                    | cashu_token_secret_mismatch      |
+| 18  | All bid proofYs consumed                                                                 | cashu_token_proof_y_mismatch     |
+| 19  | sum(proof.amounts) === bid.amount                                                        | cashu_token_amount_mismatch      |
 
 **Any check failure → event silently filtered out** (not in `pathReleases`)
 
 ## 6. Critical Data Flow — What the bidder publishes vs what the validator checks
 
 ### Published from bidder record (localStorage):
+
 ```
 leg.auctionCoordinate  → tag 'a'          → parsed.auctionCoordinate   → check #3 (vs auction.coordinate)
 leg.sellerPubkey        → tag 'p'          → parsed.sellerPubkey       → check #4 (vs auction.sellerPubkey)
@@ -157,6 +164,7 @@ event.sign(signer)      → event.pubkey         → parsed.bidderPubkey   → c
 ```
 
 ### Cross-referenced against:
+
 - **auction** (from kind-30408 event): `auction.coordinate`, `auction.sellerPubkey`, `auction.p2pkXpub`
 - **bid** (from kind-1023 event): `bid.bidderPubkey`, `bid.id`, `bid.auctionCoordinate`, `bid.sellerPubkey`, `bid.childPubkey`, `bid.locktime`, `bid.refundPubkey`, `bid.lockSecrets`, `bid.proofYs`, `bid.mint`, `bid.amount`
 
@@ -165,6 +173,7 @@ event.sign(signer)      → event.pubkey         → parsed.bidderPubkey   → c
 ## 7. Existing E2E Tests
 
 ### Test 1: "clicking Release Path publishes a kind-1025 event to the relay"
+
 - Seeds auction + bid on relay
 - Injects bidder record into localStorage
 - Clicks "Release Path" button
@@ -174,6 +183,7 @@ event.sign(signer)      → event.pubkey         → parsed.bidderPubkey   → c
 - ✅ Covers: button → publish → relay delivery
 
 ### Test 2: "after clicking Release Path, UI transitions to path-released state"
+
 - Same setup as test 1
 - Clicks button
 - Verifies optimistic UI shows "path release published"
@@ -184,6 +194,7 @@ event.sign(signer)      → event.pubkey         → parsed.bidderPubkey   → c
 - ✅ Covers: button → publish → relay → query refetch → descriptor shows "Path Released"
 
 ### GAP: No E2E test verifies that a SECOND client (seller) detects the path release
+
 - The existing tests only check the bidder's own view
 - The seller's view is tested by seeding the path release directly on the relay (not via the button)
 - There is NO test that:
