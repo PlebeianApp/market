@@ -1,6 +1,7 @@
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedSettlementEvent, ParsedPathReleaseEvent } from './events'
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
+import type { MintKeyset } from '@cashu/cashu-ts'
 import { validateBid, validatePathRelease, validateSettlementCompleteness } from './validation'
 
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
@@ -63,6 +64,7 @@ export interface GetSettlementDescriptorInput {
 	hasPlacedBid: boolean
 	now: number
 	topBidNut7State?: Nut7ProofState
+	mintKeysets?: MintKeyset[]
 }
 
 interface DerivedState {
@@ -107,10 +109,10 @@ function isValidPathRelease(
 	release: ParsedPathReleaseEvent,
 	now: number,
 	postCloseDecision: 'winner' | 'loser' | null,
+	mintKeysets?: MintKeyset[],
 ): boolean {
-	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision })
-	if (result.isValid) return true
-	return false
+	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
+	return result.isValid
 }
 
 function isPathReleaseFullyValid(
@@ -119,8 +121,9 @@ function isPathReleaseFullyValid(
 	release: ParsedPathReleaseEvent,
 	now: number,
 	postCloseDecision: 'winner' | 'loser' | null,
+	mintKeysets?: MintKeyset[],
 ): boolean {
-	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision })
+	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
 	return result.isValid
 }
 
@@ -133,6 +136,7 @@ function isSettlementStructurallyValid(
 	now: number,
 	postCloseDecision: 'winner' | 'loser' | null,
 	nut7State?: Nut7ProofState,
+	mintKeysets?: MintKeyset[],
 ): boolean {
 	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) return false
 	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) return false
@@ -151,7 +155,7 @@ function isSettlementStructurallyValid(
 
 	if (!matchingRelease) return true
 
-	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision)) return true
+	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return true
 
 	const result = validateSettlementCompleteness({
 		auction,
@@ -197,11 +201,23 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 			: 'winner'
 
 	// 4. Validate path releases — filter to only structurally valid ones.
-	const pathReleases = topBid ? rawPathReleases.filter((pr) => isValidPathRelease(auction, topBid, pr, now, postCloseDecision)) : []
+	const pathReleases = topBid
+		? rawPathReleases.filter((pr) => isValidPathRelease(auction, topBid, pr, now, postCloseDecision, input.mintKeysets))
+		: []
 
 	// 5. Validate settlements — filter to only structurally valid ones.
 	const settlements = rawSettlements.filter((s) =>
-		isSettlementStructurallyValid(auction, s, topBid, pathReleases, rawPathReleases, now, postCloseDecision, input.topBidNut7State),
+		isSettlementStructurallyValid(
+			auction,
+			s,
+			topBid,
+			pathReleases,
+			rawPathReleases,
+			now,
+			postCloseDecision,
+			input.topBidNut7State,
+			input.mintKeysets,
+		),
 	)
 
 	const reserve = auction.reserve

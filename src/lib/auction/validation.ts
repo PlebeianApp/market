@@ -38,7 +38,7 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
-import { getDecodedToken } from '@cashu/cashu-ts'
+import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
@@ -163,6 +163,7 @@ export interface ValidatePathReleaseInput {
 	postCloseDecision: 'winner' | 'loser' | null
 	fallbackOfferedAt?: number | null
 	expectedTokenAmount?: number
+	mintKeysets?: MintKeyset[]
 }
 
 export type SettlementCompletenessFailureCode =
@@ -531,7 +532,7 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 
 	let decodedToken: ReturnType<typeof getDecodedToken>
 	try {
-		decodedToken = getDecodedToken(release.cashuToken)
+		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
 	} catch (err) {
 		return invalidRelease(
 			'cashu_token_decode_failed',
