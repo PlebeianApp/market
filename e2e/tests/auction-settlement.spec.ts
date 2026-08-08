@@ -858,3 +858,57 @@ test.describe('UI interaction — publish events to relay', () => {
 		})
 	})
 })
+
+// ---------------------------------------------------------------------------
+// Cross-client test — bidder publishes, seller detects
+// ---------------------------------------------------------------------------
+
+test.describe('Cross-client — bidder publishes path release, seller detects', () => {
+	test('seller sees Settlement Ready after bidder clicks Release Path on another client', async ({
+		buyerPage,
+		merchantPage,
+	}: {
+		buyerPage: Page
+		merchantPage: Page
+	}) => {
+		await CashuMintMock.setup(buyerPage)
+		await CashuMintMock.setup(merchantPage)
+		await dismissPiiModal(buyerPage, devUser2.pk)
+		await dismissPiiModal(merchantPage, devUser1.pk)
+
+		const token = MOCK_TOKENS.unspentFuture
+		const relay = await Relay.connect(RELAY_URL)
+		let auction: SeededAuction
+		let bidId: string
+		try {
+			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
+			bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+		} finally {
+			relay.close()
+		}
+
+		// Seller navigates to the auction page first — should see "Awaiting Path Release".
+		await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
+		await merchantPage.waitForLoadState('networkidle')
+		await expect(merchantPage.getByText(/awaiting path release/i)).toBeVisible({ timeout: 15_000 })
+
+		// Bidder navigates to the auction page and injects bidder record.
+		await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+		await buyerPage.waitForLoadState('networkidle')
+		await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+		await buyerPage.reload()
+		await buyerPage.waitForLoadState('networkidle')
+
+		// Bidder clicks "Release Path" — this publishes kind-1025 to the relay.
+		await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible({ timeout: 15_000 })
+		await buyerPage.getByRole('button', { name: /release path/i }).click()
+
+		// Bidder sees optimistic "Path release published" immediately.
+		await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 10_000 })
+
+		// Seller's query refetches every 5 seconds. Within 20 seconds the
+		// seller should transition from "Awaiting Path Release" to "Settlement Ready".
+		await expect(merchantPage.getByText(/settlement ready/i)).toBeVisible({ timeout: 20_000 })
+		await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 5_000 })
+	})
+})
