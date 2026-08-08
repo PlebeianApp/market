@@ -686,6 +686,59 @@ test.describe('UI interaction — publish events to relay', () => {
 				subRelay.close()
 			}
 		})
+
+		test('after clicking Release Path, UI transitions to path-released state', async ({ buyerPage }: { buyerPage: Page }) => {
+			await CashuMintMock.setup(buyerPage)
+			await dismissPiiModal(buyerPage, devUser2.pk)
+
+			const token = MOCK_TOKENS.unspentFuture
+			const relay = await Relay.connect(RELAY_URL)
+			let auction: SeededAuction
+			let bidId: string
+			try {
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+			} finally {
+				relay.close()
+			}
+
+			// Navigate and inject bidder record into localStorage.
+			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+			await buyerPage.waitForLoadState('networkidle')
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+
+			// Reload so the component picks up the localStorage record.
+			await buyerPage.reload()
+			await buyerPage.waitForLoadState('networkidle')
+
+			// Wait for the Release Path button to appear.
+			await expect(buyerPage.getByRole('button', { name: /release path/i })).toBeVisible({ timeout: 15_000 })
+
+			// Click the button — this triggers handleReleasePath → publishBidderPathRelease.
+			await buyerPage.getByRole('button', { name: /release path/i }).click()
+
+			// The optimistic UI should immediately transition to 'Path release published'.
+			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 10_000 })
+
+			// The Release Path button should disappear (the CTA is no longer release-path).
+			await expect(buyerPage.getByRole('button', { name: /release path/i })).not.toBeVisible({ timeout: 10_000 })
+
+			// Wait for the query to refetch and pick up the real event from the relay.
+			// After refetch, the descriptor should still show 'Path Released' (not revert).
+			await buyerPage.waitForTimeout(8_000)
+
+			// The 'Path release published' state should persist (not revert to release-path).
+			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 5_000 })
+
+			// Reload the page — the real event should now be on the relay, so the
+			// descriptor should still show 'Path Released' without the optimistic state.
+			await buyerPage.reload()
+			await buyerPage.waitForLoadState('networkidle')
+
+			// After reload, the path release should be detected from the relay.
+			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 15_000 })
+			await expect(buyerPage.getByRole('button', { name: /release path/i })).not.toBeVisible({ timeout: 5_000 })
+		})
 	})
 
 	test.describe('seller clicks Publish Settlement', () => {
