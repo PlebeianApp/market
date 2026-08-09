@@ -233,6 +233,7 @@ export interface ValidateSettlementCompletenessInput {
 	winningBidNut7State?: Nut7ProofState
 	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 	bidChain?: SettlementChainLegContext[]
+	mintKeysets?: MintKeyset[]
 }
 
 // ============================================================================
@@ -709,6 +710,7 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 		postCloseDecision: inferredPostCloseDecision,
 		fallbackOfferedAt: usesFallback ? auction.maxEndAt + auction.fallbackDelaySec : null,
 		expectedTokenAmount: latestExpectedPayout?.amount ?? winningBid.amount,
+		mintKeysets: input.mintKeysets,
 	})
 	if (!pathReleaseValidity.isValid) {
 		return invalidSettlement('path_release_invalid', pathReleaseValidity.detail)

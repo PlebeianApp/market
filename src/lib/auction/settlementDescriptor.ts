@@ -162,6 +162,7 @@ function isSettlementStructurallyValid(
 		winningBid: topBid,
 		pathRelease: matchingRelease,
 		winningBidNut7State: nut7State,
+		mintKeysets,
 	})
 
 	if (result.isComplete) return true
