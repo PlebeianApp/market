@@ -209,19 +209,34 @@ export function AuctionSettlement({
 
 	const claimOrderEvents = claimOrders.map((o) => ({ id: o.id, pubkey: o.pubkey, kind: 16, content: '', tags: [] }))
 
-	const descriptorInput: GetSettlementDescriptorInput = {
-		auction,
-		bids,
-		topBid,
-		settlements,
-		pathReleases: pathReleasesForDescriptor,
-		claimOrders: claimOrderEvents,
-		currentUserPubkey: currentUserPubkey || undefined,
-		myTopBidEvent,
-		hasBidderRecord: !!myBidderRecord,
-		hasPlacedBid,
-		now,
-	}
+	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
+		() => ({
+			auction,
+			bids,
+			topBid,
+			settlements,
+			pathReleases: pathReleasesForDescriptor,
+			claimOrders: claimOrderEvents,
+			currentUserPubkey: currentUserPubkey || undefined,
+			myTopBidEvent,
+			hasBidderRecord: !!myBidderRecord,
+			hasPlacedBid,
+			now,
+		}),
+		[
+			auction,
+			bids,
+			topBid,
+			settlements,
+			pathReleasesForDescriptor,
+			claimOrderEvents,
+			currentUserPubkey,
+			myTopBidEvent,
+			myBidderRecord,
+			hasPlacedBid,
+			now,
+		],
+	)
 
 	const [descriptor, setDescriptor] = useState<SettlementDescriptor | null>(null)
 	useEffect(() => {
