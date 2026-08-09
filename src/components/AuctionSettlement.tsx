@@ -207,7 +207,10 @@ export function AuctionSettlement({
 		)
 	}
 
-	const claimOrderEvents = claimOrders.map((o) => ({ id: o.id, pubkey: o.pubkey, kind: 16, content: '', tags: [] }))
+	const claimOrderEvents = useMemo(
+		() => claimOrders.map((o) => ({ id: o.id, pubkey: o.pubkey, kind: 16, content: '', tags: [] })),
+		[claimOrders],
+	)
 
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
 		() => ({
