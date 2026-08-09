@@ -38,7 +38,7 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
-import { getDecodedToken, getDecodedTokenBinary, type MintKeyset, type Token } from '@cashu/cashu-ts'
+import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
@@ -46,39 +46,19 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 // Public API
 // ============================================================================
 
-/**
- * Fallback token decoder for when getDecodedToken fails on keyset ID mapping.
- * Decodes the token structure (mint, proofs, unit) without resolving keyset IDs.
- * This is sufficient for validation because we verify via proof_y and lock
- * secrets, not mint signatures.
- */
-function decodeTokenWithoutKeysetResolution(token: string): Token {
-	// Strip the "cashu" prefix (handles cashuB, cashuA, cashu://, etc.)
-	const stripped = token.replace(/^cashu[AB]/, '')
-	const prefix = token.slice(5, 6)
-	if (prefix === 'A') {
-		// V3 token: base64url-encoded JSON
-		const json = Buffer.from(stripped, 'base64url').toString('utf-8')
-		const parsed = JSON.parse(json)
-		const entry = parsed.token[0]
-		return {
-			mint: entry.mint,
-			proofs: entry.proofs,
-			unit: parsed.unit || 'sat',
-			...(parsed.memo ? { memo: parsed.memo } : {}),
-		}
+const keysetCache = new Map<string, MintKeyset[]>()
+
+export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
+	if (keysetCache.has(mintUrl)) return keysetCache.get(mintUrl)!
+	try {
+		const mint = new CashuMint(mintUrl)
+		const response = await mint.getKeySets()
+		const keysets = response.keysets
+		keysetCache.set(mintUrl, keysets)
+		return keysets
+	} catch {
+		return []
 	}
-	if (prefix === 'B') {
-		// V2 token: base64url-encoded CBOR. getDecodedTokenBinary expects
-		// raw bytes starting with "crawB" followed by CBOR data.
-		const cborBytes = Buffer.from(stripped, 'base64url')
-		const crawB = new TextEncoder().encode('crawB')
-		const combined = new Uint8Array(crawB.length + cborBytes.length)
-		combined.set(crawB)
-		combined.set(cborBytes, crawB.length)
-		return getDecodedTokenBinary(combined)
-	}
-	throw new Error(`Unsupported token version: ${prefix}`)
 }
 
 /**
@@ -569,23 +549,11 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 	try {
 		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
 	} catch (err) {
-		// getDecodedToken fails when the token uses a short keyset ID v2 that
-		// doesn't match any current mint keyset (rotated). We don't need the
-		// keyset public keys for validation (we verify via proof_y and lock
-		// secrets, not mint signatures), so decode the token structure manually.
-		const msg = err instanceof Error ? err.message : String(err)
-		if (!msg.includes('keyset ID')) {
-			return invalidRelease('cashu_token_decode_failed', releaseTiming, `cashu_token could not be decoded: ${msg}`)
-		}
-		try {
-			decodedToken = decodeTokenWithoutKeysetResolution(release.cashuToken)
-		} catch (err2) {
-			return invalidRelease(
-				'cashu_token_decode_failed',
-				releaseTiming,
-				`cashu_token decode fallback failed: ${err2 instanceof Error ? err2.message : String(err2)}`,
-			)
-		}
+		return invalidRelease(
+			'cashu_token_decode_failed',
+			releaseTiming,
+			`cashu_token could not be decoded: ${err instanceof Error ? err.message : String(err)}`,
+		)
 	}
 
 	if (!decodedToken.proofs.length) {

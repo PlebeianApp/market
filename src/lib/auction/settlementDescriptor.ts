@@ -2,7 +2,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedSettlementEvent, ParsedP
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
 import type { MintKeyset } from '@cashu/cashu-ts'
-import { validateBid, validatePathRelease, validateSettlementCompleteness } from './validation'
+import { validateBid, validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
 
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
 
@@ -64,7 +64,6 @@ export interface GetSettlementDescriptorInput {
 	hasPlacedBid: boolean
 	now: number
 	topBidNut7State?: Nut7ProofState
-	mintKeysets?: MintKeyset[]
 }
 
 interface DerivedState {
@@ -112,15 +111,6 @@ function isValidPathRelease(
 	mintKeysets?: MintKeyset[],
 ): boolean {
 	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
-	if (!result.isValid) {
-		console.log('[path-release] VALIDATE FAILED', {
-			id: release.id?.slice(0, 12),
-			failureCode: result.failureCode,
-			detail: result.detail?.slice(0, 80),
-			hasKeysets: !!mintKeysets,
-			keysetCount: mintKeysets?.length ?? 0,
-		})
-	}
 	return result.isValid
 }
 
@@ -178,7 +168,7 @@ function isSettlementStructurallyValid(
 	return result.failureCode === 'nut7_not_spent'
 }
 
-function deriveState(input: GetSettlementDescriptorInput): DerivedState {
+function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeyset[]): DerivedState {
 	const {
 		auction,
 		topBid: rawTopBid,
@@ -211,7 +201,7 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 
 	// 4. Validate path releases — filter to only structurally valid ones.
 	const pathReleases = topBid
-		? rawPathReleases.filter((pr) => isValidPathRelease(auction, topBid, pr, now, postCloseDecision, input.mintKeysets))
+		? rawPathReleases.filter((pr) => isValidPathRelease(auction, topBid, pr, now, postCloseDecision, mintKeysets))
 		: []
 
 	// 5. Validate settlements — filter to only structurally valid ones.
@@ -225,7 +215,7 @@ function deriveState(input: GetSettlementDescriptorInput): DerivedState {
 			now,
 			postCloseDecision,
 			input.topBidNut7State,
-			input.mintKeysets,
+			mintKeysets,
 		),
 	)
 
@@ -332,8 +322,9 @@ function sats(amount: number): string {
 	return amount.toLocaleString()
 }
 
-export function getSettlementDescriptor(input: GetSettlementDescriptorInput): SettlementDescriptor | null {
-	const d = deriveState(input)
+export async function getSettlementDescriptor(input: GetSettlementDescriptorInput): Promise<SettlementDescriptor | null> {
+	const mintKeysets = input.topBid ? await fetchMintKeysets(input.topBid.mint) : undefined
+	const d = deriveState(input, mintKeysets)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)
 	const { auction, myTopBidEvent, hasBidderRecord, hasPlacedBid } = input

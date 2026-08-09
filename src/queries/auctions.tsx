@@ -455,12 +455,6 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 		})
 	}
 
-	console.log(
-		'[settlement] fetchAuctionSettlements: eventId=%s coords=%s filters=%j',
-		auctionEventId?.slice(0, 12),
-		auctionCoordinates?.slice(0, 30),
-		filters.map((f) => ({ kinds: f.kinds, e: f['#e']?.[0]?.slice(0, 12), a: f['#a']?.[0]?.slice(0, 30) })),
-	)
 	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }

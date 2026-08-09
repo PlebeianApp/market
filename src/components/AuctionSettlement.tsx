@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useStore } from '@tanstack/react-store'
-import type { MintKeyset } from '@cashu/cashu-ts'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
@@ -86,28 +85,6 @@ export function AuctionSettlement({
 
 	const biddingCutoffAt = auction.maxEndAt >= auction.endAt ? auction.maxEndAt : auction.endAt
 	const ended = biddingCutoffAt > 0 && now >= biddingCutoffAt
-
-	// Fetch mint keysets so validatePathRelease can decode Cashu v2 tokens
-	// (short keyset IDs require a keyset map to resolve).
-	const [mintKeysets, setMintKeysets] = useState<MintKeyset[] | undefined>(undefined)
-	useEffect(() => {
-		if (!ended || !auction.mints?.length) return
-		let cancelled = false
-		const mintUrl = auction.mints[0]
-		console.log('[path-release] FETCHING keysets for', mintUrl)
-		nip60Actions.loadAuctionMintKeysets(mintUrl).then((keysets) => {
-			console.log('[path-release] KEYSETS result', {
-				mintUrl,
-				count: keysets.length,
-				ids: keysets.map((k) => k.id),
-			})
-			if (!cancelled && keysets.length) setMintKeysets(keysets)
-			else console.log('[path-release] KEYSETS empty or cancelled')
-		})
-		return () => {
-			cancelled = true
-		}
-	}, [ended, auction.mints])
 
 	const myTopBidEvent = useMemo(() => {
 		if (!currentUserPubkey || !bids.length) return null
@@ -244,10 +221,18 @@ export function AuctionSettlement({
 		hasBidderRecord: !!myBidderRecord,
 		hasPlacedBid,
 		now,
-		mintKeysets,
 	}
 
-	const descriptor = getSettlementDescriptor(descriptorInput)
+	const [descriptor, setDescriptor] = useState<SettlementDescriptor | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		getSettlementDescriptor(descriptorInput).then((d) => {
+			if (!cancelled) setDescriptor(d)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [descriptorInput])
 
 	if (!descriptor) return null
 
