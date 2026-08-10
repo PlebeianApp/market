@@ -445,7 +445,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
 
-			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 15_000 })
+			await expect(buyerPage.getByRole('heading', { name: /path release published/i })).toBeVisible({ timeout: 15_000 })
 		})
 
 		test('winner sees you-won after settlement', async ({ buyerPage }: { buyerPage: Page }) => {
@@ -718,7 +718,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			await buyerPage.getByRole('button', { name: /release path/i }).click()
 
 			// The optimistic UI should immediately transition to 'Path release published'.
-			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 10_000 })
+			await expect(buyerPage.getByRole('heading', { name: /path release published/i })).toBeVisible({ timeout: 10_000 })
 
 			// The Release Path button should disappear (the CTA is no longer release-path).
 			await expect(buyerPage.getByRole('button', { name: /release path/i })).not.toBeVisible({ timeout: 10_000 })
@@ -728,7 +728,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			await buyerPage.waitForTimeout(8_000)
 
 			// The 'Path release published' state should persist (not revert to release-path).
-			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 5_000 })
+			await expect(buyerPage.getByRole('heading', { name: /path release published/i })).toBeVisible({ timeout: 5_000 })
 
 			// Reload the page — the real event should now be on the relay, so the
 			// descriptor should still show 'Path Released' without the optimistic state.
@@ -736,7 +736,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			await buyerPage.waitForLoadState('networkidle')
 
 			// After reload, the path release should be detected from the relay.
-			await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 15_000 })
+			await expect(buyerPage.getByRole('heading', { name: /path release published/i })).toBeVisible({ timeout: 15_000 })
 			await expect(buyerPage.getByRole('button', { name: /release path/i })).not.toBeVisible({ timeout: 5_000 })
 		})
 	})
@@ -751,7 +751,8 @@ test.describe('UI interaction — publish events to relay', () => {
 			// the auction HD xpub, child pubkey, token, and proofY
 			// dynamically — all derived from the wallet's real keys.
 			// The merchantPage fixture already navigated to '/' and initialized
-			// the NIP-60 wallet. Read the wallet's actual keys directly.
+			// the NIP-60 wallet. Wait for the wallet to be ready before reading keys.
+			await merchantPage.waitForFunction(() => !!(window as any).__nip60Wallet, undefined, { timeout: 15_000 })
 			const dynKeys = await deriveDynamicWalletKeys(merchantPage)
 
 			// Seed events to the relay using the dynamic xpub/child pubkey.
@@ -904,7 +905,7 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		await buyerPage.getByRole('button', { name: /release path/i }).click()
 
 		// Bidder sees optimistic "Path release published" immediately.
-		await expect(buyerPage.getByText(/path release published/i)).toBeVisible({ timeout: 10_000 })
+		await expect(buyerPage.getByRole('heading', { name: /path release published/i })).toBeVisible({ timeout: 10_000 })
 
 		// Seller's query refetches every 5 seconds. Within 20 seconds the
 		// seller should transition from "Awaiting Path Release" to "Settlement Ready".

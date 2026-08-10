@@ -41,6 +41,7 @@ export const BidEventSchema = z
 		auctionCoordinate: addressableCoordinate,
 		sellerPubkey: nostrPubkeyHex,
 		amount: positiveInt,
+		legLockedAmount: positiveInt,
 		currency: z.literal('SAT', { message: 'currency must be SAT' }),
 		mint: z.string().url({ message: 'mint must be a URL' }),
 		locktime: positiveInt,
@@ -99,6 +100,7 @@ export const parseBidEvent = (event: NostrEventLike): ParseBidEventResult => {
 		auctionCoordinate: readSingleTag(event, 'a') ?? '',
 		sellerPubkey: readSingleTag(event, 'p') ?? '',
 		amount: parseIntegerOrZero(readSingleTag(event, 'amount')),
+		legLockedAmount: parseLegLockedFromContent(event.content, parseIntegerOrZero(readSingleTag(event, 'amount'))),
 		currency: readSingleTag(event, 'currency') ?? '',
 		mint: readSingleTag(event, 'mint') ?? '',
 		locktime: parseIntegerOrZero(readSingleTag(event, 'locktime')),
@@ -130,4 +132,17 @@ const parseIntegerOrZero = (raw: string | undefined): number => {
 	if (raw === undefined) return 0
 	const n = Number.parseInt(raw, 10)
 	return Number.isFinite(n) ? n : 0
+}
+
+const parseLegLockedFromContent = (content: string, fallback: number): number => {
+	if (!content) return fallback
+	try {
+		const parsed = JSON.parse(content)
+		if (typeof parsed.leg_locked === 'number' && Number.isSafeInteger(parsed.leg_locked) && parsed.leg_locked > 0) {
+			return parsed.leg_locked
+		}
+	} catch {
+		// Content is not JSON or malformed — fall back to amount
+	}
+	return fallback
 }

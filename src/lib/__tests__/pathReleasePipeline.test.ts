@@ -276,6 +276,7 @@ describe('path release pipeline: bidder record → publish → parse → validat
 			auctionCoordinate: AUCTION_COORDINATE,
 			sellerPubkey: SELLER_PK,
 			amount: 50_000,
+			legLockedAmount: 50_000,
 			currency: 'SAT',
 			mint: 'https://testnut.cashu.space',
 			locktime: 150,

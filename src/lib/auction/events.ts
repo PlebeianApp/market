@@ -113,6 +113,14 @@ export interface ParsedBidEvent {
 
 	// Bid value
 	amount: number
+	/**
+	 * The sats actually locked by THIS leg (the rebid delta).
+	 * Equals `amount` for a single-leg bid; less than `amount` for
+	 * a rebid chain leg. Parsed from the bid content's `leg_locked`
+	 * field. Falls back to `amount` when the field is absent
+	 * (legacy/unknown content format).
+	 */
+	legLockedAmount: number
 	currency: 'SAT'
 	mint: string
 

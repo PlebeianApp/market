@@ -65,7 +65,10 @@ const buildAuction = (): ParsedAuctionEvent => ({
 	schema: 'auction_v1',
 })
 
-const buildBid = (auction: ParsedAuctionEvent, input: { id: string; amount: number; path: string; prevBidId?: string }): ParsedBidEvent => {
+const buildBid = (
+	auction: ParsedAuctionEvent,
+	input: { id: string; amount: number; path: string; prevBidId?: string; legLockedAmount?: number },
+): ParsedBidEvent => {
 	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(auction.p2pkXpub, input.path)
 	const locktime = auction.maxEndAt + auction.settlementGrace
 	const lockSecret = buildLockSecret(childPubkey, locktime)
@@ -78,6 +81,7 @@ const buildBid = (auction: ParsedAuctionEvent, input: { id: string; amount: numb
 		auctionCoordinate: auction.coordinate,
 		sellerPubkey: auction.sellerPubkey,
 		amount: input.amount,
+		legLockedAmount: input.legLockedAmount ?? input.amount,
 		currency: 'SAT',
 		mint: 'https://mint.test',
 		locktime,
@@ -207,7 +211,7 @@ describe('validateSettlementCompleteness', () => {
 	test('accepts a valid two-leg payout chain', () => {
 		const auction = buildAuction()
 		const leg1 = buildBid(auction, { id: '2'.repeat(64), amount: 60, path: 'm/0/0/0/0/1' })
-		const leg2 = buildBid(auction, { id: '3'.repeat(64), amount: 100, path: 'm/0/0/0/0/2', prevBidId: leg1.id })
+		const leg2 = buildBid(auction, { id: '3'.repeat(64), amount: 100, path: 'm/0/0/0/0/2', prevBidId: leg1.id, legLockedAmount: 40 })
 		const release1: ParsedPathReleaseEvent = {
 			...buildPathRelease(leg1, 'm/0/0/0/0/1', '5'.repeat(64)),
 			cashuToken: buildToken(leg1.mint, leg1.lockSecrets[0], 60),

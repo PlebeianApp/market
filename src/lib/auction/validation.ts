@@ -484,7 +484,7 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseValidityResult => {
 	const { auction, bid, release, now, postCloseDecision, fallbackOfferedAt = null } = input
 	const releaseTiming: ReleaseTiming = now > auction.maxEndAt + auction.settlementGrace ? 'late' : 'prompt'
-	const expectedTokenAmount = input.expectedTokenAmount ?? bid.amount
+	const expectedTokenAmount = input.expectedTokenAmount ?? bid.legLockedAmount ?? bid.amount
 
 	if (release.bidderPubkey.toLowerCase() !== bid.bidderPubkey.toLowerCase()) {
 		return invalidRelease('unauthorized_signer', releaseTiming, 'kind-1025 author does not match the original bidder')
@@ -913,10 +913,8 @@ const validateFallbackChainConsistency = (
 
 const buildExpectedSettlementPayouts = (chain: SettlementChainLegContext[]): SettlementPayoutEntry[] => {
 	const expected: SettlementPayoutEntry[] = []
-	let runningAmount = 0
 	for (const leg of chain) {
-		const legAmount = leg.bid.amount - runningAmount
-		runningAmount = leg.bid.amount
+		const legAmount = leg.bid.legLockedAmount ?? leg.bid.amount
 		expected.push({ bidEventId: leg.bid.id, amount: legAmount, status: 'redeemed' })
 	}
 	return expected
@@ -961,12 +959,14 @@ const validateSettlementPayouts = (
 
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
-const invalidRelease = (failureCode: ReleaseValidityFailureCode, releaseTiming: ReleaseTiming, detail: string): ReleaseValidityResult => ({
-	isValid: false,
-	failureCode,
-	releaseTiming,
-	detail,
-})
+const invalidRelease = (failureCode: ReleaseValidityFailureCode, releaseTiming: ReleaseTiming, detail: string): ReleaseValidityResult => {
+	return {
+		isValid: false,
+		failureCode,
+		releaseTiming,
+		detail,
+	}
+}
 
 const buildCounter = (values: string[]): Map<string, number> => {
 	const counter = new Map<string, number>()

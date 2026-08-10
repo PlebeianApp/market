@@ -88,6 +88,7 @@ function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
 		auctionCoordinate: '30408:seller:d-tag',
 		sellerPubkey: SELLER_PUBKEY,
 		amount: 50000,
+		legLockedAmount: 50000,
 		currency: 'SAT',
 		mint: 'https://mint.example.com',
 		locktime: AUCTION_LOCKTIME,
@@ -761,5 +762,253 @@ describe('validator integration', () => {
 			}),
 		)
 		expect(d?.role).not.toBe('winning-bidder')
+	})
+})
+
+describe('rebid chain path release validation', () => {
+	// Rebid chain fixtures: leg1 (original bid) + leg2 (rebid with delta)
+	const PATH_1 = 'm/0'
+	const PATH_2 = 'm/1'
+	const CHILD_1 = deriveAuctionChildP2pkPubkeyFromXpub(TEST_XPUB, PATH_1)
+	const CHILD_2 = deriveAuctionChildP2pkPubkeyFromXpub(TEST_XPUB, PATH_2)
+	const SECRET_1 = JSON.stringify([
+		'P2PK',
+		{
+			nonce: 'a'.repeat(16),
+			data: CHILD_1,
+			tags: [
+				['n_sigs', '1'],
+				['locktime', String(AUCTION_LOCKTIME)],
+				['refund', REFUND_PUBKEY],
+				['n_sigs_refund', '1'],
+				['sigflag', 'SIG_INPUTS'],
+			],
+		},
+	])
+	const SECRET_2 = JSON.stringify([
+		'P2PK',
+		{
+			nonce: 'b'.repeat(16),
+			data: CHILD_2,
+			tags: [
+				['n_sigs', '1'],
+				['locktime', String(AUCTION_LOCKTIME)],
+				['refund', REFUND_PUBKEY],
+				['n_sigs_refund', '1'],
+				['sigflag', 'SIG_INPUTS'],
+			],
+		},
+	])
+	const PROOF_Y_1 = hashToCurveHexFromString(SECRET_1)
+	const PROOF_Y_2 = hashToCurveHexFromString(SECRET_2)
+	const TOKEN_1 = getEncodedToken({
+		mint: 'https://mint.example.com',
+		proofs: [
+			{
+				amount: 50000,
+				secret: SECRET_1,
+				C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('11'.repeat(32))).toHex(true),
+				id: '00'.repeat(16),
+			},
+		],
+	})
+	const TOKEN_2 = getEncodedToken({
+		mint: 'https://mint.example.com',
+		proofs: [
+			{
+				amount: 3000,
+				secret: SECRET_2,
+				C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
+				id: '00'.repeat(16),
+			},
+		],
+	})
+
+	const leg1 = makeBid({
+		id: 'leg-1',
+		amount: 50000,
+		legLockedAmount: 50000,
+		childPubkey: CHILD_1,
+		lockSecrets: [SECRET_1],
+		proofYs: [PROOF_Y_1],
+		prevBidId: undefined,
+	})
+	const leg2 = makeBid({
+		id: 'leg-2',
+		amount: 53000,
+		legLockedAmount: 3000,
+		childPubkey: CHILD_2,
+		lockSecrets: [SECRET_2],
+		proofYs: [PROOF_Y_2],
+		prevBidId: 'leg-1',
+	})
+
+	const release1 = makePathRelease({
+		id: 'pr-leg-1',
+		bidEventId: 'leg-1',
+		derivationPath: PATH_1,
+		childPubkey: CHILD_1,
+		cashuToken: TOKEN_1,
+	})
+	const release2 = makePathRelease({
+		id: 'pr-leg-2',
+		bidEventId: 'leg-2',
+		derivationPath: PATH_2,
+		childPubkey: CHILD_2,
+		cashuToken: TOKEN_2,
+	})
+
+	test('seller sees Settlement Ready when both legs have valid path releases', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1, release2],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		expect(d?.title).toBe('Settlement Ready')
+		expect(d?.verifiedBadge).toBe('path-release')
+	})
+
+	test('seller sees Settlement Ready when only the top bid leg has a path release', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release2],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		expect(d?.title).toBe('Settlement Ready')
+	})
+
+	test('leg 1 path release is NOT rejected when validated against its own bid (not top bid)', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		// With only leg 1's release, the seller should still see a path release
+		// (it's valid against leg 1's bid). But the top bid (leg 2) has no release,
+		// so the seller stays on "Awaiting Path Release".
+		expect(d?.title).toBe('Awaiting Path Release')
+	})
+
+	test('leg 2 path release with delta token amount is validated correctly', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1, release2],
+				currentUserPubkey: BUYER_PUBKEY,
+				myTopBidEvent: leg2,
+				hasBidderRecord: true,
+				now: 120,
+			}),
+		)
+		// The winning bidder sees "Path release published" because leg 2's release
+		// is valid (token sum = 3000 = legLockedAmount, not 53000 = amount).
+		expect(d?.title).toBe('Path release published')
+		expect(d?.verifiedBadge).toBe('path-release')
+	})
+
+	test('leg 2 path release with wrong token amount (cumulative instead of delta) is rejected', async () => {
+		const badToken2 = getEncodedToken({
+			mint: 'https://mint.example.com',
+			proofs: [
+				{
+					amount: 53000,
+					secret: SECRET_2,
+					C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
+					id: '00'.repeat(16),
+				},
+			],
+		})
+		const badRelease2 = makePathRelease({
+			id: 'pr-leg-2-bad',
+			bidEventId: 'leg-2',
+			derivationPath: PATH_2,
+			childPubkey: CHILD_2,
+			cashuToken: badToken2,
+		})
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1, badRelease2],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		// Leg 2's release has a token sum of 53000 (cumulative) but legLockedAmount
+		// is 3000 (delta). The validator should reject it as amount_mismatch.
+		// Leg 1's release is still valid, so the seller sees "Awaiting Path Release"
+		// (leg 1 is valid but leg 2 is not — the top bid has no valid release).
+		expect(d?.title).toBe('Awaiting Path Release')
+	})
+
+	test('seller sees Awaiting Shipping Details when a settled rebid-chain settlement with 2 payouts passes completeness validation', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1, release2],
+				settlements: [
+					makeSettlement({
+						status: 'settled',
+						winningBidId: 'leg-2',
+						winnerPubkey: BUYER_PUBKEY,
+						finalAmount: 53000,
+						pathReleaseEventId: 'pr-leg-2',
+						payouts: [
+							{ bidEventId: 'leg-1', amount: 50000, status: 'redeemed' },
+							{ bidEventId: 'leg-2', amount: 3000, status: 'redeemed' },
+						],
+					}),
+				],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		// The settlement has 2 payout tags (one per leg). The descriptor builds
+		// the bid chain from prevBidId links and passes it to
+		// validateSettlementCompleteness, which should accept 2 payouts.
+		expect(d?.title).toBe('Awaiting Shipping Details')
+		expect(d?.tone).toBe('waiting')
+		expect(d?.verifiedBadge).toBe('settlement')
+	})
+
+	test('seller sees Awaiting Path Release when a settled rebid-chain settlement has wrong payout count', async () => {
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				topBid: leg2,
+				pathReleases: [release1, release2],
+				settlements: [
+					makeSettlement({
+						status: 'settled',
+						winningBidId: 'leg-2',
+						winnerPubkey: BUYER_PUBKEY,
+						finalAmount: 53000,
+						payouts: [{ bidEventId: 'leg-2', amount: 53000, status: 'redeemed' }],
+					}),
+				],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		// The settlement has only 1 payout tag but the chain has 2 legs.
+		// validateSettlementCompleteness should reject it (payout_missing:
+		// "expected 2, got 1"), so the settlement is filtered out and the
+		// seller falls back to "Settlement Ready" (both path releases are valid).
+		expect(d?.title).toBe('Settlement Ready')
+		expect(d?.verifiedBadge).toBe('path-release')
 	})
 })

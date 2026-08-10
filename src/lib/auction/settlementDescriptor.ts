@@ -3,6 +3,7 @@ import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
 import type { MintKeyset } from '@cashu/cashu-ts'
 import { validateBid, validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
+import type { SettlementChainLegContext } from './validation'
 
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
 
@@ -130,6 +131,7 @@ function isSettlementStructurallyValid(
 	auction: ParsedAuctionEvent,
 	settlement: ParsedSettlementEvent,
 	topBid: ParsedBidEvent | null,
+	validatedBids: ParsedBidEvent[],
 	validatedPathReleases: ParsedPathReleaseEvent[],
 	rawPathReleases: ParsedPathReleaseEvent[],
 	now: number,
@@ -156,6 +158,25 @@ function isSettlementStructurallyValid(
 
 	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return true
 
+	// Build the bid chain by walking prevBidId links from the top bid.
+	// This lets validateSettlementCompleteness know about all legs so it
+	// can validate the correct number of payout tags.
+	const bidChain: SettlementChainLegContext[] = []
+	if (topBid) {
+		let current: ParsedBidEvent | undefined = topBid
+		const chainBids: ParsedBidEvent[] = []
+		while (current) {
+			chainBids.unshift(current)
+			current = current.prevBidId ? validatedBids.find((b) => b.id === current!.prevBidId) : undefined
+		}
+		for (const bid of chainBids) {
+			const release = validatedPathReleases.find((pr) => pr.bidEventId === bid.id)
+			if (release) {
+				bidChain.push({ bid, pathRelease: release, nut7State })
+			}
+		}
+	}
+
 	const result = validateSettlementCompleteness({
 		auction,
 		settlement,
@@ -163,6 +184,7 @@ function isSettlementStructurallyValid(
 		pathRelease: matchingRelease,
 		winningBidNut7State: nut7State,
 		mintKeysets,
+		bidChain: bidChain.length > 0 ? bidChain : undefined,
 	})
 
 	if (result.isComplete) return true
@@ -201,8 +223,16 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			: 'winner'
 
 	// 4. Validate path releases — filter to only structurally valid ones.
+	// For rebid chains, each path release must be validated against its own bid,
+	// not the top bid. A path release for leg 1 has leg 1's childPubkey and
+	// proofs, which won't match the top bid (leg 2) — that's expected.
 	const pathReleases = topBid
-		? rawPathReleases.filter((pr) => isValidPathRelease(auction, topBid, pr, now, postCloseDecision, mintKeysets))
+		? rawPathReleases.filter((pr) => {
+				const matchingBid = validatedBids.find((b) => b.id === pr.bidEventId)
+				const bidToValidate = matchingBid ?? topBid
+				const result = isValidPathRelease(auction, bidToValidate, pr, now, postCloseDecision, mintKeysets)
+				return result
+			})
 		: []
 
 	// 5. Validate settlements — filter to only structurally valid ones.
@@ -211,6 +241,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			auction,
 			s,
 			topBid,
+			validatedBids,
 			pathReleases,
 			rawPathReleases,
 			now,
