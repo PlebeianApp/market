@@ -48,7 +48,9 @@ This proposal does not reopen:
 
 - the distinct profile `cashu_p2pk_bidder_path_multiparty_v1`;
 - gross bid economics with auxiliary allocations inside the gross amount;
-- deterministic cumulative integer allocation and seller remainder;
+- deterministic cumulative integer allocation as an inherited architecture
+  requirement, with its exact sat-level allocation and rounding method deferred;
+- deterministic seller basis-point remainder;
 - integer basis points;
 - total auxiliary allocation at no more than 10,000 basis points;
 - one mint for every positive payout leg in a bidder chain;
@@ -68,8 +70,9 @@ This proposal does not reopen:
 ### D1 — Seller is implicit
 
 The canonical schedule contains auxiliary `validator` and `v4v` entries only.
-The seller is not serialized as a percentage entry and receives the cumulative
-integer remainder.
+The seller is not serialized as a percentage entry. Its basis-point remainder
+is `10000 - sum(auxiliary allocation_bps)`; sat-level allocation is deferred to
+the later cumulative-allocation decision.
 
 ### D2 — Schedule membership fixes role obligations
 
@@ -156,11 +159,15 @@ accept an empty auxiliary list and return a 100% seller allocation.
 
 The inherited architecture permits total auxiliary allocation up to and
 including 10,000 basis points. Therefore exactly 10,000 basis points is valid
-and yields a zero seller remainder.
+and yields a zero seller basis-point remainder.
 
-This packet records that inherited consequence and provides its conformance
-vector. A future requirement for positive seller proceeds would require an
-architecture or minimum-payout-policy amendment.
+This packet fixes only that basis-point consequence. Sat-level allocation and
+rounding are defined by a later cumulative-allocation decision and MUST NOT be
+inferred from this schedule packet.
+
+This packet records the inherited basis-point consequence and provides its
+conformance vector. A future requirement for a positive seller basis-point
+allocation would require an architecture or minimum-payout-policy amendment.
 
 ### D12 — V1 resource limits are fixed
 

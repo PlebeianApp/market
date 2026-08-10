@@ -26,8 +26,8 @@ reinterpret it as `cashu_p2pk_bidder_path_v1`.
 | ----------------------------- | ---------------------------------------------- | ------------------------------------------------- |
 | Distinct multiparty profile   | Fixed                                          | Exact literal and fail-closed dispatch            |
 | Gross-bid economics           | Fixed                                          | Integer basis-point fields                        |
-| Seller remainder              | Fixed                                          | Seller omitted; cumulative remainder derived      |
-| Exact 10,000 auxiliary bps    | Inherited consequence                          | Valid; seller remainder is zero                   |
+| Seller basis-point remainder  | Fixed                                          | Derived; sat allocation deferred                  |
+| Exact 10,000 auxiliary bps    | Inherited consequence                          | Valid; seller bps = 0; sat allocation deferred    |
 | Single-mint bidder chain      | Fixed                                          | Deferred from schedule codec                      |
 | Capability snapshots          | Fixed                                          | Exact event-ID fields                             |
 | Contracted validators         | Fixed                                          | Exact validator-offer fields                      |
@@ -50,16 +50,20 @@ A **canonical entry** is a validated source entry with its derived
 `schedule_index`.
 
 A **logical manifest leg** is the deterministic per-entry allocation record for
-an additive increment, including a zero-valued record when cumulative allocation
-produces zero. The later manifest packet defines its exact encoding.
+an additive increment, including a zero-valued record when the later
+cumulative-allocation decision assigns zero. The later manifest packet defines
+its exact encoding.
 
 ```text
 seller_remainder_bps = 10000 - sum(auxiliary allocation_bps)
 ```
 
 Exactly 10,000 auxiliary basis points is valid as an inherited architecture
-consequence. Actual sat allocation uses the approved cumulative-flooring
-algorithm, not independent per-increment rounding.
+consequence and gives the seller a zero basis-point remainder.
+
+Actual sat allocation is defined by a later cumulative-allocation and rounding
+decision. Implementations MUST NOT independently round each additive increment
+or infer an allocation recurrence from this schedule packet.
 
 ## 5. Primitive encodings and validation layers
 
@@ -425,7 +429,7 @@ A vector is coverage for its declared operation only.
 | `schedule_v4v_zero_allocation`                     | V4V entry has zero bps                     |
 | `schedule_duplicate_role_recipient`                | Same role and recipient appears twice      |
 | `schedule_recipient_reused_across_roles`           | Recipient pubkey appears under both roles  |
-| `schedule_auxiliary_allocation_exceeds_10000`      | Seller remainder would be negative         |
+| `schedule_auxiliary_allocation_exceeds_10000`      | Seller bps remainder would be negative     |
 | `schedule_integer_noncanonical`                    | Serialized bps violates integer grammar    |
 | `schedule_index_noncanonical`                      | Serialized index violates integer grammar  |
 | `schedule_index_not_sequential`                    | Index sequence differs from `0..N-1`       |
@@ -440,7 +444,7 @@ The companion fixtures include:
 - source-order invariance;
 - same-role pubkey-byte ordering;
 - zero-fee validator membership and logical zero legs without Cashu proofs;
-- valid exact 10,000 auxiliary bps and zero seller remainder;
+- valid exact 10,000 auxiliary bps and zero seller basis-point remainder;
 - exact canonical UTF-8, hexadecimal bytes, preimages, and commitments;
 - source V4V dash rejection;
 - hostile-byte size, header, count, framing, primitive, semantic, duplicate,

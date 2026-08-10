@@ -112,7 +112,7 @@
 		},
 		{
 			"id": "valid-exact-10000-auxiliary-bps",
-			"description": "Exactly 10,000 auxiliary basis points is valid and yields a zero seller remainder.",
+			"description": "Exactly 10,000 auxiliary basis points is valid and yields a zero seller basis-point remainder.",
 			"source_variants": [
 				[
 					{
