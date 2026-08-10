@@ -185,20 +185,20 @@ const winningBidInput = (extra: InputOverrides = {}): GetSettlementDescriptorInp
 
 describe('getSettlementDescriptor', () => {
 	describe('role classification', () => {
-		test('seller: currentUserPubkey === sellerPubkey', () => {
-			const d = getSettlementDescriptor(makeInput({ currentUserPubkey: SELLER_PUBKEY, now: 120 }))
+		test('seller: currentUserPubkey === sellerPubkey', async () => {
+			const d = await getSettlementDescriptor(makeInput({ currentUserPubkey: SELLER_PUBKEY, now: 120 }))
 			expect(d?.role).toBe('seller')
 		})
 
-		test('winning-bidder: top bid is mine', () => {
-			const d = getSettlementDescriptor(winningBidInput({ now: 120 }))
+		test('winning-bidder: top bid is mine', async () => {
+			const d = await getSettlementDescriptor(winningBidInput({ now: 120 }))
 			expect(d?.role).toBe('winning-bidder')
 		})
 
-		test('outbid-bidder: I have a validated bid but am not the top', () => {
+		test('outbid-bidder: I have a validated bid but am not the top', async () => {
 			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid, myBid],
@@ -213,21 +213,21 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.role).toBe('outbid-bidder')
 		})
 
-		test('non-participant: no pubkey -> observer state', () => {
-			const d = getSettlementDescriptor(makeInput({ currentUserPubkey: undefined, now: 120 }))
+		test('non-participant: no pubkey -> observer state', async () => {
+			const d = await getSettlementDescriptor(makeInput({ currentUserPubkey: undefined, now: 120 }))
 			expect(d?.role).toBe('non-participant')
 			expect(d?.title).toBe('Auction Ended')
 		})
 
-		test('non-participant: pubkey not in any bid, placed a bid that failed validation', () => {
-			const d = getSettlementDescriptor(makeInput({ currentUserPubkey: OTHER_BIDDER_PUBKEY, hasPlacedBid: true, now: 120 }))
+		test('non-participant: pubkey not in any bid, placed a bid that failed validation', async () => {
+			const d = await getSettlementDescriptor(makeInput({ currentUserPubkey: OTHER_BIDDER_PUBKEY, hasPlacedBid: true, now: 120 }))
 			expect(d?.role).toBe('non-participant')
 			expect(d?.title).toBe('Bid Not Validated')
 		})
 
-		test('self-bidding seller classifies as seller, not winning-bidder', () => {
+		test('self-bidding seller classifies as seller, not winning-bidder', async () => {
 			const myBid = makeBid({ bidderPubkey: SELLER_PUBKEY })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ sellerPubkey: SELLER_PUBKEY }),
 					bids: [myBid],
@@ -242,16 +242,16 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('auction not ended', () => {
-		test('returns null before biddingCutoffAt', () => {
-			const d = getSettlementDescriptor(winningBidInput({ now: 50 }))
+		test('returns null before biddingCutoffAt', async () => {
+			const d = await getSettlementDescriptor(winningBidInput({ now: 50 }))
 			expect(d).toBeNull()
 		})
 	})
 
 	describe('seller states', () => {
-		test('settlement-ready: path released, no settlement, reserve met', () => {
+		test('settlement-ready: path released, no settlement, reserve met', async () => {
 			const topBid = makeBid({ amount: 50000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
@@ -266,9 +266,9 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.tone).toBe('action')
 		})
 
-		test('late-settlement: path released but settlement window expired', () => {
+		test('late-settlement: path released but settlement window expired', async () => {
 			const topBid = makeBid({ amount: 50000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
@@ -284,7 +284,7 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.message).toContain('refund')
 		})
 
-		test('latestSettlement prefers latest by created_at among same status', () => {
+		test('latestSettlement prefers latest by created_at among same status', async () => {
 			const topBid = makeBid({ amount: 50000 })
 			const older = makeSettlement({
 				status: 'reserve_not_met',
@@ -294,7 +294,7 @@ describe('getSettlementDescriptor', () => {
 				status: 'reserve_not_met',
 				createdAt: 300,
 			})
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 100000 }),
 					bids: [topBid],
@@ -307,9 +307,9 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.title).toBe('Auction Closed — Reserve Not Met')
 		})
 
-		test('close-auction (reserve not met): high reserve, no qualifying bid', () => {
+		test('close-auction (reserve not met): high reserve, no qualifying bid', async () => {
 			const topBid = makeBid({ amount: 30000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
@@ -322,15 +322,17 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta?.kind).toBe('close-auction')
 		})
 
-		test('close-auction (no bids): no reserve, no bids', () => {
-			const d = getSettlementDescriptor(makeInput({ auction: makeAuction({ reserve: 0 }), currentUserPubkey: SELLER_PUBKEY, now: 120 }))
+		test('close-auction (no bids): no reserve, no bids', async () => {
+			const d = await getSettlementDescriptor(
+				makeInput({ auction: makeAuction({ reserve: 0 }), currentUserPubkey: SELLER_PUBKEY, now: 120 }),
+			)
 			expect(d?.title).toBe('No Bids Received')
 			expect(d?.cta?.kind).toBe('close-auction')
 		})
 
-		test('awaiting-path-release: reserve met, no path, window open', () => {
+		test('awaiting-path-release: reserve met, no path, window open', async () => {
 			const topBid = makeBid({ amount: 50000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
@@ -344,9 +346,9 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta).toBeNull()
 		})
 
-		test('settlement-window-expired: reserve met, no path, window expired', () => {
+		test('settlement-window-expired: reserve met, no path, window expired', async () => {
 			const topBid = makeBid({ amount: 50000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
@@ -360,8 +362,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta).toBeNull()
 		})
 
-		test('order-received: settled, matched claim order', () => {
-			const d = getSettlementDescriptor(
+		test('order-received: settled, matched claim order', async () => {
+			const d = await getSettlementDescriptor(
 				makeInput({
 					currentUserPubkey: SELLER_PUBKEY,
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
@@ -374,8 +376,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta?.orderId).toBe('order-1')
 		})
 
-		test('awaiting-shipping: settled, no claim order yet', () => {
-			const d = getSettlementDescriptor(
+		test('awaiting-shipping: settled, no claim order yet', async () => {
+			const d = await getSettlementDescriptor(
 				makeInput({
 					currentUserPubkey: SELLER_PUBKEY,
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
@@ -386,8 +388,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.tone).toBe('waiting')
 		})
 
-		test('closed-reserve-not-met: settlement reserve_not_met -> NOT a refund card', () => {
-			const d = getSettlementDescriptor(
+		test('closed-reserve-not-met: settlement reserve_not_met -> NOT a refund card', async () => {
+			const d = await getSettlementDescriptor(
 				makeInput({
 					currentUserPubkey: SELLER_PUBKEY,
 					settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0 })],
@@ -398,8 +400,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta).toBeNull()
 		})
 
-		test('closed (griefed_no_fallback)', () => {
-			const d = getSettlementDescriptor(
+		test('closed (griefed_no_fallback)', async () => {
+			const d = await getSettlementDescriptor(
 				makeInput({
 					currentUserPubkey: SELLER_PUBKEY,
 					settlements: [makeSettlement({ status: 'griefed_no_fallback', winnerPubkey: undefined, finalAmount: 0 })],
@@ -412,15 +414,15 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('winning-bidder states', () => {
-		test('release-path: reserve met, window open, have bidder record', () => {
-			const d = getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 120 }))
+		test('release-path: reserve met, window open, have bidder record', async () => {
+			const d = await getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 120 }))
 			expect(d?.title).toBe('You won — release your path to settle')
 			expect(d?.cta?.kind).toBe('release-path')
 			expect(d?.bidAmount).toBe(50000)
 		})
 
-		test('path-released: my path release exists', () => {
-			const d = getSettlementDescriptor(
+		test('path-released: my path release exists', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					auction: makeAuction({ reserve: 40000 }),
 					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
@@ -432,8 +434,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta).toBeNull()
 		})
 
-		test('winner-with-order: settled, settlement names me, claim order exists', () => {
-			const d = getSettlementDescriptor(
+		test('winner-with-order: settled, settlement names me, claim order exists', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY, finalAmount: 50000 })],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY, id: 'order-1' })],
@@ -445,8 +447,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.bidAmount).toBe(50000)
 		})
 
-		test('winner-claim-dialog: settled, settlement names me, no claim order', () => {
-			const d = getSettlementDescriptor(
+		test('winner-claim-dialog: settled, settlement names me, no claim order', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY, finalAmount: 50000 })],
 					now: 120,
@@ -456,9 +458,9 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta?.kind).toBe('open-claim-dialog')
 		})
 
-		test('superseded: settlement names someone else', () => {
+		test('superseded: settlement names someone else', async () => {
 			const otherWinner = 'd'.repeat(64)
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: otherWinner, finalAmount: 50000 })],
 					now: 120,
@@ -469,21 +471,23 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.cta).toBeNull()
 		})
 
-		test('settlement-expired: window closed, no path release', () => {
-			const d = getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 200 }))
+		test('settlement-expired: window closed, no path release', async () => {
+			const d = await getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 200 }))
 			expect(d?.title).toBe('Settlement Expired')
 			expect(d?.bidAmount).toBe(50000)
 		})
 
-		test('local-record-missing: no bidder record, window open', () => {
-			const d = getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), hasBidderRecord: false, now: 120 }))
+		test('local-record-missing: no bidder record, window open', async () => {
+			const d = await getSettlementDescriptor(
+				winningBidInput({ auction: makeAuction({ reserve: 40000 }), hasBidderRecord: false, now: 120 }),
+			)
 			expect(d?.title).toBe('Local Record Missing')
 			expect(d?.cta?.kind).toBe('refresh-page')
 		})
 
-		test('reserve-not-met-refund-pending: top bid below reserve, window open', () => {
+		test('reserve-not-met-refund-pending: top bid below reserve, window open', async () => {
 			const lowBid = makeBid({ amount: 30000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [lowBid],
@@ -501,9 +505,9 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('outbid-bidder states', () => {
-		test('bid-invalid: placed a bid but it failed validation', () => {
+		test('bid-invalid: placed a bid but it failed validation', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid],
 					topBid,
@@ -517,10 +521,10 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.tone).toBe('completed')
 		})
 
-		test('refund: outbid bidder with reserve_not_met settlement', () => {
+		test('refund: outbid bidder with reserve_not_met settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 30000 })
 			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid, myBid],
@@ -535,10 +539,10 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.title).toBe('Refund Pending')
 		})
 
-		test('no card: outbid with validated bid, no settlement', () => {
+		test('no card: outbid with validated bid, no settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
 			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
-			const d = getSettlementDescriptor(
+			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid, myBid],
 					topBid,
@@ -553,15 +557,15 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('non-participant states', () => {
-		test('observer: non-participant with no bid sees auction status', () => {
+		test('observer: non-participant with no bid sees auction status', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const d = getSettlementDescriptor(makeInput({ bids: [topBid], topBid, currentUserPubkey: OTHER_BIDDER_PUBKEY, now: 120 }))
+			const d = await getSettlementDescriptor(makeInput({ bids: [topBid], topBid, currentUserPubkey: OTHER_BIDDER_PUBKEY, now: 120 }))
 			expect(d?.role).toBe('non-participant')
 			expect(d?.title).toBe('Awaiting Settlement')
 		})
 
-		test('bid-invalid: placed a bid but it failed validation (non-participant in validated terms)', () => {
-			const d = getSettlementDescriptor(
+		test('bid-invalid: placed a bid but it failed validation (non-participant in validated terms)', async () => {
+			const d = await getSettlementDescriptor(
 				makeInput({
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
 					myTopBidEvent: null,
@@ -574,8 +578,8 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('refund timing', () => {
-		test('refund-pending: now < locktime', () => {
-			const d = getSettlementDescriptor(
+		test('refund-pending: now < locktime', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					auction: makeAuction({ reserve: 40000 }),
 					settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0 })],
@@ -585,8 +589,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.title).toBe('Refund Pending')
 		})
 
-		test('refund-ready: now >= locktime', () => {
-			const d = getSettlementDescriptor(
+		test('refund-ready: now >= locktime', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					auction: makeAuction({ reserve: 40000 }),
 					settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0 })],
@@ -599,8 +603,8 @@ describe('getSettlementDescriptor', () => {
 	})
 
 	describe('verified badge', () => {
-		test('settlement badge when settlement exists', () => {
-			const d = getSettlementDescriptor(
+		test('settlement badge when settlement exists', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY })],
@@ -610,8 +614,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.verifiedBadge).toBe('settlement')
 		})
 
-		test('path-release badge when path release exists but no settlement', () => {
-			const d = getSettlementDescriptor(
+		test('path-release badge when path release exists but no settlement', async () => {
+			const d = await getSettlementDescriptor(
 				winningBidInput({
 					auction: makeAuction({ reserve: 40000 }),
 					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
@@ -621,8 +625,8 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.verifiedBadge).toBe('path-release')
 		})
 
-		test('none badge when no settlement or path release', () => {
-			const d = getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 120 }))
+		test('none badge when no settlement or path release', async () => {
+			const d = await getSettlementDescriptor(winningBidInput({ auction: makeAuction({ reserve: 40000 }), now: 120 }))
 			expect(d?.verifiedBadge).toBe('none')
 		})
 	})
@@ -664,13 +668,13 @@ describe('getSettlementDescriptor', () => {
 })
 
 describe('validator integration', () => {
-	test('path release with undecodable cashu token is rejected', () => {
+	test('path release with undecodable cashu token is rejected', async () => {
 		const winningBid = makeBid({ amount: 50000 })
 		const pr = makePathRelease({
 			bidEventId: winningBid.id,
 			cashuToken: 'not-a-valid-token',
 		})
-		const d = getSettlementDescriptor(
+		const d = await getSettlementDescriptor(
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
@@ -685,10 +689,10 @@ describe('validator integration', () => {
 		expect(d?.verifiedBadge).toBe('none')
 	})
 
-	test('path release with no cashu token is rejected', () => {
+	test('path release with no cashu token is rejected', async () => {
 		const winningBid = makeBid({ amount: 50000 })
 		const pr = makePathRelease({ bidEventId: winningBid.id, cashuToken: undefined })
-		const d = getSettlementDescriptor(
+		const d = await getSettlementDescriptor(
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
@@ -703,7 +707,7 @@ describe('validator integration', () => {
 		expect(d?.verifiedBadge).toBe('none')
 	})
 
-	test('settlement referencing invalid path release is rejected', () => {
+	test('settlement referencing invalid path release is rejected', async () => {
 		const winningBid = makeBid({ amount: 50000 })
 		const badPr = makePathRelease({
 			bidEventId: winningBid.id,
@@ -712,7 +716,7 @@ describe('validator integration', () => {
 		const settlement = makeSettlement({
 			pathReleaseEventId: badPr.id,
 		})
-		const d = getSettlementDescriptor(
+		const d = await getSettlementDescriptor(
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
@@ -727,10 +731,10 @@ describe('validator integration', () => {
 		expect(d?.title).not.toBe('You won this auction!')
 	})
 
-	test('path release with valid cashu token is fully validated', () => {
+	test('path release with valid cashu token is fully validated', async () => {
 		const winningBid = makeBid({ amount: 50000 })
 		const pr = makePathRelease({ bidEventId: winningBid.id })
-		const d = getSettlementDescriptor(
+		const d = await getSettlementDescriptor(
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
@@ -745,9 +749,9 @@ describe('validator integration', () => {
 		expect(d?.verifiedBadge).toBe('path-release')
 	})
 
-	test('bid with wrong mint is rejected from top bid', () => {
+	test('bid with wrong mint is rejected from top bid', async () => {
 		const badBid = makeBid({ mint: 'https://wrong-mint.com' })
-		const d = getSettlementDescriptor(
+		const d = await getSettlementDescriptor(
 			winningBidInput({
 				bids: [badBid],
 				topBid: badBid,
