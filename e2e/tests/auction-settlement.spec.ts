@@ -912,3 +912,66 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 5_000 })
 	})
 })
+
+test.describe('settlement validation failure — unresolvable v2 keyset ID', () => {
+	test('seller stays on Awaiting Path Release when path release token has unresolvable v2 keyset ID', async ({
+		merchantPage,
+	}: {
+		merchantPage: Page
+	}) => {
+		await CashuMintMock.setup(merchantPage)
+		await dismissPiiModal(merchantPage, devUser1.pk)
+
+		// Build a token with a v2 keyset ID (01 prefix, 33 bytes).
+		// The mock mint only returns v1 keysets (id: '0000000000000000'),
+		// so getDecodedToken cannot resolve the v2 short keyset ID → throws.
+		const V2_KEYSET_ID = '01abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+		const v2Token = getEncodedToken({
+			mint: MOCK_MINT_URL,
+			proofs: [
+				{
+					id: V2_KEYSET_ID,
+					amount: MOCK_PROOF_AMOUNT,
+					secret: MOCK_TOKENS.unspentFuture.lockSecret,
+					C: '03' + '4'.repeat(64),
+				},
+			],
+		})
+
+		const relay = await Relay.connect(RELAY_URL)
+		let auction: SeededAuction
+		let bidId: string
+		let prId: string
+		try {
+			auction = await seedEndedAuction(relay, devUser1.sk, {
+				reserve: 0,
+				token: MOCK_TOKENS.unspentFuture,
+			})
+			bidId = await seedBid(relay, devUser2.sk, auction, {
+				amount: MOCK_PROOF_AMOUNT,
+				token: MOCK_TOKENS.unspentFuture,
+			})
+			// Path release uses a token with an unresolvable v2 keyset ID.
+			prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, { token: v2Token })
+			// Seed a settlement referencing the (invalid) path release.
+			await seedSettlement(relay, devUser1.sk, auction, {
+				status: 'settled',
+				winningBidId: bidId,
+				winnerPubkey: devUser2.pk,
+				finalAmount: MOCK_PROOF_AMOUNT,
+				pathReleaseEventId: prId,
+			})
+		} finally {
+			relay.close()
+		}
+
+		await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
+		await merchantPage.waitForLoadState('networkidle')
+
+		// The path release has an unresolvable v2 keyset ID, so validatePathRelease
+		// rejects it. The settlement referencing it is also rejected.
+		// The seller should see "Awaiting Path Release", NOT "Awaiting Shipping Details".
+		await expect(merchantPage.getByText(/awaiting path release/i)).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.getByText(/awaiting shipping details|order received/i)).not.toBeVisible()
+	})
+})

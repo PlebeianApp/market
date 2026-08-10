@@ -900,7 +900,8 @@ export const nip60Actions = {
 
 			// Debug hook for e2e tests — allows deriveDynamicWalletKeys
 			// to read wallet p2pk/privkey via page.evaluate().
-			if (typeof window !== 'undefined') {
+			// Only exposed in dev/test mode, never in production.
+			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
 				;(window as any).__nip60Wallet = wallet
 			}
 
