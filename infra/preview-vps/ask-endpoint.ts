@@ -7,7 +7,7 @@
  * Run: deno run --allow-net ask-endpoint.ts
  */
 
-const ALLOWED_SUFFIX = '.nsite.orangesync.tech'
+const ALLOWED_SUFFIXES = ['.nsite.orangesync.tech', '.test-market.orangesync.tech']
 const PORT = 6799
 
 function handler(req: Request): Response {
@@ -22,7 +22,7 @@ function handler(req: Request): Response {
 		return new Response('Missing domain parameter', { status: 400 })
 	}
 
-	if (domain.endsWith(ALLOWED_SUFFIX)) {
+	if (ALLOWED_SUFFIXES.some(suffix => domain.endsWith(suffix))) {
 		console.log(`[approve] ${domain}`)
 		return new Response('OK', { status: 200 })
 	}

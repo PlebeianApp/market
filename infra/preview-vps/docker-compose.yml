@@ -1,17 +1,27 @@
-# Docker Compose for the nsite gateway and on-demand TLS ask endpoint.
-# Run on the preview VPS via provision.sh. Caddy (systemd) proxies to
-# localhost:6798 (nsite gateway) and localhost:6799 (ask endpoint).
+# Docker Compose reference for the nsite gateway and on-demand TLS ask endpoint.
+#
+# NOTE: provision.sh does NOT use docker-compose. It runs docker directly
+# because the nsite-gateway image is built locally on the VPS (not available
+# from any public registry). This file is kept as documentation of the
+# intended container layout.
+#
+# Services:
+#   nsite-gateway  — nsite resolver on :3002 (proxied by Caddy)
+#   ask-endpoint   — TLS permission check on :6799 (queried by Caddy)
 services:
   nsite-gateway:
-    image: denoland/deno:latest
-    command: >
-      deno run --allow-all
-      jsr:@nsyte/cli run --port 6798 --use-fallbacks
+    image: nsite-gateway-nsite:latest
     ports:
-      - '6798:6798'
+      - '127.0.0.1:3002:3000'
     restart: unless-stopped
-    networks:
-      - preview-net
+    environment:
+      - PUBLIC_DOMAIN=nsite.orangesync.tech
+      - MAX_FILE_SIZE=128 MB
+      - NSITE_PORT=3000
+      - NSITE_HOST=0.0.0.0
+      - LOOKUP_RELAYS=wss://user.kindpag.es,wss://purplepag.es
+      - NOSTR_RELAYS=wss://relay.damus.io,wss://relay.primal.net,wss://nos.lol,wss://relay.ngit.dev,wss://relay.orangesync.tech
+      - BLOSSOM_SERVERS=https://blossom2.orangesync.tech
 
   ask-endpoint:
     image: denoland/deno:latest
@@ -20,11 +30,5 @@ services:
       - ./ask-endpoint.ts:/app/ask-endpoint.ts:ro
     command: ['deno', 'run', '--allow-net', '/app/ask-endpoint.ts']
     ports:
-      - '6799:6799'
+      - '127.0.0.1:6799:6799'
     restart: unless-stopped
-    networks:
-      - preview-net
-
-networks:
-  preview-net:
-    driver: bridge

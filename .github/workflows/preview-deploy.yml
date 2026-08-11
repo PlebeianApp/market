@@ -88,9 +88,12 @@ jobs:
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
         run: |
           set -euo pipefail
-          # Write the SSH key to a temp file for scp/ssh
+          # Write the SSH key to a temp file for scp/ssh.
+          # Use printf (not echo) to avoid trailing newline which corrupts
+          # the PEM key format and causes "hostname contains invalid
+          # characters" errors from ssh.
           KEY_FILE=$(mktemp)
-          echo "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
+          printf '%s' "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
           # Run the idempotent provision script — starts Docker services
