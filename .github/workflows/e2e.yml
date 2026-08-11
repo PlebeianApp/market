@@ -490,4 +490,3 @@ jobs:
           name: test-results-full
           path: test-results/
           retention-days: 7
-
