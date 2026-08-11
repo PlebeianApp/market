@@ -22,7 +22,7 @@ function handler(req: Request): Response {
 		return new Response('Missing domain parameter', { status: 400 })
 	}
 
-	if (ALLOWED_SUFFIXES.some(suffix => domain.endsWith(suffix))) {
+	if (ALLOWED_SUFFIXES.some((suffix) => domain.endsWith(suffix))) {
 		console.log(`[approve] ${domain}`)
 		return new Response('OK', { status: 200 })
 	}
