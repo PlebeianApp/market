@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
 	findReusablePublishedShippingSelection,
-	formatShippingCostForInput,
 	formatShippingDisplayText,
-	getProductShippingExtraCostFromTotal,
 	getProductShippingTotalCost,
 	normalizeProductShippingSelections,
 	normalizePublishedProductShippingTags,
@@ -177,18 +175,6 @@ describe('shipping cost helpers', () => {
 	test('calculates total cost from a base cost and extra cost string', () => {
 		expect(getProductShippingTotalCost(10, '2.5')).toBe(12.5)
 		expect(getProductShippingTotalCost(undefined, '5')).toBe(5)
-	})
-
-	test('derives extra cost from a total cost value', () => {
-		expect(getProductShippingExtraCostFromTotal(10, '12.5')).toBe('2.5')
-		expect(getProductShippingExtraCostFromTotal(10, '10')).toBe('')
-		expect(getProductShippingExtraCostFromTotal(10, 'not-a-number')).toBe('')
-	})
-
-	test('formats shipping cost values for numeric inputs', () => {
-		expect(formatShippingCostForInput('2.345')).toBe('2.35')
-		expect(formatShippingCostForInput(10)).toBe('10')
-		expect(formatShippingCostForInput('')).toBe('')
 	})
 
 	test('formats shipping display text from the resolved shipping option', () => {

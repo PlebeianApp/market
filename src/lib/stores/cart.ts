@@ -115,7 +115,7 @@ interface CartState {
 		{
 			satsTotal: number
 			currencyTotals: Record<string, number>
-			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number }
+			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number; communityPercentage: number }
 			shippingSats: number
 		}
 	>
@@ -1604,6 +1604,8 @@ export const cartActions = {
 					sellerAmount,
 					communityAmount: shares.communityAmount,
 					sellerPercentage,
+					// Preserve the configured V4V rate; unlike sellerPercentage, this excludes shipping.
+					communityPercentage: 100 - shares.sellerPercentage,
 				}
 
 				newSellerData[sellerPubkey] = {

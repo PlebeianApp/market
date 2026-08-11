@@ -20,7 +20,7 @@ export function ShippingInfoDisplay({ shippingInfo }: ShippingInfoDisplayProps) 
 				<span className="ml-2 font-medium">{shippingInfo.title}</span>
 			</div>
 			<div>
-				<span className="text-sm text-muted-foreground">Total:</span>
+				<span className="text-sm text-muted-foreground">Cost:</span>
 				<span className="ml-2 font-medium">{costDisplay}</span>
 			</div>
 			{shippingInfo.service && (

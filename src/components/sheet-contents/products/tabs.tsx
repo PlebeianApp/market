@@ -11,12 +11,7 @@ import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
-import {
-	resolveProductShippingSelections,
-	getProductShippingTotalCost,
-	getProductShippingExtraCostFromTotal,
-	formatShippingCostForInput,
-} from '@/lib/utils/productShippingSelections'
+import { resolveProductShippingSelections, getProductShippingTotalCost } from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
@@ -811,11 +806,6 @@ export function ShippingTab() {
 		productFormActions.updateValues({
 			shippings: updatedShippings,
 		})
-	}
-
-	const updateTotalCost = (index: number, baseCost: number, totalCost: string) => {
-		const extra = getProductShippingExtraCostFromTotal(baseCost, totalCost)
-		updateExtraCost(index, extra)
 	}
 
 	const ServiceIcon = ({ service }: { service: string }) => {

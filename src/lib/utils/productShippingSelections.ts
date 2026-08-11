@@ -185,26 +185,11 @@ export const resolvePublishedProductShippingOptions = ({
 		})
 }
 
-// Helpers for UI: convert between base+extra and total, and format values for inputs
+// Helper for displaying a shipping option's base and per-product extra cost.
 export const getProductShippingTotalCost = (baseCost: number | undefined, extraCost: string): number => {
 	const base = typeof baseCost === 'number' && Number.isFinite(baseCost) ? baseCost : 0
 	const extra = Number(extraCost) || 0
 	return base + extra
-}
-
-export const getProductShippingExtraCostFromTotal = (baseCost: number | undefined, totalCost: string): string => {
-	const base = typeof baseCost === 'number' && Number.isFinite(baseCost) ? baseCost : 0
-	const total = Number(totalCost)
-	if (!Number.isFinite(total)) return ''
-	const extra = total - base
-	return extra === 0 ? '' : String(Number(extra.toFixed(2)))
-}
-
-export const formatShippingCostForInput = (cost: number | string | null | undefined): string => {
-	if (cost === null || cost === undefined || cost === '') return ''
-	const n = typeof cost === 'number' ? cost : Number(cost)
-	if (!Number.isFinite(n)) return ''
-	return String(Number(n.toFixed(2)))
 }
 
 export const formatShippingDisplayText = (shippingRef: string | undefined, shippingOption: ReturnType<typeof getShippingInfo> | null) => {

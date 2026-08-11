@@ -85,32 +85,6 @@ export class MempoolService {
 		return Math.round(btcAmount * 100_000_000)
 	}
 
-	static convertBetweenCurrencies({
-		amount,
-		fromCurrency,
-		toCurrency,
-		exchangeRates,
-	}: {
-		amount: number
-		fromCurrency: string
-		toCurrency: string
-		exchangeRates: Record<string, number> | undefined
-	}): number {
-		if (fromCurrency === toCurrency) return amount
-
-		let btcAmount: number | null = null
-		if (fromCurrency === 'SATS') btcAmount = amount / 100_000_000
-		else if (fromCurrency === 'BTC') btcAmount = amount
-		else if (exchangeRates?.[fromCurrency]) btcAmount = amount / exchangeRates[fromCurrency]
-
-		if (btcAmount === null || !Number.isFinite(btcAmount)) return NaN
-
-		if (toCurrency === 'SATS') return btcAmount * 100_000_000
-		if (toCurrency === 'BTC') return btcAmount
-		if (exchangeRates?.[toCurrency]) return btcAmount * exchangeRates[toCurrency]
-		return NaN
-	}
-
 	static async fetchAddressTransactions(address: string): Promise<MempoolTransaction[]> {
 		const response = await fetch(`${MEMPOOL_API_BASE}/address/${address}/txs`)
 		if (!response.ok) {
