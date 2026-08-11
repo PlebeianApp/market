@@ -1,0 +1,20 @@
+# Caddyfile snippet for the nsite gateway with on-demand TLS.
+#
+# This is a *reference* of the blocks that provision.sh injects into the
+# live /etc/caddy/Caddyfile on the VPS. Do NOT copy this file over the
+# existing Caddyfile — provision.sh handles idempotent insertion.
+#
+# ── global options (must appear at the very top of the Caddyfile) ──
+{
+  on_demand_tls {
+    ask http://localhost:6799/ask
+  }
+}
+
+# ── nsite gateway site block (append after existing sites) ──
+*.nsite.orangesync.tech {
+  tls {
+    on_demand
+  }
+  reverse_proxy localhost:6798
+}

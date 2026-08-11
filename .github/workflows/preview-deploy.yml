@@ -81,6 +81,24 @@ jobs:
             echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Bootstrap VPS (nsite gateway + Caddy route)
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          # Write the SSH key to a temp file for scp/ssh
+          KEY_FILE=$(mktemp)
+          echo "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
+          # Run the idempotent provision script — starts Docker services
+          # (nsite gateway + ask endpoint) and ensures Caddy has the
+          # *.nsite.orangesync.tech on-demand TLS route.
+          bash infra/preview-vps/provision.sh
+          rm -f "$KEY_FILE"
+
       - name: Ensure remote preview directory exists
         uses: appleboy/ssh-action@v1.0.3
         with:

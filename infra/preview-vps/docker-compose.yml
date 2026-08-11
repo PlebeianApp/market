@@ -1,0 +1,30 @@
+# Docker Compose for the nsite gateway and on-demand TLS ask endpoint.
+# Run on the preview VPS via provision.sh. Caddy (systemd) proxies to
+# localhost:6798 (nsite gateway) and localhost:6799 (ask endpoint).
+services:
+  nsite-gateway:
+    image: denoland/deno:latest
+    command: >
+      deno run --allow-all
+      jsr:@nsyte/cli run --port 6798 --use-fallbacks
+    ports:
+      - '6798:6798'
+    restart: unless-stopped
+    networks:
+      - preview-net
+
+  ask-endpoint:
+    image: denoland/deno:latest
+    working_dir: /app
+    volumes:
+      - ./ask-endpoint.ts:/app/ask-endpoint.ts:ro
+    command: ['deno', 'run', '--allow-net', '/app/ask-endpoint.ts']
+    ports:
+      - '6799:6799'
+    restart: unless-stopped
+    networks:
+      - preview-net
+
+networks:
+  preview-net:
+    driver: bridge
