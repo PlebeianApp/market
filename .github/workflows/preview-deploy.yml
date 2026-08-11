@@ -89,12 +89,17 @@ jobs:
         run: |
           set -euo pipefail
           # Write the SSH key to a temp file for scp/ssh.
-          # Use printf (not echo) to avoid trailing newline which corrupts
-          # the PEM key format and causes "hostname contains invalid
-          # characters" errors from ssh.
+          # echo preserves multi-line format. The trailing newline added
+          # by echo is harmless for PEM keys (ssh-keygen handles it).
           KEY_FILE=$(mktemp)
-          printf '%s' "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
+          echo "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
+          # Verify the key is valid before proceeding
+          ssh-keygen -y -f "$KEY_FILE" > /dev/null || {
+            echo "ERROR: SSH key file is invalid (libcrypto error)"
+            echo "Key starts with: $(head -1 "$KEY_FILE")"
+            exit 1
+          }
           export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
           # Run the idempotent provision script — starts Docker services
           # (nsite gateway + ask endpoint) and ensures Caddy has the

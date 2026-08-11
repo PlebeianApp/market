@@ -16,10 +16,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── Trim whitespace from env vars (GitHub secrets often have trailing newlines) ──
+# ── Trim whitespace from HOST and USER (GitHub secrets often have trailing
+#    newlines). Do NOT trim KEY — spaces within PEM keys are not valid but
+#    the key body has newlines that must be preserved. ──
 HOST="$(echo -n "${PREVIEW_VPS_HOST:?PREVIEW_VPS_HOST is required}" | tr -d '[:space:]')"
 _VPS_USER="$(echo -n "${PREVIEW_VPS_USER:?PREVIEW_VPS_USER is required}" | tr -d '[:space:]')"
-KEY="$(echo -n "${PREVIEW_VPS_SSH_KEY:?PREVIEW_VPS_SSH_KEY is required}" | tr -d '[:space:]')"
+KEY="${PREVIEW_VPS_SSH_KEY:?PREVIEW_VPS_SSH_KEY is required}"
 
 SSH_BASE=(ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 SCP_BASE=(scp -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
