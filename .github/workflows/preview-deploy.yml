@@ -89,15 +89,19 @@ jobs:
         run: |
           set -euo pipefail
           # Write the SSH key to a temp file for scp/ssh.
-          # echo preserves multi-line format. The trailing newline added
-          # by echo is harmless for PEM keys (ssh-keygen handles it).
+          # The secret PREVIEW_VPS_SSH_KEY must be base64-encoded to avoid
+          # GitHub Actions secret newline mangling. Store the secret as:
+          #   base64 -w0 ~/.ssh/id_ed25519  (on local machine)
+          # Then paste the single-line base64 output into the GitHub secret.
           KEY_FILE=$(mktemp)
-          echo "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
+          echo "$PREVIEW_VPS_SSH_KEY" | base64 -d > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           # Verify the key is valid before proceeding
           ssh-keygen -y -f "$KEY_FILE" > /dev/null || {
             echo "ERROR: SSH key file is invalid (libcrypto error)"
             echo "Key starts with: $(head -1 "$KEY_FILE")"
+            echo "If key looks like base64, the secret is NOT base64-encoded."
+            echo "Re-create the secret with: base64 -w0 ~/.ssh/id_ed25519"
             exit 1
           }
           export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
