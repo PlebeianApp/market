@@ -38,7 +38,9 @@ mock.module('@/lib/stores/ndk', () => ({
 const { fetchLiveActivity } = await import('@/queries/liveChat')
 
 /** Create a plain (unsigned) event object for tests that don't need real crypto */
-function liveActivityEvent(overrides: { pubkey?: string; dTag?: string; kind?: number; tags?: string[][]; created_at?: number; id?: string; sig?: string } = {}) {
+function liveActivityEvent(
+	overrides: { pubkey?: string; dTag?: string; kind?: number; tags?: string[][]; created_at?: number; id?: string; sig?: string } = {},
+) {
 	return {
 		id: overrides.id ?? 'event-id',
 		kind: overrides.kind ?? LIVE_ACTIVITY_KIND,
