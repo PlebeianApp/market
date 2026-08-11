@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import { verifyEvent } from 'nostr-tools'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
@@ -35,17 +36,25 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 		return null
 	}
 
+	// Include #d filter to reduce noise and help NDK dedup select the right
+	// replacement candidate before we even see the results.
 	const filter: NDKFilter = {
 		kinds: [LIVE_ACTIVITY_KIND_NDK],
 		authors: [cvmServerPubkey],
 		'#a': [coord],
+		'#d': [dTag],
 		limit: 10,
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout([filter], { timeoutMs: 5000 })
 	if (events.size === 0) return null
 
-	const sorted = Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+	// Deterministic sort: newest by created_at, then lexicographically lower
+	// event ID as tiebreaker for equal timestamps.
+	const sorted = Array.from(events).sort((a, b) => {
+		if ((b.created_at ?? 0) !== (a.created_at ?? 0)) return (b.created_at ?? 0) - (a.created_at ?? 0)
+		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+	})
 
 	// Belt-and-suspenders: relays or subscriptions may return events outside the
 	// requested author set. Scan the full sorted array and return the first event
@@ -65,6 +74,16 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 		const hasDTag = candidate.tags?.some((t: string[]) => t[0] === 'd' && t[1])
 		if (!hasDTag) {
 			console.warn('fetchLiveActivity: skipping live activity event missing required d tag')
+			continue
+		}
+
+		// Verify the Schnorr signature on the event to reject forged events
+		// that have the correct pubkey/kind/d-tag but an invalid signature.
+		// NDK's sampling verification may skip forged events, so we verify
+		// explicitly before accepting the event as valid.
+		const raw = candidate.rawEvent?.() ?? candidate
+		if (!verifyEvent(raw as Parameters<typeof verifyEvent>[0])) {
+			console.warn('fetchLiveActivity: skipping live activity event with invalid signature', candidate.id?.slice(0, 16))
 			continue
 		}
 
