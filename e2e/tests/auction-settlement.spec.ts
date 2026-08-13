@@ -379,7 +379,8 @@ test.describe('Auction Settlement Descriptor', () => {
 			let auction: SeededAuction
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				const bidId1 = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				await seedVerdict(relay, devUser3.sk, auction, bidId1, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
@@ -403,6 +404,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -419,10 +421,11 @@ test.describe('Auction Settlement Descriptor', () => {
 			let auction: SeededAuction
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 100000 })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -432,7 +435,7 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('seller sees order-received after settlement with claim order', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
+			await CashuMintMock.setup(merchantPage, { defaultState: 'SPENT' })
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -441,22 +444,24 @@ test.describe('Auction Settlement Descriptor', () => {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
 				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
 				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
-				await seedSettlement(relay, devUser1.sk, auction, {
+				const settlementId = await seedSettlement(relay, devUser1.sk, auction, {
 					status: 'settled',
 					winningBidId: bidId,
 					winnerPubkey: devUser2.pk,
 					finalAmount: MOCK_PROOF_AMOUNT,
 					pathReleaseEventId: prId,
 				})
+				await seedClaimOrder(relay, devUser2.sk, auction, settlementId, MOCK_PROOF_AMOUNT)
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
 
-			// After settlement, seller should see "Awaiting Shipping Details" (no claim order yet)
-			await expect(merchantPage.getByText(/awaiting shipping details/i)).toBeVisible({ timeout: 15_000 })
+			// After settlement with claim order, seller should see "Order Received"
+			await expect(merchantPage.getByRole('heading', { name: /order received/i })).toBeVisible({ timeout: 15_000 })
 		})
 	})
 
@@ -475,6 +480,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate first so auth context is ready, then inject bidder record.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
@@ -502,6 +508,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
@@ -510,7 +517,7 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('winner sees you-won after settlement', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage)
+			await CashuMintMock.setup(buyerPage, { defaultState: 'SPENT' })
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -529,6 +536,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
@@ -547,10 +555,11 @@ test.describe('Auction Settlement Descriptor', () => {
 			let auction: SeededAuction
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Visit as unauthenticated user (non-participant)
 			// The auction page should render without a settlement card
@@ -569,10 +578,11 @@ test.describe('Auction Settlement Descriptor', () => {
 			let auction: SeededAuction
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -707,6 +717,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate first so the app loads and the auth context is ready,
 			// then inject the bidder record into localStorage.
@@ -762,6 +773,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate and inject bidder record into localStorage.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
@@ -834,6 +846,7 @@ test.describe('UI interaction — publish events to relay', () => {
 					proofY: dynKeys.proofY,
 					token: dynKeys.token,
 				})
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, {
 					childPubkey: dynKeys.childPubkey,
 					token: dynKeys.token,
@@ -891,10 +904,11 @@ test.describe('UI interaction — publish events to relay', () => {
 			let auction: SeededAuction
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 100000 })
-				await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			} finally {
 				relay.close()
 			}
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -948,6 +962,7 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		} finally {
 			relay.close()
 		}
+		await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 		// Seller navigates to the auction page first — should see "Awaiting Path Release".
 		await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
@@ -1013,6 +1028,7 @@ test.describe('settlement validation failure — unresolvable v2 keyset ID', () 
 				amount: MOCK_PROOF_AMOUNT,
 				token: MOCK_TOKENS.unspentFuture,
 			})
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			// Path release uses a token with an unresolvable v2 keyset ID.
 			prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, { token: v2Token })
 			// Seed a settlement referencing the (invalid) path release.
