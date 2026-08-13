@@ -189,6 +189,7 @@ jobs:
             docker compose ps
 
       - name: Upsert Cloudflare DNS A record
+        continue-on-error: true
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -196,6 +197,11 @@ jobs:
           VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
         run: |
           set -euo pipefail
+          # Skip if Cloudflare secrets are not configured.
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ZONE" ]; then
+            echo "::warning::Cloudflare secrets not set — skipping DNS upsert"
+            exit 0
+          fi
           # Resolve VPS public IP (the host secret may be a hostname or an IP).
           VPS_IP="$(getent ahostsv4 "$VPS_HOST" | awk '{print $1}' | head -1)"
           if [ -z "$VPS_IP" ]; then
