@@ -190,12 +190,10 @@ const initialState: Nip60State = {
 	pendingTokens: [],
 }
 
-const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
+const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'http://localhost:3338'
 export const NIP60_DEV_TEST_MINTS = Array.from(
 	new Set(
-		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
-			.map((mint) => mint.trim().replace(/\/$/, ''))
-			.filter(Boolean),
+		[DEV_TEST_MINT_URL, 'http://localhost:3338', 'http://127.0.0.1:3338'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean),
 	),
 )
 const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]

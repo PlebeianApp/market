@@ -1,10 +1,15 @@
 /**
- * TODO(CI): These tests rely on external Cashu test mints (testnut.cashu.space).
- * For CI reliability, run a local Cashu mint (e.g., nutmint / cashu-crumb) and
- * configure DEV_TEST_MINT_URL to point at it. External mints can be rate-limited,
- * down, or change behaviour without notice, causing flaky CI runs. A local mint
- * also eliminates the ADR-0005 test-isolation violation from calling external
- * services.
+ * E2E tests for auction bidding with Cashu mints.
+ *
+ * These tests use a LOCAL Cashu mint (nutshell with FakeWallet backend)
+ * started automatically by the Playwright webServer config on port 3338.
+ * The FakeWallet auto-settles Lightning invoices instantly, so no external
+ * Lightning node or external mint is required.
+ *
+ * MINT_A and MINT_B point to the same local mint via different hostnames
+ * (localhost vs 127.0.0.1) so the wallet treats them as separate mints.
+ * MINT_UNTRUSTED is a non-working local URL; mintTestEcash falls back to
+ * the trusted dev mints when the preferred URL is not in the trusted list.
  */
 
 import { test, expect } from '../fixtures'
@@ -13,16 +18,16 @@ import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, XPUB } from '../../src/lib/fixtures'
 import path from 'node:path'
 import { decode } from 'light-bolt11-decoder'
 
 useWebSocketImplementation(WebSocket)
 
 const D_TAG = 'e2e-auction-mint-test'
-const MINT_A = 'https://testnut.cashu.space'
-const MINT_B = 'https://nofees.testnut.cashu.space'
-const MINT_UNTRUSTED = 'https://mint.minibits.cash/Bitcoin'
+const MINT_A = 'http://localhost:3338'
+const MINT_B = 'http://127.0.0.1:3338'
+const MINT_UNTRUSTED = 'http://untrusted.localhost:3340'
 const SCREENSHOT_DIR = 'test-results'
 
 async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
@@ -52,6 +57,7 @@ async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: st
 				['reserve', '0'],
 				['settlement_policy', 'cashu_p2pk_path_oracle_v1'],
 				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', XPUB],
 				['path_issuer', TEST_APP_PUBLIC_KEY],
 				['settlement_grace', '7200'],
 				['extension_rule', 'none'],
@@ -121,7 +127,7 @@ test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auctionEvent = await seedAuction(relay, {
-				mints: [MINT_A, 'https://nofees.testnut.cashu.space'],
+				mints: [MINT_A, MINT_B],
 			})
 
 			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
@@ -169,7 +175,7 @@ test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auctionEvent = await seedAuction(relay, {
-				mints: [MINT_A, 'https://nofees.testnut.cashu.space'],
+				mints: [MINT_A, MINT_B],
 				dTag: 'e2e-auction-second-mint-test',
 			})
 
@@ -268,9 +274,9 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 
 			const mintSelect = depositDialog.locator('select').first()
 			const optionLabels = await mintSelect.locator('option').allTextContents()
-			expect(optionLabels).toContain('testnut.cashu.space')
-			expect(optionLabels).toContain('nofees.testnut.cashu.space')
-			expect(optionLabels).not.toContain('mint.minibits.cash')
+			expect(optionLabels).toContain('localhost')
+			expect(optionLabels).toContain('127.0.0.1')
+			expect(optionLabels).not.toContain('untrusted.localhost')
 
 			const amountInput = depositDialog.locator('input[type="number"]').first()
 			const requestedAmount = Number(await amountInput.inputValue())
@@ -299,12 +305,12 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // without a real Lightning node. Video recording is always on for this group.
 //
 // NOTE: These tests require a running dev server (port 34567), local relay
-// (nak serve on port 10547), and a reachable Cashu test mint. Do NOT run
-// them in CI until a local mint is available (see TODO at top of file).
+// (nak serve on port 10547), and a local Cashu mint (port 3338, started
+// automatically by the Playwright webServer config).
 // ---------------------------------------------------------------------------
 
 test.describe('Direct Lightning Bid Funding (video recorded)', () => {
-	test.use({ video: 'on' })
+	// video: 'on' set in playwright.config.ts
 	test.slow()
 
 	/** Bid event kind per AUCTIONS.md §4.2. */

@@ -18,24 +18,35 @@ export default defineConfig({
 		baseURL: BASE_URL,
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
-		video: 'retain-on-failure',
+		video: 'on',
 	},
 
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] },
+			use: { ...devices['Desktop Chrome'], channel: 'chrome' },
 		},
 	],
 
 	// On CI, servers are started manually in the workflow for better visibility.
-	// Locally, Playwright manages the relay and dev server automatically.
+	// Locally, Playwright manages the relay, mint, and dev server automatically.
 	webServer: process.env.CI
 		? []
 		: [
 				{
 					command: 'nak serve --hostname 0.0.0.0',
 					port: 10547,
+					reuseExistingServer: true,
+					stdout: 'pipe',
+					stderr: 'pipe',
+				},
+				{
+					// Local Cashu mint (nutshell with FakeWallet backend).
+					// Auto-settles Lightning invoices instantly — no external
+					// Lightning node or external mint required.
+					command: 'bash e2e/start-local-mint.sh',
+					cwd: PROJECT_ROOT,
+					port: 3338,
 					reuseExistingServer: true,
 					stdout: 'pipe',
 					stderr: 'pipe',
@@ -57,6 +68,8 @@ export default defineConfig({
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
+						APP_DEV_TEST_MINT_URL: 'http://localhost:3338',
+						CVM_SERVER_KEY: 'a49a0def40602d795b7d037dd85cb8626a2fb2975403f3a5bf2ed74a54dd7628',
 					},
 				},
 			],
