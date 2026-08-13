@@ -439,8 +439,12 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
-			// Wait for wallet to initialise — no funding, so balance is 0
-			// (insufficient for the 100 sat starting bid).
+			// Wait for wallet to initialise, then fund with a small amount so
+			// the wallet knows about the mint. The 20 sat balance is insufficient
+			// for the 100 sat starting bid, so the deposit modal will open.
+			await waitForWalletReady(buyerPage)
+			await fundWallet(buyerPage, 20, MINT_A)
+			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
 
 			// Click the bid button — opens the Confirm Bid dialog.
@@ -512,6 +516,9 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
 			await waitForWalletReady(buyerPage)
+			await fundWallet(buyerPage, 20, MINT_A)
+			await buyerPage.reload()
+			await waitForWalletReady(buyerPage)
 
 			// Place a bid to open the deposit modal.
 			await buyerPage
@@ -581,7 +588,7 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 
 	// ── Scenario 3: Publish Failure ────────────────────────────────────
 
-	test('publish failure: sufficient funds → bid publish fails → retry available', async ({ buyerPage }) => {
+	test('publish failure: deposit succeeds → bid publish fails → retry available', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auctionEvent = await seedAuction(relay, {
@@ -594,16 +601,18 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
-			// Wait for wallet and fund with sufficient balance (500 sats ≥ 100 sat bid).
+			// Wait for wallet and fund with a small amount so the wallet
+			// knows about the mint. The 20 sat balance is insufficient for
+			// the 100 sat starting bid, so the deposit modal will open.
 			await waitForWalletReady(buyerPage)
-			await fundWallet(buyerPage, 500, MINT_A)
-			await waitForWalletBalance(buyerPage, 400)
+			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
-			await waitForWalletBalance(buyerPage, 400)
+			await waitForWalletReady(buyerPage)
 
 			// Intercept NIP-07 signEvent for kind-1023 to simulate a publish
-			// failure (e.g., relay rejection). The bid mutation will throw,
-			// and the funding hook transitions to
+			// failure (e.g., relay rejection). After the deposit succeeds and
+			// e-cash is minted, the bid mutation will throw, and the funding
+			// hook transitions to
 			// 'mint_succeeded_bid_publish_failed_reclaimable' with a toast.
 			await buyerPage.evaluate(() => {
 				const nostr = (window as any).nostr
@@ -618,8 +627,8 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				}
 			})
 
-			// Place a bid — with sufficient funds, no deposit modal opens;
-			// the bid goes directly to publish, which fails.
+			// Place a bid — wallet has insufficient funds (20 sats < 100 sat
+			// starting bid), so the deposit modal opens after Confirm.
 			await buyerPage
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
 				.first()
@@ -635,6 +644,12 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			}
 
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
+
+			// Wait for the deposit QR invoice to appear, then simulate the
+			// Lightning payment. This triggers depositStatus → 'success' →
+			// onSuccess → submitPreparedBid → kind-1023 publish (which fails).
+			await waitForDepositQR(buyerPage)
+			await simulateDepositPayment(buyerPage)
 
 			// Verify the error toast appears indicating publish failure.
 			await expect(buyerPage.getByText(/bid publishing failed/i)).toBeVisible({ timeout: 30_000 })
