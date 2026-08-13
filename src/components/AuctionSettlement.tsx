@@ -253,9 +253,13 @@ export function AuctionSettlement({
 	const [descriptor, setDescriptor] = useState<SettlementDescriptor | null>(null)
 	useEffect(() => {
 		let cancelled = false
-		getSettlementDescriptor(descriptorInput).then((d) => {
-			if (!cancelled) setDescriptor(d)
-		})
+		getSettlementDescriptor(descriptorInput)
+			.then((d) => {
+				if (!cancelled) setDescriptor(d)
+			})
+			.catch((err) => {
+				console.error('SETTLEMENT: descriptor failed:', err)
+			})
 		return () => {
 			cancelled = true
 		}

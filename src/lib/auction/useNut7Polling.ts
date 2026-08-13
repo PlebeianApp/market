@@ -6,6 +6,11 @@ import type { ParsedBidEvent } from './events'
 const POLL_INTERVAL_MS = 60_000
 
 /**
+ * Type of the proof-state checker function. Injectable for testing.
+ */
+export type CheckProofStateFn = (mintUrl: string, proofYs: string[]) => Promise<Map<string, Nut7ProofState>>
+
+/**
  * Aggregate per-proof NUT-7 states into a single worst-case state per bid.
  * any spent → spent, all unspent → unspent, otherwise pending.
  */
@@ -26,11 +31,17 @@ function aggregateBidNut7State(proofStates: Map<string, Nut7ProofState>, proofYs
  *
  * Used by the route to pass nut7States to computeValidatedBids, enabling
  * real-time fraud detection (bidder-spends-behind-the-lock) per ADR-0004.
+ *
+ * @param checkFn - Optional injectable proof-state checker. Defaults to
+ *                  `checkProofStateBatch` from nut7.ts. In tests, pass a
+ *                  mock that returns canned states without network calls.
  */
-export function useNut7Polling(bids: ParsedBidEvent[]): Map<string, Nut7ProofState> {
+export function useNut7Polling(bids: ParsedBidEvent[], checkFn: CheckProofStateFn = checkProofStateBatch): Map<string, Nut7ProofState> {
 	const [nut7States, setNut7States] = useState<Map<string, Nut7ProofState>>(new Map())
 	const bidsRef = useRef(bids)
 	bidsRef.current = bids
+	const checkRef = useRef(checkFn)
+	checkRef.current = checkFn
 
 	useEffect(() => {
 		let cancelled = false
@@ -53,18 +64,15 @@ export function useNut7Polling(bids: ParsedBidEvent[]): Map<string, Nut7ProofSta
 			await Promise.all(
 				Array.from(byMint.entries()).map(async ([mintUrl, bidEntries]) => {
 					try {
-						// Collect all proofYs for this mint across all bids
 						const allYs = bidEntries.flatMap((e) => e.proofYs)
-						const proofStates = await checkProofStateBatch(mintUrl, allYs)
+						const proofStates = await checkRef.current(mintUrl, allYs)
 
-						// Map back to per-bid aggregate
 						for (const { bidId, proofYs } of bidEntries) {
 							const aggregate = aggregateBidNut7State(proofStates, proofYs)
 							if (aggregate) newStates.set(bidId, aggregate)
 						}
 					} catch {
 						// Network error — leave these bids without NUT-7 state
-						// (computeValidatedBids will treat them as pending_review)
 					}
 				}),
 			)
@@ -74,12 +82,13 @@ export function useNut7Polling(bids: ParsedBidEvent[]): Map<string, Nut7ProofSta
 			}
 		}
 
-		// Poll immediately on mount/bid change, then on interval
-		poll()
+		// Delay first poll slightly to avoid blocking initial render
+		const initialTimer = setTimeout(poll, 1_000)
 		const interval = setInterval(poll, POLL_INTERVAL_MS)
 
 		return () => {
 			cancelled = true
+			clearTimeout(initialTimer)
 			clearInterval(interval)
 		}
 	}, [bids])
