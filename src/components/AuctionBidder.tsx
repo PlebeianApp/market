@@ -227,12 +227,18 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
+		bidFundingLifecycleState,
+		resumeBidAfterRulesAck,
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
 		onBidSuccess: () => {
 			setIsEditing(false)
 			onBidSuccess?.()
+		},
+		hasAcknowledgedRules: hasAcknowledgedAuctionRules,
+		onPendingRulesAck: () => {
+			setIsRulesDialogOpen(true)
 		},
 	})
 
@@ -403,7 +409,14 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 		setHasAcknowledgedAuctionRules(true)
 		setIsRulesDialogOpen(false)
-		toast.info('Auction rules reviewed. Check the current bid amount before placing your bid.')
+
+		// If funding completed while rules were unacknowledged, resume the bid publish now.
+		if (bidFundingLifecycleState === 'ecash_minted_pending_rules_ack') {
+			toast.info('Auction rules reviewed. Publishing your funded bid now.')
+			void resumeBidAfterRulesAck()
+		} else {
+			toast.info('Auction rules reviewed. Check the current bid amount before placing your bid.')
+		}
 	}
 
 	return (

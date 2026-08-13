@@ -10,6 +10,7 @@ export type AuctionBidFundingLifecycleState =
 	| 'payment_acknowledged'
 	| 'minting_started'
 	| 'ecash_minted'
+	| 'ecash_minted_pending_rules_ack'
 	| 'bid_publish_attempted'
 	| 'bid_published'
 	| 'invoice_unpaid_or_expired_reclaimable'
@@ -40,6 +41,7 @@ export const AUCTION_BID_FUNDING_ADR_STATE_MAPPING = {
 export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingLifecycleState[] = [
 	'invoice_unpaid_or_expired_reclaimable',
 	'invoice_paid_mint_failed_reclaimable',
+	'ecash_minted_pending_rules_ack',
 	'mint_succeeded_bid_publish_failed_reclaimable',
 ]
 
@@ -62,6 +64,8 @@ interface UseAuctionBidFundingOptions {
 	previousBidAmount: number
 	publishBid: (bidData: AuctionBidFormData) => Promise<unknown>
 	onBidSuccess?: () => void
+	onPendingRulesAck?: () => void
+	hasAcknowledgedRules: boolean
 }
 
 const TERMINAL_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
@@ -75,6 +79,7 @@ const FUNDED_IN_FLIGHT_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
 	'payment_acknowledged',
 	'minting_started',
 	'ecash_minted',
+	'ecash_minted_pending_rules_ack',
 	'bid_publish_attempted',
 ]
 
@@ -94,7 +99,8 @@ const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycle
 	invoice_created: new Set(['payment_acknowledged', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
 	payment_acknowledged: new Set(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
 	minting_started: new Set(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
-	ecash_minted: new Set(['bid_publish_attempted', 'invoice_paid_mint_failed_reclaimable']),
+	ecash_minted: new Set(['ecash_minted_pending_rules_ack', 'bid_publish_attempted', 'invoice_paid_mint_failed_reclaimable']),
+	ecash_minted_pending_rules_ack: new Set(['bid_publish_attempted', 'funding_session_created']),
 	bid_publish_attempted: new Set(['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable']),
 	bid_published: new Set(['funding_session_created']),
 	invoice_unpaid_or_expired_reclaimable: new Set(['funding_session_created']),
@@ -117,11 +123,18 @@ export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycl
 export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
 
-export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSuccess }: UseAuctionBidFundingOptions) {
+export function useAuctionBidFunding({
+	previousBidAmount,
+	publishBid,
+	onBidSuccess,
+	onPendingRulesAck,
+	hasAcknowledgedRules,
+}: UseAuctionBidFundingOptions) {
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
+	const [pendingRulesAckBidData, setPendingRulesAckBidData] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
 
 	const submitPreparedBid = useCallback(
@@ -215,9 +228,25 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 			}
 
 			const orderedMintCandidates = [fundableMint, ...fundingMintCandidates.filter((mintUrl) => mintUrl !== fundableMint)]
-			await submitPreparedBid({ ...pendingBidSubmission, mintCandidates: orderedMintCandidates })
+			const preparedBid = { ...pendingBidSubmission, mintCandidates: orderedMintCandidates }
+
+			if (!hasAcknowledgedRules) {
+				setPendingRulesAckBidData(preparedBid)
+				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'ecash_minted_pending_rules_ack'))
+				onPendingRulesAck?.()
+				return
+			}
+
+			await submitPreparedBid(preparedBid)
 		})()
-	}, [pendingBidSubmission, previousBidAmount, submitPreparedBid])
+	}, [pendingBidSubmission, previousBidAmount, submitPreparedBid, hasAcknowledgedRules, onPendingRulesAck])
+
+	const resumeBidAfterRulesAck = useCallback(async () => {
+		if (!pendingRulesAckBidData) return
+		const bidData = pendingRulesAckBidData
+		setPendingRulesAckBidData(null)
+		await submitPreparedBid(bidData)
+	}, [pendingRulesAckBidData, submitPreparedBid])
 
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))
@@ -258,5 +287,6 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
+		resumeBidAfterRulesAck,
 	}
 }
