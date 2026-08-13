@@ -144,6 +144,7 @@ function makeSettlement(overrides: Partial<ParsedSettlementEvent> = {}): ParsedS
 		winningBidId: 'bid-1',
 		winnerPubkey: BUYER_PUBKEY,
 		finalAmount: 50000,
+		pathReleaseEventId: 'pr-1',
 		payouts: [],
 		fallbackChain: [],
 		...overrides,
@@ -192,6 +193,7 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		hasBidderRecord: false,
 		hasPlacedBid: false,
 		now: 120,
+		nut7States: undefined,
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -201,10 +203,18 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	// Auto-generate NUT-7 states for all bids if not explicitly provided.
 	// Default to 'unspent' — matches the old behavior where bids without NUT-7
 	// data were treated as valid (bid_pending_review was collapsed to valid).
-	if (!base.nut7States && base.bids.length > 0) {
+	// If nut7States wasn't explicitly provided, auto-generate 'unspent' for all bids.
+	// This matches the old behavior where bids without NUT-7 data were treated as valid.
+	if (base.nut7States === undefined && base.bids.length > 0) {
 		base.nut7States = new Map(base.bids.map((b) => [b.id, 'unspent' as Nut7ProofState]))
+	} else if (base.nut7States === undefined) {
+		delete base.nut7States
 	}
 	return base
+}
+
+function spentNut7States(bids: ParsedBidEvent[]): Map<string, Nut7ProofState> {
+	return new Map(bids.map((b) => [b.id, 'spent' as Nut7ProofState]))
 }
 
 const winningBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 50000 })
@@ -403,10 +413,20 @@ describe('getSettlementDescriptor', () => {
 
 		test('order-received: settled, matched claim order', async () => {
 			const d = await getSettlementDescriptor(
-				makeInput({
+				winningBidInput({
 					currentUserPubkey: SELLER_PUBKEY,
-					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
+					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY, id: 'order-1' })],
+					nut7States: spentNut7States([winningBid]),
 					now: 120,
 				}),
 			)
@@ -417,9 +437,19 @@ describe('getSettlementDescriptor', () => {
 
 		test('awaiting-shipping: settled, no claim order yet', async () => {
 			const d = await getSettlementDescriptor(
-				makeInput({
+				winningBidInput({
 					currentUserPubkey: SELLER_PUBKEY,
-					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
+					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
+					nut7States: spentNut7States([winningBid]),
 					now: 120,
 				}),
 			)
@@ -476,7 +506,15 @@ describe('getSettlementDescriptor', () => {
 		test('winner-with-order: settled, settlement names me, claim order exists', async () => {
 			const d = await getSettlementDescriptor(
 				winningBidInput({
-					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY, finalAmount: 50000 })],
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY, id: 'order-1' })],
 					now: 120,
 				}),
@@ -489,7 +527,15 @@ describe('getSettlementDescriptor', () => {
 		test('winner-claim-dialog: settled, settlement names me, no claim order', async () => {
 			const d = await getSettlementDescriptor(
 				winningBidInput({
-					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY, finalAmount: 50000 })],
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
 					now: 120,
 				}),
 			)
@@ -653,8 +699,18 @@ describe('getSettlementDescriptor', () => {
 		test('settlement badge when settlement exists', async () => {
 			const d = await getSettlementDescriptor(
 				winningBidInput({
-					settlements: [makeSettlement({ status: 'settled', winnerPubkey: BUYER_PUBKEY })],
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
+					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY })],
+					nut7States: spentNut7States([winningBid]),
 					now: 120,
 				}),
 			)
@@ -1005,6 +1061,7 @@ describe('rebid chain path release validation', () => {
 			makeInput({
 				bids: [leg1, leg2],
 				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				nut7States: spentNut7States([leg1, leg2]),
 				pathReleases: [release1, release2],
 				settlements: [
 					makeSettlement({
@@ -1043,6 +1100,7 @@ describe('rebid chain path release validation', () => {
 						winningBidId: 'leg-2',
 						winnerPubkey: BUYER_PUBKEY,
 						finalAmount: 53000,
+						pathReleaseEventId: 'pr-leg-2',
 						payouts: [{ bidEventId: 'leg-2', amount: 53000, status: 'redeemed' }],
 					}),
 				],

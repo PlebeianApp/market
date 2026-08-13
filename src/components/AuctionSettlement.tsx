@@ -17,6 +17,7 @@ import {
 	type SettlementDescriptor,
 	type SettlementIconKey,
 } from '@/lib/auction/settlementDescriptor'
+import { useNut7Polling } from '@/lib/auction/useNut7Polling'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,
@@ -218,11 +219,14 @@ export function AuctionSettlement({
 		[claimOrders],
 	)
 
+	const nut7States = useNut7Polling(bids)
+
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
 		() => ({
 			auction,
 			bids,
 			verdicts,
+			nut7States,
 			settlements,
 			pathReleases: pathReleasesForDescriptor,
 			claimOrders: claimOrderEvents,
@@ -236,6 +240,7 @@ export function AuctionSettlement({
 			auction,
 			bids,
 			verdicts,
+			nut7States,
 			settlements,
 			pathReleasesForDescriptor,
 			claimOrderEvents,

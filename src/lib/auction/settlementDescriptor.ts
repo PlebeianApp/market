@@ -91,6 +91,7 @@ interface DerivedState {
 	settlementWinner: string
 	settlementFinalAmount: number
 	settlementNamesMe: boolean
+	isSettlementPending: boolean
 	isMyBidTop: boolean
 	myAlreadyReleased: boolean
 	hasPathReleaseForTopBid: boolean
@@ -124,6 +125,8 @@ function isPathReleaseFullyValid(
 	return result.isValid
 }
 
+type SettlementValidity = 'valid' | 'pending' | 'invalid'
+
 function isSettlementStructurallyValid(
 	auction: ParsedAuctionEvent,
 	settlement: ParsedSettlementEvent,
@@ -135,11 +138,21 @@ function isSettlementStructurallyValid(
 	postCloseDecision: 'winner' | 'loser' | null,
 	nut7State?: Nut7ProofState,
 	mintKeysets?: MintKeyset[],
-): boolean {
-	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) return false
-	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) return false
+): SettlementValidity {
+	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) return 'invalid'
+	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) return 'invalid'
 
-	if (settlement.status !== 'settled' || !topBid) return true
+	// Non-settled statuses: verify based on status type
+	if (settlement.status !== 'settled') {
+		// cancelled: seller signature + root event ID + coordinate = sufficient
+		if (settlement.status === 'cancelled') return 'valid'
+		// reserve_not_met and griefed_no_fallback: basic structural checks pass
+		// (deeper cross-checks with computeValidatedBids are handled in deriveState)
+		return 'valid'
+	}
+
+	// settled status requires a valid top bid
+	if (!topBid) return 'invalid'
 
 	const matchingRelease = settlement.pathReleaseEventId
 		? validatedPathReleases.find((pr) => pr.id === settlement.pathReleaseEventId)
@@ -149,30 +162,34 @@ function isSettlementStructurallyValid(
 		? rawPathReleases.find((pr) => pr.id === settlement.pathReleaseEventId)
 		: rawPathReleases.find((pr) => pr.bidEventId === topBid.id)
 
-	if (rawMatching && !matchingRelease) return false
+	// Raw release exists but was filtered out as invalid → fraudulent release
+	if (rawMatching && !matchingRelease) return 'invalid'
 
-	if (!matchingRelease) return true
+	// No matching release yet → may not have arrived
+	if (!matchingRelease) return 'pending'
 
-	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return true
+	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return 'invalid'
 
 	// Build the bid chain by walking prevBidId links from the top bid.
 	// This lets validateSettlementCompleteness know about all legs so it
 	// can validate the correct number of payout tags.
 	const bidChain: SettlementChainLegContext[] = []
-	if (topBid) {
-		let current: ParsedBidEvent | undefined = topBid
-		const chainBids: ParsedBidEvent[] = []
-		while (current) {
-			chainBids.unshift(current)
-			current = current.prevBidId ? validatedBids.find((b) => b.id === current!.prevBidId) : undefined
-		}
-		for (const bid of chainBids) {
-			const release = validatedPathReleases.find((pr) => pr.bidEventId === bid.id)
-			if (release) {
-				bidChain.push({ bid, pathRelease: release, nut7State })
-			}
+	let current: ParsedBidEvent | undefined = topBid
+	const chainBids: ParsedBidEvent[] = []
+	while (current) {
+		chainBids.unshift(current)
+		current = current.prevBidId ? validatedBids.find((b) => b.id === current!.prevBidId) : undefined
+	}
+	for (const bid of chainBids) {
+		const release = validatedPathReleases.find((pr) => pr.bidEventId === bid.id)
+		if (release) {
+			bidChain.push({ bid, pathRelease: release, nut7State })
 		}
 	}
+
+	// Check chain integrity: every leg in the chain must have a path release
+	// (don't shrink the chain — a partial chain is invalid)
+	if (chainBids.length > 0 && bidChain.length !== chainBids.length) return 'invalid'
 
 	const result = validateSettlementCompleteness({
 		auction,
@@ -184,8 +201,12 @@ function isSettlementStructurallyValid(
 		bidChain: bidChain.length > 0 ? bidChain : undefined,
 	})
 
-	if (result.isComplete) return true
-	return result.failureCode === 'nut7_not_spent'
+	if (result.isComplete) return 'valid'
+
+	// nut7_not_spent means the settlement exists but proofs aren't spent yet
+	// — the seller may not have redeemed yet. This is pending, not invalid.
+	if (result.failureCode === 'nut7_not_spent') return 'pending'
+	return 'invalid'
 }
 
 function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeyset[]): DerivedState {
@@ -237,9 +258,10 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			})
 		: []
 
-	// 4. Validate settlements — filter to only structurally valid ones.
-	const settlements = rawSettlements.filter((s) =>
-		isSettlementStructurallyValid(
+	// 4. Validate settlements — filter out invalid ones, keep valid and pending.
+	const settlementValidities = new Map<string, SettlementValidity>()
+	const settlements = rawSettlements.filter((s) => {
+		const validity = isSettlementStructurallyValid(
 			auction,
 			s,
 			topBid,
@@ -250,8 +272,10 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			postCloseDecision,
 			input.nut7States?.get(topBid?.id ?? ''),
 			mintKeysets,
-		),
-	)
+		)
+		settlementValidities.set(s.id, validity)
+		return validity !== 'invalid'
+	})
 
 	const reserve = auction.reserve
 	const hasReserve = reserve > 0
@@ -259,17 +283,24 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 
 	// Prefer 'settled' over 'reserve_not_met' (a settled event redeems proofs
 	// and cannot be overridden by a later reserve_not_met). Among same-status
-	// events, prefer the latest by created_at.
+	// events, prefer the latest by created_at. Prefer 'valid' over 'pending'.
 	const latestSettlement = settlements.length
-		? settlements.reduce((best, s) =>
-				s.status === 'settled' && best.status !== 'settled' ? s : s.status === best.status && s.createdAt > best.createdAt ? s : best,
-			)
+		? settlements.reduce((best, s) => {
+				const bestValidity = settlementValidities.get(best.id) ?? 'valid'
+				const sValidity = settlementValidities.get(s.id) ?? 'valid'
+				if (sValidity === 'valid' && bestValidity === 'pending') return s
+				if (sValidity === 'pending' && bestValidity === 'valid') return best
+				if (s.status === 'settled' && best.status !== 'settled') return s
+				if (s.status === best.status && s.createdAt > best.createdAt) return s
+				return best
+			})
 		: null
 	const hasLatestSettlement = !!latestSettlement
 	const settlementStatus = latestSettlement?.status ?? 'unknown'
 	const settlementWinner = latestSettlement?.winnerPubkey ?? ''
 	const settlementFinalAmount = latestSettlement?.finalAmount ?? 0
 	const settlementNamesMe = !!currentUserPubkey && !!settlementWinner && settlementWinner === currentUserPubkey
+	const isSettlementPending = latestSettlement ? settlementValidities.get(latestSettlement.id) === 'pending' : false
 
 	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = !!myTopBidEvent && pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
@@ -295,6 +326,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 		settlementWinner,
 		settlementFinalAmount,
 		settlementNamesMe,
+		isSettlementPending,
 		isMyBidTop,
 		myAlreadyReleased,
 		hasPathReleaseForTopBid,
@@ -380,7 +412,9 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 	}
 
 	const verifiedBadge: SettlementDescriptor['verifiedBadge'] = d.hasLatestSettlement
-		? 'settlement'
+		? d.isSettlementPending
+			? 'verifying'
+			: 'settlement'
 		: d.hasPathReleaseForTopBid || d.myAlreadyReleased
 			? 'path-release'
 			: 'none'

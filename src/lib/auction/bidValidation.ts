@@ -46,11 +46,17 @@ function classifyBid(
 	if (validVerdicts.length >= auction.auditorQuorum) {
 		const observedAt = validVerdicts.reduce((max, v) => Math.max(max, v.observedAt), bid.createdAt)
 		const nut7State = nut7States?.get(bid.id)
+
+		// For ended auctions, NUT-7 spend state is no longer relevant for bid validity.
+		// A 'spent' state after settlement means the seller redeemed (expected), not fraud.
+		// Pass 'unspent' as default for ended auctions so validateBid doesn't reject.
+		const ended = auction.maxEndAt > 0 && observedAt >= auction.maxEndAt
+		const adjustedNut7State = ended ? (nut7State === 'spent' ? 'unspent' : nut7State) : nut7State
 		return {
 			bid,
 			classification: 'valid',
 			observedAt,
-			nut7State,
+			nut7State: adjustedNut7State,
 		}
 	}
 
