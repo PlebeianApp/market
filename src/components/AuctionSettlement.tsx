@@ -313,15 +313,15 @@ export function AuctionSettlement({
 				</div>
 			</Card>
 
-			{descriptor.cta?.kind === 'open-claim-dialog' && settlements[0] && (
+			{descriptor.cta?.kind === 'open-claim-dialog' && descriptor.cta.settlementEventId && (
 				<AuctionClaimDialog
 					open={isClaimDialogOpen}
 					onOpenChange={setIsClaimDialogOpen}
 					auctionEventId={auctionRootEventId}
 					auctionCoordinates={auctionCoordinates}
-					settlementEventId={settlements[0].id}
+					settlementEventId={descriptor.cta.settlementEventId}
 					sellerPubkey={auction.sellerPubkey}
-					finalAmount={settlements[0].finalAmount ?? 0}
+					finalAmount={descriptor.cta.finalAmount ?? 0}
 				/>
 			)}
 		</>

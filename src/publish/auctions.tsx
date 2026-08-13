@@ -171,10 +171,7 @@ export interface AuctionSettlementFormData {
 	 * matches reality — mismatch causes the backend to reject.
 	 */
 	status?: 'settled' | 'reserve_not_met'
-	closeAt?: number
 	winningBidEventId?: string
-	winnerPubkey?: string
-	finalAmount?: number
 	reason?: string
 }
 
@@ -880,7 +877,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (!auctionCoordinate) {
 		throw new Error('Auction coordinate is required to query kind-1025 path releases')
 	}
-	const auctionRootEventId = auctionEvent.id
+	const auctionRootEventId = getTag(auctionEvent, 'auction_root_event_id') ?? auctionEvent.id
 	const p2pkXpub = getTag(auctionEvent, 'p2pk_xpub') ?? ''
 	const declaredPolicy = getTag(auctionEvent, 'settlement_policy')
 	if (declaredPolicy && declaredPolicy !== policyV1) {
