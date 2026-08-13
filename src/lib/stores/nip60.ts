@@ -1141,6 +1141,24 @@ export const nip60Actions = {
 						mints: nip60Store.state.mints,
 						mintBalances: nip60Store.state.mintBalances,
 					}),
+					getDepositStatus: () => ({
+						depositStatus: nip60Store.state.depositStatus,
+						depositInvoice: nip60Store.state.depositInvoice,
+						error: nip60Store.state.error,
+					}),
+					/**
+					 * Dev-only: simulate a Lightning invoice payment by emitting
+					 * the 'success' event on the active NDKCashuDeposit. This
+					 * triggers the same store transition as a real mint
+					 * confirmation, making it possible to e2e-test the funding
+					 * → mint → bid-publish flow without a Lightning node.
+					 */
+					simulateDepositSuccess: () => {
+						const deposit = nip60Store.state.activeDeposit
+						if (deposit) {
+							deposit.emit('success', null)
+						}
+					},
 				}
 			}
 		} catch (err) {
