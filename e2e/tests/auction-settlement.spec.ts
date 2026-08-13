@@ -311,7 +311,9 @@ async function seedVerdict(
 	const dTag = `${bidderPk}:${auction.auctionRootEventId}`
 	const tags: string[][] = [
 		['d', dTag],
+		['p', bidderPk],
 		['a', auction.auctionCoordinate],
+		['e', auction.auctionRootEventId],
 		['bid', bidId],
 		['claim', claim],
 		['observed_at', String(Math.floor(Date.now() / 1000))],

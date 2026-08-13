@@ -258,7 +258,7 @@ export function AuctionSettlement({
 				if (!cancelled) setDescriptor(d)
 			})
 			.catch((err) => {
-				console.error('SETTLEMENT: descriptor failed:', err)
+				console.error('getSettlementDescriptor failed:', err)
 			})
 		return () => {
 			cancelled = true
