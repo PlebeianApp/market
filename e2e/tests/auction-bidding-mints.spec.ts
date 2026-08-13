@@ -6,11 +6,14 @@ import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { devUser1 } from '../../src/lib/fixtures'
 import path from 'node:path'
+import { decode } from 'light-bolt11-decoder'
 
 useWebSocketImplementation(WebSocket)
 
 const D_TAG = 'e2e-auction-mint-test'
 const MINT_A = 'https://testnut.cashu.space'
+const MINT_B = 'https://nofees.testnut.cashu.space'
+const MINT_UNTRUSTED = 'https://mint.minibits.cash/Bitcoin'
 const SCREENSHOT_DIR = 'test-results'
 
 async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
@@ -90,6 +93,18 @@ async function waitForWalletBalance(page: import('@playwright/test').Page, minBa
 		await page.waitForTimeout(500)
 	}
 	throw new Error(`Wallet balance did not reach ${minBalance} within timeout`)
+}
+
+const parseBolt11Sats = (bolt11: string): number => {
+	const amountMillisatsRaw = decode(bolt11).sections.find((section) => section.name === 'amount')?.value
+	if (!amountMillisatsRaw) {
+		throw new Error('No amount section found in bolt11 invoice')
+	}
+	const amountMillisats = parseInt(amountMillisatsRaw, 10)
+	if (!Number.isFinite(amountMillisats) || amountMillisats <= 0) {
+		throw new Error(`Invalid bolt11 amount section: ${amountMillisatsRaw}`)
+	}
+	return Math.floor(amountMillisats / 1000)
 }
 
 test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
@@ -212,6 +227,55 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 				path: path.join(SCREENSHOT_DIR, 'pr886-funded-mint-no-reload.png'),
 				fullPage: true,
 			})
+		} finally {
+			relay.close()
+		}
+	})
+
+	test('auction funding modal only lists accepted mints and invoice amount includes fee padding', async ({ buyerPage }) => {
+		const relay = await Relay.connect(RELAY_URL)
+		try {
+			const auctionEvent = await seedAuction(relay, {
+				mints: [MINT_A, MINT_B],
+				dTag: 'e2e-auction-funding-fee-padding-test',
+			})
+
+			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
+			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
+
+			await waitForWalletReady(buyerPage)
+			await fundWallet(buyerPage, 20, MINT_A)
+			await fundWallet(buyerPage, 20, MINT_B)
+			await fundWallet(buyerPage, 5_000, MINT_UNTRUSTED)
+			await buyerPage.reload()
+			await waitForWalletBalance(buyerPage, 5_000)
+
+			await buyerPage
+				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
+				.first()
+				.click()
+			const depositDialog = buyerPage.getByRole('dialog')
+			await expect(depositDialog.getByText('Deposit Lightning')).toBeVisible({ timeout: 10_000 })
+
+			const mintSelect = depositDialog.locator('select').first()
+			const optionLabels = await mintSelect.locator('option').allTextContents()
+			expect(optionLabels).toContain('testnut.cashu.space')
+			expect(optionLabels).toContain('nofees.testnut.cashu.space')
+			expect(optionLabels).not.toContain('mint.minibits.cash')
+
+			const amountInput = depositDialog.locator('input[type="number"]').first()
+			const requestedAmount = Number(await amountInput.inputValue())
+			expect(Number.isFinite(requestedAmount)).toBe(true)
+			expect(requestedAmount).toBeGreaterThan(0)
+
+			await depositDialog.getByRole('button', { name: 'Generate Invoice' }).click()
+			await expect(depositDialog.getByText('Lightning Invoice')).toBeVisible({ timeout: 15_000 })
+
+			const invoiceValue = await depositDialog.locator('input[readonly]').first().inputValue()
+			expect(invoiceValue.toLowerCase().startsWith('ln')).toBe(true)
+
+			const invoiceAmountSats = parseBolt11Sats(invoiceValue)
+			expect(invoiceAmountSats).toBeGreaterThan(requestedAmount)
 		} finally {
 			relay.close()
 		}

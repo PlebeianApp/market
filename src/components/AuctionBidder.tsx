@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
 import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
@@ -19,7 +20,12 @@ import {
 	getAuctionCurrentPriceFromBids,
 	getAuctionBidCountFromBids,
 	getBidAmount,
+	getAuctionTitle,
+	getAuctionImages,
+	getAuctionAuditors,
 } from '@/queries/auctions'
+import { UserCard } from './UserCard'
+import { AvatarUser } from './AvatarUser'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -36,6 +42,7 @@ import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
+import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
@@ -181,22 +188,23 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const minBid = Math.max(flatFloor, curveFloor)
 	const inCurveWindow = countdown.now > endAt && countdown.now < biddingCutoffAt
 
+	const auctionTitle = getAuctionTitle(auction)
+	const auctionThumbnailUrl = getAuctionImages(auction)[0]?.[1] || ''
+	const auctionValidators = useMemo(() => getAuctionAuditors(auction), [auction])
+
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
-	const auctionRulesAuctionIdentity = auctionRootEventId || auction.id
 	const auctionRulesAckKey =
-		hasSignedInBidder && auctionRulesBidderPubkey && auctionRulesAuctionIdentity
-			? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}:${auctionRulesAuctionIdentity}`
-			: null
+		hasSignedInBidder && auctionRulesBidderPubkey ? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}` : null
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
 	const [isEditing, setIsEditing] = useState(false)
-	const [isDepositOpen, setIsDepositOpen] = useState(false)
-	const [depositAmount, setDepositAmount] = useState(0)
-	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
 	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
+	const [isConfirmBidDialogOpen, setIsConfirmBidDialogOpen] = useState(false)
+	const [pendingBidData, setPendingBidData] = useState<AuctionBidFormData | null>(null)
+	const [isConfirmBidMintChosen, setIsConfirmBidMintChosen] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -206,6 +214,27 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const { selectedMint, depositMint, availableMints, showMintSelector, mintError, setSelectedMint, canFund, deltaAmount } =
 		useAuctionMintSelection(trustedMints, Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0, previousBidAmount)
+
+	const {
+		isDepositOpen,
+		depositAmount,
+		preferredDepositMint,
+		startFundingForBid,
+		submitPreparedBid,
+		handleFundingSuccess,
+		handleInvoiceCreated,
+		handlePaymentAcknowledged,
+		handleMintingStarted,
+		handleFundingFailed,
+		handleDepositModalClose,
+	} = useAuctionBidFunding({
+		previousBidAmount,
+		publishBid: bidMutation.mutateAsync,
+		onBidSuccess: () => {
+			setIsEditing(false)
+			onBidSuccess?.()
+		},
+	})
 
 	const hasInsufficientBidFunds =
 		hasSignedInBidder &&
@@ -269,6 +298,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return 'Place Bid'
 	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
+	const createBidSubmission = (): AuctionBidFormData => ({
+		auctionEventId: auctionRootEventId || auction.id,
+		auctionCoordinates,
+		amount: parsedBidAmount,
+		auctionStartAt: startAt,
+		auctionEffectiveEndAt: biddingCutoffAt,
+		auctionLocktimeAt: biddingCutoffAt,
+		settlementGraceSeconds: getAuctionSettlementGrace(auction),
+		sellerPubkey: auction.pubkey,
+		p2pkXpub: p2pkXpub || '',
+		mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
+	})
+
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
 		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
 
@@ -292,71 +334,56 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return null
 		}
 
-		if (hasInsufficientBidFunds) {
-			if (!depositMint) {
-				toast.error(mintError || 'No suitable mint available for bidding.')
-				return null
-			}
-
-			setDepositAmount(Math.ceil(deltaAmount))
-			setPreferredDepositMint(depositMint)
-			setIsDepositOpen(true)
-			return null
-		}
-
-		// Under `cashu_p2pk_bidder_path_v1` the bidder generates the
-		// derivation path locally and never consults a "path issuer"
-		// oracle - that was the v1 CVM-coordinator scheme. The only
-		// auction tag the bidder actually needs is `p2pk_xpub`; if
-		// it's absent the auction isn't biddable.
 		if (!p2pkXpub) {
 			toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
 			return null
 		}
-		if (!selectedMint) {
-			toast.error(mintError || 'No suitable mint available for bidding.')
-			return null
-		}
-		if (!canFund) {
-			toast.error('Insufficient balance on selected mint to cover the required delta.')
-			return null
-		}
 
 		return {
-			auctionEventId: auctionRootEventId || auction.id,
-			auctionCoordinates,
+			...createBidSubmission(),
 			amount: parsedAmount,
-			auctionStartAt: startAt,
-			auctionEffectiveEndAt: biddingCutoffAt,
-			auctionLocktimeAt: biddingCutoffAt,
-			settlementGraceSeconds: getAuctionSettlementGrace(auction),
-			sellerPubkey: auction.pubkey,
-			p2pkXpub,
-			mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
-		}
-	}
-
-	const submitPreparedBid = async (bidData: AuctionBidFormData) => {
-		try {
-			await bidMutation.mutateAsync(bidData)
-			toast.success('Bid placed successfully')
-			setIsEditing(false)
-			onBidSuccess?.()
-		} catch {
-			// Error handled by mutation
 		}
 	}
 
 	const handleSubmitBid = async () => {
-		const bidData = prepareBidSubmission()
-		if (!bidData) return
-
-		if (!hasAcknowledgedAuctionRules) {
+		if (hasSignedInBidder && !hasAcknowledgedAuctionRules) {
 			setIsRulesDialogOpen(true)
 			return
 		}
 
-		await submitPreparedBid(bidData)
+		const bidData = prepareBidSubmission()
+		if (!bidData) return
+
+		setPendingBidData(bidData)
+		setIsConfirmBidMintChosen(false)
+		setIsConfirmBidDialogOpen(true)
+	}
+
+	const handleConfirmBidDialogOpenChange = (open: boolean) => {
+		setIsConfirmBidDialogOpen(open)
+		if (!open) {
+			setPendingBidData(null)
+			setIsConfirmBidMintChosen(false)
+		}
+	}
+
+	const handleConfirmBid = async () => {
+		if (!pendingBidData) return
+		setIsConfirmBidDialogOpen(false)
+
+		const readyBidData = startFundingForBid({
+			bidData: pendingBidData,
+			hasInsufficientBidFunds,
+			depositMint,
+			deltaAmount,
+			mintError,
+			selectedMint,
+			canFund,
+		})
+		setPendingBidData(null)
+		if (!readyBidData) return
+
+		await submitPreparedBid(readyBidData)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
@@ -383,9 +410,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		<div className="flex flex-col gap-2 w-full">
 			<DepositLightningModal
 				open={isDepositOpen}
-				onClose={() => setIsDepositOpen(false)}
+				onClose={handleDepositModalClose}
 				initialAmount={depositAmount}
 				preferredMint={preferredDepositMint}
+				allowedMints={trustedMints}
+				onSuccess={handleFundingSuccess}
+				onInvoiceCreated={handleInvoiceCreated}
+				onPaymentAcknowledged={handlePaymentAcknowledged}
+				onMintingStarted={handleMintingStarted}
+				onFundingFailed={handleFundingFailed}
+				variant="bid"
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">
@@ -425,6 +459,75 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						</Button>
 						<Button onClick={handleConfirmRules} disabled={bidMutation.isPending}>
 							I understand these rules
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+			<Dialog open={isConfirmBidDialogOpen} onOpenChange={handleConfirmBidDialogOpenChange}>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Confirm Bid</DialogTitle>
+						<DialogDescription>Review the auction details before placing your bid.</DialogDescription>
+					</DialogHeader>
+					<div className="flex gap-4 py-2">
+						{auctionThumbnailUrl && (
+							<img src={auctionThumbnailUrl} alt={auctionTitle} className="w-20 h-20 rounded object-cover shrink-0 border border-border" />
+						)}
+						<div className="flex flex-col gap-2 min-w-0 grow text-sm">
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Auction Name</div>
+								<div className="font-medium truncate">{auctionTitle}</div>
+							</div>
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Seller</div>
+								<UserCard pubkey={auction.pubkey} size="xs" subtitle="none" onPress="none" />
+							</div>
+							<div className="min-w-0">
+								<div className="text-xs text-foreground/60">Selected Mint</div>
+								{availableMints.length > 0 ? (
+									<Select
+										value={isConfirmBidMintChosen ? (selectedMint ?? '') : ''}
+										onValueChange={(val) => {
+											setSelectedMint(val)
+											setIsConfirmBidMintChosen(true)
+										}}
+									>
+										<SelectTrigger size="sm" className="w-full mt-0.5">
+											<SelectValue placeholder="Select a mint" />
+										</SelectTrigger>
+										<SelectContent>
+											{availableMints.map((m) => (
+												<SelectItem key={m.mintUrl} value={m.mintUrl}>
+													{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								) : (
+									<div className="font-medium truncate">Not selected</div>
+								)}
+							</div>
+							{auctionValidators.length > 0 && (
+								<div className="min-w-0">
+									<div className="text-xs text-foreground/60">Validators</div>
+									<div className="flex items-center gap-1 mt-0.5">
+										{auctionValidators.map((pubkey) => (
+											<AvatarUser key={pubkey} pubkey={pubkey} colored deterministicFallbackText className="h-5 w-5" />
+										))}
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+					<div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-center text-2xl font-bold">
+						{Number.isFinite(parsedBidAmount) ? parsedBidAmount.toLocaleString() : 0} sats
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
+							Cancel
+						</Button>
+						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || (availableMints.length > 0 && !isConfirmBidMintChosen)}>
+							{bidMutation.isPending ? 'Submitting...' : 'Confirm'}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
