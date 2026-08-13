@@ -224,6 +224,7 @@ The CMS theme system **overrides the standard token names** (`--primary`, `--car
 1. **CMS themes override the same standard token names.** A CMS theme file (e.g., `public/themes/caffeine.css`) defines the same tokens (`--primary`, `--card`, `--background`, etc.) using `oklch` values, plus `.dark` variants. It does not define a parallel variable set — it overrides the existing token names.
 
 2. **The mechanism is a wrapper element with inline CSS variables.** The CMS fetches the theme CSS, parses the variables, and sets them as inline styles on a wrapper div. Because CSS custom properties cascade through the DOM, all child components pick up the overridden values automatically:
+
    ```
    <div ref={themeRoot} style="--primary: oklch(...); --card: oklch(...); ...">
      <ProductCard ... />            ← reads --primary, --card from nearest scope
