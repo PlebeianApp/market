@@ -48,6 +48,7 @@ widget-book/nostr/ProductCard.spec.ts    ← test coverage (ADR-0007)
 ```
 
 The base component is unaware of the CMS. The `.cms.tsx` sidecar declares:
+
 - **Data contract**: what Nostr queries the component needs (declarative, not implementation)
 - **Puck field schema**: what props the CMS editor exposes for this component
 - **Render binding**: how query results map to component props
@@ -120,14 +121,14 @@ Components declare their data contract as metadata — "this component needs a k
 
 **V1 example components (non-exhaustive, one set within a dynamic ecosystem):**
 
-| Component | Type | Data contract |
-|---|---|---|
-| `@plebeian/header` | Layout | None (static props: title, subtitle, bgColor) |
-| `@plebeian/product-grid` | Data | kind 30402 feed, optional `#t` / `#status` filters |
-| `@plebeian/product-card` | Data | Single kind 30402 event |
-| `@plebeian/author-bio` | Data | kind 0 profile for a given pubkey |
-| `@plebeian/feed` | Data | kind 30402 or kind 1 feed with filter config |
-| `@plebeian/grid` | Layout | Slots for child blocks (V1: no children) |
+| Component                | Type   | Data contract                                      |
+| ------------------------ | ------ | -------------------------------------------------- |
+| `@plebeian/header`       | Layout | None (static props: title, subtitle, bgColor)      |
+| `@plebeian/product-grid` | Data   | kind 30402 feed, optional `#t` / `#status` filters |
+| `@plebeian/product-card` | Data   | Single kind 30402 event                            |
+| `@plebeian/author-bio`   | Data   | kind 0 profile for a given pubkey                  |
+| `@plebeian/feed`         | Data   | kind 30402 or kind 1 feed with filter config       |
+| `@plebeian/grid`         | Layout | Slots for child blocks (V1: no children)           |
 
 These are **examples, not a fixed specification.** The team retains full autonomy to define new components. In V2+, anyone can make a component — the registry opens to third-party discovery via Nostr events and Blossom-hosted component assets.
 
@@ -199,11 +200,11 @@ Maps URL paths to page-definition events. Extends the existing vanity URL system
 
 **Three tiers of routing authority:**
 
-| Tier | Who controls | Example | Signed by |
-|---|---|---|---|
-| App-reserved | Hardcoded app routes | `/setup`, `/checkout`, `/admin` | N/A (code) |
-| Admin-assigned | Admins via dashboard | `/`, `/products`, `/summer-sale` | App pubkey |
-| Seller-owned | Merchants via vanity purchase | `/alice-store`, `/alice-store/featured` | Seller pubkey + app proof |
+| Tier           | Who controls                  | Example                                 | Signed by                 |
+| -------------- | ----------------------------- | --------------------------------------- | ------------------------- |
+| App-reserved   | Hardcoded app routes          | `/setup`, `/checkout`, `/admin`         | N/A (code)                |
+| Admin-assigned | Admins via dashboard          | `/`, `/products`, `/summer-sale`        | App pubkey                |
+| Seller-owned   | Merchants via vanity purchase | `/alice-store`, `/alice-store/featured` | Seller pubkey + app proof |
 
 **Seller-owned routes.** Sellers purchase a vanity URL (e.g., `alice-store`) via the existing Lightning zap mechanism. They own the entire sub-path space underneath it (`/alice-store/`, `/alice-store/featured`, `/alice-store/clearance`). Sub-pages are page-definition events published by the seller, referencing their vanity URL as a namespace.
 
@@ -227,17 +228,18 @@ Maps URL paths to page-definition events. Extends the existing vanity URL system
 
 An anti-spam / authorization mechanism that must be satisfied before a page can be published.
 
-**Reuses existing architecture.** The `ZapPurchaseManager` base class (`src/server/ZapPurchaseManager.ts`) is already a generalized zap-purchase framework. `VanityManagerImpl` is one concrete implementation; `purchaseNip05ForPubkey` shows it's already being reused for NIP-05 registrations. The CMS publishing gate rests on this same architecture — it may require generalizing the base class further to handle different use cases for vanity URLs (e.g., purchasing a vanity URL *and* publishing pages under it).
+**Reuses existing architecture.** The `ZapPurchaseManager` base class (`src/server/ZapPurchaseManager.ts`) is already a generalized zap-purchase framework. `VanityManagerImpl` is one concrete implementation; `purchaseNip05ForPubkey` shows it's already being reused for NIP-05 registrations. The CMS publishing gate rests on this same architecture — it may require generalizing the base class further to handle different use cases for vanity URLs (e.g., purchasing a vanity URL _and_ publishing pages under it).
 
 **Decomposed into smallest components.** The gate is not one thing — it's a pluggable policy with independent parts:
 
-| Gate | What it controls | Mechanism | Existing infra |
-|---|---|---|---|
-| Identity | Who can publish | Role check (admin / merchant / whitelisted) | kind 30000 role lists |
-| Rate | How often | Per-pubkey cooldown | None yet (sub-ADR) |
-| Cost | What proof is required | Lightning payment (NIP-57 zap receipt) | `ZapPurchaseManager` + `zapPurchase.ts` |
+| Gate     | What it controls       | Mechanism                                   | Existing infra                          |
+| -------- | ---------------------- | ------------------------------------------- | --------------------------------------- |
+| Identity | Who can publish        | Role check (admin / merchant / whitelisted) | kind 30000 role lists                   |
+| Rate     | How often              | Per-pubkey cooldown                         | None yet (sub-ADR)                      |
+| Cost     | What proof is required | Lightning payment (NIP-57 zap receipt)      | `ZapPurchaseManager` + `zapPurchase.ts` |
 
 **Alternatives to payment.** The cost gate can be satisfied by:
+
 - Lightning payment (default — reuses existing zap infrastructure)
 - Proof-of-work (NIP-13) — for environments without Lightning
 - Whitelisting — admins bypass the cost gate entirely via the existing role system
@@ -272,13 +274,13 @@ Can pages themselves be components — i.e., can a built page be embedded as a b
 
 **How V1 designs for it without implementing it:**
 
-| Aspect | V1 (flat) | V2 (nested) |
-|---|---|---|
-| Block schema | `children: []` (always empty) | `children: [block, ...]` |
-| Rendering | Iterates flat block list | Recursive: render block, then render children in slots |
-| Data scope | Root scope only | Scoped inheritance: children inherit parent's data scope |
-| Component registry | Primitives only | Primitives + composites (page-as-block) |
-| Editor | Add blocks to page | Add blocks to page, drag blocks into other blocks |
+| Aspect             | V1 (flat)                     | V2 (nested)                                              |
+| ------------------ | ----------------------------- | -------------------------------------------------------- |
+| Block schema       | `children: []` (always empty) | `children: [block, ...]`                                 |
+| Rendering          | Iterates flat block list      | Recursive: render block, then render children in slots   |
+| Data scope         | Root scope only               | Scoped inheritance: children inherit parent's data scope |
+| Component registry | Primitives only               | Primitives + composites (page-as-block)                  |
+| Editor             | Add blocks to page            | Add blocks to page, drag blocks into other blocks        |
 
 **Cost of designing for it now:** One optional field (`children: []`), one recursive code path that's a no-op in V1. Minimal.
 
@@ -320,14 +322,14 @@ Can pages themselves be components — i.e., can a built page be embedded as a b
 
 This ADR is the design anchor. The following sub-ADRs fill in the detail, each addressing one module or cross-cutting decision:
 
-| Sub-ADR | Scope |
-|---|---|
-| Page Definition Format | JSON schema, block tree, query definitions, binding syntax, content-vs-blob field decision, dedicated Nostr kind number |
-| Component Registry Protocol | Component metadata format (`.cms.tsx` sidecar), data contract declaration, slot model, V1 seed set, V2 open registry via Nostr + Blossom. Coordinates with ADR-0007 §3a (Component Contract). |
-| Routing & Vanity URL Extension | Extension of existing kind 30000 registry, sub-path resolution, app-signed proof event format, catch-all route implementation |
-| Publishing Gate Policy | `ZapPurchaseManager` generalization, gate decomposition (identity / rate / cost), PoW alternative, whitelist bypass |
-| Compilation & nsite Deployment | (V2) Page-to-static-asset compiler, Blossom upload, NIP-5A manifest publishing, `app` tag linkage |
-| Data Binding & Scope Model | Binding syntax definition (collaborative), root scope (V1), scoped inheritance (V2) |
+| Sub-ADR                        | Scope                                                                                                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page Definition Format         | JSON schema, block tree, query definitions, binding syntax, content-vs-blob field decision, dedicated Nostr kind number                                                                       |
+| Component Registry Protocol    | Component metadata format (`.cms.tsx` sidecar), data contract declaration, slot model, V1 seed set, V2 open registry via Nostr + Blossom. Coordinates with ADR-0007 §3a (Component Contract). |
+| Routing & Vanity URL Extension | Extension of existing kind 30000 registry, sub-path resolution, app-signed proof event format, catch-all route implementation                                                                 |
+| Publishing Gate Policy         | `ZapPurchaseManager` generalization, gate decomposition (identity / rate / cost), PoW alternative, whitelist bypass                                                                           |
+| Compilation & nsite Deployment | (V2) Page-to-static-asset compiler, Blossom upload, NIP-5A manifest publishing, `app` tag linkage                                                                                             |
+| Data Binding & Scope Model     | Binding syntax definition (collaborative), root scope (V1), scoped inheritance (V2)                                                                                                           |
 
 ---
 
@@ -358,7 +360,7 @@ This ADR is the design anchor. The following sub-ADRs fill in the detail, each a
 
 1. **Reuse before reinvent.** The vanity URL system, zap-purchase framework, Nostr query infrastructure, and component architecture from ADR-0007 all exist. The CMS builds on them, not around them.
 
-2. **Design for V2 in V1.** The block tree is recursive, the schema permits nesting, the registry is structured for openness. V1 constrains the *editor* and *renderer*, not the *format*.
+2. **Design for V2 in V1.** The block tree is recursive, the schema permits nesting, the registry is structured for openness. V1 constrains the _editor_ and _renderer_, not the _format_.
 
 3. **Standardize the format, not the implementation.** The page-definition format, component registry format, and routing proof event should be spec-able. Plebeian Market is the first implementation, not the only one.
 
