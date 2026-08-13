@@ -300,6 +300,67 @@ async function seedSettlement(
 	return event.id
 }
 
+async function seedVerdict(
+	relay: Relay,
+	validatorSk: string,
+	auction: SeededAuction,
+	bidId: string,
+	bidderPk: string,
+	claim: string,
+): Promise<string> {
+	const dTag = `${bidderPk}:${auction.auctionRootEventId}`
+	const tags: string[][] = [
+		['d', dTag],
+		['a', auction.auctionCoordinate],
+		['bid', bidId],
+		['claim', claim],
+		['observed_at', String(Math.floor(Date.now() / 1000))],
+	]
+
+	const event = finalizeEvent(
+		{
+			kind: 30440,
+			created_at: Math.floor(Date.now() / 1000),
+			content: '',
+			tags,
+		},
+		hexToBytes(validatorSk),
+	)
+	await relay.publish(event)
+	return event.id
+}
+
+async function seedClaimOrder(
+	relay: Relay,
+	buyerSk: string,
+	auction: SeededAuction,
+	settlementEventId: string,
+	amount: number,
+): Promise<string> {
+	const tags: string[][] = [
+		['p', auction.sellerPk],
+		['subject', 'Plebeian Auction Claim'],
+		['type', 'order_creation'],
+		['order', `order-${Date.now()}`],
+		['amount', String(amount)],
+		['a', auction.auctionCoordinate],
+		['e', auction.auctionRootEventId],
+		['e', settlementEventId, '', 'settlement'],
+	]
+
+	const event = finalizeEvent(
+		{
+			kind: 16,
+			created_at: Math.floor(Date.now() / 1000),
+			content: '',
+			tags,
+		},
+		hexToBytes(buyerSk),
+	)
+	await relay.publish(event)
+	return event.id
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
