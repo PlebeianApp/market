@@ -122,6 +122,18 @@ const parseBolt11Sats = (bolt11: string): number => {
 	return Math.floor(amountMillisats / 1000)
 }
 
+/**
+ * Set the auction-rules acknowledgment in localStorage so the rules dialog
+ * is skipped and the Confirm Bid dialog appears directly.
+ * Must be called BEFORE navigating to the auction page (localStorage
+ * persists across same-origin navigations on the same page).
+ */
+async function acknowledgeAuctionRules(page: import('@playwright/test').Page) {
+	await page.evaluate((pubkey) => {
+		localStorage.setItem(`auction-rules-ack:v1:${pubkey}`, 'true')
+	}, devUser2.pk)
+}
+
 test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
 	test('auction detail page renders bid button for multi-mint auction', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
@@ -255,6 +267,9 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 				dTag: 'e2e-auction-funding-fee-padding-test',
 			})
 
+			// Pre-set auction rules ack to skip the rules dialog.
+			await acknowledgeAuctionRules(buyerPage)
+
 			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
@@ -318,16 +333,6 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 
 	/** Timeout for the deposit confirmation monitor (must match nip60 store). */
 	const DEPOSIT_TIMEOUT_MS = 15_000
-
-	/**
-	 * Set the auction-rules acknowledgment in localStorage so the rules dialog
-	 * is skipped and the Confirm Bid dialog appears directly.
-	 */
-	async function acknowledgeAuctionRules(page: import('@playwright/test').Page) {
-		await page.evaluate((pubkey) => {
-			localStorage.setItem(`auction-rules-ack:v1:${pubkey}`, 'true')
-		}, devUser2.pk)
-	}
 
 	/**
 	 * Wait for the deposit QR code to appear inside the bid-variant
@@ -414,10 +419,12 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await expect(confirmDialog).toBeVisible({ timeout: 10_000 })
 
 			// Select a mint in the confirm dialog (if a mint selector is shown).
+			// The mint selector is a Radix Select (combobox) whose dropdown content
+			// is portaled outside the dialog DOM, so we query options at page level.
 			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
 			if (await mintSelectTrigger.isVisible().catch(() => false)) {
 				await mintSelectTrigger.click()
-				await confirmDialog.getByRole('option').first().click()
+				await buyerPage.getByRole('option').first().click()
 			}
 
 			// Confirm the bid — since wallet has insufficient funds, the
@@ -484,7 +491,7 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
 			if (await mintSelectTrigger.isVisible().catch(() => false)) {
 				await mintSelectTrigger.click()
-				await confirmDialog.getByRole('option').first().click()
+				await buyerPage.getByRole('option').first().click()
 			}
 
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
@@ -590,7 +597,7 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
 			if (await mintSelectTrigger.isVisible().catch(() => false)) {
 				await mintSelectTrigger.click()
-				await confirmDialog.getByRole('option').first().click()
+				await buyerPage.getByRole('option').first().click()
 			}
 
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
