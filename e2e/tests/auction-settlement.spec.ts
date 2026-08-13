@@ -401,10 +401,10 @@ test.describe('Auction Settlement Descriptor', () => {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
 				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
 				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -422,10 +422,10 @@ test.describe('Auction Settlement Descriptor', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 100000 })
 				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedVerdict(relay, devUser3.sk, auction, _bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -452,10 +452,10 @@ test.describe('Auction Settlement Descriptor', () => {
 					pathReleaseEventId: prId,
 				})
 				await seedClaimOrder(relay, devUser2.sk, auction, settlementId, MOCK_PROOF_AMOUNT)
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -477,10 +477,10 @@ test.describe('Auction Settlement Descriptor', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate first so auth context is ready, then inject bidder record.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
@@ -505,10 +505,10 @@ test.describe('Auction Settlement Descriptor', () => {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
 				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
 				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
@@ -533,10 +533,10 @@ test.describe('Auction Settlement Descriptor', () => {
 					finalAmount: MOCK_PROOF_AMOUNT,
 					pathReleaseEventId: prId,
 				})
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
@@ -556,10 +556,10 @@ test.describe('Auction Settlement Descriptor', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
 				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedVerdict(relay, devUser3.sk, auction, _bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Visit as unauthenticated user (non-participant)
 			// The auction page should render without a settlement card
@@ -579,10 +579,10 @@ test.describe('Auction Settlement Descriptor', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0 })
 				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedVerdict(relay, devUser3.sk, auction, _bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -714,10 +714,10 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate first so the app loads and the auth context is ready,
 			// then inject the bidder record into localStorage.
@@ -770,10 +770,10 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			// Navigate and inject bidder record into localStorage.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
@@ -905,10 +905,10 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 100000 })
 				const _bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedVerdict(relay, devUser3.sk, auction, _bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
 			}
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
@@ -959,10 +959,10 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		try {
 			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 			bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 		} finally {
 			relay.close()
 		}
-		await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 
 		// Seller navigates to the auction page first — should see "Awaiting Path Release".
 		await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
