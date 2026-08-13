@@ -14,7 +14,7 @@
 
 import { test, expect } from '../fixtures'
 import { RELAY_URL, TEST_APP_PUBLIC_KEY } from '../test-config'
-import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
+import { finalizeEvent, type EventTemplate, type Event } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
@@ -134,6 +134,53 @@ async function acknowledgeAuctionRules(page: import('@playwright/test').Page) {
 	}, devUser2.pk)
 }
 
+/**
+ * Purge devUser2's NDK wallet events (kind 7375/7376) from the local relay.
+ *
+ * Tests 1-6 fund the wallet with 20-5000 sats. Without purging, the wallet
+ * balance accumulates across tests (e.g. 25,004 sats by test 7), making
+ * `canFund = true` and `hasInsufficientBidFunds = false`, so
+ * `startFundingForBid` returns bidData instead of opening the deposit modal.
+ *
+ * This helper fetches all kind 7375 and 7376 events authored by devUser2 and
+ * publishes kind 5 (deletion) events for each, signed with devUser2's key.
+ */
+async function purgeWalletEvents() {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		// Fetch all kind 7375/7376 events by devUser2 via subscribe (Relay has no .list())
+		const events: Event[] = []
+		await new Promise<void>((resolve) => {
+			const sub = relay.subscribe(
+				[{ kinds: [7375, 7376], authors: [devUser2.pk] }],
+				{
+					onevent: (event: Event) => events.push(event),
+					oneose: () => {
+						sub.close()
+						resolve()
+					},
+				},
+				undefined,
+			)
+		})
+		const skBytes = hexToBytes(devUser2.sk)
+		for (const event of events) {
+			const deletionEvent = finalizeEvent(
+				{
+					kind: 5,
+					created_at: Math.floor(Date.now() / 1000),
+					tags: [['e', event.id]],
+					content: 'purge wallet event for e2e test',
+				},
+				skBytes,
+			)
+			await relay.publish(deletionEvent)
+		}
+	} finally {
+		relay.close()
+	}
+}
+
 test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
 	test('auction detail page renders bid button for multi-mint auction', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
@@ -203,6 +250,10 @@ test.describe('Auction Bidding with Multiple Mints — Rendering', () => {
 
 test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 	test.slow()
+
+	test.beforeEach(async () => {
+		await purgeWalletEvents()
+	})
 
 	test('mint selector shows funded mint with balance', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
@@ -354,6 +405,10 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 	// video: 'on' set in playwright.config.ts
 	test.slow()
+
+	test.beforeEach(async () => {
+		await purgeWalletEvents()
+	})
 
 	/** Bid event kind per AUCTIONS.md §4.2. */
 	const AUCTION_BID_KIND = 1023
