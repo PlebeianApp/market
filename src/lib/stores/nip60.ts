@@ -54,12 +54,22 @@ export interface Nip60DepositOptions {
 
 export type Nip60DepositStatus = 'idle' | 'pending' | 'awaiting_confirmation_retry' | 'success' | 'error'
 
+/**
+ * #10: Deposit quote estimate. `usedFallbackEstimate` and `feeSource` are
+ * derived from the per-component `mintFeeSource`/`lightningFeeSource` fields
+ * (see buildDepositQuoteEstimate). They are kept as convenience accessors so
+ * callers can check "did we fall back?" without OR-ing two fields, and so
+ * tests can assert on a single `feeSource` value. The per-component fields
+ * remain the source of truth for which specific fee used a fallback.
+ */
 export interface Nip60DepositQuoteEstimate {
 	requiredBidFundingAmount: number
 	totalDepositAmount: number
 	mintFeePaddingAmount: number
 	lightningFeePaddingAmount: number
+	/** Convenience: true when either mintFeeSource or lightningFeeSource is 'fallback'. */
 	usedFallbackEstimate: boolean
+	/** Convenience: 'fallback' if usedFallbackEstimate, else 'quote'. */
 	feeSource: 'quote' | 'fallback'
 	mintFeeSource: 'quote' | 'fallback'
 	lightningFeeSource: 'quote' | 'fallback'
@@ -1561,13 +1571,25 @@ export const nip60Actions = {
 
 			let depositAmount = requestedAmount
 			if (options?.includeFeePadding) {
-				// Keep deposit sizing deterministic to avoid minting an abandoned quote
-				// before creating the real payable invoice.
+				// #4: Fallback-only fee design — we do NOT call the mint quote API
+				// here to estimate fees. Instead, we add a conservative static padding
+				// (0.5%, min 5 sats, max 100 sats) via getAuctionDepositFeePadding().
+				// This avoids creating an abandoned mint quote (and consuming mint
+				// rate-limit budget) just for estimation. The actual Lightning fee
+				// is whatever the mint embeds in the invoice returned by
+				// deposit.start(); validateAuctionDepositInvoiceQuote() then checks
+				// that the invoice fee is within acceptable caps before we show it.
+				// estimateDepositQuote() exposes the same fallback logic for callers
+				// that need a pre-flight estimate without side effects.
 				depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
 			}
 
 			const deposit = wallet.deposit(depositAmount, targetMint)
-			const invoice = await deposit.start()
+			// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote
+			// request doesn't leave the user staring at a spinner indefinitely.
+			// The ADR §3b timeout also covers the post-payment confirmation phase
+			// via monitorDepositConfirmation() below.
+			const invoice = await withTimeout(deposit.start(), NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS, 'deposit invoice creation')
 
 			if (invoice) {
 				const invoiceAmountSats = extractInvoiceAmountSats(invoice)

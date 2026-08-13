@@ -21,17 +21,38 @@ export type AuctionBidFundingLifecycleState =
 export type AuctionBidFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
 
 /**
- * ADR lifecycle mapping note:
- * - ADR `bid_lock_conversion_attempted` maps to `bid_publish_attempted`.
- * - ADR `bid_lock_conversion_complete` is represented by terminal outcomes after
- *   the publish attempt finishes:
- *   - `bid_published` when lock conversion and bid publish both succeed.
- *   - `mint_succeeded_bid_publish_failed_reclaimable` when lock conversion
- *     succeeded but bid publish failed and funds remain reclaimable.
+ * #12: ADR-0004 state mapping. The ADR lists a full payment/bid state model
+ * (see ADR-0004 §"Payment and Bid State Model"). Most ADR states map 1:1 to
+ * lifecycle states with identical names; only the two non-obvious mappings
+ * below need explicit documentation.
  *
- * We intentionally keep lock conversion under the publish-attempt phase instead
- * of adding separate conversion-only states to avoid splitting one atomic UX
- * step into multiple user-visible transitions.
+ * Direct 1:1 mappings (not listed in the object):
+ *   ADR "Funding session created"      → funding_session_created
+ *   ADR "Invoice created"              → invoice_created
+ *   ADR "Invoice paid" / "Wallet ack"  → payment_acknowledged
+ *   ADR "E-cash minting attempted"     → minting_started
+ *   ADR "E-cash minted"                → ecash_minted
+ *   ADR "Invoice expired or unpaid"    → invoice_unpaid_or_expired_reclaimable
+ *   ADR "Bid published"                → bid_published
+ *   ADR "Bid publish attempted"        → bid_publish_attempted
+ *   ADR "Funding failed, reclaimable"  → invoice_paid_mint_failed_reclaimable
+ *                                         / mint_succeeded_bid_publish_failed_reclaimable
+ *
+ * Non-obvious mappings (listed in the object below):
+ *   ADR "Bid lock conversion attempted" → bid_publish_attempted
+ *     Lock conversion is folded into the publish attempt — we don't split it
+ *     into a separate user-visible state because it's an atomic UX step.
+ *   ADR "Bid lock conversion complete"  → ['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable']
+ *     Two terminal outcomes: success (bid_published) or publish failure with
+ *     reclaimable funds (mint_succeeded_bid_publish_failed_reclaimable).
+ *
+ * ADR states without a dedicated lifecycle state:
+ *   "Bid requested"        — represented by the initial `idle` state
+ *   "Mint target resolved" — handled inside startFundingForBid() before
+ *                            transitioning to funding_session_created
+ *   "Invoice payment attempted" — external Lightning payment; no client state
+ *                            between invoice_created and payment_acknowledged
+ *   "Bid funding failed"   — generic; covered by the specific reclaimable states
  */
 export const AUCTION_BID_FUNDING_ADR_STATE_MAPPING = {
 	bid_lock_conversion_attempted: 'bid_publish_attempted',

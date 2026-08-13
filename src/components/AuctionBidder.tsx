@@ -317,6 +317,13 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
 	})
 
+	// #9: prepareBidSubmission returns null on any pre-funding validation
+	// failure (invalid auction state, bad bid amount, not signed in, wallet
+	// loading, missing p2pk_xpub). A null return is the correct signal to
+	// handleConfirmBid that funding should NOT proceed — startFundingForBid
+	// is never called, so no funding lifecycle state transition occurs.
+	// This keeps the funding state machine clean: it only enters non-idle
+	// states after pre-funding validation has passed.
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
 		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
 
