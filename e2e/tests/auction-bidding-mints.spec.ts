@@ -134,8 +134,12 @@ async function ensureInsufficientBidFunds(page: import('@playwright/test').Page)
 	})
 
 	// seedAuction sets starting_bid to 100 SAT, so minBid = 100.
+	// Previous bids from earlier test runs may persist on the relay,
+	// raising the "current price" above 100. deltaAmount = bidAmount - currentPrice.
+	// We need deltaAmount > balance, so bidAmount > currentPrice + balance.
+	// Use a large bid amount to guarantee this regardless of currentPrice.
 	const minBid = 100
-	const bidAmount = Math.max(minBid, balance + 100)
+	const bidAmount = Math.max(minBid, balance + 500)
 
 	// Enter edit mode to access the custom bid input field.
 	const editButton = page.locator('button[title="Customize bid"]')
@@ -188,17 +192,13 @@ async function purgeWalletEvents() {
 		// Fetch all kind 7375/7376 events by devUser2 via subscribe (Relay has no .list())
 		const events: Event[] = []
 		await new Promise<void>((resolve) => {
-			const sub = relay.subscribe(
-				[{ kinds: [7375, 7376], authors: [devUser2.pk] }],
-				{
-					onevent: (event: Event) => events.push(event),
-					oneose: () => {
-						sub.close()
-						resolve()
-					},
+			const sub = relay.subscribe([{ kinds: [7375, 7376], authors: [devUser2.pk] }], {
+				onevent: (event: Event) => events.push(event),
+				oneose: () => {
+					sub.close()
+					resolve()
 				},
-				undefined,
-			)
+			})
 		})
 		const skBytes = hexToBytes(devUser2.sk)
 		for (const event of events) {
