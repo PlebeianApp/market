@@ -966,7 +966,7 @@ function getAllMints(wallet: NDKCashuWallet): string[] {
  * wallet.state.dump() provides the source of truth for proofs and balances.
  */
 function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; mintBalances: Record<string, number> } {
-		const mintBalances: Record<string, number> = {}
+	const mintBalances: Record<string, number> = {}
 	let totalBalance = 0
 
 	for (const mint of getAllMints(wallet)) {
