@@ -20,7 +20,7 @@ import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { EventTemplate } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '../../lib/auction/constants'
 import { buildValidatorVerdictTags } from '../../lib/auction/tagBuilders'
-import { aggregateProofStates, markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
+import { markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
 import { assignCloseRoles, assignLateValidLoserRole, deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
 
 // ============================================================================
@@ -126,7 +126,6 @@ interface BuildTemplateInput {
 
 const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => {
 	const { auctionState, bidState, verdict, observedAt } = input
-	const nut7State = aggregateProofStates(bidState.nut7States, bidState.bid.proofYs)
 	const tags = buildValidatorVerdictTags({
 		bidderPubkey: bidState.bid.bidderPubkey,
 		auctionRootEventId: auctionState.auction.rootEventId,
@@ -135,18 +134,14 @@ const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => 
 		claim: verdict.claim,
 		observedAt,
 		reason: typeof verdict.reason === 'string' ? verdict.reason : undefined,
-		nut7State: nut7State === 'unknown' ? undefined : nut7State,
-		nut7ObservedAt: nut7State !== 'unknown' ? observedAt : undefined,
 	})
 
-	// Free-form content carries diagnostics: bid amount, the verdict's
-	// detail (when present), and the per-proof NUT-7 snapshot count.
-	// Strict consumers ignore it; debug UIs surface it.
+	// Free-form content carries diagnostics: bid amount and the verdict's
+	// detail (when present). NUT-7 state is no longer included — the client
+	// queries the mint directly via checkProofStateBatch (ADR-0004).
 	const content = JSON.stringify({
 		bid_amount: bidState.bid.amount,
 		detail: verdict.detail,
-		nut7_proof_count: bidState.nut7States.size,
-		nut7_proofs_expected: bidState.bid.proofYs.length,
 	})
 
 	return {

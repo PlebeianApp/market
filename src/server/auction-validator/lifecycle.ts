@@ -265,17 +265,12 @@ const deriveSettlementVerdict = (
 		}
 	}
 
-	// 2. Mint-side check: NUT-7 must report at least one proof as spent
-	//    for this to be a confirmed settlement. Until that flips we hold
-	//    at won_pending_settlement (don't downgrade).
-	const aggregate = aggregateProofStates(bidState.nut7States, bidState.bid.proofYs)
-	if (aggregate !== 'spent') {
-		return { claim: 'won_pending_settlement' }
-	}
-
-	// 3. Seller declaration check: the deterministically selected
+	// 2. Seller declaration check: the deterministically selected
 	//    settlement must exist and match the redeemed chain before we
-	//    publish settled_*. sel.settlement is undefined when no authorized
+	//    publish settled_*. NUT-7 proof-state verification is now the
+	//    client's responsibility (ADR-0004) — the validator confirms
+	//    settlement via kind-1024 + kind-1025 observation.
+	//    sel.settlement is undefined when no authorized
 	//    settlement references a valid release for this bid.
 	const settlement = sel.settlement
 	if (!settlement) {
@@ -288,7 +283,7 @@ const deriveSettlementVerdict = (
 		pathRelease: release,
 		winningBidClaim: bidState.currentClaim,
 		winningBidPostCloseDecision: bidState.postCloseDecision,
-		winningBidNut7State: aggregate,
+		winningBidNut7State: undefined,
 		winningBidNut7ProofStates: buildProofStateMap(bidState),
 		pathReleaseObservedAt: releaseObservedAt,
 		bidChain: buildSettlementChain(auctionState, bidState, now),

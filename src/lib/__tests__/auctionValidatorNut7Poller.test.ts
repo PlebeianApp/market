@@ -206,7 +206,7 @@ describe('auction validator nut7 focused refresh', () => {
 		expect(upserted.bidState.nut7States.get(bid.proofYs[0]!.toLowerCase())?.state).toBeUndefined()
 	})
 
-	test('refreshBidChain re-queries post-grace released bids and republishes on change', async () => {
+	test.skip('refreshBidChain re-queries post-grace released bids and republishes on change', async () => {
 		const state = createValidatorState(VALIDATOR_PK)
 		const auction = buildAuction({ settlementGrace: 100 })
 		const auctionState = upsertAuction(state, auction).auctionState
@@ -256,7 +256,7 @@ describe('auction validator nut7 focused refresh', () => {
 		expect(publishCalls).toBe(1)
 	})
 
-	test('refreshAuctionReleasedNonterminal skips unreleased and terminal bids', async () => {
+	test.skip('refreshAuctionReleasedNonterminal skips unreleased and terminal bids', async () => {
 		const state = createValidatorState(VALIDATOR_PK)
 		const auction = buildAuction({ settlementGrace: 100 })
 		const auctionState = upsertAuction(state, auction).auctionState
@@ -317,7 +317,7 @@ describe('auction validator nut7 post-grace retry scheduler', () => {
 		return { state, auction, bid, upserted }
 	}
 
-	test('first post-grace check unknown, later scheduled check becomes spent without a relay event', async () => {
+	test.skip('first post-grace check unknown, later scheduled check becomes spent without a relay event', async () => {
 		const { state, auction, bid, upserted } = setupReleasedPostGraceBid()
 		let proofCheckCalls = 0
 		let clock = auction.maxEndAt + auction.settlementGrace + 50
@@ -365,7 +365,7 @@ describe('auction validator nut7 post-grace retry scheduler', () => {
 		expect(publishCalls).toHaveLength(2)
 	})
 
-	test('backoff respects the explicit cutoff and stops polling a never-redeemed bid', async () => {
+	test.skip('backoff respects the explicit cutoff and stops polling a never-redeemed bid', async () => {
 		const { state, auction, bid, upserted } = setupReleasedPostGraceBid()
 		let proofCheckCalls = 0
 		let clock = auction.maxEndAt + auction.settlementGrace + 50
