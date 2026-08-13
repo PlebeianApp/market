@@ -732,6 +732,54 @@ export const publishBidderPathRelease = async (
 		}
 	}
 
+	// Verify won_pending_settlement quorum before releasing the path.
+	// The bidder should not release their locked ecash unless a quorum
+	// of auditors has confirmed that this bid is the canonical winner
+	// and the auction is ready for settlement. This prevents premature
+	// release based on stale or incomplete information.
+	const latestLeg = chain[chain.length - 1]
+	try {
+		const [{ fetchAuctionVerdicts, fetchAuction }, { getAuctionTagValue }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] =
+			await Promise.all([
+				import('@/queries/auctions'),
+				import('@/lib/auctionSettlement'),
+				import('@/lib/schemas/auction/validatorEvents'),
+				import('@/lib/schemas/auction/auctionEvent'),
+			])
+		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, 500, latestLeg.auctionCoordinate)
+		const parsedVerdicts = verdictEvents
+			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+			.filter((v) => v.bidEventId === input.bidEventId && v.claim === 'won_pending_settlement')
+
+		// Fetch the auction to get auditor list + quorum threshold.
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
+		if (auctionEvent) {
+			const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
+			if (parsedAuctionResult.ok) {
+				const auction = parsedAuctionResult.value
+				const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
+				const auditorCount = auction.auditors.filter((a) => confirmingAuditors.has(a)).length
+				if (auditorCount < auction.auditorQuorum) {
+					throw new Error(
+						`Cannot release path: only ${auditorCount}/${auction.auditors.length} auditors confirmed ` +
+							`won_pending_settlement (quorum requires ${auction.auditorQuorum}). Wait for more validators.`,
+					)
+				}
+			}
+		}
+	} catch (err) {
+		// If the quorum check itself fails (network error, relay down),
+		// re-throw with context. Don't silently proceed — that would
+		// defeat the purpose of the gate.
+		if (err instanceof Error && err.message.includes('quorum requires')) throw err
+		// Network/parse errors: warn but don't block. The bidder may be
+		// offline or relays may be temporarily unavailable. The release
+		// is the bidder's voluntary action; they bear the risk.
+		console.warn('Path release quorum check failed (non-quorum error):', err)
+	}
+
 	const releaseReason: PathReleaseReason = input.releaseReason ?? 'settlement'
 
 	let latestEventId = ''
@@ -850,19 +898,34 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// Lazy imports to avoid pulling settlement-only deps into the bid
 	// path's bundle.
 	const [
-		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, getBidAmount },
+		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionVerdicts, getBidAmount },
 		auctionSettlementMod,
 		settlementEventsMod,
 		constantsMod,
+		auctionEventMod,
+		bidEventMod,
+		validatorEventsMod,
+		bidValidationMod,
+		nut7Mod,
 	] = await Promise.all([
 		import('@/queries/auctions'),
 		import('@/lib/auctionSettlement'),
 		import('@/lib/schemas/auction/settlementEvents'),
 		import('@/lib/auction/constants'),
+		import('@/lib/schemas/auction/auctionEvent'),
+		import('@/lib/schemas/auction/bidEvent'),
+		import('@/lib/schemas/auction/validatorEvents'),
+		import('@/lib/auction/bidValidation'),
+		import('@/lib/cashu/nut7'),
 	])
 	const { getAuctionTagValue: getTag, AUCTION_SETTLEMENT_KIND: kind1024 } = auctionSettlementMod
 	const { parsePathReleaseEvent } = settlementEventsMod
 	const { AUCTION_SETTLEMENT_POLICY: policyV1 } = constantsMod
+	const { parseAuctionEvent } = auctionEventMod
+	const { parseBidEvent } = bidEventMod
+	const { parseValidatorVerdictEvent } = validatorEventsMod
+	const { computeValidatedBids } = bidValidationMod
+	const { checkProofStateBatch } = nut7Mod
 
 	// 1. Auction event.
 	const auctionEvent = await fetchAuction(formData.auctionEventId)
@@ -884,7 +947,20 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		throw new Error(`Auction settlement_policy is ${declaredPolicy}; this client only handles ${policyV1}`)
 	}
 
-	const closeAt = Math.floor(Date.now() / 1000)
+	// 1b. Parse the auction event for structured access to maxEndAt, reserve, etc.
+	const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
+	if (!parsedAuctionResult.ok) {
+		throw new Error(`Auction event is malformed: ${'error' in parsedAuctionResult ? parsedAuctionResult.error.message : 'unknown'}`)
+	}
+	const parsedAuction = parsedAuctionResult.value
+
+	// 1c. Verify the auction has ended. Settlement before max_end_at is invalid.
+	const now = Math.floor(Date.now() / 1000)
+	if (now < parsedAuction.maxEndAt) {
+		throw new Error(`Auction has not ended yet (max_end_at=${parsedAuction.maxEndAt}, now=${now}). Cannot settle before auction close.`)
+	}
+
+	const closeAt = now
 
 	// 2. Resolve `reserve_not_met` shortcut. No on-mint work for this path —
 	// losers self-refund at locktime via their refund branch.
@@ -905,29 +981,61 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		return event.id
 	}
 
-	// 3. Bids → winning bid.
-	const bids = await fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate)
+	// 3. Bids → winning bid. Fetch bids + verdicts, parse, and call
+	// computeValidatedBids to get the canonical winner. The publisher
+	// does not trust the caller's assertion of who won — it derives the
+	// winner independently from validator quorum evidence.
+	const [bids, verdictEvents] = await Promise.all([
+		fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
+		fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
 	}
-	let winningBid: NDKEvent | null = null
-	if (formData.winningBidEventId) {
-		winningBid = bids.find((b) => b.id === formData.winningBidEventId) ?? null
-		if (!winningBid) throw new Error(`Winning bid ${formData.winningBidEventId} not found in fetched bids`)
-	} else {
-		winningBid = bids.reduce<NDKEvent | null>((best, bid) => {
-			if (!best) return bid
-			const delta = getBidAmount(bid) - getBidAmount(best)
-			if (delta > 0) return bid
-			if (delta < 0) return best
-			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
-		}, null)
+
+	const parsedBids = bids
+		.map((b) => parseBidEvent(b.rawEvent()))
+		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+		.map((r) => r.value)
+	const parsedVerdicts = verdictEvents
+		.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+		.map((r) => r.value)
+
+	const validatedBids = computeValidatedBids({
+		auction: parsedAuction,
+		bids: parsedBids,
+		verdicts: parsedVerdicts,
+	})
+
+	if (!validatedBids.canonicalWinner) {
+		if (validatedBids.validBids.length === 0 && parsedAuction.reserve > 0) {
+			throw new Error('No validated winner. If the reserve was not met, use status=reserve_not_met to close the auction.')
+		}
+		throw new Error('No validated winner — all bids are pending or invalid. Cannot settle.')
 	}
-	if (!winningBid) throw new Error('Could not resolve winning bid')
+
+	// Cross-check: if the caller specified a winningBidEventId, verify it
+	// matches the canonical winner derived from validator quorum.
+	if (formData.winningBidEventId && formData.winningBidEventId !== validatedBids.canonicalWinner.id) {
+		throw new Error(
+			`Winning bid mismatch: caller expected ${formData.winningBidEventId}, ` +
+				`but validator quorum identifies ${validatedBids.canonicalWinner.id} as the canonical winner.`,
+		)
+	}
+
+	// Verify reserve price is met.
+	if (parsedAuction.reserve > 0 && validatedBids.canonicalWinner.amount < parsedAuction.reserve) {
+		throw new Error(
+			`Winning bid (${validatedBids.canonicalWinner.amount} sats) is below reserve (${parsedAuction.reserve} sats). Use status=reserve_not_met to close the auction.`,
+		)
+	}
+
+	// Map canonical winner back to its NDKEvent for chain walking.
+	const winningBid = bids.find((b) => b.id === validatedBids.canonicalWinner!.id)!
 	const winningBidId = winningBid.id
 	const winnerPubkey = winningBid.pubkey
-	const winningAmount = getBidAmount(winningBid)
-	if (winningAmount <= 0) throw new Error('Winning bid amount must be positive')
+	const winningAmount = validatedBids.canonicalWinner.amount
 	const childPubkeyFromBid = (getTag(winningBid, 'child_pubkey') ?? '').toLowerCase()
 	const mintUrl = getTag(winningBid, 'mint') ?? ''
 	if (!mintUrl) throw new Error('Winning bid is missing its `mint` tag — cannot redeem')
@@ -1061,6 +1169,32 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			mintKeysets: mintKeysetsByMint.get(leg.mintUrl),
 		})),
 	})
+
+	// 5b. NUT-7 atomicity pre-check. Before redeeming any leg, verify
+	// that ALL proofs across ALL legs are UNSPENT. If any proof is
+	// already SPENT, the bidder has committed early-exit fraud —
+	// abort the entire settlement to avoid redeeming a partial chain.
+	const allProofYsByMint = new Map<string, string[]>()
+	for (const leg of resolvedLegs) {
+		const legBid = parsedBids.find((b) => b.id === leg.bid.id)
+		if (!legBid) continue
+		for (const proofY of legBid.proofYs) {
+			const arr = allProofYsByMint.get(leg.mintUrl) ?? []
+			arr.push(proofY)
+			allProofYsByMint.set(leg.mintUrl, arr)
+		}
+	}
+	for (const [mintUrl, proofYs] of Array.from(allProofYsByMint)) {
+		const states = await checkProofStateBatch(mintUrl, proofYs)
+		for (const [, state] of Array.from(states)) {
+			if (state === 'spent') {
+				throw new Error(
+					`NUT-7 atomicity pre-check failed: a proof at ${mintUrl} is already SPENT. ` +
+						`The bidder may have committed early-exit fraud. Aborting settlement.`,
+				)
+			}
+		}
+	}
 
 	// 6. For each leg in the chain (oldest → newest): derive the
 	// seller's child privkey from the auction xpriv + leg's path, then

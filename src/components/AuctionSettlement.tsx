@@ -18,6 +18,7 @@ import {
 	type SettlementIconKey,
 } from '@/lib/auction/settlementDescriptor'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,
@@ -62,7 +63,7 @@ export interface AuctionSettlementProps {
 	verdicts: ParsedValidatorVerdictEvent[]
 	settlements: ParsedSettlementEvent[]
 	pathReleases: ParsedPathReleaseEvent[]
-	claimOrders: { id: string; pubkey: string }[]
+	claimOrders: NostrEventLike[]
 	hasPlacedBid: boolean
 	auctionRootEventId: string
 	auctionCoordinates: string
@@ -214,10 +215,7 @@ export function AuctionSettlement({
 		)
 	}
 
-	const claimOrderEvents = useMemo(
-		() => claimOrders.map((o) => ({ id: o.id, pubkey: o.pubkey, kind: 16, content: '', tags: [] })),
-		[claimOrders],
-	)
+	const claimOrderEvents = useMemo(() => claimOrders, [claimOrders])
 
 	const nut7States = useNut7Polling(bids)
 

@@ -209,6 +209,67 @@ function isSettlementStructurallyValid(
 	return 'invalid'
 }
 
+function readEventTag(tags: string[][], name: string): string | undefined {
+	const tag = tags.find((t) => t[0] === name)
+	return tag?.[1]
+}
+
+function readSettlementEventTag(tags: string[][]): string | undefined {
+	const tag = tags.find((t) => t[0] === 'e' && t[3] === 'settlement')
+	return tag?.[1]
+}
+
+function readAuctionEventTag(tags: string[][]): string | undefined {
+	const tag = tags.find((t) => t[0] === 'e' && t[3] !== 'settlement')
+	return tag?.[1]
+}
+
+/**
+ * Validate a kind-16 claim order against the auction + settlement.
+ * Returns the claim order id if valid, undefined otherwise.
+ *
+ * 8-point validation:
+ * 1. Claim order's `p` tag (seller) matches auction.sellerPubkey
+ * 2. Claim order's `a` tag (coordinate) matches the auction's coordinate
+ * 3. Claim order has a settlement_event `e` tag with 'settlement' marker
+ * 4. The referenced settlement event is in the validated settlements list
+ * 5. Claim order's pubkey (buyer) matches the settlement's winnerPubkey
+ * 6. Claim order's `amount` tag matches the settlement's finalAmount
+ * 7. Claim order's auction `e` tag matches the auction root event id
+ * 8. Claim order pubkey is a valid 64-char hex (inherent in Nostr)
+ */
+function validateClaimOrder(
+	order: NostrEventLike,
+	auction: ParsedAuctionEvent,
+	validatedSettlements: ParsedSettlementEvent[],
+	auctionRootEventId: string,
+): boolean {
+	const tags = order.tags ?? []
+	// 1. Seller pubkey match
+	const sellerP = readEventTag(tags, 'p')
+	if (sellerP !== auction.sellerPubkey) return false
+	// 2. Auction coordinate match
+	const coordinate = readEventTag(tags, 'a')
+	if (coordinate !== auction.coordinate) return false
+	// 3. Settlement event tag exists
+	const settlementEventId = readSettlementEventTag(tags)
+	if (!settlementEventId) return false
+	// 4. Referenced settlement is in validated list
+	const settlement = validatedSettlements.find((s) => s.id === settlementEventId)
+	if (!settlement) return false
+	// 5. Buyer pubkey matches settlement winner
+	if (order.pubkey !== settlement.winnerPubkey) return false
+	// 6. Amount matches settlement finalAmount
+	const amountStr = readEventTag(tags, 'amount')
+	const amount = amountStr ? parseInt(amountStr, 10) : NaN
+	if (!Number.isFinite(amount) || amount !== (settlement.finalAmount ?? 0)) return false
+	// 7. Auction event id matches root
+	const auctionEventId = readAuctionEventTag(tags)
+	if (auctionEventId !== auctionRootEventId) return false
+	// 8. Pubkey is valid hex (inherent — Nostr events have valid pubkeys)
+	return true
+}
+
 function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeyset[]): DerivedState {
 	const {
 		auction,
@@ -306,11 +367,14 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	const myAlreadyReleased = !!myTopBidEvent && pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
 	const hasPathReleaseForTopBid = !!topBid && pathReleases.some((pr) => pr.bidEventId === topBid.id)
 
-	const matchedClaimOrderId = settlementNamesMe
-		? claimOrders.find((o) => o.pubkey === currentUserPubkey)?.id
-		: settlementWinner
-			? claimOrders.find((o) => o.pubkey === settlementWinner)?.id
-			: undefined
+	// Match claim orders using 8-point validation instead of simple pubkey match.
+	// For seller view: match any claim order that validates against the latest settlement.
+	// For bidder view: match claim orders signed by the current user that validate.
+	const validatedClaimOrderIds = claimOrders
+		.filter((o) => validateClaimOrder(o, auction, settlements, auction.rootEventId))
+		.map((o) => o.id)
+	const targetClaimPubkey = settlementNamesMe ? currentUserPubkey : settlementWinner
+	const matchedClaimOrderId = validatedClaimOrderIds.find((id) => claimOrders.find((o) => o.id === id)?.pubkey === targetClaimPubkey)
 	const hasMatchedClaimOrder = !!matchedClaimOrderId
 
 	return {

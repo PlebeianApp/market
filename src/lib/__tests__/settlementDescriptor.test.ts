@@ -152,7 +152,22 @@ function makeSettlement(overrides: Partial<ParsedSettlementEvent> = {}): ParsedS
 }
 
 function makeClaimOrder(overrides: Partial<NostrEventLike> = {}): NostrEventLike {
-	return { id: 'order-1', pubkey: BUYER_PUBKEY, kind: 16, content: '', tags: [], ...overrides }
+	return {
+		id: 'order-1',
+		pubkey: BUYER_PUBKEY,
+		kind: 16,
+		content: '',
+		tags: [
+			['p', SELLER_PUBKEY],
+			['type', 'order_creation'],
+			['order', 'order-1'],
+			['amount', '50000'],
+			['a', '30408:seller:d-tag'],
+			['e', 'auction-root'],
+			['e', 'settle-1', '', 'settlement'],
+		],
+		...overrides,
+	}
 }
 
 function makeVerdict(overrides: Partial<ParsedValidatorVerdictEvent> = {}): ParsedValidatorVerdictEvent {

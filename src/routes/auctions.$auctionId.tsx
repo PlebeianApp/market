@@ -527,10 +527,7 @@ function AuctionDetailRoute() {
 		[pathReleasesQuery.data],
 	)
 
-	const parsedClaimOrdersForSettlement = useMemo(
-		() => (claimOrdersQuery.data ?? []).map((o) => ({ id: o.id, pubkey: o.pubkey })),
-		[claimOrdersQuery.data],
-	)
+	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => o.rawEvent()), [claimOrdersQuery.data])
 
 	const myTopBidEvent = useMemo(() => {
 		if (!activeUserPubkey) return null
