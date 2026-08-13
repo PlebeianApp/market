@@ -75,6 +75,10 @@ import { AuctionBidder } from '@/components/AuctionBidder'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
+import { useAuctionVerdicts } from '@/queries/auctions'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { AuctionSettlement } from '@/components/AuctionSettlement'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
@@ -503,6 +507,18 @@ function AuctionDetailRoute() {
 		}, parsedBidsForSettlement[0])
 	}, [parsedBidsForSettlement])
 
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const parsedVerdicts = useMemo(() => {
+		return (verdictsQuery.data ?? [])
+			.map((e) =>
+				parseValidatorVerdictEvent(
+					e as unknown as { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number },
+				),
+			)
+			.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+	}, [verdictsQuery.data])
+
 	const parsedSettlementsForSettlement = useMemo(
 		() =>
 			(settlementsQuery.data ?? [])
@@ -805,7 +821,7 @@ function AuctionDetailRoute() {
 								<AuctionSettlement
 									auction={parsedAuctionForSettlement}
 									bids={parsedBidsForSettlement}
-									topBid={parsedTopBidForSettlement}
+									verdicts={parsedVerdicts}
 									settlements={parsedSettlementsForSettlement}
 									pathReleases={parsedPathReleasesForSettlement}
 									claimOrders={parsedClaimOrdersForSettlement}

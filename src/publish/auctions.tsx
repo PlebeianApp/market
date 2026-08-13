@@ -572,7 +572,6 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		type: 'auction_bid_v1',
 		amount: formData.amount,
 		mint: lockResult.mintUrl,
-		leg_locked: legLockAmount,
 	})
 	bidEvent.tags = buildBidEventTags({
 		auctionRootEventId: formData.auctionEventId,

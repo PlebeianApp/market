@@ -424,7 +424,8 @@ proofs.
 
 ### Why the lock secret is now public
 
-- Validators can NUT-7-query the mint to confirm the proof is unspent
+- Validators can verify structural integrity; the client NUT-7-queries the
+  mint to confirm the proof is unspent (ADR-0004)
   at any moment — catching "fake bid" attacks where the bidder
   controlled the pubkey and quietly spent behind the lock.
 - Anyone — not just a single trusted oracle — can independently
@@ -591,11 +592,24 @@ Required tags:
 - `a`: auction coordinate.
 - `status`: one of
   - `settled` — winning bid paid, seller redeemed.
+    **Self-verifiable** (ADR-0004): path release valid + proofs
+    spent + seller signature — all checkable locally by any client.
   - `reserve_not_met` — highest valid bid below `reserve`.
+    **Network-consensus** (ADR-0004): requires knowing the highest
+    valid bid, which needs quorum. The seller follows the quorum.
   - `cancelled` — seller cancelled the auction before close.
+    **Self-verifiable** (ADR-0004): seller signature + authority —
+    checkable locally.
   - `griefed_no_fallback` — winner griefed and no second-highest
     bidder accepted fallback before grace expired. No on-mint
     redemption took place; all bids refund at locktime.
+    **Validator-quorum-derived** (ADR-0004): requires proving no
+    path release was observed anywhere on the network. The seller
+    cannot verify this locally — they might not see all relays. The
+    source of truth is the validator quorum (kind-30440 `griefed`
+    claims). The seller may publish kind-1024 as a formality, but
+    the descriptor verifies grief from quorum, not from the seller's
+    claim.
 - `close_at`: unix seconds when close was computed.
 - `winning_bid`: `<bid_event_id>` of the bid actually redeemed (when
   `status=settled`), or empty.
@@ -676,10 +690,12 @@ Conditional tags (depending on `claim`):
   `pre_start`, `under_increment`, `bad_lock`, `timestamp_skew`,
   `relatr_below_threshold`, `on_blacklist`, `fraudulent_bid`,
   `griefed`, etc.). REQUIRED for any `bid_invalid` / negative claim.
-- `nut7_state`: most recent NUT-7 result the validator observed for
-  this bid's proof: `unspent | pending | spent`. REQUIRED when the
-  validator includes mint-state in its judgement.
-- `nut7_observed_at`: unix seconds of the most recent NUT-7 query.
+
+> **Amendment (ADR-0004):** `nut7_state` and `nut7_observed_at` tags are
+> removed from kind-30440 events. Validators no longer query the mint for
+> proof state — NUT-7 is now a client responsibility (see §5.6). Validators
+> that still include these tags for backward compatibility SHOULD be ignored
+> by compliant clients — the mint is the source of truth, not the validator.
 
 Content: free-form JSON the validator may use for human-readable notes
 or extra structured data (e.g. specific threshold values, list of
@@ -700,8 +716,6 @@ Example:
 		["bid", "<latest_bid_event_id>"],
 		["claim", "valid_bid_placed"],
 		["observed_at", "1716210045"],
-		["nut7_state", "unspent"],
-		["nut7_observed_at", "1716210050"],
 	],
 	"content": "{\"bid_amount\":12000,\"claim_skew_sec\":4}",
 }
@@ -762,8 +776,9 @@ Post-close (terminal):
 - `lost_pending_refund` — bid was not the winner; awaiting locktime
   refund or earlier voluntary refund.
 - `settled_promptly` — bidder published a valid kind-1025 within
-  `settlement_grace`, mint state confirms proof is now `spent` by the
-  seller.
+  `settlement_grace`, and the seller published a kind-1024 with
+  `status=settled` (ADR-0004: validators observe kind-1024, not NUT-7
+  state, as proof of redemption).
 - `settled_late` — kind-1025 came after `settlement_grace` but
   before the bidder refunded; seller still able to redeem.
 - `griefed` — winning bidder never published a valid kind-1025
@@ -771,8 +786,8 @@ Post-close (terminal):
 - `griefed_pending_fallback` — `fallback_delay_sec` elapsed since
   `max_end_at` without settlement; seller's UI may now offer
   fallback to second-highest.
-- `fraudulent_bid` — at settlement (or via NUT-7 observation),
-  detected that the bid's lock pubkey was not actually
+- `fraudulent_bid` — at settlement (or via client NUT-7 observation
+  per ADR-0004), detected that the bid's lock pubkey was not actually
   `derive(p2pk_xpub, revealed_path)` or the proof was spent before
   the legitimate settlement. Strongest negative.
 - `cancelled` — auction was cancelled by the seller; bid refunds at
@@ -1055,7 +1070,13 @@ computation. The bidder MUST:
 6. Persist `(path, fullProof)` locally — encrypted backup
    RECOMMENDED.
 
-### Validator, while the bid is live
+### Validator, while the bid is live — amended per ADR-0004
+
+> **Amendment (ADR-0004):** Validators no longer query the mint for NUT-7
+> proof state. NUT-7 ownership has moved to the client (see §5.6 Client
+> responsibilities below). The previous steps 2–3 (NUT-7 query + periodic
+> re-query) are removed from validator responsibilities. Validators verify
+> structural integrity and auction rules only.
 
 Validators cannot verify the derivation without the path (and the
 bidder doesn't reveal the path until settlement). What they CAN do:
@@ -1063,15 +1084,21 @@ bidder doesn't reveal the path until settlement). What they CAN do:
 1. Parse the published `lock_secret` and verify it has the correct
    NUT-11 structure (single pubkey, correct locktime, correct refund
    key matching the bidder's signing identity).
-2. Query the bid's mint via NUT-7 using `proof_y`; require state
-   `unspent` for `valid_bid_placed`. If the state is `spent` before
-   settlement, the bid was fake (the bidder controlled the pubkey
-   and spent behind the lock) — emit `bid_invalid` with
-   `reason=proof_spent` or `fraudulent_bid`.
-3. Re-query NUT-7 periodically (RECOMMENDED ≤ 60s interval) for the
-   duration of the auction.
+2. Verify auction rules — `created_at` within auction window _AND_
+   `observed_at` within auction window _AND_ amount ≥ current high +
+   `bid_increment` (and ≥ `min_bid_curve` floor in the anti-snipe
+   window); `mint` in the auction's allowlist; `locktime` equals
+   `max_end_at + settlement_grace`.
+3. Apply policy — the validator's own published kind-30441 policy.
+4. Publish verdict — kind-30440 with `claim`, `observed_at`, and any
+   `reason`.
 
-### Validator, at settlement
+### Validator, at settlement — amended per ADR-0004
+
+> **Amendment (ADR-0004):** Validators no longer observe NUT-7 state
+> transitions. Instead, they observe the seller's kind-1024 settlement
+> event as proof of redemption. The previous step 3 (NUT-7 state becomes
+> `spent`) is replaced by observing kind-1024 publication.
 
 When the bidder publishes a kind-1025, validators verify:
 
@@ -1082,12 +1109,36 @@ When the bidder publishes a kind-1025, validators verify:
    serialises to exactly `kind_1023.child_pubkey`. If this fails the
    bid was fraudulent (lock pubkey was not actually a child of the
    auction xpub); emit `fraudulent_bid`.
-3. Subsequently the proof's NUT-7 state becomes `spent` (seller
-   redeemed). On observing this transition the validator emits
-   `settled_promptly` (or `settled_late` if `settlement_grace` had
-   elapsed).
+3. Observe the seller's kind-1024 settlement event. On observing a
+   valid kind-1024 with `status=settled` referencing the winning bid,
+   the validator emits `settled_promptly` (or `settled_late` if
+   `settlement_grace` had elapsed).
 
-### Seller, at settlement
+### Client, while the bid is live — added per ADR-0004
+
+> **Added (ADR-0004):** NUT-7 proof state verification is now a client
+> responsibility. The client queries the mint directly using `proof_y`
+> values from the bid event via `checkProofStateBatch`. The mint is the
+> source of truth for proof state, not the validators.
+
+The client MUST:
+
+1. Query the bid's mint via NUT-7 using `proof_y` from the bid event.
+2. Require state `unspent` for the bid to be considered valid. If the
+   state is `spent` before settlement, the bid is fake (the bidder
+   controlled the pubkey and spent behind the lock) — the bid is
+   treated as `bid_invalid`.
+3. If the state is `pending` or `unknown`, the bid is treated as
+   `bid_pending_review` — no settlement CTAs.
+4. Re-query NUT-7 when needed (e.g. when the auction ends and
+   settlement begins).
+
+### Seller, at settlement — amended per ADR-0004
+
+> **Amendment (ADR-0004):** Added NUT-7 pre-check step (step 4) for
+> redemption atomicity. The seller MUST verify all legs' proof states
+> before attempting any redemption — all-unspent or abort, no partial
+> redemption. Also added `auction_root_event_id` tag requirement (step 6).
 
 The seller receives (or observes on relays) the bidder's kind-1025.
 The seller MUST:
@@ -1100,14 +1151,26 @@ The seller MUST:
    bid effectively becomes a fake_bid record and the seller falls
    back to the next bid in the chain.
 3. Derive `seller_child_privkey = derive(seller_xpriv, derivation_path)`.
-4. Spend the locked proof at the mint (1-of-1 P2PK signature).
-5. Publish the kind-1024 settlement event referencing both the bid
-   and the kind-1025.
+4. **Pre-check NUT-7 for all legs** — query the mint via NUT-7 for
+   every leg's `proof_y` values. If any proof is `spent`, abort
+   entirely (no redemption attempted). Only proceed if ALL proofs
+   across ALL legs are `unspent`. This ensures atomicity: either all
+   legs redeem or none do, preventing a half-redeemed state.
+5. Spend the locked proof at the mint (1-of-1 P2PK signature), leg
+   by leg.
+6. Publish the kind-1024 settlement event referencing both the bid
+   and the kind-1025, using `auction_root_event_id` (the tag, not
+   `event.id`) as the `e` tag.
 
 Skipping verification step 2 lets a malicious bidder publish a
 kind-1025 with a garbage path, watch the seller fail to redeem, and
 claim the seller refused settlement. Always verify the derivation
 before attempting on-mint redemption.
+
+Skipping step 4 risks a partial redemption: if leg 1 succeeds and
+leg 2 fails (proofs already spent), the seller has redeemed partial
+funds but cannot publish a valid kind-1024 (chain sum ≠ final amount).
+Always pre-check all legs before any redemption.
 
 ---
 
@@ -1257,8 +1320,10 @@ sequenceDiagram
 
     R-->>V: Bid event observed (observed_at recorded)
     V->>V: Re-run §7.1 validation pipeline
-    V->>M: NUT-7 state(proof_y) → unspent
+    V->>V: Structural + auction-rule verification (ADR-0004)
     V->>R: Publish kind-30440 verdict (valid_bid_placed)
+    Note over V: NUT-7 is now client-side (ADR-0004)
+    Note over B: Client queries mint for proof state via checkProofStateBatch
 ```
 
 Validation rules (MUST — applied by validators and by all
@@ -1281,8 +1346,8 @@ compliant clients re-running the rules):
 - `child_pubkey` tag is a compressed secp256k1 pubkey. (Note: the
   derivation `child_pubkey == derive(p2pk_xpub, path)` cannot be
   verified pre-settlement because the path is bidder-private; the
-  on-mint NUT-7 state check catches bidders who locked to a
-  self-controlled pubkey instead.)
+  on-mint NUT-7 state check (now client-side per ADR-0004) catches
+  bidders who locked to a self-controlled pubkey instead.)
 - `lock_secret` parses as a NUT-10 P2PK well-known secret. Its
   inner structure MUST list `child_pubkey` as the sole spending
   pubkey, declare `locktime` equal to
@@ -1290,14 +1355,21 @@ compliant clients re-running the rules):
   `refund` matching the bid event's `refund_pubkey` tag.
 - `proof_y` is a valid `hash_to_curve(secret)` for the
   `lock_secret`'s `secret` field.
-- NUT-7 query against the bid's mint with `proof_y` returns
-  `unspent`. (`pending` is transient → retry with bounded backoff;
-  `spent` → `bid_invalid: proof_spent`.)
+- NUT-7 query against the bid's mint with `proof_y` returns `unspent`
+  (client-side per ADR-0004; validators no longer query the mint).
+  (`pending` is transient → retry with bounded backoff; `spent` →
+  `bid_invalid: proof_spent`.)
 - `derivation_path` tag MUST NOT be present on a kind-1023 bid
   event. Bids that publish the path early are treated as
   malformed.
 
-## 7.1 Validation pipeline (normative)
+## 7.1 Validation pipeline (normative) — amended per ADR-0004
+
+> **Amendment (ADR-0004):** NUT-7 proof state verification (step H in the
+> flowchart) has moved from validators to the client. The validator pipeline
+> now ends at structural + auction-rule verification (step G). The client
+> runs NUT-7 independently after confirming quorum of `valid_bid_placed`
+> verdicts. See §5.6 Client responsibilities.
 
 ```mermaid
 flowchart TD
@@ -1317,25 +1389,26 @@ flowchart TD
     F -->|No| R5[Reject: bad_lock]
     F -->|Yes| G{proof_y == hash_to_curve(secret)?}
     G -->|No| R6[Reject: bad_proof_y]
-    G -->|Yes| H{NUT-7 state == unspent?}
-    H -->|spent| R7[Reject: proof_spent /<br/>fraudulent_bid]
-    H -->|pending| H1[Defer: bid_pending_review]
-    H -->|missing| R8[Reject: proof_missing]
-    H -->|unspent| I{Validator policy<br/>(relatr, blacklist, KYC, ...)}
+    G -->|Yes| I{Validator policy<br/>(relatr, blacklist, KYC, ...)}
     I -->|fail| R9[Reject: policy reason]
     I -->|pass| OK[Emit valid_bid_placed]
+    OK --> CLIENT{Client: NUT-7 state == unspent?<br/>(via checkProofStateBatch)}
+    CLIENT -->|spent| CR1[Client: treat as invalid<br/>proof_spent / fraudulent_bid]
+    CLIENT -->|pending/unknown| CR2[Client: bid_pending_review<br/>no settlement CTAs]
+    CLIENT -->|unspent| COK[Client: bid fully valid<br/>settlement CTAs enabled]
 ```
 
 Operational notes:
 
-- NUT-7 check SHOULD be retried with bounded timeout (RECOMMENDED
-  ≤ 60s polling for the duration of the auction so that a
-  bidder-spends-behind-the-lock attack is caught quickly).
-- If the mint is unreachable, the validator MAY emit
-  `bid_pending_review` with `nut7_state=unknown` and retry; it MUST
-  NOT emit `valid_bid_placed` until at least one successful
-  `unspent` reading.
-- Each listed validator runs this pipeline independently. Compliant
+- The validator pipeline ends at structural + auction-rule verification.
+  NUT-7 is no longer part of the validator's responsibilities (ADR-0004).
+- The client runs NUT-7 independently after confirming quorum of
+  `valid_bid_placed` verdicts, using `checkProofStateBatch` with the
+  bid's `proof_y` values.
+- If the mint is unreachable, the client MAY treat the bid as
+  `bid_pending_review` and retry; it MUST NOT treat the bid as fully
+  valid until at least one successful `unspent` reading.
+- Each listed validator runs the pipeline independently. Compliant
   clients consult the `auditor_quorum` count of agreeing
   `valid_bid_placed` verdicts before treating the bid as a real
   bid for tie-breaking and floor computation.
@@ -1359,16 +1432,18 @@ auction whose `auditors` list includes its pubkey:
    high + `bid_increment` (and ≥ `min_bid_curve` floor in the
    anti-snipe window); `mint` in the auction's allowlist; `locktime`
    equals `max_end_at + settlement_grace`.
-3. **Verify on-mint state** — query the bid's mint via NUT-7 with
-   `proof_y`. Result `unspent` is required for `valid_bid_placed`.
-   `pending` is transient and SHOULD be retried with bounded
-   backoff. `spent` (before settlement) means the bid was fake; emit
-   `bid_invalid` with `reason=proof_spent` or `fraudulent_bid` as
-   appropriate.
-4. **Apply policy** — the validator's own published kind-30441
+3. **Apply policy** — the validator's own published kind-30441
    policy (relatr threshold, blacklist, KYC, jurisdiction, etc.).
-5. **Publish verdict** — replaceable kind-30440 event (§4.4.1) with
+4. **Publish verdict** — replaceable kind-30440 event (§4.4.1) with
    the current `claim`, `observed_at`, and any `reason`.
+
+> **Amendment (ADR-0004):** The previous step 3 ("Verify on-mint state"
+> — NUT-7 query) is removed from validator responsibilities. NUT-7
+> ownership has moved to the client. The client queries the mint directly
+> via `checkProofStateBatch` using `proof_y` from the bid event. The mint
+> is the source of truth for proof state, not the validators. Validators
+> no longer include `nut7_state` or `nut7_observed_at` tags in kind-30440
+> events. See §5.6 Client responsibilities.
 
 What a validator MUST do at auction close (`max_end_at` elapsed):
 
@@ -1376,15 +1451,33 @@ What a validator MUST do at auction close (`max_end_at` elapsed):
    marked `valid_bid_placed`, with the tie-break rule from §8.
 2. **Update verdicts** — winner → `won_pending_settlement`; all
    other valid bids → `lost_pending_refund`.
+
+   > **Amendment (ADR-0004):** Step 3 is amended. Validators no longer observe
+   > NUT-7 state transitions. Instead, they observe the seller's kind-1024
+   > settlement event as proof of redemption. The previous text ("whose proof's
+   > NUT-7 state subsequently becomes `spent`") is replaced by observing kind-1024.
+
 3. **Watch for settlement** — observe kind-1025 path releases and
-   kind-1024 settlement events. On a valid kind-1025 within
-   `settlement_grace` whose path derives to the bid's `child_pubkey`
-   AND whose proof's NUT-7 state subsequently becomes `spent` (by
-   the seller), update the winner's verdict to `settled_promptly`.
+   kind-1024 settlement events. On observing a valid kind-1025 within
+   `settlement_grace` whose path derives to the bid's `child_pubkey`,
+   and subsequently a valid kind-1024 with `status=settled` from the
+   seller, update the winner's verdict to `settled_promptly` (or
+   `settled_late` if `settlement_grace` had elapsed).
 4. **Handle grief / fraud** — if `settlement_grace` elapses without
    a valid kind-1025, emit `griefed`. If a kind-1025 is published
    but the path does NOT derive to the lock pubkey, emit
    `fraudulent_bid`.
+
+   > **Amendment (ADR-0004):** `griefed` is a **network-consensus** state —
+   > it requires proving no kind-1025 was observed anywhere. The validator
+   > quorum is the source of truth for this state, not the seller's kind-1024.
+   > `fraudulent_bid` is **self-verifiable** — once a kind-1025 is observed,
+   > any client can verify the derivation locally. The distinction:
+   > `griefed` proves a negative (no release), `fraudulent_bid` verifies a
+   > positive (release exists but is invalid). The seller follows the quorum
+   > for `griefed_no_fallback`; the descriptor derives it from `griefed`
+   > quorum, not from the seller's kind-1024 claim.
+
 5. **Surface fallback opportunity** — if `fallback_delay_sec`
    elapses without settlement, emit `griefed_pending_fallback` so
    the seller's UI can offer fallback to the second-highest valid
@@ -1428,13 +1521,15 @@ sequenceDiagram
     V->>R: kind-30440 winner: won_pending_settlement
     V->>R: kind-30440 losers: lost_pending_refund
 
+    Note over W: MUST wait for won_pending_settlement quorum (ADR-0004)
+    Note over W: Client verifies auditor_quorum before publishing kind-1025
+
     alt Winner settles (happy path)
         W->>R: kind-1025 path_release (derivation_path)
         S->>S: derive(seller_xpriv, path) → seller_child_privkey
         S->>M: Redeem locked proof (1-of-1 P2PK)
-        V->>M: NUT-7 check → spent
-        V->>R: kind-30440 winner: settled_promptly
         S->>R: kind-1024 settlement (status: settled, path_release ref)
+        V->>R: kind-30440 winner: settled_promptly (observes kind-1024, ADR-0004)
         Note over L,M: Losers self-refund at locktime via refund key
     else Winner griefs (no path_release within settlement_grace)
         Note over V: fallback_delay_sec elapses
@@ -1444,12 +1539,13 @@ sequenceDiagram
         alt Bidder #2 accepts
             L->>R: kind-1025 path_release (release_reason: fallback_settlement)
             S->>M: Redeem #2's locked proof
-            V->>R: kind-30440 #2: settled_promptly
             S->>R: kind-1024 (status: settled, fallback_chain includes #1 griefed)
+            V->>R: kind-30440 #2: settled_promptly (observes kind-1024, ADR-0004)
             V->>R: kind-30440 winner: griefed (terminal)
         else Bidder #2 declines / no second highest
-            S->>R: kind-1024 (status: griefed_no_fallback)
-            V->>R: kind-30440 winner: griefed (terminal)
+            V->>R: kind-30440 winner: griefed (terminal, quorum)
+            Note over V: ADR-0004: grief derived from quorum, not seller
+            S->>R: kind-1024 (status: griefed_no_fallback, follows quorum)
             Note over W,M: All bids refund at locktime
         end
     else Reserve not met
@@ -1482,20 +1578,31 @@ attempt to settle with. Bidders should reach the same answer.
 Validators publish their answer as a `won_pending_settlement` /
 `lost_pending_refund` verdict, so passive observers can corroborate.
 
-### 8.1 Settlement flow (happy path)
+### 8.1 Settlement flow (happy path) — amended per ADR-0004
+
+> **Amendment (ADR-0004):** Step 3 is amended to make the
+> `won_pending_settlement` quorum an explicit MUST gate for path release.
+> The previous text implied the ordering (validators publish first, bidder
+> releases second) but did not make it a requirement. Step 5 is amended to
+> remove NUT-7 observation by validators, replacing it with kind-1024
+> observation. See ADR-0004 §4 (Publish-layer self-verification).
 
 1. `max_end_at` elapses (closing window may extend it; see §6).
 2. Listed validators publish kind-30440 with `won_pending_settlement`
    for the winning bid and `lost_pending_refund` for the rest.
-3. The winning bidder's client surfaces a "settle now" prompt. The
-   bidder publishes a kind-1025 path release. (Auto-settle is
-   RECOMMENDED — see §11.)
+3. The winning bidder's client MUST wait for `won_pending_settlement`
+   quorum (at least `auditor_quorum` validators confirming) before
+   publishing a kind-1025 path release. Security takes priority over
+   settlement speed. The bidder's client surfaces a "settle now"
+   prompt only when quorum is achieved. (Auto-settle is RECOMMENDED
+   — see §11.)
 4. The seller's client observes the kind-1025, derives
-   `seller_child_privkey`, swaps the locked proof at the mint, and
+   `seller_child_privkey`, pre-checks NUT-7 for all legs (atomicity:
+   all-unspent or abort), swaps the locked proof at the mint, and
    publishes a kind-1024 settlement event referencing the path
-   release.
-5. Validators observe the proof's NUT-7 state flip to `spent` and
-   update the winner's verdict to `settled_promptly`.
+   release, using `auction_root_event_id` (the tag) as the `e` tag.
+5. Validators observe the kind-1024 settlement event and update the
+   winner's verdict to `settled_promptly`.
 6. Losing bidders' clients refund their locked proofs at `locktime`
    via the proof's refund-pubkey condition. (Self-service; no
    third-party action required.)
@@ -1508,6 +1615,10 @@ Validators publish their answer as a `won_pending_settlement` /
 - **`reserve_not_met`**: seller publishes kind-1024 with
   `status=reserve_not_met`. All bids follow the locktime refund
   path. Validators update all bids to `lost_pending_refund`.
+  **Network-consensus** (ADR-0004): the seller follows the quorum —
+  they check that no valid bid met the reserve based on validator
+  verdicts. The descriptor cross-checks `won_pending_settlement`
+  quorum: if any bid achieved it, `reserve_not_met` is invalid.
 - **`cancelled` before first valid bid**: allowed. Seller publishes
   kind-1024 with `status=cancelled`. No locks exist.
 - **`cancelled` after first valid bid**: SHOULD be forbidden in v1
@@ -1517,11 +1628,21 @@ Validators publish their answer as a `won_pending_settlement` /
   locktime regardless.
 - **`bidder_griefed`**: winner did not publish a valid kind-1025
   within `settlement_grace`. See §8.3 for the fallback workflow.
+  **Validator-quorum-derived** (ADR-0004): the griefed state is
+  determined by validator quorum (kind-30440 `griefed` claims),
+  not by the seller's kind-1024. The seller cannot prove locally
+  that no kind-1025 was observed — they might not see all relays.
+  The descriptor verifies grief from `griefed` quorum.
 - **`fraudulent_bid`** detected at settlement (path doesn't derive
   to the lock pubkey): the seller cannot redeem. Validators emit
   `fraudulent_bid`. Seller falls back to the next-best bid; the
   fraudulent bidder eventually self-refunds at locktime (the lock
   was a pubkey they controlled, so they can refund whenever).
+  **Self-verifiable** (ADR-0004): once a kind-1025 is observed, any
+  client can verify `derive(p2pk_xpub, path) == child_pubkey` locally.
+  The distinction from `griefed` is fundamental: `fraudulent_bid`
+  verifies a positive (the kind-1025 exists and is invalid), while
+  `griefed` proves a negative (no kind-1025 was observed anywhere).
 - **`seller_offline_at_settlement`**: even with the path revealed,
   no on-mint redemption happens. Winning bidder eventually refunds
   at locktime. Validator emits `griefed_seller` (NEW: optional
@@ -1661,20 +1782,55 @@ sell). See §14 for the full threat analysis.
   silent-grief variant retrospectively. Either path produces a
   `fraudulent_bid` reputation event.
 
+### 9.1.1 Locked amount not verifiable at bid time (known gap)
+
+> **Known gap (not yet resolved).** The kind-1023 bid event publishes
+> `lock_secret` (the P2PK lock script) and `proof_y` (for NUT-7 state
+> checks), but it does NOT publish the proof's `C` (mint signature),
+> `amount`, or `id` (keyset). NUT-7 verifies spend state (`UNSPENT` /
+> `SPENT` / `PENDING`) but does NOT return the proof's amount.
+>
+> Consequently, a bidder can lock a small amount (e.g. 1 sat) at the
+> mint and publish a bid claiming a much larger cumulative `amount`
+> (e.g. 100,000 sats). The bid passes all current bid-time checks
+> (NUT-7 shows `UNSPENT`, lock structure is valid, `amount` >
+> `prev_bid` + increment). The mismatch is only caught at settlement
+> when the kind-1025 reveals the full `cashu_token` and
+> `validatePathRelease` checks `sum(proofs.amount) == expectedDelta`.
+>
+> This is a **griefing vector**, not a theft vector: the malicious
+> bidder locks real funds (even if tiny) and the fraud is caught at
+> settlement. But during the auction, the fake bid affects winner
+> selection, min-increment floor, and reserve-met determination.
+>
+> The `content.leg_locked` field in the kind-1023 event body is
+> UNSIGNED and MUST NOT be used to verify the locked amount. The delta
+> is computed from signed tags: `amount - prev_bid.amount`. But the
+> actual amount locked at the mint is only verifiable at settlement
+> via the `cashu_token`.
+>
+> **Mitigation:** Per-auction rate limits, validator policy gates
+> (relatr score, account age, NIP-05), and the `vadium_ratio_bps`
+> parameter (which can require >100% deposit) partially deter this
+> attack. A future protocol enhancement could close this gap by
+> enabling offline signature validation, but the specific approach is
+> not yet settled (see ADR-0004 known limitations).
+
 ## 9.2 Fake cashu / invalid proofs
 
 - Validators parse `lock_secret` and confirm the NUT-11 structure
   matches the auction's required shape (correct locktime, correct
   refund key, single lock pubkey, etc.).
 - Validators verify the mint is in the auction's `mint` allowlist.
-- Validators query the mint via NUT-7 using `proof_y` and require
-  `unspent` for any `valid_bid_placed` verdict.
+- **Client** queries the mint via NUT-7 using `proof_y` and requires
+  `unspent` for any bid to be treated as valid (ADR-0004: NUT-7 moved
+  from validator to client).
 - A proof reported `pending` is transient and SHOULD be retried; if
-  it remains `pending` past a sanity window (validator policy), emit
-  `bid_pending_review` with a notice.
-- A proof reported `spent` before legitimate settlement → emit
-  `bid_invalid` with `reason=proof_spent` (or `fraudulent_bid` if
-  the bidder still claims a live bid).
+  it remains `pending` past a sanity window, the bid is treated as
+  `bid_pending_review` — no settlement CTAs.
+- A proof reported `spent` before legitimate settlement → the bid
+  is treated as `bid_invalid` with `reason=proof_spent` (or
+  `fraudulent_bid` if the bidder still claims a live bid).
 
 ## 9.3 End-time manipulation
 
@@ -1985,21 +2141,21 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 
 ## 14. Security model summary
 
-| Threat                                                   | Mitigation                                                                                                        | Residual risk                                                                                                                                                         |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fake bid (unbacked)                                      | Public `lock_secret` + `proof_y` in bid event; validators NUT-7 the proof every observation cycle                 | Mint downtime delays detection (bid marked `bid_pending_review`)                                                                                                      |
-| Fake lock (bidder-controlled pubkey, spends behind lock) | NUT-7 catches the spend in real time → `fraudulent_bid` reputation event                                          | Detection window equals validator polling interval (RECOMMENDED ≤60s)                                                                                                 |
-| Fake lock (bidder-controlled pubkey, silent grief)       | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid`                | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost    |
-| End-time tampering                                       | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at` | Single dishonest validator's clock — mitigated by `auditor_quorum > 1`                                                                                                |
-| Sniping                                                  | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]`                                          | None if curve enforced by all listed validators                                                                                                                       |
-| Double-spend (lock vs refund)                            | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal                         | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund                                        |
-| Seller fraud (early redeem)                              | Seller cannot derive child privkey without path; path is bidder-held secret                                       | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`.                                   |
-| Validator fraud (false verdicts)                         | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost                  | A single-validator auction with a dishonest validator is at the seller's risk by choice                                                                               |
-| Validator rug-pull / offline                             | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode.                                 | Liveness only: missing kind-30440 verdicts force the seller to make their own determination                                                                           |
-| Bidder griefing (winner withholds path)                  | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss                 | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit. |
-| Seller offline at settlement                             | Bidder eventually refunds at locktime; no funds lost; sale fails                                                  | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller                                                       |
-| Mint outage                                              | Settlement retries with backoff; both seller and bidder may race once mint recovers                               | Race favors whoever acts first post-recovery; aligned with timing of locktime                                                                                         |
-| Bidder loses path (wallet destruction)                   | Bidder still has refund key → refunds at locktime                                                                 | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup.                                                          |
+| Threat                                                   | Mitigation                                                                                                                                                                                  | Residual risk                                                                                                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fake bid (unbacked)                                      | Public `lock_secret` + `proof_y` in bid event; **client** NUT-7 checks proof state (ADR-0004)                                                                                               | Mint downtime delays detection (bid marked `bid_pending_review`)                                                                                                                 |
+| Fake lock (bidder-controlled pubkey, spends behind lock) | Client NUT-7 catches the spend → `fraudulent_bid` reputation event (ADR-0004)                                                                                                               | Detection depends on client polling frequency                                                                                                                                    |
+| Fake lock (bidder-controlled pubkey, silent grief)       | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid`                                                                                          | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost               |
+| End-time tampering                                       | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at`                                                                           | Single dishonest validator's clock — mitigated by `auditor_quorum > 1`                                                                                                           |
+| Sniping                                                  | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]`                                                                                                                    | None if curve enforced by all listed validators                                                                                                                                  |
+| Double-spend (lock vs refund)                            | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal                                                                                                   | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund                                                   |
+| Seller fraud (early redeem)                              | Seller cannot derive child privkey without path; path is bidder-held secret; client MUST NOT publish kind-1025 before `max_end_at` AND MUST have `won_pending_settlement` quorum (ADR-0004) | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`, and MUST wait for validator quorum approval. |
+| Validator fraud (false verdicts)                         | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost                                                                                            | A single-validator auction with a dishonest validator is at the seller's risk by choice                                                                                          |
+| Validator rug-pull / offline                             | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode.                                                                                                           | Liveness only: missing kind-30440 verdicts force the seller to make their own determination                                                                                      |
+| Bidder griefing (winner withholds path)                  | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss                                                                                           | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit.            |
+| Seller offline at settlement                             | Bidder eventually refunds at locktime; no funds lost; sale fails                                                                                                                            | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller                                                                  |
+| Mint outage                                              | Settlement retries with backoff; both seller and bidder may race once mint recovers                                                                                                         | Race favors whoever acts first post-recovery; aligned with timing of locktime                                                                                                    |
+| Bidder loses path (wallet destruction)                   | Bidder still has refund key → refunds at locktime                                                                                                                                           | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup.                                                                     |
 
 ### What this scheme guarantees, cryptographically
 

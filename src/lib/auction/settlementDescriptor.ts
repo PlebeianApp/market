@@ -1,8 +1,15 @@
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedSettlementEvent, ParsedPathReleaseEvent } from './events'
+import type {
+	ParsedAuctionEvent,
+	ParsedBidEvent,
+	ParsedSettlementEvent,
+	ParsedPathReleaseEvent,
+	ParsedValidatorVerdictEvent,
+} from './events'
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
 import type { MintKeyset } from '@cashu/cashu-ts'
-import { validateBid, validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
+import { validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
+import { computeValidatedBids } from './bidValidation'
 import type { SettlementChainLegContext } from './validation'
 
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
@@ -55,7 +62,7 @@ export interface SettlementDescriptor {
 export interface GetSettlementDescriptorInput {
 	auction: ParsedAuctionEvent
 	bids: ParsedBidEvent[]
-	topBid: ParsedBidEvent | null
+	verdicts: ParsedValidatorVerdictEvent[]
 	settlements: ParsedSettlementEvent[]
 	pathReleases: ParsedPathReleaseEvent[]
 	claimOrders: NostrEventLike[]
@@ -64,7 +71,11 @@ export interface GetSettlementDescriptorInput {
 	hasBidderRecord: boolean
 	hasPlacedBid: boolean
 	now: number
-	topBidNut7State?: Nut7ProofState
+	/**
+	 * NUT-7 proof states from the client's own `checkProofStateBatch` query,
+	 * keyed by bid event id. When absent, bids fall back to `bid_pending_review`.
+	 */
+	nut7States?: Map<string, Nut7ProofState>
 }
 
 interface DerivedState {
@@ -87,20 +98,6 @@ interface DerivedState {
 	hasMatchedClaimOrder: boolean
 	validatedTopBid: ParsedBidEvent | null
 	validatedBids: ParsedBidEvent[]
-}
-
-function isBidValid(auction: ParsedAuctionEvent, bid: ParsedBidEvent, nut7State?: Nut7ProofState, allBids?: ParsedBidEvent[]): boolean {
-	// Compute replacement-chain leg amount if the bid references a previous bid.
-	let bidChainLegAmount: number | undefined
-	if (bid.prevBidId && allBids) {
-		const prevBid = allBids.find((b) => b.id === bid.prevBidId)
-		if (prevBid) bidChainLegAmount = bid.amount - prevBid.amount
-	}
-
-	const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State, bidChainLegAmount })
-	if (verdict.claim === 'bid_invalid') {
-	}
-	return verdict.claim !== 'bid_invalid'
 }
 
 function isValidPathRelease(
@@ -194,7 +191,8 @@ function isSettlementStructurallyValid(
 function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeyset[]): DerivedState {
 	const {
 		auction,
-		topBid: rawTopBid,
+		bids,
+		verdicts,
 		settlements: rawSettlements,
 		pathReleases: rawPathReleases,
 		claimOrders,
@@ -208,13 +206,17 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	const ended = biddingCutoffAt > 0 && now >= biddingCutoffAt
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
 
-	// 1. Validate the top bid — reject structurally invalid bids.
-	const topBid = rawTopBid && isBidValid(auction, rawTopBid, input.topBidNut7State, input.bids) ? rawTopBid : null
+	// 1. Compute validated bids using quorum + structural validation.
+	const validatedBidSet = computeValidatedBids({
+		auction,
+		bids,
+		verdicts,
+		nut7States: input.nut7States,
+	})
+	const topBid = validatedBidSet.canonicalWinner
+	const validatedBids = validatedBidSet.validBids
 
-	// 2. Validate bids — filter to only structurally valid bids.
-	const validatedBids = input.bids.filter((b) => isBidValid(auction, b, undefined, input.bids))
-
-	// 3. Determine postCloseDecision from raw settlement data.
+	// 2. Determine postCloseDecision from raw settlement data.
 	const rawSettlementWinner = rawSettlements[0]?.winnerPubkey ?? ''
 	const postCloseDecision: 'winner' | 'loser' | null = !ended
 		? null
@@ -222,7 +224,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			? 'loser'
 			: 'winner'
 
-	// 4. Validate path releases — filter to only structurally valid ones.
+	// 3. Validate path releases — filter to only structurally valid ones.
 	// For rebid chains, each path release must be validated against its own bid,
 	// not the top bid. A path release for leg 1 has leg 1's childPubkey and
 	// proofs, which won't match the top bid (leg 2) — that's expected.
@@ -235,7 +237,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			})
 		: []
 
-	// 5. Validate settlements — filter to only structurally valid ones.
+	// 4. Validate settlements — filter to only structurally valid ones.
 	const settlements = rawSettlements.filter((s) =>
 		isSettlementStructurallyValid(
 			auction,
@@ -246,7 +248,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 			rawPathReleases,
 			now,
 			postCloseDecision,
-			input.topBidNut7State,
+			input.nut7States?.get(topBid?.id ?? ''),
 			mintKeysets,
 		),
 	)
@@ -304,7 +306,7 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 }
 
 function classifyRole(input: GetSettlementDescriptorInput, d: DerivedState): SettlementParticipantRole {
-	const { auction, topBid, currentUserPubkey } = input
+	const { auction, currentUserPubkey } = input
 	if (!currentUserPubkey) return 'non-participant'
 	if (currentUserPubkey === auction.sellerPubkey) return 'seller'
 	if (d.validatedTopBid && d.validatedTopBid.bidderPubkey === currentUserPubkey) return 'winning-bidder'
@@ -355,7 +357,15 @@ function sats(amount: number): string {
 }
 
 export async function getSettlementDescriptor(input: GetSettlementDescriptorInput): Promise<SettlementDescriptor | null> {
-	const mintKeysets = input.topBid ? await fetchMintKeysets(input.topBid.mint) : undefined
+	// Compute validated bids early so we can fetch keysets for the canonical winner.
+	const preValidated = computeValidatedBids({
+		auction: input.auction,
+		bids: input.bids,
+		verdicts: input.verdicts,
+		nut7States: input.nut7States,
+	})
+	const winnerBid = preValidated.canonicalWinner
+	const mintKeysets = winnerBid ? await fetchMintKeysets(winnerBid.mint) : undefined
 	const d = deriveState(input, mintKeysets)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)

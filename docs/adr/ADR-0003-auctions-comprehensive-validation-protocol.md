@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Proposed (amended 2026-08-10 per ADR-0004)
 
 ## Date
 
@@ -201,7 +201,14 @@ Critical Checks:
 | R2.5 | Positive       | Chain terminates (no cycles).                | true            | replacement_chain_invalid |
 | R2.6 | Positive       | Delta amount = sum(proof amounts in leg).    | true            | delta_mismatch            |
 
-#### 2.6 validateBidMintState(bidEvent, mintClient)
+#### 2.6 validateBidMintState(bidEvent, mintClient) — amended per ADR-0004
+
+> **Amendment (ADR-0004):** NUT-7 ownership has moved from validators to the
+> client. The function signature and checks remain the same; the caller
+> changes from the server-side validator process to the client-side
+> descriptor/publisher. Validators no longer query the mint for proof state.
+> The client queries the mint directly via `checkProofStateBatch`
+> (`src/lib/cashu/nut7.ts`) using `proof_y` values from the bid event.
 
 | ID   | Condition Type | Check Description                      | Expected Result | Failure Label |
 | ---- | -------------- | -------------------------------------- | --------------- | ------------- |
@@ -246,6 +253,12 @@ Critical Checks:
 | S4.9  | Positive       | Payout sum == final_amount (for rebid chains).  | true            | payout_sum_mismatch    |
 | S4.10 | Positive       | All chain legs have corresponding Kind 1025.    | true            | partial_chain_release  |
 | S4.11 | Positive       | NUT-7 state for proofs is spent.                | true            | redemption_unconfirmed |
+
+> **Amendment (ADR-0004):** S4.11 is amended: the NUT-7 pre-check is
+> performed **client-side before redemption** for atomicity (all-unspent or
+> abort, no partial redemption), not as a validator post-check. See
+> ADR-0004 §4 (Publish-layer self-verification) for the atomicity
+> requirement.
 
 ## Appendix C: Implementation Guidelines
 

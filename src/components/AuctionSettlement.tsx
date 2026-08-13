@@ -17,7 +17,13 @@ import {
 	type SettlementDescriptor,
 	type SettlementIconKey,
 } from '@/lib/auction/settlementDescriptor'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '@/lib/auction/events'
+import type {
+	ParsedAuctionEvent,
+	ParsedBidEvent,
+	ParsedPathReleaseEvent,
+	ParsedSettlementEvent,
+	ParsedValidatorVerdictEvent,
+} from '@/lib/auction/events'
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
@@ -52,7 +58,7 @@ const TONE_CLASSES: Record<SettlementDescriptor['tone'], string> = {
 export interface AuctionSettlementProps {
 	auction: ParsedAuctionEvent
 	bids: ParsedBidEvent[]
-	topBid: ParsedBidEvent | null
+	verdicts: ParsedValidatorVerdictEvent[]
 	settlements: ParsedSettlementEvent[]
 	pathReleases: ParsedPathReleaseEvent[]
 	claimOrders: { id: string; pubkey: string }[]
@@ -65,7 +71,7 @@ export interface AuctionSettlementProps {
 export function AuctionSettlement({
 	auction,
 	bids,
-	topBid,
+	verdicts,
 	settlements,
 	pathReleases,
 	claimOrders,
@@ -156,7 +162,7 @@ export function AuctionSettlement({
 				auctionEventId: auctionRootEventId,
 				auctionCoordinates,
 				status,
-				winningBidEventId: status ? undefined : topBid?.id,
+				winningBidEventId: status ? undefined : descriptor?.cta?.kind === 'release-path' ? myTopBidEvent?.id : undefined,
 			} as AuctionSettlementFormData)
 		} catch {
 			// Toast handled in mutation hook
@@ -216,7 +222,7 @@ export function AuctionSettlement({
 		() => ({
 			auction,
 			bids,
-			topBid,
+			verdicts,
 			settlements,
 			pathReleases: pathReleasesForDescriptor,
 			claimOrders: claimOrderEvents,
@@ -229,7 +235,7 @@ export function AuctionSettlement({
 		[
 			auction,
 			bids,
-			topBid,
+			verdicts,
 			settlements,
 			pathReleasesForDescriptor,
 			claimOrderEvents,

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementParticipantRole } from '../auction/settlementDescriptor'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
+import type {
+	ParsedAuctionEvent,
+	ParsedBidEvent,
+	ParsedPathReleaseEvent,
+	ParsedSettlementEvent,
+	ParsedValidatorVerdictEvent,
+} from '../auction/events'
+import type { Nut7ProofState } from '../auction/constants'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -11,6 +18,7 @@ import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 const SELLER_PUBKEY = 'a'.repeat(64)
 const BUYER_PUBKEY = 'b'.repeat(64)
 const OTHER_BIDDER_PUBKEY = 'c'.repeat(64)
+const VALIDATOR_PUBKEY = 'd'.repeat(64)
 
 const AUCTION_END = 100
 const AUCTION_GRACE = 50
@@ -68,7 +76,7 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 		keyScheme: 'hd_p2pk',
 		mints: ['https://mint.example.com'],
 		p2pkXpub: TEST_XPUB,
-		auditors: [],
+		auditors: [VALIDATOR_PUBKEY],
 		auditorQuorum: 1,
 		maxSkewSec: 30,
 		fallbackDelaySec: 25,
@@ -146,6 +154,27 @@ function makeClaimOrder(overrides: Partial<NostrEventLike> = {}): NostrEventLike
 	return { id: 'order-1', pubkey: BUYER_PUBKEY, kind: 16, content: '', tags: [], ...overrides }
 }
 
+function makeVerdict(overrides: Partial<ParsedValidatorVerdictEvent> = {}): ParsedValidatorVerdictEvent {
+	return {
+		rawEvent: { id: 'verdict-1', pubkey: VALIDATOR_PUBKEY, kind: 30440, tags: [], content: '', created_at: 100 },
+		id: 'verdict-1',
+		validatorPubkey: VALIDATOR_PUBKEY,
+		createdAt: 100,
+		dTag: `${BUYER_PUBKEY}:auction-root`,
+		bidderPubkey: BUYER_PUBKEY,
+		auctionRootEventId: 'auction-root',
+		auctionCoordinate: '30408:seller:d-tag',
+		bidEventId: 'bid-1',
+		claim: 'valid_bid_placed',
+		observedAt: 100,
+		...overrides,
+	} as ParsedValidatorVerdictEvent
+}
+
+function verdictForBid(bidId: string, overrides: Partial<ParsedValidatorVerdictEvent> = {}): ParsedValidatorVerdictEvent {
+	return makeVerdict({ bidEventId: bidId, id: `verdict-${bidId}`, ...overrides })
+}
+
 function hasKey(o: object, k: string): boolean {
 	return Object.prototype.hasOwnProperty.call(o, k)
 }
@@ -154,7 +183,7 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	const base: GetSettlementDescriptorInput = {
 		auction: makeAuction(),
 		bids: [],
-		topBid: null,
+		verdicts: [],
 		settlements: [],
 		pathReleases: [],
 		claimOrders: [],
@@ -166,8 +195,14 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
-			;(base as Record<string, unknown>)[k] = v
+			;(base as unknown as Record<string, unknown>)[k] = v
 		}
+	}
+	// Auto-generate NUT-7 states for all bids if not explicitly provided.
+	// Default to 'unspent' — matches the old behavior where bids without NUT-7
+	// data were treated as valid (bid_pending_review was collapsed to valid).
+	if (!base.nut7States && base.bids.length > 0) {
+		base.nut7States = new Map(base.bids.map((b) => [b.id, 'unspent' as Nut7ProofState]))
 	}
 	return base
 }
@@ -176,7 +211,7 @@ const winningBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 const winningBidInput = (extra: InputOverrides = {}): GetSettlementDescriptorInput =>
 	makeInput({
 		bids: [winningBid],
-		topBid: winningBid,
+		verdicts: [verdictForBid(winningBid.id)],
 		currentUserPubkey: BUYER_PUBKEY,
 		myTopBidEvent: winningBid,
 		hasBidderRecord: true,
@@ -197,13 +232,16 @@ describe('getSettlementDescriptor', () => {
 		})
 
 		test('outbid-bidder: I have a validated bid but am not the top', async () => {
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
+			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid, myBid],
-					topBid,
+					verdicts: [
+						verdictForBid(topBid.id),
+						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+					],
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
 					myTopBidEvent: myBid,
 					hasPlacedBid: true,
@@ -232,7 +270,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ sellerPubkey: SELLER_PUBKEY }),
 					bids: [myBid],
-					topBid: myBid,
+					verdicts: [verdictForBid(myBid.id, { bidderPubkey: SELLER_PUBKEY, dTag: `${SELLER_PUBKEY}:auction-root` })],
 					currentUserPubkey: SELLER_PUBKEY,
 					myTopBidEvent: myBid,
 					now: 120,
@@ -256,7 +294,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					pathReleases: [makePathRelease({ bidEventId: topBid.id })],
 					now: 120,
@@ -273,7 +311,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					pathReleases: [makePathRelease({ bidEventId: topBid.id })],
 					now: AUCTION_LOCKTIME + 10,
@@ -299,7 +337,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 100000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					settlements: [older, newer],
 					now: 120,
@@ -314,7 +352,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					now: 120,
 				}),
@@ -337,7 +375,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					now: 120,
 				}),
@@ -353,7 +391,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: SELLER_PUBKEY,
 					now: 200,
 				}),
@@ -492,7 +530,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [lowBid],
-					topBid: lowBid,
+					verdicts: [verdictForBid(lowBid.id)],
 					currentUserPubkey: BUYER_PUBKEY,
 					myTopBidEvent: lowBid,
 					hasBidderRecord: true,
@@ -511,7 +549,7 @@ describe('getSettlementDescriptor', () => {
 			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid],
-					topBid,
+					verdicts: [verdictForBid(topBid.id)],
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
 					myTopBidEvent: null,
 					hasPlacedBid: true,
@@ -524,12 +562,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('refund: outbid bidder with reserve_not_met settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 30000 })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
+			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
 			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
 					bids: [topBid, myBid],
-					topBid,
+					verdicts: [
+						verdictForBid(topBid.id),
+						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+					],
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
 					myTopBidEvent: myBid,
 					hasPlacedBid: true,
@@ -542,11 +583,14 @@ describe('getSettlementDescriptor', () => {
 
 		test('no card: outbid with validated bid, no settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000 })
+			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
 			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid, myBid],
-					topBid,
+					verdicts: [
+						verdictForBid(topBid.id),
+						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+					],
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
 					myTopBidEvent: myBid,
 					hasPlacedBid: true,
@@ -560,7 +604,9 @@ describe('getSettlementDescriptor', () => {
 	describe('non-participant states', () => {
 		test('observer: non-participant with no bid sees auction status', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const d = await getSettlementDescriptor(makeInput({ bids: [topBid], topBid, currentUserPubkey: OTHER_BIDDER_PUBKEY, now: 120 }))
+			const d = await getSettlementDescriptor(
+				makeInput({ bids: [topBid], verdicts: [verdictForBid(topBid.id)], currentUserPubkey: OTHER_BIDDER_PUBKEY, now: 120 }),
+			)
 			expect(d?.role).toBe('non-participant')
 			expect(d?.title).toBe('Awaiting Settlement')
 		})
@@ -650,7 +696,7 @@ describe('getSettlementDescriptor', () => {
 					d = getSettlementDescriptor(
 						makeInput({
 							bids: [topBid, myBid],
-							topBid,
+							verdicts: [verdictForBid(topBid.id)],
 							currentUserPubkey: OTHER_BIDDER_PUBKEY,
 							myTopBidEvent: myBid,
 							hasPlacedBid: true,
@@ -679,7 +725,7 @@ describe('validator integration', () => {
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
-				topBid: winningBid,
+				verdicts: [verdictForBid(winningBid.id)],
 				myTopBidEvent: winningBid,
 				hasBidderRecord: true,
 				pathReleases: [pr],
@@ -697,7 +743,7 @@ describe('validator integration', () => {
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
-				topBid: winningBid,
+				verdicts: [verdictForBid(winningBid.id)],
 				myTopBidEvent: winningBid,
 				hasBidderRecord: true,
 				pathReleases: [pr],
@@ -721,7 +767,7 @@ describe('validator integration', () => {
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
-				topBid: winningBid,
+				verdicts: [verdictForBid(winningBid.id)],
 				myTopBidEvent: winningBid,
 				hasBidderRecord: true,
 				pathReleases: [badPr],
@@ -739,7 +785,7 @@ describe('validator integration', () => {
 			winningBidInput({
 				auction: makeAuction({ reserve: 40000 }),
 				bids: [winningBid],
-				topBid: winningBid,
+				verdicts: [verdictForBid(winningBid.id)],
 				myTopBidEvent: winningBid,
 				hasBidderRecord: true,
 				pathReleases: [pr],
@@ -755,7 +801,7 @@ describe('validator integration', () => {
 		const d = await getSettlementDescriptor(
 			winningBidInput({
 				bids: [badBid],
-				topBid: badBid,
+				verdicts: [verdictForBid(badBid.id)],
 				myTopBidEvent: badBid,
 				hasBidderRecord: true,
 				now: 120,
@@ -862,7 +908,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -876,7 +922,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -889,7 +935,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -905,7 +951,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				currentUserPubkey: BUYER_PUBKEY,
 				myTopBidEvent: leg2,
@@ -941,7 +987,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, badRelease2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -958,7 +1004,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				settlements: [
 					makeSettlement({
@@ -989,7 +1035,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				topBid: leg2,
+				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				settlements: [
 					makeSettlement({
