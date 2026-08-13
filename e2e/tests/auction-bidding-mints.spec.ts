@@ -110,6 +110,43 @@ async function waitForWalletBalance(page: import('@playwright/test').Page, minBa
 	throw new Error(`Wallet balance did not reach ${minBalance} within timeout`)
 }
 
+/**
+ * Dynamically set the bid amount to exceed the actual wallet balance,
+ * ensuring `hasInsufficientBidFunds = true` regardless of accumulated
+ * balance from previous tests.
+ *
+ * The wallet balance persists across tests because NDK loads wallet state
+ * from IndexedDB/localStorage, not just from relay events. Hardcoding a
+ * small bid amount (e.g. 100 sats) may not trigger insufficient funds
+ * if the wallet already has thousands of sats.
+ *
+ * This helper reads the balance via __nip60.getStatus(), computes a bid
+ * amount of max(100, balance + 100), and enters it using the "Customize
+ * bid" edit mode.
+ *
+ * Must be called after waitForWalletReady (or waitForWalletBalance) and
+ * before clicking the bid button.
+ */
+async function ensureInsufficientBidFunds(page: import('@playwright/test').Page) {
+	const balance = await page.evaluate(() => {
+		const w = (window as any).__nip60
+		return w ? (w.getStatus().balance ?? 0) : 0
+	})
+
+	// seedAuction sets starting_bid to 100 SAT, so minBid = 100.
+	const minBid = 100
+	const bidAmount = Math.max(minBid, balance + 100)
+
+	// Enter edit mode to access the custom bid input field.
+	const editButton = page.locator('button[title="Customize bid"]')
+	await editButton.waitFor({ state: 'visible', timeout: 10_000 })
+	await editButton.click()
+
+	// Clear and type the new bid amount.
+	const bidInput = page.locator('input[type="number"]').first()
+	await bidInput.fill(String(bidAmount))
+}
+
 const parseBolt11Sats = (bolt11: string): number => {
 	const amountMillisatsRaw = decode(bolt11).sections.find((section) => section.name === 'amount')?.value
 	if (!amountMillisatsRaw) {
@@ -331,6 +368,10 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 			await buyerPage.reload()
 			await waitForWalletBalance(buyerPage, 5_000)
 
+			// Dynamically set bid amount to exceed actual wallet balance, ensuring
+			// hasInsufficientBidFunds = true regardless of accumulated balance.
+			await ensureInsufficientBidFunds(buyerPage)
+
 			await buyerPage
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
 				.first()
@@ -349,8 +390,8 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 				await buyerPage.getByRole('option').first().click()
 			}
 
-			// Confirm the bid — wallet has insufficient funds (40 sats on accepted
-			// mints vs 100 sat starting bid), so the DepositLightningModal opens in
+			// Confirm the bid — wallet has insufficient funds (bid amount exceeds
+			// total wallet balance), so the DepositLightningModal opens in
 			// bid-variant quick view.
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
 
@@ -495,12 +536,16 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
 			// Wait for wallet to initialise, then fund with a small amount so
-			// the wallet knows about the mint. The 20 sat balance is insufficient
-			// for the 100 sat starting bid, so the deposit modal will open.
+			// the wallet knows about the mint. The bid amount is set dynamically
+			// to exceed the wallet balance, so the deposit modal will open.
 			await waitForWalletReady(buyerPage)
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+
+			// Dynamically set bid amount to exceed actual wallet balance, ensuring
+			// hasInsufficientBidFunds = true regardless of accumulated balance.
+			await ensureInsufficientBidFunds(buyerPage)
 
 			// Click the bid button — opens the Confirm Bid dialog.
 			await buyerPage
@@ -574,6 +619,10 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+
+			// Dynamically set bid amount to exceed actual wallet balance, ensuring
+			// hasInsufficientBidFunds = true regardless of accumulated balance.
+			await ensureInsufficientBidFunds(buyerPage)
 
 			// Place a bid to open the deposit modal.
 			await buyerPage
@@ -657,12 +706,16 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
 
 			// Wait for wallet and fund with a small amount so the wallet
-			// knows about the mint. The 20 sat balance is insufficient for
-			// the 100 sat starting bid, so the deposit modal will open.
+			// knows about the mint. The bid amount is set dynamically to
+			// exceed the wallet balance, so the deposit modal will open.
 			await waitForWalletReady(buyerPage)
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+
+			// Dynamically set bid amount to exceed actual wallet balance, ensuring
+			// hasInsufficientBidFunds = true regardless of accumulated balance.
+			await ensureInsufficientBidFunds(buyerPage)
 
 			// Intercept NIP-07 signEvent for kind-1023 to simulate a publish
 			// failure (e.g., relay rejection). After the deposit succeeds and
@@ -682,8 +735,8 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				}
 			})
 
-			// Place a bid — wallet has insufficient funds (20 sats < 100 sat
-			// starting bid), so the deposit modal opens after Confirm.
+			// Place a bid — wallet has insufficient funds (bid amount exceeds
+			// wallet balance), so the deposit modal opens after Confirm.
 			await buyerPage
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
 				.first()
