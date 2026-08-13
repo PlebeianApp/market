@@ -284,7 +284,34 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
 				.first()
 				.click()
+
+			// Confirm Bid dialog appears (rules already acknowledged).
+			const confirmDialog = buyerPage.getByRole('dialog', { name: /confirm bid/i })
+			await expect(confirmDialog).toBeVisible({ timeout: 10_000 })
+
+			// Select a mint in the confirm dialog (if a mint selector is shown).
+			// The mint selector is a Radix Select (combobox) whose dropdown content
+			// is portaled outside the dialog DOM, so we query options at page level.
+			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
+			if (await mintSelectTrigger.isVisible().catch(() => false)) {
+				await mintSelectTrigger.click()
+				await buyerPage.getByRole('option').first().click()
+			}
+
+			// Confirm the bid — wallet has insufficient funds (40 sats on accepted
+			// mints vs 100 sat starting bid), so the DepositLightningModal opens in
+			// bid-variant quick view.
+			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
+
+			// The deposit modal opens in bid-variant quick view (title "Bid with
+			// lightning"). Switch to the classic top-up view to access the mint
+			// selector and form fields.
 			const depositDialog = buyerPage.getByRole('dialog')
+			await expect(depositDialog.getByText('Bid with lightning')).toBeVisible({ timeout: 10_000 })
+			await depositDialog.getByRole('button', { name: /or top up your wallet/i }).click()
+
+			// In classic view the title changes to "Deposit Lightning" and the
+			// form (amount input, mint selector, Generate Invoice button) appears.
 			await expect(depositDialog.getByText('Deposit Lightning')).toBeVisible({ timeout: 10_000 })
 
 			const mintSelect = depositDialog.locator('select').first()
@@ -339,9 +366,16 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 	 * DepositLightningModal. The QR is rendered as an <svg> inside the dialog.
 	 */
 	async function waitForDepositQR(page: import('@playwright/test').Page, timeoutMs = 30_000) {
-		const dialog = page.getByRole('dialog', { name: /bid with lightning/i })
+		// The DepositLightningModal renders a Radix Dialog whose DialogTitle is
+		// "Bid with lightning" (bid variant). The title contains a Zap icon <svg>,
+		// so we locate the dialog by its visible title text rather than by role
+		// name (which can be unreliable when the title has mixed content).
+		const dialog = page.getByRole('dialog').filter({ hasText: /bid with lightning/i })
 		await expect(dialog).toBeVisible({ timeout: 15_000 })
-		await expect(dialog.locator('svg')).toBeVisible({ timeout: timeoutMs })
+		// The QR code is rendered as a <QRCodeSVG> which produces an <svg> inside
+		// a <button>. The title's Zap icon is also an <svg>, so target the QR
+		// container specifically (it's inside a div with fixed 216×216 dimensions).
+		await expect(dialog.locator('div[class*="216"] svg')).toBeVisible({ timeout: timeoutMs })
 		return dialog
 	}
 
