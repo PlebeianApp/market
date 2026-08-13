@@ -145,6 +145,20 @@ jobs:
             RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
             APP_DIR="$HOME/previews/pr-$PR_NUMBER"
             cd "$APP_DIR"
+            # Build nak image locally if not present (ghcr.io/fiatjaf/nak is
+            # not publicly pullable).
+            if ! docker images --format '{{.Repository}}:{{.Tag}}' | grep -q 'nak:latest'; then
+              echo "Building nak image from source"
+              cd /tmp
+              if [ -d nak-src ]; then
+                cd nak-src && git pull --quiet
+              else
+                git clone --quiet https://github.com/fiatjaf/nak.git nak-src
+                cd nak-src
+              fi
+              docker build -t nak:latest .
+              cd "$APP_DIR"
+            fi
             cat > docker-compose.yml <<EOF
             services:
               market-app:
@@ -165,7 +179,7 @@ jobs:
                 depends_on:
                   - nak-relay
               nak-relay:
-                image: ghcr.io/fiatjaf/nak:latest
+                image: nak:latest
                 command: serve --hostname 0.0.0.0
                 ports:
                   - "${RELAY_PORT}:10547"
