@@ -316,7 +316,7 @@ async function seedVerdict(
 		['e', auction.auctionRootEventId],
 		['bid', bidId],
 		['claim', claim],
-		['observed_at', String(Math.floor(Date.now() / 1000))],
+		['observed_at', String(auction.endAt)],
 	]
 
 	const event = finalizeEvent(
