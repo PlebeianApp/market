@@ -151,3 +151,127 @@ describe('mint quote fee bounds', () => {
 		).toThrow('invoice below the requested deposit amount')
 	})
 })
+
+describe('checkDepositNow', () => {
+	test('while pending resolves on success via deposit check', async () => {
+		const deposit = createMockDeposit()
+
+		// Simulate the success handler that startDeposit attaches to the deposit
+		deposit.on('success', () => {
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'success',
+				activeDeposit: null,
+				depositInvoice: null,
+			}))
+		})
+
+		nip60Store.setState((state) => ({
+			...state,
+			activeDeposit: deposit as never,
+			depositInvoice: 'lnbc1test',
+			depositStatus: 'pending',
+			error: null,
+		}))
+
+		await nip60Actions.checkDepositNow()
+
+		expect(nip60Store.state.depositStatus).toBe('success')
+		expect(deposit.getCheckCalls()).toBe(1)
+	})
+
+	test('while pending with check error stays pending (error is caught, not fatal)', async () => {
+		const handlers: Partial<Record<DepositEventName, (value?: unknown) => void>> = {}
+		const failingDeposit = {
+			on: (event: DepositEventName, handler: (value?: unknown) => void) => {
+				handlers[event] = handler
+				return undefined
+			},
+			check: async () => {
+				throw new Error('mint unreachable')
+			},
+			emitSuccess: () => handlers.success?.(),
+			emitError: (error: string) => handlers.error?.(error),
+		}
+
+		nip60Store.setState((state) => ({
+			...state,
+			activeDeposit: failingDeposit as never,
+			depositInvoice: 'lnbc1test',
+			depositStatus: 'pending',
+			error: null,
+		}))
+
+		await nip60Actions.checkDepositNow()
+
+		// checkDepositNow catches the check error; depositStatus stays pending
+		expect(nip60Store.state.depositStatus).toBe('pending')
+	})
+
+	test('while awaiting_confirmation_retry delegates to retryDepositConfirmation', async () => {
+		const deposit = createMockDeposit()
+
+		nip60Store.setState((state) => ({
+			...state,
+			activeDeposit: deposit as never,
+			depositInvoice: 'lnbc1test',
+			depositStatus: 'awaiting_confirmation_retry',
+			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
+		}))
+
+		await nip60Actions.checkDepositNow()
+
+		// retryDepositConfirmation sets status to pending and triggers a re-check
+		expect(nip60Store.state.depositStatus).toBe('pending')
+		expect(nip60Store.state.error).toBeNull()
+		expect(deposit.getCheckCalls()).toBe(1)
+	})
+
+	test('while idle is a no-op (no active deposit)', async () => {
+		await nip60Actions.checkDepositNow()
+		expect(nip60Store.state.depositStatus).toBe('idle')
+	})
+
+	test('while success is a no-op (does not re-check a completed deposit)', async () => {
+		const deposit = createMockDeposit()
+
+		nip60Store.setState((state) => ({
+			...state,
+			activeDeposit: deposit as never,
+			depositStatus: 'success',
+		}))
+
+		await nip60Actions.checkDepositNow()
+
+		expect(deposit.getCheckCalls()).toBe(0)
+		expect(nip60Store.state.depositStatus).toBe('success')
+	})
+})
+
+describe('deposit timeout error detection', () => {
+	test('waitForDepositConfirmation timeout error message includes timeout duration', async () => {
+		const deposit = createMockDeposit()
+
+		// The error message format is what monitorDepositConfirmation uses to
+		// distinguish a timeout from other errors (isDepositConfirmationTimeoutError).
+		await expect(waitForDepositConfirmation(deposit as never, 50)).rejects.toThrow(/timeout after 50ms/)
+	})
+
+	test('waitForDepositConfirmation error event is distinct from timeout (not mistaken for timeout)', async () => {
+		const deposit = createMockDeposit()
+
+		const promise = waitForDepositConfirmation(deposit as never, 5000)
+		deposit.emitError('mint connection refused')
+
+		await expect(promise).rejects.toThrow('mint connection refused')
+	})
+
+	test('waitForDepositConfirmation resolves before timeout when success arrives first', async () => {
+		const deposit = createMockDeposit()
+
+		const promise = waitForDepositConfirmation(deposit as never, 5000)
+		deposit.emitSuccess()
+
+		await expect(promise).resolves.toBeUndefined()
+	})
+})
