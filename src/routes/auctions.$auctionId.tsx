@@ -497,16 +497,6 @@ function AuctionDetailRoute() {
 		[bids],
 	)
 
-	const parsedTopBidForSettlement = useMemo(() => {
-		if (!parsedBidsForSettlement.length) return null
-		return parsedBidsForSettlement.reduce((best, bid) => {
-			const delta = bid.amount - best.amount
-			if (delta > 0) return bid
-			if (delta < 0) return best
-			return bid.createdAt < best.createdAt ? bid : best
-		}, parsedBidsForSettlement[0])
-	}, [parsedBidsForSettlement])
-
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const parsedVerdicts = useMemo(() => {
 		return (verdictsQuery.data ?? [])
