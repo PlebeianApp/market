@@ -1164,7 +1164,7 @@ export const nip60Actions = {
 					 * mint appears in the store before the deposit modal opens.
 					 */
 					addMint: nip60Actions.addMint,
-					}
+				}
 			}
 		} catch (err) {
 			console.error('[nip60] Failed to initialize wallet:', err)

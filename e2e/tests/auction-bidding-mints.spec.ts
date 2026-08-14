@@ -372,10 +372,13 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 			// Explicitly register mints after reload — the wallet re-inits from
 			// relay events and may not have the mint in its store when the
 			// deposit modal opens, causing filteredMints to be empty.
-			await buyerPage.evaluate((mints) => {
-				const w = (window as any).__nip60
-				if (w?.addMint) mints.forEach((m: string) => w.addMint(m))
-			}, [MINT_A, MINT_B])
+			await buyerPage.evaluate(
+				(mints) => {
+					const w = (window as any).__nip60
+					if (w?.addMint) mints.forEach((m: string) => w.addMint(m))
+				},
+				[MINT_A, MINT_B],
+			)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
