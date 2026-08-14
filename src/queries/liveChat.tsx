@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
-import { verifyEvent } from 'nostr-tools'
+import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
@@ -82,7 +82,7 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 		// NDK's sampling verification may skip forged events, so we verify
 		// explicitly before accepting the event as valid.
 		const raw = candidate.rawEvent?.() ?? candidate
-		if (!verifyEvent(raw as Parameters<typeof verifyEvent>[0])) {
+		if (!verifyNostrEventSignature(raw as Parameters<typeof verifyNostrEventSignature>[0])) {
 			console.warn('fetchLiveActivity: skipping live activity event with invalid signature', candidate.id?.slice(0, 16))
 			continue
 		}

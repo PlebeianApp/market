@@ -1,5 +1,5 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { getPublicKey } from 'nostr-tools'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { finalizeEvent, getPublicKey, verifyEvent as realVerifyEvent } from 'nostr-tools'
 import { parseLiveActivity, deriveLiveActivityStatus, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
 import { configStore } from '@/lib/stores/config'
 
@@ -11,36 +11,18 @@ let fetchedFilters: Record<string, unknown>[] = []
 let relayEvents: Set<Record<string, unknown>> = new Set()
 let verifyEventResult: ((event: Record<string, unknown>) => boolean) | null = null
 
-// mock.module() is process-wide in `bun test`: every test file shares one
-// process, and this mock leaks into files that run after this one (e.g.
-// src/lib/__tests__/nostr/nip59.test.ts). Capture the real nostr-tools exports
-// BEFORE installing the mock so we can spread them below — later files keep
-// real nip44/finalizeEvent/getEventHash/etc. and only see verifyEvent changed.
-const realNostrTools = await import('nostr-tools')
-const realVerifyEvent = realNostrTools.verifyEvent
-
-// Flipped in afterAll so that, once this file's tests are done, the leaked
-// mock is a transparent passthrough to the real verifyEvent implementation.
-let useRealVerifyEvent = false
-
-// Mock verifyEvent from nostr-tools so we can control which events pass/fail
-// signature verification in tests without needing real cryptographic signatures.
-mock.module('nostr-tools', () => ({
-	...realNostrTools,
-	verifyEvent: mock((event: Record<string, unknown>) => {
-		if (useRealVerifyEvent) {
-			return realVerifyEvent(event as unknown as Parameters<typeof realVerifyEvent>[0])
-		}
+// Mock only the signature-verification seam that liveChat.tsx uses, so we can
+// control which events pass/fail signature verification without needing real
+// cryptographic signatures. Never mock 'nostr-tools' itself: bun applies
+// mock.module process-wide for the whole test run, which would replace the
+// real verifyEvent for every other test file in the suite.
+mock.module('@/lib/nostr/event-signature', () => ({
+	verifyNostrEventSignature: mock((event: Record<string, unknown>) => {
 		if (verifyEventResult) return verifyEventResult(event)
-		// Default within this file: accept events that have a 'sig' field, reject those without
+		// Default: accept events that have a 'sig' field, reject those without
 		return !!event.sig
 	}),
 }))
-
-afterAll(() => {
-	verifyEventResult = null
-	useRealVerifyEvent = true
-})
 
 mock.module('@/lib/stores/ndk', () => ({
 	ndkStore: {
@@ -277,6 +259,37 @@ describe('liveChat queries', () => {
 			// Both are valid, but the one with the lower ID should be selected
 			// (sort is created_at desc, then event ID asc as tiebreaker)
 			expect(result).not.toBeNull()
+		})
+	})
+
+	describe('signature-verification seam isolation (regression)', () => {
+		test('nostr-tools verifyEvent stays real while the liveChat seam is mocked', () => {
+			// Regression: this file used to mock the whole 'nostr-tools' module,
+			// which bun applies process-wide for the entire test run. That made
+			// realVerifyEvent accept any event with a 'sig' field and broke
+			// signature-verification tests in nip59, nip17, and orders suites.
+			// The seam mock must only affect liveChat's own verification path.
+			const signerPriv = crypto.getRandomValues(new Uint8Array(32))
+			const signedEvent = finalizeEvent(
+				{
+					kind: LIVE_ACTIVITY_KIND,
+					content: '',
+					created_at: Math.floor(Date.now() / 1000),
+					tags: [['d', 'auction:seam-isolation:signed']],
+				},
+				signerPriv,
+			)
+
+			// Real verification accepts a genuinely signed event...
+			expect(realVerifyEvent(signedEvent)).toBe(true)
+
+			// ...and rejects a forged signature, even though the event carries
+			// a syntactically valid sig field and the seam mock is active.
+			// Clone via JSON: nostr-tools caches its verdict on the event via a
+			// symbol property, and object spread would copy that cached verdict.
+			const forgedEvent = JSON.parse(JSON.stringify(signedEvent)) as typeof signedEvent
+			forgedEvent.sig = '0'.repeat(128)
+			expect(realVerifyEvent(forgedEvent)).toBe(false)
 		})
 	})
 
