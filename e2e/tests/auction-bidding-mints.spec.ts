@@ -113,6 +113,27 @@ async function waitForWalletBalance(page: import('@playwright/test').Page, minBa
 }
 
 /**
+ * Wait until a mint URL is registered in the wallet store. The __nip60
+ * addMint bridge updates the store synchronously, but polling makes the
+ * registration explicit (and fails loudly if the wallet was not ready to
+ * accept it) instead of relying on a fixed sleep for React to pick up the
+ * store update.
+ */
+async function waitForWalletMint(page: import('@playwright/test').Page, mintUrl: string, timeoutMs = 30_000) {
+	const start = Date.now()
+	while (Date.now() - start < timeoutMs) {
+		const registered = await page.evaluate((url) => {
+			const w = (window as any).__nip60
+			const mints: string[] = w ? (w.getStatus().mints ?? []) : []
+			return mints.includes(url)
+		}, mintUrl)
+		if (registered) return
+		await page.waitForTimeout(500)
+	}
+	throw new Error(`Mint ${mintUrl} did not appear in the wallet store within timeout`)
+}
+
+/**
  * Dynamically set the bid amount to exceed the actual wallet balance,
  * ensuring `hasInsufficientBidFunds = true` regardless of accumulated
  * balance from previous tests.
@@ -554,6 +575,11 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Wait for the wallet balance to be loaded from relay events after
+			// reload. waitForWalletReady only checks status === 'ready', but the
+			// mint balances may not be loaded yet, causing resolveAuctionMintSelection
+			// to see no available mints and depositMint to be null.
+			await waitForWalletBalance(buyerPage, 1)
 			// Explicitly register mint after reload — wallet re-inits from relay
 			// events and may not have the mint in its store when the deposit
 			// modal opens, causing filteredMints to be empty.
@@ -561,6 +587,9 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				const w = (window as any).__nip60
 				if (w?.addMint) w.addMint(mint)
 			}, MINT_A)
+			// Wait until the mint is registered in the wallet store so the
+			// deposit modal's mint selection sees it.
+			await waitForWalletMint(buyerPage, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
@@ -637,11 +666,19 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Wait for the wallet balance to be loaded from relay events after
+			// reload. waitForWalletReady only checks status === 'ready', but the
+			// mint balances may not be loaded yet, causing resolveAuctionMintSelection
+			// to see no available mints and depositMint to be null.
+			await waitForWalletBalance(buyerPage, 1)
 			// Explicitly register mint after reload.
 			await buyerPage.evaluate((mint) => {
 				const w = (window as any).__nip60
 				if (w?.addMint) w.addMint(mint)
 			}, MINT_A)
+			// Wait until the mint is registered in the wallet store so the
+			// deposit modal's mint selection sees it.
+			await waitForWalletMint(buyerPage, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
@@ -734,11 +771,19 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Wait for the wallet balance to be loaded from relay events after
+			// reload. waitForWalletReady only checks status === 'ready', but the
+			// mint balances may not be loaded yet, causing resolveAuctionMintSelection
+			// to see no available mints and depositMint to be null.
+			await waitForWalletBalance(buyerPage, 1)
 			// Explicitly register mint after reload.
 			await buyerPage.evaluate((mint) => {
 				const w = (window as any).__nip60
 				if (w?.addMint) w.addMint(mint)
 			}, MINT_A)
+			// Wait until the mint is registered in the wallet store so the
+			// deposit modal's mint selection sees it.
+			await waitForWalletMint(buyerPage, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
