@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { getPublicKey } from 'nostr-tools'
 import { parseLiveActivity, deriveLiveActivityStatus, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
 import { configStore } from '@/lib/stores/config'
@@ -11,15 +11,36 @@ let fetchedFilters: Record<string, unknown>[] = []
 let relayEvents: Set<Record<string, unknown>> = new Set()
 let verifyEventResult: ((event: Record<string, unknown>) => boolean) | null = null
 
+// mock.module() is process-wide in `bun test`: every test file shares one
+// process, and this mock leaks into files that run after this one (e.g.
+// src/lib/__tests__/nostr/nip59.test.ts). Capture the real nostr-tools exports
+// BEFORE installing the mock so we can spread them below — later files keep
+// real nip44/finalizeEvent/getEventHash/etc. and only see verifyEvent changed.
+const realNostrTools = await import('nostr-tools')
+const realVerifyEvent = realNostrTools.verifyEvent
+
+// Flipped in afterAll so that, once this file's tests are done, the leaked
+// mock is a transparent passthrough to the real verifyEvent implementation.
+let useRealVerifyEvent = false
+
 // Mock verifyEvent from nostr-tools so we can control which events pass/fail
 // signature verification in tests without needing real cryptographic signatures.
 mock.module('nostr-tools', () => ({
+	...realNostrTools,
 	verifyEvent: mock((event: Record<string, unknown>) => {
+		if (useRealVerifyEvent) {
+			return realVerifyEvent(event as unknown as Parameters<typeof realVerifyEvent>[0])
+		}
 		if (verifyEventResult) return verifyEventResult(event)
-		// Default: accept events that have a 'sig' field, reject those without
+		// Default within this file: accept events that have a 'sig' field, reject those without
 		return !!event.sig
 	}),
 }))
+
+afterAll(() => {
+	verifyEventResult = null
+	useRealVerifyEvent = true
+})
 
 mock.module('@/lib/stores/ndk', () => ({
 	ndkStore: {
