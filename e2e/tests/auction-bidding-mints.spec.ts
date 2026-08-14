@@ -24,6 +24,8 @@ import { decode } from 'light-bolt11-decoder'
 
 useWebSocketImplementation(WebSocket)
 
+test.use({ video: 'on' })
+
 const D_TAG = 'e2e-auction-mint-test'
 const MINT_A = 'http://localhost:3338'
 const MINT_B = 'http://127.0.0.1:3338'
@@ -367,6 +369,13 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 			await fundWallet(buyerPage, 5_000, MINT_UNTRUSTED)
 			await buyerPage.reload()
 			await waitForWalletBalance(buyerPage, 5_000)
+			// Explicitly register mints after reload — the wallet re-inits from
+			// relay events and may not have the mint in its store when the
+			// deposit modal opens, causing filteredMints to be empty.
+			await buyerPage.evaluate((mints) => {
+				const w = (window as any).__nip60
+				if (w?.addMint) mints.forEach((m: string) => w.addMint(m))
+			}, [MINT_A, MINT_B])
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
@@ -542,11 +551,17 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Explicitly register mint after reload — wallet re-inits from relay
+			// events and may not have the mint in its store when the deposit
+			// modal opens, causing filteredMints to be empty.
+			await buyerPage.evaluate((mint) => {
+				const w = (window as any).__nip60
+				if (w?.addMint) w.addMint(mint)
+			}, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
 			await ensureInsufficientBidFunds(buyerPage)
-
 			// Click the bid button — opens the Confirm Bid dialog.
 			await buyerPage
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
@@ -619,11 +634,15 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Explicitly register mint after reload.
+			await buyerPage.evaluate((mint) => {
+				const w = (window as any).__nip60
+				if (w?.addMint) w.addMint(mint)
+			}, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
 			await ensureInsufficientBidFunds(buyerPage)
-
 			// Place a bid to open the deposit modal.
 			await buyerPage
 				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
@@ -712,11 +731,15 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			await fundWallet(buyerPage, 20, MINT_A)
 			await buyerPage.reload()
 			await waitForWalletReady(buyerPage)
+			// Explicitly register mint after reload.
+			await buyerPage.evaluate((mint) => {
+				const w = (window as any).__nip60
+				if (w?.addMint) w.addMint(mint)
+			}, MINT_A)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
 			await ensureInsufficientBidFunds(buyerPage)
-
 			// Intercept NIP-07 signEvent for kind-1023 to simulate a publish
 			// failure (e.g., relay rejection). After the deposit succeeds and
 			// e-cash is minted, the bid mutation will throw, and the funding

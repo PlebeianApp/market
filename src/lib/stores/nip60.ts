@@ -1157,7 +1157,14 @@ export const nip60Actions = {
 							deposit.emit('success', null)
 						}
 					},
-				}
+					/**
+					 * Dev-only: explicitly register a mint URL in the wallet.
+					 * Exposed via the __nip60 bridge so e2e tests can call
+					 * nip60Actions.addMint() after fundWallet to ensure the
+					 * mint appears in the store before the deposit modal opens.
+					 */
+					addMint: nip60Actions.addMint,
+					}
 			}
 		} catch (err) {
 			console.error('[nip60] Failed to initialize wallet:', err)
