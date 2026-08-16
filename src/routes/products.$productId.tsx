@@ -345,6 +345,7 @@ function RouteComponent() {
 
 	// Derive all product fields from the loaded product event (avoids conditional hook calls / racey dependent queries)
 	const title = getProductTitle(product) || 'Untitled Product'
+	const description = getProductDescription(product)
 	const images = getProductImages(product) || []
 	const priceTag = getProductPrice(product)
 	const typeTag = getProductType(product)
