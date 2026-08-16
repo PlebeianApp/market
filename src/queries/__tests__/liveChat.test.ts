@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, verifyEvent as realVerifyEvent } from 'nostr-tools'
-import { parseLiveActivity, deriveLiveActivityStatus, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
+import { parseLiveActivity, deriveLiveActivityStatus, buildLiveActivityDTag, LIVE_ACTIVITY_KIND } from '@/lib/nip53'
 import { configStore } from '@/lib/stores/config'
 
 const CVM_PUBKEY = 'c'.repeat(64)
@@ -155,11 +155,41 @@ describe('liveChat queries', () => {
 			expect(fetchedFilters[0].authors).toEqual([CVM_PUBKEY])
 		})
 
-		test('includes #d filter for pre-dedup validation', async () => {
+		test('🔴 pre-dedup #d filter is the DERIVED live-activity d, not the auction bare d', async () => {
 			verifyEventResult = () => true
 			relayEvents.add(liveActivityEvent())
 			await fetchLiveActivity(auctionEvent())
-			expect(fetchedFilters[0]['#d']).toBeDefined()
+			// The kind-30311 live-activity event's canonical d tag is derived from
+			// the auction coordinate via buildLiveActivityDTag(coord). A conforming
+			// relay returns zero events for a filter on the auction's bare d.
+			const expectedActivityD = buildLiveActivityDTag(AUCTION_COORDINATE)
+			expect(fetchedFilters[0]['#d']).toEqual([expectedActivityD])
+			// Guard against regression to the auction's bare d tag.
+			expect(fetchedFilters[0]['#d']).not.toEqual(['auction-1'])
+		})
+
+		test('🔴 post-fetch validation: rejects candidate whose d tag is the auction bare d', async () => {
+			verifyEventResult = () => true
+			// Correct author and kind, valid signature, but the d tag is the
+			// auction's bare d instead of the derived live-activity d.
+			relayEvents.add(liveActivityEvent({ dTag: 'auction-1' }))
+			const result = await fetchLiveActivity(auctionEvent())
+			expect(result).toBeNull()
+		})
+
+		test('🔴 post-fetch validation: rejects candidate whose d tag belongs to a different auction', async () => {
+			verifyEventResult = () => true
+			relayEvents.add(liveActivityEvent({ dTag: `auction:${SELLER_PUBKEY.slice(0, 16)}:other-auction` }))
+			const result = await fetchLiveActivity(auctionEvent())
+			expect(result).toBeNull()
+		})
+
+		test('accepts candidate whose d tag exactly equals the derived live-activity d', async () => {
+			verifyEventResult = () => true
+			relayEvents.add(liveActivityEvent())
+			const result = await fetchLiveActivity(auctionEvent())
+			expect(result).not.toBeNull()
+			expect(result?.dTag).toBe(buildLiveActivityDTag(AUCTION_COORDINATE))
 		})
 
 		test('accepts events ONLY from cvmServerPubkey (rejects spoofed events from random pubkey)', async () => {
