@@ -469,6 +469,20 @@ function RouteComponent() {
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
 	useHeroBackground(backgroundImageUrl, heroClassName)
 
+	// Build product URL and meta description for social sharing
+	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
+	const metaDescription = description.length > 160 ? `${description.substring(0, 157)}...` : description
+
+	// Inject Open Graph and Twitter Card meta tags
+	useDocumentMeta({
+		title,
+		description: metaDescription,
+		image: backgroundImageUrl || undefined,
+		url: productUrl,
+		price,
+		currency: priceTag?.[2] || 'SATS',
+	})
+
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
 	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
 		return (
@@ -638,20 +652,6 @@ function RouteComponent() {
 			}
 		}, 100)
 	}
-
-	// Build product URL and meta description for social sharing
-	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
-	const metaDescription = description.length > 160 ? `${description.substring(0, 157)}...` : description
-
-	// Inject Open Graph and Twitter Card meta tags
-	useDocumentMeta({
-		title,
-		description: metaDescription,
-		image: backgroundImageUrl || undefined,
-		url: productUrl,
-		price,
-		currency: priceTag?.[2] || 'SATS',
-	})
 
 	return (
 		<div className="flex flex-col gap-4">
