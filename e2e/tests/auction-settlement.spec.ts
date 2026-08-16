@@ -316,7 +316,10 @@ async function seedVerdict(
 		['e', auction.auctionRootEventId],
 		['bid', bidId],
 		['claim', claim],
-		['observed_at', String(auction.endAt)],
+		// observed_at must match the bid's createdAt (Math.max(1, endAt-60)) to stay
+		// within max_skew_sec. Using auction.endAt causes a skew > max_skew_sec
+		// for past-window auctions (endAt=50, bid createdAt=1 → skew=49 > 30).
+		['observed_at', String(Math.max(1, auction.endAt - 60))],
 	]
 
 	const event = finalizeEvent(
@@ -342,7 +345,7 @@ async function seedClaimOrder(
 	const tags: string[][] = [
 		['p', auction.sellerPk],
 		['subject', 'Plebeian Auction Claim'],
-		['type', 'order_creation'],
+		['type', '1'],
 		['order', `order-${Date.now()}`],
 		['amount', String(amount)],
 		['a', auction.auctionCoordinate],
