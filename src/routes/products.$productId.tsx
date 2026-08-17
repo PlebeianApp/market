@@ -102,16 +102,27 @@ function useDocumentMeta(config: MetaTagsConfig) {
 	useEffect(() => {
 		const { title, description, image, url, price, currency, enabled = true } = config
 		if (!enabled) return
-		const elements: HTMLElement[] = []
+		const createdElements: HTMLElement[] = []
+		const restoredContents: Array<{ element: Element; originalContent: string | null }> = []
 
-		// Helper to create and track meta tags
+		// Helper to apply a meta tag. Server-side og injection (see
+		// src/index.tsx + src/lib/ogTags.ts) already renders og:/twitter:
+		// tags into the initial HTML for product pages, so reuse those
+		// elements instead of appending duplicates — snapshotting their
+		// original content so cleanup can restore the server-rendered value.
 		const addMeta = (attributes: Record<string, string>) => {
-			const meta = document.createElement('meta')
+			const selector = attributes.property !== undefined ? `meta[property="${attributes.property}"]` : `meta[name="${attributes.name}"]`
+			let meta = document.head.querySelector<HTMLMetaElement>(selector)
+			if (meta) {
+				restoredContents.push({ element: meta, originalContent: meta.getAttribute('content') })
+			} else {
+				meta = document.createElement('meta')
+				createdElements.push(meta)
+			}
 			Object.entries(attributes).forEach(([key, value]) => {
-				meta.setAttribute(key, value)
+				meta!.setAttribute(key, value)
 			})
-			document.head.appendChild(meta)
-			elements.push(meta)
+			if (!meta!.parentNode) document.head.appendChild(meta)
 		}
 
 		// Set document title
@@ -149,10 +160,14 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		// Cleanup on unmount or when config changes
 		return () => {
 			document.title = originalTitle
-			elements.forEach((el) => {
+			createdElements.forEach((el) => {
 				if (el.parentNode) {
 					el.parentNode.removeChild(el)
 				}
+			})
+			restoredContents.forEach(({ element, originalContent }) => {
+				if (originalContent === null) element.removeAttribute('content')
+				else element.setAttribute('content', originalContent)
 			})
 		}
 	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.enabled])
