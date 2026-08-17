@@ -94,11 +94,14 @@ interface MetaTagsConfig {
 	url: string
 	price?: number
 	currency?: string
+	/** When false, skip all meta/title injection (e.g. NSFW-gated products). */
+	enabled?: boolean
 }
 
 function useDocumentMeta(config: MetaTagsConfig) {
 	useEffect(() => {
-		const { title, description, image, url, price, currency } = config
+		const { title, description, image, url, price, currency, enabled = true } = config
+		if (!enabled) return
 		const elements: HTMLElement[] = []
 
 		// Helper to create and track meta tags
@@ -152,7 +155,7 @@ function useDocumentMeta(config: MetaTagsConfig) {
 				}
 			})
 		}
-	}, [config.title, config.description, config.image, config.url, config.price, config.currency])
+	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.enabled])
 }
 
 declare module '@tanstack/react-router' {
@@ -465,16 +468,26 @@ function RouteComponent() {
 	// Get first image URL for background
 	const backgroundImageUrl = formattedImages[0]?.url || ''
 
+	// Check if this is an NSFW product and user hasn't enabled viewing.
+	// Must be computed before useHeroBackground/useDocumentMeta (both hooks run
+	// before the gate early-return for React hook-order stability) so a gated
+	// NSFW product never leaks its title, description, or first image into
+	// <head> (og:*, twitter:*, document.title, hero background CSS) before the
+	// content gate renders.
+	const productIsNSFW = isNSFWProduct(product)
+	const nsfwGated = productIsNSFW && !showNSFWContent
+
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(backgroundImageUrl, heroClassName)
+	useHeroBackground(nsfwGated ? '' : backgroundImageUrl, heroClassName)
 
 	// Build product URL and meta description for social sharing
 	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
 	const metaDescription = description.length > 160 ? `${description.substring(0, 157)}...` : description
 
-	// Inject Open Graph and Twitter Card meta tags
+	// Inject Open Graph and Twitter Card meta tags (no-op while the NSFW gate is active)
 	useDocumentMeta({
+		enabled: !nsfwGated,
 		title,
 		description: metaDescription,
 		image: backgroundImageUrl || undefined,
@@ -527,9 +540,9 @@ function RouteComponent() {
 		)
 	}
 
-	// Check if this is an NSFW product and user hasn't enabled viewing
-	const productIsNSFW = isNSFWProduct(product)
-	if (productIsNSFW && !showNSFWContent) {
+	// Adult content gate: product is NSFW and the user hasn't enabled viewing.
+	// (productIsNSFW/nsfwGated are computed before the head-injecting hooks above)
+	if (nsfwGated) {
 		return (
 			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
 				<AlertTriangle className="w-16 h-16 text-amber-500" />
