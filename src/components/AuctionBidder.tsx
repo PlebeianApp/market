@@ -23,7 +23,7 @@ import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auct
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type KeyboardEvent } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
 import { InputGroup, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
@@ -321,6 +321,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		try {
 			await bidMutation.mutateAsync(bidData)
 			toast.success('Bid placed successfully')
+			// Reset the editing flag so the input re-syncs to the new minBid floor.
+			setHasStartedEditingBidAmount(false)
 			onBidSuccess?.()
 		} catch {
 			// Error handled by mutation
@@ -343,10 +345,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (hasStartedEditingBidAmount) return
 		if (!event.key) return
 		if (String(bidAmountInput) !== String(minBid)) return
-		if (!/^[0-9.]$/.test(event.key)) return
+		if (!/^[0-9]$/.test(event.key)) return
 
 		setHasStartedEditingBidAmount(true)
 		setBidAmountInput('')
+	}
+
+	const handleBidAmountInputPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+		event.preventDefault()
+		const pasted = event.clipboardData?.getData('text') ?? ''
+		setHasStartedEditingBidAmount(true)
+		setBidAmountInput(pasted)
 	}
 
 	const handleBidAmountInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -479,6 +488,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							value={bidAmountInput}
 							onChange={handleBidAmountInputChange}
 							onKeyDown={handleBidAmountInputKeyDown}
+							onPaste={handleBidAmountInputPaste}
 							placeholder={`Min: ${minBid.toLocaleString()}`}
 							disabled={isDisabledInput}
 						/>
