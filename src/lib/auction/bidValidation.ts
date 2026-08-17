@@ -40,7 +40,16 @@ function classifyBid(
 ): ClassifiedBid {
 	const confirmingVerdicts = verdicts.filter((v) => v.bidEventId === bid.id && auction.auditors.includes(v.validatorPubkey))
 
-	const validVerdicts = confirmingVerdicts.filter((v) => v.claim === 'valid_bid_placed')
+	// A `won_pending_settlement` verdict is a strictly stronger assertion than
+	// `valid_bid_placed` (the validator confirmed the bid is valid AND is the
+	// canonical pending-settlement winner). Kind-30440 is addressable on
+	// `d = bidder:auction`, so a validator has exactly one latest verdict per
+	// bid — once it upgrades to `won_pending_settlement`, the earlier
+	// `valid_bid_placed` is replaced on the relay. Counting only
+	// `valid_bid_placed` here would make winner determination break the moment
+	// validators publish the settlement-ready state that `publishBidderPathRelease`
+	// requires. Treat both as satisfying the valid-bid quorum.
+	const validVerdicts = confirmingVerdicts.filter((v) => v.claim === 'valid_bid_placed' || v.claim === 'won_pending_settlement')
 	const invalidVerdicts = confirmingVerdicts.filter((v) => v.claim === 'bid_invalid' || v.claim === 'fraudulent_bid')
 
 	if (validVerdicts.length >= auction.auditorQuorum) {
@@ -49,9 +58,17 @@ function classifyBid(
 
 		// For ended auctions, NUT-7 spend state is no longer relevant for bid validity.
 		// A 'spent' state after settlement means the seller redeemed (expected), not fraud.
-		// Pass 'unspent' as default for ended auctions so validateBid doesn't reject.
+		// Default undefined/unknown/spent states to 'unspent' so validateBid doesn't
+		// reject bids as 'nut7_unknown' — the publish path
+		// (publishAuctionSettlement) legitimately lacks NUT-7 data because it
+		// doesn't poll the mint before winner determination; the NUT-7 atomicity
+		// pre-check runs later, just before redemption.
 		const ended = auction.maxEndAt > 0 && observedAt >= auction.maxEndAt
-		const adjustedNut7State = ended ? (nut7State === 'spent' ? 'unspent' : nut7State) : nut7State
+		const adjustedNut7State = ended
+			? nut7State === 'spent' || nut7State == null || nut7State === 'unknown'
+				? 'unspent'
+				: nut7State
+			: nut7State
 		return {
 			bid,
 			classification: 'valid',

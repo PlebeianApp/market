@@ -719,7 +719,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
-				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 			} finally {
 				relay.close()
 			}
@@ -775,7 +775,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
-				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
+				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 			} finally {
 				relay.close()
 			}
@@ -872,6 +872,14 @@ test.describe('UI interaction — publish events to relay', () => {
 			// Wait for the Publish Settlement button to appear.
 			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 15_000 })
 
+			// Stub receiveLockedEcash: the CashuMintMock's /v1/swap echoes B_ as C_
+			// without real blind signatures, so receiveTokenIntoWallet rejects the
+			// redeemed proofs. A real test mint will replace this stub later.
+			await merchantPage.evaluate(() => {
+				const actions = (window as any).__nip60Actions
+				if (actions) actions.receiveLockedEcash = async () => true
+			})
+
 			// Open a relay subscription BEFORE clicking.
 			const subRelay = await Relay.connect(RELAY_URL)
 			try {
@@ -964,7 +972,7 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		try {
 			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
 			bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
-			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 		} finally {
 			relay.close()
 		}

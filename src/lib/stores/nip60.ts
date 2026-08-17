@@ -903,6 +903,10 @@ export const nip60Actions = {
 			// Only exposed in dev/test mode, never in production.
 			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
 				;(window as any).__nip60Wallet = wallet
+				// Expose nip60Actions so e2e tests can stub mint-dependent methods
+				// (e.g. receiveLockedEcash) when running against the CashuMintMock,
+				// which cannot produce valid blind signatures. Same dev/test gate.
+				;(window as any).__nip60Actions = nip60Actions
 			}
 
 			// Subscribe to balance updates
