@@ -1,11 +1,13 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
 import {
 	LIVE_ACTIVITY_KIND,
 	LIVE_CHAT_KIND,
 	AUCTION_KIND,
+	buildLiveActivityDTag,
 	parseLiveActivity,
 	parseLiveChatMessage,
 	type LiveActivity,
@@ -27,6 +29,13 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 
 	const coord = `${AUCTION_KIND}:${event.pubkey}:${dTag}`
 
+	// The kind-30311 live-activity event's canonical `d` tag is derived from the
+	// auction coordinate via buildLiveActivityDTag (currently
+	// `auction:<seller-prefix>:<auction-d>`), NOT the auction's bare `d`.
+	// Filtering on the bare `d` makes a conforming relay return zero events even
+	// when the live-activity event exists.
+	const expectedActivityD = buildLiveActivityDTag(coord)
+
 	// Fail closed: only accept live activity events from the expected CVM server.
 	// The integrated boot path requires this identity before rendering the app.
 	const cvmServerPubkey = configStore.state.config.cvmServerPubkey
@@ -35,17 +44,25 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 		return null
 	}
 
+	// Include #d filter (on the derived live-activity d) to reduce noise and help
+	// NDK dedup select the right replacement candidate before we even see the results.
 	const filter: NDKFilter = {
 		kinds: [LIVE_ACTIVITY_KIND_NDK],
 		authors: [cvmServerPubkey],
 		'#a': [coord],
+		'#d': [expectedActivityD],
 		limit: 10,
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout([filter], { timeoutMs: 5000 })
 	if (events.size === 0) return null
 
-	const sorted = Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+	// Deterministic sort: newest by created_at, then lexicographically lower
+	// event ID as tiebreaker for equal timestamps.
+	const sorted = Array.from(events).sort((a, b) => {
+		if ((b.created_at ?? 0) !== (a.created_at ?? 0)) return (b.created_at ?? 0) - (a.created_at ?? 0)
+		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+	})
 
 	// Belt-and-suspenders: relays or subscriptions may return events outside the
 	// requested author set. Scan the full sorted array and return the first event
@@ -62,9 +79,22 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 			continue
 		}
 
-		const hasDTag = candidate.tags?.some((t: string[]) => t[0] === 'd' && t[1])
-		if (!hasDTag) {
-			console.warn('fetchLiveActivity: skipping live activity event missing required d tag')
+		// The candidate's exact d tag must equal the derived live-activity d —
+		// not merely be defined — so events for other auctions (or the auction's
+		// bare d) can never be accepted as this auction's live activity.
+		const candidateD = candidate.tags?.find((t: string[]) => t[0] === 'd')?.[1]
+		if (candidateD !== expectedActivityD) {
+			console.warn('fetchLiveActivity: skipping live activity event with unexpected d tag', candidateD)
+			continue
+		}
+
+		// Verify the Schnorr signature on the event to reject forged events
+		// that have the correct pubkey/kind/d-tag but an invalid signature.
+		// NDK's sampling verification may skip forged events, so we verify
+		// explicitly before accepting the event as valid.
+		const raw = candidate.rawEvent?.() ?? candidate
+		if (!verifyNostrEventSignature(raw as Parameters<typeof verifyNostrEventSignature>[0])) {
+			console.warn('fetchLiveActivity: skipping live activity event with invalid signature', candidate.id?.slice(0, 16))
 			continue
 		}
 
