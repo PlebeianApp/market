@@ -66,6 +66,46 @@ export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingL
 	'mint_succeeded_bid_publish_failed_reclaimable',
 ]
 
+/**
+ * Reclaim / refund flow for reclaimable states:
+ *
+ * When a bid funding session ends in one of the reclaimable terminal states,
+ * the user's sats are not lost — they remain as Cashu proofs at the mint,
+ * locked under a P2PK timelock with a refund path. Recovery works as follows:
+ *
+ * 1. `invoice_unpaid_or_expired_reclaimable`: The Lightning invoice expired
+ *    or was never paid. No funds were minted — nothing to reclaim. The user
+ *    can simply start a new funding session.
+ *
+ * 2. `invoice_paid_mint_failed_reclaimable`: The invoice was paid but minting
+ *    failed. Funds may be at the mint in a partially-minted state. The user
+ *    can retry the funding session (transition back to funding_session_created
+ *    is allowed), which re-attempts minting. If minting keeps failing, the
+ *    pending token entry in nip60Store will eventually become eligible for
+ *    reclaimToken() once the timelock expires.
+ *
+ * 3. `mint_succeeded_bid_publish_failed_reclaimable`: E-cash was minted but
+ *    the bid event could not be published to relays. The proofs are in the
+ *    user's wallet as a pending token. The user can retry publishing (transition
+ *    back to bid_publish_attempted is allowed). If they abandon the bid, the
+ *    funds are reclaimable via nip60Actions.reclaimToken() after the timelock.
+ *
+ * 4. `ecash_minted_pending_rules_ack`: E-cash was minted but the user hasn't
+ *    acknowledged the auction rules yet. The funds are in the wallet as a
+ *    pending token. If the user closes the modal, the pending bid is preserved
+ *    (shouldPreservePendingBidSubmissionOnModalClose returns true). Once rules
+ *    are acknowledged, publishing resumes. If abandoned, reclaimToken() recovers
+ *    funds after the timelock.
+ *
+ * The actual reclaim implementation lives in nip60Actions.reclaimToken() in
+ * src/lib/stores/nip60.ts. It:
+ *   - Checks the timelock from the proof secret (not cached context)
+ *   - Looks up the refund private key from BidderBidRecord or wallet.privkeys
+ *   - Calls receiveTokenWithPrivkey() to sweep the locked proofs back
+ *   - Marks the token as 'reclaimed' in pendingTokens
+ * An auto-reclaim sweep runs periodically with exponential backoff; the user
+ * can also manually trigger reclaim from the UI.
+ */
 const AUCTION_BID_FUNDING_RECLAIMABLE_STATE_SET = new Set<AuctionBidFundingLifecycleState>(AUCTION_BID_FUNDING_RECLAIMABLE_STATES)
 
 export const isAuctionBidFundingReclaimableState = (state: AuctionBidFundingLifecycleState): boolean =>

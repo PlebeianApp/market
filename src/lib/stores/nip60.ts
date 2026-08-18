@@ -190,10 +190,12 @@ const initialState: Nip60State = {
 	pendingTokens: [],
 }
 
-const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'http://localhost:3338'
+// Default to the public testnet mint. Set APP_DEV_TEST_MINT_URL to override
+// (e.g. http://localhost:3338 for local e2e tests with a local nutshell mint).
+const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
 export const NIP60_DEV_TEST_MINTS = Array.from(
 	new Set(
-		[DEV_TEST_MINT_URL, 'http://localhost:3338', 'http://127.0.0.1:3338'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean),
+		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean),
 	),
 )
 const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
