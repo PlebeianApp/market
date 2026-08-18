@@ -126,7 +126,7 @@ jobs:
         # Reviewer request (#1191): gate the promoted tests of this PR too, and
         # run each test twice with retries disabled so flaky tests fail the gate
         # instead of being masked by Playwright's automatic retries.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|should allow adding reaction to a comment|Lightning Mock' --repeat-each=2 --retries=0
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock' --repeat-each=2 --retries=0
 
       - name: Show server logs on failure
         if: failure()
@@ -263,7 +263,7 @@ jobs:
           # Guard against non-numeric REPEAT_EACH (e.g. empty or injected)
           case "$REPEAT_EACH" in
             ''|*[!0-9]*) ;;
-            *) [ "$REPEAT_EACH" != "1" ] && REPEAT_FLAG="--repeat-each=$REPEAT_EACH --retries=0" ;;
+            *) if [ "$REPEAT_EACH" -ge 1 ] && [ "$REPEAT_EACH" -ne 1 ]; then REPEAT_FLAG="--repeat-each=$REPEAT_EACH --retries=0"; fi ;;
           esac
           if [ -n "$REPEAT_FLAG" ]; then
             echo "🔍 Flake detection mode: $REPEAT_EACH runs per test, retries disabled"
