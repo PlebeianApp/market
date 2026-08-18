@@ -1595,17 +1595,16 @@ export const cartActions = {
 				const totalWithShipping = sellerTotal + shippingSats
 				const sellerAmount = shares.sellerAmount + shippingSats
 
-				// Add shipping cost entirely to seller's amount (shipping is not shared with V4V)
-				// The payment breakdown percentages are based on the final amount paid,
-				// so shipping is included in the merchant percentage display.
+				// Add shipping cost entirely to the seller's amount (shipping is not shared with V4V).
+				// Both displayed percentages use the final amount paid as their denominator.
 				const sellerPercentage = totalWithShipping > 0 ? (sellerAmount / totalWithShipping) * 100 : 100
+				const communityPercentage = totalWithShipping > 0 ? (shares.communityAmount / totalWithShipping) * 100 : 0
 
 				const adjustedShares = {
 					sellerAmount,
 					communityAmount: shares.communityAmount,
 					sellerPercentage,
-					// Preserve the configured V4V rate; unlike sellerPercentage, this excludes shipping.
-					communityPercentage: 100 - shares.sellerPercentage,
+					communityPercentage,
 				}
 
 				newSellerData[sellerPubkey] = {
