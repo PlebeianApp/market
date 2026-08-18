@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — open for review on PR #1212.
+Proposed
 
 ## Date
 
@@ -175,7 +175,7 @@ The foundation creates a new stylesheet pattern, but for backwards compatibility
 
 The expected outcome is a clean stylesheet containing only tokens and generic utilities, with all component-specific styling moved into component files. The `.theme-new` scope and `ThemeMigrationWrapper` placement serve as the migration tracker: as components migrate, their corresponding legacy utilities are extracted into component files using `cn()` + semantic tokens.
 
-:**2c. Compliance and Maintanance**
+**2c. Compliance and Maintenance**
 In order to keep the work of each PR over time, every migrated or created component must satisfy the following conditions before being considered complete:
 
 1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `src/components/AGENTS.md`.

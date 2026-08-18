@@ -14,7 +14,7 @@ src/components/cms/product-card.cms.tsx   ← Layer 2: CMS metadata sidecar (ADR
 widget-book/nostr/ProductCard.spec.ts     ← Layer 3: Test coverage (ADR-0007)
 ```
 
-**Layer 1** is a standard migrated component. It follows all ADR-0007 rules: `forwardRef`, `cn()`, callbacks instead of hooks, correct directory, token-based styling. It is completely unaware of the CMS.
+**Layer 1** is a standard migrated component. It follows all ADR-0007 rules: ref exposure (React 19 ref-as-prop, or `forwardRef` where a dependency still requires it), `cn()`, callbacks instead of hooks, correct directory, token-based styling. It is completely unaware of the CMS.
 
 **Layer 2** is the CMS sidecar. It declares the data contract, Puck field schema, and render binding. It imports the base component and wraps it for Puck. This is the **only** CMS-specific code.
 
