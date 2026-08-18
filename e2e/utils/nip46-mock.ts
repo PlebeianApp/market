@@ -26,13 +26,18 @@ interface SignerLoopOptions {
 	requireAuthForSecretless?: boolean
 	authUrl?: string
 	authAckDelayMs?: number
+	connectAckDelayMs?: number
 }
 
 export class Nip46Mock {
-	/** Hex secret key of the "remote signer" user */
+	/** Hex secret key for the remote signer endpoint and NIP-46 envelopes. */
 	readonly sk: string
-	/** Hex public key */
+	/** Hex public key for the remote signer endpoint. */
 	readonly pk: string
+	/** Hex secret key for the user account controlled by the remote signer. */
+	readonly userSk: string
+	/** Hex public key for the user account controlled by the remote signer. */
+	readonly userPk: string
 
 	private ws: WebSocket | null = null
 	private subId: string | null = null
@@ -45,9 +50,11 @@ export class Nip46Mock {
 	private eventHandler: ((event: any) => Promise<void>) | null = null
 	private bufferedEvents: any[] = []
 
-	constructor(userSk: string) {
-		this.sk = userSk
-		this.pk = getPublicKey(hexToBytes(userSk))
+	constructor(remoteSignerSk: string, userSk = remoteSignerSk) {
+		this.sk = remoteSignerSk
+		this.pk = getPublicKey(hexToBytes(remoteSignerSk))
+		this.userSk = userSk
+		this.userPk = getPublicKey(hexToBytes(userSk))
 	}
 
 	// ─── Encryption helpers ────────────────────────────────────
@@ -190,50 +197,40 @@ export class Nip46Mock {
 	/**
 	 * Complete the nostrconnect:// handshake and start the signer loop.
 	 *
-	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, token
+	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, secret
 	 * 2. Connect to relay and subscribe
-	 * 3. Set up event handler for responses
-	 * 4. Publish a `connect` request with the token
-	 * 5. Event handler processes approval → sends ack
-	 * 6. Event handler processes signer requests (connect, get_public_key, sign_event)
+	 * 3. Publish a `connect` response with the secret
+	 * 4. Handle subsequent signer requests (connect, get_public_key, sign_event)
 	 *
 	 * Returns a cleanup function.
 	 */
-	async respondToConnect(nostrconnectUrl: string): Promise<() => void> {
+	async respondToConnect(nostrconnectUrl: string, options: SignerLoopOptions = {}): Promise<() => void> {
 		const withoutProtocol = nostrconnectUrl.replace('nostrconnect://', '')
 		const qIdx = withoutProtocol.indexOf('?')
 		const localPubkey = withoutProtocol.slice(0, qIdx)
 		const params = new URLSearchParams(withoutProtocol.slice(qIdx + 1))
 		const relayUrl = params.get('relay')!
-		const token = params.get('token')!
+		const secret = params.get('secret') ?? params.get('token') ?? ''
 
 		// Connect and wait for subscription EOSE
 		await this.connectAndSubscribe(relayUrl)
-
-		let qrHandshakeDone = false
 
 		// Set up event handler (also drains any buffered events)
 		this.setEventHandler(async (event) => {
 			const decrypted = await this.decryptContent(event.pubkey, event.content)
 			const msg = JSON.parse(decrypted)
 
-			if (!qrHandshakeDone && msg.result !== undefined && !msg.method) {
-				// App's approval response to our connect request
-				qrHandshakeDone = true
-				await this.sendEncrypted(localPubkey, { result: 'ack' })
-			} else if (msg.method) {
-				// Signer request from NDKNip46Signer
-				await this.handleSignerRequest(event.pubkey, msg)
+			if (msg.method) {
+				await this.handleSignerRequest(event.pubkey, msg, options)
 			}
 		})
 
-		// Publish the connect request
-		const connectRequest = {
+		// Publish the NIP-46 client-initiated connect response.
+		const connectResponse = {
 			id: crypto.randomUUID(),
-			method: 'connect',
-			params: { token },
+			result: secret,
 		}
-		await this.sendEncrypted(localPubkey, connectRequest)
+		await this.sendEncrypted(localPubkey, connectResponse)
 
 		return () => this.close()
 	}
@@ -277,30 +274,33 @@ export class Nip46Mock {
 					})
 					await new Promise((resolve) => setTimeout(resolve, options.authAckDelayMs ?? 250))
 				}
+				if (options.connectAckDelayMs) {
+					await new Promise((resolve) => setTimeout(resolve, options.connectAckDelayMs))
+				}
 				response = { id: request.id, result: 'ack' }
 				break
 
 			case 'get_public_key':
-				response = { id: request.id, result: this.pk }
+				response = { id: request.id, result: this.userPk }
 				break
 
 			case 'sign_event': {
 				const eventToSign = typeof request.params[0] === 'string' ? JSON.parse(request.params[0]) : request.params[0]
-				const signed = finalizeEvent(eventToSign, hexToBytes(this.sk))
+				const signed = finalizeEvent(eventToSign, hexToBytes(this.userSk))
 				response = { id: request.id, result: JSON.stringify(signed) }
 				break
 			}
 
 			case 'nip04_encrypt': {
 				const [thirdPartyPubkey, plaintext] = request.params
-				const ciphertext = await nip04Encrypt(this.sk, thirdPartyPubkey, plaintext)
+				const ciphertext = await nip04Encrypt(this.userSk, thirdPartyPubkey, plaintext)
 				response = { id: request.id, result: ciphertext }
 				break
 			}
 
 			case 'nip04_decrypt': {
 				const [thirdPartyPubkey2, ciphertext2] = request.params
-				const plaintext2 = await nip04Decrypt(this.sk, thirdPartyPubkey2, ciphertext2)
+				const plaintext2 = await nip04Decrypt(this.userSk, thirdPartyPubkey2, ciphertext2)
 				response = { id: request.id, result: plaintext2 }
 				break
 			}
