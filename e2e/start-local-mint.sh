@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Start a local Cashu mint for Plebeian Market e2e tests.
+# See the "Local Cashu Mint" section in e2e/ARCHITECTURE.md for details.
 #
 # Uses the Cashu (nutshell) FakeWallet backend which auto-settles
 # Lightning invoices instantly — no external Lightning node needed.

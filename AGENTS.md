@@ -82,8 +82,11 @@ already exists.
 
 Tests must not make network calls to external services. The only allowed
 network dependencies are local services started in CI workflows (local
-relay via `nak serve`, local dev server on port 3333, ContextVM). All
-other external services (CDNs, Cashu mints, Lightning nodes, third-party
+relay via `nak serve`, local dev server on port 3333, local Cashu mint on
+port 3338, ContextVM). The local Cashu mint is a real nutshell mint with
+the FakeWallet backend, started by `e2e/start-local-mint.sh` (see the
+"Local Cashu Mint" section in `e2e/ARCHITECTURE.md`). All other external
+services (CDNs, remote Cashu mints, real Lightning nodes, third-party
 APIs) must be mocked or intercepted.
 
 See ADR-0005 for the full decision and established mock patterns.
