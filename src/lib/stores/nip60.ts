@@ -195,7 +195,9 @@ const initialState: Nip60State = {
 const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
 export const NIP60_DEV_TEST_MINTS = Array.from(
 	new Set(
-		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean),
+		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+			.map((mint) => mint.trim().replace(/\/$/, ''))
+			.filter(Boolean),
 	),
 )
 const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
