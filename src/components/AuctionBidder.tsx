@@ -323,6 +323,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			toast.success('Bid placed successfully')
 			// Reset the editing flag so the input re-syncs to the new minBid floor.
 			setHasStartedEditingBidAmount(false)
+			setBidAmountInput('')
 			onBidSuccess?.()
 		} catch {
 			// Error handled by mutation
@@ -341,15 +342,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		await submitPreparedBid(bidData)
 	}
 
-	const handleBidAmountInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (hasStartedEditingBidAmount) return
-		if (!event.key) return
-		if (String(bidAmountInput) !== String(minBid)) return
-		if (!/^[0-9]$/.test(event.key)) return
-
-		setHasStartedEditingBidAmount(true)
-		setBidAmountInput('')
-	}
+	// ---------- Bid amount input handlers ----------
+	// Paste is intercepted with preventDefault so the pasted value is set
+	// directly; onChange handles all other input methods (typing, IME,
+	// drag-drop, step buttons, autocomplete) via first-edit-clear.
 
 	const handleBidAmountInputPaste = (event: ClipboardEvent<HTMLInputElement>) => {
 		event.preventDefault()
@@ -359,8 +355,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}
 
 	const handleBidAmountInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+		const rawValue = event.target.value
+		if (!hasStartedEditingBidAmount && String(bidAmountInput) === String(minBid)) {
+			setHasStartedEditingBidAmount(true)
+			// Strip the minBid prefix when the user appends digits to the
+			// default value (e.g. "10000" + "5" -> "100005" -> "5").
+			const stripped = rawValue.startsWith(String(minBid)) ? rawValue.slice(String(minBid).length) : rawValue
+			setBidAmountInput(stripped || rawValue)
+			return
+		}
 		setHasStartedEditingBidAmount(true)
-		setBidAmountInput(event.target.value)
+		setBidAmountInput(rawValue)
 	}
 
 	const handleRulesDialogOpenChange = (open: boolean) => {
@@ -487,7 +492,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 							step={bidStep}
 							value={bidAmountInput}
 							onChange={handleBidAmountInputChange}
-							onKeyDown={handleBidAmountInputKeyDown}
 							onPaste={handleBidAmountInputPaste}
 							placeholder={`Min: ${minBid.toLocaleString()}`}
 							disabled={isDisabledInput}
