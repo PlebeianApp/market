@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 useWebSocketImplementation(WebSocket)
 
-export type ScenarioName = 'none' | 'base' | 'merchant' | 'marketplace'
+export type ScenarioName = 'none' | 'base' | 'merchant' | 'merchant-unresolved-shipping' | 'marketplace'
 
 // Track which scenarios have been seeded in this worker
 const seededScenarios = new Set<ScenarioName>()
@@ -31,6 +31,10 @@ export async function ensureScenario(scenario: ScenarioName): Promise<void> {
 			case 'merchant':
 				await ensureScenario('base')
 				await seedMerchant(relay)
+				break
+			case 'merchant-unresolved-shipping':
+				await ensureScenario('merchant')
+				await seedUnresolvedShippingFixture(relay)
 				break
 			case 'marketplace':
 				await ensureScenario('merchant')
@@ -221,6 +225,34 @@ async function seedMarketplace(relay: Relay) {
 		category: 'Bitcoin',
 		stock: '10',
 		shippingOptions: [`30406:${devUser2.pk}:express-shipping`, `30406:${devUser2.pk}:digital-delivery`],
+	})
+}
+
+/**
+ * Fixture for checkout validation: the shipping event exists and is selectable,
+ * but its service is not a recognized delivery mode. This is the only seeded
+ * scenario that should show the unresolved-delivery warning after selection.
+ */
+async function seedUnresolvedShippingFixture(relay: Relay) {
+	console.log('  Seeding: unresolved shipping checkout fixture')
+
+	await seedShippingOption(relay, devUser1.sk, {
+		title: 'Unsupported E2E Delivery',
+		price: '0',
+		currency: 'sats',
+		service: 'unsupported-e2e-service',
+		countries: [],
+	})
+
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Unresolved Shipping E2E Product',
+		description: 'Fixture product for checkout delivery-requirement validation.',
+		price: '1000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Test',
+		stock: '1',
+		shippingOptions: [`30406:${devUser1.pk}:unsupported-e2e-delivery`],
 	})
 }
 

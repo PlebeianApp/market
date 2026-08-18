@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
 	findReusablePublishedShippingSelection,
+	formatShippingDisplayText,
+	getProductShippingTotalCost,
 	normalizeProductShippingSelections,
 	normalizePublishedProductShippingTags,
 	resolveProductShippingSelections,
@@ -166,6 +168,19 @@ describe('product shipping selection normalization', () => {
 				cost: 0,
 			}),
 		])
+	})
+})
+
+describe('shipping cost helpers', () => {
+	test('calculates total cost from a base cost and extra cost string', () => {
+		expect(getProductShippingTotalCost(10, '2.5')).toBe(12.5)
+		expect(getProductShippingTotalCost(undefined, '5')).toBe(5)
+	})
+
+	test('formats shipping display text from the resolved shipping option', () => {
+		expect(
+			formatShippingDisplayText('30406:merchant:standard', { title: 'Standard Shipping', price: { amount: 5, currency: 'USD' } } as any),
+		).toBe('Standard Shipping • 5 USD')
 	})
 })
 

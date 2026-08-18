@@ -21,6 +21,7 @@ import {
 	resolvePublishedProductShippingOptions,
 	type ProductShippingSelection,
 } from '@/lib/utils/productShippingSelections'
+import { MempoolService } from '@/lib/utils/mempool'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -114,7 +115,7 @@ interface CartState {
 		{
 			satsTotal: number
 			currencyTotals: Record<string, number>
-			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number }
+			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number; communityPercentage: number }
 			shippingSats: number
 		}
 	>
@@ -1485,17 +1486,17 @@ export const cartActions = {
 		if (!exchangeRates || !amount) return 0
 
 		const upperCurrency = currency.toUpperCase()
+		const sats = MempoolService.convertCurrencyToSats({
+			amount,
+			fromCurrency: upperCurrency,
+			exchangeRates,
+		})
 
-		if (upperCurrency === 'SATS') return Math.round(amount)
-		if (upperCurrency === 'BTC') return Math.round(amount * numSatsInBtc)
-
-		const rate = exchangeRates[upperCurrency]
-		if (!rate) {
+		if (!Number.isFinite(sats)) {
 			console.warn(`Exchange rate not found for ${upperCurrency}`)
 			return 0
 		}
 
-		const sats = (amount / rate) * numSatsInBtc
 		return Math.round(sats)
 	},
 
@@ -1591,15 +1592,20 @@ export const cartActions = {
 
 				// V4V shares are calculated ONLY from product price, not including shipping
 				const shares = cartActions.calculateShares(sellerPubkey, sellerTotal)
-
-				// Add shipping cost entirely to seller's amount (shipping is not shared with V4V)
-				const adjustedShares = {
-					sellerAmount: shares.sellerAmount + shippingSats,
-					communityAmount: shares.communityAmount, // V4V shares stay the same
-					sellerPercentage: shares.sellerPercentage, // Keep original percentage for display
-				}
-
 				const totalWithShipping = sellerTotal + shippingSats
+				const sellerAmount = shares.sellerAmount + shippingSats
+
+				// Add shipping cost entirely to the seller's amount (shipping is not shared with V4V).
+				// Both displayed percentages use the final amount paid as their denominator.
+				const sellerPercentage = totalWithShipping > 0 ? (sellerAmount / totalWithShipping) * 100 : 100
+				const communityPercentage = totalWithShipping > 0 ? (shares.communityAmount / totalWithShipping) * 100 : 0
+
+				const adjustedShares = {
+					sellerAmount,
+					communityAmount: shares.communityAmount,
+					sellerPercentage,
+					communityPercentage,
+				}
 
 				newSellerData[sellerPubkey] = {
 					satsTotal: totalWithShipping,
