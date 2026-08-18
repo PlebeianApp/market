@@ -323,7 +323,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			toast.success('Bid placed successfully')
 			// Reset the editing flag so the input re-syncs to the new minBid floor.
 			setHasStartedEditingBidAmount(false)
-			setBidAmountInput('')
 			onBidSuccess?.()
 		} catch {
 			// Error handled by mutation
