@@ -48,7 +48,7 @@ PW_CONFIG = "e2e/playwright.config.ts"
 SPEC_GLOB = "e2e/tests/*.spec.ts"
 RESULTS_DIR = "e2e/baseline-results/"
 DEFAULT_RUNS = 5
-RUN_TIMEOUT_SEC = 300  # per-run timeout
+RUN_TIMEOUT_SEC = 1800  # per-run timeout (30 min) — large specs (cart, payments) can exceed 5 min under workers=1
 
 # Playwright is invoked through bunx in this repo (Bun-based, not npm).
 RUNNER_CMD = "bunx"
@@ -180,7 +180,14 @@ def run_spec_once(
     with tempfile.TemporaryDirectory(prefix="flake-run-") as tmp:
         report_path = Path(tmp) / "report.json"
         env = os.environ.copy()
-        env["NODE_OPTIONS"] = NODE_OPTIONS
+        # Prepend our flag rather than overwriting any caller-supplied
+        # NODE_OPTIONS (e.g. from a CI environment).
+        existing_node_options = env.get("NODE_OPTIONS", "").strip()
+        env["NODE_OPTIONS"] = (
+            f"{NODE_OPTIONS} {existing_node_options}".strip()
+            if existing_node_options
+            else NODE_OPTIONS
+        )
         env["PLAYWRIGHT_JSON_OUTPUT_DIR"] = tmp
         env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = "report.json"
         # Ensure we run from repo root so relative paths resolve.
@@ -235,6 +242,28 @@ def run_spec_once(
                 "duration_sec": elapsed,
                 "stderr_tail": "timeout",
             }
+        except OSError as e:
+            elapsed = time.monotonic() - start
+            sys.stderr.write(
+                f"\n  [run {run_num}] failed to launch runner for "
+                f"{spec_basename}: {e}\n"
+            )
+            return {
+                "results": [
+                    TestResult(
+                        spec_file=spec_basename,
+                        test_title="<spec-launch-error>",
+                        run_num=run_num,
+                        passed=False,
+                        duration_ms=int(elapsed * 1000),
+                        error_snippet=f"Runner launch failed: {e}",
+                    )
+                ],
+                "raw_exit_code": 1,
+                "parse_ok": False,
+                "duration_sec": elapsed,
+                "stderr_tail": str(e),
+            }
 
         elapsed = time.monotonic() - start
 
@@ -245,7 +274,10 @@ def run_spec_once(
                 raw = report_path.read_text(encoding="utf-8", errors="replace")
                 report = json.loads(raw)
                 results = extract_test_results(report, spec_basename, run_num)
-                parse_ok = bool(results) or True  # empty list is still parse_ok
+                # Empty results (all tests skipped, or grep matched nothing)
+                # yields parse_ok=False so the fallback below synthesizes a
+                # coarse entry instead of silently dropping the run.
+                parse_ok = bool(results)
             except (json.JSONDecodeError, OSError) as e:
                 sys.stderr.write(
                     f"\n  [run {run_num}] JSON parse failed for "
@@ -288,13 +320,25 @@ def extract_test_results(
     """
     out: List[TestResult] = []
 
-    def visit(suite: Dict[str, Any], file_hint: str) -> None:
+    def visit(
+        suite: Dict[str, Any], file_hint: str, title_path: List[str]
+    ) -> None:
         # Inherit/override the file hint if this suite declares one.
         suite_file = suite.get("file") or file_hint or spec_basename
         suite_file = os.path.basename(suite_file) if suite_file else spec_basename
+        # Accumulate describe-block titles so tests in different blocks with
+        # the same leaf title are not conflated.
+        suite_title = suite.get("title", "")
+        if suite_title:
+            title_path = title_path + [suite_title]
 
         for spec in suite.get("specs", []) or []:
-            title = spec.get("title", "<untitled>")
+            leaf_title = spec.get("title", "<untitled>")
+            title = (
+                " > ".join(title_path + [leaf_title])
+                if title_path
+                else leaf_title
+            )
             # Each spec may have multiple `tests` (one per project). We use the
             # first test's first result for the pass/fail verdict; if multiple
             # projects exist, we still record one TestResult per test entry.
@@ -327,10 +371,10 @@ def extract_test_results(
                 )
 
         for child in suite.get("suites", []) or []:
-            visit(child, suite_file)
+            visit(child, suite_file, title_path)
 
     for top_suite in report.get("suites", []) or []:
-        visit(top_suite, spec_basename)
+        visit(top_suite, spec_basename, [])
 
     return out
 
