@@ -1,6 +1,6 @@
 import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
-import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib/schemas/featured'
+import type { FeaturedProducts, FeaturedCollections, FeaturedAuctions, FeaturedUsers } from '@/lib/schemas/featured'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
@@ -52,6 +52,33 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
 
 	return {
 		featuredCollections,
+		lastUpdated: event.created_at || Date.now() / 1000,
+	}
+}
+
+/**
+ * Fetches featured auctions settings (kind 30409)
+ * @param appPubkey The app's pubkey
+ * @returns Featured auctions data or null
+ */
+export const fetchFeaturedAuctions = async (appPubkey: string): Promise<FeaturedAuctions | null> => {
+	const event = await fetchLatestAppEvent({
+		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind],
+		authors: [appPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
+	})
+
+	if (!event) return null
+
+	const rawAuctions = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30408:')).map((tag) => tag[1])
+	const featuredAuctions = rawAuctions.filter((coords) => {
+		const parts = coords.split(':')
+		if (parts.length !== 3 || !parts[1] || !parts[2]) return false
+		return filterBlacklistedPubkeys([parts[1]]).length > 0
+	})
+
+	return {
+		featuredAuctions,
 		lastUpdated: event.created_at || Date.now() / 1000,
 	}
 }
@@ -150,6 +177,21 @@ export const useFeaturedCollections = (appPubkey: string) => {
 	return useQuery({
 		queryKey,
 		queryFn: () => fetchFeaturedCollections(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+	})
+}
+
+/**
+ * Hook to fetch featured auctions
+ */
+export const useFeaturedAuctions = (appPubkey: string) => {
+	const queryKey = configKeys.featuredAuctions(appPubkey)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.AUCTIONS.kind, FEATURED_ITEMS_CONFIG.AUCTIONS.dTag)
+
+	return useQuery({
+		queryKey,
+		queryFn: () => fetchFeaturedAuctions(appPubkey),
 		enabled: !!appPubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes
 	})

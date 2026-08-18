@@ -95,6 +95,14 @@ See ADR-0005 for the full decision and established mock patterns.
 - `e2e/utils/lightning-mock.ts` — mocks LNURL, WebLN, and zap receipts.
 - `e2e/utils/nip46-mock.ts` — mocks NIP-46 remote signer.
 - `e2e/helpers/lnurl-mock.ts` — intercepts LNURL discovery.
+- Narrow first-party seams (e.g. `src/lib/nostr/event-signature.ts`) — when a
+  unit test needs to control an outcome of third-party code (signature
+  verification, encryption), route production code through a small first-party
+  module and mock that seam. Never `mock.module()` the third-party package
+  itself: bun applies module mocks process-wide for the whole test run, so
+  mocking `nostr-tools` replaced real Schnorr verification for every other
+  test file in the suite (nip59, nip17, and orders tests failed only in full
+  suite runs because of this).
 
 ### What Is Allowed
 

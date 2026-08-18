@@ -6,7 +6,7 @@ import { getProfileIdentifierValidationError, validateProfileIdentifier } from '
 import { getNormalizedProfileDisplayName, getNormalizedProfileNip05, normalizeOptionalPubkey } from '@/queries/profiles'
 import { getUserCardTitle, isKeyboardCopyActivationKey } from '@/components/UserCard'
 
-const VALID_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const VALID_HEX = 'a'.repeat(64)
 const VALID_NPUB = nip19.npubEncode(VALID_HEX)
 const VALID_NPROFILE = nip19.nprofileEncode({
 	pubkey: VALID_HEX,

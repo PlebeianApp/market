@@ -1,4 +1,5 @@
 import CartSheetContent from '@/components/sheet-contents/CartSheetContent'
+import { NewAuctionContent } from '@/components/sheet-contents/NewAuctionContent'
 import { NewProductContent } from '@/components/sheet-contents/NewProductContent'
 import { NewCollectionContent } from '@/components/sheet-contents/NewCollectionContent'
 import { ConversationSheetContent } from '@/components/sheet-contents/ConversationSheetContent'
@@ -13,6 +14,7 @@ export function SheetRegistry() {
 	const activeDrawer = useMemo(() => {
 		if (drawers.cart) return 'cart'
 		if (drawers.createProduct) return 'createProduct'
+		if (drawers.createAuction) return 'createAuction'
 		if (drawers.createCollection) return 'createCollection'
 		if (drawers.conversation) return 'conversation'
 		return null
@@ -52,6 +54,10 @@ export function SheetRegistry() {
 		createProduct: {
 			side: 'right' as const,
 			content: <NewProductContent title="Add A Product" description="Create a new product to sell in your shop" />,
+		},
+		createAuction: {
+			side: 'right' as const,
+			content: <NewAuctionContent title="Create Auction" description="Create a new auction listing settled with Cashu" />,
 		},
 		createCollection: {
 			side: 'right' as const,

@@ -2,7 +2,7 @@ import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure'
 import { devUser1 } from './lib/fixtures'
 import { getEventHandler } from './server'
-import { server, type NostrMessage } from './index.tsx'
+import { serverPromise, type NostrMessage } from './index.tsx'
 
 describe('WebSocket Server', () => {
 	const WS_URL = 'ws://localhost:3000'
@@ -19,6 +19,7 @@ describe('WebSocket Server', () => {
 	}
 
 	beforeEach(async () => {
+		const server = await serverPromise
 		ws = new globalThis.WebSocket(WS_URL)
 		await new Promise((resolve) => ws.once('open', resolve))
 		await new Promise((resolve) => setTimeout(resolve, 1000))

@@ -53,7 +53,7 @@ export const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 		return text.length > len ? `${text.substring(0, len)}...` : text
 	}
 
-	const isOwnUser = event.author?.pubkey === authStore.state.user?.pubkey
+	const isOwnUser = event.pubkey === authStore.state.user?.pubkey
 
 	if (kind === 14) {
 		// Use the same extraction logic as the bubble display for consistency

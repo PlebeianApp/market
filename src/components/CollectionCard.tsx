@@ -5,7 +5,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { UserCard } from './UserCard'
 import { cn } from '@/lib/utils'
 
-export function CollectionCard({ collection, className }: { collection: NDKEvent } & React.HTMLAttributes<'div'>) {
+export function CollectionCard({ collection, className }: { collection: NDKEvent } & React.HTMLAttributes<HTMLDivElement>) {
 	const title = getCollectionTitle(collection)
 	const collectionId = getCollectionId(collection)
 	const pubkey = collection.pubkey

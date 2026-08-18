@@ -67,8 +67,8 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 
 	return (
 		<Dialog open={isOpen} onOpenChange={onClose}>
-			<DialogTitle>{images[currentIndex]?.title}</DialogTitle>
 			<DialogContent className="!max-w-[95vw] sm:!max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-black/95 border-none">
+				<DialogTitle className="sr-only">{images[currentIndex]?.title}</DialogTitle>
 				{/* Toolbar */}
 				<div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
 					<div className="flex items-center gap-2">

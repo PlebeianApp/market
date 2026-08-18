@@ -26,17 +26,10 @@ export const usePIIMonitor = () => {
 			setError(null)
 
 			try {
-				console.log('[PII Monitor] Starting PII exposure scan for user:', user.pubkey.substring(0, 8))
 				const result = await scanForPIIExposure(user.pubkey)
 
 				setScanResult(result)
 				setHasPII(result.hasPII)
-
-				if (result.hasPII) {
-					console.warn('[PII Monitor] PII exposure detected!')
-				} else {
-					console.log('[PII Monitor] No PII exposure detected')
-				}
 			} catch (err) {
 				console.error('[PII Monitor] Error during PII scan:', err)
 				setError(err as Error)

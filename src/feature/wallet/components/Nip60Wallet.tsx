@@ -1,5 +1,15 @@
+import { DEFAULT_TRUSTED_MINTS } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
-import { nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
+import { configStore } from '@/lib/stores/config'
+import {
+	nip60Actions,
+	nip60Store,
+	NIP60_DEV_TEST_MINTS,
+	isNip60WalletDevModeEnabled,
+	type PendingNip60Token,
+	type Nip60DevAuctionBidResult,
+	type Nip60TestMintResult,
+} from '@/lib/stores/nip60'
 import { cashuActions, cashuStore, type PendingToken } from '@/lib/stores/cashu'
 import { useStore } from '@tanstack/react-store'
 import {
@@ -18,6 +28,7 @@ import {
 	QrCode,
 	ChevronRight,
 	Coins,
+	Gavel,
 	Clock,
 	Eye,
 	Copy,
@@ -43,13 +54,11 @@ import { cn } from '@/lib/utils'
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
 
-// Default mints for new wallets
-const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io', 'https://mint.cubabitcoin.org']
-
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
 
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
+	const appStage = useStore(configStore, (state) => state.config.stage)
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
 	const { pendingTokens: cashuPendingTokens } = useStore(cashuStore)
 	const [isCreating, setIsCreating] = useState(false)
@@ -62,6 +71,17 @@ export function Nip60Wallet() {
 	const [viewingToken, setViewingToken] = useState<UnifiedPendingToken | null>(null)
 	const [isReclaiming, setIsReclaiming] = useState<string | null>(null)
 	const [copied, setCopied] = useState(false)
+	const [devMintAmount, setDevMintAmount] = useState('1000')
+	const [devBidAmount, setDevBidAmount] = useState('')
+	const [isDevMinting, setIsDevMinting] = useState(false)
+	const [isDevBidding, setIsDevBidding] = useState(false)
+	const [lastDevMint, setLastDevMint] = useState<Nip60TestMintResult | null>(null)
+	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
+	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	const defaultMints = useMemo(
+		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
+		[walletDevMode],
+	)
 
 	// Combine pending tokens from both stores
 	const activePendingTokens: UnifiedPendingToken[] = useMemo(
@@ -106,7 +126,7 @@ export function Nip60Wallet() {
 	const handleCreateWallet = async () => {
 		setIsCreating(true)
 		try {
-			await nip60Actions.createWallet(DEFAULT_MINTS)
+			await nip60Actions.createWallet(defaultMints)
 		} finally {
 			setIsCreating(false)
 		}
@@ -181,6 +201,46 @@ export function Nip60Wallet() {
 			nip60Actions.removePendingToken(token.id)
 		}
 		toast.success('Token removed from history')
+	}
+
+	const handleDevMintTestEcash = async () => {
+		const amount = Math.floor(parseInt(devMintAmount || '0', 10))
+		if (!Number.isFinite(amount) || amount <= 0) {
+			toast.error('Mint amount must be a positive number')
+			return
+		}
+
+		setIsDevMinting(true)
+		try {
+			const preferredMintUrl = defaultMint || mints[0]
+			const result = await nip60Actions.mintTestEcash(amount, preferredMintUrl)
+			setLastDevMint(result)
+			toast.success(`Minted ${result.amount.toLocaleString()} sats from ${getMintHostname(result.mintUrl)}`)
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to mint test ecash')
+		} finally {
+			setIsDevMinting(false)
+		}
+	}
+
+	const handleDevBidSeededAuction = async () => {
+		const preferredBidAmount = devBidAmount.trim() ? parseInt(devBidAmount.trim(), 10) : undefined
+		if (preferredBidAmount !== undefined && (!Number.isFinite(preferredBidAmount) || preferredBidAmount <= 0)) {
+			toast.error('Bid amount must be a positive number')
+			return
+		}
+
+		setIsDevBidding(true)
+		try {
+			const preferredMintUrl = defaultMint || mints[0]
+			const result = await nip60Actions.placeDevBidOnSeededAuction({ preferredBidAmount, preferredMintUrl })
+			setLastDevBid(result)
+			toast.success(`Bid placed: ${result.bidAmount.toLocaleString()} sats on "${result.auctionTitle}"`)
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to place dev bid')
+		} finally {
+			setIsDevBidding(false)
+		}
 	}
 
 	// Button appearance class definitions
@@ -260,6 +320,66 @@ export function Nip60Wallet() {
 					Send eCash
 				</Button>
 			</div>
+
+			{walletDevMode && (
+				<div className="mb-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 space-y-2">
+					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Test Tools</p>
+					<p className="text-xs text-amber-100/80">Available on staging and local dev for seeded auctions and fallback testnut mints.</p>
+
+					<div className="flex gap-2">
+						<Input
+							type="number"
+							min={1}
+							step={1}
+							value={devMintAmount}
+							onChange={(e) => setDevMintAmount(e.target.value)}
+							placeholder="Mint sats"
+							className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-gray-500"
+						/>
+						<Button
+							variant="dark-active"
+							size="sm"
+							onClick={() => void handleDevMintTestEcash()}
+							disabled={isDevMinting}
+							icon={isDevMinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Coins className="h-3.5 w-3.5" />}
+						>
+							Mint Test
+						</Button>
+					</div>
+
+					<div className="flex gap-2">
+						<Input
+							type="number"
+							min={1}
+							step={1}
+							value={devBidAmount}
+							onChange={(e) => setDevBidAmount(e.target.value)}
+							placeholder="Bid sats (optional)"
+							className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-gray-500"
+						/>
+						<Button
+							variant="dark-active"
+							size="sm"
+							onClick={() => void handleDevBidSeededAuction()}
+							disabled={isDevBidding}
+							icon={isDevBidding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gavel className="h-3.5 w-3.5" />}
+						>
+							Bid Seeded
+						</Button>
+					</div>
+
+					{lastDevMint && (
+						<p className="text-[11px] text-amber-100/90">
+							Last mint: {lastDevMint.amount.toLocaleString()} sats via {getMintHostname(lastDevMint.mintUrl)}
+						</p>
+					)}
+					{lastDevBid && (
+						<p className="text-[11px] text-amber-100/90 break-words">
+							Last bid: {lastDevBid.bidAmount.toLocaleString()} sats on {lastDevBid.auctionTitle}
+						</p>
+					)}
+				</div>
+			)}
 
 			{/* Default Mint Selector */}
 			<div className="mb-2 pt-2 overflow-hidden">

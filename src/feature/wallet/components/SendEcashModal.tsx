@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component, type ReactNode } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Copy, Check, Send } from 'lucide-react'
+import { Loader2, Copy, Check, Send, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { getMintHostname } from '@/lib/wallet'
@@ -13,8 +13,37 @@ interface SendEcashModalProps {
 	open: boolean
 	onClose: () => void
 }
+/**
+ * Maximum byte capacity for a QR code at version 40, error correction level L, byte mode.
+ * Using a conservative threshold slightly below the theoretical 2,953 to account for
+ * mode indicators and character count overhead in the QR encoding.
+ */
+const QR_MAX_BYTES = 2900
 
 type View = 'form' | 'token'
+
+/**
+ * Error Boundary to catch "code length overflow" errors thrown by QRCodeSVG during render.
+ * Without this, a token that exceeds QR capacity will crash the entire modal.
+ */
+class QRErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
+	state = { hasError: false }
+
+	static getDerivedStateFromError(): { hasError: boolean } {
+		return { hasError: true }
+	}
+
+	componentDidCatch(error: Error): void {
+		console.error('[QRCodeSVG] Render error:', error)
+	}
+
+	render() {
+		if (this.state.hasError) {
+			return this.props.fallback
+		}
+		return this.props.children
+	}
+}
 
 export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 	const { mints, defaultMint, mintBalances, balance: nip60Balance } = useStore(nip60Store)
@@ -78,6 +107,16 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 			}
 
 			if (token) {
+				// Pre-flight check: warn if the token is likely too large for a QR code
+				const tokenBytes = new Blob([token]).size
+				if (tokenBytes > QR_MAX_BYTES) {
+					console.warn(
+						`[SendEcash] Token is ${tokenBytes} bytes, exceeds QR capacity (~${QR_MAX_BYTES} bytes). ` +
+							`QR code may not render. Consider splitting into smaller amounts.`,
+					)
+					toast.warning('Token is large — QR code may not be scannable. You can still copy the token text.')
+				}
+
 				setGeneratedToken(token)
 				setView('token')
 				toast.success('eCash token generated!')
@@ -117,6 +156,9 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 	// Get mints that have balance
 	const mintsWithBalance = mints.filter((mint) => (balances[mint] ?? 0) > 0)
 
+	// Check if token exceeds QR capacity for conditional UI
+	const tokenTooLargeForQR = generatedToken !== null && new Blob([generatedToken]).size > QR_MAX_BYTES
+
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
 			<DialogContent className="sm:max-w-md">
@@ -130,11 +172,34 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 
 				{view === 'token' && generatedToken ? (
 					<div className="space-y-4">
-						<div className="flex justify-center">
-							<div className="p-4 bg-white rounded-lg">
-								<QRCodeSVG value={generatedToken} size={200} />
+						{/* QR Code with Error Boundary — if rendering fails (overflow), show fallback */}
+						{!tokenTooLargeForQR ? (
+							<div className="flex justify-center">
+								<div className="p-4 bg-white rounded-lg">
+									<QRErrorBoundary
+										fallback={
+											<div className="flex flex-col items-center gap-2 p-8 text-center">
+												<AlertTriangle className="w-8 h-8 text-yellow-500" />
+												<p className="text-sm text-muted-foreground">
+													QR code is too dense to render. Use the copy button below to share the token.
+												</p>
+											</div>
+										}
+									>
+										<QRCodeSVG value={generatedToken} size={360} marginSize={4} level="L" />
+									</QRErrorBoundary>
+								</div>
 							</div>
-						</div>
+						) : (
+							<div className="flex flex-col items-center gap-2 p-6 text-center border rounded-lg bg-muted/50">
+								<AlertTriangle className="w-8 h-8 text-yellow-500" />
+								<p className="text-sm font-medium">Token too large for QR code</p>
+								<p className="text-xs text-muted-foreground">
+									This token exceeds QR code capacity. Use copy/paste to share it, or try sending a smaller amount.
+								</p>
+							</div>
+						)}
+
 						<div className="space-y-2">
 							<p className="text-sm font-medium">Cashu Token</p>
 							<div className="flex gap-2">

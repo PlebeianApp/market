@@ -3,6 +3,7 @@ import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
 import {
@@ -20,7 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { TooltipButton } from '@/components/shared/TooltipButton'
 
 // Component to show basic product information
@@ -205,6 +206,12 @@ function ProductsOverviewComponent() {
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Products')
+
+	useEffect(() => {
+		if (isAuthenticated) {
+			notificationActions.markProductCommentsSeen()
+		}
+	}, [isAuthenticated])
 
 	// Auto-animate for smooth list transitions
 	const [animationParent] = (() => {
