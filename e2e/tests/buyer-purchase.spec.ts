@@ -58,9 +58,9 @@ test.describe('Buyer Purchase Flow', () => {
 		await expect(buyerPage.getByText(/Community Share/)).toBeVisible()
 		await expect(buyerPage.getByText('6,500 sat')).toBeVisible()
 		await expect(buyerPage.getByText('68,500 sat')).toBeVisible()
-		// Community share keeps the merchant's configured V4V rate, independent of shipping.
+		// Both percentages use the final total of 75,000 sat as their denominator.
 		await expect(buyerPage.getByText('68,500 sat (91.33%)')).toBeVisible()
-		await expect(buyerPage.getByText('6,500 sat (10.00%)')).toBeVisible()
+		await expect(buyerPage.getByText('6,500 sat (8.67%)')).toBeVisible()
 
 		// Checkout button should be enabled now that shipping is selected
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
