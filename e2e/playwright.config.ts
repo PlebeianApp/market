@@ -18,13 +18,13 @@ export default defineConfig({
 		baseURL: BASE_URL,
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
-		video: 'on',
+		video: 'retain-on-failure',
 	},
 
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+			use: { ...devices['Desktop Chrome'] },
 		},
 	],
 

@@ -36,7 +36,7 @@ export const test = base.extend<TestFixtures>({
 
 	merchantPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext({ recordVideo: { mode: 'on' } })
+		const context = await browser.newContext()
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
@@ -53,7 +53,7 @@ export const test = base.extend<TestFixtures>({
 	buyerPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser2.sk)
-		const context = await browser.newContext({ recordVideo: { mode: 'on' } })
+		const context = await browser.newContext()
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
 
@@ -68,7 +68,7 @@ export const test = base.extend<TestFixtures>({
 	newUserPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser3.sk)
-		const context = await browser.newContext({ recordVideo: { mode: 'on' } })
+		const context = await browser.newContext()
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
 
@@ -82,7 +82,7 @@ export const test = base.extend<TestFixtures>({
 
 	unauthenticatedPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext({ recordVideo: { mode: 'on' } })
+		const context = await browser.newContext()
 		// Do NOT call setupAuthContext here. This leaves the user logged out.
 		const page = await context.newPage()
 
