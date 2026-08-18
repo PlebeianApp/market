@@ -51,11 +51,15 @@ describe('persistAuthenticatedLoginState', () => {
 })
 
 describe('completeNip46LoginHandshake', () => {
-	test('wraps the fallback signer without depending on NDK private state', async () => {
+	const remoteSignerPubkey = 'a'.repeat(64)
+	const actualUserPubkey = 'b'.repeat(64)
+	const expectedUserPubkey = 'c'.repeat(64)
+
+	test('resolves the actual user with get_public_key after a handshake timeout', async () => {
 		const signer = {
-			blockUntilReady: mock(async () => {
-				throw new Error('relay handshake stalled')
-			}),
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(() => new Promise(() => {})),
+			getPublicKey: mock(async () => actualUserPubkey),
 			userPubkey: undefined as string | undefined,
 			rpc: {
 				eventNames: mock(() => []),
@@ -66,25 +70,34 @@ describe('completeNip46LoginHandshake', () => {
 			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
 		}
 
-		const loginResult = await completeNip46LoginHandshake(signer as any, 'fallback-pubkey', 1, ndk as any)
+		const loginResult = await completeNip46LoginHandshake(signer as any, actualUserPubkey, 1, ndk as any)
 
-		expect(loginResult?.user.pubkey).toBe('fallback-pubkey')
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
 		expect(signer.blockUntilReady).toHaveBeenCalledTimes(1)
-		expect(signer.userPubkey).toBe('fallback-pubkey')
+		expect(signer.getPublicKey).toHaveBeenCalledTimes(1)
+		expect(signer.userPubkey).toBe(actualUserPubkey)
+		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
 		expect((signer as any)._user).toBeUndefined()
-		expect((await loginResult?.signer.user())?.pubkey).toBe('fallback-pubkey')
-		expect(loginResult?.signer.userSync.pubkey).toBe('fallback-pubkey')
+		expect((await loginResult?.signer.user())?.pubkey).toBe(actualUserPubkey)
+		expect(loginResult?.signer.userSync.pubkey).toBe(actualUserPubkey)
 	})
 
-	test('cancels the timed-out handshake response listener before using the fallback', async () => {
-		let eventNamesCalls = 0
+	test('fails closed when get_public_key does not respond after a timeout', async () => {
+		const responseEvents: string[] = []
 		const removeAllListeners = mock(() => {})
 		const signer = {
-			bunkerPubkey: 'bunker-pubkey',
-			blockUntilReady: mock(() => new Promise(() => {})),
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(() => {
+				responseEvents.push('response-connect')
+				return new Promise(() => {})
+			}),
+			getPublicKey: mock(() => {
+				responseEvents.push('response-get_public_key')
+				return new Promise(() => {})
+			}),
 			userPubkey: undefined as string | undefined,
 			rpc: {
-				eventNames: () => (eventNamesCalls++ === 0 ? [] : ['response-connect']),
+				eventNames: () => responseEvents,
 				removeAllListeners,
 			},
 		}
@@ -94,7 +107,82 @@ describe('completeNip46LoginHandshake', () => {
 
 		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 1, ndk as any)
 
-		expect(loginResult?.user.pubkey).toBe('bunker-pubkey')
+		expect(loginResult).toBeNull()
+		expect(signer.userPubkey).toBeUndefined()
+		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
 		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
+		expect(removeAllListeners).toHaveBeenCalledWith('response-get_public_key')
+	})
+
+	test('clears a configured user key and rejects a mismatched get_public_key response', async () => {
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(() => new Promise(() => {})),
+			getPublicKey: mock(async () => {
+				expect(signer.userPubkey).toBeUndefined()
+				return actualUserPubkey
+			}),
+			userPubkey: expectedUserPubkey,
+			rpc: {
+				eventNames: mock(() => []),
+				removeAllListeners: mock(() => {}),
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, expectedUserPubkey, 1, ndk as any)
+
+		expect(loginResult).toBeNull()
+		expect(signer.getPublicKey).toHaveBeenCalledTimes(1)
+		expect(signer.userPubkey).toBeUndefined()
+		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
+	})
+
+	test('rejects a completed handshake that differs from the persisted expected user', async () => {
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => ({ pubkey: actualUserPubkey })),
+			getPublicKey: mock(async () => actualUserPubkey),
+			userPubkey: actualUserPubkey,
+			rpc: {
+				eventNames: mock(() => []),
+				removeAllListeners: mock(() => {}),
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, expectedUserPubkey, 1, ndk as any)
+
+		expect(loginResult).toBeNull()
+		expect(signer.getPublicKey).not.toHaveBeenCalled()
+		expect(signer.userPubkey).toBe(actualUserPubkey)
+	})
+
+	test('fails closed when the handshake errors before resolving the user', async () => {
+		const getPublicKey = mock(async () => actualUserPubkey)
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => {
+				throw new Error('relay handshake stalled')
+			}),
+			getPublicKey,
+			userPubkey: undefined as string | undefined,
+			rpc: {
+				eventNames: mock(() => []),
+				removeAllListeners: mock(() => {}),
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 1, ndk as any)
+
+		expect(loginResult).toBeNull()
+		expect(getPublicKey).not.toHaveBeenCalled()
 	})
 })

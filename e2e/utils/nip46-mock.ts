@@ -30,10 +30,14 @@ interface SignerLoopOptions {
 }
 
 export class Nip46Mock {
-	/** Hex secret key of the "remote signer" user */
+	/** Hex secret key for the remote signer endpoint and NIP-46 envelopes. */
 	readonly sk: string
-	/** Hex public key */
+	/** Hex public key for the remote signer endpoint. */
 	readonly pk: string
+	/** Hex secret key for the user account controlled by the remote signer. */
+	readonly userSk: string
+	/** Hex public key for the user account controlled by the remote signer. */
+	readonly userPk: string
 
 	private ws: WebSocket | null = null
 	private subId: string | null = null
@@ -46,9 +50,11 @@ export class Nip46Mock {
 	private eventHandler: ((event: any) => Promise<void>) | null = null
 	private bufferedEvents: any[] = []
 
-	constructor(userSk: string) {
-		this.sk = userSk
-		this.pk = getPublicKey(hexToBytes(userSk))
+	constructor(remoteSignerSk: string, userSk = remoteSignerSk) {
+		this.sk = remoteSignerSk
+		this.pk = getPublicKey(hexToBytes(remoteSignerSk))
+		this.userSk = userSk
+		this.userPk = getPublicKey(hexToBytes(userSk))
 	}
 
 	// ─── Encryption helpers ────────────────────────────────────
@@ -275,26 +281,26 @@ export class Nip46Mock {
 				break
 
 			case 'get_public_key':
-				response = { id: request.id, result: this.pk }
+				response = { id: request.id, result: this.userPk }
 				break
 
 			case 'sign_event': {
 				const eventToSign = typeof request.params[0] === 'string' ? JSON.parse(request.params[0]) : request.params[0]
-				const signed = finalizeEvent(eventToSign, hexToBytes(this.sk))
+				const signed = finalizeEvent(eventToSign, hexToBytes(this.userSk))
 				response = { id: request.id, result: JSON.stringify(signed) }
 				break
 			}
 
 			case 'nip04_encrypt': {
 				const [thirdPartyPubkey, plaintext] = request.params
-				const ciphertext = await nip04Encrypt(this.sk, thirdPartyPubkey, plaintext)
+				const ciphertext = await nip04Encrypt(this.userSk, thirdPartyPubkey, plaintext)
 				response = { id: request.id, result: ciphertext }
 				break
 			}
 
 			case 'nip04_decrypt': {
 				const [thirdPartyPubkey2, ciphertext2] = request.params
-				const plaintext2 = await nip04Decrypt(this.sk, thirdPartyPubkey2, ciphertext2)
+				const plaintext2 = await nip04Decrypt(this.userSk, thirdPartyPubkey2, ciphertext2)
 				response = { id: request.id, result: plaintext2 }
 				break
 			}

@@ -28,7 +28,7 @@ interface AuthState {
 interface Nip46LoginOptions {
 	onAuthUrl?: (url: string) => void
 	timeoutMs?: number
-	remotePubkey?: string
+	expectedUserPubkey?: string
 }
 
 function getAuthStorage(): Storage | undefined {
@@ -81,6 +81,7 @@ interface Nip46LoginResult {
 }
 
 const NIP46_RESPONSE_EVENT_PREFIX = 'response-'
+const NIP46_USER_PUBKEY_RECOVERY_TIMEOUT_MS = 2000
 
 function getNip46ResponseEventNames(signer: NDKNip46Signer): string[] {
 	return signer.rpc
@@ -96,7 +97,7 @@ function cancelNip46HandshakeListeners(signer: NDKNip46Signer, knownResponseEven
 	}
 }
 
-function createNip46FallbackSigner(signer: NDKNip46Signer, user: NDKUser): NDKNip46Signer {
+function createNip46ResolvedSigner(signer: NDKNip46Signer, user: NDKUser): NDKNip46Signer {
 	return new Proxy(signer, {
 		get(target, property) {
 			if (property === 'user') return async () => user
@@ -109,21 +110,65 @@ function createNip46FallbackSigner(signer: NDKNip46Signer, user: NDKUser): NDKNi
 	})
 }
 
+function isHexPubkey(value: string): boolean {
+	return /^[a-f0-9]{64}$/i.test(value)
+}
+
+async function recoverNip46UserPubkey(
+	signer: NDKNip46Signer,
+	expectedUserPubkey: string | undefined,
+	timeoutMs: number,
+): Promise<string | null> {
+	const configuredUserPubkey = signer.userPubkey ?? undefined
+	const expectedPubkeys = new Set([expectedUserPubkey, configuredUserPubkey].filter((value): value is string => Boolean(value)))
+	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
+	const recoveryTimeoutMs = Math.max(1, Math.min(timeoutMs, NIP46_USER_PUBKEY_RECOVERY_TIMEOUT_MS))
+	const timeoutError = new Error('NIP-46 get_public_key recovery timed out')
+	let timeout: ReturnType<typeof setTimeout> | undefined
+
+	// NDK's getPublicKey() returns userPubkey without making an RPC request when
+	// it is already populated from a bunker URL. Clear that unverified value so
+	// recovery always resolves the account identity from the remote signer.
+	signer.userPubkey = undefined
+
+	try {
+		const userPubkey = await Promise.race([
+			signer.getPublicKey(),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => reject(timeoutError), recoveryTimeoutMs)
+			}),
+		])
+
+		if (!isHexPubkey(userPubkey)) {
+			throw new Error('NIP-46 get_public_key returned an invalid pubkey')
+		}
+
+		if (expectedPubkeys.size > 0 && !expectedPubkeys.has(userPubkey)) {
+			throw new Error('NIP-46 get_public_key did not match the expected user')
+		}
+
+		signer.userPubkey = userPubkey
+		return userPubkey
+	} catch (error) {
+		console.warn('[NIP46] get_public_key recovery failed', error)
+		return null
+	} finally {
+		if (timeout) clearTimeout(timeout)
+		cancelNip46HandshakeListeners(signer, knownResponseEvents)
+	}
+}
+
 export async function completeNip46LoginHandshake(
 	signer: NDKNip46Signer,
-	fallbackPubkey?: string,
+	expectedUserPubkey?: string,
 	timeoutMs = 8000,
 	ndk?: ReturnType<typeof ndkActions.getNDK>,
 ): Promise<Nip46LoginResult | null> {
 	const resolvedNdk = ndk ?? ndkActions.getNDK()
 	if (!resolvedNdk) {
-		throw new Error('NDK not initialized for NIP-46 fallback')
+		throw new Error('NDK not initialized for NIP-46 user resolution')
 	}
 
-	const bunkerPubkey = (signer as unknown as { bunkerPubkey?: string }).bunkerPubkey
-	const candidatePubkeys = Array.from(
-		new Set([fallbackPubkey, signer.userPubkey, bunkerPubkey].filter((value): value is string => Boolean(value))),
-	)
 	let timeout: ReturnType<typeof setTimeout> | undefined
 	const timeoutError = new Error('NIP-46 handshake timed out')
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
@@ -137,28 +182,31 @@ export async function completeNip46LoginHandshake(
 		])
 
 		if (user?.pubkey) {
+			if (expectedUserPubkey && user.pubkey !== expectedUserPubkey) {
+				console.warn('[NIP46] resolved user pubkey did not match the expected user')
+				return null
+			}
 			return { user, signer }
 		}
 	} catch (error) {
-		if (error === timeoutError) {
-			cancelNip46HandshakeListeners(signer, knownResponseEvents)
+		if (error !== timeoutError) {
+			console.warn('[NIP46] handshake failed before resolving the user pubkey', error)
+			return null
 		}
-		console.warn('[NIP46] full handshake did not complete, using fallback pubkey', error)
+
+		cancelNip46HandshakeListeners(signer, knownResponseEvents)
+		console.warn('[NIP46] handshake timed out; resolving the user pubkey with get_public_key', error)
 	} finally {
 		if (timeout) clearTimeout(timeout)
 	}
 
-	for (const pubkey of candidatePubkeys) {
-		try {
-			signer.userPubkey = pubkey
-			const user = resolvedNdk.getUser({ pubkey })
-			return { user, signer: createNip46FallbackSigner(signer, user) }
-		} catch (error) {
-			console.warn('[NIP46] fallback pubkey failed', pubkey, error)
-		}
+	const userPubkey = await recoverNip46UserPubkey(signer, expectedUserPubkey, timeoutMs)
+	if (!userPubkey) {
+		return null
 	}
 
-	return null
+	const user = resolvedNdk.getUser({ pubkey: userPubkey })
+	return { user, signer: createNip46ResolvedSigner(signer, user) }
 }
 
 const initialState: AuthState = {
@@ -199,7 +247,7 @@ export const authActions = {
 
 			if (privateKeySigner && bunkerUrl) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
-					remotePubkey: localStorage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
+					expectedUserPubkey: localStorage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
 				})
 				authActions.checkAndShowTermsDialog()
 				return
@@ -392,10 +440,10 @@ export const authActions = {
 				})
 			}
 
-			const loginResult = await completeNip46LoginHandshake(signer, options?.remotePubkey, options?.timeoutMs, ndk)
+			const loginResult = await completeNip46LoginHandshake(signer, options?.expectedUserPubkey, options?.timeoutMs, ndk)
 
 			if (!loginResult?.user.pubkey) {
-				throw new Error('Failed to resolve the remote signer pubkey for login')
+				throw new Error('Failed to resolve the NIP-46 user pubkey for login')
 			}
 			const { user, signer: authenticatedSigner } = loginResult
 

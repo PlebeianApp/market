@@ -398,11 +398,11 @@ test.describe('Authentication', () => {
 	})
 
 	test.describe('NIP-46 Nostr Connect', () => {
-		test('QR code login with NIP-46 mock', async ({ browser }) => {
+		test('QR login keeps the remote signer endpoint distinct from the authenticated user', async ({ browser }) => {
 			test.setTimeout(60_000)
 			const context = await browser.newContext()
 			const page = await createFreshPage(context)
-			const mock = new Nip46Mock(devUser2.sk)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
 
 			try {
 				await page.goto('/')
@@ -434,6 +434,8 @@ test.describe('Authentication', () => {
 				// successfully!" briefly before closing via onSuccess(). Verify
 				// auth directly since the intermediate text may flash too fast.
 				await expectAuthenticated(page)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 
 				// Verify localStorage has NIP-46 keys
 				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
@@ -441,18 +443,18 @@ test.describe('Authentication', () => {
 
 				const connectUrl = await page.evaluate(() => localStorage.getItem('nostr_connect_url'))
 				expect(connectUrl).toBeTruthy()
-				expect(connectUrl).toContain('bunker://')
+				expect(connectUrl).toContain(`bunker://${mock.pk}`)
 			} finally {
 				mock.close()
 				await context.close()
 			}
 		})
 
-		test('QR Code Connect reaches the authenticated UI when the signer acknowledges slowly', async ({ browser }) => {
+		test('QR timeout recovery authenticates as get_public_key user, not the remote signer', async ({ browser }) => {
 			test.setTimeout(60_000)
 			const context = await browser.newContext()
 			const page = await createFreshPage(context)
-			const mock = new Nip46Mock(devUser2.sk)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
 
 			try {
 				await page.goto('/')
@@ -469,7 +471,8 @@ test.describe('Authentication', () => {
 				await mock.respondToConnect(await urlInput.inputValue(), { connectAckDelayMs: 9_000 })
 
 				await expectAuthenticated(page, 15_000)
-				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.pk)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 			} finally {
 				mock.close()
 				await context.close()
@@ -516,11 +519,11 @@ test.describe('Authentication', () => {
 			}
 		})
 
-		test('Bunker URL Connect reaches the authenticated UI when the signer acknowledges slowly', async ({ browser }) => {
+		test('Bunker URL timeout recovery authenticates as get_public_key user, not the remote signer', async ({ browser }) => {
 			test.setTimeout(60_000)
 			const context = await browser.newContext()
 			const page = await createFreshPage(context)
-			const mock = new Nip46Mock(devUser2.sk)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
 			const secret = 'slow-test-secret-' + Date.now()
 
 			try {
@@ -536,7 +539,8 @@ test.describe('Authentication', () => {
 				await page.locator('[data-testid="connect-bunker-button"]').click()
 
 				await expectAuthenticated(page, 15_000)
-				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.pk)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 			} finally {
 				mock.close()
 				await context.close()
