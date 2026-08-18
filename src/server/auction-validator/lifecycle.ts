@@ -150,7 +150,12 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 // ============================================================================
 
 const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState, currentTopBid: number): DerivedVerdict => {
-	const nut7State = aggregateProofStates(bidState.nut7States, bidState.bid.proofYs)
+	// B1 (ADR-0004): The NUT-7 poller has been removed — validators no
+	// longer query the mint for proof state. When no NUT-7 data exists
+	// (the permanent state since the poller was deleted), default to
+	// 'unspent' — the bid was accepted at the mint at lock time. NUT-7
+	// is now client-side-only evidence.
+	const nut7State = bidState.nut7States.size > 0 ? aggregateProofStates(bidState.nut7States, bidState.bid.proofYs) : 'unspent'
 
 	const verdict: BidValidationVerdict = validateBid({
 		auction: auctionState.auction,
@@ -284,7 +289,9 @@ const deriveSettlementVerdict = (
 		winningBidClaim: bidState.currentClaim,
 		winningBidPostCloseDecision: bidState.postCloseDecision,
 		winningBidNut7State: undefined,
-		winningBidNut7ProofStates: buildProofStateMap(bidState),
+		// B1 (ADR-0004): NUT-7 poller removed — pass undefined when no
+		// NUT-7 data so settlement completeness doesn't gate on NUT-7.
+		winningBidNut7ProofStates: bidState.nut7States.size > 0 ? buildProofStateMap(bidState) : undefined,
 		pathReleaseObservedAt: releaseObservedAt,
 		bidChain: buildSettlementChain(auctionState, bidState, now),
 	})
@@ -307,15 +314,15 @@ const buildSettlementChain = (
 	bid: ValidatorBidState['bid']
 	pathRelease: ParsedPathReleaseEvent
 	pathReleaseObservedAt?: number
-	nut7State: ReturnType<typeof aggregateProofStates>
-	nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
+	nut7State: ReturnType<typeof aggregateProofStates> | undefined
+	nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>> | undefined
 }> => {
 	const chain: Array<{
 		bid: ValidatorBidState['bid']
 		pathRelease: ParsedPathReleaseEvent
 		pathReleaseObservedAt?: number
-		nut7State: ReturnType<typeof aggregateProofStates>
-		nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>>
+		nut7State: ReturnType<typeof aggregateProofStates> | undefined
+		nut7ProofStates: Map<string, ReturnType<typeof aggregateProofStates>> | undefined
 	}> = []
 	const legs: ValidatorBidState[] = []
 	const seen = new Set<string>()
@@ -333,13 +340,16 @@ const buildSettlementChain = (
 	for (const leg of legs) {
 		const pathRelease = selectCanonicalEvidence(auctionState, leg, now).release
 		if (!pathRelease) continue
-		const nut7ProofStates = buildProofStateMap(leg)
+		// B1 (ADR-0004): When no NUT-7 data exists (poller removed), pass
+		// undefined so validateSettlementLegNut7States skips the NUT-7
+		// spend check — validators observe kind-1024 as proof of redemption.
+		const hasNut7Data = leg.nut7States.size > 0
 		chain.push({
 			bid: leg.bid,
 			pathRelease,
 			pathReleaseObservedAt: auctionState.pathReleaseObservedAt.get(pathRelease.id),
-			nut7State: aggregateProofStates(leg.nut7States, leg.bid.proofYs),
-			nut7ProofStates,
+			nut7State: hasNut7Data ? aggregateProofStates(leg.nut7States, leg.bid.proofYs) : undefined,
+			nut7ProofStates: hasNut7Data ? buildProofStateMap(leg) : undefined,
 		})
 	}
 	return chain
@@ -348,7 +358,9 @@ const buildSettlementChain = (
 const buildProofStateMap = (bidState: ValidatorBidState): Map<string, ReturnType<typeof aggregateProofStates>> => {
 	const perProof = new Map<string, ReturnType<typeof aggregateProofStates>>()
 	for (const proofY of bidState.bid.proofYs) {
-		const state = bidState.nut7States.get(proofY.toLowerCase())?.state ?? 'unknown'
+		// B1 (ADR-0004): Default absent NUT-7 to 'unspent' — the poller has
+		// been removed and NUT-7 is now client-side-only evidence.
+		const state = bidState.nut7States.get(proofY.toLowerCase())?.state ?? 'unspent'
 		perProof.set(proofY.toLowerCase(), state)
 	}
 	return perProof

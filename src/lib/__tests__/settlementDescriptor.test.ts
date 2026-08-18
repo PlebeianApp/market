@@ -261,7 +261,7 @@ describe('getSettlementDescriptor', () => {
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 			const d = await getSettlementDescriptor(
 				makeInput({
-					auction: makeAuction({ reserve: 40000 }),
+					auction: makeAuction({ reserve: 55000 }),
 					bids: [topBid, myBid],
 					verdicts: [
 						verdictForBid(topBid.id),
@@ -689,7 +689,7 @@ describe('getSettlementDescriptor', () => {
 		test('refund-pending: now < locktime', async () => {
 			const d = await getSettlementDescriptor(
 				winningBidInput({
-					auction: makeAuction({ reserve: 40000 }),
+					auction: makeAuction({ reserve: 55000 }),
 					settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0 })],
 					now: 120,
 				}),
@@ -700,7 +700,7 @@ describe('getSettlementDescriptor', () => {
 		test('refund-ready: now >= locktime', async () => {
 			const d = await getSettlementDescriptor(
 				winningBidInput({
-					auction: makeAuction({ reserve: 40000 }),
+					auction: makeAuction({ reserve: 55000 }),
 					settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0 })],
 					now: AUCTION_LOCKTIME,
 				}),
@@ -979,7 +979,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -993,7 +993,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -1006,7 +1006,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -1022,7 +1022,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				currentUserPubkey: BUYER_PUBKEY,
 				myTopBidEvent: leg2,
@@ -1058,7 +1058,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, badRelease2],
 				currentUserPubkey: SELLER_PUBKEY,
 				now: 120,
@@ -1075,7 +1075,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				nut7States: spentNut7States([leg1, leg2]),
 				pathReleases: [release1, release2],
 				settlements: [
@@ -1107,7 +1107,7 @@ describe('rebid chain path release validation', () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
-				verdicts: [verdictForBid(leg1.id, { observedAt: 95 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
 				pathReleases: [release1, release2],
 				settlements: [
 					makeSettlement({

@@ -302,7 +302,7 @@ describe('deriveVerdict — pre-close', () => {
 		}
 	})
 
-	test('no NUT-7 signal → bid_pending_review', () => {
+	test('no NUT-7 signal → valid_bid_placed (B1: default to unspent)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -310,7 +310,7 @@ describe('deriveVerdict — pre-close', () => {
 		auctionState.bids.set(bid.id, bidState)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_pending_review')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
 	test('NUT-7 reports spent → bid_invalid: proof_spent', () => {

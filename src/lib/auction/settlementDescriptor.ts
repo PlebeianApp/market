@@ -15,26 +15,14 @@ import type { SettlementChainLegContext } from './validation'
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
 
 export type SettlementPhase =
-	| 'bidding-open'
-	| 'settlement-window-open'
-	| 'settlement-window-expired'
-	| 'settled'
-	| 'reserve-not-met'
-	| 'cancelled'
-	| 'closed'
+	'bidding-open' | 'settlement-window-open' | 'settlement-window-expired' | 'settled' | 'reserve-not-met' | 'cancelled' | 'closed'
 
 export type SettlementTone = 'action' | 'waiting' | 'completed' | 'danger' | 'default'
 
 export type SettlementIconKey = 'gavel' | 'check' | 'ban' | 'truck' | 'clock' | 'trophy' | 'alert'
 
 export type SettlementCtaKind =
-	| 'release-path'
-	| 'submit-settlement'
-	| 'close-auction'
-	| 'view-order'
-	| 'open-claim-dialog'
-	| 'refresh-page'
-	| 'none'
+	'release-path' | 'submit-settlement' | 'close-auction' | 'view-order' | 'open-claim-dialog' | 'refresh-page' | 'none'
 
 export interface SettlementCta {
 	kind: Exclude<SettlementCtaKind, 'none'>
@@ -144,6 +132,13 @@ function isSettlementStructurallyValid(
 
 	// Non-settled statuses: verify based on status type
 	if (settlement.status !== 'settled') {
+		// B3: cancelled and reserve_not_met must not be 'valid' when a
+		// reserve-meeting bid exists. A seller cannot displace a
+		// reserve-meeting canonical winner with these statuses.
+		if (settlement.status === 'cancelled' || settlement.status === 'reserve_not_met') {
+			const hasReserveMeetingBid = validatedBids.some((b) => b.amount >= auction.reserve)
+			if (hasReserveMeetingBid) return 'invalid'
+		}
 		// cancelled: seller signature + root event ID + coordinate = sufficient
 		if (settlement.status === 'cancelled') return 'valid'
 		// reserve_not_met and griefed_no_fallback: basic structural checks pass
@@ -345,13 +340,18 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	// Prefer 'settled' over 'reserve_not_met' (a settled event redeems proofs
 	// and cannot be overridden by a later reserve_not_met). Among same-status
 	// events, prefer the latest by created_at. Prefer 'valid' over 'pending'.
+	// B3: Never let reserve_not_met displace settled — a pending settled
+	// always beats a valid non-settled, regardless of validity ordering.
 	const latestSettlement = settlements.length
 		? settlements.reduce((best, s) => {
 				const bestValidity = settlementValidities.get(best.id) ?? 'valid'
 				const sValidity = settlementValidities.get(s.id) ?? 'valid'
+				// B3: Settled always wins over non-settled, even when settled is
+				// pending and the other is valid.
+				if (s.status === 'settled' && best.status !== 'settled') return s
+				if (best.status === 'settled' && s.status !== 'settled') return best
 				if (sValidity === 'valid' && bestValidity === 'pending') return s
 				if (sValidity === 'pending' && bestValidity === 'valid') return best
-				if (s.status === 'settled' && best.status !== 'settled') return s
 				if (s.status === best.status && s.createdAt > best.createdAt) return s
 				return best
 			})

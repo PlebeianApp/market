@@ -53,7 +53,16 @@ function classifyBid(
 	const invalidVerdicts = confirmingVerdicts.filter((v) => v.claim === 'bid_invalid' || v.claim === 'fraudulent_bid')
 
 	if (validVerdicts.length >= auction.auditorQuorum) {
-		const observedAt = validVerdicts.reduce((max, v) => Math.max(max, v.observedAt), bid.createdAt)
+		// B2: Use the MINIMUM observedAt across quorum validators, and cap at
+		// maxEndAt. Post-close verdicts have observed_at > maxEndAt, which
+		// triggers late_arrival + timestamp_skew in validateBid. The earliest
+		// validator to confirm the bid is the most reliable timestamp for the
+		// bid's acceptance window. Capping at maxEndAt ensures the time-window
+		// check in validateBid does not reject bids that were validly placed
+		// before the auction closed but only confirmed by some validators
+		// after close.
+		const minObservedAt = validVerdicts.reduce((min, v) => Math.min(min, v.observedAt), validVerdicts[0]!.observedAt)
+		const observedAt = Math.min(minObservedAt, auction.maxEndAt)
 		const nut7State = nut7States?.get(bid.id)
 
 		// For ended auctions, NUT-7 spend state is no longer relevant for bid validity.

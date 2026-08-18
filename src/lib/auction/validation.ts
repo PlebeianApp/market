@@ -833,6 +833,15 @@ const validateSettlementLegNut7States = (leg: SettlementChainLegContext): { ok: 
 		return { ok: true }
 	}
 
+	// B1 (ADR-0004): When no NUT-7 data is provided at all (neither
+	// per-proof states nor aggregate state), skip the NUT-7 spend check.
+	// Validators no longer query the mint for proof state — they observe
+	// the seller's kind-1024 settlement event as proof of redemption.
+	// The client performs NUT-7 checks separately via checkProofStateBatch.
+	if (leg.nut7State === undefined) {
+		return { ok: true }
+	}
+
 	// Backward-compatible fallback: aggregate state is only sufficient for
 	// single-proof legs. Multi-proof legs require explicit per-proof states.
 	if (leg.bid.proofYs.length <= 1 && leg.nut7State === 'spent') {

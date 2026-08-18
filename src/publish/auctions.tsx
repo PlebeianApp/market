@@ -965,6 +965,36 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// 2. Resolve `reserve_not_met` shortcut. No on-mint work for this path —
 	// losers self-refund at locktime via their refund branch.
 	if (formData.status === 'reserve_not_met') {
+		// B3: Before publishing reserve_not_met, verify no reserve-meeting
+		// canonical winner exists. A seller who has already redeemed a
+		// winning bid must not be able to displace it with reserve_not_met.
+		const [rnmBids, rnmVerdicts] = await Promise.all([
+			fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
+			fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+		])
+		const rnmParsedBids = rnmBids
+			.map((b) => parseBidEvent(b.rawEvent()))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+			.map((r) => r.value)
+		const rnmParsedVerdicts = rnmVerdicts
+			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+
+		const rnmValidated = computeValidatedBids({
+			auction: parsedAuction,
+			bids: rnmParsedBids,
+			verdicts: rnmParsedVerdicts,
+		})
+
+		if (rnmValidated.canonicalWinner && rnmValidated.canonicalWinner.amount >= parsedAuction.reserve) {
+			throw new Error(
+				'Cannot publish reserve_not_met: a validated bid meeting the reserve exists. ' +
+					`Canonical winner: ${rnmValidated.canonicalWinner.id} ` +
+					`(${rnmValidated.canonicalWinner.amount} sats).`,
+			)
+		}
+
 		const event = new NDKEvent(ndk)
 		event.kind = AUCTION_SETTLEMENT_KIND
 		event.content = ''
