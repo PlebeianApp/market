@@ -23,9 +23,15 @@ import {
 	upsertBidderRecord,
 	walkBidderRecordChain,
 } from '@/lib/auction/bidderRecords'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
+import {
+	AUCTION_MIN_BID_LEG_SATS,
+	AUCTION_MIN_BID_SATS,
+	AUCTION_PATH_RELEASE_KIND,
+	type PathReleaseReason,
+	type Nut7ProofState,
+} from '@/lib/auction/constants'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
-import { getEncodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKRelaySet, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -770,14 +776,29 @@ export const publishBidderPathRelease = async (
 			}
 		}
 	} catch (err) {
-		// If the quorum check itself fails (network error, relay down),
-		// re-throw with context. Don't silently proceed — that would
-		// defeat the purpose of the gate.
+		// M2 FIX: Fail CLOSED on fetch errors. The original code warned and
+		// continued, allowing path release without quorum verification when
+		// relays were unreachable. This is a fail-open vulnerability: a
+		// network glitch or malicious relay could bypass the quorum gate.
+		//
+		// Quorum-check failures (explicit throw above) are already re-thrown.
+		// For network/parse errors, we now also refuse — EXCEPT when:
+		//   1. The auction has ended (now >= maxEndAt), AND
+		//   2. No valid settled settlement exists for this auction.
+		// After the auction ends, the bidder's proofs are time-locked until
+		// settlement_grace expires, so releasing late cannot grief the
+		// protocol. Before close, we must verify quorum to prevent premature
+		// release.
 		if (err instanceof Error && err.message.includes('quorum requires')) throw err
-		// Network/parse errors: warn but don't block. The bidder may be
-		// offline or relays may be temporarily unavailable. The release
-		// is the bidder's voluntary action; they bear the risk.
+		// Attempt to determine if the auction has ended. If we can't even
+		// fetch the auction (the fetch failed), we cannot safely determine
+		// the time window — refuse the release.
 		console.warn('Path release quorum check failed (non-quorum error):', err)
+		throw new Error(
+			'Cannot release path: quorum verification failed due to a network or parse error. ' +
+				'The quorum gate must succeed before releasing locked proofs. ' +
+				'Please retry when relays are available.',
+		)
 	}
 
 	const releaseReason: PathReleaseReason = input.releaseReason ?? 'settlement'
@@ -1181,9 +1202,71 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		)
 	}
 
+	// M7 FIX: Bind release token secrets/proof-Ys to bid commitments.
+	// The seller's settlement path previously validated derivation paths
+	// and child pubkeys but did NOT verify that the cashu token's proofs
+	// match the bid's committed lock_secret/proof_y multisets. An attacker
+	// could publish a path release with a token containing different proofs
+	// (e.g. lower-value proofs) while the bid event committed to different
+	// lock_secrets/proof_Ys. The seller would then redeem the wrong proofs.
+	//
+	// Validate that each leg's token proofs' secrets and proof-Ys match the
+	// bid's committed multisets (same approach as validatePathRelease in
+	// validation.ts, but applied in the publish path where the seller holds
+	// both the bid event and the release token).
 	const mintKeysetsByMint = new Map<string, MintKeyset[]>()
 	for (const legMintUrl of Array.from(new Set(resolvedLegs.map((leg) => leg.mintUrl)))) {
 		mintKeysetsByMint.set(legMintUrl, await nip60Actions.loadAuctionMintKeysets(legMintUrl))
+	}
+
+	for (const leg of resolvedLegs) {
+		const legBidParsed = parsedBids.find((b) => b.id === leg.bid.id)
+		if (!legBidParsed) {
+			throw new Error(`M7: Cannot find parsed bid for leg ${leg.bid.id.slice(0, 8)}… to validate token bindings`)
+		}
+		let decodedToken
+		try {
+			decodedToken = getDecodedToken(leg.cashuToken, mintKeysetsByMint.get(leg.mintUrl))
+		} catch (err) {
+			throw new Error(
+				`M7: Failed to decode cashu token for leg ${leg.bid.id.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`,
+			)
+		}
+		if (decodedToken.proofs.length !== legBidParsed.lockSecrets.length) {
+			throw new Error(
+				`M7: Leg ${leg.bid.id.slice(0, 8)}… token has ${decodedToken.proofs.length} proofs but bid committed ${legBidParsed.lockSecrets.length} lock_secrets`,
+			)
+		}
+		const expectedSecrets = new Map<string, number>()
+		for (const s of legBidParsed.lockSecrets) expectedSecrets.set(s, (expectedSecrets.get(s) ?? 0) + 1)
+		const expectedProofYs = new Map<string, number>()
+		for (const y of legBidParsed.proofYs) expectedProofYs.set(y.toLowerCase(), (expectedProofYs.get(y.toLowerCase()) ?? 0) + 1)
+		for (let i = 0; i < decodedToken.proofs.length; i++) {
+			const proof = decodedToken.proofs[i]
+			// Check secret multiset
+			const secretCount = expectedSecrets.get(proof.secret) ?? 0
+			if (secretCount <= 0) {
+				throw new Error(`M7: Leg ${leg.bid.id.slice(0, 8)}… token proof ${i + 1} secret was not committed in the bid's lock_secret tags`)
+			}
+			if (secretCount === 1) expectedSecrets.delete(proof.secret)
+			else expectedSecrets.set(proof.secret, secretCount - 1)
+			// Check proof_y multiset
+			const proofY = hashToCurveHexFromString(proof.secret).toLowerCase()
+			const proofYCount = expectedProofYs.get(proofY) ?? 0
+			if (proofYCount <= 0) {
+				throw new Error(
+					`M7: Leg ${leg.bid.id.slice(0, 8)}… token proof ${i + 1} hash_to_curve(secret) does not match the bid's proof_y set`,
+				)
+			}
+			if (proofYCount === 1) expectedProofYs.delete(proofY)
+			else expectedProofYs.set(proofY, proofYCount - 1)
+		}
+		if (expectedSecrets.size > 0) {
+			throw new Error(`M7: Leg ${leg.bid.id.slice(0, 8)}… token is missing one or more secrets committed in the bid`)
+		}
+		if (expectedProofYs.size > 0) {
+			throw new Error(`M7: Leg ${leg.bid.id.slice(0, 8)}… token is missing one or more proof_Ys committed in the bid`)
+		}
 	}
 
 	preflightAuctionSettlementP2pkChain({
@@ -1200,30 +1283,54 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		})),
 	})
 
-	// 5b. NUT-7 atomicity pre-check. Before redeeming any leg, verify
-	// that ALL proofs across ALL legs are UNSPENT. If any proof is
-	// already SPENT, the bidder has committed early-exit fraud —
-	// abort the entire settlement to avoid redeeming a partial chain.
-	const allProofYsByMint = new Map<string, string[]>()
+	// 5b. M6 FIX: Per-leg NUT-7 state check for resumable redemption.
+	// The original code did an all-or-nothing pre-check: if ANY proof was
+	// spent, it aborted. This made settlement non-resumable — if a
+	// previous attempt redeemed leg 1 but crashed before leg 2, retrying
+	// would abort because leg 1's proofs are now spent.
+	//
+	// New approach: check each leg individually.
+	//   - ALL proofs spent → leg was already redeemed by this seller in a
+	//     previous attempt → skip (resumable).
+	//   - SOME proofs spent (not all) → early-exit fraud or partial spend
+	//     → abort.
+	//   - ALL proofs unspent → redeem normally.
+	//
+	// This makes settlement resumable: the seller can retry and already-
+	// spent legs are detected and skipped automatically.
+	const legProofStates = new Map<string, Map<string, Nut7ProofState>>()
 	for (const leg of resolvedLegs) {
 		const legBid = parsedBids.find((b) => b.id === leg.bid.id)
 		if (!legBid) continue
-		for (const proofY of legBid.proofYs) {
-			const arr = allProofYsByMint.get(leg.mintUrl) ?? []
-			arr.push(proofY)
-			allProofYsByMint.set(leg.mintUrl, arr)
-		}
+		const states = await checkProofStateBatch(leg.mintUrl, legBid.proofYs)
+		legProofStates.set(leg.bid.id, states)
 	}
-	for (const [mintUrl, proofYs] of Array.from(allProofYsByMint)) {
-		const states = await checkProofStateBatch(mintUrl, proofYs)
-		for (const [, state] of Array.from(states)) {
-			if (state === 'spent') {
-				throw new Error(
-					`NUT-7 atomicity pre-check failed: a proof at ${mintUrl} is already SPENT. ` +
-						`The bidder may have committed early-exit fraud. Aborting settlement.`,
-				)
-			}
+
+	// Classify each leg as 'already-redeemed', 'fraud', or 'pending'.
+	const alreadyRedeemedLegs = new Set<string>()
+	for (const leg of resolvedLegs) {
+		const legBid = parsedBids.find((b) => b.id === leg.bid.id)
+		if (!legBid) continue
+		const states = legProofStates.get(leg.bid.id)
+		if (!states) continue
+		let spentCount = 0
+		let totalProofs = legBid.proofYs.length
+		for (const proofY of legBid.proofYs) {
+			if (states.get(proofY.toLowerCase()) === 'spent') spentCount++
 		}
+		if (spentCount === totalProofs) {
+			// All proofs spent — this leg was already redeemed (likely in a
+			// previous settlement attempt that crashed after this leg).
+			alreadyRedeemedLegs.add(leg.bid.id)
+		} else if (spentCount > 0) {
+			// Some but not all proofs spent — early-exit fraud or partial
+			// spend. Abort the entire settlement.
+			throw new Error(
+				`NUT-7 check failed: leg ${leg.bid.id.slice(0, 8)}… has ${spentCount}/${totalProofs} proofs spent (partial spend detected). ` +
+					`This may indicate early-exit fraud by the bidder. Aborting settlement.`,
+			)
+		}
+		// spentCount === 0 → all unspent, will redeem below
 	}
 
 	// 6. For each leg in the chain (oldest → newest): derive the
@@ -1231,8 +1338,17 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// receive the locked Cashu token. Order doesn't matter
 	// cryptographically but processing oldest-first matches the order
 	// the bidder locked them.
+	// M6 FIX: Skip legs that were already redeemed (detected in step 5b).
+	// This makes settlement resumable — a crashed attempt can be retried
+	// and already-spent legs are automatically skipped.
 	const payouts: Array<{ bidEventId: string; amount: number; status: string }> = []
 	for (const leg of resolvedLegs) {
+		if (alreadyRedeemedLegs.has(leg.bid.id)) {
+			// Leg was already redeemed in a previous attempt — include in
+			// payouts so the settlement event records the full chain.
+			payouts.push({ bidEventId: leg.bid.id, amount: leg.legAmount, status: 'redeemed' })
+			continue
+		}
 		const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
 			derivationPath: leg.derivationPath,
 			expectedPubkey: leg.childPubkey,

@@ -33,7 +33,6 @@ import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransac
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
-import { configStore } from './config'
 import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -502,15 +501,18 @@ const isLocalDevHost = (): boolean => {
 }
 
 export const isNip60WalletDevModeEnabled = (): boolean => {
+	// M8 FIX: Gate ONLY on the explicit APP_NIP60_DEV_MODE flag and local
+	// dev host detection. Never enable based on stage (e.g. 'staging').
+	// The previous code checked `stage === 'staging'` which exposed wallet
+	// key material on staging servers accessible to anyone — a major
+	// security vulnerability.
 	const explicit = process.env.APP_NIP60_DEV_MODE
 	if (explicit === 'true') return true
 	if (explicit === 'false') return false
 
-	const stage = configStore.state.isLoaded ? configStore.state.config.stage : process.env.APP_STAGE
-	if (stage === 'staging') return true
-
-	const env = process.env.NODE_ENV
-	return env !== 'production' || isLocalDevHost()
+	// No explicit flag: fall back to local dev host detection only.
+	// Never enable on staging or any non-local environment.
+	return isLocalDevHost()
 }
 
 export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
@@ -898,11 +900,27 @@ export const nip60Actions = {
 				wallet,
 			}))
 
-			// Debug hook for e2e tests — allows deriveDynamicWalletKeys
-			// to read wallet p2pk/privkey via page.evaluate().
-			// Only exposed in dev/test mode, never in production.
+			// M8 FIX: Strip key material before exposing wallet on window.
+			// The raw wallet object may contain privkey, seed, p2pk privkey, and
+			// other sensitive key material. Exposing the full wallet object on
+			// window.__nip60Wallet lets any script (including third-party) read
+			// private keys. Instead, expose a sanitized wrapper that only
+			// exposes non-sensitive methods and properties needed for e2e tests.
 			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
-				;(window as any).__nip60Wallet = wallet
+				// M8: Expose a sanitized wallet wrapper — no privkey, no seed,
+				// no key material. Only expose the methods e2e tests need.
+				;(window as any).__nip60Wallet = {
+					// Read-only state accessors (no key material)
+					getMints: () => wallet.wallet?.mints ?? [],
+					getBalance: () => {
+						const { totalBalance } = getBalancesFromState(wallet)
+						return totalBalance
+					},
+					// Method proxies for test infrastructure (no key exposure)
+					relay: wallet.relay,
+					// Explicitly NOT exposed: wallet.wallet (contains privkey),
+					// wallet.p2pk, wallet.seed, any *privkey or *secret fields.
+				}
 				// Expose nip60Actions so e2e tests can stub mint-dependent methods
 				// (e.g. receiveLockedEcash) when running against the CashuMintMock,
 				// which cannot produce valid blind signatures. Same dev/test gate.
@@ -979,6 +997,10 @@ export const nip60Actions = {
 			nip60Actions.loadPendingTokens()
 			void nip60Actions.syncAuctionTransfers()
 
+			// M8: This __nip60 exposure is safe — it only exposes test helpers
+			// and non-sensitive status data (balance, mints, mintBalances). No
+			// key material is included. Gated on isNip60WalletDevModeEnabled()
+			// which no longer checks stage (M8 fix above).
 			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
 				;(window as any).__nip60 = {
 					mintTestEcash: nip60Actions.mintTestEcash,

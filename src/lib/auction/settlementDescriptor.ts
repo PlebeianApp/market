@@ -15,14 +15,26 @@ import type { SettlementChainLegContext } from './validation'
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
 
 export type SettlementPhase =
-	'bidding-open' | 'settlement-window-open' | 'settlement-window-expired' | 'settled' | 'reserve-not-met' | 'cancelled' | 'closed'
+	| 'bidding-open'
+	| 'settlement-window-open'
+	| 'settlement-window-expired'
+	| 'settled'
+	| 'reserve-not-met'
+	| 'cancelled'
+	| 'closed'
 
 export type SettlementTone = 'action' | 'waiting' | 'completed' | 'danger' | 'default'
 
 export type SettlementIconKey = 'gavel' | 'check' | 'ban' | 'truck' | 'clock' | 'trophy' | 'alert'
 
 export type SettlementCtaKind =
-	'release-path' | 'submit-settlement' | 'close-auction' | 'view-order' | 'open-claim-dialog' | 'refresh-page' | 'none'
+	| 'release-path'
+	| 'submit-settlement'
+	| 'close-auction'
+	| 'view-order'
+	| 'open-claim-dialog'
+	| 'refresh-page'
+	| 'none'
 
 export interface SettlementCta {
 	kind: Exclude<SettlementCtaKind, 'none'>
@@ -293,11 +305,26 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
 
-	// 2. Determine postCloseDecision from raw settlement data.
-	const rawSettlementWinner = rawSettlements[0]?.winnerPubkey ?? ''
+	// 2. Determine postCloseDecision from structurally pre-filtered settlements.
+	// M1 FIX: The original code used rawSettlements[0]?.winnerPubkey directly,
+	// which could be a fraudulent settlement from an arbitrary pubkey. An
+	// attacker could publish a settlement with a different winnerPubkey to
+	// poison postCloseDecision to 'loser', which would then reject the
+	// legitimate winner's path release in step 3. Instead, we first filter
+	// to settlements that pass basic structural checks (correct seller,
+	// auction refs), then pick the latest by createdAt deterministically.
+	const structurallyPrefilteredSettlements = rawSettlements
+		.filter(
+			(s) =>
+				s.sellerPubkey.toLowerCase() === auction.sellerPubkey.toLowerCase() &&
+				s.auctionRootEventId === auction.rootEventId &&
+				s.auctionCoordinate === auction.coordinate,
+		)
+		.sort((a, b) => b.createdAt - a.createdAt)
+	const prefilteredWinner = structurallyPrefilteredSettlements[0]?.winnerPubkey ?? ''
 	const postCloseDecision: 'winner' | 'loser' | null = !ended
 		? null
-		: rawSettlementWinner && topBid && rawSettlementWinner !== topBid.bidderPubkey
+		: prefilteredWinner && topBid && prefilteredWinner !== topBid.bidderPubkey
 			? 'loser'
 			: 'winner'
 

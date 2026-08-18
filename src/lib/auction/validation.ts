@@ -356,6 +356,35 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 			detail: `lock_secret and proof_y tags must be parallel: ${bid.lockSecrets.length} vs ${bid.proofYs.length}`,
 		}
 	}
+	// M5 FIX: Reject bids with duplicate lock_secret or proof_y values
+	// within the same bid. The bid amount is declared in the `amount` tag
+	// but is not cryptographically bound to the proofs — an attacker could
+	// pad their proof count by repeating the same lock_secret/proof_y pair
+	// to make the bid appear to lock more value than it actually does.
+	// Duplicates within a single bid are always invalid: each proof in a
+	// Cashu token has a unique secret and Y value by construction.
+	const seenLockSecrets = new Set<string>()
+	const seenProofYs = new Set<string>()
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const secretLower = bid.lockSecrets[i].toLowerCase()
+		const proofYLower = bid.proofYs[i].toLowerCase()
+		if (seenLockSecrets.has(secretLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_lock',
+				detail: `duplicate lock_secret at index ${i} — each proof must have a unique secret`,
+			}
+		}
+		if (seenProofYs.has(proofYLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_proof_y',
+				detail: `duplicate proof_y at index ${i} — each proof must have a unique Y value`,
+			}
+		}
+		seenLockSecrets.add(secretLower)
+		seenProofYs.add(proofYLower)
+	}
 	// Validate every proof's secret independently. All MUST share the same
 	// lock parameters — the bidder split their input across multiple
 	// denominations but each output proof is its own P2PK lock with its

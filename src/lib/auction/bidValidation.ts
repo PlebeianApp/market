@@ -53,14 +53,23 @@ function classifyBid(
 	const invalidVerdicts = confirmingVerdicts.filter((v) => v.claim === 'bid_invalid' || v.claim === 'fraudulent_bid')
 
 	if (validVerdicts.length >= auction.auditorQuorum) {
-		// B2: Use the MINIMUM observedAt across quorum validators, and cap at
-		// maxEndAt. Post-close verdicts have observed_at > maxEndAt, which
+		// B2 + M4 FIX: Use the MINIMUM observedAt across quorum validators, and
+		// cap at maxEndAt. Post-close verdicts have observed_at > maxEndAt, which
 		// triggers late_arrival + timestamp_skew in validateBid. The earliest
 		// validator to confirm the bid is the most reliable timestamp for the
 		// bid's acceptance window. Capping at maxEndAt ensures the time-window
 		// check in validateBid does not reject bids that were validly placed
 		// before the auction closed but only confirmed by some validators
 		// after close.
+		//
+		// M4 security rationale (single-validator veto via observed_at poisoning):
+		// A malicious validator could publish a verdict with an artificially
+		// inflated observed_at (e.g. far past maxEndAt) to cause validateBid's
+		// time-window check to reject an otherwise valid bid, effectively
+		// vetoing it. By taking the MINIMUM across quorum validators and capping
+		// at maxEndAt, a single validator cannot poison the observed_at to
+		// invalidate a bid — at least quorum validators must collude to shift
+		// the minimum above maxEndAt, and even then the cap prevents it.
 		const minObservedAt = validVerdicts.reduce((min, v) => Math.min(min, v.observedAt), validVerdicts[0]!.observedAt)
 		const observedAt = Math.min(minObservedAt, auction.maxEndAt)
 		const nut7State = nut7States?.get(bid.id)
@@ -140,13 +149,124 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	// Step 1: Compute legLockedAmount from signed chain before validation.
 	computeLegLockedAmounts(bids)
 
-	// Step 2: Classify each bid based on validator quorum.
-	const classified = bids.map((bid) => classifyBid(bid, auction, verdicts, nut7States))
+	// M3 FIX: Rebid-chain verdict d-tag collision.
+	// Kind-30440 is parameterized replaceable on d = "bidder:auction".
+	// When a bidder rebids (same bidder, same auction), the validator
+	// publishes a new verdict with the new bidEventId, which REPLACES the
+	// old verdict on the relay. The old leg's verdict disappears, so
+	// classifyBid can't find it and the old leg becomes 'pending',
+	// breaking the validated chain.
+	//
+	// Fix: Walk the rebid chain backwards. If bid B has a valid verdict
+	// and B.prevBidId points to bid A, then the same validators that
+	// confirmed B must have also seen and confirmed A (validators process
+	// the chain sequentially — they can't validate a rebid without first
+	// validating the leg it replaces). We propagate the verdict set
+	// backwards so earlier legs inherit the quorum-confirmed status.
+	//
+	// LIMITATION: This relies on the assumption that validators validate
+	// the full chain before emitting a verdict for the latest leg. If a
+	// validator only validates the delta without checking the previous
+	// leg, this propagation would be unsound. In practice, validateBid
+	// requires prevBid context (bidChainLegAmount) and validators fetch
+	// the full chain, so this assumption holds. A future schema change
+	// to include bidEventId in the d-tag (d = "bidder:auction:bidEventId")
+	// would eliminate this issue entirely.
+	// TODO(audit-m3): Consider changing d-tag to include bidEventId for
+	// per-leg verdict addressability.
+	const verdictsByBidId = new Map<string, ParsedValidatorVerdictEvent[]>()
+	for (const v of verdicts) {
+		const arr = verdictsByBidId.get(v.bidEventId) ?? []
+		arr.push(v)
+		verdictsByBidId.set(v.bidEventId, arr)
+	}
+	// Build parent chain map (which bids point to which via prevBidId).
+	const parentOf = new Map<string, string | undefined>()
+	for (const bid of bids) {
+		parentOf.set(bid.id, bid.prevBidId)
+	}
+	// Propagate verdicts backwards: for each bid that has direct verdicts,
+	// walk up the prevBid chain and copy the verdict references to ancestor
+	// legs that lack their own direct verdicts.
+	const propagatedVerdicts = new Map<string, ParsedValidatorVerdictEvent[]>()
+	for (const [bidId, directVerdicts] of verdictsByBidId) {
+		// Start with the bid that has direct verdicts
+		let currentId: string | undefined = bidId
+		const seen = new Set<string>()
+		while (currentId && !seen.has(currentId)) {
+			seen.add(currentId)
+			// Only propagate to ancestor legs that don't have their own direct
+			// verdicts (direct verdicts are always preferred).
+			if (!verdictsByBidId.has(currentId) && !propagatedVerdicts.has(currentId)) {
+				propagatedVerdicts.set(currentId, directVerdicts)
+			}
+			currentId = parentOf.get(currentId)
+		}
+	}
+	// Merge propagated verdicts into the verdicts list for classification.
+	// We create an augmented verdicts array that includes propagated
+	// verdicts (with the ancestor bid's id substituted) so classifyBid
+	// can find them by bidEventId.
+	const augmentedVerdicts: ParsedValidatorVerdictEvent[] = [...verdicts]
+	for (const [bidId, props] of propagatedVerdicts) {
+		for (const v of props) {
+			// Create a verdict copy pointing at the ancestor bid. The
+			// observedAt is the same as the descendant's verdict — the
+			// validator observed both at approximately the same time.
+			augmentedVerdicts.push({ ...v, bidEventId: bidId })
+		}
+	}
 
-	// Step 3: Sort valid candidates chronologically by observedAt for sequential
-	// currentTopBid accumulation.
-	const validCandidates = classified.filter((c) => c.classification === 'valid').sort((a, b) => a.observedAt - b.observedAt)
+	// Step 2: Classify each bid based on validator quorum (using augmented verdicts).
+	const classified = bids.map((bid) => classifyBid(bid, auction, augmentedVerdicts, nut7States))
 
+	// M5 FIX: Cross-bid dedup check at parse/classification time.
+	// Two different bids in the same auction must not share the same
+	// lock_secret or proof_y. If they do, one bid is reusing proofs
+	// from another — the bid amount is not cryptographically bound to
+	// the proofs, so an attacker could submit a high-amount bid reusing
+	// proofs committed in a lower-amount bid. Mark any bid whose
+	// lock_secret/proof_y multiset collides with an earlier-observed bid
+	// as invalid. We process in order of observedAt (earliest wins).
+	// M5: Exclude bids with duplicate proofs (same-bidder only).
+	// A bid that claims the same lock_secret/proof_y as an earlier-observed
+	// bid from the same bidder is likely reusing proofs committed in a
+	// lower-amount bid. Different bidders can legitimately share proof_y
+	// values (they lock proofs at the same mint). We process in order of
+	// observedAt (earliest wins).
+	const seenLockSecretsByBidder = new Map<string, Set<string>>()
+	const seenProofYsByBidder = new Map<string, Set<string>>()
+	const sortedByObserved = [...classified].sort((a, b) => a.observedAt - b.observedAt)
+	const bidsWithDuplicateProofs = new Set<string>()
+	for (const c of sortedByObserved) {
+		if (c.classification === 'invalid') continue
+		const bidder = c.bid.bidderPubkey.toLowerCase()
+		const bidderSeenSecrets = seenLockSecretsByBidder.get(bidder) ?? new Set()
+		const bidderSeenProofYs = seenProofYsByBidder.get(bidder) ?? new Set()
+		let hasDup = false
+		for (const secret of c.bid.lockSecrets) {
+			if (bidderSeenSecrets.has(secret.toLowerCase())) {
+				hasDup = true
+				break
+			}
+		}
+		if (!hasDup) {
+			for (const proofY of c.bid.proofYs) {
+				if (bidderSeenProofYs.has(proofY.toLowerCase())) {
+					hasDup = true
+					break
+				}
+			}
+		}
+		if (hasDup) {
+			bidsWithDuplicateProofs.add(c.bid.id)
+		} else {
+			for (const secret of c.bid.lockSecrets) bidderSeenSecrets.add(secret.toLowerCase())
+			for (const proofY of c.bid.proofYs) bidderSeenProofYs.add(proofY.toLowerCase())
+			seenLockSecretsByBidder.set(bidder, bidderSeenSecrets)
+			seenProofYsByBidder.set(bidder, bidderSeenProofYs)
+		}
+	}
 	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
 	// currentTopBid from previously-validated bids.
 	const observedAtByBid = new Map<string, number>()
@@ -160,11 +280,21 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			finalInvalid.push(c.bid)
 			continue
 		}
+		// M5: Bids with duplicate lock_secret/proof_y are invalid.
+		if (bidsWithDuplicateProofs.has(c.bid.id)) {
+			finalInvalid.push(c.bid)
+			continue
+		}
 		if (c.classification === 'pending') {
 			finalPending.push(c.bid)
 			continue
 		}
 	}
+
+	// Build validCandidates from classified bids that passed M5 duplicate checks.
+	const validCandidates = classified
+		.filter((c) => c.classification === 'valid' && !bidsWithDuplicateProofs.has(c.bid.id))
+		.sort((a, b) => a.observedAt - b.observedAt)
 
 	for (const c of validCandidates) {
 		const verdict = validateBid({
