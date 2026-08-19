@@ -20,6 +20,9 @@ export const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.
 export const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 export const PORT = Number(process.env.PORT || 3000)
 
+export const AUCTION_WHITELIST_MODE = process.env.AUCTION_WHITELIST_MODE ?? 'open'
+export const AUCTION_WHITELIST_PUBKEYS = process.env.AUCTION_WHITELIST_PUBKEYS ?? ''
+
 let APP_PUBLIC_KEY: string | undefined
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let eventHandlerReady = false

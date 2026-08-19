@@ -6,6 +6,8 @@ import {
 	isEventHandlerReady,
 	NIP46_RELAY_URL,
 	RELAY_URL,
+	AUCTION_WHITELIST_MODE,
+	AUCTION_WHITELIST_PUBKEYS,
 } from '../runtime'
 import type { BunRoutes } from './types'
 
@@ -23,6 +25,12 @@ export const configRoutes: BunRoutes = {
 				needsSetup: !getAppSettings(),
 				serverReady: isEventHandlerReady(),
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+				auctionWhitelist: {
+					mode: AUCTION_WHITELIST_MODE,
+					pubkeyCount: AUCTION_WHITELIST_PUBKEYS.split(',')
+						.map((s) => s.trim())
+						.filter(Boolean).length,
+				},
 			})
 		},
 	},

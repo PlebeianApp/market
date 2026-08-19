@@ -2,18 +2,35 @@ import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
 import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager } from './types'
 import { bytesFromHex } from '../lib/utils/keyConversion'
+import { AuctionWhitelistManager } from './AuctionWhitelistManager'
+import { AUCTION_WHITELIST_MODE, AUCTION_WHITELIST_PUBKEYS } from './runtime'
 
 export class EventValidator {
 	private appPrivateKey: string
 	private adminManager: AdminManager
 	private editorManager: EditorManager
 	private bootstrapManager: BootstrapManager
+	private auctionWhitelistManager: AuctionWhitelistManager
 
-	constructor(appPrivateKey: string, adminManager: AdminManager, editorManager: EditorManager, bootstrapManager: BootstrapManager) {
+	constructor(
+		appPrivateKey: string,
+		adminManager: AdminManager,
+		editorManager: EditorManager,
+		bootstrapManager: BootstrapManager,
+		auctionWhitelistManager?: AuctionWhitelistManager,
+	) {
 		this.appPrivateKey = appPrivateKey
 		this.adminManager = adminManager
 		this.editorManager = editorManager
 		this.bootstrapManager = bootstrapManager
+		this.auctionWhitelistManager =
+			auctionWhitelistManager ??
+			new AuctionWhitelistManager({
+				mode: AUCTION_WHITELIST_MODE,
+				pubkeys: AUCTION_WHITELIST_PUBKEYS.split(',')
+					.map((s) => s.trim())
+					.filter(Boolean),
+			})
 	}
 
 	public validateEvent(event: NostrEvent): EventValidationResult {
@@ -27,6 +44,8 @@ export class EventValidator {
 				return this.validateRoleListEvent(event)
 			case 'blacklist':
 				return this.validateBlacklistEvent(event)
+			case 'auction':
+				return this.validateAuctionEvent(event)
 			default:
 				return this.validateGeneralEvent(event)
 		}
@@ -43,6 +62,9 @@ export class EventValidator {
 		}
 		if (event.kind === 10000) {
 			return 'blacklist'
+		}
+		if (event.kind === 30408) {
+			return 'auction'
 		}
 		return 'general'
 	}
@@ -87,6 +109,17 @@ export class EventValidator {
 			return {
 				isValid: false,
 				reason: 'General event rejected: not from admin',
+			}
+		}
+
+		return { isValid: true }
+	}
+
+	private validateAuctionEvent(event: NostrEvent): EventValidationResult {
+		if (!this.auctionWhitelistManager.isAllowed(event.pubkey)) {
+			return {
+				isValid: false,
+				reason: 'Auction event rejected: pubkey not in whitelist',
 			}
 		}
 

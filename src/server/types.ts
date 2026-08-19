@@ -47,3 +47,8 @@ export interface BlacklistManager {
 	getBlacklistedPubkeys(): string[]
 	loadExistingBlacklist(appPubkey: string): Promise<void>
 }
+
+export interface AuctionWhitelistConfig {
+	mode: 'whitelist' | 'open'
+	pubkeys: string[]
+}

@@ -9,8 +9,10 @@ import { Nip05ManagerImpl } from './Nip05Manager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
+import { AuctionWhitelistManager } from './AuctionWhitelistManager'
 import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
+import { AUCTION_WHITELIST_MODE, AUCTION_WHITELIST_PUBKEYS } from './runtime'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 
 export class EventHandler {
@@ -30,6 +32,7 @@ export class EventHandler {
 	private ndk: NDK | null = null
 	private zapNdk: NDK | null = null
 	private handledZapReceiptIds: Set<string> = new Set()
+	private auctionWhitelistManager: AuctionWhitelistManager
 
 	// Registered zap purchase managers (vanity URLs, nip05)
 	private purchaseManagers: ZapPurchaseManager<ZapPurchaseEntry>[] = []
@@ -46,6 +49,12 @@ export class EventHandler {
 		this.blacklistManager = null as any
 		this.vanityManager = null as any
 		this.nip05Manager = null as any
+		this.auctionWhitelistManager = new AuctionWhitelistManager({
+			mode: AUCTION_WHITELIST_MODE,
+			pubkeys: AUCTION_WHITELIST_PUBKEYS.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean),
+		})
 	}
 
 	public static getInstance(): EventHandler {
@@ -70,7 +79,13 @@ export class EventHandler {
 			config.allowPublicBootstrap,
 		)
 		this.eventSigner = new EventSigner(config.appPrivateKey)
-		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
+		this.eventValidator = new EventValidator(
+			config.appPrivateKey,
+			this.adminManager,
+			this.editorManager,
+			this.bootstrapManager,
+			this.auctionWhitelistManager,
+		)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.vanityManager = new VanityManagerImpl(this.eventSigner)
@@ -311,6 +326,13 @@ export class EventHandler {
 			throw new Error('EventHandler is not initialized')
 		}
 		return this.blacklistManager.isBlacklisted(pubkey)
+	}
+
+	/**
+	 * Get the auction whitelist manager instance.
+	 */
+	public getAuctionWhitelist(): AuctionWhitelistManager {
+		return this.auctionWhitelistManager
 	}
 
 	public getBlacklistedPubkeys(): string[] {
