@@ -1,19 +1,30 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
-import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager } from './types'
+import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager, AuctionWhitelistManager } from './types'
 import { bytesFromHex } from '../lib/utils/keyConversion'
+
+/** Auction event kind (NIP-53 / Plebeian auction protocol). */
+const AUCTION_KIND = 30408
 
 export class EventValidator {
 	private appPrivateKey: string
 	private adminManager: AdminManager
 	private editorManager: EditorManager
 	private bootstrapManager: BootstrapManager
+	private auctionWhitelistManager: AuctionWhitelistManager | null
 
-	constructor(appPrivateKey: string, adminManager: AdminManager, editorManager: EditorManager, bootstrapManager: BootstrapManager) {
+	constructor(
+		appPrivateKey: string,
+		adminManager: AdminManager,
+		editorManager: EditorManager,
+		bootstrapManager: BootstrapManager,
+		auctionWhitelistManager: AuctionWhitelistManager | null = null,
+	) {
 		this.appPrivateKey = appPrivateKey
 		this.adminManager = adminManager
 		this.editorManager = editorManager
 		this.bootstrapManager = bootstrapManager
+		this.auctionWhitelistManager = auctionWhitelistManager
 	}
 
 	public validateEvent(event: NostrEvent): EventValidationResult {
@@ -27,6 +38,8 @@ export class EventValidator {
 				return this.validateRoleListEvent(event)
 			case 'blacklist':
 				return this.validateBlacklistEvent(event)
+			case 'auction':
+				return this.validateAuctionEvent(event)
 			default:
 				return this.validateGeneralEvent(event)
 		}
@@ -43,6 +56,9 @@ export class EventValidator {
 		}
 		if (event.kind === 10000) {
 			return 'blacklist'
+		}
+		if (event.kind === AUCTION_KIND) {
+			return 'auction'
 		}
 		return 'general'
 	}
@@ -91,5 +107,42 @@ export class EventValidator {
 		}
 
 		return { isValid: true }
+	}
+
+	/**
+	 * Validate a kind-30408 auction event against the whitelist policy.
+	 *
+	 * When no AuctionWhitelistManager is configured (null) or the manager is
+	 * in 'open' mode, all pubkeys are allowed (backward-compatible default).
+	 *
+	 * When the manager is in 'whitelist' mode, only pubkeys in the whitelist
+	 * set are accepted. Admins are always allowed regardless of whitelist
+	 * mode, so the app owner can manage auctions even under strict mode.
+	 */
+	private validateAuctionEvent(event: NostrEvent): EventValidationResult {
+		// No whitelist manager configured → open by default (backward compat)
+		if (!this.auctionWhitelistManager) {
+			return { isValid: true }
+		}
+
+		// Open mode → allow all
+		if (this.auctionWhitelistManager.isOpenMode()) {
+			return { isValid: true }
+		}
+
+		// Whitelist mode — admins always pass
+		if (this.adminManager.isAdmin(event.pubkey)) {
+			return { isValid: true }
+		}
+
+		// Whitelist mode — check the pubkey against the whitelist
+		if (this.auctionWhitelistManager.isWhitelisted(event.pubkey)) {
+			return { isValid: true }
+		}
+
+		return {
+			isValid: false,
+			reason: 'Auction event rejected: pubkey not in auction whitelist',
+		}
 	}
 }

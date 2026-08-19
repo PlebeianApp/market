@@ -5,6 +5,7 @@ export interface EventHandlerConfig {
 	appPrivateKey: string
 	adminPubkeys: string[]
 	relayUrl?: string
+	auctionWhitelist?: AuctionWhitelistConfig
 }
 
 export interface EventValidationResult {
@@ -44,4 +45,20 @@ export interface BlacklistManager {
 	isBlacklisted(pubkey: string): boolean
 	getBlacklistedPubkeys(): string[]
 	loadExistingBlacklist(appPubkey: string): Promise<void>
+}
+
+export interface AuctionWhitelistConfig {
+	mode: 'whitelist' | 'open'
+	pubkeys: string[]
+}
+
+export interface AuctionWhitelistManager {
+	isWhitelistMode(): boolean
+	isOpenMode(): boolean
+	getMode(): 'whitelist' | 'open'
+	isWhitelisted(pubkey: string): boolean
+	isAllowed(pubkey: string): boolean
+	getWhitelist(): Set<string>
+	setWhitelist(pubkeys: string[]): void
+	size(): number
 }

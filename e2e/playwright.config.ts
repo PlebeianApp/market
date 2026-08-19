@@ -57,6 +57,11 @@ export default defineConfig({
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
+						APP_DEV_TEST_MINT_URL: 'http://localhost:3338',
+						CVM_SERVER_KEY: 'a49a0def40602d795b7d037dd85cb8626a2fb2975403f3a5bf2ed74a54dd7628',
+						// Auction whitelist: enforce whitelist mode with devUser1 allowed
+						APP_AUCTION_WHITELIST_MODE: 'whitelist',
+						APP_AUCTION_WHITELIST_PUBKEYS: '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0',
 					},
 				},
 			],

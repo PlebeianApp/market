@@ -9,6 +9,7 @@ import { Nip05ManagerImpl } from './Nip05Manager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
+import { AuctionWhitelistManager } from './AuctionWhitelistManager'
 import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
@@ -24,6 +25,7 @@ export class EventHandler {
 	private blacklistManager: BlacklistManagerImpl
 	private vanityManager: VanityManagerImpl
 	private nip05Manager: Nip05ManagerImpl
+	private auctionWhitelistManager: AuctionWhitelistManager | null
 	private eventValidator: EventValidator
 	private eventSigner: EventSigner
 	private ndkService: NDKService
@@ -39,6 +41,7 @@ export class EventHandler {
 		this.adminManager = new AdminManagerImpl()
 		this.editorManager = new EditorManagerImpl()
 		this.bootstrapManager = new BootstrapManagerImpl(this.adminManager)
+		this.auctionWhitelistManager = null
 		// These will be properly initialized in the initialize() method
 		this.eventValidator = null as any
 		this.eventSigner = null as any
@@ -65,7 +68,25 @@ export class EventHandler {
 		this.editorManager = new EditorManagerImpl()
 		this.bootstrapManager = new BootstrapManagerImpl(this.adminManager, config.adminPubkeys.length)
 		this.eventSigner = new EventSigner(config.appPrivateKey)
-		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
+
+		// Initialize auction whitelist manager from config (optional)
+		if (config.auctionWhitelist) {
+			this.auctionWhitelistManager = new AuctionWhitelistManager(
+				config.auctionWhitelist.mode,
+				config.auctionWhitelist.pubkeys,
+			)
+			console.log(`AuctionWhitelistManager initialized: mode=${config.auctionWhitelist.mode}, whitelisted=${config.auctionWhitelist.pubkeys.length}`)
+		} else {
+			this.auctionWhitelistManager = null
+		}
+
+		this.eventValidator = new EventValidator(
+			config.appPrivateKey,
+			this.adminManager,
+			this.editorManager,
+			this.bootstrapManager,
+			this.auctionWhitelistManager,
+		)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.vanityManager = new VanityManagerImpl(this.eventSigner)
@@ -315,6 +336,24 @@ export class EventHandler {
 		return this.blacklistManager.getBlacklistedPubkeys()
 	}
 
+	public getAuctionWhitelistMode(): 'whitelist' | 'open' {
+		return this.auctionWhitelistManager?.getMode() ?? 'open'
+	}
+
+	public isAuctionWhitelistMode(): boolean {
+		return this.auctionWhitelistManager?.isWhitelistMode() ?? false
+	}
+
+	public isAuctionPubkeyAllowed(pubkey: string): boolean {
+		if (!this.auctionWhitelistManager) return true
+		return this.auctionWhitelistManager.isAllowed(pubkey)
+	}
+
+	public getAuctionWhitelist(): string[] {
+		if (!this.auctionWhitelistManager) return []
+		return Array.from(this.auctionWhitelistManager.getWhitelist())
+	}
+
 	/**
 	 * Get a registered purchase manager by its zap label.
 	 * Used by invoice route handlers to delegate to the correct manager.
@@ -342,6 +381,8 @@ export class EventHandler {
 			adminCount: this.adminManager.size(),
 			editorCount: this.editorManager.size(),
 			blacklistedPubkeys: this.isInitialized ? this.blacklistManager.getBlacklistedPubkeys().length : 0,
+			auctionWhitelistMode: this.auctionWhitelistManager?.getMode() ?? 'open',
+			auctionWhitelistSize: this.auctionWhitelistManager?.size() ?? 0,
 			isBootstrapMode: this.bootstrapManager.isBootstrapMode(),
 			isInitialized: this.isInitialized,
 		}
