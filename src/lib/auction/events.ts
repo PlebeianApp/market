@@ -86,6 +86,12 @@ export interface ParsedAuctionEvent {
 	// Bookkeeping
 	vadiumRatioBps: number
 	schema: string
+
+	/**
+	 * Whether this auction carries the beta status tag.
+	 * Defaults to false for legacy events without the tag.
+	 */
+	isBeta: boolean
 }
 
 // =========================================================================

@@ -779,6 +779,15 @@ export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 
 export const getAuctionSchema = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
 
+/**
+ * Whether an auction event carries the `['beta', 'true']` tag.
+ * Works on raw NDKEvent from relay queries — no parse step needed.
+ */
+export const isBetaAuction = (event: NDKEvent | null): boolean => {
+	if (!event) return false
+	return event.tags.some((t) => t[0] === 'beta' && t[1] === 'true')
+}
+
 export const getAuctionShippingOptions = (event: NDKEvent | null): Array<{ shippingRef: string; extraCost: string }> => {
 	if (!event) return []
 	return event.tags

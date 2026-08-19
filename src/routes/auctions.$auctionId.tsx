@@ -55,6 +55,7 @@ import {
 	getAuctionSummary,
 	getAuctionTitle,
 	getAuctionType,
+	isBetaAuction,
 	isNSFWAuction,
 	useStreamingAuctionBids,
 	useAuctionClaimOrders,
@@ -670,6 +671,11 @@ function AuctionDetailRoute() {
 							<div className="flex items-center justify-between gap-4">
 								<h1 className="text-3xl font-semibold">{title}</h1>
 								<div className="flex items-center gap-2 flex-shrink-0">
+									{isBetaAuction(auction) && (
+										<span data-testid="beta-badge" className="flex items-center text-xs font-bold px-2 h-6 rounded bg-amber-500 text-white">
+											Beta
+										</span>
+									)}
 									<div className={`flex items-center text-xs font-bold px-2 h-6 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
 										{ended ? 'ENDED' : 'LIVE'}
 									</div>

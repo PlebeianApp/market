@@ -43,6 +43,14 @@ export const AUCTION_SETTLEMENT_KIND = 1024 as AuctionKind
 /** Kind 1025 — path release (regular event, bidder-signed). §4.3.1. */
 export const AUCTION_PATH_RELEASE_KIND = 1025 as AuctionKind
 
+/**
+ * Beta status tag for auction events.
+ * Tag shape: `['beta', 'true']`
+ * Value is always the string `'true'`, not a boolean.
+ */
+export const AUCTION_BETA_TAG_NAME = 'beta'
+export const AUCTION_BETA_TAG_VALUE = 'true'
+
 /** Kind 1026 — fallback offer (regular event, seller-signed, optional). §8.3. */
 export const AUCTION_FALLBACK_OFFER_KIND = 1026 as AuctionKind
 

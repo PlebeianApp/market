@@ -96,6 +96,7 @@ export const AuctionEventSchema = z
 		fallbackDelaySec: nonNegativeInt,
 		vadiumRatioBps: nonNegativeInt,
 		schema: z.string().default('auction_v1'),
+		isBeta: z.boolean().default(false),
 	})
 	.refine((value) => value.endAt >= value.startAt, { message: 'end_at must be ≥ start_at', path: ['endAt'] })
 	.refine((value) => value.maxEndAt >= value.endAt, { message: 'max_end_at must be ≥ end_at', path: ['maxEndAt'] })
@@ -164,6 +165,7 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	const summary = readSingleTag(event, 'summary')
 	const p2pkXpub = readSingleTag(event, 'p2pk_xpub') ?? ''
 	const schema = readSingleTag(event, 'schema') ?? 'auction_v1'
+	const isBeta = readSingleTag(event, 'beta') === 'true'
 
 	const parsed = AuctionEventSchema.safeParse({
 		dTag,
@@ -193,6 +195,7 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 		fallbackDelaySec,
 		vadiumRatioBps,
 		schema,
+		isBeta,
 	})
 
 	if (!parsed.success) return { ok: false, error: parsed.error }

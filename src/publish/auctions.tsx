@@ -23,7 +23,14 @@ import {
 	upsertBidderRecord,
 	walkBidderRecordChain,
 } from '@/lib/auction/bidderRecords'
-import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, AUCTION_PATH_RELEASE_KIND, type PathReleaseReason } from '@/lib/auction/constants'
+import {
+	AUCTION_BETA_TAG_NAME,
+	AUCTION_BETA_TAG_VALUE,
+	AUCTION_MIN_BID_LEG_SATS,
+	AUCTION_MIN_BID_SATS,
+	AUCTION_PATH_RELEASE_KIND,
+	type PathReleaseReason,
+} from '@/lib/auction/constants'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
 import { getEncodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
@@ -310,6 +317,9 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
+		// Beta status marker — all auctions published by this client are
+		// marked as beta while the auction protocol is in beta phase.
+		[AUCTION_BETA_TAG_NAME, AUCTION_BETA_TAG_VALUE],
 		['schema', 'auction_v1'],
 		...imageTags,
 		...categoryTags,

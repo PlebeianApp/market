@@ -641,6 +641,7 @@ export async function seedAuction(
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
 			['settlement_policy', 'cashu_p2pk_v1'],
+			['beta', 'true'],
 			['schema', 'auction_v1'],
 			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
 			['t', 'Bitcoin'],
