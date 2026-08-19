@@ -43,6 +43,7 @@ import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
+import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
@@ -194,11 +195,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
-	const auctionRulesAuctionIdentity = auctionRootEventId || auction.id
+	// Rules ack is scoped per-ruleset (version + bidder), not per-auction —
+	// the rules content is static across all auctions, so acknowledging once
+	// should suppress the dialog for every auction until the version bumps.
 	const auctionRulesAckKey =
-		hasSignedInBidder && auctionRulesBidderPubkey && auctionRulesAuctionIdentity
-			? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}:${auctionRulesAuctionIdentity}`
-			: null
+		hasSignedInBidder && auctionRulesBidderPubkey ? `auction-rules-ack:${AUCTION_RULES_ACK_VERSION}:${auctionRulesBidderPubkey}` : null
 
 	// State for input and view mode
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
@@ -208,6 +209,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [isConfirmBidDialogOpen, setIsConfirmBidDialogOpen] = useState(false)
 	const [pendingBidData, setPendingBidData] = useState<AuctionBidFormData | null>(null)
 	const [isConfirmBidMintChosen, setIsConfirmBidMintChosen] = useState(false)
+	const [isBidProgressDialogOpen, setIsBidProgressDialogOpen] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -232,6 +234,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		handleDepositModalClose,
 		bidFundingLifecycleState,
 		resumeBidAfterRulesAck,
+		retryBidPublish,
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
@@ -273,6 +276,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			setHasAcknowledgedAuctionRules(false)
 		}
 	}, [auctionRulesAckKey])
+
+	// Open the bid progress dialog when the lifecycle enters the publish phase,
+	// and auto-close when returning to idle or canceled.
+	useEffect(() => {
+		if (['bid_publish_attempted', 'bid_published'].includes(bidFundingLifecycleState)) {
+			setIsBidProgressDialogOpen(true)
+		}
+		if (['idle', 'funding_canceled'].includes(bidFundingLifecycleState)) {
+			setIsBidProgressDialogOpen(false)
+		}
+	}, [bidFundingLifecycleState])
+
+	const handleCloseBidProgressDialog = useCallback(() => {
+		setIsBidProgressDialogOpen(false)
+	}, [])
 
 	// Disable logic
 	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
@@ -361,18 +379,22 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 	}
 
-	const handleSubmitBid = async () => {
-		if (hasSignedInBidder && !hasAcknowledgedAuctionRules) {
-			setIsRulesDialogOpen(true)
-			return
-		}
-
+	const openConfirmBidDialog = () => {
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
 		setPendingBidData(bidData)
 		setIsConfirmBidMintChosen(false)
 		setIsConfirmBidDialogOpen(true)
+	}
+
+	const handleSubmitBid = async () => {
+		if (hasSignedInBidder && !hasAcknowledgedAuctionRules) {
+			setIsRulesDialogOpen(true)
+			return
+		}
+
+		openConfirmBidDialog()
 	}
 
 	const handleConfirmBidDialogOpenChange = (open: boolean) => {
@@ -424,9 +446,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (bidFundingLifecycleState === 'ecash_minted_pending_rules_ack') {
 			toast.info('Auction rules reviewed. Publishing your funded bid now.')
 			void resumeBidAfterRulesAck()
-		} else {
-			toast.info('Auction rules reviewed. Check the current bid amount before placing your bid.')
+			return
 		}
+
+		// Rules just acknowledged — immediately proceed to the bid confirmation dialog.
+		openConfirmBidDialog()
 	}
 
 	return (
@@ -443,6 +467,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onMintingStarted={handleMintingStarted}
 				onFundingFailed={handleFundingFailed}
 				variant="bid"
+			/>
+			<AuctionBidProgressDialog
+				open={isBidProgressDialogOpen}
+				onClose={handleCloseBidProgressDialog}
+				lifecycleState={bidFundingLifecycleState}
+				auctionRootEventId={auctionRootEventId || auction.id}
+				auctionCoordinates={auctionCoordinates}
+				bidderPubkey={signedInBidderPubkey}
+				validatorPubkeys={auctionValidators}
+				onRetryPublish={() => void retryBidPublish()}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">

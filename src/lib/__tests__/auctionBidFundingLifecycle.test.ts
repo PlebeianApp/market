@@ -262,3 +262,17 @@ describe('modal close behavior: comprehensive state coverage', () => {
 		expect(shouldPreservePendingBidSubmissionOnModalClose(state)).toBe(false)
 	})
 })
+
+describe('retryBidPublish state transitions', () => {
+	test('can retry publish from mint_succeeded_bid_publish_failed_reclaimable to bid_publish_attempted', () => {
+		expect(canTransitionAuctionBidFundingState('mint_succeeded_bid_publish_failed_reclaimable', 'bid_publish_attempted')).toBe(true)
+	})
+
+	test('retry path completes: bid_publish_attempted → bid_published on success', () => {
+		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'bid_published')).toBe(true)
+	})
+
+	test('retry path can fail again: bid_publish_attempted → mint_succeeded_bid_publish_failed_reclaimable', () => {
+		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'mint_succeeded_bid_publish_failed_reclaimable')).toBe(true)
+	})
+})

@@ -309,6 +309,16 @@ export function useAuctionBidFunding({
 		await submitPreparedBid(bidData)
 	}, [pendingRulesAckBidData, submitPreparedBid])
 
+	/**
+	 * Retry bid publish from the mint_succeeded_bid_publish_failed_reclaimable
+	 * state. Uses the preserved pendingBidSubmission so the user doesn't need
+	 * to re-enter the bid amount or reselect mints.
+	 */
+	const retryBidPublish = useCallback(async () => {
+		if (!pendingBidSubmission) return
+		await submitPreparedBid(pendingBidSubmission)
+	}, [pendingBidSubmission, submitPreparedBid])
+
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))
 	}, [])
@@ -349,5 +359,6 @@ export function useAuctionBidFunding({
 		handleFundingFailed,
 		handleDepositModalClose,
 		resumeBidAfterRulesAck,
+		retryBidPublish,
 	}
 }

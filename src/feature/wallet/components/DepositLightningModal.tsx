@@ -293,24 +293,28 @@ export function DepositLightningModal({
 	const handleClose = () => {
 		if (isPayingWithNwc) return
 
-		const hasSentNwcPayment = nwcPaymentStatus === 'sent' || nwcPaymentSentForCurrentInvoice
-		const isTerminalDepositState = depositStatus === 'success' || depositStatus === 'error'
+		const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 
-		if (depositStatus === 'pending' && !hasSentNwcPayment) {
-			onFundingFailed?.('invoice_unpaid_or_expired_reclaimable')
-			failureNotifiedRef.current = true
-			nip60Actions.cancelDeposit()
+		// Always tear down the deposit so the modal starts fresh on reopen.
+		// For pending deposits, notify the funding lifecycle so it transitions
+		// to a reclaimable terminal state instead of hanging.
+		if (isPendingDeposit && !failureNotifiedRef.current) {
+			onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
 		}
-		if (isTerminalDepositState) {
-			nip60Actions.clearDepositResult()
-		}
+		// cancelDeposit() unconditionally resets the store to idle — works for
+		// pending, terminal, and idle states. This replaces the previous
+		// conditional cancel/clear that left stale state in the NWC-sent case.
+		nip60Actions.cancelDeposit()
 
+		// Reset ALL local state for a clean reopen.
 		setAmount('')
 		setCopied(false)
 		resetNwcPaymentState()
 		successNotifiedRef.current = false
 		paymentAcknowledgedRef.current = false
 		failureNotifiedRef.current = false
+		notifiedInvoiceRef.current = null
+		sentNwcInvoiceRef.current = null
 		setShowClassicTopUp(false)
 		setIsCheckingDeposit(false)
 		autoGenerateAttemptedKeyRef.current = null
