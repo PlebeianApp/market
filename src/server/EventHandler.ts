@@ -12,7 +12,7 @@ import { NDKService } from './NDKService'
 import { AuctionWhitelistManager } from './AuctionWhitelistManager'
 import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
-import { AUCTION_WHITELIST_MODE, AUCTION_WHITELIST_PUBKEYS } from './runtime'
+import { getAuctionWhitelistConfig } from './runtime'
 import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 
 export class EventHandler {
@@ -49,12 +49,7 @@ export class EventHandler {
 		this.blacklistManager = null as any
 		this.vanityManager = null as any
 		this.nip05Manager = null as any
-		this.auctionWhitelistManager = new AuctionWhitelistManager({
-			mode: AUCTION_WHITELIST_MODE,
-			pubkeys: AUCTION_WHITELIST_PUBKEYS.split(',')
-				.map((s) => s.trim())
-				.filter(Boolean),
-		})
+		this.auctionWhitelistManager = new AuctionWhitelistManager(getAuctionWhitelistConfig())
 	}
 
 	public static getInstance(): EventHandler {
@@ -79,15 +74,18 @@ export class EventHandler {
 			config.allowPublicBootstrap,
 		)
 		this.eventSigner = new EventSigner(config.appPrivateKey)
+		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
+		// Created before the validator so auction events can be checked
+		// against the app-wide blacklist (kind-30408 must not bypass it).
+		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.eventValidator = new EventValidator(
 			config.appPrivateKey,
 			this.adminManager,
 			this.editorManager,
 			this.bootstrapManager,
 			this.auctionWhitelistManager,
+			this.blacklistManager,
 		)
-		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
-		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.vanityManager = new VanityManagerImpl(this.eventSigner)
 		this.nip05Manager = new Nip05ManagerImpl(this.eventSigner)
 

@@ -1,6 +1,7 @@
 import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
 import { hexToBytes } from 'nostr-tools/utils'
+import type { AuctionWhitelistConfig } from './types'
 
 function isValidHexPubkey(value: string): boolean {
 	return /^[0-9a-fA-F]{64}$/.test(value)
@@ -22,6 +23,27 @@ export const PORT = Number(process.env.PORT || 3000)
 
 export const AUCTION_WHITELIST_MODE = process.env.AUCTION_WHITELIST_MODE ?? 'open'
 export const AUCTION_WHITELIST_PUBKEYS = process.env.AUCTION_WHITELIST_PUBKEYS ?? ''
+
+/**
+ * Normalized auction whitelist configuration derived from the environment.
+ *
+ * Single source of truth for the whitelist mode + pubkey list so the
+ * validator, the event handler and the /api/config endpoint all agree on
+ * the effective value (see docs/adr/proposals/auction-whitelist.md).
+ *
+ * - Any mode other than the exact string `whitelist` (including unset or
+ *   misspelled values) degrades to `open`.
+ * - The pubkey list is a comma-separated env var; entries are trimmed and
+ *   empty entries dropped.
+ */
+export function getAuctionWhitelistConfig(): AuctionWhitelistConfig {
+	return {
+		mode: AUCTION_WHITELIST_MODE === 'whitelist' ? 'whitelist' : 'open',
+		pubkeys: AUCTION_WHITELIST_PUBKEYS.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean),
+	}
+}
 
 let APP_PUBLIC_KEY: string | undefined
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null

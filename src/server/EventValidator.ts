@@ -1,9 +1,9 @@
 import type { NostrEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
-import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager } from './types'
+import type { EventValidationResult, AdminManager, EditorManager, BootstrapManager, BlacklistManager } from './types'
 import { bytesFromHex } from '../lib/utils/keyConversion'
 import { AuctionWhitelistManager } from './AuctionWhitelistManager'
-import { AUCTION_WHITELIST_MODE, AUCTION_WHITELIST_PUBKEYS } from './runtime'
+import { getAuctionWhitelistConfig } from './runtime'
 
 export class EventValidator {
 	private appPrivateKey: string
@@ -11,6 +11,7 @@ export class EventValidator {
 	private editorManager: EditorManager
 	private bootstrapManager: BootstrapManager
 	private auctionWhitelistManager: AuctionWhitelistManager
+	private blacklistManager?: BlacklistManager
 
 	constructor(
 		appPrivateKey: string,
@@ -18,19 +19,14 @@ export class EventValidator {
 		editorManager: EditorManager,
 		bootstrapManager: BootstrapManager,
 		auctionWhitelistManager?: AuctionWhitelistManager,
+		blacklistManager?: BlacklistManager,
 	) {
 		this.appPrivateKey = appPrivateKey
 		this.adminManager = adminManager
 		this.editorManager = editorManager
 		this.bootstrapManager = bootstrapManager
-		this.auctionWhitelistManager =
-			auctionWhitelistManager ??
-			new AuctionWhitelistManager({
-				mode: AUCTION_WHITELIST_MODE,
-				pubkeys: AUCTION_WHITELIST_PUBKEYS.split(',')
-					.map((s) => s.trim())
-					.filter(Boolean),
-			})
+		this.auctionWhitelistManager = auctionWhitelistManager ?? new AuctionWhitelistManager(getAuctionWhitelistConfig())
+		this.blacklistManager = blacklistManager
 	}
 
 	public validateEvent(event: NostrEvent): EventValidationResult {
@@ -116,6 +112,15 @@ export class EventValidator {
 	}
 
 	private validateAuctionEvent(event: NostrEvent): EventValidationResult {
+		// Blacklisted pubkeys are rejected regardless of whitelist mode —
+		// auction events must not bypass the app-wide blacklist.
+		if (this.blacklistManager?.isBlacklisted(event.pubkey)) {
+			return {
+				isValid: false,
+				reason: 'Auction event rejected: pubkey is blacklisted',
+			}
+		}
+
 		if (!this.auctionWhitelistManager.isAllowed(event.pubkey)) {
 			return {
 				isValid: false,

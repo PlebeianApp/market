@@ -1,13 +1,33 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test, expect } from '../fixtures'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import WebSocket from 'ws'
+import type { Page } from '@playwright/test'
 import { devUser1 } from '../../src/lib/fixtures'
 import { queryRelayEvents, getTagValue, type RelayEvent } from '../utils/relay-query'
 import { RELAY_URL } from '../test-config'
 
 test.use({ scenario: 'merchant' })
+
+const __filename = fileURLToPath(import.meta.url)
+const LOCAL_IMAGE_PATH = path.join(path.dirname(__filename), '..', 'fixtures', 'test-product-image.png')
+const CDN_PLACEHOLDER_IMAGE = 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'
+
+/**
+ * Intercepts requests to cdn.satellite.earth and serves a local fixture image
+ * (test isolation: no external network calls — see e2e/AGENTS.md).
+ */
+async function interceptCdnImages(page: Page) {
+	await page.route('**/cdn.satellite.earth/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/png',
+			path: LOCAL_IMAGE_PATH,
+		})
+	})
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,54 +39,56 @@ test.use({ scenario: 'merchant' })
  */
 async function seedAuctionBeta(opts: { withBetaTag?: boolean; dTag?: string }): Promise<{ event: RelayEvent; dTag: string }> {
 	const relay = await Relay.connect(RELAY_URL)
-	const skBytes = hexToBytes(devUser1.sk)
-	const now = Math.floor(Date.now() / 1000)
-	const dTag = opts.dTag ?? `test-beta-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+	try {
+		const skBytes = hexToBytes(devUser1.sk)
+		const now = Math.floor(Date.now() / 1000)
+		const dTag = opts.dTag ?? `test-beta-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
 
-	const tags: string[][] = [
-		['d', dTag],
-		['title', `Beta Tag Test Auction ${dTag}`],
-		['summary', 'E2E test auction for beta tag'],
-		['auction_type', 'english'],
-		['start_at', String(now)],
-		['end_at', String(now + 86400)],
-		['max_end_at', String(now + 172800)],
-		['settlement_grace', '3600'],
-		['currency', 'SAT'],
-		['price', '1000', 'SAT'],
-		['starting_bid', '1000', 'SAT'],
-		['bid_increment', '100'],
-		['reserve', '0'],
-		['mint', 'https://nofees.testnut.cashu.space'],
-		['auditors', devUser1.pk],
-		['auditor_quorum', '1'],
-		['max_skew_sec', '120'],
-		['key_scheme', 'hd_p2pk'],
-		['p2pk_xpub', 'xpub' + '0'.repeat(100)],
-		['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
-		['schema', 'auction_v1'],
-		['image', 'https://placehold.co/400x400'],
-		['t', 'Bitcoin'],
-	]
+		const tags: string[][] = [
+			['d', dTag],
+			['title', `Beta Tag Test Auction ${dTag}`],
+			['summary', 'E2E test auction for beta tag'],
+			['auction_type', 'english'],
+			['start_at', String(now)],
+			['end_at', String(now + 86400)],
+			['max_end_at', String(now + 172800)],
+			['settlement_grace', '3600'],
+			['currency', 'SAT'],
+			['price', '1000', 'SAT'],
+			['starting_bid', '1000', 'SAT'],
+			['bid_increment', '100'],
+			['reserve', '0'],
+			['mint', 'https://nofees.testnut.cashu.space'],
+			['auditors', devUser1.pk],
+			['auditor_quorum', '1'],
+			['max_skew_sec', '120'],
+			['key_scheme', 'hd_p2pk'],
+			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+			['schema', 'auction_v1'],
+			['image', CDN_PLACEHOLDER_IMAGE],
+			['t', 'Bitcoin'],
+		]
 
-	if (opts.withBetaTag) {
-		tags.push(['beta', 'true'])
+		if (opts.withBetaTag) {
+			tags.push(['beta', 'true'])
+		}
+
+		const event = finalizeEvent(
+			{
+				kind: 30408,
+				created_at: now,
+				content: 'Test auction for beta tag verification.',
+				tags,
+			},
+			skBytes,
+		)
+
+		await relay.publish(event)
+		return { event: event as unknown as RelayEvent, dTag }
+	} finally {
+		await relay.close()
 	}
-
-	const event = finalizeEvent(
-		{
-			kind: 30408,
-			created_at: now,
-			content: 'Test auction for beta tag verification.',
-			tags,
-		},
-		skBytes,
-	)
-
-	await relay.publish(event)
-	await relay.close()
-
-	return { event: event as unknown as RelayEvent, dTag }
 }
 
 /**
@@ -75,53 +97,55 @@ async function seedAuctionBeta(opts: { withBetaTag?: boolean; dTag?: string }): 
  */
 async function updateAuctionBeta(dTag: string, opts: { withBetaTag?: boolean }): Promise<RelayEvent> {
 	const relay = await Relay.connect(RELAY_URL)
-	const skBytes = hexToBytes(devUser1.sk)
-	const now = Math.floor(Date.now() / 1000)
+	try {
+		const skBytes = hexToBytes(devUser1.sk)
+		const now = Math.floor(Date.now() / 1000)
 
-	const tags: string[][] = [
-		['d', dTag],
-		['title', `Beta Tag Test Auction ${dTag} (updated)`],
-		['summary', 'E2E test auction for beta tag (updated)'],
-		['auction_type', 'english'],
-		['start_at', String(now)],
-		['end_at', String(now + 86400)],
-		['max_end_at', String(now + 172800)],
-		['settlement_grace', '3600'],
-		['currency', 'SAT'],
-		['price', '1200', 'SAT'],
-		['starting_bid', '1200', 'SAT'],
-		['bid_increment', '100'],
-		['reserve', '0'],
-		['mint', 'https://nofees.testnut.cashu.space'],
-		['auditors', devUser1.pk],
-		['auditor_quorum', '1'],
-		['max_skew_sec', '120'],
-		['key_scheme', 'hd_p2pk'],
-		['p2pk_xpub', 'xpub' + '0'.repeat(100)],
-		['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
-		['schema', 'auction_v1'],
-		['image', 'https://placehold.co/400x400'],
-		['t', 'Bitcoin'],
-	]
+		const tags: string[][] = [
+			['d', dTag],
+			['title', `Beta Tag Test Auction ${dTag} (updated)`],
+			['summary', 'E2E test auction for beta tag (updated)'],
+			['auction_type', 'english'],
+			['start_at', String(now)],
+			['end_at', String(now + 86400)],
+			['max_end_at', String(now + 172800)],
+			['settlement_grace', '3600'],
+			['currency', 'SAT'],
+			['price', '1200', 'SAT'],
+			['starting_bid', '1200', 'SAT'],
+			['bid_increment', '100'],
+			['reserve', '0'],
+			['mint', 'https://nofees.testnut.cashu.space'],
+			['auditors', devUser1.pk],
+			['auditor_quorum', '1'],
+			['max_skew_sec', '120'],
+			['key_scheme', 'hd_p2pk'],
+			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+			['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+			['schema', 'auction_v1'],
+			['image', CDN_PLACEHOLDER_IMAGE],
+			['t', 'Bitcoin'],
+		]
 
-	if (opts.withBetaTag) {
-		tags.push(['beta', 'true'])
+		if (opts.withBetaTag) {
+			tags.push(['beta', 'true'])
+		}
+
+		const event = finalizeEvent(
+			{
+				kind: 30408,
+				created_at: now + 1,
+				content: 'Updated auction for beta tag persistence test.',
+				tags,
+			},
+			skBytes,
+		)
+
+		await relay.publish(event)
+		return event as unknown as RelayEvent
+	} finally {
+		await relay.close()
 	}
-
-	const event = finalizeEvent(
-		{
-			kind: 30408,
-			created_at: now + 1,
-			content: 'Updated auction for beta tag persistence test.',
-			tags,
-		},
-		skBytes,
-	)
-
-	await relay.publish(event)
-	await relay.close()
-
-	return event as unknown as RelayEvent
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +219,7 @@ test.describe('Auction Beta Tag', () => {
 	// Test 2: Beta tag parsed from seeded event and displayed as badge
 	test('parses beta tag from seeded kind-30408 event and displays beta indicator', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
+		await interceptCdnImages(merchantPage)
 
 		// Seed an auction with beta tag
 		const { event } = await seedAuctionBeta({ withBetaTag: true })
@@ -214,6 +239,7 @@ test.describe('Auction Beta Tag', () => {
 	// Test 3: No beta tag → no badge
 	test('parses auction event WITHOUT beta tag — no badge displayed', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
+		await interceptCdnImages(merchantPage)
 
 		// Seed an auction WITHOUT beta tag (legacy)
 		const { event } = await seedAuctionBeta({ withBetaTag: false })
@@ -262,36 +288,36 @@ test.describe('Auction Beta Tag', () => {
 		expect(latest.id).toBe(updatedEvent.id)
 	})
 
-	// Test 5: Relay query by #beta tag filter returns only tagged auctions
-	test('relay query by beta tag returns only tagged auctions', async () => {
+	// Test 5: Beta-tagged and untagged auctions are distinguishable by tag
+	// ('beta' is not a single-letter tag, so #beta is not a valid NIP-01
+	// filter — clients must fetch by author/kind and filter client-side.)
+	test('beta tag distinguishes tagged from untagged auctions when querying by author', async () => {
 		test.setTimeout(60_000)
 
 		// Seed two auctions — one with beta tag, one without
 		const { dTag: betaDTag } = await seedAuctionBeta({ withBetaTag: true })
 		const { dTag: noBetaDTag } = await seedAuctionBeta({ withBetaTag: false })
 
-		// Query relay filtering by #beta tag
+		// Query relay for this author's auctions (valid NIP-01 filter)
 		const events = await queryRelayEvents({
 			kinds: [30408],
 			authors: [devUser1.pk],
-			'#beta': ['true'],
-			limit: 50,
+			limit: 100,
 		})
 
-		// Should return at least 1 result (the beta-tagged auction)
-		expect(events.length).toBeGreaterThanOrEqual(1)
-
-		// All returned events should have the beta tag
-		for (const event of events) {
-			const betaTag = event.tags.find((t) => t[0] === 'beta' && t[1] === 'true')
-			expect(betaTag).toBeDefined()
+		// Filter client-side by the beta tag, as consumers must
+		const betaEvents = events.filter((e) => e.tags.some((t) => t[0] === 'beta' && t[1] === 'true'))
+		expect(betaEvents.length).toBeGreaterThanOrEqual(1)
+		for (const event of betaEvents) {
+			expect(event.tags.find((t) => t[0] === 'beta' && t[1] === 'true')).toBeDefined()
 		}
 
-		// The non-beta auction d-tag should NOT be in the results
-		const returnedDTags = events.map((e) => getTagValue(e, 'd')).filter(Boolean)
-		expect(returnedDTags).not.toContain(noBetaDTag)
+		const betaDTags = betaEvents.map((e) => getTagValue(e, 'd')).filter(Boolean)
+		expect(betaDTags).toContain(betaDTag)
+		expect(betaDTags).not.toContain(noBetaDTag)
 
-		// The beta auction d-tag SHOULD be in the results
-		expect(returnedDTags).toContain(betaDTag)
+		// The untagged auction is still on the relay, just without the tag
+		const allDTags = events.map((e) => getTagValue(e, 'd')).filter(Boolean)
+		expect(allDTags).toContain(noBetaDTag)
 	})
 })
