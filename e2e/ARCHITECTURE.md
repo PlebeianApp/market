@@ -224,6 +224,15 @@ external Lightning node is involved.
 The dev server receives `APP_DEV_TEST_MINT_URL=http://localhost:3338`,
 pointing the app's test wallet at the local mint.
 
+**Deprecation of mock mint fixtures (ADR-0006):** this real mint
+supersedes the previous mock approach for mint flows. Inert mint URLs
+with `getEncodedToken`/pre-computed tokens (ADR-0005), the wallet/mint
+path of `lightning-mock.ts`, and `cashu-mint-mock.ts` are deprecated for
+mint operations. Roadmap: migrate mint-adjacent tests
+(`auction-mint-state`, `auction-live-chat*`) off external mint URLs,
+then remove `cashu-mint-mock.ts`. `lightning-mock.ts` remains for
+non-wallet Lightning flows (zaps, LNURL). See ADR-0006.
+
 ### Seed Relay: `seed-relay.ts`
 
 Standalone script that publishes app settings events to the relay. Runs via Bun (which has native WebSocket) before the dev server starts.
