@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
+import { isVideoUrl } from '@/lib/media'
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel'
-import { ImageOff } from 'lucide-react'
+import { ImageOff, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface ProductImage {
@@ -64,13 +65,17 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 					{images.map((image, index) => (
 						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
 							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
-							<button
-								onClick={() => onImageClick?.(index)}
-								className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
-								aria-label={`View ${title} - Image ${index + 1} in full size`}
-							>
-								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
-							</button>
+							{isVideoUrl(image.url) ? (
+								<video src={image.url} controls muted loop playsInline className="relative z-10 max-w-full max-h-full object-contain" />
+							) : (
+								<button
+									onClick={() => onImageClick?.(index)}
+									className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
+									aria-label={`View ${title} - Image ${index + 1} in full size`}
+								>
+									<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
+								</button>
+							)}
 						</CarouselItem>
 					))}
 				</CarouselContent>
@@ -95,8 +100,12 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 									)}
 									onClick={() => handlePreviewClick(index)}
 								>
-									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
-										<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
+									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800 flex items-center justify-center">
+										{isVideoUrl(image.url) ? (
+											<Play className="h-6 w-6 text-white" />
+										) : (
+											<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
+										)}
 									</div>
 									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
 								</button>

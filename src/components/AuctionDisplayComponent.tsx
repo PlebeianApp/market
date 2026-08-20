@@ -1,4 +1,5 @@
 import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { isVideoUrl } from '@/lib/media'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'
@@ -54,7 +55,11 @@ export function AuctionDisplayComponent({
 			<div className="flex items-center gap-4">
 				<div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
 					{imageUrl ? (
-						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+						isVideoUrl(imageUrl) ? (
+							<video src={imageUrl} muted loop playsInline className="w-full h-full object-cover" />
+						) : (
+							<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+						)
 					) : (
 						<div className="w-full h-full bg-gray-300 flex items-center justify-center text-gray-500 text-xs">No Image</div>
 					)}
