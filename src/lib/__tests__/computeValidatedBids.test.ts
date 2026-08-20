@@ -271,12 +271,41 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			verdicts,
 			nut7States: new Map([[bid.id, 'spent' as Nut7ProofState]]),
 			postSettlement: true,
+			// settledBidIds is REQUIRED when postSettlement is true — a bid NOT
+			// recorded in the settlement keeps proof_spent as an invalidation.
+			settledBidIds: new Set([bid.id]),
 		})
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 		// The NUT-7 value itself is never rewritten: classified still reports
 		// the mint-reported truth.
 		const classified = result.classified.find((c) => c.bid.id === bid.id)
 		expect(classified?.nut7State).toBe('spent')
+	})
+
+	test('postSettlement=true: a bid NOT recorded in settledBidIds stays invalid (displacement blocked)', () => {
+		const auction = buildAuction()
+		const realWinner = buildBid(auction, { id: 'a'.repeat(64), amount: 5_000 })
+		const fakeHighBid = buildBid(auction, { id: 'b'.repeat(64), bidderPubkey: '9'.repeat(64), amount: 9_000, createdAt: 1_400 })
+		const verdicts = [
+			buildVerdict(realWinner, { validatorPubkey: V1 }),
+			buildVerdict(realWinner, { validatorPubkey: V2 }),
+			buildVerdict(fakeHighBid, { validatorPubkey: V1, observedAt: fakeHighBid.createdAt + 5 }),
+			buildVerdict(fakeHighBid, { validatorPubkey: V2, observedAt: fakeHighBid.createdAt + 5 }),
+		]
+		const result = computeValidatedBids({
+			auction,
+			bids: [realWinner, fakeHighBid],
+			verdicts,
+			// Both bids spent — realWinner is in the settlement, fakeHighBid is not.
+			nut7States: new Map([
+				[realWinner.id, 'spent' as Nut7ProofState],
+				[fakeHighBid.id, 'spent' as Nut7ProofState],
+			]),
+			postSettlement: true,
+			settledBidIds: new Set([realWinner.id]),
+		})
+		expect(result.canonicalWinner?.id).toBe(realWinner.id)
+		expect(result.invalidBids).toContainEqual(expect.objectContaining({ id: fakeHighBid.id }))
 	})
 
 	test('pending NUT-7 from the mint keeps the bid pending', () => {

@@ -366,7 +366,7 @@ function DashboardAuctionDetailRoute() {
 		})
 
 		return validSettlements[0]?.ndkEvent ?? null
-	}, [auction, settlements, bids, verdictsData])
+	}, [auction, settlements, bids, verdictsData, nut7States])
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {

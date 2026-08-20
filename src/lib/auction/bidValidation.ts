@@ -387,7 +387,10 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		// legitimate post-locktime refund), not pre-settlement fraud. Bids NOT
 		// recorded in the settlement keep `proof_spent` as an invalidation, so
 		// a drained high bid cannot displace the real winner.
-		const spendExcusable = postSettlement && (input.settledBidIds ? input.settledBidIds.has(c.bid.id) : true)
+		//
+		// Require settledBidIds when postSettlement is true — no fallback
+		// (prevents the displacement risk the fallback enables).
+		const spendExcusable = postSettlement && input.settledBidIds !== undefined && input.settledBidIds.has(c.bid.id)
 		if (verdict.claim === 'bid_invalid' && verdict.reason === 'proof_spent' && spendExcusable) {
 			finalValid.push(c.bid)
 			if (c.bid.amount > currentTopValidAmount) {
