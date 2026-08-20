@@ -20,7 +20,6 @@ import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { devUser1, devUser2, XPUB } from '../../src/lib/fixtures'
 import path from 'node:path'
-import { decode } from 'light-bolt11-decoder'
 
 useWebSocketImplementation(WebSocket)
 
@@ -169,18 +168,6 @@ async function ensureInsufficientBidFunds(page: import('@playwright/test').Page)
 	// directly — there is no "Customize bid" edit-mode toggle anymore.
 	const bidInput = page.locator('input[type="number"]').first()
 	await bidInput.fill(String(bidAmount))
-}
-
-const parseBolt11Sats = (bolt11: string): number => {
-	const amountMillisatsRaw = decode(bolt11).sections.find((section) => section.name === 'amount')?.value
-	if (!amountMillisatsRaw) {
-		throw new Error('No amount section found in bolt11 invoice')
-	}
-	const amountMillisats = parseInt(amountMillisatsRaw, 10)
-	if (!Number.isFinite(amountMillisats) || amountMillisats <= 0) {
-		throw new Error(`Invalid bolt11 amount section: ${amountMillisatsRaw}`)
-	}
-	return Math.floor(amountMillisats / 1000)
 }
 
 /**
@@ -367,7 +354,7 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 		}
 	})
 
-	test('auction funding modal only lists accepted mints and invoice amount includes fee padding', async ({ buyerPage }) => {
+	test('auction funding only lists accepted mints and completes the bid', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auctionEvent = await seedAuction(relay, {
@@ -411,50 +398,25 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 			const confirmDialog = buyerPage.getByRole('dialog', { name: /confirm bid/i })
 			await expect(confirmDialog).toBeVisible({ timeout: 10_000 })
 
-			// Select a mint in the confirm dialog (if a mint selector is shown).
-			// The mint selector is a Radix Select (combobox) whose dropdown content
-			// is portaled outside the dialog DOM, so we query options at page level.
+			// Verify the confirm dialog's mint selector lists ONLY the auction's
+			// accepted mints (localhost + 127.0.0.1) — not the untrusted mint.
+			// The Radix Select options are portaled outside the dialog, so query
+			// them at page level.
 			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
-			if (await mintSelectTrigger.isVisible().catch(() => false)) {
-				await mintSelectTrigger.click()
-				await buyerPage.getByRole('option').first().click()
-			}
+			await mintSelectTrigger.click()
+			const optionLabels = await buyerPage.getByRole('option').allTextContents()
+			expect(optionLabels.some((label) => label.startsWith('localhost'))).toBe(true)
+			expect(optionLabels.some((label) => label.startsWith('127.0.0.1'))).toBe(true)
+			expect(optionLabels.some((label) => label.includes('untrusted'))).toBe(false)
+			await buyerPage.getByRole('option').first().click()
 
-			// Confirm the bid — wallet has insufficient funds (bid amount exceeds
-			// total wallet balance), so the DepositLightningModal opens in
-			// bid-variant quick view.
+			// Confirm the bid — the wallet has insufficient funds, so funding runs
+			// through the local Cashu mint. Its FakeWallet backend auto-settles the
+			// Lightning invoice, so funding completes and the bid progress dialog
+			// takes over (invoice fee-padding is covered by the nip60 unit tests).
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
 
-			// The deposit modal opens in bid-variant quick view (title "Bid with
-			// lightning"). Switch to the classic top-up view to access the mint
-			// selector and form fields.
-			const depositDialog = buyerPage.getByRole('dialog')
-			await expect(depositDialog.getByText('Bid with lightning')).toBeVisible({ timeout: 10_000 })
-			await depositDialog.getByRole('button', { name: /or top up your wallet/i }).click()
-
-			// In classic view the title changes to "Deposit Lightning" and the
-			// form (amount input, mint selector, Generate Invoice button) appears.
-			await expect(depositDialog.getByText('Deposit Lightning')).toBeVisible({ timeout: 10_000 })
-
-			const mintSelect = depositDialog.locator('select').first()
-			const optionLabels = await mintSelect.locator('option').allTextContents()
-			expect(optionLabels).toContain('localhost')
-			expect(optionLabels).toContain('127.0.0.1')
-			expect(optionLabels).not.toContain('untrusted.localhost')
-
-			const amountInput = depositDialog.locator('input[type="number"]').first()
-			const requestedAmount = Number(await amountInput.inputValue())
-			expect(Number.isFinite(requestedAmount)).toBe(true)
-			expect(requestedAmount).toBeGreaterThan(0)
-
-			await depositDialog.getByRole('button', { name: 'Generate Invoice' }).click()
-			await expect(depositDialog.getByText('Lightning Invoice')).toBeVisible({ timeout: 15_000 })
-
-			const invoiceValue = await depositDialog.locator('input[readonly]').first().inputValue()
-			expect(invoiceValue.toLowerCase().startsWith('ln')).toBe(true)
-
-			const invoiceAmountSats = parseBolt11Sats(invoiceValue)
-			expect(invoiceAmountSats).toBeGreaterThan(requestedAmount)
+			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 20_000 })
 		} finally {
 			relay.close()
 		}
