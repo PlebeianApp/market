@@ -907,8 +907,13 @@ export const nip60Actions = {
 			// private keys. Instead, expose a sanitized wrapper that only
 			// exposes non-sensitive methods and properties needed for e2e tests.
 			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
-				// M8: Expose a sanitized wallet wrapper — no privkey, no seed,
-				// no key material. Only expose the methods e2e tests need.
+				// M8: Expose a sanitized wallet wrapper. No privkey/seed is exposed
+				// here except the p2pk + privkeys map below, which the settlement
+				// e2e test needs to derive the auction HD xpub and P2PK lock
+				// (c03rad0r #5). The staging exposure is closed by the gate above:
+				// isNip60WalletDevModeEnabled() is true only on localhost/dev
+				// (isLocalDevHost) or via an explicit APP_NIP60_DEV_MODE flag —
+				// never via `stage === 'staging'` (removed in M8).
 				;(window as any).__nip60Wallet = {
 					// Read-only state accessors (no key material)
 					getMints: () => wallet.wallet?.mints ?? [],
@@ -918,8 +923,11 @@ export const nip60Actions = {
 					},
 					// Method proxies for test infrastructure (no key exposure)
 					relay: wallet.relay,
-					// Explicitly NOT exposed: wallet.wallet (contains privkey),
-					// wallet.p2pk, wallet.seed, any *privkey or *secret fields.
+					// Key material for the settlement e2e test (dev/localhost only,
+					// per the gate above). wallet.wallet (full NDKCashuWallet with
+					// seed) and wallet.seed are NOT exposed.
+					getP2pk: () => wallet.getP2pk(),
+					privkeys: wallet.privkeys,
 				}
 				// Expose nip60Actions so e2e tests can stub mint-dependent methods
 				// (e.g. receiveLockedEcash) when running against the CashuMintMock,
