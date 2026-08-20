@@ -776,29 +776,62 @@ export const publishBidderPathRelease = async (
 			}
 		}
 	} catch (err) {
-		// M2 FIX: Fail CLOSED on fetch errors. The original code warned and
-		// continued, allowing path release without quorum verification when
-		// relays were unreachable. This is a fail-open vulnerability: a
-		// network glitch or malicious relay could bypass the quorum gate.
+		// M2 FIX: Fail CLOSED on non-quorum errors. The original code warned
+		// and continued, allowing path release without quorum verification
+		// when relays were unreachable — a fail-open vulnerability.
 		//
-		// Quorum-check failures (explicit throw above) are already re-thrown.
-		// For network/parse errors, we now also refuse — EXCEPT when:
-		//   1. The auction has ended (now >= maxEndAt), AND
-		//   2. No valid settled settlement exists for this auction.
-		// After the auction ends, the bidder's proofs are time-locked until
-		// settlement_grace expires, so releasing late cannot grief the
-		// protocol. Before close, we must verify quorum to prevent premature
-		// release.
+		// Quorum-check failures (explicit throw above) are re-thrown.
+		// For network/parse errors we refuse, EXCEPT for the post-close
+		// release path below: after the auction ends the bidder's proofs
+		// are time-locked until settlement_grace expires, so a late release
+		// cannot grief the protocol. Before close we must verify quorum.
 		if (err instanceof Error && err.message.includes('quorum requires')) throw err
-		// Attempt to determine if the auction has ended. If we can't even
-		// fetch the auction (the fetch failed), we cannot safely determine
-		// the time window — refuse the release.
-		console.warn('Path release quorum check failed (non-quorum error):', err)
-		throw new Error(
-			'Cannot release path: quorum verification failed due to a network or parse error. ' +
-				'The quorum gate must succeed before releasing locked proofs. ' +
-				'Please retry when relays are available.',
-		)
+
+		// Determine whether the post-close exception applies: the auction
+		// has ended (now >= maxEndAt) AND no valid `settled` settlement
+		// exists. Both conditions must be positively established from relay
+		// state; any failure keeps the gate closed (fail closed).
+		let postCloseReleaseAllowed = false
+		try {
+			const [
+				{ fetchAuction: fetchAuctionRetry },
+				{ parseAuctionEvent: parseAuctionEventRetry },
+				{ fetchAuctionSettlements },
+				{ parseSettlementEvent },
+			] = await Promise.all([
+				import('@/queries/auctions'),
+				import('@/lib/schemas/auction/auctionEvent'),
+				import('@/queries/auctions'),
+				import('@/lib/schemas/auction/settlementEvents'),
+			])
+			const auctionEventRetry = await fetchAuctionRetry(latestLeg.auctionRootEventId)
+			const parsedRetry = auctionEventRetry ? parseAuctionEventRetry(auctionEventRetry.rawEvent()) : null
+			if (parsedRetry?.ok) {
+				const auction = parsedRetry.value
+				const now = Math.floor(Date.now() / 1000)
+				if (now >= auction.maxEndAt) {
+					const settlements = await fetchAuctionSettlements(latestLeg.auctionRootEventId, 100, latestLeg.auctionCoordinate)
+					const hasSettled = settlements.some((s) => {
+						const parsed = parseSettlementEvent(s.rawEvent())
+						return parsed.ok && parsed.value.status === 'settled'
+					})
+					postCloseReleaseAllowed = !hasSettled
+				}
+			}
+		} catch {
+			// Could not re-establish auction/settlement state — keep the gate closed.
+			postCloseReleaseAllowed = false
+		}
+
+		if (!postCloseReleaseAllowed) {
+			console.warn('Path release quorum check failed (non-quorum error):', err)
+			throw new Error(
+				'Cannot release path: quorum verification failed due to a network or parse error. ' +
+					'The quorum gate must succeed before releasing locked proofs. ' +
+					'Please retry when relays are available.',
+			)
+		}
+		console.warn('Path release quorum check failed, but the auction has ended with no settled settlement — allowing late release.', err)
 	}
 
 	const releaseReason: PathReleaseReason = input.releaseReason ?? 'settlement'
