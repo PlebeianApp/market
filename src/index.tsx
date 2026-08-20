@@ -18,7 +18,6 @@ import { file } from 'bun'
 import.meta.hot.accept()
 
 const RELAY_URL = process.env.APP_RELAY_URL
-const FALLBACK_RELAYS = process.env.APP_FALLBACK_RELAYS
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
@@ -263,7 +262,7 @@ async function serveProductPageWithOg(productId: string, requestUrl: string): Pr
 		return new Response('Product page unavailable', { status: 503 })
 	}
 
-	const meta = await getProductOgMeta(RELAY_URL, productId, FALLBACK_RELAYS)
+	const meta = await getProductOgMeta(RELAY_URL, productId)
 	const html = renderProductPageHtml(baseHtml, meta, `${url.origin}/products/${productId}`, url.origin)
 
 	// Body differs per product: only carry over the content type, and force
