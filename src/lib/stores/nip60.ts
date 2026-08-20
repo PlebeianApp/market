@@ -1807,6 +1807,15 @@ export const nip60Actions = {
 					store: changeProofs,
 					destroy: selectedProofs,
 				})
+				// Persist the wallet event to Nostr so the token event
+				// references are current. Without this, a page refresh
+				// reloads the stale wallet event whose e-tags still
+				// point at old token events containing spent proofs.
+				try {
+					await wallet.publish()
+				} catch (publishErr) {
+					console.error('[nip60] Failed to publish wallet after bid lock (non-fatal):', publishErr)
+				}
 				// Synchronously re-read balance from wallet.state into the
 				// store so the UI updates immediately (avoids a stale
 				// inflated display until the async consolidation lands).
@@ -1943,16 +1952,20 @@ export const nip60Actions = {
 			// The token is already saved to pending list, so even if state sync fails,
 			// the token won't be lost - user can reclaim or share it.
 			//
-			// For change proofs, we need to add them back to the wallet
-			if (changeProofs.length > 0) {
-				try {
-					await wallet.state.update({
-						store: changeProofs,
-						mint: targetMint,
-					})
-				} catch (changeErr) {
-					console.error('[nip60] Failed to add change proofs (will recover on consolidation):', changeErr)
-				}
+			// Destroy the inputs we consumed — the mint already burned
+			// them during the swap. Without this, a subsequent bid or
+			// sendEcash in the same session will try to spend the
+			// same proofs and get "Token Already Spent" from the mint.
+			await wallet.state.update({
+				mint: targetMint,
+				destroy: selectedProofs,
+				...(changeProofs.length > 0 ? { store: changeProofs } : {}),
+			})
+			// Persist so the wallet event is current on page refresh.
+			try {
+				await wallet.publish()
+			} catch (publishErr) {
+				console.error('[nip60] Failed to publish wallet after send (non-fatal):', publishErr)
 			}
 
 			// Consolidate to sync state (detect spent proofs)
