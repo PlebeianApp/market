@@ -159,12 +159,16 @@ async function fetchVerifiedProductEvent(relayUrl: string, productId: string): P
 	try {
 		const deadline = Date.now() + OG_FETCH_TIMEOUT_MS
 
-		relay = await Promise.race([Relay.connect(relayUrl), rejectAfter(OG_FETCH_TIMEOUT_MS, 'og: relay connect timeout')])
+		const connectTimeout = rejectAfter(OG_FETCH_TIMEOUT_MS, 'og: relay connect timeout')
+		const requestTimeout = rejectAfter(Math.max(deadline - Date.now(), 1), 'og: relay request timeout')
+		try {
+			relay = await Promise.race([Relay.connect(relayUrl), connectTimeout.promise])
 
-		return await Promise.race([
-			requestProductEvent(relay, productId),
-			rejectAfter(Math.max(deadline - Date.now(), 1), 'og: relay request timeout'),
-		])
+			return await Promise.race([requestProductEvent(relay, productId), requestTimeout.promise])
+		} finally {
+			connectTimeout.cancel()
+			requestTimeout.cancel()
+		}
 	} catch (error) {
 		// Best-effort by contract: any failure means "no preview meta".
 		console.warn('og: product lookup failed:', error instanceof Error ? error.message : String(error))
@@ -214,8 +218,13 @@ function requestProductEvent(relay: Relay, productId: string): Promise<unknown |
 	})
 }
 
-function rejectAfter(ms: number, message: string): Promise<never> {
-	return new Promise((_, reject) => {
-		setTimeout(() => reject(new Error(message)), ms)
+function rejectAfter(ms: number, message: string): { promise: Promise<never>; cancel: () => void } {
+	let timer: ReturnType<typeof setTimeout>
+	const promise = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => reject(new Error(message)), ms)
 	})
+	return {
+		promise,
+		cancel: () => clearTimeout(timer),
+	}
 }

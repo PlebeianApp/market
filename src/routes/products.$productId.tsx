@@ -498,7 +498,7 @@ function RouteComponent() {
 
 	// Build product URL and meta description for social sharing
 	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
-	const metaDescription = description.length > 160 ? `${description.substring(0, 157)}...` : description
+	const metaDescription = description.length > 160 ? `${truncateForMeta(description, 157)}...` : description
 
 	// Inject Open Graph and Twitter Card meta tags (no-op while the NSFW gate is active)
 	useDocumentMeta({
