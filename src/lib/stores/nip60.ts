@@ -192,10 +192,20 @@ const initialState: Nip60State = {
 
 // Default to the public testnet mint. Set APP_DEV_TEST_MINT_URL to override
 // (e.g. http://localhost:3338 for local e2e tests with a local nutshell mint).
+// APP_DEV_TEST_MINT_URL is set on the server, but it may not reach the browser
+// bundle (bun reliably inlines NODE_ENV, not arbitrary custom vars), so the local
+// e2e mint (localhost:3338 / 127.0.0.1:3338) is also listed explicitly below so
+// mintTestEcash hits the local nutshell mint instead of external testnet mints.
 const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
 export const NIP60_DEV_TEST_MINTS = Array.from(
 	new Set(
-		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+		[
+			DEV_TEST_MINT_URL,
+			'http://localhost:3338',
+			'http://127.0.0.1:3338',
+			'https://testnut.cashu.space',
+			'https://nofees.testnut.cashu.space',
+		]
 			.map((mint) => mint.trim().replace(/\/$/, ''))
 			.filter(Boolean),
 	),
