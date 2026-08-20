@@ -378,6 +378,23 @@ export function DepositLightningModal({
 							{Number.isFinite(parseInt(amount, 10)) ? parseInt(amount, 10).toLocaleString() : 0} sats
 						</p>
 
+						{depositInvoice && (
+							<div className="space-y-2">
+								<p className="text-sm font-medium">Lightning Invoice</p>
+								<div className="flex gap-2">
+									<input
+										type="text"
+										value={depositInvoice}
+										readOnly
+										className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
+									/>
+									<Button variant="outline" size="icon" onClick={handleCopyInvoice} title="Copy invoice">
+										{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+									</Button>
+								</div>
+							</div>
+						)}
+
 						{copied && <p className="text-xs text-center text-muted-foreground">Invoice copied to clipboard</p>}
 
 						{depositStatus === 'error' && (

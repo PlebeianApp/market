@@ -223,7 +223,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
 	const [hasStartedEditingBidAmount, setHasStartedEditingBidAmount] = useState(false)
 	const [isRulesDialogOpen, setIsRulesDialogOpen] = useState(false)
-	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState(false)
+	// Read the per-ruleset ack from localStorage synchronously on mount so there
+	// is no first-render window where the state is still false (the form would
+	// otherwise re-open the rules dialog on every auction page).
+	const [hasAcknowledgedAuctionRules, setHasAcknowledgedAuctionRules] = useState<boolean>(() => {
+		if (typeof window === 'undefined' || !auctionRulesAckKey) return false
+		try {
+			return window.localStorage.getItem(auctionRulesAckKey) === 'true'
+		} catch {
+			return false
+		}
+	})
 	const [isConfirmBidDialogOpen, setIsConfirmBidDialogOpen] = useState(false)
 	const [pendingBidData, setPendingBidData] = useState<AuctionBidFormData | null>(null)
 	const [confirmBidMint, setConfirmBidMint] = useState<string | null>(null)
@@ -506,7 +516,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			bidData: updatedBidData,
 			hasInsufficientBidFunds: hasInsufficientConfirmMint,
 			depositMint: hasInsufficientConfirmMint ? confirmBidMint : depositMint,
-			deltaAmount: confirmDeltaAmount,
+			// The deposit (Lightning invoice) mints the SHORTFALL, not the full lock
+			// delta: the wallet already holds confirmMintBalance sats, so only the
+			// remaining top-up (Pay via Lightning) needs to be funded.
+			deltaAmount: confirmTopUpNeeded,
 			mintError,
 			selectedMint: confirmBidMint,
 			canFund: canFundConfirmMint,
