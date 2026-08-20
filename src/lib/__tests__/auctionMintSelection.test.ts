@@ -237,4 +237,33 @@ describe('resolveAuctionMintSelection', () => {
 		expect(result.availableMints[0].balance).toBe(75)
 		expect(result.availableMints[1].balance).toBe(25)
 	})
+
+	test('allowlist order determines auto-selected mint when multiple are eligible', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				trustedMints: [MINT_B, MINT_A],
+				walletMints: [MINT_A, MINT_B],
+				mintBalances: { [MINT_A]: 5_000, [MINT_B]: 2_000 },
+				bidAmount: 1_000,
+			}),
+		)
+
+		expect(result.selectedMint).toBe(MINT_B)
+		expect(result.eligibleMints.map((mint) => mint.mintUrl)).toEqual([MINT_B, MINT_A])
+	})
+
+	test('allowlist excludes funded but untrusted mints from eligibility and selection', () => {
+		const result = resolveAuctionMintSelection(
+			makeInput({
+				trustedMints: [MINT_A],
+				walletMints: [MINT_A, MINT_B],
+				mintBalances: { [MINT_A]: 25, [MINT_B]: 20_000 },
+				bidAmount: 50,
+			}),
+		)
+
+		expect(result.selectedMint).toBeNull()
+		expect(result.availableMints.map((mint) => mint.mintUrl)).toEqual([MINT_A])
+		expect(result.error).toContain('Insufficient balance')
+	})
 })
