@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { checkProofStateBatch } from '../cashu/nut7'
+import { aggregateBidNut7State, checkProofStateBatch } from '../cashu/nut7'
 import { normalizeMintUrl } from '../wallet'
 import type { Nut7ProofState } from './constants'
 import type { ParsedBidEvent } from './events'
@@ -10,21 +10,6 @@ const POLL_INTERVAL_MS = 60_000
  * Type of the proof-state checker function. Injectable for testing.
  */
 export type CheckProofStateFn = (mintUrl: string, proofYs: string[]) => Promise<Map<string, Nut7ProofState>>
-
-/**
- * Aggregate per-proof NUT-7 states into a single worst-case state per bid.
- * any spent → spent, all unspent → unspent, otherwise pending.
- */
-function aggregateBidNut7State(proofStates: Map<string, Nut7ProofState>, proofYs: string[]): Nut7ProofState | undefined {
-	if (!proofYs.length) return undefined
-	let allUnspent = true
-	for (const y of proofYs) {
-		const state = proofStates.get(y.toLowerCase())
-		if (state === 'spent') return 'spent'
-		if (state !== 'unspent') allUnspent = false
-	}
-	return allUnspent ? 'unspent' : 'pending'
-}
 
 /**
  * React hook that polls NUT-7 proof states for all bids every ~60 seconds.

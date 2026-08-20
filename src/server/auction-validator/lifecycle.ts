@@ -151,20 +151,17 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 
 const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState, currentTopBid: number): DerivedVerdict => {
 	// B1 (ADR-0004): The NUT-7 poller has been removed — validators no
-	// longer query the mint for proof state. When no NUT-7 data exists
-	// (the permanent state since the poller was deleted), default to
-	// 'unspent' — the bid was accepted at the mint at lock time. NUT-7
-	// is now client-side-only evidence.
-	const nut7State = bidState.nut7States.size > 0 ? aggregateProofStates(bidState.nut7States, bidState.bid.proofYs) : 'unspent'
-
+	// longer query the mint for proof state; a validator's verdict asserts
+	// structural/rules validity only, and on-mint proof state is client-side
+	// evidence. The NUT-7 step is therefore SKIPPED explicitly rather than
+	// bypassed with a fabricated state: an unconfirmed NUT-7 state is never
+	// defaulted to 'unspent' (or 'spent') — it is 'pending' by definition,
+	// and only a mint response may convert it.
 	const verdict: BidValidationVerdict = validateBid({
 		auction: auctionState.auction,
 		bid: bidState.bid,
 		observedAt: bidState.observedAt,
-		nut7State,
-		// Pre-settlement fraud ("any proof spent") is detected from the
-		// per-proof map, independent of the all-spent aggregate.
-		nut7ProofStates: buildProofStateMap(bidState),
+		skipNut7Check: true,
 		currentTopBid,
 		bidChainValidation: deriveBidChainValidation(auctionState, bidState),
 	})

@@ -952,7 +952,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// Lazy imports to avoid pulling settlement-only deps into the bid
 	// path's bundle.
 	const [
-		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionVerdicts, getBidAmount },
+		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionSettlements, fetchAuctionVerdicts, getBidAmount },
 		auctionSettlementMod,
 		settlementEventsMod,
 		constantsMod,
@@ -973,13 +973,13 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		import('@/lib/cashu/nut7'),
 	])
 	const { getAuctionTagValue: getTag, AUCTION_SETTLEMENT_KIND: kind1024 } = auctionSettlementMod
-	const { parsePathReleaseEvent } = settlementEventsMod
+	const { parsePathReleaseEvent, parseSettlementEvent } = settlementEventsMod
 	const { AUCTION_SETTLEMENT_POLICY: policyV1 } = constantsMod
 	const { parseAuctionEvent } = auctionEventMod
 	const { parseBidEvent } = bidEventMod
 	const { parseValidatorVerdictEvent } = validatorEventsMod
 	const { computeValidatedBids } = bidValidationMod
-	const { checkProofStateBatch } = nut7Mod
+	const { checkProofStateBatch, aggregateBidNut7State } = nut7Mod
 
 	// 1. Auction event.
 	const auctionEvent = await fetchAuction(formData.auctionEventId)
@@ -1016,8 +1016,42 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 
 	const closeAt = now
 
-	// 2. Resolve `reserve_not_met` shortcut. No on-mint work for this path —
-	// losers self-refund at locktime via their refund branch.
+	// Winner derivation must be based on mint-reported proof states, never on
+	// defaulted or fabricated ones: an unconfirmed NUT-7 state stays unconfirmed
+	// (`bid_pending_review`), and only the mint's response converts it.
+	// Query each allowlisted mint for every parsed bid's proof_y set and
+	// aggregate per bid (any spent → spent, all unspent → unspent, else
+	// pending). Bids on non-allowlisted mints are never polled: they cannot
+	// win (validateBid rejects them via the mint-allowlist check), and polling
+	// attacker-supplied mint URLs from raw bids would turn the client into a
+	// beacon. Unreachable mints leave their bids 'unknown' → pending.
+	type ParsedBidEventT = import('@/lib/auction/events').ParsedBidEvent
+	type Nut7ProofStateT = import('@/lib/auction/constants').Nut7ProofState
+	const fetchNut7StatesForBids = async (bidList: ParsedBidEventT[]): Promise<Map<string, Nut7ProofStateT>> => {
+		const states = new Map<string, Nut7ProofStateT>()
+		const byMint = new Map<string, ParsedBidEventT[]>()
+		for (const b of bidList) {
+			if (!parsedAuction.mints.includes(b.mint)) continue
+			const arr = byMint.get(b.mint) ?? []
+			arr.push(b)
+			byMint.set(b.mint, arr)
+		}
+		for (const [mint, mintBids] of byMint) {
+			const perProof = await checkProofStateBatch(
+				mint,
+				mintBids.flatMap((b: ParsedBidEventT) => b.proofYs),
+			)
+			for (const b of mintBids) {
+				states.set(b.id, aggregateBidNut7State(perProof, b.proofYs) ?? 'unknown')
+			}
+		}
+		return states
+	}
+
+	// 2. Resolve `reserve_not_met` shortcut. Redemption work happens only on
+	// the settled path — losers self-refund at locktime via their refund
+	// branch. Mint I/O here is limited to NUT-7 evidence for the reserve
+	// decision above.
 	if (formData.status === 'reserve_not_met') {
 		// B3: Before publishing reserve_not_met, verify no reserve-meeting
 		// canonical winner exists. A seller who has already redeemed a
@@ -1035,10 +1069,12 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
+		const rnmNut7States = await fetchNut7StatesForBids(rnmParsedBids)
 		const rnmValidated = computeValidatedBids({
 			auction: parsedAuction,
 			bids: rnmParsedBids,
 			verdicts: rnmParsedVerdicts,
+			nut7States: rnmNut7States,
 			postSettlement: false,
 		})
 
@@ -1048,6 +1084,27 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 					`Canonical winner: ${rnmValidated.canonicalWinner.id} ` +
 					`(${rnmValidated.canonicalWinner.amount} sats).`,
 			)
+		}
+
+		// Terminal-event consistency: refuse reserve_not_met when a
+		// structurally-valid `settled` settlement already exists for this
+		// auction — the seller cannot displace a completed settlement with a
+		// later terminal event. (Structural check only: seller + auction
+		// refs; deeper completeness validation happens on the read path.)
+		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, 100, auctionCoordinate)
+		const hasSettledSettlement = existingSettlements.some((s) => {
+			const parsed = parseSettlementEvent(s.rawEvent())
+			if (!parsed.ok) return false
+			const v = parsed.value
+			return (
+				v.status === 'settled' &&
+				v.sellerPubkey.toLowerCase() === sellerPubkey.toLowerCase() &&
+				v.auctionRootEventId === auctionRootEventId &&
+				v.auctionCoordinate === auctionCoordinate
+			)
+		})
+		if (hasSettledSettlement) {
+			throw new Error('Cannot publish reserve_not_met: a settled settlement already exists for this auction.')
 		}
 
 		const event = new NDKEvent(ndk)
@@ -1087,10 +1144,12 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 		.map((r) => r.value)
 
+	const nut7States = await fetchNut7StatesForBids(parsedBids)
 	const validatedBids = computeValidatedBids({
 		auction: parsedAuction,
 		bids: parsedBids,
 		verdicts: parsedVerdicts,
+		nut7States,
 		postSettlement: false,
 	})
 

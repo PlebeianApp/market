@@ -302,7 +302,7 @@ describe('deriveVerdict — pre-close', () => {
 		}
 	})
 
-	test('no NUT-7 signal → valid_bid_placed (B1: default to unspent)', () => {
+	test('no NUT-7 signal → valid_bid_placed (NUT-7 step explicitly skipped)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -313,7 +313,12 @@ describe('deriveVerdict — pre-close', () => {
 		expect(v.claim).toBe('valid_bid_placed')
 	})
 
-	test('NUT-7 reports spent → bid_invalid: proof_spent', () => {
+	test('NUT-7 evidence is skipped by the validator (client-owned per ADR-0004)', () => {
+		// Validators no longer query the mint; their pre-close verdict asserts
+		// structural/rules validity only (validateBid with skipNut7Check).
+		// Even recorded NUT-7 spent evidence does not invalidate via this path —
+		// the CLIENT-side winner derivation (computeValidatedBids → validateBid
+		// without skipNut7Check) enforces proof_spent from mint-truthful data.
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -322,11 +327,10 @@ describe('deriveVerdict — pre-close', () => {
 		recordNut7State(bidState, bid.proofYs[0], 'spent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_invalid')
-		if (v.claim === 'bid_invalid') expect(v.reason).toBe('proof_spent')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
-	test('multi-proof aggregate — one spent flips the bid invalid', () => {
+	test('multi-proof spent evidence likewise skipped by the validator', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
 			lockSecrets: [
@@ -341,8 +345,7 @@ describe('deriveVerdict — pre-close', () => {
 		recordNut7State(bidState, bid.proofYs[1], 'spent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_invalid')
-		if (v.claim === 'bid_invalid') expect(v.reason).toBe('proof_spent')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
 	test('multi-proof aggregate — all unspent → valid_bid_placed', () => {

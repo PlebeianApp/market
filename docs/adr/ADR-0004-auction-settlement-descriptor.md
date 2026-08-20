@@ -209,6 +209,30 @@ NUT-7 proof state verification moves from validators to the client.
 - The client queries the mint directly using `proof_y` values from the bid
   event, which are published precisely for this purpose (AUCTIONS.md §4.2).
 
+> **Amendment (2026-08): NUT-7 states are never fabricated or rewritten.**
+>
+> 1. **No defaulting.** An unconfirmed NUT-7 state is `pending` by definition
+>    (`bid_pending_review`) — never implicitly `unspent` or `spent`. Only the
+>    mint's `/checkstate` response may convert a proof state. Callers that own
+>    NUT-7 evidence pass the truthful mint-reported state; callers that do not
+>    (post-ADR-0004 validators) pass `skipNut7Check: true` to `validateBid`
+>    so the NUT-7 step is explicitly skipped rather than bypassed with a
+>    fabricated value.
+> 2. **No remapping.** A mint-reported `spent` is never rewritten to
+>    `unspent` (or anything else). When settlement context changes what a
+>    `spent` means — a structurally-valid `settled` settlement exists, so the
+>    terminal redemption/refund has legitimately consumed the proofs — it is
+>    the CONSUMER of the state (`computeValidatedBids`, via the
+>    `postSettlement` flag) that interprets the value, keeping the value
+>    itself intact for every other consumer.
+> 3. **The publisher fetches evidence.** `publishAuctionSettlement` (both the
+>    settled path and the `reserve_not_met` shortcut) queries each
+>    auction-allowlisted mint for every parsed bid's `proof_y` set BEFORE
+>    calling `computeValidatedBids`. Bids on non-allowlisted mints are never
+>    polled (they cannot win; polling attacker-supplied mint URLs would turn
+>    the client into a beacon). Unreachable mints leave their bids `unknown`
+>    → `pending`, which is the safe failure mode.
+
 ### 4. Publish-layer self-verification (amendment)
 
 #### Path release (`publishBidderPathRelease`)
@@ -282,6 +306,21 @@ Both the settlement descriptor and the publishers call the same pure function
 to determine bid validity and canonical winner. This is defense-in-depth: if
 one module has a bug, the other catches it. The function is pure (no React,
 no DOM, no side effects) and reusable.
+
+> **Amendment (2026-08): quorum-eligibility and truthful evidence.**
+> `computeValidatedBids` consumes kind-30440 verdicts with a per-verdict
+> eligibility screen (ADR-0003 §2.3 amendment): a confirm verdict counts
+> toward `auditorQuorum` only when its `observed_at` passes the window + skew
+> checks against the bid's signed `created_at`. Condemn verdicts
+> (`bid_invalid`/`fraudulent_bid`) require the same quorum — no single
+> validator can veto or promote a bid. Verdicts are deduplicated per
+> (validator, referenced bid) keeping the latest replaceable copy. The
+> client-side `validateBid` re-run for quorum-confirmed bids uses the bid's
+> own `created_at` (deterministic across clients) and the caller's
+> mint-reported `nut7States` verbatim (§3 amendment: never defaulted, never
+> remapped). Post-settlement, `proof_spent` on a quorum-confirmed bid is
+> interpreted as terminal redemption/refund — a consumer decision, not a
+> state rewrite.
 
 ## Consequences
 
@@ -365,9 +404,15 @@ Documented in AUCTIONS.md §9.1.1 as a known gap.
 
 ## Amendments to other documents
 
+- **ADR-0003 §2.3** (`validateBidTemporal`): amended with the quorum-
+  eligibility rule for consuming kind-30440 verdicts (per-verdict window +
+  skew screen against the bid's `created_at`; condemn claims gated by the
+  same quorum; no synthetic timestamp composition).
 - **ADR-0003 §2.6** (`validateBidMintState`): ownership moves from validator
   to client. The function signature and checks remain the same; the caller
-  changes.
+  changes. 2026-08 amendment: unconfirmed states are never defaulted,
+  mint-reported states are never remapped; validators pass `skipNut7Check`
+  instead of fabricating a state.
 - **AUCTIONS.md §4.3.2** (kind-1024 status enum): each status annotated
   with verification category (self-verifiable vs. network-consensus).
   `griefed_no_fallback` annotated as validator-quorum-derived.

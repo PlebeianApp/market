@@ -181,6 +181,27 @@ Critical Checks:
 | T2.3 | Positive       | observed_at <= max_end_at.                       | true            | late_arrival   |
 | T2.4 | Positive       | created_at - observed_at <= max_skew_sec (120s). | true            | timestamp_skew |
 
+> **Amendment (2026-08): quorum-eligibility of verdict timestamps.** When a
+> client derives the canonical bid set from kind-30440 verdicts
+> (`computeValidatedBids`), T2.3/T2.4 are applied PER VERDICT as an
+> eligibility screen against the referenced bid's `created_at`: a verdict
+> counts toward the confirm quorum only if its own `observed_at` lies inside
+> the auction window and within `max_skew_sec` of the bid's `created_at`.
+> This is the anti-poisoning boundary for validator timestamps: a malicious
+> validator publishing an inflated `observed_at` (e.g. far past `max_end_at`)
+> fails its own timing check and simply does not count — the bid stays
+> `pending` rather than becoming `invalid`. No synthetic timestamp (MIN/
+> cap/aggregate across validators) is ever composed for re-validation: the
+> client-side re-run of `validateBid` uses the bid's own signed `created_at`,
+> which is deterministic across clients and never rejects an in-window bid on
+> timing grounds. Condemn claims (`bid_invalid`/`fraudulent_bid`) are gated
+> by the same quorum: a single condemning validator cannot veto a bid —
+> structural invalidity is deterministic, so honest validators converge and
+> quorum forms independently. Validators continue to stamp `observed_at` as
+> their own first-observation time (AUCTIONS.md §4.4.1), including on
+> `won_pending_settlement` upgrades, which is what makes this eligibility
+> screen work for honest quorums.
+
 #### 2.4 validateBidAmount(bidEvent, auctionContext, topBid, observedTime)
 
 | ID   | Condition Type | Check Description                        | Expected Result | Failure Label        |

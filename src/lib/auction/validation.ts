@@ -135,6 +135,17 @@ export interface ValidateBidInput {
 	bidChainValidation?: BidChainValidation
 	/** Optional validator policy hook. */
 	policy?: PolicyHook
+	/**
+	 * Skip step 6 (NUT-7 proof state) entirely. For callers that do NOT own
+	 * NUT-7 evidence — post-ADR-0004 validators, whose verdicts assert
+	 * structural/rules validity only while on-mint proof state is the
+	 * client's responsibility. An unconfirmed NUT-7 state must never be
+	 * FABRICATED as `unspent` (or `spent`) to bypass this step: callers that
+	 * own the check pass the truthful mint-reported state (or nothing, which
+	 * yields `bid_pending_review`), and callers that don't own it set this
+	 * flag instead.
+	 */
+	skipNut7Check?: boolean
 }
 
 export type ReleaseTiming = 'prompt' | 'late'
@@ -457,47 +468,53 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// when EVERY proof is spent — that is the settlement-completeness
 	// signal, not the fraud signal). Detected from the per-proof map so a
 	// partially-spent bid is still rejected before the aggregate switch.
-	const { nut7ProofStates } = input
-	if (nut7ProofStates) {
-		for (const proofY of bid.proofYs) {
-			if (readProofState(nut7ProofStates, proofY) === 'spent') {
+	//
+	// Skipped entirely when the caller does not own NUT-7 evidence
+	// (`skipNut7Check`, e.g. post-ADR-0004 validators) — the check is never
+	// bypassed with a fabricated state.
+	if (!input.skipNut7Check) {
+		const { nut7ProofStates } = input
+		if (nut7ProofStates) {
+			for (const proofY of bid.proofYs) {
+				if (readProofState(nut7ProofStates, proofY) === 'spent') {
+					return {
+						claim: 'bid_invalid',
+						reason: 'proof_spent',
+						detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
+					}
+				}
+			}
+		}
+
+		switch (nut7State) {
+			case undefined:
+			case 'unknown':
+				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
+			case 'missing':
+				return {
+					claim: 'bid_invalid',
+					reason: 'proof_missing',
+					detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
+				}
+			case 'pending':
+				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
+			case 'spent':
+				// Pre-settlement spent = fake / fraudulent bid. The bidder either
+				// controlled the lock pubkey themselves and drained behind the
+				// scenes, or the bid was already redeemed somehow. Either way it's
+				// invalid for the auction. Reason `proof_spent` covers the
+				// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
+				// raised at settlement time when a kind-1025 reveals a path that
+				// doesn't derive to the lock pubkey.
 				return {
 					claim: 'bid_invalid',
 					reason: 'proof_spent',
 					detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
 				}
-			}
+			case 'unspent':
+				// Proceed to policy.
+				break
 		}
-	}
-
-	switch (nut7State) {
-		case undefined:
-		case 'unknown':
-			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-		case 'missing':
-			return {
-				claim: 'bid_invalid',
-				reason: 'proof_missing',
-				detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
-			}
-		case 'pending':
-			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-		case 'spent':
-			// Pre-settlement spent = fake / fraudulent bid. The bidder either
-			// controlled the lock pubkey themselves and drained behind the
-			// scenes, or the bid was already redeemed somehow. Either way it's
-			// invalid for the auction. Reason `proof_spent` covers the
-			// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
-			// raised at settlement time when a kind-1025 reveals a path that
-			// doesn't derive to the lock pubkey.
-			return {
-				claim: 'bid_invalid',
-				reason: 'proof_spent',
-				detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
-			}
-		case 'unspent':
-			// Proceed to policy.
-			break
 	}
 
 	// --- Step 7: validator-specific policy ----------------------------------
