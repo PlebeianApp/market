@@ -501,8 +501,9 @@ export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordi
 
 /**
  * Fetch kind-30440 validator verdicts for an auction. These are
- * parameterised-replaceable per (validator, bidder, auction), so the
- * relay returns at most one per such tuple.
+ * parameterised-replaceable per (validator, bidder, auction, bid)
+ * — per-bid addressability, ADR-0003 §4.4.1 amendment — so the relay
+ * returns at most one verdict per bid per validator.
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,

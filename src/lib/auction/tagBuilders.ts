@@ -310,7 +310,19 @@ export interface ValidatorVerdictTagsInput {
 }
 
 export const buildValidatorVerdictTags = (input: ValidatorVerdictTagsInput): string[][] => {
-	const dTag = `${input.bidderPubkey}:${input.auctionRootEventId}`
+	// Per-bid addressability (ADR-0003 §4.4.1 amendment): the d-tag includes
+	// the bid event id so each (validator, bidder, auction, bid) quadruple
+	// has its own replaceable address. The previous `bidder:auction` scheme
+	// shared one address across all of a bidder's legs in an auction, so a
+	// rebid's verdict DELETED the prior leg's verdict on the relay — breaking
+	// the validated chain. With the bid id in `d`, a rebid creates a new
+	// address and the prior leg's verdict survives independently. Within a
+	// single bid's lifecycle, verdicts still share a d-tag (same bid) so the
+	// latest claim (valid_bid_placed → won_pending_settlement → settled)
+	// correctly replaces the prior one. The eventual direction (non-
+	// replaceable verdict events) is recorded in ADR-0003; this is the
+	// interim addressability fix.
+	const dTag = `${input.bidderPubkey}:${input.auctionRootEventId}:${input.bidEventId}`
 	const tags: string[][] = [
 		['d', dTag],
 		['p', input.bidderPubkey],

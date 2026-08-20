@@ -132,7 +132,7 @@ const buildVerdict = (bid: ParsedBidEvent, overrides: Partial<ParsedValidatorVer
 		id: overrides.id ?? `verdict-${verdictCounter}`,
 		validatorPubkey: overrides.validatorPubkey ?? V1,
 		createdAt: overrides.createdAt ?? 1_505,
-		dTag: overrides.dTag ?? `${bid.bidderPubkey}:${bid.auctionRootEventId}`,
+		dTag: overrides.dTag ?? `${bid.bidderPubkey}:${bid.auctionRootEventId}:${bid.id}`,
 		bidderPubkey: bid.bidderPubkey,
 		auctionRootEventId: bid.auctionRootEventId,
 		auctionCoordinate: bid.auctionCoordinate,
@@ -368,12 +368,15 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 })
 
 describe('computeValidatedBids — rebid chain verdict propagation', () => {
-	test('latest-leg quorum verdicts confirm earlier legs (d-tag collision)', () => {
+	test('latest-leg quorum verdicts confirm earlier legs (belt-and-braces propagation)', () => {
 		const auction = buildAuction()
 		const leg1 = buildBid(auction, { id: 'a'.repeat(63) + '1', amount: 5_000, createdAt: 1_500 })
 		const leg2 = buildBid(auction, { id: 'a'.repeat(63) + '2', amount: 5_300, createdAt: 1_510, prevBidId: leg1.id })
-		// Only the latest leg has direct verdicts (kind-30440 is replaceable on
-		// d = bidder:auction — the earlier leg's verdicts were replaced).
+		// Only the latest leg has direct verdicts. Under the per-bid d-tag
+		// scheme (ADR-0003 §4.4.1 amendment) each leg has its own replaceable
+		// address so the earlier leg's verdict would normally survive on the
+		// relay; the backward-propagation is retained as belt-and-braces for
+		// the case where a validator only published for the latest leg.
 		const verdicts = [
 			buildVerdict(leg2, { validatorPubkey: V1, claim: 'won_pending_settlement' }),
 			buildVerdict(leg2, { validatorPubkey: V2, claim: 'won_pending_settlement' }),

@@ -655,8 +655,8 @@ aggregate.
 Two kinds:
 
 - **Kind `30440` — Validator Bid Verdict** (parameterized replaceable):
-  per-(validator, bidder, auction) opinion that evolves through the bid
-  lifecycle.
+  per-(validator, bidder, auction, bid) opinion that evolves through the
+  bid lifecycle.
 - **Kind `30441` — Validator Policy Declaration** (parameterized
   replaceable): a validator's published policy, so bidders can predict
   whether their bid will clear before they post it.
@@ -666,18 +666,26 @@ Two kinds:
 Authored by a validator. Updated as the bid's state changes
 (placed → won → settled / griefed / fraudulent / etc.). Because it's
 parameterized replaceable, only the latest verdict per (validator,
-bidder, auction) is canonical.
+bidder, auction, bid) is canonical.
 
 Required tags:
 
-- `d`: `<bidder_pubkey>:<auction_root_event_id>` — per-bidder,
-  per-auction, replaceable.
+- `d`: `<bidder_pubkey>:<auction_root_event_id>:<bid_event_id>` —
+  per-bid, per-auction, per-bidder, replaceable (ADR-0003 §4.4.1
+  amendment). Including the bid event id gives each leg its own
+  replaceable address, so a rebid no longer DELETES the prior leg's
+  verdict on the relay. Within a single bid's lifecycle, verdicts share
+  the d-tag (same bid) so the latest claim (valid_bid_placed →
+  won_pending_settlement → settled) correctly replaces the prior one.
+  The eventual direction is non-replaceable verdict events (recorded in
+  ADR-0003); per-bid d-tags are the interim addressability fix.
 - `p`: `<bidder_pubkey>` — for `#p` indexing.
 - `a`: auction coordinate.
 - `e`: `<auction_root_event_id>` — for `#e` queries.
-- `bid`: `<bid_event_id>` — the most recent kind-1023 bid event from
-  this bidder for this auction (replacement chains: the highest /
-  latest bid).
+- `bid`: `<bid_event_id>` — the kind-1023 bid event this verdict refers
+  to. (Under the per-bid d-tag scheme this is redundant with the d-tag's
+  third component but retained for `#bid` indexing and backward
+  compatibility.)
 - `claim`: one of the values in §4.4.3.
 - `observed_at`: unix seconds when the validator first observed the
   bid event on its subscribed relays. **This is the validator's own
@@ -709,7 +717,7 @@ Example:
 	"kind": 30440,
 	"pubkey": "<validator_pk>",
 	"tags": [
-		["d", "<bidder_pk>:<auction_root_event_id>"],
+		["d", "<bidder_pk>:<auction_root_event_id>:<bid_event_id>"],
 		["p", "<bidder_pk>"],
 		["a", "30408:<seller_pk>:<auction_d>"],
 		["e", "<auction_root_event_id>"],

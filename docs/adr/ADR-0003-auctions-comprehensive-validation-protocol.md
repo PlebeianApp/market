@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (amended 2026-08-10 per ADR-0004)
+Proposed (amended 2026-08-10 per ADR-0004; amended 2026-08-21 for per-bid d-tag + observed_at recovery)
 
 ## Date
 
@@ -204,6 +204,54 @@ Critical Checks:
 > first-observation stamping, replaceable close-phase upgrades would carry
 > `publish-time > maxEndAt` timestamps and the eligibility screen would
 > drop every previously-confirmed bid to `pending` after close.
+
+> **Amendment (2026-08-21): per-bid d-tag addressability + restart
+> `observed_at` recovery + post-close `late_arrival` suppression.**
+> Three coordinated changes address a restart-after-close failure observed
+> in manual testing (PR #1144) where `won_pending_settlement` was never
+> published ("Cannot release path: only 0/1 auditors confirmed
+> won_pending_settlement"):
+>
+> 1. **Per-bid d-tag (§4.4.1).** The kind-30440 `d` tag changes from
+>    `<bidder>:<auction_root>` to `<bidder>:<auction_root>:<bid_event_id>`.
+>    The previous scheme shared one replaceable address across all of a
+>    bidder's legs in an auction, so a rebid's verdict DELETED the prior
+>    leg's verdict on the relay, breaking the validated chain. With the bid
+>    id in `d`, each leg gets its own address and a rebid no longer deletes
+>    prior evidence; the client quorum screen's rebid-chain backward-
+>    propagation (`computeValidatedBids`) is retained as belt-and-braces.
+>    The eventual direction — non-replaceable verdict events — is recorded
+>    here as the target; per-bid d-tags are the interim addressability fix.
+> 2. **`observed_at` recovery on restart (`observedAtRecovery.ts`).** The
+>    validator is memory-only (no persistence), so a restart wiped every
+>    bid's `observedAt` and the subscriber re-stamped replayed historical
+>    bids `observed_at = now()`. For an auction that had already closed,
+>    that re-stamped timestamp is outside the window → T2.3 flipped every
+>    in-window bid to `bid_invalid: late_arrival` → `pickWinningBid` found
+>    no `valid_bid_placed` bids → the winner was never assigned. On startup,
+>    the validator now fetches its OWN prior kind-30440 verdicts from the
+>    relay and seeds each bid's `observedAt` from the earliest surviving
+>    `observed_at` tag (the publisher stamps first-observation on every
+>    verdict). A bid the validator never saw before has no seed and falls
+>    back to `now()` (correct first observation).
+> 3. **Post-close `late_arrival` suppression (`publisher.ts` Fix 3).**
+>    Defense-in-depth for when recovery misses a bid (no prior verdict on
+>    the relay, relay unreachable): the publisher no longer emits
+>    `bid_invalid: late_arrival` once `now > max_end_at`. T2.3 `late_arrival`
+>    only fires for bids whose own `created_at` IS in-window (T2.1/T2.2
+>    passed); a validator that only first-observed such a bid post-close
+>    cannot legitimately CONDEMN it. Suppressing keeps any surviving prior
+>    `valid_bid_placed` on the relay intact (so the client still recognizes
+>    the winner); with no prior verdict the bid stays `pending` rather than
+>    `invalid`. The quorum-eligibility screen already drops these verdicts,
+>    so this is a source-side cleanup. Pre-close `late_arrival` (observed
+>    before `start_at`) is unchanged.
+>
+> The three fixes compose: (1) prevents cross-bid verdict deletion on the
+> relay, (2) prevents same-bid re-stamping on restart, (3) prevents a
+> post-close restart from condemning an in-window bid even when (2)
+> recovers nothing. Together they restore `won_pending_settlement`
+> publication after a validator restart that straddles auction close.
 
 #### 2.4 validateBidAmount(bidEvent, auctionContext, topBid, observedTime)
 

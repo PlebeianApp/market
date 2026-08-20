@@ -294,12 +294,12 @@ export interface ParsedValidatorVerdictEvent {
 	createdAt: number
 
 	// Replaceable key components
-	/** Format: `<bidder_pubkey>:<auction_root_event_id>`. */
+	/** Format: `<bidder_pubkey>:<auction_root_event_id>:<bid_event_id>` (per-bid addressability, ADR-0003 §4.4.1 amendment). */
 	dTag: string
 	bidderPubkey: string
 	auctionRootEventId: string
 	auctionCoordinate: string
-	/** The most recent kind-1023 bid event id this verdict refers to. */
+	/** The kind-1023 bid event id this verdict refers to. */
 	bidEventId: string
 
 	claim: ValidatorClaim

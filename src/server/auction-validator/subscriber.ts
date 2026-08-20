@@ -45,6 +45,17 @@ export interface ValidatorSubscriberDeps {
 	now?: () => number
 	/** Operator-controlled outbound-network + load policy for mint probes. */
 	mintProbePolicy?: MintProbePolicy
+	/**
+	 * First-observation `observed_at` recovered from the validator's own
+	 * prior kind-30440 verdicts on startup (`observedAtRecovery.ts`). When a
+	 * bid arrives without an explicit `observedAt` (i.e. from the live
+	 * subscription, not a buffered replay), the subscriber prefers the
+	 * seed for that `bidEventId` over `now()` so a restart after the auction
+	 * closed no longer re-stamps in-window bids to `late_arrival`
+	 * (ADR-0003 §2.3 amendment). A bid the validator never saw before has
+	 * no seed and falls back to `now()` (correct first observation).
+	 */
+	seedObservedAt?: Map<string, number>
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -159,7 +170,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 		const bid = parsed.value
-		const firstObservedAt = observedAt ?? now()
+		// Prefer an explicit observedAt (buffered replay preserves the
+		// original sighting), then the recovered seed (cross-restart
+		// first-observation, Fix 1), then a fresh `now()` (genuine first
+		// sight this process). This ordering keeps a single-process
+		// buffered sighting authoritative over the relay-recovered value.
+		const firstObservedAt = observedAt ?? deps.seedObservedAt?.get(bid.id) ?? now()
 
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it (with this first-observed time) when the auction

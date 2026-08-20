@@ -1,4 +1,5 @@
-import type { Nut7ProofState } from './constants'
+import type { Nut7ProofState, ValidatorClaim } from './constants'
+import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from './events'
 import { validateBid } from './validation'
 
@@ -56,10 +57,10 @@ export interface ComputeValidatedBidsInput {
 	settledBidIds?: Set<string>
 }
 
-/** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). */
-const CONFIRM_CLAIMS = new Set(['valid_bid_placed', 'won_pending_settlement'])
+/** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). Re-exported from constants so the client quorum screen and the validator publisher agree. */
+const CONFIRM_CLAIMS = VALIDATOR_CONFIRM_CLAIMS
 /** Verdict claims that condemn a bid as invalid. */
-const CONDEMN_CLAIMS = new Set(['bid_invalid', 'fraudulent_bid'])
+const CONDEMN_CLAIMS = VALIDATOR_CONDEMN_CLAIMS
 
 /**
  * A verdict is quorum-eligible only when the validator's own `observed_at`
@@ -95,12 +96,13 @@ function classifyBid(
 	// `valid_bid_placed` (the validator confirmed the bid is valid AND is the
 	// canonical pending-settlement winner). Both are collected as confirm
 	// claims by the caller. Kind-30440 is addressable on
-	// `d = bidder:auction`, so a validator has exactly one latest verdict per
-	// bidder — once it upgrades to `won_pending_settlement`, the earlier
-	// `valid_bid_placed` is replaced on the relay. Counting only
-	// `valid_bid_placed` here would make winner determination break the moment
-	// validators publish the settlement-ready state that `publishBidderPathRelease`
-	// requires.
+	// `d = bidder:auction:bid` (per-bid, ADR-0003 §4.4.1 amendment), so a
+	// validator has exactly one latest verdict per bid. Within a single bid's
+	// lifecycle, once the validator upgrades to `won_pending_settlement`, the
+	// earlier `valid_bid_placed` is replaced on the relay (same d-tag for the
+	// same bid). Counting only `valid_bid_placed` here would make winner
+	// determination break the moment validators publish the settlement-ready
+	// state that `publishBidderPathRelease` requires.
 	if (eligibleConfirms.length >= auction.auditorQuorum) {
 		return {
 			bid,
@@ -227,20 +229,25 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		eligibleConfirmsByBidId.set(v.bidEventId, arr)
 	}
 
-	// M3 FIX: Rebid-chain verdict d-tag collision.
-	// Kind-30440 is parameterized replaceable on d = "bidder:auction".
-	// When a bidder rebids (same bidder, same auction), the validator
-	// publishes a new verdict with the new bidEventId, which REPLACES the
-	// old verdict on the relay. The old leg's verdict disappears, so
-	// classifyBid can't find it and the old leg becomes 'pending',
-	// breaking the validated chain.
+	// M3: Rebid-chain verdict backward-propagation (belt-and-braces).
+	// Kind-30440 is now parameterized replaceable on d = "bidder:auction:bid"
+	// (ADR-0003 §4.4.1 amendment), so each leg has its own replaceable
+	// address and a rebid no longer DELETES the prior leg's verdict on the
+	// relay — the collision this propagation was originally written to
+	// compensate for no longer occurs. The walk is retained as defense-in-
+	// depth for mixed-version relay state during rollout (old verdicts with
+	// the 2-part d-tag may still be present) and for the edge case where a
+	// validator observed a descendant but never published a standalone
+	// verdict for an ancestor leg.
 	//
-	// Fix: Walk the rebid chain backwards. If bid B has quorum-eligible
-	// verdicts and B.prevBidId points to bid A, then the same validators that
-	// confirmed B must have also seen and confirmed A (validators process
-	// the chain sequentially — they can't validate a rebid without first
-	// validating the leg it replaces). We propagate the verdict set
-	// backwards so earlier legs inherit the quorum-confirmed status.
+	// If bid B has quorum-eligible verdicts and B.prevBidId points to bid A,
+	// the same validators that confirmed B must have also seen and confirmed
+	// A (validators process the chain sequentially — they can't validate a
+	// rebid without first validating the leg it replaces). We propagate the
+	// verdict set backwards so earlier legs inherit the quorum-confirmed
+	// status. The walk only FILLS ancestors that lack their own eligible
+	// verdicts, so once a leg has its own surviving verdict (the norm under
+	// the per-bid d-tag scheme) this is a no-op.
 	//
 	// Propagated verdicts are NOT re-checked for timing eligibility against
 	// the ancestor's `created_at`: eligibility was already established
@@ -255,11 +262,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	// validator only validates the delta without checking the previous
 	// leg, this propagation would be unsound. In practice, validateBid
 	// requires prevBid context (bidChainLegAmount) and validators fetch
-	// the full chain, so this assumption holds. A future schema change
-	// to include bidEventId in the d-tag (d = "bidder:auction:bidEventId")
-	// would eliminate this issue entirely.
-	// TODO(audit-m3): Consider changing d-tag to include bidEventId for
-	// per-leg verdict addressability.
+	// the full chain, so this assumption holds.
 	const parentOf = new Map<string, string | undefined>()
 	for (const bid of bids) {
 		parentOf.set(bid.id, bid.prevBidId)

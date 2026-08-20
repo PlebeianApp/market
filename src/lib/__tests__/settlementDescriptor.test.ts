@@ -176,7 +176,7 @@ function makeVerdict(overrides: Partial<ParsedValidatorVerdictEvent> = {}): Pars
 		id: 'verdict-1',
 		validatorPubkey: VALIDATOR_PUBKEY,
 		createdAt: 100,
-		dTag: `${BUYER_PUBKEY}:auction-root`,
+		dTag: `${BUYER_PUBKEY}:auction-root:bid-1`,
 		bidderPubkey: BUYER_PUBKEY,
 		auctionRootEventId: 'auction-root',
 		auctionCoordinate: '30408:seller:d-tag',
@@ -268,7 +268,11 @@ describe('getSettlementDescriptor', () => {
 					bids: [topBid, myBid],
 					verdicts: [
 						verdictForBid(topBid.id),
-						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+						verdictForBid(myBid.id, {
+							bidderPubkey: OTHER_BIDDER_PUBKEY,
+							dTag: `${OTHER_BIDDER_PUBKEY}:auction-root:${myBid.id}`,
+							observedAt: 90,
+						}),
 					],
 					nut7States: unspentNut7States([topBid, myBid]),
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
@@ -299,7 +303,7 @@ describe('getSettlementDescriptor', () => {
 				makeInput({
 					auction: makeAuction({ sellerPubkey: SELLER_PUBKEY }),
 					bids: [myBid],
-					verdicts: [verdictForBid(myBid.id, { bidderPubkey: SELLER_PUBKEY, dTag: `${SELLER_PUBKEY}:auction-root` })],
+					verdicts: [verdictForBid(myBid.id, { bidderPubkey: SELLER_PUBKEY, dTag: `${SELLER_PUBKEY}:auction-root:${myBid.id}` })],
 					nut7States: unspentNut7States([myBid]),
 					currentUserPubkey: SELLER_PUBKEY,
 					myTopBidEvent: myBid,
@@ -643,7 +647,11 @@ describe('getSettlementDescriptor', () => {
 					bids: [topBid, myBid],
 					verdicts: [
 						verdictForBid(topBid.id),
-						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+						verdictForBid(myBid.id, {
+							bidderPubkey: OTHER_BIDDER_PUBKEY,
+							dTag: `${OTHER_BIDDER_PUBKEY}:auction-root:${myBid.id}`,
+							observedAt: 90,
+						}),
 					],
 					nut7States: unspentNut7States([topBid, myBid]),
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,
@@ -664,7 +672,11 @@ describe('getSettlementDescriptor', () => {
 					bids: [topBid, myBid],
 					verdicts: [
 						verdictForBid(topBid.id),
-						verdictForBid(myBid.id, { bidderPubkey: OTHER_BIDDER_PUBKEY, dTag: `${OTHER_BIDDER_PUBKEY}:auction-root`, observedAt: 90 }),
+						verdictForBid(myBid.id, {
+							bidderPubkey: OTHER_BIDDER_PUBKEY,
+							dTag: `${OTHER_BIDDER_PUBKEY}:auction-root:${myBid.id}`,
+							observedAt: 90,
+						}),
 					],
 					nut7States: unspentNut7States([topBid, myBid]),
 					currentUserPubkey: OTHER_BIDDER_PUBKEY,

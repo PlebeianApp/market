@@ -1,13 +1,15 @@
 /**
  * Minimal display of kind-30440 validator verdicts for an auction.
  *
- * One row per `(validator, bidder)` tuple (kind-30440 is parameterised
- * replaceable on `<bidder_pk>:<auction_root_event_id>`, so the relay
- * returns at most one per such tuple). The panel is intentionally bare:
- * the validator's claim, the bidder it targets, the latest NUT-7 state
- * if known, and a timestamp. This is what compliant clients consume to
- * filter "fraudulent_bid" / "griefed" outcomes and to surface bid
- * verifiability — Phase 7 builds the reputation UX on top.
+ * One row per `(validator, bid)` tuple (kind-30440 is parameterised
+ * replaceable on `<bidder_pk>:<auction_root_event_id>:<bid_event_id>`,
+ * per-bid addressability — ADR-0003 §4.4.1 amendment, so the relay
+ * returns at most one verdict per bid per validator). The panel is
+ * intentionally bare: the validator's claim, the bidder it targets,
+ * the latest NUT-7 state if known, and a timestamp. This is what
+ * compliant clients consume to filter "fraudulent_bid" / "griefed"
+ * outcomes and to surface bid verifiability — Phase 7 builds the
+ * reputation UX on top.
  */
 
 import { useMemo } from 'react'

@@ -5,9 +5,14 @@
  * Suppression discipline: we only publish when the derived verdict
  * differs from what we last published for that bid (claim or reason
  * change). `detail` differences are noise and don't trigger
- * republish. Since kind-30440 is parameterised-replaceable (d-tag =
- * `<bidder>:<auction_root>`), each (bidder, auction) triple has at
- * most one event per validator in flight on relays at any time.
+ * republish. Since kind-30440 is parameterised-replaceable on d-tag =
+ * `<bidder>:<auction_root>:<bid_event_id>` (per-bid addressability,
+ * ADR-0003 §4.4.1 amendment), each (validator, bidder, auction, bid)
+ * quadruple has at most one event per validator in flight on relays at
+ * any time. A bid's lifecycle verdicts (valid_bid_placed →
+ * won_pending_settlement → settled) share the d-tag (same bid) and
+ * replace one another; different bids get independent addresses so a
+ * rebid no longer deletes the prior leg's verdict.
  *
  * No state mutation here — the caller (lifecycle composer) updates
  * the in-memory bid state via {@link markVerdictPublished} after the
@@ -101,6 +106,27 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 		}
 
 		if (!verdictChanged(verdict, input.bidState.currentClaim, input.bidState.currentReason)) {
+			return { verdict, published: false }
+		}
+
+		// Fix 3 (defense-in-depth): suppress publishing `bid_invalid: late_arrival`
+		// once the auction has closed (`now > max_end_at`). Post-close, a fresh
+		// (unrecovered) `observed_at` is always outside the window, so any
+		// in-window bid observed for the first time post-close would derive
+		// `late_arrival`. But `late_arrival` (T2.3) only fires for bids whose
+		// own `created_at` IS in-window (T2.1/T2.2 already passed) — the
+		// validator simply saw it late, which is not grounds to CONDEMN a
+		// validly-placed bid. Publishing it would (a) feed a condemn the
+		// quorum-eligibility screen drops anyway (ADR-0003 §2.3), and (b)
+		// replace a surviving prior `valid_bid_placed` on the relay with a
+		// condemn. Suppressing keeps the prior verdict intact so the client
+		// still recognizes the winner; with no prior verdict the bid simply
+		// stays `pending` (correct — the validator can't attest to timing it
+		// didn't observe). Fix 1 (observed_at recovery) is the primary restart
+		// defense; this ensures that even when recovery misses a bid, a
+		// post-close restart never condemns an in-window bid. Pre-close
+		// `late_arrival` (observed before `start_at`) is left untouched.
+		if (verdict.claim === 'bid_invalid' && verdict.reason === 'late_arrival' && nowUnix > input.auctionState.auction.maxEndAt) {
 			return { verdict, published: false }
 		}
 

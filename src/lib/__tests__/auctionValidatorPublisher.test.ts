@@ -258,4 +258,83 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		expect(observedAtTag?.[1]).toBe(String(1_500))
 		expect(observedAtTag?.[1]).not.toBe(String(auction.maxEndAt + 10))
 	})
+
+	test('Fix 3: post-close late_arrival is suppressed (never condemns an in-window bid)', async () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+
+		// Simulate a restart: fresh in-memory state (currentClaim = null) with
+		// a re-stamped observed_at = post-close now. Without Fix 1 recovery,
+		// deriveVerdict produces bid_invalid: late_arrival.
+		const bid = buildBid(auction, { id: '3'.repeat(64), bidderPubkey: BIDDER_A, amount: 1_200, proofY: PROOF_Y_A })
+		const bidState = upsertBid(state, bid, auction.maxEndAt + 100)
+		if (!bidState) throw new Error('expected bid to upsert')
+		// currentClaim stays null (fresh memory); observed_at is post-close.
+		auctionState.closeHandled = false
+
+		let published = false
+		const publisher = createVerdictPublisher({
+			signer: {
+				getPublicKey: async () => VALIDATOR_PK,
+				signEvent: async (template: EventTemplate) => {
+					published = true
+					return { ...template, id: '9'.repeat(64), pubkey: VALIDATOR_PK, sig: 'a'.repeat(128) } as any
+				},
+			} as any,
+			relayPool: { publish: async () => {} } as any,
+			now: () => auction.maxEndAt + 100,
+		})
+
+		const result = await publisher.publishIfChanged({
+			auctionState,
+			bidState: bidState.bidState,
+			currentTopBid: bid.amount,
+		})
+
+		// Fix 3: the late_arrival condemn is suppressed — the relay keeps any
+		// surviving prior valid_bid_placed, and with no prior verdict the bid
+		// stays pending (never condemned). In-memory claim is unchanged.
+		expect(published).toBe(false)
+		expect(result.published).toBe(false)
+		expect(result.verdict.claim).toBe('bid_invalid')
+		expect(result.verdict.reason).toBe('late_arrival')
+		expect(bidState.bidState.currentClaim).toBeNull()
+	})
+
+	test('Fix 3: pre-close late_arrival is still published (not suppressed)', async () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+
+		// Bid observed before start_at (observed_at < startAt) while still
+		// pre-close (now <= maxEndAt) → late_arrival, which IS published.
+		const bid = buildBid(auction, { id: '4'.repeat(64), bidderPubkey: BIDDER_A, amount: 1_200, proofY: PROOF_Y_A })
+		const bidState = upsertBid(state, bid, auction.startAt - 50)
+		if (!bidState) throw new Error('expected bid to upsert')
+		auctionState.closeHandled = false
+
+		let published = false
+		const publisher = createVerdictPublisher({
+			signer: {
+				getPublicKey: async () => VALIDATOR_PK,
+				signEvent: async (template: EventTemplate) => {
+					published = true
+					return { ...template, id: '8'.repeat(64), pubkey: VALIDATOR_PK, sig: 'b'.repeat(128) } as any
+				},
+			} as any,
+			relayPool: { publish: async () => {} } as any,
+			now: () => auction.startAt + 10,
+		})
+
+		await publisher.publishIfChanged({
+			auctionState,
+			bidState: bidState.bidState,
+			currentTopBid: bid.amount,
+		})
+
+		expect(published).toBe(true)
+	})
 })
