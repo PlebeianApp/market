@@ -198,23 +198,6 @@ export function AuctionSettlement({
 		}
 	}
 
-	// Loading state
-	if (ended && !auction) {
-		return (
-			<Card className={cn('p-4', className)}>
-				<div className="flex items-start gap-3">
-					<div className="mt-0.5">
-						<AlertTriangle className="w-5 h-5 text-yellow-400" />
-					</div>
-					<div className="flex-1">
-						<h3 className="font-semibold text-foreground">Verifying…</h3>
-						<p className="text-sm text-foreground/80 mt-1">Validating settlement data.</p>
-					</div>
-				</div>
-			</Card>
-		)
-	}
-
 	const claimOrderEvents = useMemo(() => claimOrders, [claimOrders])
 
 	const nut7States = useNut7Polling(bids, auction.mints)

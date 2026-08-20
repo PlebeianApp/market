@@ -113,18 +113,6 @@ function isValidPathRelease(
 	return result.isValid
 }
 
-function isPathReleaseFullyValid(
-	auction: ParsedAuctionEvent,
-	bid: ParsedBidEvent,
-	release: ParsedPathReleaseEvent,
-	now: number,
-	postCloseDecision: 'winner' | 'loser' | null,
-	mintKeysets?: MintKeyset[],
-): boolean {
-	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
-	return result.isValid
-}
-
 type SettlementValidity = 'valid' | 'pending' | 'invalid'
 
 function isSettlementStructurallyValid(
@@ -175,7 +163,7 @@ function isSettlementStructurallyValid(
 	// No matching release yet → may not have arrived
 	if (!matchingRelease) return 'pending'
 
-	if (!isPathReleaseFullyValid(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return 'invalid'
+	if (!isValidPathRelease(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return 'invalid'
 
 	// Build the bid chain by walking prevBidId links from the top bid.
 	// This lets validateSettlementCompleteness know about all legs so it
