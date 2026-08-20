@@ -179,8 +179,13 @@ export function DepositLightningModal({
 		if (depositStatus !== 'error') return
 		if (failureNotifiedRef.current) return
 		failureNotifiedRef.current = true
-		onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
-	}, [depositStatus, onFundingFailed])
+		// NWC: paymentAcknowledgedRef tells us whether the invoice was actually
+		// sent/paid. QR: we can't observe the external wallet's payment, so lean
+		// toward "paid but mint failed" rather than stranding a paid user's sats
+		// behind an "invoice unpaid/expired" message that implies nothing was paid.
+		const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
+		onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
+	}, [depositStatus, onFundingFailed, nwcPaymentAttempted])
 
 	useEffect(() => {
 		if (depositStatus !== 'success') {

@@ -119,7 +119,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run E2E tests
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only'
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Auction Bidding'
 
       - name: Show server logs on failure
         if: failure()
@@ -254,7 +254,7 @@ jobs:
           if [ -n "$TEST_GREP" ]; then
             bun run test:e2e -- --grep "$TEST_GREP"
           else
-            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management'
+            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Auction Bidding|Collection Management'
           fi
 
       - name: Show server logs on failure

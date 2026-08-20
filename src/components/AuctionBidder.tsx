@@ -34,7 +34,7 @@ import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auct
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
 import { formatAuctionCountdownDetailed } from '@/lib/auctionCountdownLabels'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
@@ -271,6 +271,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const confirmDeltaAmount = Math.max(0, (Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : 0) - previousBidAmount)
 	const confirmMintBalance = confirmBidMint ? (confirmMintOptions.find((m) => m.mintUrl === confirmBidMint)?.balance ?? 0) : 0
 	const confirmTopUpNeeded = Math.max(0, confirmDeltaAmount - confirmMintBalance)
+	// The confirm dialog must not accept a bid below the live floor (minBid), which
+	// already tracks the anti-snipe curve + current price. The floor-bump effect below
+	// only reacts to open/minBid changes, not user edits, so gate the Confirm button
+	// and re-validate in handleConfirmBid on this value.
+	const confirmAmountIsBelowFloor = !Number.isFinite(confirmParsedAmount) || confirmParsedAmount < minBid
 	const refundLocktimeTs = biddingCutoffAt + getAuctionSettlementGrace(auction)
 
 	// When the confirm dialog is open and the min bid rises (anti-snipe
@@ -471,6 +476,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const handleConfirmBid = async () => {
 		if (!pendingBidData || !confirmBidMint) return
+		// Re-validate the live floor in case the user edited the confirm amount
+		// below minBid after the floor-bump effect ran (that effect only reacts to
+		// open/minBid changes). Mirrors the check in prepareBidSubmission.
+		if (!Number.isFinite(confirmParsedAmount) || confirmParsedAmount < minBid) {
+			toast.error(
+				hasPriorBids
+					? `Minimum raise is ${bidStep.toLocaleString()} sats; bid at least ${minBid.toLocaleString()} sats`
+					: `Minimum bid is ${minBid.toLocaleString()} sats`,
+			)
+			return
+		}
 		setIsConfirmBidDialogOpen(false)
 
 		// Compute funding parameters from the confirm dialog's own state
@@ -508,7 +524,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const handleBidAmountInputPaste = (event: ClipboardEvent<HTMLInputElement>) => {
 		event.preventDefault()
-		const pasted = event.clipboardData?.getData('text') ?? ''
+		// Strip non-digits so pasting "1,000" or "1000 sats" doesn't collapse to
+		// parseInt("1,000") === 1. The number input sanitizes typed input, but paste
+		// bypasses that path.
+		const pasted = (event.clipboardData?.getData('text') ?? '').replace(/[^\d]/g, '')
 		setHasStartedEditingBidAmount(true)
 		setBidAmountInput(pasted)
 	}
@@ -747,7 +766,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
 							Cancel
 						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || !confirmBidMint}>
+						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || !confirmBidMint || confirmAmountIsBelowFloor}>
 							{bidMutation.isPending ? 'Submitting...' : 'Confirm Bid'}
 						</Button>
 					</DialogFooter>
