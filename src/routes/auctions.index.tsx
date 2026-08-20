@@ -1,5 +1,6 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionFilters } from '@/components/AuctionFilters'
+import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,9 +14,12 @@ import {
 	auctionsQueryOptions,
 	filterNSFWAuctions,
 	getAuctionCategories,
+	getAuctionId,
 	getAuctionImages,
 	getAuctionRootEventId,
 	getAuctionTitle,
+	auctionsByPubkeyQueryOptions,
+	useAuctionBidsByBidder,
 	useAuctionBidsForList,
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
@@ -76,6 +80,7 @@ function AuctionsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)
+	const { user: currentUser } = useStore(authStore)
 	const { showNSFWContent } = useStore(uiStore)
 	const [filters, setFilters] = useState<AuctionFilterState>(defaultAuctionFilters)
 
@@ -90,6 +95,34 @@ function AuctionsRoute() {
 
 	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
+
+	// Your Auctions — auctions created by the current user
+	const userPubkey = currentUser?.pubkey
+	const myAuctionsQuery = useQuery({
+		...auctionsByPubkeyQueryOptions(userPubkey || '', 50),
+		enabled: !!userPubkey,
+	})
+	const myAuctions = filterNSFWAuctions((myAuctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
+
+	// Previously Bid — auctions the user has bid on
+	const myBidsQuery = useAuctionBidsByBidder(userPubkey || '', 500)
+	const myBidAuctionIds = useMemo(() => {
+		if (!myBidsQuery.data?.length) return new Set<string>()
+		const ids = new Set<string>()
+		for (const bid of myBidsQuery.data) {
+			// Bid events reference their auction via the `e` tag (auction root event id).
+			const auctionId = bid.tags?.find((t) => t[0] === 'e')?.[1] || ''
+			if (auctionId) ids.add(auctionId)
+		}
+		return ids
+	}, [myBidsQuery.data])
+	const previouslyBidAuctions = useMemo(() => {
+		if (!myBidAuctionIds.size) return []
+		return auctions.filter((a) => {
+			const id = getAuctionRootEventId(a) || a.id
+			return id && myBidAuctionIds.has(id) && !(userPubkey && a.pubkey === userPubkey)
+		})
+	}, [auctions, myBidAuctionIds, userPubkey])
 
 	const { data: config } = useConfigQuery()
 	const { data: featuredAuctionsData } = useFeaturedAuctions(config?.appPublicKey || '')
@@ -283,6 +316,28 @@ function AuctionsRoute() {
 						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 					</div>
 					<div className="hero-content">{renderAuctionHero()}</div>
+				</div>
+			)}
+
+			{isAuthenticated && userPubkey && (myAuctions.length > 0 || myAuctionsQuery.isLoading) && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid
+						title="Your Auctions"
+						auctions={myAuctions}
+						loading={myAuctionsQuery.isLoading}
+						bidsByAuctionId={bidsByAuctionId}
+					/>
+				</div>
+			)}
+
+			{isAuthenticated && userPubkey && (previouslyBidAuctions.length > 0 || myBidsQuery.isLoading) && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid
+						title="You Previously Bid"
+						auctions={previouslyBidAuctions}
+						loading={myBidsQuery.isLoading}
+						bidsByAuctionId={bidsByAuctionId}
+					/>
 				</div>
 			)}
 
