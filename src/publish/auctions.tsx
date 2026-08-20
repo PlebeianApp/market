@@ -1039,6 +1039,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			auction: parsedAuction,
 			bids: rnmParsedBids,
 			verdicts: rnmParsedVerdicts,
+			postSettlement: false,
 		})
 
 		if (rnmValidated.canonicalWinner && rnmValidated.canonicalWinner.amount >= parsedAuction.reserve) {
@@ -1090,6 +1091,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		auction: parsedAuction,
 		bids: parsedBids,
 		verdicts: parsedVerdicts,
+		postSettlement: false,
 	})
 
 	if (!validatedBids.canonicalWinner) {

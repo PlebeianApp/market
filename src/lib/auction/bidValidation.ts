@@ -30,6 +30,14 @@ export interface ComputeValidatedBidsInput {
 	 * keyed by bid event id. When absent, bids fall back to `bid_pending_review`.
 	 */
 	nut7States?: Map<string, Nut7ProofState>
+	/**
+	 * Whether a structurally-valid `settled` settlement already exists for this
+	 * auction. When true, a NUT-7 `spent` state on an ended auction is treated
+	 * as 'seller already redeemed' (expected) and remapped to `unspent`; when
+	 * false, `spent` is preserved so validateBid flags the bid as `proof_spent`
+	 * (pre-settlement double-spend fraud). Defaults to false.
+	 */
+	postSettlement?: boolean
 }
 
 function classifyBid(
@@ -37,6 +45,7 @@ function classifyBid(
 	auction: ParsedAuctionEvent,
 	verdicts: ParsedValidatorVerdictEvent[],
 	nut7States?: Map<string, Nut7ProofState>,
+	postSettlement = false,
 ): ClassifiedBid {
 	const confirmingVerdicts = verdicts.filter((v) => v.bidEventId === bid.id && auction.auditors.includes(v.validatorPubkey))
 
@@ -80,16 +89,15 @@ function classifyBid(
 		// doesn't poll the mint before winner determination; the NUT-7 atomicity
 		// pre-check runs later, just before redemption.
 		//
-		// TODO(#11): the current `spent → unspent` remap also masks a genuine
-		// pre-settlement double-spend (a last-second bidder who spends their
-		// proofs behind the lock is presented to viewers/auditors as the valid
-		// canonical winner). The correct fix must be settlement-aware: only
-		// remap `spent` when a valid `settled` settlement exists (seller already
-		// redeemed), otherwise preserve `spent` so validateBid flags proof_spent.
-		// That requires threading a `postSettlement` flag into computeValidatedBids.
+		// Settlement-aware NUT-7 spend masking (#11): `spent` is fraud before
+		// the seller settles (a bidder who drains their locked proofs behind the
+		// lock must not surface as the canonical winner), but is the expected
+		// 'seller already redeemed' state once a valid `settled` settlement
+		// exists. Remap `spent → unspent` only when postSettlement is true;
+		// otherwise preserve `spent` so validateBid flags proof_spent.
 		const ended = auction.maxEndAt > 0 && observedAt >= auction.maxEndAt
 		const adjustedNut7State = ended
-			? nut7State === 'spent' || nut7State == null || nut7State === 'unknown'
+			? nut7State == null || nut7State === 'unknown' || (postSettlement && nut7State === 'spent')
 				? 'unspent'
 				: nut7State
 			: nut7State
@@ -226,7 +234,8 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	}
 
 	// Step 2: Classify each bid based on validator quorum (using augmented verdicts).
-	const classified = bids.map((bid) => classifyBid(bid, auction, augmentedVerdicts, nut7States))
+	const postSettlement = input.postSettlement ?? false
+	const classified = bids.map((bid) => classifyBid(bid, auction, augmentedVerdicts, nut7States, postSettlement))
 
 	// M5 FIX: Cross-bid dedup check at parse/classification time.
 	// Two different bids in the same auction must not share the same

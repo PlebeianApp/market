@@ -283,12 +283,25 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	const ended = biddingCutoffAt > 0 && now >= biddingCutoffAt
 	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
 
+	// Settlement-aware NUT-7 spend masking (#11): `spent` is fraud before the
+	// seller settles, but 'seller already redeemed' after a valid `settled`
+	// settlement exists. Only treat `spent` as benign when a structurally-valid
+	// `settled` settlement is present (correct seller + auction refs).
+	const hasSettledSettlement = rawSettlements.some(
+		(s) =>
+			s.status === 'settled' &&
+			s.sellerPubkey.toLowerCase() === auction.sellerPubkey.toLowerCase() &&
+			s.auctionRootEventId === auction.rootEventId &&
+			s.auctionCoordinate === auction.coordinate,
+	)
+
 	// 1. Compute validated bids using quorum + structural validation.
 	const validatedBidSet = computeValidatedBids({
 		auction,
 		bids,
 		verdicts,
 		nut7States: input.nut7States,
+		postSettlement: hasSettledSettlement,
 	})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
@@ -475,12 +488,25 @@ function sats(amount: number): string {
 }
 
 export async function getSettlementDescriptor(input: GetSettlementDescriptorInput): Promise<SettlementDescriptor | null> {
+	// Settlement-aware NUT-7 spend masking (#11): `spent` is fraud before the
+	// seller settles, but 'seller already redeemed' after a valid `settled`
+	// settlement exists. Only treat `spent` as benign when a structurally-valid
+	// `settled` settlement is present (correct seller + auction refs).
+	const hasSettledSettlement = input.settlements.some(
+		(s) =>
+			s.status === 'settled' &&
+			s.sellerPubkey.toLowerCase() === input.auction.sellerPubkey.toLowerCase() &&
+			s.auctionRootEventId === input.auction.rootEventId &&
+			s.auctionCoordinate === input.auction.coordinate,
+	)
+
 	// Compute validated bids early so we can fetch keysets for the canonical winner.
 	const preValidated = computeValidatedBids({
 		auction: input.auction,
 		bids: input.bids,
 		verdicts: input.verdicts,
 		nut7States: input.nut7States,
+		postSettlement: hasSettledSettlement,
 	})
 	const winnerBid = preValidated.canonicalWinner
 	const mintKeysets = winnerBid ? await fetchMintKeysets(winnerBid.mint) : undefined

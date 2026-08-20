@@ -749,6 +749,51 @@ describe('getSettlementDescriptor', () => {
 		})
 	})
 
+	describe('NUT-7 double-spend masking', () => {
+		test('spent bid with no settled settlement is excluded from canonical winner (pre-settlement double-spend)', async () => {
+			const topBid = makeBid({ amount: 50000 })
+			const d = await getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 40000 }),
+					bids: [topBid],
+					verdicts: [verdictForBid(topBid.id)],
+					nut7States: spentNut7States([topBid]),
+					currentUserPubkey: SELLER_PUBKEY,
+					now: 120,
+				}),
+			)
+			// Without a `settled` settlement, `spent` is pre-settlement fraud: the
+			// bid is rejected as proof_spent and does not surface as the canonical
+			// winner. The seller sees 'Reserve Not Met' (no reserve-meeting valid
+			// bid) instead of 'Awaiting Path Release' / 'Settlement Ready'.
+			expect(d?.title).toBe('Reserve Not Met')
+			expect(d?.cta?.kind).toBe('close-auction')
+		})
+
+		test('spent bid with a settled settlement is still treated as redeemed (post-settlement)', async () => {
+			const d = await getSettlementDescriptor(
+				winningBidInput({
+					currentUserPubkey: SELLER_PUBKEY,
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
+					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
+					nut7States: spentNut7States([winningBid]),
+					now: 120,
+				}),
+			)
+			// With a valid `settled` settlement, `spent` is the expected
+			// 'seller already redeemed' state and the bid stays the canonical winner.
+			expect(d?.title).toBe('Awaiting Shipping Details')
+		})
+	})
+
 	describe('role exhaustiveness', () => {
 		const roles: SettlementParticipantRole[] = ['seller', 'winning-bidder', 'outbid-bidder', 'non-participant']
 

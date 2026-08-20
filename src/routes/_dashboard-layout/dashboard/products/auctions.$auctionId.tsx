@@ -293,11 +293,28 @@ function DashboardAuctionDetailRoute() {
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
+		// Settlement-aware NUT-7 spend masking (#11): `spent` is fraud before the
+		// seller settles, but 'seller already redeemed' after a valid `settled`
+		// settlement exists. Only treat `spent` as benign when a structurally-valid
+		// `settled` settlement is present (correct seller + auction refs).
+		const hasSettledSettlement = settlements.some((s) => {
+			const parsedResult = parseSettlementEvent(s.rawEvent())
+			if (!parsedResult.ok) return false
+			const parsed = parsedResult.value
+			return (
+				parsed.status === 'settled' &&
+				parsed.sellerPubkey.toLowerCase() === parsedAuction.sellerPubkey.toLowerCase() &&
+				parsed.auctionRootEventId === parsedAuction.rootEventId &&
+				parsed.auctionCoordinate === parsedAuction.coordinate
+			)
+		})
+
 		// Compute validated bids using quorum evidence.
 		const validatedBidSet = computeValidatedBids({
 			auction: parsedAuction,
 			bids: parsedBids,
 			verdicts: parsedVerdicts,
+			postSettlement: hasSettledSettlement,
 		})
 		const validatedBidderPubkeys = new Set(validatedBidSet.validBids.map((b) => b.bidderPubkey.toLowerCase()))
 		const hasReserveMeetingBid = validatedBidSet.validBids.some((b) => b.amount >= parsedAuction.reserve)
