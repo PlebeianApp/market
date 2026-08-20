@@ -636,7 +636,7 @@ export async function seedAuction(
 			['starting_bid', String(startingBid), 'SAT'],
 			['bid_increment', String(bidIncrement)],
 			['reserve', String(reserve)],
-			['mint', 'https://nofees.testnut.cashu.space'],
+			['mint', 'http://localhost:3338'],
 			['escrow_pubkey', '02' + '00'.repeat(32)],
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', 'xpub' + '0'.repeat(100)],
