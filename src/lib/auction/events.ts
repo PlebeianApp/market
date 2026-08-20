@@ -244,6 +244,23 @@ export interface ParsedSettlementEvent {
 	reason?: string
 }
 
+/**
+ * Structural `settled`-validity check shared by every consumer that needs to
+ * ask "does a structurally-valid settled settlement exist for this auction?"
+ * — the descriptor, the dashboard route, and the settlement publisher all
+ * used to copy-paste this predicate, which was a drift vector. Structural
+ * only (seller + auction refs): deeper completeness validation happens on
+ * the read path. A garbage third-party kind-1024 must NOT satisfy this.
+ */
+export const isStructurallyValidSettledSettlement = (
+	s: { status: string; sellerPubkey: string; auctionRootEventId: string; auctionCoordinate: string },
+	auction: { sellerPubkey: string; rootEventId: string; coordinate: string },
+): boolean =>
+	s.status === 'settled' &&
+	s.sellerPubkey.toLowerCase() === auction.sellerPubkey.toLowerCase() &&
+	s.auctionRootEventId === auction.rootEventId &&
+	s.auctionCoordinate === auction.coordinate
+
 // =========================================================================
 // kind 1026 — Fallback offer (seller-signed, optional) — §8.3
 // =========================================================================

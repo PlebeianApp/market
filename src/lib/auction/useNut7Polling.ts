@@ -74,12 +74,22 @@ export function useNut7Polling(
 							if (aggregate) newStates.set(bidId, aggregate)
 						}
 					} catch {
-						// Network error — leave these bids without NUT-7 state
+						// Mint unreachable/erroring this cycle: previously observed
+						// states for these bids are STALE, not current. Downgrade to
+						// 'unknown' rather than keeping a pre-outage 'unspent' as
+						// fake-current evidence (freshness is part of the payment-state
+						// boundary — NUT-7 can flip spent before a path release).
+						for (const { bidId } of bidEntries) {
+							newStates.set(bidId, 'unknown')
+						}
 					}
 				}),
 			)
 
-			if (!cancelled && newStates.size > 0) {
+			// Always replace the map: bids whose mints failed are 'unknown'
+			// (not silently retained), and bids that vanished from the input
+			// drop out. The freshness bound is one poll interval.
+			if (!cancelled) {
 				setNut7States(newStates)
 			}
 		}

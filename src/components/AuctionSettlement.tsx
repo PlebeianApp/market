@@ -130,7 +130,11 @@ export function AuctionSettlement({
 			// Optimistic UI: append synthetic release so the descriptor transitions
 			// immediately to 'Path release published' (ADR-0004 Decision 4).
 			if (!optimisticReleaseRef.current) {
-				const synthetic: ParsedPathReleaseEvent = {
+				// Marked synthetic via an explicit flag — NOT via a forgeable
+				// `optimistic-` id prefix (relay-sourced ids aren't
+				// signature/hash-verified in this pipeline, so an attacker could
+				// forge the prefix and bypass isValidPathRelease).
+				const synthetic = {
 					rawEvent: { id: 'optimistic', pubkey: currentUserPubkey!, kind: 1025, tags: [], content: '' },
 					id: 'optimistic-' + myTopBidEvent.id,
 					bidderPubkey: currentUserPubkey!,
@@ -140,10 +144,11 @@ export function AuctionSettlement({
 					sellerPubkey: auction.sellerPubkey,
 					derivationPath: '',
 					childPubkey: '',
-					releaseReason: 'settlement',
+					releaseReason: 'settlement' as const,
 					auditorRefs: [],
 					content: '',
-				}
+					synthetic: true,
+				} satisfies ParsedPathReleaseEvent & { synthetic: boolean }
 				optimisticReleaseRef.current = synthetic
 				setOptimisticRelease(synthetic)
 			}
@@ -198,8 +203,6 @@ export function AuctionSettlement({
 		}
 	}
 
-	const claimOrderEvents = useMemo(() => claimOrders, [claimOrders])
-
 	const nut7States = useNut7Polling(bids, auction.mints)
 
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
@@ -210,7 +213,7 @@ export function AuctionSettlement({
 			nut7States,
 			settlements,
 			pathReleases: pathReleasesForDescriptor,
-			claimOrders: claimOrderEvents,
+			claimOrders,
 			currentUserPubkey: currentUserPubkey || undefined,
 			myTopBidEvent,
 			hasBidderRecord: !!myBidderRecord,
@@ -224,7 +227,7 @@ export function AuctionSettlement({
 			nut7States,
 			settlements,
 			pathReleasesForDescriptor,
-			claimOrderEvents,
+			claimOrders,
 			currentUserPubkey,
 			myTopBidEvent,
 			myBidderRecord,

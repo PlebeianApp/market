@@ -1,3 +1,4 @@
+import { isStructurallyValidSettledSettlement } from './events'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,
@@ -265,7 +266,13 @@ function validateClaimOrder(
 	return true
 }
 
-function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeyset[]): DerivedState {
+function deriveState(
+	input: GetSettlementDescriptorInput,
+	mintKeysets?: MintKeyset[],
+	// Optional pre-computed validated-bid set — getSettlementDescriptor
+	// computes it once and passes it in instead of re-computing.
+	preValidated?: import('./bidValidation').ValidatedBidSet,
+): DerivedState {
 	const {
 		auction,
 		bids,
@@ -287,22 +294,27 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	// seller settles, but 'seller already redeemed' after a valid `settled`
 	// settlement exists. Only treat `spent` as benign when a structurally-valid
 	// `settled` settlement is present (correct seller + auction refs).
-	const hasSettledSettlement = rawSettlements.some(
-		(s) =>
-			s.status === 'settled' &&
-			s.sellerPubkey.toLowerCase() === auction.sellerPubkey.toLowerCase() &&
-			s.auctionRootEventId === auction.rootEventId &&
-			s.auctionCoordinate === auction.coordinate,
-	)
+	const settledBidIds = new Set<string>()
+	for (const s of rawSettlements) {
+		if (!isStructurallyValidSettledSettlement(s, auction)) continue
+		if (s.winningBidId) settledBidIds.add(s.winningBidId)
+		for (const p of s.payouts ?? []) settledBidIds.add(p.bidEventId)
+	}
+	const hasSettledSettlement = settledBidIds.size > 0
 
-	// 1. Compute validated bids using quorum + structural validation.
-	const validatedBidSet = computeValidatedBids({
-		auction,
-		bids,
-		verdicts,
-		nut7States: input.nut7States,
-		postSettlement: hasSettledSettlement,
-	})
+	// 1. Validated bids — reuse the caller's pre-computed set when provided
+	// (avoids a duplicate validation pass per descriptor invocation, which
+	// this view re-runs on every ticking `now` update).
+	const validatedBidSet =
+		preValidated ??
+		computeValidatedBids({
+			auction,
+			bids,
+			verdicts,
+			nut7States: input.nut7States,
+			postSettlement: hasSettledSettlement,
+			settledBidIds,
+		})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
 
@@ -335,13 +347,16 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	// proofs, which won't match the top bid (leg 2) — that's expected.
 	const pathReleases = topBid
 		? rawPathReleases.filter((pr) => {
-				// Optimistic UI (ADR-0004 Decision 4): a locally-synthesized release
-				// is id-prefixed `optimistic-` and has an empty derivation path /
-				// child pubkey until the relay refetch, so structural validation
-				// would reject it. It originates from the current user's own publish
-				// action, so skip validation for it — otherwise `myAlreadyReleased`
-				// stays false and the UI does not flip to 'Path release published'.
-				if (pr.id.startsWith('optimistic-')) return true
+				// Optimistic UI (ADR-0004 Decision 4): a locally-synthesized
+				// release is marked `synthetic: true` by the component that
+				// constructs it (an explicit, non-forgeable flag — relay-sourced
+				// ids are NOT trusted for this, since they aren't
+				// signature/hash-verified in this fetch pipeline and an attacker
+				// could forge an id prefix). It originates from the current
+				// user's own publish action, so skip validation for it —
+				// otherwise `myAlreadyReleased` stays false and the UI does not
+				// flip to 'Path release published'.
+				if ((pr as { synthetic?: boolean }).synthetic === true) return true
 				const matchingBid = validatedBids.find((b) => b.id === pr.bidEventId)
 				const bidToValidate = matchingBid ?? topBid
 				const result = isValidPathRelease(auction, bidToValidate, pr, now, postCloseDecision, mintKeysets)
@@ -492,13 +507,13 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 	// seller settles, but 'seller already redeemed' after a valid `settled`
 	// settlement exists. Only treat `spent` as benign when a structurally-valid
 	// `settled` settlement is present (correct seller + auction refs).
-	const hasSettledSettlement = input.settlements.some(
-		(s) =>
-			s.status === 'settled' &&
-			s.sellerPubkey.toLowerCase() === input.auction.sellerPubkey.toLowerCase() &&
-			s.auctionRootEventId === input.auction.rootEventId &&
-			s.auctionCoordinate === input.auction.coordinate,
-	)
+	const settledBidIds = new Set<string>()
+	for (const s of input.settlements) {
+		if (!isStructurallyValidSettledSettlement(s, input.auction)) continue
+		if (s.winningBidId) settledBidIds.add(s.winningBidId)
+		for (const p of s.payouts ?? []) settledBidIds.add(p.bidEventId)
+	}
+	const hasSettledSettlement = settledBidIds.size > 0
 
 	// Compute validated bids early so we can fetch keysets for the canonical winner.
 	const preValidated = computeValidatedBids({
@@ -507,10 +522,11 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 		verdicts: input.verdicts,
 		nut7States: input.nut7States,
 		postSettlement: hasSettledSettlement,
+		settledBidIds,
 	})
 	const winnerBid = preValidated.canonicalWinner
 	const mintKeysets = winnerBid ? await fetchMintKeysets(winnerBid.mint) : undefined
-	const d = deriveState(input, mintKeysets)
+	const d = deriveState(input, mintKeysets, preValidated)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)
 	const { auction, myTopBidEvent, hasBidderRecord, hasPlacedBid } = input

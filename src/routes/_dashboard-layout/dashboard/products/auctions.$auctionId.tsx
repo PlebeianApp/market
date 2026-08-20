@@ -17,6 +17,8 @@ import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
+import { useNut7Polling } from '@/lib/auction/useNut7Polling'
 import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { auctionKeys } from '@/queries/queryKeyFactory'
@@ -252,6 +254,10 @@ function DashboardAuctionDetailRoute() {
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
+	// Client-side NUT-7 evidence (ADR-0004 §3): winner derivation needs
+	// mint-reported proof states; without them every quorum-confirmed bid
+	// stays bid_pending_review and settled settlements fail Check 3 below.
+	const nut7States = useNut7Polling(bids, trustedMints)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const now = countdown.now
@@ -297,24 +303,24 @@ function DashboardAuctionDetailRoute() {
 		// seller settles, but 'seller already redeemed' after a valid `settled`
 		// settlement exists. Only treat `spent` as benign when a structurally-valid
 		// `settled` settlement is present (correct seller + auction refs).
-		const hasSettledSettlement = settlements.some((s) => {
+		const settledBidIds = new Set<string>()
+		for (const s of settlements) {
 			const parsedResult = parseSettlementEvent(s.rawEvent())
-			if (!parsedResult.ok) return false
-			const parsed = parsedResult.value
-			return (
-				parsed.status === 'settled' &&
-				parsed.sellerPubkey.toLowerCase() === parsedAuction.sellerPubkey.toLowerCase() &&
-				parsed.auctionRootEventId === parsedAuction.rootEventId &&
-				parsed.auctionCoordinate === parsedAuction.coordinate
-			)
-		})
+			if (!parsedResult.ok) continue
+			if (!isStructurallyValidSettledSettlement(parsedResult.value, parsedAuction)) continue
+			if (parsedResult.value.winningBidId) settledBidIds.add(parsedResult.value.winningBidId)
+			for (const p of parsedResult.value.payouts ?? []) settledBidIds.add(p.bidEventId)
+		}
+		const hasSettledSettlement = settledBidIds.size > 0
 
 		// Compute validated bids using quorum evidence.
 		const validatedBidSet = computeValidatedBids({
 			auction: parsedAuction,
 			bids: parsedBids,
 			verdicts: parsedVerdicts,
+			nut7States,
 			postSettlement: hasSettledSettlement,
+			settledBidIds,
 		})
 		const validatedBidderPubkeys = new Set(validatedBidSet.validBids.map((b) => b.bidderPubkey.toLowerCase()))
 		const hasReserveMeetingBid = validatedBidSet.validBids.some((b) => b.amount >= parsedAuction.reserve)

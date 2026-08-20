@@ -12,6 +12,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
+import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
@@ -776,62 +777,24 @@ export const publishBidderPathRelease = async (
 			}
 		}
 	} catch (err) {
-		// M2 FIX: Fail CLOSED on non-quorum errors. The original code warned
-		// and continued, allowing path release without quorum verification
-		// when relays were unreachable — a fail-open vulnerability.
-		//
-		// Quorum-check failures (explicit throw above) are re-thrown.
-		// For network/parse errors we refuse, EXCEPT for the post-close
-		// release path below: after the auction ends the bidder's proofs
-		// are time-locked until settlement_grace expires, so a late release
-		// cannot grief the protocol. Before close we must verify quorum.
+		// Quorum verification is a hard gate for path release (M2): the
+		// release exposes the bidder's derivation path + locked Cashu token,
+		// and once published the seller can derive the child key and redeem
+		// the proofs directly at the mint — bypassing every downstream
+		// canonical-winner check in the settlement publisher. Authorization
+		// unavailable ≠ authorization granted: ANY failure to positively
+		// establish the canonical auction + won_pending_settlement quorum
+		// (network error, parse error, auction lookup failure) keeps the
+		// gate CLOSED. There is no post-close exception — a winner whose
+		// relays are unreachable waits and retries, and retains the
+		// locktime refund branch as the safe fallback.
 		if (err instanceof Error && err.message.includes('quorum requires')) throw err
 
-		// Determine whether the post-close exception applies: the auction
-		// has ended (now >= maxEndAt) AND no valid `settled` settlement
-		// exists. Both conditions must be positively established from relay
-		// state; any failure keeps the gate closed (fail closed).
-		let postCloseReleaseAllowed = false
-		try {
-			const [
-				{ fetchAuction: fetchAuctionRetry },
-				{ parseAuctionEvent: parseAuctionEventRetry },
-				{ fetchAuctionSettlements },
-				{ parseSettlementEvent },
-			] = await Promise.all([
-				import('@/queries/auctions'),
-				import('@/lib/schemas/auction/auctionEvent'),
-				import('@/queries/auctions'),
-				import('@/lib/schemas/auction/settlementEvents'),
-			])
-			const auctionEventRetry = await fetchAuctionRetry(latestLeg.auctionRootEventId)
-			const parsedRetry = auctionEventRetry ? parseAuctionEventRetry(auctionEventRetry.rawEvent()) : null
-			if (parsedRetry?.ok) {
-				const auction = parsedRetry.value
-				const now = Math.floor(Date.now() / 1000)
-				if (now >= auction.maxEndAt) {
-					const settlements = await fetchAuctionSettlements(latestLeg.auctionRootEventId, 100, latestLeg.auctionCoordinate)
-					const hasSettled = settlements.some((s) => {
-						const parsed = parseSettlementEvent(s.rawEvent())
-						return parsed.ok && parsed.value.status === 'settled'
-					})
-					postCloseReleaseAllowed = !hasSettled
-				}
-			}
-		} catch {
-			// Could not re-establish auction/settlement state — keep the gate closed.
-			postCloseReleaseAllowed = false
-		}
-
-		if (!postCloseReleaseAllowed) {
-			console.warn('Path release quorum check failed (non-quorum error):', err)
-			throw new Error(
-				'Cannot release path: quorum verification failed due to a network or parse error. ' +
-					'The quorum gate must succeed before releasing locked proofs. ' +
-					'Please retry when relays are available.',
-			)
-		}
-		console.warn('Path release quorum check failed, but the auction has ended with no settled settlement — allowing late release.', err)
+		throw new Error(
+			'Cannot release path: quorum verification failed due to a network or parse error. ' +
+				'The quorum gate must succeed before releasing locked proofs. ' +
+				'Please retry when relays are available.',
+		)
 	}
 
 	const releaseReason: PathReleaseReason = input.releaseReason ?? 'settlement'
@@ -1095,13 +1058,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		const hasSettledSettlement = existingSettlements.some((s) => {
 			const parsed = parseSettlementEvent(s.rawEvent())
 			if (!parsed.ok) return false
-			const v = parsed.value
-			return (
-				v.status === 'settled' &&
-				v.sellerPubkey.toLowerCase() === sellerPubkey.toLowerCase() &&
-				v.auctionRootEventId === auctionRootEventId &&
-				v.auctionCoordinate === auctionCoordinate
-			)
+			return isStructurallyValidSettledSettlement(parsed.value, parsedAuction)
 		})
 		if (hasSettledSettlement) {
 			throw new Error('Cannot publish reserve_not_met: a settled settlement already exists for this auction.')
@@ -1413,9 +1370,18 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			if (states.get(proofY.toLowerCase()) === 'spent') spentCount++
 		}
 		if (spentCount === totalProofs) {
-			// All proofs spent — this leg was already redeemed (likely in a
-			// previous settlement attempt that crashed after this leg).
-			alreadyRedeemedLegs.add(leg.bid.id)
+			// All proofs spent — but bare SPENT proves consumption, not WHO
+			// consumed them. Pre-locktime only the seller's lock key (child
+			// privkey from the auction xpriv + this leg's path) can spend, so
+			// all-spent pre-locktime IS seller-bound redemption evidence
+			// ('already redeemed', e.g. a previous settlement attempt that
+			// crashed after this leg). Post-locktime the bidder's refund path
+			// is also open — then all-spent stays ambiguous and the leg must
+			// be redeemed (the mint answers 'already spent' only if the
+			// bidder refunded; see recovery in the receive loop below).
+			if (now < legBid.locktime) {
+				alreadyRedeemedLegs.add(leg.bid.id)
+			}
 		} else if (spentCount > 0) {
 			// Some but not all proofs spent — early-exit fraud or partial
 			// spend. Abort the entire settlement.

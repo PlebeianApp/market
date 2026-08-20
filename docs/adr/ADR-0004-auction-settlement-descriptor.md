@@ -232,6 +232,19 @@ NUT-7 proof state verification moves from validators to the client.
 >    polled (they cannot win; polling attacker-supplied mint URLs would turn
 >    the client into a beacon). Unreachable mints leave their bids `unknown`
 >    → `pending`, which is the safe failure mode.
+>
+> **Amendment (2026-08-20): freshness + bare-SPENT attribution boundaries.**
+>
+> 4. **Freshness**: `useNut7Polling` marks bids whose mint failed a refresh
+>    cycle as `unknown` and always replaces the state map — a previously
+>    observed `unspent` must not survive a mint outage as fake-current
+>    evidence. The freshness bound is one poll interval (60 s).
+> 5. **Bare `SPENT` proves consumption, not the consumer.** In the
+>    settlement publisher's resumable-redemption skip, all-spent legs count
+>    as 'already redeemed' ONLY while pre-locktime (only the seller's lock
+>    key can spend pre-locktime; post-locktime the bidder's refund path
+>    also consumes, so all-spent stays ambiguous and redemption is
+>    re-attempted).
 
 ### 4. Publish-layer self-verification (amendment)
 
@@ -306,6 +319,22 @@ Both the settlement descriptor and the publishers call the same pure function
 to determine bid validity and canonical winner. This is defense-in-depth: if
 one module has a bug, the other catches it. The function is pure (no React,
 no DOM, no side effects) and reusable.
+
+> **Amendment (2026-08-20): publisher stamping + path gate + scoped
+> interpretation.** Validators MUST stamp `observed_at` with their first
+> observation of the bid (now enforced in the verdict publisher, not just
+> assumed) so upgrade verdicts survive the client-side eligibility screen.
+> Path release now FAILS CLOSED unconditionally when the
+> `won_pending_settlement` quorum cannot be positively established — the
+> post-close exception is removed, since a published path lets the seller
+> redeem locked proofs at the mint directly, bypassing every downstream
+> canonical-winner check. `settledBidIds` scopes the post-settlement
+> `proof_spent` interpretation to the bids recorded in the `settled`
+> settlement (winning_bid + payout legs), so a drained non-settlement bid
+> cannot displace the real winner. Condemn claims pass the same
+> eligibility screen as confirms. The `hasSettled` structural predicate is
+> centralized in `isStructurallyValidSettledSettlement`
+> (`src/lib/auction/events.ts`) — one definition, no 4× copy-paste drift.
 
 > **Amendment (2026-08): quorum-eligibility and truthful evidence.**
 > `computeValidatedBids` consumes kind-30440 verdicts with a per-verdict

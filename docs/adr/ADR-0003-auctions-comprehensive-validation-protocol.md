@@ -197,10 +197,13 @@ Critical Checks:
 > timing grounds. Condemn claims (`bid_invalid`/`fraudulent_bid`) are gated
 > by the same quorum: a single condemning validator cannot veto a bid —
 > structural invalidity is deterministic, so honest validators converge and
-> quorum forms independently. Validators continue to stamp `observed_at` as
-> their own first-observation time (AUCTIONS.md §4.4.1), including on
-> `won_pending_settlement` upgrades, which is what makes this eligibility
-> screen work for honest quorums.
+> quorum forms independently. Validators MUST stamp `observed_at` as
+> their own first-observation time on EVERY verdict (AUCTIONS.md §4.4.1) —
+> including `won_pending_settlement` upgrades — and the verdict publisher
+> enforces this (`src/server/auction-validator/publisher.ts`). Without
+> first-observation stamping, replaceable close-phase upgrades would carry
+> `publish-time > maxEndAt` timestamps and the eligibility screen would
+> drop every previously-confirmed bid to `pending` after close.
 
 #### 2.4 validateBidAmount(bidEvent, auctionContext, topBid, observedTime)
 

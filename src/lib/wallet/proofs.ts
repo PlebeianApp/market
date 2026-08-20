@@ -65,9 +65,7 @@ export function extractProofsByMint(wallet: NDKCashuWallet, knownMints?: string[
  * @returns Array of proofs or empty array
  */
 export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
-	// Use getProofs({ onlyAvailable: true }) to exclude deleted proofs
-	// that were spent in a prior transaction. dump() returns all proofs
-	// including deleted ones, which causes selectProofs to pick
-	// already-spent proofs and the mint to reject them.
-	return wallet.state.getProofs({ mint: mintUrl }) ?? []
+	// Pass onlyAvailable: true explicitly — dump() would otherwise return
+	// deleted proofs too, letting selectProofs pick already-spent inputs.
+	return wallet.state.getProofs({ mint: mintUrl, onlyAvailable: true }) ?? []
 }
