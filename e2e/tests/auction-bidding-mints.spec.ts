@@ -144,8 +144,9 @@ async function waitForWalletMint(page: import('@playwright/test').Page, mintUrl:
  * if the wallet already has thousands of sats.
  *
  * This helper reads the balance via __nip60.getStatus(), computes a bid
- * amount of max(100, balance + 100), and enters it using the "Customize
- * bid" edit mode.
+ * amount of max(100, balance + 500), and fills the always-visible bid
+ * amount input directly (the single-input rework removed the "Customize
+ * bid" edit-mode toggle).
  *
  * Must be called after waitForWalletReady (or waitForWalletBalance) and
  * before clicking the bid button.
@@ -164,12 +165,8 @@ async function ensureInsufficientBidFunds(page: import('@playwright/test').Page)
 	const minBid = 100
 	const bidAmount = Math.max(minBid, balance + 500)
 
-	// Enter edit mode to access the custom bid input field.
-	const editButton = page.locator('button[title="Customize bid"]')
-	await editButton.waitFor({ state: 'visible', timeout: 10_000 })
-	await editButton.click()
-
-	// Clear and type the new bid amount.
+	// The bid amount input is always visible (single-input rework); fill it
+	// directly — there is no "Customize bid" edit-mode toggle anymore.
 	const bidInput = page.locator('input[type="number"]').first()
 	await bidInput.fill(String(bidAmount))
 }
