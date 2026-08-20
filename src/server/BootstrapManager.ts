@@ -7,9 +7,14 @@ export class BootstrapManagerImpl implements BootstrapManager {
 	private hasSetupEvent: boolean = false
 	private adminManager: AdminManager
 
-	constructor(adminManager: AdminManager, initialAdminCount: number = 0) {
+	constructor(
+		adminManager: AdminManager,
+		initialAdminCount: number = 0,
+		hasExistingSetup: boolean = false,
+		allowPublicBootstrap: boolean = false,
+	) {
 		this.adminManager = adminManager
-		this.bootstrapMode = initialAdminCount === 0
+		this.bootstrapMode = allowPublicBootstrap && initialAdminCount === 0 && !hasExistingSetup
 
 		if (this.bootstrapMode) {
 			console.log('Bootstrap manager initialized in bootstrap mode')
