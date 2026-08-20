@@ -217,7 +217,7 @@ export function AuctionSettlement({
 
 	const claimOrderEvents = useMemo(() => claimOrders, [claimOrders])
 
-	const nut7States = useNut7Polling(bids)
+	const nut7States = useNut7Polling(bids, auction.mints)
 
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
 		() => ({

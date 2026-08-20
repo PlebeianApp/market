@@ -46,15 +46,19 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 // Public API
 // ============================================================================
 
-const keysetCache = new Map<string, MintKeyset[]>()
+const KEYSET_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — keysets rotate rarely
+const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number }>()
 
 export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
-	if (keysetCache.has(mintUrl)) return keysetCache.get(mintUrl)!
+	const cached = keysetCache.get(mintUrl)
+	if (cached && Date.now() - cached.cachedAt < KEYSET_CACHE_TTL_MS) {
+		return cached.keysets
+	}
 	try {
 		const mint = new CashuMint(mintUrl)
 		const response = await mint.getKeySets()
 		const keysets = response.keysets
-		keysetCache.set(mintUrl, keysets)
+		keysetCache.set(mintUrl, { keysets, cachedAt: Date.now() })
 		return keysets
 	} catch {
 		return []

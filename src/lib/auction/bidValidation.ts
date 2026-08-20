@@ -74,13 +74,19 @@ function classifyBid(
 		const observedAt = Math.min(minObservedAt, auction.maxEndAt)
 		const nut7State = nut7States?.get(bid.id)
 
-		// For ended auctions, NUT-7 spend state is no longer relevant for bid validity.
-		// A 'spent' state after settlement means the seller redeemed (expected), not fraud.
-		// Default undefined/unknown/spent states to 'unspent' so validateBid doesn't
-		// reject bids as 'nut7_unknown' — the publish path
+		// For ended auctions, default a missing/unknown NUT-7 state to `unspent`
+		// so validateBid doesn't reject bids as `nut7_unknown` — the publish path
 		// (publishAuctionSettlement) legitimately lacks NUT-7 data because it
 		// doesn't poll the mint before winner determination; the NUT-7 atomicity
 		// pre-check runs later, just before redemption.
+		//
+		// TODO(#11): the current `spent → unspent` remap also masks a genuine
+		// pre-settlement double-spend (a last-second bidder who spends their
+		// proofs behind the lock is presented to viewers/auditors as the valid
+		// canonical winner). The correct fix must be settlement-aware: only
+		// remap `spent` when a valid `settled` settlement exists (seller already
+		// redeemed), otherwise preserve `spent` so validateBid flags proof_spent.
+		// That requires threading a `postSettlement` flag into computeValidatedBids.
 		const ended = auction.maxEndAt > 0 && observedAt >= auction.maxEndAt
 		const adjustedNut7State = ended
 			? nut7State === 'spent' || nut7State == null || nut7State === 'unknown'
@@ -128,16 +134,18 @@ function computeLegLockedAmounts(bids: ParsedBidEvent[]): void {
 	}
 }
 
-function computeCanonicalWinner(validBids: ParsedBidEvent[], observedAtByBid: Map<string, number>): ParsedBidEvent | null {
+function computeCanonicalWinner(validBids: ParsedBidEvent[]): ParsedBidEvent | null {
 	if (validBids.length === 0) return null
 
 	return validBids.reduce((winner, bid) => {
 		if (bid.amount > winner.amount) return bid
 		if (bid.amount === winner.amount) {
-			const bidObserved = observedAtByBid.get(bid.id) ?? bid.createdAt
-			const winnerObserved = observedAtByBid.get(winner.id) ?? winner.createdAt
-			if (bidObserved < winnerObserved) return bid
-			if (bidObserved === winnerObserved && bid.id < winner.id) return bid
+			// Tie-break per AUCTIONS.md §8.0: earliest `created_at` wins,
+			// then lexical smallest bid event id. Deterministic — never
+			// relay-state-dependent (observed_at varies by relay, so two
+			// compliant clients could otherwise display different winners).
+			if (bid.createdAt < winner.createdAt) return bid
+			if (bid.createdAt === winner.createdAt && bid.id < winner.id) return bid
 		}
 		return winner
 	})
@@ -269,7 +277,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	}
 	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
 	// currentTopBid from previously-validated bids.
-	const observedAtByBid = new Map<string, number>()
 	let currentTopValidAmount = 0
 	const finalValid: ParsedBidEvent[] = []
 	const finalPending: ParsedBidEvent[] = []
@@ -308,7 +315,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 
 		if (verdict.claim === 'valid_bid_placed') {
 			finalValid.push(c.bid)
-			observedAtByBid.set(c.bid.id, c.observedAt)
 			if (c.bid.amount > currentTopValidAmount) {
 				currentTopValidAmount = c.bid.amount
 			}
@@ -319,7 +325,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		}
 	}
 
-	const canonicalWinner = computeCanonicalWinner(finalValid, observedAtByBid)
+	const canonicalWinner = computeCanonicalWinner(finalValid)
 
 	return {
 		classified,
