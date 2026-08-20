@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { RELAY_URL, BASE_URL } from '../test-config'
+import { RELAY_URL } from '../test-config'
 import { devUser1 } from '@/lib/fixtures'
 import { seedProduct } from '../scenarios'
 import type { VerifiedEvent } from 'nostr-tools'
@@ -60,7 +60,7 @@ async function seedNsfwProduct(
 				['price', opts.price, opts.currency],
 				['status', 'on-sale'],
 				['t', 'Bitcoin'],
-				['content_warning', 'nsfw'],
+				['content-warning', 'nsfw'],
 				['image', 'https://cdn.satellite.earth/nsfw-test-image.png'],
 			],
 		},

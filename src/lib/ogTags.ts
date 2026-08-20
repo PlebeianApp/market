@@ -9,7 +9,7 @@
  * `src/routes/products.$productId.tsx` (kind 30402 tag conventions):
  * title from the `title` tag, description from event content, first `image`
  * tag (sorted by optional order), price/currency from the `price` tag, and
- * NSFW detection from the `content_warning` tag.
+ * NSFW detection from the `content-warning` tag (NIP-15 hyphenated form).
  */
 
 export interface OgProductMeta {
@@ -76,9 +76,9 @@ function findFirstImageUrl(event: OgTagSourceEvent): string | undefined {
 	return imageTags[0]?.[1] || undefined
 }
 
-/** True when the product carries the `content_warning` NSFW marker. */
+/** True when the product carries the `content-warning` NSFW marker. */
 export function isNsfwProductEvent(event: OgTagSourceEvent): boolean {
-	return findTag(event, 'content_warning')?.[1] === NSFW_CONTENT_WARNING
+	return findTag(event, 'content-warning')?.[1] === NSFW_CONTENT_WARNING
 }
 
 /**

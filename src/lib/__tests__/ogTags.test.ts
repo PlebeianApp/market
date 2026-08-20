@@ -52,7 +52,7 @@ describe('buildOgProductMeta', () => {
 			tags: [
 				['d', 'gated'],
 				['title', 'Gated Product'],
-				['content_warning', 'nsfw'],
+				['content-warning', 'nsfw'],
 			],
 		})
 
