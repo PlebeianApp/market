@@ -113,6 +113,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 										index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-primary/50',
 									)}
 									onClick={() => handlePreviewClick(index)}
+									aria-label={`View ${title} - Image ${index + 1}`}
 								>
 									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800 flex items-center justify-center">
 										{isVideoUrl(image.url) ? (

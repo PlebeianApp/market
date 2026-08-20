@@ -12,3 +12,10 @@ export function isVideoUrl(url: string): boolean {
 export function getMediaType(url: string): 'image' | 'video' {
 	return isVideoUrl(url) ? 'video' : 'image'
 }
+
+/** Returns the lowercase file extension of a media URL, or undefined. */
+export function getMediaExtension(url: string): string | undefined {
+	const path = url.split('?')[0].split('#')[0]
+	const m = path.match(/\.([a-zA-Z0-9]+)$/)
+	return m ? m[1].toLowerCase() : undefined
+}

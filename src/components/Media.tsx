@@ -16,6 +16,7 @@ export interface MediaProps {
 	/** Render a `<video>` (with controls) when `src` is a video URL. Default true. */
 	video?: boolean
 	controls?: boolean
+	autoPlay?: boolean
 	muted?: boolean
 	loop?: boolean
 	playsInline?: boolean
@@ -36,16 +37,26 @@ export function Media({
 	fallbackClassName,
 	video = true,
 	controls = false,
+	autoPlay = false,
 	muted = true,
 	loop = true,
 	playsInline = true,
 	onClick,
 }: MediaProps) {
-	const [failed, setFailed] = useState(false)
+	// Track which `src` errored (not just a boolean) so a recycled component
+	// (keyed list rows, carousel items, MigrationForm index) resets to the
+	// media element when its `src` changes instead of staying on the fallback.
+	const [failedSrc, setFailedSrc] = useState<string | null>(null)
+	const failed = !!src && failedSrc === src
+	const handleError = () => setFailedSrc(src ?? null)
 
 	if (!src || failed) {
 		return (
-			<div className={cn('flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500', fallbackClassName)} aria-label={alt}>
+			<div
+				role="img"
+				aria-label={alt}
+				className={cn('flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500', fallbackClassName)}
+			>
 				<ImageOff className="h-8 w-8" />
 			</div>
 		)
@@ -58,13 +69,15 @@ export function Media({
 				className={className}
 				style={style}
 				controls={controls}
+				autoPlay={autoPlay}
 				muted={muted}
 				loop={loop}
 				playsInline={playsInline}
+				onError={handleError}
 				onClick={onClick}
 			/>
 		)
 	}
 
-	return <img src={src} alt={alt} className={className} style={style} onError={() => setFailed(true)} onClick={onClick} />
+	return <img src={src} alt={alt} className={className} style={style} onError={handleError} onClick={onClick} />
 }

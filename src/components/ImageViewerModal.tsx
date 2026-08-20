@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { isVideoUrl } from '@/lib/media'
+import { getMediaExtension, isVideoUrl } from '@/lib/media'
+import { Media } from '@/components/Media'
 import { Button } from '@/components/ui/button'
 import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -43,7 +44,9 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 			const url = window.URL.createObjectURL(blob)
 			const link = document.createElement('a')
 			link.href = url
-			link.download = `${images[currentIndex]?.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${isVideoUrl(images[currentIndex]?.url) ? 'mp4' : 'jpg'}`
+			const mediaUrl = images[currentIndex]?.url || ''
+			const ext = getMediaExtension(mediaUrl) || (isVideoUrl(mediaUrl) ? 'mp4' : 'jpg')
+			link.download = `${images[currentIndex]?.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${ext}`
 			document.body.appendChild(link)
 			link.click()
 			document.body.removeChild(link)
@@ -173,7 +176,15 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 
 					<div className="relative flex items-center justify-center w-full h-full p-16">
 						{isVideoUrl(images[currentIndex]?.url) ? (
-							<video src={images[currentIndex]?.url} controls autoPlay className="max-w-full max-h-full object-contain" />
+							<Media
+								src={images[currentIndex]?.url}
+								alt={images[currentIndex]?.title}
+								className="max-w-full max-h-full object-contain"
+								controls
+								autoPlay
+								muted
+								playsInline
+							/>
 						) : (
 							<img
 								src={images[currentIndex]?.url}
