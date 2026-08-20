@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
-import { RELAY_URL } from '../test-config'
+import { RELAY_URL, BASE_URL } from '../test-config'
 import { devUser1, devUser2, devUser3 } from '@/lib/fixtures'
 import { kinds, type VerifiedEvent } from 'nostr-tools'
 import type { Locator, Page } from '@playwright/test'
@@ -218,6 +218,22 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		await expect(headerContent.getByText(/100(?:\.00)?\s+USD/)).toBeVisible({ timeout: 15000 })
 		await expect(headerContent.getByText('10 in stock')).toBeVisible()
 		await expect(headerContent.getByText('Test Merchant')).toBeVisible()
+	})
+
+	// Raw HTTP response — exactly what crawlers and link unfurlers receive,
+	// no JavaScript executed (issue #459 acceptance criterion).
+	test('serves og: meta tags in the initial HTML', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+
+		const response = await unauthenticatedPage.request.get(`/products/${currentProductId}`)
+		expect(response.status()).toBe(200)
+
+		const html = await response.text()
+		expect(html).toContain('<meta property="og:type" content="product" />')
+		expect(html).toContain('<meta property="og:title" content="View Test Product')
+		expect(html).toContain('<meta property="og:image"')
+		expect(html).toContain('cdn.satellite.earth')
+		expect(html).toContain(`<meta property="og:url" content="${BASE_URL}/products/${currentProductId}" />`)
 	})
 
 	test('should show product image', async ({ unauthenticatedPage }) => {

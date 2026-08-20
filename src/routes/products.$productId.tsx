@@ -14,6 +14,7 @@ import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
+import { truncateForMeta } from '@/lib/ogTags'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -84,6 +85,93 @@ function useHeroBackground(imageUrl: string, className: string) {
 			document.head.removeChild(style)
 		}
 	}, [imageUrl, className])
+}
+
+// Hook to inject Open Graph and Twitter Card meta tags for social sharing
+interface MetaTagsConfig {
+	title: string
+	description: string
+	image?: string
+	url: string
+	price?: number
+	currency?: string
+	/** When false, skip all meta/title injection (e.g. NSFW-gated products). */
+	enabled?: boolean
+}
+
+function useDocumentMeta(config: MetaTagsConfig) {
+	useEffect(() => {
+		const { title, description, image, url, price, currency, enabled = true } = config
+		if (!enabled) return
+		const createdElements: HTMLElement[] = []
+		const restoredContents: Array<{ element: Element; originalContent: string | null }> = []
+
+		// Helper to apply a meta tag. Server-side og injection (see
+		// src/index.tsx + src/lib/ogTags.ts) already renders og:/twitter:
+		// tags into the initial HTML for product pages, so reuse those
+		// elements instead of appending duplicates — snapshotting their
+		// original content so cleanup can restore the server-rendered value.
+		const addMeta = (attributes: Record<string, string>) => {
+			const selector = attributes.property !== undefined ? `meta[property="${attributes.property}"]` : `meta[name="${attributes.name}"]`
+			let meta = document.head.querySelector<HTMLMetaElement>(selector)
+			if (meta) {
+				restoredContents.push({ element: meta, originalContent: meta.getAttribute('content') })
+			} else {
+				meta = document.createElement('meta')
+				createdElements.push(meta)
+			}
+			Object.entries(attributes).forEach(([key, value]) => {
+				meta!.setAttribute(key, value)
+			})
+			if (!meta!.parentNode) document.head.appendChild(meta)
+		}
+
+		// Set document title
+		const originalTitle = document.title
+		document.title = `${title} | Plebeian Market`
+
+		// Open Graph tags
+		addMeta({ property: 'og:type', content: 'product' })
+		addMeta({ property: 'og:title', content: title })
+		addMeta({ property: 'og:description', content: description })
+		addMeta({ property: 'og:url', content: url })
+		addMeta({ property: 'og:site_name', content: 'Plebeian Market' })
+		if (image) {
+			addMeta({ property: 'og:image', content: image })
+		}
+		if (price !== undefined && currency) {
+			addMeta({ property: 'product:price:amount', content: String(price) })
+			addMeta({ property: 'product:price:currency', content: currency })
+		}
+
+		// Twitter Card tags
+		addMeta({ name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' })
+		addMeta({ name: 'twitter:title', content: title })
+		addMeta({
+			name: 'twitter:description',
+			content: price !== undefined && currency ? `${description} - ${price} ${currency}` : description,
+		})
+		if (image) {
+			addMeta({ name: 'twitter:image', content: image })
+		}
+
+		// Standard meta description
+		addMeta({ name: 'description', content: description })
+
+		// Cleanup on unmount or when config changes
+		return () => {
+			document.title = originalTitle
+			createdElements.forEach((el) => {
+				if (el.parentNode) {
+					el.parentNode.removeChild(el)
+				}
+			})
+			restoredContents.forEach(({ element, originalContent }) => {
+				if (originalContent === null) element.removeAttribute('content')
+				else element.setAttribute('content', originalContent)
+			})
+		}
+	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.enabled])
 }
 
 declare module '@tanstack/react-router' {
@@ -276,6 +364,7 @@ function RouteComponent() {
 
 	// Derive all product fields from the loaded product event (avoids conditional hook calls / racey dependent queries)
 	const title = getProductTitle(product) || 'Untitled Product'
+	const description = getProductDescription(product)
 	const images = getProductImages(product) || []
 	const priceTag = getProductPrice(product)
 	const typeTag = getProductType(product)
@@ -395,9 +484,33 @@ function RouteComponent() {
 	// Get first image URL for background
 	const backgroundImageUrl = formattedImages[0]?.url || ''
 
+	// Check if this is an NSFW product and user hasn't enabled viewing.
+	// Must be computed before useHeroBackground/useDocumentMeta (both hooks run
+	// before the gate early-return for React hook-order stability) so a gated
+	// NSFW product never leaks its title, description, or first image into
+	// <head> (og:*, twitter:*, document.title, hero background CSS) before the
+	// content gate renders.
+	const productIsNSFW = isNSFWProduct(product)
+	const nsfwGated = productIsNSFW && !showNSFWContent
+
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(backgroundImageUrl, heroClassName)
+	useHeroBackground(nsfwGated ? '' : backgroundImageUrl, heroClassName)
+
+	// Build product URL and meta description for social sharing
+	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
+	const metaDescription = description.length > 160 ? truncateForMeta(description, 157) : description
+
+	// Inject Open Graph and Twitter Card meta tags (no-op while the NSFW gate is active)
+	useDocumentMeta({
+		enabled: !nsfwGated,
+		title,
+		description: metaDescription,
+		image: backgroundImageUrl || undefined,
+		url: productUrl,
+		price,
+		currency: priceTag?.[2] || 'SATS',
+	})
 
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
 	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
@@ -443,9 +556,9 @@ function RouteComponent() {
 		)
 	}
 
-	// Check if this is an NSFW product and user hasn't enabled viewing
-	const productIsNSFW = isNSFWProduct(product)
-	if (productIsNSFW && !showNSFWContent) {
+	// Adult content gate: product is NSFW and the user hasn't enabled viewing.
+	// (productIsNSFW/nsfwGated are computed before the head-injecting hooks above)
+	if (nsfwGated) {
 		return (
 			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
 				<AlertTriangle className="w-16 h-16 text-amber-500" />
