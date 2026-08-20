@@ -215,4 +215,47 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		expect(result.verdict.claim).toBe('lost_pending_refund')
 		expect(publishedClaims).toEqual(['published'])
 	})
+
+	test("verdict observed_at stamps the validator's FIRST observation, not publish time", async () => {
+		const state = createValidatorState(VALIDATOR_PK)
+		const auction = buildAuction()
+		const auctionState = upsertAuction(state, auction).auctionState
+		setAuctionMintReachability(auctionState, [['https://mint.test', true]])
+
+		// Bid first observed at 1_500 (in-window). The publisher runs much
+		// later (post-close, maxEndAt + 10). Without first-observation
+		// stamping, the close-phase upgrade would carry `publish time`
+		// (> maxEndAt) and the client-side quorum-eligibility screen
+		// (ADR-0003 §2.3 amendment) would drop it — winner derivation
+		// would break for every previously-confirmed bid.
+		const bid = buildBid(auction, { id: '2'.repeat(64), bidderPubkey: BIDDER_A, amount: 1_200, proofY: PROOF_Y_A })
+		const bidState = upsertBid(state, bid, 1_500)
+		if (!bidState) throw new Error('expected bid to upsert')
+		bidState.bidState.currentClaim = 'valid_bid_placed'
+		auctionState.closeHandled = false
+
+		let capturedTemplate: EventTemplate | null = null
+		const publisher = createVerdictPublisher({
+			signer: {
+				getPublicKey: async () => VALIDATOR_PK,
+				signEvent: async (template: EventTemplate) => {
+					capturedTemplate = template
+					return { ...template, id: '9'.repeat(64), pubkey: VALIDATOR_PK, sig: 'a'.repeat(128) } as any
+				},
+			} as any,
+			relayPool: { publish: async () => {} } as any,
+			now: () => auction.maxEndAt + 10,
+		})
+
+		await publisher.publishIfChanged({
+			auctionState,
+			bidState: bidState.bidState,
+			currentTopBid: bid.amount,
+		})
+
+		if (!capturedTemplate) throw new Error('expected a verdict publish')
+		const observedAtTag = (capturedTemplate as EventTemplate).tags.find((t) => t[0] === 'observed_at')
+		expect(observedAtTag?.[1]).toBe(String(1_500))
+		expect(observedAtTag?.[1]).not.toBe(String(auction.maxEndAt + 10))
+	})
 })

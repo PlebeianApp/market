@@ -61,16 +61,24 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 	 * (the subscriber, the NUT-7 poller) can log or batch.
 	 */
 	const publishIfChanged = async (input: PublishVerdictInput): Promise<PublishVerdictResult> => {
-		const observedAt = now()
+		const nowUnix = now()
+		// Stamp `observed_at` with this validator's FIRST observation of the
+		// bid (AUCTIONS.md §4.4.1), not publish time. On close, kind-30440
+		// upgrades (won_pending_settlement / lost_pending_refund) REPLACE the
+		// in-window valid_bid_placed verdicts — if they were re-stamped to
+		// `now() > maxEndAt`, a client-side quorum-eligibility screen
+		// (ADR-0003 §2.3 amendment) would drop every previously confirmed
+		// bid to `pending` after close and winner derivation would break.
+		const observedAt = input.bidState.observedAt
 
-		if (!input.auctionState.closeHandled && observedAt > input.auctionState.auction.maxEndAt) {
+		if (!input.auctionState.closeHandled && nowUnix > input.auctionState.auction.maxEndAt) {
 			assignCloseRoles(input.auctionState)
 		}
 
 		let verdict = deriveVerdict({
 			auctionState: input.auctionState,
 			bidState: input.bidState,
-			now: observedAt,
+			now: nowUnix,
 			currentTopBid: input.currentTopBid,
 		})
 
@@ -87,7 +95,7 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 			verdict = deriveVerdict({
 				auctionState: input.auctionState,
 				bidState: input.bidState,
-				now: observedAt,
+				now: nowUnix,
 				currentTopBid: input.currentTopBid,
 			})
 		}

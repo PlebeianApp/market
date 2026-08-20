@@ -44,6 +44,16 @@ export interface ComputeValidatedBidsInput {
 	 * Defaults to false.
 	 */
 	postSettlement?: boolean
+	/**
+	 * Optional narrowing for `postSettlement`: the bid ids recorded in the
+	 * `settled` settlement (winner + payout legs). When provided, the
+	 * terminal-condition interpretation applies ONLY to those bids — a
+	 * drained, higher-amount non-settlement bid (pre-settlement fraud the
+	 * validators cannot see) stays invalid instead of displacing the real
+	 * winner from `canonicalWinner` and breaking the settlement's structural
+	 * cross-checks. Pass the ids from `winning_bid` + `payout` tags.
+	 */
+	settledBidIds?: Set<string>
 }
 
 /** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). */
@@ -194,16 +204,24 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	const eligibleConfirmsByBidId = new Map<string, ParsedValidatorVerdictEvent[]>()
 	const condemnByBidId = new Map<string, ParsedValidatorVerdictEvent[]>()
 	for (const v of latestByValidatorAndBid.values()) {
+		const refBidForScreen = bidsById.get(v.bidEventId)
 		if (CONDEMN_CLAIMS.has(v.claim)) {
+			// Condemn verdicts are gated by the same eligibility screen as
+			// confirms (ADR-0003 §2.3 amendment): a condemn verdict whose own
+			// observed_at fails the window/skew checks against the referenced
+			// bid doesn't count toward the condemn quorum either. Honest
+			// validators stamp first-observation timestamps on every claim,
+			// so structural condemnations still converge to quorum.
+			if (!refBidForScreen) continue
+			if (!isQuorumEligibleVerdict(v, refBidForScreen, auction)) continue
 			const arr = condemnByBidId.get(v.bidEventId) ?? []
 			arr.push(v)
 			condemnByBidId.set(v.bidEventId, arr)
 			continue
 		}
 		if (!CONFIRM_CLAIMS.has(v.claim)) continue
-		const refBid = bidsById.get(v.bidEventId)
-		if (!refBid) continue
-		if (!isQuorumEligibleVerdict(v, refBid, auction)) continue
+		if (!refBidForScreen) continue
+		if (!isQuorumEligibleVerdict(v, refBidForScreen, auction)) continue
 		const arr = eligibleConfirmsByBidId.get(v.bidEventId) ?? []
 		arr.push(v)
 		eligibleConfirmsByBidId.set(v.bidEventId, arr)
@@ -364,11 +382,13 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		// Post-settlement spend interpretation (consumer-side; the NUT-7 value
 		// itself is never remapped): once a structurally-valid `settled`
 		// settlement exists, a mint-reported `spent` on a quorum-confirmed bid
-		// is the expected terminal condition — 'seller already redeemed' for
-		// the winner, or a legitimate post-locktime refund for losers — not
-		// pre-settlement fraud. Pre-settlement (`postSettlement` unset/false)
-		// `proof_spent` still invalidates, so a double-spend is rejected.
-		if (verdict.claim === 'bid_invalid' && verdict.reason === 'proof_spent' && postSettlement) {
+		// — when that bid is recorded in the settlement (winner/payout legs) —
+		// is the expected terminal condition ('seller already redeemed' or a
+		// legitimate post-locktime refund), not pre-settlement fraud. Bids NOT
+		// recorded in the settlement keep `proof_spent` as an invalidation, so
+		// a drained high bid cannot displace the real winner.
+		const spendExcusable = postSettlement && (input.settledBidIds ? input.settledBidIds.has(c.bid.id) : true)
+		if (verdict.claim === 'bid_invalid' && verdict.reason === 'proof_spent' && spendExcusable) {
 			finalValid.push(c.bid)
 			if (c.bid.amount > currentTopValidAmount) {
 				currentTopValidAmount = c.bid.amount

@@ -321,6 +321,21 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.invalidBids).toHaveLength(1)
 	})
+
+	test('condemn verdicts with poisoned observed_at do not reach the condemn quorum', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction)
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, claim: 'bid_invalid', reason: 'timestamp_skew', observedAt: auction.maxEndAt + 99_999 }),
+			buildVerdict(bid, { validatorPubkey: V2, claim: 'bid_invalid', reason: 'timestamp_skew', observedAt: auction.maxEndAt + 99_999 }),
+		]
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		// Same anti-poisoning as confirms: the screened condemn verdicts drop
+		// below quorum, so the bid stays pending rather than invalid.
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+	})
 })
 
 describe('computeValidatedBids — rebid chain verdict propagation', () => {
