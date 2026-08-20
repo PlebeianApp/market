@@ -334,6 +334,13 @@ function deriveState(input: GetSettlementDescriptorInput, mintKeysets?: MintKeys
 	// proofs, which won't match the top bid (leg 2) — that's expected.
 	const pathReleases = topBid
 		? rawPathReleases.filter((pr) => {
+				// Optimistic UI (ADR-0004 Decision 4): a locally-synthesized release
+				// is id-prefixed `optimistic-` and has an empty derivation path /
+				// child pubkey until the relay refetch, so structural validation
+				// would reject it. It originates from the current user's own publish
+				// action, so skip validation for it — otherwise `myAlreadyReleased`
+				// stays false and the UI does not flip to 'Path release published'.
+				if (pr.id.startsWith('optimistic-')) return true
 				const matchingBid = validatedBids.find((b) => b.id === pr.bidEventId)
 				const bidToValidate = matchingBid ?? topBid
 				const result = isValidPathRelease(auction, bidToValidate, pr, now, postCloseDecision, mintKeysets)
