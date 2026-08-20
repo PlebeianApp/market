@@ -14,7 +14,7 @@ import { devUser1, XPUB } from '../../src/lib/fixtures'
 useWebSocketImplementation(WebSocket)
 
 const VIDEO_URL = 'https://media.example.invalid/video.mp4'
-const IMAGE_URL = 'https://placehold.co/600x600/png?text=Image'
+const IMAGE_URL = 'https://media.example.invalid/image.png'
 
 async function seedMediaAuction(relay: Relay) {
 	const now = Math.floor(Date.now() / 1000)
@@ -57,9 +57,10 @@ async function seedMediaAuction(relay: Relay) {
 
 test.describe('media rendering', () => {
 	test('auction renders a <video> player for a video image URL', async ({ page }) => {
-		// Intercept the fake video src so no real external request is made;
-		// the assertion is on the <video> element, not on playback.
-		await page.route('**/video.mp4', (route) => route.abort())
+		// Intercept the fake media host so no real external request is made
+		// (ADR-0005: tests must not contact external services). The assertion
+		// is on the <video> element, not on playback.
+		await page.route('**/example.invalid/**', (route) => route.abort())
 
 		const relay = await Relay.connect(RELAY_URL)
 		const auction = await seedMediaAuction(relay)
@@ -70,6 +71,8 @@ test.describe('media rendering', () => {
 	})
 
 	test('auction renders an <img> for an image URL in the gallery', async ({ page }) => {
+		await page.route('**/example.invalid/**', (route) => route.abort())
+
 		const relay = await Relay.connect(RELAY_URL)
 		const auction = await seedMediaAuction(relay)
 		await page.goto(`/auctions/${auction.id}`)
