@@ -52,6 +52,7 @@ graph TB
 
     subgraph "Infrastructure Layer"
         NAK["nak serve<br/>(local relay)"]
+        MINT["Local Cashu mint<br/>(nutshell FakeWallet, :3338)"]
         SR["seed-relay.ts<br/>(app settings)"]
         DEV["bun dev<br/>(app server)"]
     end
@@ -75,11 +76,13 @@ graph TB
     TC --> DEV
     TC --> SC
     NAK --> SR
+    MINT -->|"APP_DEV_TEST_MINT_URL"| DEV
     SR --> DEV
     TF --> AF
     AF --> NE
     AF --> TC2
     TF --> RM
+    TF -.->|"NUT-04/NUT-05<br/>(wallet tests)"| MINT
     SC -.->|"per-fixture<br/>seeding"| TF
 ```
 
@@ -197,6 +200,29 @@ export default defineConfig({
 	expect: { timeout: 5_000 },
 })
 ```
+
+### Local Cashu Mint: `start-local-mint.sh`
+
+The suite also runs a **real local Cashu mint** — nutshell with the
+FakeWallet backend — so wallet and auction bid-funding tests exercise
+genuine NUT-04/NUT-05 mint and melt flows instead of mocks. The
+FakeWallet backend auto-settles Lightning invoices instantly; no
+external Lightning node is involved.
+
+- **Locally**: started by the Playwright `webServer` in
+  `e2e/playwright.config.ts` (`bash e2e/start-local-mint.sh` on port
+  3338, `reuseExistingServer: true`).
+- **In CI**: `.github/workflows/e2e.yml` sets up Python 3.12, runs
+  `pip install cashu`, starts the mint with
+  `nohup bash e2e/start-local-mint.sh`, and waits for
+  `http://localhost:3338/v1/info` before continuing.
+- **Configuration**: written by `e2e/start-local-mint.sh` — fixed test
+  key `0000...0001`, zero fees, rate limit off, name
+  "Plebeian Test Mint", data dir `/tmp/cashu-mint-e2e`. Override with
+  `CASHU_MINT_PORT`, `CASHU_MINT_HOST`, or `CASHU_MINT_DIR`.
+
+The dev server receives `APP_DEV_TEST_MINT_URL=http://localhost:3338`,
+pointing the app's test wallet at the local mint.
 
 ### Seed Relay: `seed-relay.ts`
 
@@ -803,7 +829,7 @@ Even though tests can run independently, when running the full suite we want an 
 
 ## 8. Test Utilities (Mocks)
 
-The `utils/` directory contains standalone mock implementations that simulate external systems (remote signers, Lightning payments, relay queries) without hitting real services. All mocks communicate with the local test relay via raw WebSocket or `nostr-tools`.
+The `utils/` directory contains standalone mock implementations that simulate external systems (remote signers, Lightning payments, relay queries) without hitting real services. All mocks communicate with the local test relay via raw WebSocket or `nostr-tools`. The Lightning mock still exists for non-wallet flows, but auction bid-funding tests (`e2e/tests/auction-bidding-mints.spec.ts`) exercise real NUT-04/NUT-05 flows against the local Cashu mint (see [Infrastructure Layer](#1-infrastructure-layer)) — this is deliberate.
 
 ### NIP-46 Remote Signer Mock (`utils/nip46-mock.ts`)
 
@@ -1125,6 +1151,9 @@ Key points:
 
 ## Running Tests
 
+Prerequisite (one-time): Python 3 with the nutshell mint installed —
+`pip install cashu`. Playwright starts everything else automatically.
+
 ```bash
 # Run all e2e tests (new suite)
 bun test:e2e
@@ -1146,6 +1175,23 @@ bun test:e2e -- e2e/tests/products.spec.ts
 ```
 
 > **Note**: The `bun test:e2e` scripts include `NODE_OPTIONS='--dns-result-order=ipv4first'` to work around macOS IPv4/IPv6 resolution issues (see Pitfalls section).
+
+### Local Cashu Mint
+
+Wallet and auction-bidding tests hit a **real local Cashu mint**
+(nutshell, FakeWallet backend) on port 3338 — no external mint or
+Lightning node. Playwright starts it automatically via the `webServer`
+config (`reuseExistingServer: true` reuses a mint that is already
+running). To start it manually:
+
+```bash
+bash e2e/start-local-mint.sh
+curl http://localhost:3338/v1/info # health check
+```
+
+Tests target the mint via `APP_DEV_TEST_MINT_URL=http://localhost:3338`
+(passed to the dev server by the `webServer` env in
+`playwright.config.ts`).
 
 ### Local Development Workflow
 

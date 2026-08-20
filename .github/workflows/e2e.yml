@@ -80,6 +80,14 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
 
+      - name: Setup Python for local Cashu mint
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Cashu (nutshell) mint
+        run: pip install cashu 'marshmallow<4.0.0' 'limits<5.0.0'
+
       - name: Start relay
         run: |
           nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
@@ -93,6 +101,21 @@ jobs:
           done
           echo "::error::Relay failed to start. Logs:"
           cat /tmp/relay.log
+          exit 1
+
+      - name: Start local Cashu mint
+        run: |
+          nohup bash e2e/start-local-mint.sh > /tmp/mint.log 2>&1 &
+          echo "Waiting for local Cashu mint on port 3338..."
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:3338/v1/info > /dev/null 2>&1; then
+              echo "Cashu mint is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Cashu mint failed to start. Logs:"
+          cat /tmp/mint.log
           exit 1
 
       - name: Seed relay and start dev server
@@ -117,6 +140,7 @@ jobs:
           APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
+          APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
 
       - name: Run E2E tests
         run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only'
