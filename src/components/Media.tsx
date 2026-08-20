@@ -1,0 +1,70 @@
+import { useState, type CSSProperties } from 'react'
+import { isVideoUrl } from '@/lib/media'
+import { cn } from '@/lib/utils'
+import { ImageOff } from 'lucide-react'
+
+export interface MediaProps {
+	/** Media URL. Null/undefined or an errored image renders the fallback. */
+	src?: string | null
+	alt: string
+	/** Classes applied to the `<img>` / `<video>` element. */
+	className?: string
+	/** Inline styles applied to the `<img>` / `<video>` element. */
+	style?: CSSProperties
+	/** Extra classes for the fallback placeholder (defaults to full-size centered). */
+	fallbackClassName?: string
+	/** Render a `<video>` (with controls) when `src` is a video URL. Default true. */
+	video?: boolean
+	controls?: boolean
+	muted?: boolean
+	loop?: boolean
+	playsInline?: boolean
+	onClick?: () => void
+}
+
+/**
+ * Shared media element: renders a `<video>` for video URLs and `<img>`
+ * otherwise, with an `onError` fallback. Centralising display lets one
+ * component change shape consistently everywhere (vs scattered `<img>` /
+ * `<video>` sites drifting apart).
+ */
+export function Media({
+	src,
+	alt,
+	className,
+	style,
+	fallbackClassName,
+	video = true,
+	controls = false,
+	muted = true,
+	loop = true,
+	playsInline = true,
+	onClick,
+}: MediaProps) {
+	const [failed, setFailed] = useState(false)
+
+	if (!src || failed) {
+		return (
+			<div className={cn('flex h-full w-full items-center justify-center bg-zinc-800 text-zinc-500', fallbackClassName)} aria-label={alt}>
+				<ImageOff className="h-8 w-8" />
+			</div>
+		)
+	}
+
+	if (video && isVideoUrl(src)) {
+		return (
+			<video
+				src={src}
+				className={className}
+				style={style}
+				controls={controls}
+				muted={muted}
+				loop={loop}
+				playsInline={playsInline}
+				onClick={onClick}
+			/>
+		)
+	}
+
+	return <img src={src} alt={alt} className={className} style={style} onError={() => setFailed(true)} onClick={onClick} />
+}

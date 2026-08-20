@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Media } from '@/components/Media'
 import { Input } from '@/components/ui/input'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -114,7 +115,7 @@ export function ProductSearch() {
 										}}
 									>
 										{/* Product Image */}
-										{mainImage && <img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}
+										{mainImage && <Media src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}
 
 										{/* Content Section */}
 										<div className="flex-1 min-w-0 flex items-center gap-2">

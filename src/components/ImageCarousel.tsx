@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import { isVideoUrl } from '@/lib/media'
+import { Media } from '@/components/Media'
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel'
 import { ImageOff, Play } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -66,14 +67,27 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
 							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
 							{isVideoUrl(image.url) ? (
-								<video src={image.url} controls muted loop playsInline className="relative z-10 max-w-full max-h-full object-contain" />
+								<Media
+									src={image.url}
+									alt={`${title} - Image ${index + 1}`}
+									className="relative z-10 max-w-full max-h-full object-contain"
+									controls
+									muted
+									loop
+									playsInline
+								/>
 							) : (
 								<button
 									onClick={() => onImageClick?.(index)}
 									className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
 									aria-label={`View ${title} - Image ${index + 1} in full size`}
 								>
-									<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
+									<Media
+										src={image.url}
+										alt={`${title} - Image ${index + 1}`}
+										className="max-w-full max-h-full object-contain"
+										video={false}
+									/>
 								</button>
 							)}
 						</CarouselItem>
