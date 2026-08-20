@@ -1,4 +1,5 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
+import { Media } from '@/components/Media'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -45,7 +46,7 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 			<div className="space-y-3">
 				{images.length > 0 && (
 					<div className="bg-gray-200 rounded-md w-full h-32 overflow-hidden">
-						<img src={images[0][1]} alt="Product image" className="w-full h-full object-cover" />
+						<Media src={images[0][1]} alt="Product image" className="w-full h-full object-cover" />
 					</div>
 				)}
 				<div>
@@ -120,7 +121,7 @@ function ProductListItem({
 	const triggerContent = (
 		<div className="flex items-center gap-3">
 			{thumbnailUrl ? (
-				<img src={thumbnailUrl} alt="" className="rounded w-10 h-10 object-cover shrink-0" />
+				<Media src={thumbnailUrl} alt="" className="rounded w-10 h-10 object-cover shrink-0" />
 			) : (
 				<div className="flex justify-center items-center bg-gray-100 rounded w-10 h-10 shrink-0">
 					<PackageIcon className="w-5 h-5 text-gray-400" />

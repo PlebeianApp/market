@@ -1,4 +1,5 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
+import { Media } from '@/components/Media'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -447,7 +448,7 @@ function DashboardAuctionDetailRoute() {
 					<div className="relative min-h-[260px] border-b border-black/10 bg-zinc-900 lg:min-h-[340px] lg:border-b-0 lg:border-r">
 						{previewImage ? (
 							<>
-								<img src={previewImage} alt={getAuctionTitle(auction)} className="h-full w-full object-cover opacity-90" />
+								<Media src={previewImage} alt={getAuctionTitle(auction)} className="h-full w-full object-cover opacity-90" />
 								<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 							</>
 						) : (

@@ -1,4 +1,5 @@
 import { InfiniteProductList } from '@/components/InfiniteProductList'
+import { Media } from '@/components/Media'
 import { ProductFilters, defaultProductFilters, type ProductFilterState } from '@/components/ProductFilters'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -263,7 +264,7 @@ function ProductsRoute() {
 				{backgroundImageUrl && (
 					<Link to={`/products/${currentProductId}`} className="block w-full h-full">
 						<div className="relative shadow-xl rounded-lg ring-2 ring-white/20 hover:ring-secondary w-full h-full overflow-hidden transition-all">
-							<img
+							<Media
 								src={backgroundImageUrl}
 								alt={displayTitle || 'Featured product'}
 								className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
