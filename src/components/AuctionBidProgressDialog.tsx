@@ -167,7 +167,7 @@ export function AuctionBidProgressDialog({
 		? 'done'
 		: hasNegativeVerdict
 			? 'error'
-			: isAwaitingValidator
+			: isAwaitingValidator && validatorPubkeys.length > 0
 				? 'active'
 				: 'pending'
 
@@ -294,9 +294,11 @@ export function AuctionBidProgressDialog({
 									? `Validator confirmed: ${myVerdict?.claim}`
 									: hasNegativeVerdict
 										? `Validator verdict: ${myVerdict?.claim}`
-										: isAwaitingValidator
-											? 'Waiting for kind-30440 verdict from auction validators'
-											: undefined
+										: isAwaitingValidator && validatorPubkeys.length === 0
+											? 'No validators configured for this auction'
+											: isAwaitingValidator
+												? 'Waiting for kind-30440 verdict from auction validators'
+												: undefined
 							}
 						/>
 					</div>

@@ -295,7 +295,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		handleFundingSuccess,
 		handleInvoiceCreated,
 		handlePaymentAcknowledged,
-		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
 		bidFundingLifecycleState,
@@ -496,7 +495,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		// Compute funding parameters from the confirm dialog's own state
 		// (confirmBidAmountInput / confirmBidMint), not the main bidAmountInput
 		// or the hook's selectedMint.
-		const confirmMintBalance = confirmMintOptions.find((m) => m.mintUrl === confirmBidMint)?.balance ?? 0
 		const canFundConfirmMint = confirmMintBalance >= confirmDeltaAmount
 		const hasInsufficientConfirmMint = confirmDeltaAmount > 0 && !canFundConfirmMint
 
@@ -562,7 +560,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onSuccess={handleFundingSuccess}
 				onInvoiceCreated={handleInvoiceCreated}
 				onPaymentAcknowledged={handlePaymentAcknowledged}
-				onMintingStarted={handleMintingStarted}
 				onFundingFailed={handleFundingFailed}
 				variant="bid"
 			/>
@@ -574,7 +571,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				auctionCoordinates={auctionCoordinates}
 				bidderPubkey={signedInBidderPubkey}
 				validatorPubkeys={auctionValidators}
-				bidAmount={Number.isFinite(parsedBidAmount) ? parsedBidAmount : undefined}
+				bidAmount={Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : undefined}
 				refundLocktime={biddingCutoffAt + getAuctionSettlementGrace(auction)}
 				onRetryPublish={() => void retryBidPublish()}
 			/>
@@ -803,7 +800,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								type="number"
 								min={minBid}
 								step={bidStep}
-								value={confirmBidAmountInput}
+								value={bidAmountInput}
 								onChange={(e) => setBidAmountInput(e.target.value)}
 								placeholder={`Min: ${minBid.toLocaleString()}`}
 								disabled={isDisabledInput}

@@ -1,4 +1,4 @@
-# ADR-0004: Direct Lightning Invoice Funding for Auction Bids
+# ADR-0008: Direct Lightning Invoice Funding for Auction Bids
 
 ## Status
 
@@ -131,6 +131,12 @@ Wallet acknowledgment, invoice payment, e-cash minting, bid publication, and auc
 ### Decision 12: Payment/privacy-safe telemetry and logs only
 
 Errors, logs, and telemetry must avoid leaking sensitive payment material such as invoice preimages, token proofs, seed material, or private wallet configuration.
+
+### Decision 13: Auction rules acknowledgement is scoped per ruleset, not per auction
+
+The "review auction rules" acknowledgement is scoped per ruleset version and per bidder — keyed as `auction-rules-ack:<version>:<bidder pubkey>` — rather than per auction. The rules content is static across all auctions; a bidder who has acknowledged the current ruleset once is not re-prompted on every auction until the ruleset version bumps. Acknowledging the rules advances the user directly into the bid-confirmation dialog.
+
+This is a deliberate departure from the earlier per-auction scoping (keyed `auction-rules-ack:<version>:<bidder>:<auction identity>`), which re-prompted on every auction. Per-ruleset scoping was chosen because re-acknowledging identical rules per auction is redundant; the version bump remains the safety valve for materially changed rules.
 
 ## Payment and Bid State Model
 

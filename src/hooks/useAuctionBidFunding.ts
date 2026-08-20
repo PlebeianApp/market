@@ -59,6 +59,24 @@ export const AUCTION_BID_FUNDING_ADR_STATE_MAPPING = {
 	bid_lock_conversion_complete: ['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable'],
 } as const
 
+/**
+ * States from which a user's locked e-cash can be reclaimed.
+ *
+ * This list deliberately mixes two categories:
+ *
+ * - **Failure states** (`invoice_unpaid_or_expired_reclaimable`,
+ *   `invoice_paid_mint_failed_reclaimable`,
+ *   `mint_succeeded_bid_publish_failed_reclaimable`) — the funding attempt
+ *   errored and the user must recover.
+ * - **Pending state** (`ecash_minted_pending_rules_ack`) — the funding
+ *   succeeded and e-cash is minted, but the bid is paused awaiting the
+ *   rules acknowledgement. It is NOT a failure, but it IS reclaimable if the
+ *   user abandons the bid, so it belongs in this set for the reclaim path.
+ *
+ * `isAuctionBidFundingReclaimableState` gates the reclaim UI/flow on this
+ * set, so both the "failed and recover" and "paused but abandonable" cases
+ * funnel into the same recovery entry point.
+ */
 export const AUCTION_BID_FUNDING_RECLAIMABLE_STATES: readonly AuctionBidFundingLifecycleState[] = [
 	'invoice_unpaid_or_expired_reclaimable',
 	'invoice_paid_mint_failed_reclaimable',
@@ -265,7 +283,16 @@ export function useAuctionBidFunding({
 		setIsDepositOpen(false)
 
 		void (async () => {
-			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'ecash_minted'))
+			// Advance through the intermediate funding states to ecash_minted.
+			// For QR-scan deposits, payment_acknowledged and minting_started are
+			// not separately observable (only the final mint 'success' event), so
+			// the lifecycle may still be at invoice_created when the deposit
+			// confirms. Walk forward through the unobservable intermediate states
+			// so the transition is valid regardless of which pre-mint state we
+			// last observed. Each step is idempotent if the state already moved on.
+			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'payment_acknowledged'))
+			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'minting_started'))
+			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'ecash_minted'))
 
 			try {
 				await nip60Actions.refresh()
@@ -333,10 +360,6 @@ export function useAuctionBidFunding({
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'payment_acknowledged'))
 	}, [])
 
-	const handleMintingStarted = useCallback(() => {
-		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'minting_started'))
-	}, [])
-
 	const handleFundingFailed = useCallback((reason: AuctionBidFundingFailureReason) => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, reason))
 	}, [])
@@ -361,7 +384,6 @@ export function useAuctionBidFunding({
 		handleFundingSuccess,
 		handleInvoiceCreated,
 		handlePaymentAcknowledged,
-		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
 		resumeBidAfterRulesAck,

@@ -35,7 +35,6 @@ interface DepositLightningModalProps {
 	onSuccess?: () => void
 	onInvoiceCreated?: (invoice: string) => void
 	onPaymentAcknowledged?: () => void
-	onMintingStarted?: () => void
 	onFundingFailed?: (reason: AuctionFundingFailureReason) => void
 	/**
 	 * 'bid' renders the compact "Bid with lightning" quick-pay view: fixed
@@ -58,7 +57,6 @@ export function DepositLightningModal({
 	onSuccess,
 	onInvoiceCreated,
 	onPaymentAcknowledged,
-	onMintingStarted,
 	onFundingFailed,
 	variant = 'topup',
 }: DepositLightningModalProps) {
@@ -170,9 +168,12 @@ export function DepositLightningModal({
 	useEffect(() => {
 		if (nwcPaymentStatus !== 'sent' && !nwcPaymentSentForCurrentInvoice) return
 		paymentAcknowledgedRef.current = true
+		// Only acknowledge payment here. The minting_started → ecash_minted
+		// progression is driven by the deposit-success path (handleFundingSuccess
+		// walks forward through the intermediate states), since neither the NWC
+		// nor the QR path can observe a distinct 'minting started' event.
 		onPaymentAcknowledged?.()
-		onMintingStarted?.()
-	}, [nwcPaymentSentForCurrentInvoice, nwcPaymentStatus, onMintingStarted, onPaymentAcknowledged])
+	}, [nwcPaymentSentForCurrentInvoice, nwcPaymentStatus, onPaymentAcknowledged])
 
 	useEffect(() => {
 		if (depositStatus !== 'error') return
