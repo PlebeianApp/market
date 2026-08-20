@@ -310,7 +310,11 @@ export function DepositLightningModal({
 			const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 
 			if (isPendingDeposit && !failureNotifiedRef.current) {
-				onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
+				// Same paid/unknown classification as the error path: a QR payer
+				// can't be observed by the app, so lean toward reclaimable instead of
+				// claiming "unpaid" and stranding their sats at the mint.
+				const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
+				onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
 			}
 			nip60Actions.cancelDeposit()
 
