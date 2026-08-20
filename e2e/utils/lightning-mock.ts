@@ -26,9 +26,9 @@ useWebSocketImplementation(WebSocket)
 const LNURL_SERVER_SK = 'e2e1111111111111111111111111111111111111111111111111111111111111'
 const LNURL_SERVER_PK = getPublicKey(hexToBytes(LNURL_SERVER_SK))
 
-// Mock domain used in the LNURL callback URL. Playwright intercepts requests
-// to this domain so no real DNS resolution happens.
-const MOCK_LNURL_DOMAIN = 'mock-lnurl.e2e.test'
+// Domain that matches the test fixture lud16 (plebeianuser@coinos.io).
+// Playwright intercepts requests to this domain so no real HTTP leaves the browser.
+const MOCK_LNURL_DOMAIN = 'coinos.io'
 
 let invoiceCounter = 0
 
@@ -97,8 +97,12 @@ export class LightningMock {
 			})
 		})
 
-		// LNURL callback: invoice generation
-		await page.route(`https://${MOCK_LNURL_DOMAIN}/**`, async (route) => {
+		// LNURL callback: invoice generation.
+		// Use the specific callback path so this handler does NOT shadow the
+		// .well-known/lnurlp/* discovery handler registered above. Playwright
+		// evaluates routes in reverse order (last registered wins), so a broad
+		// `https://domain/**` glob would intercept discovery requests too.
+		await page.route(`https://${MOCK_LNURL_DOMAIN}/lnurlp/callback**`, async (route) => {
 			const url = new URL(route.request().url())
 
 			// Extract amount for a more realistic-looking invoice

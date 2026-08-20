@@ -11,6 +11,11 @@ on:
         description: 'Optional grep filter (runs only matching tests). Empty = default full run.'
         required: false
         default: ''
+      repeat_each:
+        description: 'Repeat each test N times for flake detection (0/1 = normal run)'
+        required: false
+        default: 1
+        type: number
   schedule:
     - cron: '0 6 * * 1'
 
@@ -119,7 +124,12 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run E2E tests
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only'
+        # Deterministic families gate every PR/push, each test run twice to
+        # surface obvious flakiness. Retries come from playwright.config.ts so
+        # failures still produce traces. Flaky families (Cart, Product Page
+        # Interactions incl. the reaction test, ...) are not gated here; they
+        # run in the scheduled/manual e2e-full job instead.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
@@ -146,7 +156,9 @@ jobs:
     # remain in the scheduled e2e-full job.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Flake-detection runs (repeat_each > 1) disable retries, so allow the
+    # job more headroom than the weekly default run.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.repeat_each > 1) && 360 || 120 }}
 
     steps:
       - name: Checkout code
@@ -250,11 +262,22 @@ jobs:
       - name: Run remaining E2E tests
         env:
           TEST_GREP: ${{ inputs.test_grep }}
+          REPEAT_EACH: ${{ inputs.repeat_each }}
         run: |
+          REPEAT_FLAG=""
+          # Empty, non-numeric, 0, or 1 mean a normal run; anything else
+          # repeats each test N times with retries disabled (flake hunting).
+          case "${REPEAT_EACH:-}" in
+            ''|*[!0-9]*|0|1) ;;
+            *) REPEAT_FLAG="--repeat-each=$REPEAT_EACH --retries=0" ;;
+          esac
+          if [ -n "$REPEAT_FLAG" ]; then
+            echo "Flake detection mode: $REPEAT_EACH runs per test, retries disabled"
+          fi
           if [ -n "$TEST_GREP" ]; then
-            bun run test:e2e -- --grep "$TEST_GREP"
+            bun run test:e2e -- --grep "$TEST_GREP" $REPEAT_FLAG
           else
-            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management'
+            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management' $REPEAT_FLAG
           fi
 
       - name: Show server logs on failure

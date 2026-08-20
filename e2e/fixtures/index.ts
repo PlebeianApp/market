@@ -42,9 +42,9 @@ export const test = base.extend<TestFixtures>({
 
 		// Navigate and wait for the app to load
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		// Give the auto-login a moment to complete
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByTestId('dashboard-button')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
 		await context.close()
@@ -58,8 +58,8 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await page.waitForLoadState('domcontentloaded')
+		await expect(page.getByTestId('dashboard-button')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
 		await context.close()
@@ -73,8 +73,8 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await page.waitForLoadState('domcontentloaded')
+		await expect(page.getByTestId('dashboard-button')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
 		await context.close()
@@ -87,7 +87,7 @@ export const test = base.extend<TestFixtures>({
 		const page = await context.newPage()
 
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
+		await page.waitForLoadState('domcontentloaded')
 		// Verify we are NOT logged in (check for login button visibility)
 		await expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })
 

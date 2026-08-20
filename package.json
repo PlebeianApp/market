@@ -27,6 +27,7 @@
 		"test:e2e:headed": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --headed",
 		"test:e2e:ui": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --ui",
 		"test:e2e:debug": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --debug",
+		"test:e2e:flake": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --retries=0 --repeat-each=${E2E_REPEAT:-5}",
 		"dev:contextvm-server": "bun run contextvm/server.ts",
 		"test:unit": "bun test $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
