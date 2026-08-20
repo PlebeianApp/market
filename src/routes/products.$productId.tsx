@@ -14,6 +14,7 @@ import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
+import { truncateForMeta } from '@/lib/ogTags'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -144,7 +145,7 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		}
 
 		// Twitter Card tags
-		addMeta({ name: 'twitter:card', content: 'summary_large_image' })
+		addMeta({ name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' })
 		addMeta({ name: 'twitter:title', content: title })
 		addMeta({
 			name: 'twitter:description',
@@ -498,7 +499,7 @@ function RouteComponent() {
 
 	// Build product URL and meta description for social sharing
 	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
-	const metaDescription = description.length > 160 ? `${truncateForMeta(description, 157)}...` : description
+	const metaDescription = description.length > 160 ? truncateForMeta(description, 157) : description
 
 	// Inject Open Graph and Twitter Card meta tags (no-op while the NSFW gate is active)
 	useDocumentMeta({
