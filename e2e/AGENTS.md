@@ -30,9 +30,12 @@ infrastructure.
 
 ## Test Isolation
 
-Tests must not make network calls to external services. Only the local
-relay (`nak serve`) and local dev server (port 3333) are allowed. All
-external services (CDNs, mints, Lightning nodes) must be mocked or
+Tests must not make network calls to external services. Three local
+services are allowed: the local relay (`nak serve`), the local dev
+server (port 3333), and the real local Cashu mint at 127.0.0.1:3338
+(nutshell mint with FakeWallet backend; tests target it via
+`APP_DEV_TEST_MINT_URL=http://localhost:3338`). All other external
+services (CDNs, remote mints, real Lightning nodes) must be mocked or
 intercepted via `page.route()` / `context.route()`.
 
 See ADR-0005 and the repository-level AGENTS.md "Test Isolation" section
