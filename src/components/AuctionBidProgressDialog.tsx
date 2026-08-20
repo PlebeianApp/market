@@ -146,7 +146,12 @@ export function AuctionBidProgressDialog({
 
 	const hasPositiveVerdict = !!myVerdict && (POSITIVE_VERDICT_CLAIMS as readonly string[]).includes(myVerdict.claim)
 	const hasNegativeVerdict = !!myVerdict && (NEGATIVE_VERDICT_CLAIMS as readonly string[]).includes(myVerdict.claim)
-	const isAwaitingValidator = isPublishDone && !myVerdict
+	// A verdict that is neither positive nor negative (e.g. `bid_pending_review`, a
+	// pre-#1144 validator claim) is NOT final — the bid is still awaiting a final
+	// timestamp-observation verdict. "Pending review" is a client-side state, not
+	// a validator verdict, so treat it the same as "no verdict yet".
+	const hasNeutralVerdict = !!myVerdict && !hasPositiveVerdict && !hasNegativeVerdict
+	const isAwaitingValidator = isPublishDone && !hasPositiveVerdict && !hasNegativeVerdict
 
 	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed || isFundingFailed
 
@@ -296,9 +301,11 @@ export function AuctionBidProgressDialog({
 										? `Validator verdict: ${myVerdict?.claim}`
 										: isAwaitingValidator && validatorPubkeys.length === 0
 											? 'No validators configured for this auction'
-											: isAwaitingValidator
-												? 'Waiting for kind-30440 verdict from auction validators'
-												: undefined
+											: isAwaitingValidator && hasNeutralVerdict
+												? `Validator review pending (${myVerdict?.claim}) — awaiting final verdict`
+												: isAwaitingValidator
+													? 'Waiting for kind-30440 verdict from auction validators'
+													: undefined
 							}
 						/>
 					</div>
