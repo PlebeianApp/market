@@ -1,9 +1,11 @@
 # Task: Validator NUT-7 Check for Winning Bid at Settlement Time
 
 ## Status
+
 Future improvement — not yet implemented.
 
 ## Context
+
 PR #1144 (`feat/settlement-steps`) manual testing revealed that the
 validator should verify NUT-7 proof state for the top winning bid before
 publishing `won_pending_settlement`, and walk down the bid chain to valid
@@ -17,6 +19,7 @@ for the winning bid would restore that layer without the overhead of
 polling every bid.
 
 ## Scope
+
 - The validator should do a NUT-7 check (mint proof state query) for the
   **top winning bid only** before publishing `won_pending_settlement`.
 - If the winning bid's proofs are `spent` (double-spend fraud), the
@@ -30,6 +33,7 @@ polling every bid.
   query may be needed.
 
 ## Dependencies
+
 - ADR-0004 (NUT-7 is client-side evidence) may need an amendment to
   allow the validator to do a targeted winner-only NUT-7 check at
   settlement time.
@@ -37,6 +41,7 @@ polling every bid.
   probing is already implemented in `mintReachability.ts`).
 
 ## Non-Goals
+
 - Polling NUT-7 for every bid (only the winning bid chain at settlement).
 - Changing the bid-time validation path (validators stay passive at bid
   time).
