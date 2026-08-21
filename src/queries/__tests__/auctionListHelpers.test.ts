@@ -49,6 +49,11 @@ mock.module('@/lib/stores/ndk', () => ({
 
 const { fetchAuctionSettlementsForList, fetchAuctionPathReleasesForList, getAuctionTopBidFromBids } = await import('@/queries/auctions')
 
+const injectedFetch = mock(async (filter: NostrFilter | NostrFilter[]) => {
+	fetchedRequests.push(filter)
+	return [...relayEvents]
+})
+
 type AuctionEventLike = NonNullable<Parameters<typeof getAuctionTopBidFromBids>[0]>
 type RelayEvent = AuctionEventLike
 
@@ -130,7 +135,7 @@ describe('fetchAuctionSettlementsForList', () => {
 	})
 
 	test('returns empty map and does not hit relay without ids or coordinates', async () => {
-		const result = await fetchAuctionSettlementsForList([], [])
+		const result = await fetchAuctionSettlementsForList([], [], 200, injectedFetch)
 		expect(result.size).toBe(0)
 		expect(fetchedRequests).toEqual([])
 	})
@@ -144,7 +149,7 @@ describe('fetchAuctionSettlementsForList', () => {
 		const duplicateNewestRootOnly = makeSettlementEvent({ id: 's-new', createdAt: 300, rootIds: [rootId] })
 		relayEvents = new Set([newestRootOnly, bothRefs, coordinateOnly, duplicateNewestRootOnly])
 
-		const grouped = await fetchAuctionSettlementsForList([rootId], [coordinate])
+		const grouped = await fetchAuctionSettlementsForList([rootId], [coordinate], 200, injectedFetch)
 
 		expect(grouped.get(rootId)?.map((event) => event.id)).toEqual(['s-new', 's-both'])
 		expect(grouped.get(coordinate)?.map((event) => event.id)).toEqual(['s-both', 's-coord'])
@@ -154,7 +159,7 @@ describe('fetchAuctionSettlementsForList', () => {
 		const ids = Array.from({ length: 81 }, (_, index) => `root-${index}`)
 		const coordinates = Array.from({ length: 81 }, (_, index) => `30408:${'a'.repeat(64)}:auction-${index}`)
 
-		await fetchAuctionSettlementsForList(ids, coordinates, 77)
+		await fetchAuctionSettlementsForList(ids, coordinates, 77, injectedFetch)
 
 		expect(fetchedRequests).toHaveLength(1)
 		const filterBatch = fetchedRequests[0] as NostrFilter[]
@@ -172,7 +177,7 @@ describe('fetchAuctionPathReleasesForList', () => {
 	})
 
 	test('returns empty map and does not hit relay without coordinates', async () => {
-		const result = await fetchAuctionPathReleasesForList([])
+		const result = await fetchAuctionPathReleasesForList([], 200, injectedFetch)
 		expect(result.size).toBe(0)
 		expect(fetchedRequests).toEqual([])
 	})
@@ -188,7 +193,7 @@ describe('fetchAuctionPathReleasesForList', () => {
 		const eventOther = makePathReleaseEvent({ id: 'r-other', createdAt: 999, coordinates: [`30408:${'b'.repeat(64)}:other`] })
 		relayEvents = new Set([eventAOld, eventANew, eventShared, eventBOnly, eventOther])
 
-		const grouped = await fetchAuctionPathReleasesForList([coordinateA, coordinateB])
+		const grouped = await fetchAuctionPathReleasesForList([coordinateA, coordinateB], 200, injectedFetch)
 
 		expect(grouped.get(coordinateA)?.map((event) => event.id)).toEqual(['r-a-new', 'r-shared', 'r-a-old'])
 		expect(grouped.get(coordinateB)?.map((event) => event.id)).toEqual(['r-b-only', 'r-shared'])
