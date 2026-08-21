@@ -38,6 +38,11 @@ describe('auction publish validation', () => {
 		expect(() => validate({ reserve: '99' })).toThrow('Reserve must be greater than or equal to the starting bid')
 	})
 
+	test('reserve of 0 is treated as no reserve, not rejected vs starting bid', () => {
+		const result = validate({ reserve: '0' })
+		expect(result.reserve).toBe(0)
+	})
+
 	test('starting bid below auction minimum is rejected', () => {
 		expect(() => validate({ startingBid: String(AUCTION_MIN_BID_SATS - 1) })).toThrow(
 			`Starting bid must be at least ${AUCTION_MIN_BID_SATS} sats`,

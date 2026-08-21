@@ -105,7 +105,7 @@ function validateDraft(raw: unknown): AuctionFormDraft | null {
 		description: str(fd.description),
 		startingBid: str(fd.startingBid),
 		bidIncrement: str(fd.bidIncrement, '1'),
-		reserve: str(fd.reserve, '0'),
+		reserve: str(fd.reserve, ''),
 		startAt: str(fd.startAt),
 		endAt: str(fd.endAt),
 		antiSnipeWindowMinutes,
