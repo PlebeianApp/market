@@ -38,13 +38,32 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
-import { getDecodedToken } from '@cashu/cashu-ts'
+import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
 // ============================================================================
 // Public API
 // ============================================================================
+
+const KEYSET_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — keysets rotate rarely
+const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number }>()
+
+export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
+	const cached = keysetCache.get(mintUrl)
+	if (cached && Date.now() - cached.cachedAt < KEYSET_CACHE_TTL_MS) {
+		return cached.keysets
+	}
+	try {
+		const mint = new CashuMint(mintUrl)
+		const response = await mint.getKeySets()
+		const keysets = response.keysets
+		keysetCache.set(mintUrl, { keysets, cachedAt: Date.now() })
+		return keysets
+	} catch {
+		return []
+	}
+}
 
 /**
  * Output of {@link validateBid}. Discriminated by {@link claim}:
@@ -116,6 +135,17 @@ export interface ValidateBidInput {
 	bidChainValidation?: BidChainValidation
 	/** Optional validator policy hook. */
 	policy?: PolicyHook
+	/**
+	 * Skip step 6 (NUT-7 proof state) entirely. For callers that do NOT own
+	 * NUT-7 evidence — post-ADR-0004 validators, whose verdicts assert
+	 * structural/rules validity only while on-mint proof state is the
+	 * client's responsibility. An unconfirmed NUT-7 state must never be
+	 * FABRICATED as `unspent` (or `spent`) to bypass this step: callers that
+	 * own the check pass the truthful mint-reported state (or nothing, which
+	 * yields `bid_pending_review`), and callers that don't own it set this
+	 * flag instead.
+	 */
+	skipNut7Check?: boolean
 }
 
 export type ReleaseTiming = 'prompt' | 'late'
@@ -163,6 +193,17 @@ export interface ValidatePathReleaseInput {
 	postCloseDecision: 'winner' | 'loser' | null
 	fallbackOfferedAt?: number | null
 	expectedTokenAmount?: number
+	mintKeysets?: MintKeyset[]
+	/**
+	 * When true, skip the cashu token decode + proof validation section.
+	 * The validator passes this because token decoding requires mint keyset
+	 * info it doesn't have (the validator makes no mint interaction), and
+	 * cashu token validation is the SELLER's job at redemption time. An
+	 * undecodable token must not condemn a bid as fraudulent. The
+	 * derivation path + child_pubkey + release timing checks still run.
+	 * Mirrors the `skipNut7Check` pattern in `validateBid`.
+	 */
+	skipCashuTokenCheck?: boolean
 }
 
 export type SettlementCompletenessFailureCode =
@@ -217,6 +258,7 @@ export interface ValidateSettlementCompletenessInput {
 	winningBidNut7State?: Nut7ProofState
 	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
 	bidChain?: SettlementChainLegContext[]
+	mintKeysets?: MintKeyset[]
 }
 
 // ============================================================================
@@ -339,6 +381,35 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 			detail: `lock_secret and proof_y tags must be parallel: ${bid.lockSecrets.length} vs ${bid.proofYs.length}`,
 		}
 	}
+	// M5 FIX: Reject bids with duplicate lock_secret or proof_y values
+	// within the same bid. The bid amount is declared in the `amount` tag
+	// but is not cryptographically bound to the proofs — an attacker could
+	// pad their proof count by repeating the same lock_secret/proof_y pair
+	// to make the bid appear to lock more value than it actually does.
+	// Duplicates within a single bid are always invalid: each proof in a
+	// Cashu token has a unique secret and Y value by construction.
+	const seenLockSecrets = new Set<string>()
+	const seenProofYs = new Set<string>()
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const secretLower = bid.lockSecrets[i].toLowerCase()
+		const proofYLower = bid.proofYs[i].toLowerCase()
+		if (seenLockSecrets.has(secretLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_lock',
+				detail: `duplicate lock_secret at index ${i} — each proof must have a unique secret`,
+			}
+		}
+		if (seenProofYs.has(proofYLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_proof_y',
+				detail: `duplicate proof_y at index ${i} — each proof must have a unique Y value`,
+			}
+		}
+		seenLockSecrets.add(secretLower)
+		seenProofYs.add(proofYLower)
+	}
 	// Validate every proof's secret independently. All MUST share the same
 	// lock parameters — the bidder split their input across multiple
 	// denominations but each output proof is its own P2PK lock with its
@@ -407,47 +478,53 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// when EVERY proof is spent — that is the settlement-completeness
 	// signal, not the fraud signal). Detected from the per-proof map so a
 	// partially-spent bid is still rejected before the aggregate switch.
-	const { nut7ProofStates } = input
-	if (nut7ProofStates) {
-		for (const proofY of bid.proofYs) {
-			if (readProofState(nut7ProofStates, proofY) === 'spent') {
+	//
+	// Skipped entirely when the caller does not own NUT-7 evidence
+	// (`skipNut7Check`, e.g. post-ADR-0004 validators) — the check is never
+	// bypassed with a fabricated state.
+	if (!input.skipNut7Check) {
+		const { nut7ProofStates } = input
+		if (nut7ProofStates) {
+			for (const proofY of bid.proofYs) {
+				if (readProofState(nut7ProofStates, proofY) === 'spent') {
+					return {
+						claim: 'bid_invalid',
+						reason: 'proof_spent',
+						detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
+					}
+				}
+			}
+		}
+
+		switch (nut7State) {
+			case undefined:
+			case 'unknown':
+				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
+			case 'missing':
+				return {
+					claim: 'bid_invalid',
+					reason: 'proof_missing',
+					detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
+				}
+			case 'pending':
+				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
+			case 'spent':
+				// Pre-settlement spent = fake / fraudulent bid. The bidder either
+				// controlled the lock pubkey themselves and drained behind the
+				// scenes, or the bid was already redeemed somehow. Either way it's
+				// invalid for the auction. Reason `proof_spent` covers the
+				// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
+				// raised at settlement time when a kind-1025 reveals a path that
+				// doesn't derive to the lock pubkey.
 				return {
 					claim: 'bid_invalid',
 					reason: 'proof_spent',
 					detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
 				}
-			}
+			case 'unspent':
+				// Proceed to policy.
+				break
 		}
-	}
-
-	switch (nut7State) {
-		case undefined:
-		case 'unknown':
-			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-		case 'missing':
-			return {
-				claim: 'bid_invalid',
-				reason: 'proof_missing',
-				detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
-			}
-		case 'pending':
-			return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-		case 'spent':
-			// Pre-settlement spent = fake / fraudulent bid. The bidder either
-			// controlled the lock pubkey themselves and drained behind the
-			// scenes, or the bid was already redeemed somehow. Either way it's
-			// invalid for the auction. Reason `proof_spent` covers the
-			// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
-			// raised at settlement time when a kind-1025 reveals a path that
-			// doesn't derive to the lock pubkey.
-			return {
-				claim: 'bid_invalid',
-				reason: 'proof_spent',
-				detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
-			}
-		case 'unspent':
-			// Proceed to policy.
-			break
 	}
 
 	// --- Step 7: validator-specific policy ----------------------------------
@@ -467,7 +544,7 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseValidityResult => {
 	const { auction, bid, release, now, postCloseDecision, fallbackOfferedAt = null } = input
 	const releaseTiming: ReleaseTiming = now > auction.maxEndAt + auction.settlementGrace ? 'late' : 'prompt'
-	const expectedTokenAmount = input.expectedTokenAmount ?? bid.amount
+	const expectedTokenAmount = input.expectedTokenAmount ?? bid.legLockedAmount ?? bid.amount
 
 	if (release.bidderPubkey.toLowerCase() !== bid.bidderPubkey.toLowerCase()) {
 		return invalidRelease('unauthorized_signer', releaseTiming, 'kind-1025 author does not match the original bidder')
@@ -525,13 +602,27 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 			`derive(p2pk_xpub, path)=${derivedChildPubkey} does not match bid.child_pubkey=${bid.childPubkey}`,
 		)
 	}
+
+	// Cashu token decode + proof validation. Skipped entirely when the
+	// caller passes `skipCashuTokenCheck` (the validator does this: token
+	// decoding requires mint keyset info it doesn't have, and cashu token
+	// validation is the seller's job at redemption time). The derivation
+	// path + child_pubkey + release timing checks above still run.
+	if (input.skipCashuTokenCheck) {
+		return {
+			isValid: true,
+			releaseTiming,
+			derivedChildPubkey,
+		}
+	}
+
 	if (!release.cashuToken?.trim()) {
 		return invalidRelease('cashu_token_missing', releaseTiming, 'kind-1025 is missing the cashu_token tag required for redemption')
 	}
 
-	let decodedToken: ReturnType<typeof getDecodedToken>
+	let decodedToken: Token
 	try {
-		decodedToken = getDecodedToken(release.cashuToken)
+		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
 	} catch (err) {
 		return invalidRelease(
 			'cashu_token_decode_failed',
@@ -693,6 +784,7 @@ export const validateSettlementCompleteness = (input: ValidateSettlementComplete
 		postCloseDecision: inferredPostCloseDecision,
 		fallbackOfferedAt: usesFallback ? auction.maxEndAt + auction.fallbackDelaySec : null,
 		expectedTokenAmount: latestExpectedPayout?.amount ?? winningBid.amount,
+		mintKeysets: input.mintKeysets,
 	})
 	if (!pathReleaseValidity.isValid) {
 		return invalidSettlement('path_release_invalid', pathReleaseValidity.detail)
@@ -815,6 +907,15 @@ const validateSettlementLegNut7States = (leg: SettlementChainLegContext): { ok: 
 		return { ok: true }
 	}
 
+	// B1 (ADR-0004): When no NUT-7 data is provided at all (neither
+	// per-proof states nor aggregate state), skip the NUT-7 spend check.
+	// Validators no longer query the mint for proof state — they observe
+	// the seller's kind-1024 settlement event as proof of redemption.
+	// The client performs NUT-7 checks separately via checkProofStateBatch.
+	if (leg.nut7State === undefined) {
+		return { ok: true }
+	}
+
 	// Backward-compatible fallback: aggregate state is only sufficient for
 	// single-proof legs. Multi-proof legs require explicit per-proof states.
 	if (leg.bid.proofYs.length <= 1 && leg.nut7State === 'spent') {
@@ -895,10 +996,8 @@ const validateFallbackChainConsistency = (
 
 const buildExpectedSettlementPayouts = (chain: SettlementChainLegContext[]): SettlementPayoutEntry[] => {
 	const expected: SettlementPayoutEntry[] = []
-	let runningAmount = 0
 	for (const leg of chain) {
-		const legAmount = leg.bid.amount - runningAmount
-		runningAmount = leg.bid.amount
+		const legAmount = leg.bid.legLockedAmount ?? leg.bid.amount
 		expected.push({ bidEventId: leg.bid.id, amount: legAmount, status: 'redeemed' })
 	}
 	return expected
@@ -943,12 +1042,14 @@ const validateSettlementPayouts = (
 
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
-const invalidRelease = (failureCode: ReleaseValidityFailureCode, releaseTiming: ReleaseTiming, detail: string): ReleaseValidityResult => ({
-	isValid: false,
-	failureCode,
-	releaseTiming,
-	detail,
-})
+const invalidRelease = (failureCode: ReleaseValidityFailureCode, releaseTiming: ReleaseTiming, detail: string): ReleaseValidityResult => {
+	return {
+		isValid: false,
+		failureCode,
+		releaseTiming,
+		detail,
+	}
+}
 
 const buildCounter = (values: string[]): Map<string, number> => {
 	const counter = new Map<string, number>()
