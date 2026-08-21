@@ -28,6 +28,8 @@ import {
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet } from '@/lib/nostr/ndk-events'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
@@ -179,7 +181,7 @@ export const fetchAuctions = async (limit: number = 200) => {
 		limit,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
@@ -221,7 +223,7 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 		limit,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
@@ -423,14 +425,11 @@ export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 5
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const events = await ndkActions.fetchEventsWithTimeout(
-		{
-			kinds: [AUCTION_BID_KIND],
-			authors: [pubkey],
-			limit,
-		},
-		{ timeoutMs: 8000 },
-	)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, {
+		kinds: [AUCTION_BID_KIND],
+		authors: [pubkey],
+		limit,
+	})
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
