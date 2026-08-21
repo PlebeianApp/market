@@ -116,7 +116,22 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 	const release = sel?.release
 
 	if (bidState.postCloseDecision === 'loser') {
-		if (release) {
+		// A losing bid refunds at locktime. A `settlement` release for a
+		// loser is irrelevant — it may be a spurious publish (the bidder
+		// released the wrong bid) or a relay replay of an unrelated release.
+		// It is NOT fraud: the loser simply didn't win, and the release
+		// doesn't change that. Stay at lost_pending_refund (don't call
+		// deriveSettlementVerdict for a `settlement` release —
+		// validateReleaseReason would condemn it as "release_reason=settlement
+		// is only valid for the winning bid", which is a misuse of the
+		// fraudulent_bid claim for a non-fraudulent action).
+		//
+		// EXCEPTION: a `fallback_settlement` release for a loser IS a valid
+		// settlement path (the winner griefed, the fallback offer was
+		// extended, and this loser-bidder accepted it). In that case proceed
+		// to deriveSettlementVerdict so the fallback bidder can reach
+		// settled_promptly.
+		if (release && release.releaseReason === 'fallback_settlement') {
 			return deriveSettlementVerdict(auctionState, bidState, sel, now)
 		}
 		return deriveLoserVerdict(auctionState, bidState, now)
@@ -258,6 +273,7 @@ const deriveSettlementVerdict = (
 		postCloseDecision: bidState.postCloseDecision,
 		fallbackOfferedAt: auctionState.fallbackOfferedAt,
 		expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
+		skipCashuTokenCheck: true,
 	})
 	if (!releaseValidity.isValid) {
 		return {
@@ -416,6 +432,7 @@ const selectCanonicalEvidence = (
 				postCloseDecision: bidState.postCloseDecision,
 				fallbackOfferedAt: auctionState.fallbackOfferedAt,
 				expectedTokenAmount: deriveBidLegAmount(auctionState, bidState),
+				skipCashuTokenCheck: true,
 			})
 			return { release: r, valid: validity.isValid, createdAt: r.createdAt, id: r.id }
 		})
@@ -511,23 +528,40 @@ export const assignCloseRoles = (auctionState: ValidatorAuctionState): Validator
 }
 
 /**
- * Snapshot semantics for the close lifecycle. `assignCloseRoles`
- * snapshots winner/loser roles over the bids that were
- * `valid_bid_placed` at the moment close was handled. A bid that only
- * reaches `valid_bid_placed` afterwards (e.g. a delayed NUT-7 unspent
- * result) was not confirmed valid at the close snapshot and therefore
- * cannot become the winner — it is assigned the `loser` role so it
- * refunds at locktime and never enters winner settlement processing.
+ * Assign a close role to a bid that only reached `valid_bid_placed` AFTER the
+ * close snapshot ran (`assignCloseRoles` found no valid bids at close time →
+ * no winner was picked). This happens on validator restart when relay
+ * replay ordering + `replacement_chain_invalid` transients delay a bid's
+ * validation past the close moment.
  *
- * This is deterministic (arrival-order independent: a late-valid bid is
- * always a non-winner) and bounds the null-role window the publisher
- * closes after deriving the verdict. Returns true when a role was
- * assigned (caller should re-derive the verdict).
+ * Rather than unconditionally marking the bid 'loser' (the old behavior,
+ * which prevented the highest valid bid from ever becoming the winner),
+ * this checks whether the bid is the current `pickWinningBid` winner among
+ * all `valid_bid_placed` bids (including this one). If it is → 'winner',
+ * and any previously-marked 'winner' is demoted to 'loser' (a higher bid
+ * arrived later). If it is not → 'loser'.
+ *
+ * This is deterministic: `pickWinningBid` sorts by amount (desc), then
+ * `created_at` (asc), then `id` (lexical) — so two clients processing the
+ * same bid set converge on the same winner regardless of arrival order.
  */
 export const assignLateValidLoserRole = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): boolean => {
 	if (!auctionState.closeHandled) return false
 	if (bidState.postCloseDecision !== null) return false
-	bidState.postCloseDecision = 'loser'
+
+	const winner = pickWinningBid(auctionState)
+	if (winner === bidState) {
+		// This bid is the highest valid bid → it's the winner. Demote any
+		// previously-assigned winner (a lower bid that became valid earlier).
+		for (const other of Array.from(auctionState.bids.values())) {
+			if (other !== bidState && other.postCloseDecision === 'winner') {
+				other.postCloseDecision = 'loser'
+			}
+		}
+		bidState.postCloseDecision = 'winner'
+	} else {
+		bidState.postCloseDecision = 'loser'
+	}
 	return true
 }
 
@@ -536,10 +570,23 @@ export const assignLateValidLoserRole = (auctionState: ValidatorAuctionState, bi
  * pre-close floor checks. Walks live bids and picks the max amount on
  * any that has reached `valid_bid_placed`.
  */
-export const currentTopValidBidAmount = (auctionState: ValidatorAuctionState): number => {
+/**
+ * Recompute the current top valid bid amount for an auction. Used by
+ * pre-close floor checks. Walks live bids and picks the max amount on
+ * any that has reached `valid_bid_placed`.
+ *
+ * `excludeBidId` (optional): the bid currently being derived. A bid
+ * must never be checked against ITSELF as the top — `amount < amount +
+ * increment` is always true, so a valid bid would condemn itself as
+ * `under_increment` on every re-derivation. Excluding the bid being
+ * validated mirrors the client's `computeValidatedBids` accumulation
+ * (each bid checked against the top as it stood when the bid arrived).
+ */
+export const currentTopValidBidAmount = (auctionState: ValidatorAuctionState, excludeBidId?: string): number => {
 	let top = 0
 	for (const bidState of Array.from(auctionState.bids.values())) {
 		if (bidState.currentClaim !== 'valid_bid_placed') continue
+		if (excludeBidId !== undefined && bidState.bid.id === excludeBidId) continue
 		if (bidState.bid.amount > top) top = bidState.bid.amount
 	}
 	return top

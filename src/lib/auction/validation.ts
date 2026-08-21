@@ -194,6 +194,16 @@ export interface ValidatePathReleaseInput {
 	fallbackOfferedAt?: number | null
 	expectedTokenAmount?: number
 	mintKeysets?: MintKeyset[]
+	/**
+	 * When true, skip the cashu token decode + proof validation section.
+	 * The validator passes this because token decoding requires mint keyset
+	 * info it doesn't have (the validator makes no mint interaction), and
+	 * cashu token validation is the SELLER's job at redemption time. An
+	 * undecodable token must not condemn a bid as fraudulent. The
+	 * derivation path + child_pubkey + release timing checks still run.
+	 * Mirrors the `skipNut7Check` pattern in `validateBid`.
+	 */
+	skipCashuTokenCheck?: boolean
 }
 
 export type SettlementCompletenessFailureCode =
@@ -592,6 +602,20 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 			`derive(p2pk_xpub, path)=${derivedChildPubkey} does not match bid.child_pubkey=${bid.childPubkey}`,
 		)
 	}
+
+	// Cashu token decode + proof validation. Skipped entirely when the
+	// caller passes `skipCashuTokenCheck` (the validator does this: token
+	// decoding requires mint keyset info it doesn't have, and cashu token
+	// validation is the seller's job at redemption time). The derivation
+	// path + child_pubkey + release timing checks above still run.
+	if (input.skipCashuTokenCheck) {
+		return {
+			isValid: true,
+			releaseTiming,
+			derivedChildPubkey,
+		}
+	}
+
 	if (!release.cashuToken?.trim()) {
 		return invalidRelease('cashu_token_missing', releaseTiming, 'kind-1025 is missing the cashu_token tag required for redemption')
 	}

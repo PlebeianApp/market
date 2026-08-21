@@ -199,9 +199,15 @@ function isSettlementStructurallyValid(
 
 	if (result.isComplete) return 'valid'
 
-	// nut7_not_spent means the settlement exists but proofs aren't spent yet
-	// — the seller may not have redeemed yet. This is pending, not invalid.
-	if (result.failureCode === 'nut7_not_spent') return 'pending'
+	// A structurally valid settlement (correct seller, winning bid, path
+	// release, payouts) that fails ONLY on NUT-7 spend state is still
+	// 'valid' — the settlement event is the seller's declaration of
+	// redemption; NUT-7 spend is fraud-detection evidence (has the seller
+	// actually redeemed?), not a validity gate for the settlement
+	// declaration. The seller publishes the settlement BEFORE redeeming,
+	// so requiring spent proofs at settlement time would leave the
+	// settlement stuck in 'verifying' until redemption completes.
+	if (result.failureCode === 'nut7_not_spent') return 'valid'
 	return 'invalid'
 }
 

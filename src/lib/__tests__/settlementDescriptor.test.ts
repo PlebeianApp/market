@@ -456,7 +456,7 @@ describe('getSettlementDescriptor', () => {
 					],
 					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
 					claimOrders: [makeClaimOrder({ pubkey: BUYER_PUBKEY, id: 'order-1' })],
-					nut7States: spentNut7States([winningBid]),
+					nut7States: unspentNut7States([winningBid]),
 					now: 120,
 				}),
 			)
@@ -479,12 +479,40 @@ describe('getSettlementDescriptor', () => {
 						}),
 					],
 					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
-					nut7States: spentNut7States([winningBid]),
+					nut7States: unspentNut7States([winningBid]),
 					now: 120,
 				}),
 			)
 			expect(d?.title).toBe('Awaiting Shipping Details')
 			expect(d?.tone).toBe('waiting')
+		})
+
+		test('TDD: settled with unspent NUT-7 (seller not redeemed yet) → settlement badge, NOT verifying', async () => {
+			// The seller just published the settlement event — they have NOT
+			// redeemed the proofs at the mint yet. The settlement is
+			// structurally valid (correct seller, winning bid, path release,
+			// payouts). NUT-7 spend state is fraud-detection evidence (has the
+			// seller actually redeemed?), not a validity gate for the settlement
+			// declaration. The badge should be 'settlement', not 'verifying'.
+			const d = await getSettlementDescriptor(
+				winningBidInput({
+					currentUserPubkey: SELLER_PUBKEY,
+					settlements: [
+						makeSettlement({
+							status: 'settled',
+							winnerPubkey: BUYER_PUBKEY,
+							finalAmount: 50000,
+							pathReleaseEventId: 'pr-1',
+							payouts: [{ bidEventId: 'bid-1', amount: 50000, status: 'redeemed' }],
+						}),
+					],
+					pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
+					nut7States: unspentNut7States([winningBid]),
+					now: 120,
+				}),
+			)
+			expect(d?.title).toBe('Awaiting Shipping Details')
+			expect(d?.verifiedBadge).toBe('settlement')
 		})
 
 		test('closed-reserve-not-met: settlement reserve_not_met -> NOT a refund card', async () => {

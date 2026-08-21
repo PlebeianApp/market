@@ -228,14 +228,18 @@ describe('computeValidatedBids — quorum-timing eligibility', () => {
 })
 
 describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)', () => {
-	test('quorum-confirmed bid WITHOUT NUT-7 evidence stays pending (never defaulted to unspent)', () => {
+	test('quorum-confirmed bid WITHOUT NUT-7 evidence is valid (NUT-7 is fraud-detection evidence, not a validity gate)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
 		const result = computeValidatedBids({ auction, bids: [bid], verdicts })
-		expect(result.canonicalWinner).toBeNull()
-		expect(result.validBids).toHaveLength(0)
-		expect(result.pendingBids).toHaveLength(1)
+		// ADR-0004: NUT-7 is client-side evidence for pre-settlement fraud
+		// detection, not a validity gate. A quorum-confirmed bid with no
+		// NUT-7 evidence is valid — the validators already asserted
+		// structural validity. Missing NUT-7 does not block the bid.
+		expect(result.canonicalWinner?.id).toBe(bid.id)
+		expect(result.validBids).toHaveLength(1)
+		expect(result.pendingBids).toHaveLength(0)
 	})
 
 	test('mint-reported unspent confirms; canonical winner derived', () => {
@@ -308,7 +312,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 		expect(result.invalidBids).toContainEqual(expect.objectContaining({ id: fakeHighBid.id }))
 	})
 
-	test('pending NUT-7 from the mint keeps the bid pending', () => {
+	test('pending NUT-7 from the mint keeps the bid valid (NUT-7 is fraud-detection, not a validity gate)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
@@ -318,8 +322,10 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			verdicts,
 			nut7States: new Map([[bid.id, 'pending' as Nut7ProofState]]),
 		})
-		expect(result.canonicalWinner).toBeNull()
-		expect(result.pendingBids).toHaveLength(1)
+		// A pending NUT-7 state means the mint hasn't confirmed yet. The bid
+		// is quorum-confirmed → valid. Only `spent` pre-settlement invalidates.
+		expect(result.canonicalWinner?.id).toBe(bid.id)
+		expect(result.validBids).toHaveLength(1)
 	})
 })
 

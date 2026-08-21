@@ -195,7 +195,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await deps.publisher.publishIfChanged({
 				auctionState: result.auctionState,
 				bidState: result.bidState,
-				currentTopBid: currentTopValidBidAmount(result.auctionState),
+				currentTopBid: currentTopValidBidAmount(result.auctionState, result.bidState.bid.id),
 			})
 		} catch (err) {
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
@@ -254,7 +254,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await deps.publisher.publishIfChanged({
 				auctionState,
 				bidState,
-				currentTopBid: currentTopValidBidAmount(auctionState),
+				currentTopBid: currentTopValidBidAmount(auctionState, bidState.bid.id),
 			})
 		} catch (err) {
 			logger.error(
@@ -338,13 +338,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const republishAuction = async (auctionRootEventId: string): Promise<void> => {
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return
-		const topBid = currentTopValidBidAmount(auctionState)
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			try {
 				await deps.publisher.publishIfChanged({
 					auctionState,
 					bidState,
-					currentTopBid: topBid,
+					currentTopBid: currentTopValidBidAmount(auctionState, bidState.bid.id),
 				})
 			} catch (err) {
 				logger.error(

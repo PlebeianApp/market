@@ -208,12 +208,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	for (const v of latestByValidatorAndBid.values()) {
 		const refBidForScreen = bidsById.get(v.bidEventId)
 		if (CONDEMN_CLAIMS.has(v.claim)) {
-			// Condemn verdicts are gated by the same eligibility screen as
-			// confirms (ADR-0003 §2.3 amendment): a condemn verdict whose own
-			// observed_at fails the window/skew checks against the referenced
-			// bid doesn't count toward the condemn quorum either. Honest
-			// validators stamp first-observation timestamps on every claim,
-			// so structural condemnations still converge to quorum.
 			if (!refBidForScreen) continue
 			if (!isQuorumEligibleVerdict(v, refBidForScreen, auction)) continue
 			const arr = condemnByBidId.get(v.bidEventId) ?? []
@@ -370,31 +364,37 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			bid: c.bid,
 			observedAt: c.observedAt,
 			nut7State: c.nut7State,
+			// ADR-0004: NUT-7 is client-side evidence for pre-settlement fraud
+			// detection. A quorum-confirmed bid (validators asserted
+			// structural validity) must NOT be blocked by a missing NUT-7
+			// poll — the bid is pending REVIEW by validators, not by the
+			// mint. Skip the NUT-7 gate here; the actual NUT-7 state is
+			// applied separately below for the pre-settlement fraud /
+			// post-settlement redemption interpretation.
+			skipNut7Check: true,
 			currentTopBid: currentTopValidAmount,
 			bidChainLegAmount: c.bid.legLockedAmount,
 		})
 
 		if (verdict.claim === 'valid_bid_placed') {
-			finalValid.push(c.bid)
-			if (c.bid.amount > currentTopValidAmount) {
-				currentTopValidAmount = c.bid.amount
+			// Structural checks passed. Now apply NUT-7 evidence separately.
+			// - `spent` pre-settlement = double-spend fraud → invalid.
+			// - `spent` post-settlement (recorded in the settlement) = expected
+			//   terminal redemption → valid (see spendExcusable below).
+			// - `undefined`/`pending`/`unknown` = no NUT-7 evidence yet → the bid
+			//   stays VALID (quorum-confirmed); NUT-7 is fraud-detection evidence,
+			//   not a validity gate for a quorum-confirmed bid.
+			if (c.nut7State === 'spent') {
+				const spendExcusable = postSettlement && input.settledBidIds !== undefined && input.settledBidIds.has(c.bid.id)
+				if (spendExcusable) {
+					finalValid.push(c.bid)
+					if (c.bid.amount > currentTopValidAmount) currentTopValidAmount = c.bid.amount
+				} else {
+					finalInvalid.push(c.bid)
+				}
+				continue
 			}
-			continue
-		}
-
-		// Post-settlement spend interpretation (consumer-side; the NUT-7 value
-		// itself is never remapped): once a structurally-valid `settled`
-		// settlement exists, a mint-reported `spent` on a quorum-confirmed bid
-		// — when that bid is recorded in the settlement (winner/payout legs) —
-		// is the expected terminal condition ('seller already redeemed' or a
-		// legitimate post-locktime refund), not pre-settlement fraud. Bids NOT
-		// recorded in the settlement keep `proof_spent` as an invalidation, so
-		// a drained high bid cannot displace the real winner.
-		//
-		// Require settledBidIds when postSettlement is true — no fallback
-		// (prevents the displacement risk the fallback enables).
-		const spendExcusable = postSettlement && input.settledBidIds !== undefined && input.settledBidIds.has(c.bid.id)
-		if (verdict.claim === 'bid_invalid' && verdict.reason === 'proof_spent' && spendExcusable) {
+			// No NUT-7 evidence, or unspent → valid.
 			finalValid.push(c.bid)
 			if (c.bid.amount > currentTopValidAmount) {
 				currentTopValidAmount = c.bid.amount

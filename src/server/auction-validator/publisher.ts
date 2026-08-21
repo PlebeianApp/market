@@ -135,6 +135,7 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 			bidState: input.bidState,
 			verdict,
 			observedAt,
+			publishedAt: nowUnix,
 		})
 
 		const signed = await deps.signer.signEvent(template)
@@ -156,10 +157,12 @@ interface BuildTemplateInput {
 	bidState: ValidatorBidState
 	verdict: DerivedVerdict
 	observedAt: number
+	/** Actual publish time (unix seconds) — used as the event `created_at` so the relay's replaceable semantics keep the LATEST verdict. Distinct from `observedAt` (the validator's first-observation timestamp, carried in the `observed_at` tag for the client quorum screen). */
+	publishedAt: number
 }
 
 const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => {
-	const { auctionState, bidState, verdict, observedAt } = input
+	const { auctionState, bidState, verdict, observedAt, publishedAt } = input
 	const tags = buildValidatorVerdictTags({
 		bidderPubkey: bidState.bid.bidderPubkey,
 		auctionRootEventId: auctionState.auction.rootEventId,
@@ -180,7 +183,17 @@ const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => 
 
 	return {
 		kind: VALIDATOR_VERDICT_KIND as unknown as number,
-		created_at: observedAt,
+		// `created_at` is the actual publish time so the relay's replaceable
+		// semantics (latest `created_at` wins) keep the newest verdict — a
+		// `won_pending_settlement` upgrade MUST replace the earlier
+		// `valid_bid_placed`, which requires a strictly greater `created_at`.
+		// The validator's first-observation timestamp is carried separately in
+		// the `observed_at` tag (client quorum-eligibility screen uses the tag,
+		// not the event field — ADR-0003 §2.3 amendment). Previously both
+		// verdicts shared `created_at = observedAt`, so the relay kept the first
+		// (`valid_bid_placed`) and silently dropped the `won_pending_settlement`
+		// upgrade — the "0/1 auditors confirmed won_pending_settlement" failure.
+		created_at: publishedAt,
 		tags,
 		content,
 	}
