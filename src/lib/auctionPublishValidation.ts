@@ -255,7 +255,7 @@ const normalizeAuctionPublishInput = (
 		if (parsedReserve !== undefined) {
 			reserve = parsedReserve
 		}
-		if (startingBid !== undefined && parsedReserve !== undefined && parsedReserve < startingBid) {
+		if (startingBid !== undefined && parsedReserve !== undefined && parsedReserve !== 0 && parsedReserve < startingBid) {
 			issues.push({ field: 'reserve', message: 'Reserve must be greater than or equal to the starting bid' })
 		}
 	}
