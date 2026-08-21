@@ -75,18 +75,36 @@ recovery was meant to fix (restart-after-close re-stamping
 **Fix direction:** Persist a minimal `(bidEventId → observedAt)` map
 to a local file so recovery doesn't depend on relay availability.
 
-### 6. Pre-publish gate uses aggregate NUT-7, redemption loop uses per-proof
+### 6. Pre-publish gate uses aggregate NUT-7, cannot distinguish partial-spend from all-spent
 
 The pre-publish gate (`validateBidChainNut7PrePublish`) checks the
-aggregate state per bid. The redemption loop (step 5b) checks per-proof.
-`aggregateBidNut7State` returns `'spent'` only when ALL proofs are
-spent, so the aggregate aligns with "all-spent" — but a partial spend
-(2 of 5 proofs spent) aggregates to `'pending'` or `'unknown'`, which
-the gate correctly rejects. This dependency on the aggregate function's
-semantics is implicit, not tested.
+aggregate state per bid via `aggregateBidNut7State` (in
+`src/lib/cashu/nut7.ts`). This function returns `'spent'` if **ANY**
+proof is spent (early return on first spent), not just when ALL proofs
+are spent. So a partial-spend leg (e.g. 1 of 2 proofs spent) aggregates
+to `'spent'` and is silently skipped by the gate as "already
+redeemed" — when it's actually fraud (early-exit double-spend).
 
-**Fix direction:** Add a test: partial spend (some proofs spent, not
-all) → aggregate should be `'pending'`/`'unknown'` → gate should reject.
+M6's per-proof check (step 5b) catches it later and throws "partial
+spend detected," so the settlement still aborts correctly — but the
+gate's stated purpose is to be stricter than the read path, and here
+it is less precise. The seller also wastes work between steps 4b and
+5b (path-release validation, token binding) on a settlement that will
+fail.
+
+Note: `aggregateProofStates` (in `src/server/auction-validator/state.ts`)
+has different semantics — it requires ALL spent to return `'spent'`.
+The two functions disagree on partial spends.
+
+**Fix direction:** Either (a) change `aggregateBidNut7State` to only
+return `'spent'` when ALL proofs are spent (matching
+`aggregateProofStates`), or (b) have the gate query per-proof states
+directly instead of using the aggregate, or (c) at minimum document
+that partial-spend detection is deferred to M6's per-proof check in
+step 5b. Option (a) is the smallest change but would change the
+aggregate's semantics for all callers; verify no other caller relies
+on the any-spent behavior. Option (b) is more precise but requires the
+gate to accept per-proof states instead of the aggregate map.
 
 ### 7. Test coverage gaps for multi-validator and restart scenarios
 
