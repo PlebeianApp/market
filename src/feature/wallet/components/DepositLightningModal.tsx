@@ -409,7 +409,7 @@ export function DepositLightningModal({
 						)}
 
 						{/* Payment status indicator */}
-						{depositInvoice && depositStatus === 'pending' && (
+						{depositInvoice && (depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry') && (
 							<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
 								{needsConfirmationRetry ? (
 									<>
