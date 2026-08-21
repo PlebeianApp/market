@@ -51,6 +51,11 @@ mock.module('@/lib/stores/ndk', () => ({
 
 const { buildAuctionPathReleaseFilter, fetchAuctionPathReleases } = await import('@/queries/auctions')
 
+const injectedFetch = mock(async (filter: NostrFilter | NostrFilter[]) => {
+	fetchedFilters.push(filter as NostrFilter)
+	return [...relayEvents]
+})
+
 const AUCTION_ROOT_EVENT_ID = '1'.repeat(64)
 const SELLER_PUBKEY = 'a'.repeat(64)
 const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
@@ -83,14 +88,14 @@ describe('auction path-release queries', () => {
 	})
 
 	test('no coordinate means no relay query and an empty passive result', async () => {
-		const releases = await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 200)
+		const releases = await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 200, undefined, injectedFetch)
 
 		expect(releases).toEqual([])
 		expect(fetchedFilters).toEqual([])
 	})
 
 	test('coordinate present means the relay filter includes #a', async () => {
-		await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 123, AUCTION_COORDINATE)
+		await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 123, AUCTION_COORDINATE, injectedFetch)
 
 		expect(fetchedFilters).toEqual([
 			{
@@ -107,7 +112,7 @@ describe('auction path-release queries', () => {
 		const related = pathReleaseEvent('related', AUCTION_COORDINATE, 1)
 		relayEvents = new Set([unrelated, related])
 
-		const releases = await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 200, AUCTION_COORDINATE)
+		const releases = await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, 200, AUCTION_COORDINATE, injectedFetch)
 
 		expect(releases.map((event) => event.id)).toEqual(['related'])
 	})

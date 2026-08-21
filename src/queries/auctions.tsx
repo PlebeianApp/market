@@ -35,6 +35,8 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
+type EventFetcher = (filter: NostrFilter | NostrFilter[]) => Promise<NostrEventLike[]>
+
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
 export type PrivateAuctionClaimLookupResult =
@@ -272,6 +274,7 @@ export const fetchAuctionSettlementsForList = async (
 	auctionRootEventIds: string[],
 	auctionCoordinates: string[],
 	limit: number = 200,
+	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<Map<string, NostrEventLike[]>> => {
 	const ids = toStableUniqueStrings(auctionRootEventIds)
 	const coordinates = toStableUniqueStrings(auctionCoordinates)
@@ -295,7 +298,7 @@ export const fetchAuctionSettlementsForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await applesauceIo.fetchEvents(filters)
+	const events = await fetchFn(filters)
 	const settlements = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	const byAuction = new Map<string, NostrEventLike[]>()
@@ -329,6 +332,7 @@ export const fetchAuctionSettlementsForList = async (
 export const fetchAuctionPathReleasesForList = async (
 	auctionCoordinates: string[],
 	limit: number = 200,
+	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<Map<string, NostrEventLike[]>> => {
 	const coordinates = toStableUniqueStrings(auctionCoordinates)
 	if (coordinates.length === 0) return new Map()
@@ -344,7 +348,7 @@ export const fetchAuctionPathReleasesForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await applesauceIo.fetchEvents(filters)
+	const events = await fetchFn(filters)
 	const releases = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	const byCoordinate = new Map<string, NostrEventLike[]>()
@@ -410,6 +414,7 @@ export const fetchAuctionSettlements = async (
 	auctionEventId: string,
 	limit: number = 100,
 	auctionCoordinates?: string,
+	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
 
@@ -429,7 +434,7 @@ export const fetchAuctionSettlements = async (
 		})
 	}
 
-	const events = await applesauceIo.fetchEvents(filters)
+	const events = await fetchFn(filters)
 	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
@@ -443,6 +448,7 @@ export const fetchAuctionPathReleases = async (
 	auctionEventId: string,
 	limit: number = 200,
 	auctionCoordinates?: string,
+	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<NostrEventLike[]> => {
 	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
 	if (!filter) return []
@@ -451,7 +457,7 @@ export const fetchAuctionPathReleases = async (
 
 	void auctionEventId
 
-	const events = await applesauceIo.fetchEvents(filter)
+	const events = await fetchFn(filter)
 	return filterBlacklistedEvents(events)
 		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
