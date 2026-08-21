@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { getMediaType } from '@/lib/media'
 import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -226,13 +227,6 @@ export function ImageUploader({
     if (inputEditable) {
       setInputEditable(false)
     }
-  }
-
-  function getMediaType(url: string): 'image' | 'video' {
-    if (url.match(/\.(mp4|webm|ogg|mov)($|\?)/i)) {
-      return 'video'
-    }
-    return 'image'
   }
 
   return (

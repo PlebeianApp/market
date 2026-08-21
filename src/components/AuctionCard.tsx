@@ -1,4 +1,5 @@
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { Media } from '@/components/Media'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
@@ -124,7 +125,7 @@ export function AuctionCard({
 		>
 			<Link to={`/auctions/${auction.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images.length > 0 ? (
-					<img
+					<Media
 						src={images[0][1]}
 						alt={title}
 						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
