@@ -308,7 +308,7 @@ async function seedVerdict(
 	bidderPk: string,
 	claim: string,
 ): Promise<string> {
-	const dTag = `${bidderPk}:${auction.auctionRootEventId}`
+	const dTag = `${bidderPk}:${auction.auctionRootEventId}:${bidId}`
 	const tags: string[][] = [
 		['d', dTag],
 		['p', bidderPk],
