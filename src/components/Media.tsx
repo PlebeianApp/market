@@ -66,6 +66,7 @@ export function Media({
 		return (
 			<video
 				src={src}
+				aria-label={alt}
 				className={className}
 				style={style}
 				controls={controls}

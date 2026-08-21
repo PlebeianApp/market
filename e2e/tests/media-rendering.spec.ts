@@ -60,7 +60,15 @@ test.describe('media rendering', () => {
 		// Intercept the fake media host so no real external request is made
 		// (ADR-0005: tests must not contact external services). The assertion
 		// is on the <video> element, not on playback.
-		await page.route('**/example.invalid/**', (route) => route.abort())
+		await page.route('**/example.invalid/**', (route) => {
+			if (route.request().url().endsWith('.mp4')) {
+				// Fulfill the video with a tiny real MP4 so <video> loads without
+				// error (a failed load would fire Media's onError and swap to the
+				// fallback, making the <video> assertion race-y).
+				return route.fulfill({ status: 200, contentType: 'video/mp4', path: 'e2e/fixtures/tiny-video.mp4' })
+			}
+			return route.abort()
+		})
 
 		const relay = await Relay.connect(RELAY_URL)
 		const auction = await seedMediaAuction(relay)
@@ -71,7 +79,15 @@ test.describe('media rendering', () => {
 	})
 
 	test('auction renders an <img> for an image URL in the gallery', async ({ page }) => {
-		await page.route('**/example.invalid/**', (route) => route.abort())
+		await page.route('**/example.invalid/**', (route) => {
+			if (route.request().url().endsWith('.mp4')) {
+				// Fulfill the video with a tiny real MP4 so <video> loads without
+				// error (a failed load would fire Media's onError and swap to the
+				// fallback, making the <video> assertion race-y).
+				return route.fulfill({ status: 200, contentType: 'video/mp4', path: 'e2e/fixtures/tiny-video.mp4' })
+			}
+			return route.abort()
+		})
 
 		const relay = await Relay.connect(RELAY_URL)
 		const auction = await seedMediaAuction(relay)

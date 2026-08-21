@@ -6,7 +6,7 @@
 
 /** Returns whether a media URL points to a video (vs an image). */
 export function isVideoUrl(url: string): boolean {
-	return /\.(mp4|webm|ogg|mov)($|\?)/i.test(url)
+	return /\.(mp4|webm|ogg|mov)($|[?#])/i.test(url)
 }
 
 export function getMediaType(url: string): 'image' | 'video' {
