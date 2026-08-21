@@ -18,6 +18,7 @@ import { createVerdictPublisher } from './publisher'
 import { createNut7Poller } from './nut7Poller'
 import { createValidatorSubscriber } from './subscriber'
 import { publishValidatorPolicy } from './policy'
+import { recoverObservedAt } from './observedAtRecovery'
 import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
 
@@ -76,6 +77,18 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 
 	const publisher = createVerdictPublisher({ signer: options.signer, relayPool: options.relayPool })
 	const poller = createNut7Poller({ state, publisher, logger, mintProbePolicy: options.mintProbePolicy })
+
+	// Recover the validator's own first-observation timestamps from its
+	// prior kind-30440 verdicts on the relay BEFORE the subscriber starts
+	// replaying bids. Without this, a restart after an auction closed
+	// re-stamps every in-window bid `observed_at = now()` → `late_arrival`,
+	// which prevents `won_pending_settlement` from ever publishing (Fix 1).
+	const seedObservedAt = await recoverObservedAt({
+		relayPool: options.relayPool,
+		validatorPubkey,
+		logger,
+	})
+
 	const subscriber = createValidatorSubscriber({
 		state,
 		relayPool: options.relayPool,
@@ -83,6 +96,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		nut7Poller: poller,
 		logger,
 		mintProbePolicy: options.mintProbePolicy,
+		seedObservedAt,
 	})
 
 	await subscriber.start()

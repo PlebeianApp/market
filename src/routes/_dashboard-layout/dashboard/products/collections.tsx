@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Media } from '@/components/Media'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
@@ -26,7 +27,7 @@ function CollectionBasicInfo({ collection }: { collection: any }) {
 			<div className="space-y-3">
 				{headerImage && (
 					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
-						<img src={headerImage} alt="Collection header" className="w-full h-full object-cover" />
+						<Media src={headerImage} alt="Collection header" className="w-full h-full object-cover" />
 					</div>
 				)}
 				{summary && (

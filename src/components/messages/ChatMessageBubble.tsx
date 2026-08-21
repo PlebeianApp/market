@@ -1,4 +1,5 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { Media } from '@/components/Media'
 import { format } from 'date-fns' // For formatting timestamp
 import {
 	ShoppingCartIcon,
@@ -151,7 +152,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 		<div className="max-w-md rounded-lg border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
 			{hasImage && (
 				<div className="w-full h-40 bg-muted overflow-hidden">
-					<img src={image!} alt={title || 'Event image'} className="w-full h-full object-cover" />
+					<Media src={image!} alt={title || 'Event image'} className="w-full h-full object-cover" />
 				</div>
 			)}
 
@@ -243,7 +244,7 @@ const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 		<li className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
 			{images.length > 0 && (
 				<div className="h-12 w-12 flex-shrink-0 rounded-md border overflow-hidden bg-gray-100">
-					<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
+					<Media src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
 				</div>
 			)}
 
@@ -287,7 +288,7 @@ const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductE
 			<div className="flex gap-3 p-2 bg-gray-50 rounded-md border border-gray-200">
 				{imageUrl && (
 					<div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
-						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+						<Media src={imageUrl} alt={title} className="w-full h-full object-cover" />
 					</div>
 				)}
 

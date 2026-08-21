@@ -187,3 +187,24 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, label: string): 
 		)
 	})
 }
+
+/**
+ * Aggregate per-proof NUT-7 states into a single worst-case state per bid
+ * (fraud-oriented): any spent proof → `spent`, all unspent → `unspent`,
+ * otherwise `pending`. Returns `undefined` for an empty expected-proof list.
+ *
+ * This is the CLIENT-side aggregate used for winner derivation — the
+ * pre-settlement fraud signal ("any spent invalidates"), distinct from the
+ * settlement-completeness aggregate (all-spent) used on the validator's
+ * post-settlement path.
+ */
+export const aggregateBidNut7State = (proofStates: Map<string, Nut7ProofState>, proofYs: string[]): Nut7ProofState | undefined => {
+	if (!proofYs.length) return undefined
+	let allUnspent = true
+	for (const y of proofYs) {
+		const state = proofStates.get(y.toLowerCase())
+		if (state === 'spent') return 'spent'
+		if (state !== 'unspent') allUnspent = false
+	}
+	return allUnspent ? 'unspent' : 'pending'
+}

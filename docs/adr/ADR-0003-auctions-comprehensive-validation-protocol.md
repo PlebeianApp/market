@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Proposed (amended 2026-08-10 per ADR-0004; amended 2026-08-21 for per-bid d-tag + observed_at recovery)
 
 ## Date
 
@@ -181,6 +181,78 @@ Critical Checks:
 | T2.3 | Positive       | observed_at <= max_end_at.                       | true            | late_arrival   |
 | T2.4 | Positive       | created_at - observed_at <= max_skew_sec (120s). | true            | timestamp_skew |
 
+> **Amendment (2026-08): quorum-eligibility of verdict timestamps.** When a
+> client derives the canonical bid set from kind-30440 verdicts
+> (`computeValidatedBids`), T2.3/T2.4 are applied PER VERDICT as an
+> eligibility screen against the referenced bid's `created_at`: a verdict
+> counts toward the confirm quorum only if its own `observed_at` lies inside
+> the auction window and within `max_skew_sec` of the bid's `created_at`.
+> This is the anti-poisoning boundary for validator timestamps: a malicious
+> validator publishing an inflated `observed_at` (e.g. far past `max_end_at`)
+> fails its own timing check and simply does not count — the bid stays
+> `pending` rather than becoming `invalid`. No synthetic timestamp (MIN/
+> cap/aggregate across validators) is ever composed for re-validation: the
+> client-side re-run of `validateBid` uses the bid's own signed `created_at`,
+> which is deterministic across clients and never rejects an in-window bid on
+> timing grounds. Condemn claims (`bid_invalid`/`fraudulent_bid`) are gated
+> by the same quorum: a single condemning validator cannot veto a bid —
+> structural invalidity is deterministic, so honest validators converge and
+> quorum forms independently. Validators MUST stamp `observed_at` as
+> their own first-observation time on EVERY verdict (AUCTIONS.md §4.4.1) —
+> including `won_pending_settlement` upgrades — and the verdict publisher
+> enforces this (`src/server/auction-validator/publisher.ts`). Without
+> first-observation stamping, replaceable close-phase upgrades would carry
+> `publish-time > maxEndAt` timestamps and the eligibility screen would
+> drop every previously-confirmed bid to `pending` after close.
+
+> **Amendment (2026-08-21): per-bid d-tag addressability + restart
+> `observed_at` recovery + post-close `late_arrival` suppression.**
+> Three coordinated changes address a restart-after-close failure observed
+> in manual testing (PR #1144) where `won_pending_settlement` was never
+> published ("Cannot release path: only 0/1 auditors confirmed
+> won_pending_settlement"):
+>
+> 1. **Per-bid d-tag (§4.4.1).** The kind-30440 `d` tag changes from
+>    `<bidder>:<auction_root>` to `<bidder>:<auction_root>:<bid_event_id>`.
+>    The previous scheme shared one replaceable address across all of a
+>    bidder's legs in an auction, so a rebid's verdict DELETED the prior
+>    leg's verdict on the relay, breaking the validated chain. With the bid
+>    id in `d`, each leg gets its own address and a rebid no longer deletes
+>    prior evidence; the client quorum screen's rebid-chain backward-
+>    propagation (`computeValidatedBids`) is retained as belt-and-braces.
+>    The eventual direction — non-replaceable verdict events — is recorded
+>    here as the target; per-bid d-tags are the interim addressability fix.
+> 2. **`observed_at` recovery on restart (`observedAtRecovery.ts`).** The
+>    validator is memory-only (no persistence), so a restart wiped every
+>    bid's `observedAt` and the subscriber re-stamped replayed historical
+>    bids `observed_at = now()`. For an auction that had already closed,
+>    that re-stamped timestamp is outside the window → T2.3 flipped every
+>    in-window bid to `bid_invalid: late_arrival` → `pickWinningBid` found
+>    no `valid_bid_placed` bids → the winner was never assigned. On startup,
+>    the validator now fetches its OWN prior kind-30440 verdicts from the
+>    relay and seeds each bid's `observedAt` from the earliest surviving
+>    `observed_at` tag (the publisher stamps first-observation on every
+>    verdict). A bid the validator never saw before has no seed and falls
+>    back to `now()` (correct first observation).
+> 3. **Post-close `late_arrival` suppression (`publisher.ts` Fix 3).**
+>    Defense-in-depth for when recovery misses a bid (no prior verdict on
+>    the relay, relay unreachable): the publisher no longer emits
+>    `bid_invalid: late_arrival` once `now > max_end_at`. T2.3 `late_arrival`
+>    only fires for bids whose own `created_at` IS in-window (T2.1/T2.2
+>    passed); a validator that only first-observed such a bid post-close
+>    cannot legitimately CONDEMN it. Suppressing keeps any surviving prior
+>    `valid_bid_placed` on the relay intact (so the client still recognizes
+>    the winner); with no prior verdict the bid stays `pending` rather than
+>    `invalid`. The quorum-eligibility screen already drops these verdicts,
+>    so this is a source-side cleanup. Pre-close `late_arrival` (observed
+>    before `start_at`) is unchanged.
+>
+> The three fixes compose: (1) prevents cross-bid verdict deletion on the
+> relay, (2) prevents same-bid re-stamping on restart, (3) prevents a
+> post-close restart from condemning an in-window bid even when (2)
+> recovers nothing. Together they restore `won_pending_settlement`
+> publication after a validator restart that straddles auction close.
+
 #### 2.4 validateBidAmount(bidEvent, auctionContext, topBid, observedTime)
 
 | ID   | Condition Type | Check Description                        | Expected Result | Failure Label        |
@@ -201,7 +273,14 @@ Critical Checks:
 | R2.5 | Positive       | Chain terminates (no cycles).                | true            | replacement_chain_invalid |
 | R2.6 | Positive       | Delta amount = sum(proof amounts in leg).    | true            | delta_mismatch            |
 
-#### 2.6 validateBidMintState(bidEvent, mintClient)
+#### 2.6 validateBidMintState(bidEvent, mintClient) — amended per ADR-0004
+
+> **Amendment (ADR-0004):** NUT-7 ownership has moved from validators to the
+> client. The function signature and checks remain the same; the caller
+> changes from the server-side validator process to the client-side
+> descriptor/publisher. Validators no longer query the mint for proof state.
+> The client queries the mint directly via `checkProofStateBatch`
+> (`src/lib/cashu/nut7.ts`) using `proof_y` values from the bid event.
 
 | ID   | Condition Type | Check Description                      | Expected Result | Failure Label |
 | ---- | -------------- | -------------------------------------- | --------------- | ------------- |
@@ -246,6 +325,12 @@ Critical Checks:
 | S4.9  | Positive       | Payout sum == final_amount (for rebid chains).  | true            | payout_sum_mismatch    |
 | S4.10 | Positive       | All chain legs have corresponding Kind 1025.    | true            | partial_chain_release  |
 | S4.11 | Positive       | NUT-7 state for proofs is spent.                | true            | redemption_unconfirmed |
+
+> **Amendment (ADR-0004):** S4.11 is amended: the NUT-7 pre-check is
+> performed **client-side before redemption** for atomicity (all-unspent or
+> abort, no partial redemption), not as a validator post-check. See
+> ADR-0004 §4 (Publish-layer self-verification) for the atomicity
+> requirement.
 
 ## Appendix C: Implementation Guidelines
 

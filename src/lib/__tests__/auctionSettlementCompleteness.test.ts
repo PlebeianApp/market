@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -65,7 +65,10 @@ const buildAuction = (): ParsedAuctionEvent => ({
 	schema: 'auction_v1',
 })
 
-const buildBid = (auction: ParsedAuctionEvent, input: { id: string; amount: number; path: string; prevBidId?: string }): ParsedBidEvent => {
+const buildBid = (
+	auction: ParsedAuctionEvent,
+	input: { id: string; amount: number; path: string; prevBidId?: string; legLockedAmount?: number },
+): ParsedBidEvent => {
 	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(auction.p2pkXpub, input.path)
 	const locktime = auction.maxEndAt + auction.settlementGrace
 	const lockSecret = buildLockSecret(childPubkey, locktime)
@@ -78,6 +81,7 @@ const buildBid = (auction: ParsedAuctionEvent, input: { id: string; amount: numb
 		auctionCoordinate: auction.coordinate,
 		sellerPubkey: auction.sellerPubkey,
 		amount: input.amount,
+		legLockedAmount: input.legLockedAmount ?? input.amount,
 		currency: 'SAT',
 		mint: 'https://mint.test',
 		locktime,
@@ -96,6 +100,19 @@ const buildBid = (auction: ParsedAuctionEvent, input: { id: string; amount: numb
 const buildToken = (mint: string, secret: string, amount: number): string => {
 	const proof: Proof = {
 		id: '009a1f293253e41e',
+		amount,
+		secret,
+		C: '02' + '1'.repeat(64),
+	}
+	return getEncodedToken({ mint, proofs: [proof] })
+}
+
+const V2_KEYSET_ID = '01abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+const V2_MINT_KEYSETS: MintKeyset[] = [{ id: V2_KEYSET_ID, unit: 'sat', active: true }]
+
+const buildTokenV2 = (mint: string, secret: string, amount: number): string => {
+	const proof: Proof = {
+		id: V2_KEYSET_ID,
 		amount,
 		secret,
 		C: '02' + '1'.repeat(64),
@@ -194,7 +211,7 @@ describe('validateSettlementCompleteness', () => {
 	test('accepts a valid two-leg payout chain', () => {
 		const auction = buildAuction()
 		const leg1 = buildBid(auction, { id: '2'.repeat(64), amount: 60, path: 'm/0/0/0/0/1' })
-		const leg2 = buildBid(auction, { id: '3'.repeat(64), amount: 100, path: 'm/0/0/0/0/2', prevBidId: leg1.id })
+		const leg2 = buildBid(auction, { id: '3'.repeat(64), amount: 100, path: 'm/0/0/0/0/2', prevBidId: leg1.id, legLockedAmount: 40 })
 		const release1: ParsedPathReleaseEvent = {
 			...buildPathRelease(leg1, 'm/0/0/0/0/1', '5'.repeat(64)),
 			cashuToken: buildToken(leg1.mint, leg1.lockSecrets[0], 60),
@@ -387,5 +404,55 @@ describe('validateSettlementCompleteness', () => {
 
 		expect(result.isComplete).toBe(false)
 		if (!result.isComplete) expect(result.failureCode).toBe('nut7_not_spent')
+	})
+
+	test('accepts settlement with v2 keyset ID when mintKeysets are provided', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, { id: '2'.repeat(64), amount: 100, path: 'm/0/0/0/0/0' })
+		const release: ParsedPathReleaseEvent = {
+			...buildPathRelease(bid, 'm/0/0/0/0/0', '3'.repeat(64)),
+			cashuToken: buildTokenV2(bid.mint, bid.lockSecrets[0], 100),
+		}
+		const settlement = buildSettlement(auction, bid, release.id)
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: bid,
+			pathRelease: release,
+			winningBidClaim: 'won_pending_settlement',
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+			mintKeysets: V2_MINT_KEYSETS,
+		})
+
+		expect(result.isComplete).toBe(true)
+		if (result.isComplete) {
+			expect(result.payoutSum).toBe(100)
+			expect(result.legCount).toBe(1)
+		}
+	})
+
+	test('rejects settlement with v2 keyset ID when mintKeysets are not provided', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, { id: '2'.repeat(64), amount: 100, path: 'm/0/0/0/0/0' })
+		const release: ParsedPathReleaseEvent = {
+			...buildPathRelease(bid, 'm/0/0/0/0/0', '3'.repeat(64)),
+			cashuToken: buildTokenV2(bid.mint, bid.lockSecrets[0], 100),
+		}
+		const settlement = buildSettlement(auction, bid, release.id)
+
+		const result = validateSettlementCompleteness({
+			auction,
+			settlement,
+			winningBid: bid,
+			pathRelease: release,
+			winningBidClaim: 'won_pending_settlement',
+			winningBidPostCloseDecision: 'winner',
+			winningBidNut7State: 'spent',
+		})
+
+		expect(result.isComplete).toBe(false)
+		if (!result.isComplete) expect(result.failureCode).toBe('path_release_invalid')
 	})
 })

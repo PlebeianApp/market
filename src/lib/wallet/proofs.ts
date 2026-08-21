@@ -65,8 +65,9 @@ export function extractProofsByMint(wallet: NDKCashuWallet, knownMints?: string[
  * @returns Array of proofs or empty array
  */
 export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
-	const proofsByMint = extractProofsByMint(wallet, [mintUrl])
-	return proofsByMint.get(mintUrl) || []
+	// Pass onlyAvailable: true explicitly — dump() would otherwise return
+	// deleted proofs too, letting selectProofs pick already-spent inputs.
+	return wallet.state.getProofs({ mint: mintUrl, onlyAvailable: true }) ?? []
 }
 
 /**

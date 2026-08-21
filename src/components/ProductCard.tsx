@@ -1,4 +1,5 @@
 import { cartActions, useCart } from '@/lib/stores/cart'
+import { Media } from '@/components/Media'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
 import {
@@ -93,7 +94,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
 			{/* Square aspect ratio container for image */}
 			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (
-					<img
+					<Media
 						src={images[0][1]}
 						alt={title}
 						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"

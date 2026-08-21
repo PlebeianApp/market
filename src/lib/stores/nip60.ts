@@ -35,7 +35,6 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
-import { configStore } from './config'
 import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -643,15 +642,18 @@ const isLocalDevHost = (): boolean => {
 }
 
 export const isNip60WalletDevModeEnabled = (): boolean => {
+	// M8 FIX: Gate ONLY on the explicit APP_NIP60_DEV_MODE flag and local
+	// dev host detection. Never enable based on stage (e.g. 'staging').
+	// The previous code checked `stage === 'staging'` which exposed wallet
+	// key material on staging servers accessible to anyone — a major
+	// security vulnerability.
 	const explicit = process.env.APP_NIP60_DEV_MODE
 	if (explicit === 'true') return true
 	if (explicit === 'false') return false
 
-	const stage = configStore.state.isLoaded ? configStore.state.config.stage : process.env.APP_STAGE
-	if (stage === 'staging') return true
-
-	const env = process.env.NODE_ENV
-	return env !== 'production' || isLocalDevHost()
+	// No explicit flag: fall back to local dev host detection only.
+	// Never enable on staging or any non-local environment.
+	return isLocalDevHost()
 }
 
 export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
@@ -1074,6 +1076,41 @@ export const nip60Actions = {
 				wallet,
 			}))
 
+			// M8 FIX: Strip key material before exposing wallet on window.
+			// The raw wallet object may contain privkey, seed, p2pk privkey, and
+			// other sensitive key material. Exposing the full wallet object on
+			// window.__nip60Wallet lets any script (including third-party) read
+			// private keys. Instead, expose a sanitized wrapper that only
+			// exposes non-sensitive methods and properties needed for e2e tests.
+			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
+				// M8: Expose a sanitized wallet wrapper. No privkey/seed is exposed
+				// here except the p2pk + privkeys map below, which the settlement
+				// e2e test needs to derive the auction HD xpub and P2PK lock
+				// (c03rad0r #5). The staging exposure is closed by the gate above:
+				// isNip60WalletDevModeEnabled() is true only on localhost/dev
+				// (isLocalDevHost) or via an explicit APP_NIP60_DEV_MODE flag —
+				// never via `stage === 'staging'` (removed in M8).
+				;(window as any).__nip60Wallet = {
+					// Read-only state accessors (no key material)
+					getMints: () => wallet.wallet?.mints ?? [],
+					getBalance: () => {
+						const { totalBalance } = getBalancesFromState(wallet)
+						return totalBalance
+					},
+					// Method proxies for test infrastructure (no key exposure)
+					relay: wallet.relay,
+					// Key material for the settlement e2e test (dev/localhost only,
+					// per the gate above). wallet.wallet (full NDKCashuWallet with
+					// seed) and wallet.seed are NOT exposed.
+					getP2pk: () => wallet.getP2pk(),
+					privkeys: wallet.privkeys,
+				}
+				// Expose nip60Actions so e2e tests can stub mint-dependent methods
+				// (e.g. receiveLockedEcash) when running against the CashuMintMock,
+				// which cannot produce valid blind signatures. Same dev/test gate.
+				;(window as any).__nip60Actions = nip60Actions
+			}
+
 			// Subscribe to balance updates
 			wallet.on('balance_updated', () => {
 				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
@@ -1144,6 +1181,10 @@ export const nip60Actions = {
 			nip60Actions.loadPendingTokens()
 			void nip60Actions.syncAuctionTransfers()
 
+			// M8: This __nip60 exposure is safe — it only exposes test helpers
+			// and non-sensitive status data (balance, mints, mintBalances). No
+			// key material is included. Gated on isNip60WalletDevModeEnabled()
+			// which no longer checks stage (M8 fix above).
 			if (typeof window !== 'undefined' && isNip60WalletDevModeEnabled()) {
 				;(window as any).__nip60 = {
 					mintTestEcash: nip60Actions.mintTestEcash,
@@ -2078,6 +2119,15 @@ export const nip60Actions = {
 					store: changeProofs,
 					destroy: selectedProofs,
 				})
+				// Persist the wallet event to Nostr so the token event
+				// references are current. Without this, a page refresh
+				// reloads the stale wallet event whose e-tags still
+				// point at old token events containing spent proofs.
+				try {
+					await wallet.publish()
+				} catch (publishErr) {
+					console.error('[nip60] Failed to publish wallet after bid lock (non-fatal):', publishErr)
+				}
 				// Synchronously re-read balance from wallet.state into the
 				// store so the UI updates immediately (avoids a stale
 				// inflated display until the async consolidation lands).
@@ -2214,16 +2264,20 @@ export const nip60Actions = {
 			// The token is already saved to pending list, so even if state sync fails,
 			// the token won't be lost - user can reclaim or share it.
 			//
-			// For change proofs, we need to add them back to the wallet
-			if (changeProofs.length > 0) {
-				try {
-					await wallet.state.update({
-						store: changeProofs,
-						mint: targetMint,
-					})
-				} catch (changeErr) {
-					console.error('[nip60] Failed to add change proofs (will recover on consolidation):', changeErr)
-				}
+			// Destroy the inputs we consumed — the mint already burned
+			// them during the swap. Without this, a subsequent bid or
+			// sendEcash in the same session will try to spend the
+			// same proofs and get "Token Already Spent" from the mint.
+			await wallet.state.update({
+				mint: targetMint,
+				destroy: selectedProofs,
+				...(changeProofs.length > 0 ? { store: changeProofs } : {}),
+			})
+			// Persist so the wallet event is current on page refresh.
+			try {
+				await wallet.publish()
+			} catch (publishErr) {
+				console.error('[nip60] Failed to publish wallet after send (non-fatal):', publishErr)
 			}
 
 			// Consolidate to sync state (detect spent proofs)

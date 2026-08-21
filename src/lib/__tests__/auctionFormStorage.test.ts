@@ -91,6 +91,13 @@ describe('save/load roundtrip', () => {
 		expect(loaded!.formData.isNSFW).toBe(false)
 	})
 
+	test('a draft without a reserve reloads with empty string, not "0"', () => {
+		const draft = { ...baseDraft, formData: { ...baseDraft.formData, reserve: undefined } }
+		saveAuctionFormDraft(PUBKEY_A, draft)
+		const loaded = getAuctionFormDraft(PUBKEY_A)
+		expect(loaded!.formData.reserve).toBe('')
+	})
+
 	test('restores top-level draft fields', () => {
 		saveAuctionFormDraft(PUBKEY_A, baseDraft)
 		const loaded = getAuctionFormDraft(PUBKEY_A)
