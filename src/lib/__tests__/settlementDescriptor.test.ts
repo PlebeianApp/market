@@ -487,13 +487,13 @@ describe('getSettlementDescriptor', () => {
 			expect(d?.tone).toBe('waiting')
 		})
 
-		test('TDD: settled with unspent NUT-7 (seller not redeemed yet) → settlement badge, NOT verifying', async () => {
+		test('TDD: settled with unspent NUT-7 (seller not redeemed yet) → settlement-pending-redemption badge, NOT verifying', async () => {
 			// The seller just published the settlement event — they have NOT
 			// redeemed the proofs at the mint yet. The settlement is
 			// structurally valid (correct seller, winning bid, path release,
 			// payouts). NUT-7 spend state is fraud-detection evidence (has the
 			// seller actually redeemed?), not a validity gate for the settlement
-			// declaration. The badge should be 'settlement', not 'verifying'.
+			// declaration. The badge should be 'settlement-pending-redemption' (not 'verifying', and not the full 'settlement' which implies confirmed redemption).
 			const d = await getSettlementDescriptor(
 				winningBidInput({
 					currentUserPubkey: SELLER_PUBKEY,
@@ -512,7 +512,7 @@ describe('getSettlementDescriptor', () => {
 				}),
 			)
 			expect(d?.title).toBe('Awaiting Shipping Details')
-			expect(d?.verifiedBadge).toBe('settlement')
+			expect(d?.verifiedBadge).toBe('settlement-pending-redemption')
 		})
 
 		test('closed-reserve-not-met: settlement reserve_not_met -> NOT a refund card', async () => {

@@ -256,11 +256,13 @@ export function AuctionSettlement({
 	const badgeText =
 		descriptor.verifiedBadge === 'settlement'
 			? 'Verified · Settlement confirmed'
-			: descriptor.verifiedBadge === 'path-release'
-				? 'Verified · Path release confirmed'
-				: descriptor.verifiedBadge === 'verifying'
-					? 'Verifying…'
-					: null
+			: descriptor.verifiedBadge === 'settlement-pending-redemption'
+				? 'Settlement accepted · Awaiting redemption'
+				: descriptor.verifiedBadge === 'path-release'
+					? 'Verified · Path release confirmed'
+					: descriptor.verifiedBadge === 'verifying'
+						? 'Verifying…'
+						: null
 
 	const ctaHandler = dispatchCta(descriptor)
 	const ctaLabel = descriptor.cta?.label ?? ''

@@ -57,7 +57,7 @@ export interface SettlementDescriptor {
 	icon: SettlementIconKey
 	cta: SettlementCta | null
 	bidAmount: number
-	verifiedBadge: 'none' | 'settlement' | 'path-release' | 'verifying'
+	verifiedBadge: 'none' | 'settlement' | 'settlement-pending-redemption' | 'path-release' | 'verifying'
 }
 
 export interface GetSettlementDescriptorInput {
@@ -93,6 +93,14 @@ interface DerivedState {
 	settlementFinalAmount: number
 	settlementNamesMe: boolean
 	isSettlementPending: boolean
+	/**
+	 * True when the settlement is structurally valid but the winning bid's
+	 * proofs are NOT confirmed `spent` at the mint (the seller hasn't
+	 * redeemed yet). The settlement is accepted but redemption is pending.
+	 * Used to show `settlement-pending-redemption` badge instead of the
+	 * full `settlement` badge.
+	 */
+	isSettlementPendingRedemption: boolean
 	isMyBidTop: boolean
 	myAlreadyReleased: boolean
 	hasPathReleaseForTopBid: boolean
@@ -419,6 +427,14 @@ function deriveState(
 	const settlementNamesMe = !!currentUserPubkey && !!settlementWinner && settlementWinner === currentUserPubkey
 	const isSettlementPending = latestSettlement ? settlementValidities.get(latestSettlement.id) === 'pending' : false
 
+	// Whether the winning bid's proofs are confirmed `spent` at the mint.
+	// When the settlement is valid but proofs aren't spent yet (the seller
+	// hasn't redeemed), show a distinct badge (`settlement-pending-redemption`)
+	// rather than the full `settlement` badge.
+	const winnerNut7State = topBid ? input.nut7States?.get(topBid.id) : undefined
+	const isSettlementPendingRedemption =
+		hasLatestSettlement && settlementStatus === 'settled' && !isSettlementPending && winnerNut7State !== 'spent'
+
 	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = !!myTopBidEvent && pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
 	const hasPathReleaseForTopBid = !!topBid && pathReleases.some((pr) => pr.bidEventId === topBid.id)
@@ -447,6 +463,7 @@ function deriveState(
 		settlementFinalAmount,
 		settlementNamesMe,
 		isSettlementPending,
+		isSettlementPendingRedemption,
 		isMyBidTop,
 		myAlreadyReleased,
 		hasPathReleaseForTopBid,
@@ -548,7 +565,9 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 	const verifiedBadge: SettlementDescriptor['verifiedBadge'] = d.hasLatestSettlement
 		? d.isSettlementPending
 			? 'verifying'
-			: 'settlement'
+			: d.isSettlementPendingRedemption
+				? 'settlement-pending-redemption'
+				: 'settlement'
 		: d.hasPathReleaseForTopBid || d.myAlreadyReleased
 			? 'path-release'
 			: 'none'

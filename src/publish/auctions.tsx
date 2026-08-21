@@ -941,7 +941,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	const { parseAuctionEvent } = auctionEventMod
 	const { parseBidEvent } = bidEventMod
 	const { parseValidatorVerdictEvent } = validatorEventsMod
-	const { computeValidatedBids } = bidValidationMod
+	const { computeValidatedBids, validateBidChainNut7PrePublish } = bidValidationMod
 	const { checkProofStateBatch, aggregateBidNut7State } = nut7Mod
 
 	// 1. Auction event.
@@ -1163,6 +1163,19 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		cursor = getTag(leg, 'prev_bid') || undefined
 	}
 	if (chainBids.length === 0) throw new Error('Empty chain — should be impossible')
+
+	// 4b. Pre-publish NUT-7 gate: before committing to an irreversible
+	// settlement, verify every leg in the winning bid chain has confirmed
+	// unspent proofs. A `spent` state = pre-settlement double-spend fraud.
+	// Missing/unknown = the mint hasn't confirmed — the seller should retry.
+	// This gate is stricter than the read/display path (computeValidatedBids
+	// with skipNut7Check) because publishing a settlement is irreversible.
+	const parsedChainBids = chainBids
+		.map((b) => parseBidEvent(b))
+		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+		.map((r) => r.value)
+	const nut7Error = validateBidChainNut7PrePublish(parsedChainBids, nut7States)
+	if (nut7Error) throw new Error(nut7Error)
 
 	// 5. Path releases — collect a kind-1025 for every leg. The bidder
 	// publishes one per leg as part of `publishBidderPathRelease`.

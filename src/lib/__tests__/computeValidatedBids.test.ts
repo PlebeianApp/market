@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { computeValidatedBids } from '../auction/bidValidation'
+import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
@@ -422,5 +422,70 @@ describe('computeValidatedBids — canonical winner ordering', () => {
 			nut7States: unspent([bidEarly, bidLate]),
 		})
 		expect(result.canonicalWinner?.id).toBe(bidEarly.id)
+	})
+})
+
+describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
+	const auction = buildAuction()
+	const leg1 = buildBid(auction, { id: 'a'.repeat(63) + '1', amount: 1_000 })
+	const leg2 = buildBid(auction, { id: 'a'.repeat(63) + '2', amount: 1_200, prevBidId: leg1.id })
+	const chain = [leg1, leg2]
+
+	test('all unspent → null (safe to publish)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'unspent'],
+			[leg2.id, 'unspent'],
+		])
+		expect(validateBidChainNut7PrePublish(chain, nut7)).toBeNull()
+	})
+
+	test('any leg spent → error (double-spend fraud)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'spent'],
+			[leg2.id, 'unspent'],
+		])
+		const err = validateBidChainNut7PrePublish(chain, nut7)
+		expect(err).not.toBeNull()
+		expect(err).toMatch(/SPENT/)
+		expect(err).toMatch(leg1.id.slice(0, 8))
+	})
+
+	test('missing NUT-7 for any leg → error (cannot verify)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'unspent'],
+			// leg2 missing
+		])
+		const err = validateBidChainNut7PrePublish(chain, nut7)
+		expect(err).not.toBeNull()
+		expect(err).toMatch(/no confirmed NUT-7 state/)
+		expect(err).toMatch(leg2.id.slice(0, 8))
+	})
+
+	test('unknown NUT-7 → error (cannot verify)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'unknown'],
+			[leg2.id, 'unspent'],
+		])
+		const err = validateBidChainNut7PrePublish(chain, nut7)
+		expect(err).not.toBeNull()
+		expect(err).toMatch(/no confirmed NUT-7 state/)
+	})
+
+	test('pending NUT-7 → null (acceptable, not spent)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'pending'],
+			[leg2.id, 'unspent'],
+		])
+		expect(validateBidChainNut7PrePublish(chain, nut7)).toBeNull()
+	})
+
+	test('missing (mint omitted proof) → error', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'missing'],
+			[leg2.id, 'unspent'],
+		])
+		const err = validateBidChainNut7PrePublish(chain, nut7)
+		expect(err).not.toBeNull()
+		expect(err).toMatch(/omitted/)
 	})
 })

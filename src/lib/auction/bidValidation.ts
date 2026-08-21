@@ -22,6 +22,39 @@ export interface ValidatedBidSet {
 	currentTopValidAmount: number
 }
 
+/**
+ * Pre-publish NUT-7 gate: before the seller publishes a settlement (an
+ * irreversible action), verify that every bid in the winning bid chain has
+ * NUT-7 evidence that is NOT `spent` (pre-settlement double-spend fraud).
+ * The read/display path (`computeValidatedBids`) is lenient — a missing
+ * NUT-7 poll leaves a quorum-confirmed bid valid. But the publish path
+ * must not let the seller commit to a settlement for a double-spent bid.
+ *
+ * Returns `null` if the chain passes (safe to publish), or an error message
+ * describing the first problem found (spent proof, or missing/unreachable
+ * NUT-7 evidence for any leg).
+ *
+ * `nut7States` is the mint-reported NUT-7 states from `fetchNut7StatesForBids`.
+ * `chainBids` is the rebid chain (oldest → newest) from walking `prevBidId`.
+ */
+export function validateBidChainNut7PrePublish(chainBids: ParsedBidEvent[], nut7States: Map<string, Nut7ProofState>): string | null {
+	for (const bid of chainBids) {
+		const state = nut7States.get(bid.id)
+		if (state === 'spent') {
+			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has SPENT proofs — pre-settlement double-spend fraud detected. Do not publish a settlement for this bid chain.`
+		}
+		if (state === undefined || state === 'unknown') {
+			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has no confirmed NUT-7 state (got ${state ?? 'undefined'}). The mint must confirm all proofs are unspent before publishing a settlement. Retry in a moment.`
+		}
+		if (state === 'missing') {
+			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) — the mint omitted at least one proof from its NUT-7 response. Cannot verify unspent state.`
+		}
+		// 'unspent' or 'pending' → acceptable for publish (pending means the mint
+		// is processing; it's not spent)
+	}
+	return null
+}
+
 export interface ComputeValidatedBidsInput {
 	auction: ParsedAuctionEvent
 	bids: ParsedBidEvent[]
