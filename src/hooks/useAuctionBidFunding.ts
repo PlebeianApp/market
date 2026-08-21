@@ -141,7 +141,7 @@ interface StartFundingForBidInput {
 
 interface UseAuctionBidFundingOptions {
 	previousBidAmount: number
-	publishBid: (bidData: AuctionBidFormData) => Promise<unknown>
+	publishBid: (bidData: AuctionBidFormData) => Promise<string>
 	onBidSuccess?: () => void
 	onPendingRulesAck?: () => void
 	hasAcknowledgedRules: boolean
@@ -215,12 +215,14 @@ export function useAuctionBidFunding({
 	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
 	const [pendingRulesAckBidData, setPendingRulesAckBidData] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
+	const [publishedBidEventId, setPublishedBidEventId] = useState<string | null>(null)
 
 	const submitPreparedBid = useCallback(
 		async (bidData: AuctionBidFormData) => {
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
 			try {
-				await publishBid(bidData)
+				const bidEventId = await publishBid(bidData)
+				setPublishedBidEventId(bidEventId)
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				setPendingBidSubmission(null)
 				setIsDepositOpen(false)
@@ -388,5 +390,6 @@ export function useAuctionBidFunding({
 		handleDepositModalClose,
 		resumeBidAfterRulesAck,
 		retryBidPublish,
+		publishedBidEventId,
 	}
 }
