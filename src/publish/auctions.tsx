@@ -871,7 +871,6 @@ export const usePublishAuctionBidMutation = () => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
-			toast.success('Bid submitted')
 		},
 		onError: (error) => {
 			console.error('Failed to publish auction bid:', error)
