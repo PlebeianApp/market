@@ -25,7 +25,7 @@ import {
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions } from '@/queries/featured'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -64,7 +64,7 @@ function useFeaturedAuctionEvents(featuredAuctions: string[] | undefined) {
 
 	return results
 		.filter((result) => !result.isLoading && result.data)
-		.map((result) => result.data as NDKEvent)
+		.map((result) => result.data as NostrEventLike)
 		.filter((auction) => getAuctionImages(auction).length > 0)
 }
 
@@ -92,7 +92,7 @@ function AuctionsRoute() {
 		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
 
-	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
+	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NostrEventLike[], showNSFWContent)
 
 	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
@@ -103,7 +103,7 @@ function AuctionsRoute() {
 		...auctionsByPubkeyQueryOptions(userPubkey || '', 50),
 		enabled: !!userPubkey,
 	})
-	const myAuctions = filterNSFWAuctions((myAuctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
+	const myAuctions = filterNSFWAuctions((myAuctionsQuery.data ?? []) as NostrEventLike[], showNSFWContent)
 
 	// Previously Bid — auctions the user has bid on
 	const myBidsQuery = useAuctionBidsByBidder(userPubkey || '', 500)
