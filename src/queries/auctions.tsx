@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
@@ -30,6 +30,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
 import type { NostrFilter } from '@/lib/nostr/io'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
@@ -949,6 +950,33 @@ export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
 	useQuery({
 		...auctionBidsByBidderQueryOptions(pubkey, limit),
 	})
+
+/**
+ * Live subscription to a bidder's bid events (kind 1023 by author), routed
+ * through the applesauce I/O adapter. Used by the auctions home page
+ * "You Previously Bid" grid so it updates without polling.
+ */
+export const useAuctionBidsByBidderStream = (pubkey: string, limit: number = 500): { bids: NostrEventLike[]; isStreaming: boolean } => {
+	const filter = useMemo<NostrFilter | null>(
+		() => (pubkey ? { kinds: [AUCTION_BID_KIND], authors: [pubkey], limit } : null),
+		[pubkey, limit],
+	)
+	const { events, isStreaming } = useSubscriptionEvents(filter, !!pubkey)
+	const bids = useMemo(() => filterBlacklistedEvents(events), [events])
+	return { bids, isStreaming }
+}
+
+/**
+ * Live subscription to a seller's auction events (kind 30408 by author) with
+ * version collapsing, routed through applesauce. Used by the auctions home
+ * page "Your Auctions" grid so it updates without polling.
+ */
+export const useAuctionsByPubkeyStream = (pubkey: string, limit: number = 100): { auctions: NostrEventLike[]; isStreaming: boolean } => {
+	const filter = useMemo<NostrFilter | null>(() => (pubkey ? { kinds: [AUCTION_KIND], authors: [pubkey], limit } : null), [pubkey, limit])
+	const { events, isStreaming } = useSubscriptionEvents(filter, !!pubkey)
+	const auctions = useMemo(() => collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))), [events])
+	return { auctions, isStreaming }
+}
 
 export const useAuctionSettlements = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
 	useQuery({

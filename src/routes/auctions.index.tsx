@@ -18,9 +18,9 @@ import {
 	getAuctionImages,
 	getAuctionRootEventId,
 	getAuctionTitle,
-	auctionsByPubkeyQueryOptions,
-	useAuctionBidsByBidder,
+	useAuctionBidsByBidderStream,
 	useAuctionBidsForList,
+	useAuctionsByPubkeyStream,
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions } from '@/queries/featured'
@@ -96,26 +96,21 @@ function AuctionsRoute() {
 	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
 
-	// Your Auctions — auctions created by the current user
+	// Your Auctions — auctions created by the current user (live subscription)
 	const userPubkey = currentUser?.pubkey
-	const myAuctionsQuery = useQuery({
-		...auctionsByPubkeyQueryOptions(userPubkey || '', 50),
-		enabled: !!userPubkey,
-	})
-	const myAuctions = filterNSFWAuctions((myAuctionsQuery.data ?? []) as NostrEventLike[], showNSFWContent)
+	const { auctions: myAuctions, isStreaming: myAuctionsStreaming } = useAuctionsByPubkeyStream(userPubkey || '', 50)
+	const myAuctionsFiltered = filterNSFWAuctions(myAuctions, showNSFWContent)
 
-	// Previously Bid — auctions the user has bid on
-	const myBidsQuery = useAuctionBidsByBidder(userPubkey || '', 500)
+	// Previously Bid — auctions the user has bid on (live subscription)
+	const { bids: myBids, isStreaming: myBidsStreaming } = useAuctionBidsByBidderStream(userPubkey || '', 500)
 	const myBidAuctionIds = useMemo(() => {
-		if (!myBidsQuery.data?.length) return new Set<string>()
 		const ids = new Set<string>()
-		for (const bid of myBidsQuery.data) {
-			// Bid events reference their auction via the `e` tag (auction root event id).
+		for (const bid of myBids) {
 			const auctionId = bid.tags?.find((t) => t[0] === 'e')?.[1] || ''
 			if (auctionId) ids.add(auctionId)
 		}
 		return ids
-	}, [myBidsQuery.data])
+	}, [myBids])
 	const previouslyBidAuctions = useMemo(() => {
 		if (!myBidAuctionIds.size) return []
 		return auctions.filter((a) => {
@@ -319,23 +314,23 @@ function AuctionsRoute() {
 				</div>
 			)}
 
-			{isAuthenticated && userPubkey && (myAuctions.length > 0 || myAuctionsQuery.isLoading) && (
+			{isAuthenticated && userPubkey && (myAuctionsFiltered.length > 0 || myAuctionsStreaming) && (
 				<div className="px-8 py-4">
 					<AuctionSectionGrid
 						title="Your Auctions"
-						auctions={myAuctions}
-						loading={myAuctionsQuery.isLoading}
+						auctions={myAuctionsFiltered}
+						loading={myAuctionsStreaming}
 						bidsByAuctionId={bidsByAuctionId}
 					/>
 				</div>
 			)}
 
-			{isAuthenticated && userPubkey && (previouslyBidAuctions.length > 0 || myBidsQuery.isLoading) && (
+			{isAuthenticated && userPubkey && (previouslyBidAuctions.length > 0 || myBidsStreaming) && (
 				<div className="px-8 py-4">
 					<AuctionSectionGrid
 						title="You Previously Bid"
 						auctions={previouslyBidAuctions}
-						loading={myBidsQuery.isLoading}
+						loading={myBidsStreaming}
 						bidsByAuctionId={bidsByAuctionId}
 					/>
 				</div>
