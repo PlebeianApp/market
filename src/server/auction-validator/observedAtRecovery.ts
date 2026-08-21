@@ -69,8 +69,8 @@ export interface RecoverObservedAtDeps {
  * build a `bidEventId → earliest observed_at` seed. The earliest verdict for
  * a bid carries the first observation (the publisher stamps the same
  * `observed_at` on every verdict for a bid, but taking the MIN is defensive
- * against any anomaly). Malformed events (missing `bid`/`observed_at` tags,
- * or a mismatched d-tag) are skipped.
+ * against any anomaly). Malformed events (missing `bid` or `observed_at`
+ * tags, or non-numeric `observed_at`) are skipped.
  */
 export const buildObservedAtSeed = (verdictEvents: NostrEvent[]): ObservedAtSeed => {
 	const seed: ObservedAtSeed = new Map()

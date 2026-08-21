@@ -371,10 +371,13 @@ const buildSettlementChain = (
 const buildProofStateMap = (bidState: ValidatorBidState): Map<string, ReturnType<typeof aggregateProofStates>> => {
 	const perProof = new Map<string, ReturnType<typeof aggregateProofStates>>()
 	for (const proofY of bidState.bid.proofYs) {
-		// B1 (ADR-0004): Default absent NUT-7 to 'unspent' — the poller has
-		// been removed and NUT-7 is now client-side-only evidence.
-		const state = bidState.nut7States.get(proofY.toLowerCase())?.state ?? 'unspent'
-		perProof.set(proofY.toLowerCase(), state)
+		// ADR-0004 §3: never default absent NUT-7 to 'unspent' — only the
+		// mint's response may convert a proof state. Skip unset proofs so
+		// the completeness check sees them as missing rather than unspent.
+		const snapshot = bidState.nut7States.get(proofY.toLowerCase())
+		if (snapshot) {
+			perProof.set(proofY.toLowerCase(), snapshot.state)
+		}
 	}
 	return perProof
 }

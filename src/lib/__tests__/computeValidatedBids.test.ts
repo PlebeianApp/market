@@ -436,18 +436,30 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 			[leg1.id, 'unspent'],
 			[leg2.id, 'unspent'],
 		])
-		expect(validateBidChainNut7PrePublish(chain, nut7)).toBeNull()
+		expect(validateBidChainNut7PrePublish(chain, nut7, 100)).toBeNull()
 	})
 
-	test('any leg spent → error (double-spend fraud)', () => {
+	test('spent pre-locktime → null (already redeemed by this seller, resumable)', () => {
+		// After a crash between legs, leg 1 is all-spent (seller redeemed it).
+		// Pre-locktime, only the seller's child privkey can spend, so
+		// all-spent = already redeemed → skip, not fraud.
 		const nut7 = new Map<string, Nut7ProofState>([
 			[leg1.id, 'spent'],
 			[leg2.id, 'unspent'],
 		])
-		const err = validateBidChainNut7PrePublish(chain, nut7)
+		// now (100) < locktime (maxEndAt + settlementGrace = 2_100 + 3_600 = 5_700)
+		expect(validateBidChainNut7PrePublish(chain, nut7, 100)).toBeNull()
+	})
+
+	test('spent post-locktime → error (ambiguous: could be bidder refund)', () => {
+		const nut7 = new Map<string, Nut7ProofState>([
+			[leg1.id, 'spent'],
+			[leg2.id, 'unspent'],
+		])
+		// now (6_000) > locktime (5_700) → spent is ambiguous
+		const err = validateBidChainNut7PrePublish(chain, nut7, 6_000)
 		expect(err).not.toBeNull()
-		expect(err).toMatch(/SPENT/)
-		expect(err).toMatch(leg1.id.slice(0, 8))
+		expect(err).toMatch(/ambiguous|refund|locktime/i)
 	})
 
 	test('missing NUT-7 for any leg → error (cannot verify)', () => {
@@ -455,7 +467,7 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 			[leg1.id, 'unspent'],
 			// leg2 missing
 		])
-		const err = validateBidChainNut7PrePublish(chain, nut7)
+		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
 		expect(err).not.toBeNull()
 		expect(err).toMatch(/no confirmed NUT-7 state/)
 		expect(err).toMatch(leg2.id.slice(0, 8))
@@ -466,17 +478,22 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 			[leg1.id, 'unknown'],
 			[leg2.id, 'unspent'],
 		])
-		const err = validateBidChainNut7PrePublish(chain, nut7)
+		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
 		expect(err).not.toBeNull()
 		expect(err).toMatch(/no confirmed NUT-7 state/)
 	})
 
-	test('pending NUT-7 → null (acceptable, not spent)', () => {
+	test('pending NUT-7 → error (in-flight swap, retry — ADR-0004 §4.5)', () => {
+		// PENDING is an in-flight swap, possibly the bidder's own spend.
+		// A leg can flip to SPENT between the gate and the seller's swap.
+		// Treat like unknown (retry), not as publishable.
 		const nut7 = new Map<string, Nut7ProofState>([
 			[leg1.id, 'pending'],
 			[leg2.id, 'unspent'],
 		])
-		expect(validateBidChainNut7PrePublish(chain, nut7)).toBeNull()
+		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
+		expect(err).not.toBeNull()
+		expect(err).toMatch(/pending|retry|in-flight/i)
 	})
 
 	test('missing (mint omitted proof) → error', () => {
@@ -484,7 +501,7 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 			[leg1.id, 'missing'],
 			[leg2.id, 'unspent'],
 		])
-		const err = validateBidChainNut7PrePublish(chain, nut7)
+		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
 		expect(err).not.toBeNull()
 		expect(err).toMatch(/omitted/)
 	})

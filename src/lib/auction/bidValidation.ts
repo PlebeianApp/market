@@ -36,12 +36,29 @@ export interface ValidatedBidSet {
  *
  * `nut7States` is the mint-reported NUT-7 states from `fetchNut7StatesForBids`.
  * `chainBids` is the rebid chain (oldest → newest) from walking `prevBidId`.
+ * `now` is the current unix timestamp, used to determine whether a `spent`
+ * leg is pre-locktime (already redeemed by this seller — resumable) or
+ * post-locktime (ambiguous — could be bidder refund).
  */
-export function validateBidChainNut7PrePublish(chainBids: ParsedBidEvent[], nut7States: Map<string, Nut7ProofState>): string | null {
+export function validateBidChainNut7PrePublish(
+	chainBids: ParsedBidEvent[],
+	nut7States: Map<string, Nut7ProofState>,
+	now: number,
+): string | null {
 	for (const bid of chainBids) {
 		const state = nut7States.get(bid.id)
 		if (state === 'spent') {
-			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has SPENT proofs — pre-settlement double-spend fraud detected. Do not publish a settlement for this bid chain.`
+			// All proofs spent. Pre-locktime, only the seller's child privkey
+			// can spend (the refund branch is timelocked), so all-spent
+			// pre-locktime IS seller-bound redemption evidence (e.g. a
+			// previous settlement attempt that crashed after this leg).
+			// Post-locktime the bidder's refund path is also open — then
+			// all-spent is ambiguous and we must abort (can't safely settle).
+			if (now >= bid.locktime) {
+				return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has SPENT proofs post-locktime — ambiguous (could be bidder refund). Cannot safely publish a settlement.`
+			}
+			// Pre-locktime: already redeemed by this seller → skip, not fraud.
+			continue
 		}
 		if (state === undefined || state === 'unknown') {
 			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has no confirmed NUT-7 state (got ${state ?? 'undefined'}). The mint must confirm all proofs are unspent before publishing a settlement. Retry in a moment.`
@@ -49,8 +66,13 @@ export function validateBidChainNut7PrePublish(chainBids: ParsedBidEvent[], nut7
 		if (state === 'missing') {
 			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) — the mint omitted at least one proof from its NUT-7 response. Cannot verify unspent state.`
 		}
-		// 'unspent' or 'pending' → acceptable for publish (pending means the mint
-		// is processing; it's not spent)
+		if (state === 'pending') {
+			// PENDING is an in-flight swap — possibly the bidder's own spend.
+			// A leg can flip to SPENT between the gate and the seller's swap.
+			// Per ADR-0004 §4.5, treat like unknown (retry), not publishable.
+			return `Chain leg ${bid.id.slice(0, 8)}… (${bid.amount} sats) has PENDING NUT-7 state (in-flight swap). Retry when the mint confirms unspent.`
+		}
+		// 'unspent' → acceptable for publish
 	}
 	return null
 }

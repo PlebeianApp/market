@@ -1174,7 +1174,13 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		.map((b) => parseBidEvent(b))
 		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
 		.map((r) => r.value)
-	const nut7Error = validateBidChainNut7PrePublish(parsedChainBids, nut7States)
+	if (parsedChainBids.length !== chainBids.length) {
+		throw new Error(
+			`Chain leg parse mismatch: ${chainBids.length} raw legs but only ${parsedChainBids.length} parsed. ` +
+				`Cannot safely settle — a leg may have a malformed structure that bypasses the NUT-7 fraud check.`,
+		)
+	}
+	const nut7Error = validateBidChainNut7PrePublish(parsedChainBids, nut7States, now)
 	if (nut7Error) throw new Error(nut7Error)
 
 	// 5. Path releases — collect a kind-1025 for every leg. The bidder

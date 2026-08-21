@@ -247,7 +247,7 @@ function DashboardAuctionDetailRoute() {
 	const startAt = getAuctionStartAt(auction)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
-	const trustedMints = getAuctionMints(auction)
+	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const summary = getAuctionSummary(auction) || auction?.content || 'No summary provided yet.'
 	const previewImage = getAuctionImages(auction)[0]?.[1]
