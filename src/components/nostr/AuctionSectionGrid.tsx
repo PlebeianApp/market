@@ -2,13 +2,13 @@ import { AuctionCard } from '@/components/AuctionCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { cn } from '@/lib/utils'
 import { getAuctionRootEventId } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { Loader2 } from 'lucide-react'
 
 interface AuctionSectionGridProps {
 	title: string
-	auctions: NDKEvent[]
-	bidsByAuctionId?: Map<string, NDKEvent[]>
+	auctions: NostrEventLike[]
+	bidsByAuctionId?: Map<string, NostrEventLike[]>
 	loading?: boolean
 	emptyMessage?: string
 	className?: string

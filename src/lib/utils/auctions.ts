@@ -1,5 +1,5 @@
 import { getAuctionCategories, getAuctionBiddingCutoffAt, getAuctionStartingBid, getAuctionTitle } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useMemo } from 'react'
 
 export type AuctionSortOption = 'newest' | 'oldest' | 'ending-soon' | 'highest-starting-bid' | 'title-a-z' | 'title-z-a'
@@ -36,8 +36,8 @@ export interface AuctionFilterState {
 }
 
 export interface UseFilteredAuctionsProps {
-	auctions: NDKEvent[]
-	bidsByAuctionId?: Map<string, NDKEvent[]>
+	auctions: NostrEventLike[]
+	bidsByAuctionId?: Map<string, NostrEventLike[]>
 	filters: AuctionFilterState
 	tag: string | undefined
 }

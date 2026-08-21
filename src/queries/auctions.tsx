@@ -26,14 +26,13 @@ import {
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
-import { fetchNdkEventSet } from '@/lib/nostr/ndk-events'
+import type { NostrFilter } from '@/lib/nostr/io'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -92,7 +91,7 @@ export const isAuctionDeleted = (dTag: string, eventCreatedAt?: number) => {
 	return eventCreatedAt < deletionTimestamp
 }
 
-const filterDeletedAuctions = (events: NDKEvent[]): NDKEvent[] => {
+const filterDeletedAuctions = (events: NostrEventLike[]): NostrEventLike[] => {
 	return events.filter((event) => {
 		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
 		if (!dTag) return true
@@ -100,8 +99,8 @@ const filterDeletedAuctions = (events: NDKEvent[]): NDKEvent[] => {
 	})
 }
 
-const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
-	const eventsById = new Map<string, NDKEvent>()
+const dedupeEventsById = (events: NostrEventLike[]): NostrEventLike[] => {
+	const eventsById = new Map<string, NostrEventLike>()
 	for (const event of events) {
 		eventsById.set(event.id, event)
 	}
@@ -118,29 +117,24 @@ const chunkStrings = (values: string[], size: number): string[][] => {
 	return chunks
 }
 
-const cloneAuctionEventWithRootId = (
-	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
-	event: NDKEvent,
-	rootEventId: string,
-): NDKEvent => {
-	const cloned = new NDKEvent(ndk, event.rawEvent())
-	cloned.tags = [...cloned.tags.filter((tag) => tag[0] !== AUCTION_ROOT_EVENT_ID_TAG), [AUCTION_ROOT_EVENT_ID_TAG, rootEventId]]
-	return cloned
-}
+const cloneAuctionEventWithRootId = (event: NostrEventLike, rootEventId: string): NostrEventLike => ({
+	...event,
+	tags: [...event.tags.filter((tag) => tag[0] !== AUCTION_ROOT_EVENT_ID_TAG), [AUCTION_ROOT_EVENT_ID_TAG, rootEventId]],
+})
 
-const getAuctionGroupingKey = (event: NDKEvent): string => {
+const getAuctionGroupingKey = (event: NostrEventLike): string => {
 	const dTag = getAuctionId(event)
 	return dTag ? `${event.pubkey}:${dTag}` : event.id
 }
 
-const resolveCanonicalAuctionEvent = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, events: NDKEvent[]): NDKEvent | null => {
+const resolveCanonicalAuctionEvent = (events: NostrEventLike[]): NostrEventLike | null => {
 	const resolved = resolveAuctionVersionSet(events)
 	if (!resolved) return null
-	return cloneAuctionEventWithRootId(ndk, resolved.displayEvent, resolved.rootEventId)
+	return cloneAuctionEventWithRootId(resolved.displayEvent, resolved.rootEventId)
 }
 
-const collapseAuctionVersions = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, events: NDKEvent[]): NDKEvent[] => {
-	const groupedEvents = new Map<string, NDKEvent[]>()
+const collapseAuctionVersions = (events: NostrEventLike[]): NostrEventLike[] => {
+	const groupedEvents = new Map<string, NostrEventLike[]>()
 	for (const event of events) {
 		const key = getAuctionGroupingKey(event)
 		const group = groupedEvents.get(key)
@@ -149,101 +143,87 @@ const collapseAuctionVersions = (ndk: NonNullable<ReturnType<typeof ndkActions.g
 	}
 
 	return Array.from(groupedEvents.values())
-		.map((group) => resolveCanonicalAuctionEvent(ndk, group))
-		.filter((event): event is NDKEvent => !!event)
+		.map((group) => resolveCanonicalAuctionEvent(group))
+		.filter((event): event is NostrEventLike => !!event)
 }
 
-const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: number = 50): Promise<NDKEvent[]> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk || !pubkey || !dTag) return []
+const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: number = 50): Promise<NostrEventLike[]> => {
+	if (!pubkey || !dTag) return []
 
-	const events = await ndkActions.fetchEventsWithTimeout(
-		{
-			kinds: [AUCTION_KIND],
-			authors: [pubkey],
-			'#d': [dTag],
-			limit,
-		},
-		{ timeoutMs: 8000 },
-	)
-	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))
+	const events = await applesauceIo.fetchEvents({
+		kinds: [AUCTION_KIND],
+		authors: [pubkey],
+		'#d': [dTag],
+		limit,
+	})
+	return filterDeletedAuctions(filterBlacklistedEvents(events))
 }
 
-export const fetchAuctions = async (limit: number = 200) => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) {
-		console.warn('NDK not ready, returning empty auction list')
-		return []
-	}
-
-	const filter: NDKFilter = {
+export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike[]> => {
+	const filter: NostrFilter = {
 		kinds: [AUCTION_KIND],
 		limit,
 	}
 
-	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
-	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
+	const events = await applesauceIo.fetchEvents(filter)
+	return collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
 }
 
-export const fetchAuction = async (id: string) => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) {
-		console.warn('NDK not ready, cannot fetch auction')
-		return null
-	}
+export const fetchAuction = async (id: string): Promise<NostrEventLike | null> => {
 	if (!id) return null
 
-	const filter: NDKFilter = {
+	const filter: NostrFilter = {
 		kinds: [AUCTION_KIND],
 		ids: [id],
 		limit: 1,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	const event = Array.from(events)[0] ?? null
+	const events = await applesauceIo.fetchEvents(filter)
+	const event = events[0] ?? null
 	if (!event) return null
 	const dTag = getAuctionId(event)
 	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
 	if (!dTag) return filterBlacklistedEvents([event])[0] || null
 
 	const versionEvents = await fetchAuctionVersionEvents(event.pubkey, dTag)
-	return resolveCanonicalAuctionEvent(ndk, dedupeEventsById([event, ...versionEvents]))
+	return resolveCanonicalAuctionEvent(dedupeEventsById([event, ...versionEvents]))
 }
 
-export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100) => {
+export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const filter: NDKFilter = {
+	const filter: NostrFilter = {
 		kinds: [AUCTION_KIND],
 		authors: [pubkey],
 		limit,
 	}
 
-	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
-	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
+	const events = await applesauceIo.fetchEvents(filter)
+	return collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
 }
 
-export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+export const fetchAuctionByATag = async (pubkey: string, dTag: string): Promise<NostrEventLike | null> => {
 	if (!pubkey || !dTag) return null
 
 	const versionEvents = await fetchAuctionVersionEvents(pubkey, dTag)
 	if (versionEvents.length === 0) {
-		const naddr = naddrFromAddress(30408, pubkey, dTag)
-		const event = await ndk.fetchEvent(naddr)
+		const fallbackEvents = await applesauceIo.fetchEvents({
+			kinds: [AUCTION_KIND],
+			authors: [pubkey],
+			'#d': [dTag],
+			limit: 1,
+		})
+		const event = fallbackEvents[0] ?? null
 		if (!event) return null
 		if (isAuctionDeleted(dTag, event.created_at)) return null
-		return resolveCanonicalAuctionEvent(ndk, [event])
+		return resolveCanonicalAuctionEvent([event])
 	}
 
-	return resolveCanonicalAuctionEvent(ndk, versionEvents)
+	return resolveCanonicalAuctionEvent(versionEvents)
 }
 
 /**
@@ -256,32 +236,30 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
  * `kinds: [1023], '#e': [...ids]` filter and slices the result per auction in
  * memory.
  *
- * Returns a Map<rootEventId, NDKEvent[]> keyed by the auction root event id.
+ * Returns a Map<rootEventId, NostrEventLike[]> keyed by the auction root event id.
  */
-export const fetchAuctionBidsForList = async (auctionRootEventIds: string[], limit: number = 1000): Promise<Map<string, NDKEvent[]>> => {
+export const fetchAuctionBidsForList = async (
+	auctionRootEventIds: string[],
+	limit: number = 1000,
+): Promise<Map<string, NostrEventLike[]>> => {
 	const ids = Array.from(new Set(auctionRootEventIds.filter(Boolean)))
 	if (ids.length === 0) return new Map()
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(
-		{
-			kinds: [AUCTION_BID_KIND],
-			'#e': ids,
-			limit,
-		},
-		{ timeoutMs: 8000 },
-	)
+	const events = await applesauceIo.fetchEvents({
+		kinds: [AUCTION_BID_KIND],
+		'#e': ids,
+		limit,
+	})
 
-	const byAuctionId = new Map<string, NDKEvent[]>()
+	const byAuctionId = new Map<string, NostrEventLike[]>()
 	for (const id of ids) byAuctionId.set(id, [])
-	for (const bid of filterBlacklistedEvents(Array.from(events))) {
+	for (const bid of filterBlacklistedEvents(events)) {
 		const auctionEventId = bid.tags.find((tag) => tag[0] === 'e')?.[1]
 		if (!auctionEventId) continue
 		const bucket = byAuctionId.get(auctionEventId)
 		if (bucket) bucket.push(bid)
 	}
-	byAuctionId.forEach((bucket) => bucket.sort((a: NDKEvent, b: NDKEvent) => (a.created_at || 0) - (b.created_at || 0)))
+	byAuctionId.forEach((bucket) => bucket.sort((a, b) => (a.created_at || 0) - (b.created_at || 0)))
 	return byAuctionId
 }
 
@@ -293,14 +271,12 @@ export const fetchAuctionSettlementsForList = async (
 	auctionRootEventIds: string[],
 	auctionCoordinates: string[],
 	limit: number = 200,
-): Promise<Map<string, NDKEvent[]>> => {
+): Promise<Map<string, NostrEventLike[]>> => {
 	const ids = toStableUniqueStrings(auctionRootEventIds)
 	const coordinates = toStableUniqueStrings(auctionCoordinates)
 	if (ids.length === 0 && coordinates.length === 0) return new Map()
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return new Map()
 
-	const filters: NDKFilter[] = []
+	const filters: NostrFilter[] = []
 	for (const idChunk of chunkStrings(ids, AUCTION_LIST_FILTER_CHUNK_SIZE)) {
 		filters.push({
 			kinds: [AUCTION_SETTLEMENT_KIND],
@@ -318,12 +294,10 @@ export const fetchAuctionSettlementsForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
-	const settlements = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort(
-		(a, b) => (b.created_at || 0) - (a.created_at || 0),
-	)
+	const events = await applesauceIo.fetchEvents(filters)
+	const settlements = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	const byAuction = new Map<string, NDKEvent[]>()
+	const byAuction = new Map<string, NostrEventLike[]>()
 	for (const id of ids) byAuction.set(id, [])
 	for (const coordinate of coordinates) byAuction.set(coordinate, [])
 
@@ -354,13 +328,11 @@ export const fetchAuctionSettlementsForList = async (
 export const fetchAuctionPathReleasesForList = async (
 	auctionCoordinates: string[],
 	limit: number = 200,
-): Promise<Map<string, NDKEvent[]>> => {
+): Promise<Map<string, NostrEventLike[]>> => {
 	const coordinates = toStableUniqueStrings(auctionCoordinates)
 	if (coordinates.length === 0) return new Map()
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return new Map()
 
-	const filters: NDKFilter[] = []
+	const filters: NostrFilter[] = []
 	for (const coordinateChunk of chunkStrings(coordinates, AUCTION_LIST_FILTER_CHUNK_SIZE)) {
 		filters.push({
 			kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
@@ -371,10 +343,10 @@ export const fetchAuctionPathReleasesForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
-	const releases = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const events = await applesauceIo.fetchEvents(filters)
+	const releases = filterBlacklistedEvents(dedupeEventsById(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	const byCoordinate = new Map<string, NDKEvent[]>()
+	const byCoordinate = new Map<string, NostrEventLike[]>()
 	for (const coordinate of coordinates) byCoordinate.set(coordinate, [])
 
 	for (const release of releases) {
@@ -395,12 +367,14 @@ export const fetchAuctionPathReleasesForList = async (
 	return byCoordinate
 }
 
-export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) => {
+export const fetchAuctionBids = async (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const filters: NDKFilter[] = []
+	const filters: NostrFilter[] = []
 	if (auctionEventId) {
 		filters.push({
 			kinds: [AUCTION_BID_KIND],
@@ -416,29 +390,29 @@ export const fetchAuctionBids = async (auctionEventId: string, limit: number = 5
 		})
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+	const events = await applesauceIo.fetchEvents(filters)
+	return filterBlacklistedEvents(events).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
-export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 500) => {
+export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 500): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const events = await fetchNdkEventSet(applesauceIo, ndk, {
+	const events = await applesauceIo.fetchEvents({
 		kinds: [AUCTION_BID_KIND],
 		authors: [pubkey],
 		limit,
 	})
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
-export const fetchAuctionSettlements = async (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) => {
+export const fetchAuctionSettlements = async (
+	auctionEventId: string,
+	limit: number = 100,
+	auctionCoordinates?: string,
+): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const filters: NDKFilter[] = []
+	const filters: NostrFilter[] = []
 	if (auctionEventId) {
 		filters.push({
 			kinds: [AUCTION_SETTLEMENT_KIND],
@@ -454,8 +428,8 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 		})
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const events = await applesauceIo.fetchEvents(filters)
+	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 /**
@@ -468,23 +442,21 @@ export const fetchAuctionPathReleases = async (
 	auctionEventId: string,
 	limit: number = 200,
 	auctionCoordinates?: string,
-): Promise<NDKEvent[]> => {
+): Promise<NostrEventLike[]> => {
 	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
 	if (!filter) return []
 	const coordinate = filter['#a']?.[0]
 	if (!coordinate) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
 	void auctionEventId
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events))
+	const events = await applesauceIo.fetchEvents(filter)
+	return filterBlacklistedEvents(events)
 		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
-export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number = 200): NDKFilter | null {
+export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number = 200): NostrFilter | null {
 	const coordinate = auctionCoordinates?.trim()
 	if (!coordinate) return null
 	return {
@@ -494,7 +466,7 @@ export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undef
 	}
 }
 
-export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordinates: string): boolean {
+export function isAuctionPathReleaseForCoordinate(event: NostrEventLike, auctionCoordinates: string): boolean {
 	return event.tags.some((tag) => tag[0] === 'a' && tag[1] === auctionCoordinates)
 }
 
@@ -507,20 +479,18 @@ export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
-): Promise<NDKEvent[]> => {
+): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const filter: NDKFilter = {
+	const filter: NostrFilter = {
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
 		limit,
 	}
-	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
-	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
+	if (auctionEventId) filter['#e'] = [auctionEventId]
+	if (auctionCoordinates) filter['#a'] = [auctionCoordinates]
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const events = await applesauceIo.fetchEvents(filter)
+	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const auctionsQueryOptions = (limit: number = 200) =>
@@ -658,19 +628,20 @@ export const auctionVerdictsQueryOptions = (auctionEventId: string, limit: numbe
 		refetchInterval: 5000,
 	})
 
-export const getAuctionId = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'd')?.[1] || ''
-export const getAuctionRootEventId = (event: NDKEvent | null): string => (event ? getAuctionRootEventIdValue(event) : '')
+export const getAuctionId = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'd')?.[1] || ''
+export const getAuctionRootEventId = (event: NostrEventLike | null): string => (event ? getAuctionRootEventIdValue(event) : '')
 
-export const getAuctionTitle = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Auction'
+export const getAuctionTitle = (event: NostrEventLike | null): string =>
+	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Auction'
 
-export const getAuctionSummary = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
+export const getAuctionSummary = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
 
-export const getAuctionCategories = (event: NDKEvent | null): string[] => {
+export const getAuctionCategories = (event: NostrEventLike | null): string[] => {
 	if (!event) return []
 	return event.tags.filter((tag) => tag[0] === 't' && !!tag[1]).map((tag) => tag[1])
 }
 
-export const getAuctionImages = (event: NDKEvent | null): Array<string[]> => {
+export const getAuctionImages = (event: NostrEventLike | null): Array<string[]> => {
 	if (!event) return []
 	return event.tags
 		.filter((t) => t[0] === 'image')
@@ -681,28 +652,28 @@ export const getAuctionImages = (event: NDKEvent | null): Array<string[]> => {
 		})
 }
 
-export const getAuctionEndAt = (event: NDKEvent | null): number => {
+export const getAuctionEndAt = (event: NostrEventLike | null): number => {
 	return event ? getAuctionEndAtValue(event) : 0
 }
 
-export const getAuctionStartAt = (event: NDKEvent | null): number => {
+export const getAuctionStartAt = (event: NostrEventLike | null): number => {
 	return event ? getAuctionStartAtValue(event) : 0
 }
 
-export const getAuctionEffectiveEndAt = (event: NDKEvent | null, bids: NDKEvent[] = []): number => {
+export const getAuctionEffectiveEndAt = (event: NostrEventLike | null, bids: NostrEventLike[] = []): number => {
 	if (!event) return 0
 	return computeAuctionEffectiveEndAt(event, bids)
 }
 
-export const getAuctionMaxEndAt = (event: NDKEvent | null): number => (event ? getAuctionMaxEndAtValue(event) : 0)
+export const getAuctionMaxEndAt = (event: NostrEventLike | null): number => (event ? getAuctionMaxEndAtValue(event) : 0)
 
-export const getAuctionBiddingCutoffAt = (event: NDKEvent | null): number => (event ? getAuctionBiddingCutoffAtValue(event) : 0)
+export const getAuctionBiddingCutoffAt = (event: NostrEventLike | null): number => (event ? getAuctionBiddingCutoffAtValue(event) : 0)
 
-export const getAuctionSettlementGrace = (event: NDKEvent | null): number => (event ? getAuctionSettlementGraceValue(event) : 0)
+export const getAuctionSettlementGrace = (event: NostrEventLike | null): number => (event ? getAuctionSettlementGraceValue(event) : 0)
 
-export const getAuctionExtensionRule = (event: NDKEvent | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
+export const getAuctionExtensionRule = (event: NostrEventLike | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
 
-export const getAuctionStartingBid = (event: NDKEvent | null): number => {
+export const getAuctionStartingBid = (event: NostrEventLike | null): number => {
 	if (!event) return 0
 
 	const startingBidTag = event.tags.find((t) => t[0] === 'starting_bid')
@@ -720,25 +691,25 @@ export const getAuctionStartingBid = (event: NDKEvent | null): number => {
 	return 0
 }
 
-export const getAuctionBidIncrement = (event: NDKEvent | null): number => {
+export const getAuctionBidIncrement = (event: NostrEventLike | null): number => {
 	if (!event) return 1
 	const tag = event.tags.find((t) => t[0] === 'bid_increment')
 	const parsed = tag?.[1] ? parseInt(tag[1], 10) : NaN
 	return !isNaN(parsed) && parsed > 0 ? parsed : 1
 }
 
-export const getAuctionReserve = (event: NDKEvent | null): number => {
+export const getAuctionReserve = (event: NostrEventLike | null): number => {
 	if (!event) return 0
 	const tag = event.tags.find((t) => t[0] === 'reserve')
 	const parsed = tag?.[1] ? parseInt(tag[1], 10) : NaN
 	return !isNaN(parsed) ? parsed : 0
 }
 
-export const getAuctionType = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'auction_type')?.[1] || 'english'
+export const getAuctionType = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'auction_type')?.[1] || 'english'
 
-export const getAuctionCurrency = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'currency')?.[1] || 'SAT'
+export const getAuctionCurrency = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'currency')?.[1] || 'SAT'
 
-export const getAuctionMints = (event: NDKEvent | null): string[] => {
+export const getAuctionMints = (event: NostrEventLike | null): string[] => {
 	if (!event) return []
 	return event.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1])
 }
@@ -750,19 +721,19 @@ export const getAuctionMints = (event: NDKEvent | null): string[] => {
  * settlement scheme (which lives in the `settlement_policy` tag, e.g.
  * `cashu_p2pk_path_oracle_v1`).
  */
-export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
+export const getAuctionKeyScheme = (event: NostrEventLike | null): 'hd_p2pk' => {
 	if (!event) return 'hd_p2pk'
 	const raw = event.tags.find((tag) => tag[0] === 'key_scheme')?.[1]
 	return raw === 'hd_p2pk' ? raw : 'hd_p2pk'
 }
 
-export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
+export const getAuctionP2pkXpub = (event: NostrEventLike | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 
 /**
  * Validator pubkeys the auction trusts to audit its bids. Auction events
  * under `cashu_p2pk_bidder_path_v1` use repeated `auditors` tags (§4.1).
  */
-export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
+export const getAuctionAuditors = (event: NostrEventLike | null): string[] =>
 	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
 
 /**
@@ -771,14 +742,14 @@ export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
  * none are listed. Phase 7 (reputation UI) will swap call sites to the
  * proper multi-value {@link getAuctionAuditors}.
  */
-export const getAuctionPathIssuer = (event: NDKEvent | null): string => getAuctionAuditors(event)[0] || ''
+export const getAuctionPathIssuer = (event: NostrEventLike | null): string => getAuctionAuditors(event)[0] || ''
 
-export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
+export const getAuctionSettlementPolicy = (event: NostrEventLike | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
 
-export const getAuctionSchema = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
+export const getAuctionSchema = (event: NostrEventLike | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
 
-export const getAuctionShippingOptions = (event: NDKEvent | null): Array<{ shippingRef: string; extraCost: string }> => {
+export const getAuctionShippingOptions = (event: NostrEventLike | null): Array<{ shippingRef: string; extraCost: string }> => {
 	if (!event) return []
 	return event.tags
 		.filter((tag) => tag[0] === 'shipping_option' && !!tag[1])
@@ -788,7 +759,7 @@ export const getAuctionShippingOptions = (event: NDKEvent | null): Array<{ shipp
 		}))
 }
 
-export const getAuctionSpecs = (event: NDKEvent | null): Array<{ key: string; value: string }> => {
+export const getAuctionSpecs = (event: NostrEventLike | null): Array<{ key: string; value: string }> => {
 	if (!event) return []
 	return event.tags
 		.filter((tag) => tag[0] === 'spec' && !!tag[1])
@@ -798,7 +769,7 @@ export const getAuctionSpecs = (event: NDKEvent | null): Array<{ key: string; va
 		}))
 }
 
-export const getBidAmount = (bidEvent: NDKEvent | null): number => {
+export const getBidAmount = (bidEvent: NostrEventLike | null): number => {
 	if (!bidEvent) return 0
 	const amountTag = bidEvent.tags.find((tag) => tag[0] === 'amount')?.[1]
 	const parsed = amountTag ? parseInt(amountTag, 10) : NaN
@@ -813,13 +784,13 @@ export const getBidAmount = (bidEvent: NDKEvent | null): number => {
 	}
 }
 
-export const getBidAuctionEventId = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'e')?.[1] || ''
+export const getBidAuctionEventId = (bidEvent: NostrEventLike | null): string => bidEvent?.tags.find((tag) => tag[0] === 'e')?.[1] || ''
 
-export const getBidAuctionCoordinates = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'a')?.[1] || ''
+export const getBidAuctionCoordinates = (bidEvent: NostrEventLike | null): string => bidEvent?.tags.find((tag) => tag[0] === 'a')?.[1] || ''
 
-export const getBidSellerPubkey = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'p')?.[1] || ''
+export const getBidSellerPubkey = (bidEvent: NostrEventLike | null): string => bidEvent?.tags.find((tag) => tag[0] === 'p')?.[1] || ''
 
-export const getBidMint = (bidEvent: NDKEvent | null): string => {
+export const getBidMint = (bidEvent: NostrEventLike | null): string => {
 	if (!bidEvent) return ''
 	const tagMint = bidEvent.tags.find((tag) => tag[0] === 'mint')?.[1]
 	if (tagMint) return tagMint
@@ -831,56 +802,56 @@ export const getBidMint = (bidEvent: NDKEvent | null): string => {
 	}
 }
 
-export const getBidStatus = (bidEvent: NDKEvent | null): string => {
+export const getBidStatus = (bidEvent: NostrEventLike | null): string => {
 	if (!bidEvent) return 'unknown'
 	return bidEvent.tags.find((tag) => tag[0] === 'status')?.[1] || 'unknown'
 }
 
-export const getBidLocktime = (bidEvent: NDKEvent | null): number => {
+export const getBidLocktime = (bidEvent: NostrEventLike | null): number => {
 	if (!bidEvent) return 0
 	const parsed = parseInt(bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1] || '0', 10)
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
-export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: NDKEvent[], startingBid: number = 0): number =>
+export const getAuctionCurrentPriceFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[], startingBid: number = 0): number =>
 	auction
 		? computeAuctionCurrentPrice(auction, bids, startingBid)
 		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
 
-export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
+export const getAuctionBidCountFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
 
-export const getAuctionTopBidFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | null => {
+export const getAuctionTopBidFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[]): NostrEventLike | null => {
 	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
 	if (validBids.length === 0) return null
 	return validBids.reduce((top, bid) => (getBidAmount(bid) > getBidAmount(top) ? bid : top), validBids[0])
 }
 
-export const getAuctionSettlementStatus = (settlementEvent: NDKEvent | null): AuctionSettlementStatus => {
+export const getAuctionSettlementStatus = (settlementEvent: NostrEventLike | null): AuctionSettlementStatus => {
 	if (!settlementEvent) return 'unknown'
 	const status = settlementEvent.tags.find((tag) => tag[0] === 'status')?.[1]
 	if (status === 'settled' || status === 'reserve_not_met' || status === 'cancelled') return status
 	return 'unknown'
 }
 
-export const getAuctionSettlementWinningBid = (settlementEvent: NDKEvent | null): string =>
+export const getAuctionSettlementWinningBid = (settlementEvent: NostrEventLike | null): string =>
 	settlementEvent?.tags.find((tag) => tag[0] === 'winning_bid')?.[1] || ''
 
-export const getAuctionSettlementWinner = (settlementEvent: NDKEvent | null): string =>
+export const getAuctionSettlementWinner = (settlementEvent: NostrEventLike | null): string =>
 	settlementEvent?.tags.find((tag) => tag[0] === 'winner')?.[1] || ''
 
-export const getAuctionSettlementFinalAmount = (settlementEvent: NDKEvent | null): number => {
+export const getAuctionSettlementFinalAmount = (settlementEvent: NostrEventLike | null): number => {
 	if (!settlementEvent) return 0
 	const parsed = parseInt(settlementEvent.tags.find((tag) => tag[0] === 'final_amount')?.[1] || '0', 10)
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
-export const isNSFWAuction = (event: NDKEvent | null): boolean => {
+export const isNSFWAuction = (event: NostrEventLike | null): boolean => {
 	if (!event) return false
 	return event.tags.find((t) => t[0] === 'content-warning')?.[1] === 'nsfw'
 }
 
-export const filterNSFWAuctions = (events: NDKEvent[], showNSFW: boolean): NDKEvent[] => {
+export const filterNSFWAuctions = (events: NostrEventLike[], showNSFW: boolean): NostrEventLike[] => {
 	if (showNSFW) return events
 	return events.filter((event) => !isNSFWAuction(event))
 }
@@ -899,7 +870,7 @@ export function buildAuctionBidFilters(rootEventId: string, coordinates: string 
 	return filters
 }
 
-export function mergeAndSortBids(existing: NDKEvent[], incoming: NDKEvent[]): NDKEvent[] {
+export function mergeAndSortBids(existing: NostrEventLike[], incoming: NostrEventLike[]): NostrEventLike[] {
 	const existingIds = new Set(existing.map((b) => b.id))
 	const fresh = incoming.filter((b) => !existingIds.has(b.id))
 	if (fresh.length === 0) return existing
@@ -910,11 +881,11 @@ export function useStreamingAuctionBids(
 	auctionRootEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
-): { bids: NDKEvent[]; isStreaming: boolean } {
-	const [bids, setBids] = useState<NDKEvent[]>([])
+): { bids: NostrEventLike[]; isStreaming: boolean } {
+	const [bids, setBids] = useState<NostrEventLike[]>([])
 	const [isStreaming, setIsStreaming] = useState(false)
 	const seenIds = useRef(new Set<string>())
-	const pendingBids = useRef<NDKEvent[]>([])
+	const pendingBids = useRef<NostrEventLike[]>([])
 	const eoseReceived = useRef(false)
 
 	useEffect(() => {
@@ -931,7 +902,7 @@ export function useStreamingAuctionBids(
 		const filters = buildAuctionBidFilters(auctionRootEventId, auctionCoordinates, limit)
 		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
 
-		sub.on('event', (event: NDKEvent) => {
+		sub.on('event', (event: NostrEventLike) => {
 			if (seenIds.current.has(event.id)) return
 			seenIds.current.add(event.id)
 			const [filtered] = filterBlacklistedEvents([event])
@@ -1003,19 +974,17 @@ export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, 
  * These are identified by having an `a` tag matching the auction coordinates and a
  * `type` tag of ORDER_CREATION ('1').
  */
-export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promise<NDKEvent[]> => {
+export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promise<NostrEventLike[]> => {
 	if (!auctionCoordinates) return []
-	const ndk = ndkActions.getNDK()
-	if (!ndk) return []
 
-	const filter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+	const filter: NostrFilter = {
+		kinds: [ORDER_PROCESS_KIND as unknown as number],
 		'#a': [auctionCoordinates],
 		limit: 20,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 })
-	return Array.from(events)
+	const events = await applesauceIo.fetchEvents(filter)
+	return events
 		.filter((e) => {
 			const type = e.tags.find((t) => t[0] === 'type')?.[1]
 			return type === ORDER_MESSAGE_TYPE.ORDER_CREATION
