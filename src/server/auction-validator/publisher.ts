@@ -5,9 +5,14 @@
  * Suppression discipline: we only publish when the derived verdict
  * differs from what we last published for that bid (claim or reason
  * change). `detail` differences are noise and don't trigger
- * republish. Since kind-30440 is parameterised-replaceable (d-tag =
- * `<bidder>:<auction_root>`), each (bidder, auction) triple has at
- * most one event per validator in flight on relays at any time.
+ * republish. Since kind-30440 is parameterised-replaceable on d-tag =
+ * `<bidder>:<auction_root>:<bid_event_id>` (per-bid addressability,
+ * ADR-0003 §4.4.1 amendment), each (validator, bidder, auction, bid)
+ * quadruple has at most one event per validator in flight on relays at
+ * any time. A bid's lifecycle verdicts (valid_bid_placed →
+ * won_pending_settlement → settled) share the d-tag (same bid) and
+ * replace one another; different bids get independent addresses so a
+ * rebid no longer deletes the prior leg's verdict.
  *
  * No state mutation here — the caller (lifecycle composer) updates
  * the in-memory bid state via {@link markVerdictPublished} after the
@@ -20,7 +25,7 @@ import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import type { EventTemplate } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '../../lib/auction/constants'
 import { buildValidatorVerdictTags } from '../../lib/auction/tagBuilders'
-import { aggregateProofStates, markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
+import { markVerdictPublished, type ValidatorAuctionState, type ValidatorBidState } from './state'
 import { assignCloseRoles, assignLateValidLoserRole, deriveVerdict, verdictChanged, type DerivedVerdict } from './lifecycle'
 
 // ============================================================================
@@ -61,16 +66,24 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 	 * (the subscriber, the NUT-7 poller) can log or batch.
 	 */
 	const publishIfChanged = async (input: PublishVerdictInput): Promise<PublishVerdictResult> => {
-		const observedAt = now()
+		const nowUnix = now()
+		// Stamp `observed_at` with this validator's FIRST observation of the
+		// bid (AUCTIONS.md §4.4.1), not publish time. On close, kind-30440
+		// upgrades (won_pending_settlement / lost_pending_refund) REPLACE the
+		// in-window valid_bid_placed verdicts — if they were re-stamped to
+		// `now() > maxEndAt`, a client-side quorum-eligibility screen
+		// (ADR-0003 §2.3 amendment) would drop every previously confirmed
+		// bid to `pending` after close and winner derivation would break.
+		const observedAt = input.bidState.observedAt
 
-		if (!input.auctionState.closeHandled && observedAt > input.auctionState.auction.maxEndAt) {
+		if (!input.auctionState.closeHandled && nowUnix > input.auctionState.auction.maxEndAt) {
 			assignCloseRoles(input.auctionState)
 		}
 
 		let verdict = deriveVerdict({
 			auctionState: input.auctionState,
 			bidState: input.bidState,
-			now: observedAt,
+			now: nowUnix,
 			currentTopBid: input.currentTopBid,
 		})
 
@@ -87,7 +100,7 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 			verdict = deriveVerdict({
 				auctionState: input.auctionState,
 				bidState: input.bidState,
-				now: observedAt,
+				now: nowUnix,
 				currentTopBid: input.currentTopBid,
 			})
 		}
@@ -96,11 +109,33 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 			return { verdict, published: false }
 		}
 
+		// Fix 3 (defense-in-depth): suppress publishing `bid_invalid: late_arrival`
+		// once the auction has closed (`now > max_end_at`). Post-close, a fresh
+		// (unrecovered) `observed_at` is always outside the window, so any
+		// in-window bid observed for the first time post-close would derive
+		// `late_arrival`. But `late_arrival` (T2.3) only fires for bids whose
+		// own `created_at` IS in-window (T2.1/T2.2 already passed) — the
+		// validator simply saw it late, which is not grounds to CONDEMN a
+		// validly-placed bid. Publishing it would (a) feed a condemn the
+		// quorum-eligibility screen drops anyway (ADR-0003 §2.3), and (b)
+		// replace a surviving prior `valid_bid_placed` on the relay with a
+		// condemn. Suppressing keeps the prior verdict intact so the client
+		// still recognizes the winner; with no prior verdict the bid simply
+		// stays `pending` (correct — the validator can't attest to timing it
+		// didn't observe). Fix 1 (observed_at recovery) is the primary restart
+		// defense; this ensures that even when recovery misses a bid, a
+		// post-close restart never condemns an in-window bid. Pre-close
+		// `late_arrival` (observed before `start_at`) is left untouched.
+		if (verdict.claim === 'bid_invalid' && verdict.reason === 'late_arrival' && nowUnix > input.auctionState.auction.maxEndAt) {
+			return { verdict, published: false }
+		}
+
 		const template = buildVerdictEventTemplate({
 			auctionState: input.auctionState,
 			bidState: input.bidState,
 			verdict,
 			observedAt,
+			publishedAt: nowUnix,
 		})
 
 		const signed = await deps.signer.signEvent(template)
@@ -122,11 +157,12 @@ interface BuildTemplateInput {
 	bidState: ValidatorBidState
 	verdict: DerivedVerdict
 	observedAt: number
+	/** Actual publish time (unix seconds) — used as the event `created_at` so the relay's replaceable semantics keep the LATEST verdict. Distinct from `observedAt` (the validator's first-observation timestamp, carried in the `observed_at` tag for the client quorum screen). */
+	publishedAt: number
 }
 
 const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => {
-	const { auctionState, bidState, verdict, observedAt } = input
-	const nut7State = aggregateProofStates(bidState.nut7States, bidState.bid.proofYs)
+	const { auctionState, bidState, verdict, observedAt, publishedAt } = input
 	const tags = buildValidatorVerdictTags({
 		bidderPubkey: bidState.bid.bidderPubkey,
 		auctionRootEventId: auctionState.auction.rootEventId,
@@ -135,23 +171,29 @@ const buildVerdictEventTemplate = (input: BuildTemplateInput): EventTemplate => 
 		claim: verdict.claim,
 		observedAt,
 		reason: typeof verdict.reason === 'string' ? verdict.reason : undefined,
-		nut7State: nut7State === 'unknown' ? undefined : nut7State,
-		nut7ObservedAt: nut7State !== 'unknown' ? observedAt : undefined,
 	})
 
-	// Free-form content carries diagnostics: bid amount, the verdict's
-	// detail (when present), and the per-proof NUT-7 snapshot count.
-	// Strict consumers ignore it; debug UIs surface it.
+	// Free-form content carries diagnostics: bid amount and the verdict's
+	// detail (when present). NUT-7 state is no longer included — the client
+	// queries the mint directly via checkProofStateBatch (ADR-0004).
 	const content = JSON.stringify({
 		bid_amount: bidState.bid.amount,
 		detail: verdict.detail,
-		nut7_proof_count: bidState.nut7States.size,
-		nut7_proofs_expected: bidState.bid.proofYs.length,
 	})
 
 	return {
 		kind: VALIDATOR_VERDICT_KIND as unknown as number,
-		created_at: observedAt,
+		// `created_at` is the actual publish time so the relay's replaceable
+		// semantics (latest `created_at` wins) keep the newest verdict — a
+		// `won_pending_settlement` upgrade MUST replace the earlier
+		// `valid_bid_placed`, which requires a strictly greater `created_at`.
+		// The validator's first-observation timestamp is carried separately in
+		// the `observed_at` tag (client quorum-eligibility screen uses the tag,
+		// not the event field — ADR-0003 §2.3 amendment). Previously both
+		// verdicts shared `created_at = observedAt`, so the relay kept the first
+		// (`valid_bid_placed`) and silently dropped the `won_pending_settlement`
+		// upgrade — the "0/1 auditors confirmed won_pending_settlement" failure.
+		created_at: publishedAt,
 		tags,
 		content,
 	}

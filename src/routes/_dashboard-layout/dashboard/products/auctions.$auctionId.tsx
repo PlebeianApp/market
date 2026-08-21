@@ -13,6 +13,14 @@ import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
+// B4: Imports for settlement validation
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
+import { useNut7Polling } from '@/lib/auction/useNut7Polling'
+import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -49,6 +57,7 @@ import {
 	useAuctionClaimOrders,
 	useAuctionPathReleases,
 	useAuctionSettlements,
+	useAuctionVerdicts,
 	usePrivateAuctionClaimForOrder,
 } from '@/queries/auctions'
 import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
@@ -238,13 +247,17 @@ function DashboardAuctionDetailRoute() {
 	const startAt = getAuctionStartAt(auction)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
-	const trustedMints = getAuctionMints(auction)
+	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const summary = getAuctionSummary(auction) || auction?.content || 'No summary provided yet.'
 	const previewImage = getAuctionImages(auction)[0]?.[1]
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
+	// Client-side NUT-7 evidence (ADR-0004 §3): winner derivation needs
+	// mint-reported proof states; without them every quorum-confirmed bid
+	// stays bid_pending_review and settled settlements fail Check 3 below.
+	const nut7States = useNut7Polling(bids, trustedMints)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const now = countdown.now
@@ -255,7 +268,105 @@ function DashboardAuctionDetailRoute() {
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
 	const settlements = settlementsQuery.data ?? []
-	const latestSettlement = settlements[0] || null
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const verdictsData = verdictsQuery.data ?? []
+
+	// B4: Validate settlements before using them. The previous code read
+	// `settlements[0]` (newest by created_at) with NO validation, allowing
+	// a malicious settlement to surface claim-order/shipping UI. We now:
+	// 1. Parse the auction + bids + verdicts and call computeValidatedBids.
+	// 2. Parse each settlement and check seller pubkey, auction reference.
+	// 3. For 'settled': verify winner pubkey matches a validated bid.
+	// 4. For 'reserve_not_met'/'cancelled': verify no reserve-meeting bid.
+	// 5. Pick the latest valid settlement, preferring 'settled'.
+	const latestSettlement = useMemo<(typeof settlements)[0] | null>(() => {
+		if (!auction || settlements.length === 0) return null
+
+		// Parse the auction event (NDKEvent → raw event for NostrEventLike compat).
+		const parsedAuctionResult = parseAuctionEvent(auction.rawEvent())
+		if (!parsedAuctionResult.ok) return null
+		const parsedAuction = parsedAuctionResult.value
+
+		// Parse bids (NDKEvent → raw event → ParsedBidEvent).
+		const parsedBids = bids
+			.map((b) => parseBidEvent(b.rawEvent()))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+			.map((r) => r.value)
+
+		// Parse verdicts.
+		const parsedVerdicts = verdictsData
+			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+
+		// Settlement-aware NUT-7 spend masking (#11): `spent` is fraud before the
+		// seller settles, but 'seller already redeemed' after a valid `settled`
+		// settlement exists. Only treat `spent` as benign when a structurally-valid
+		// `settled` settlement is present (correct seller + auction refs).
+		const settledBidIds = new Set<string>()
+		for (const s of settlements) {
+			const parsedResult = parseSettlementEvent(s.rawEvent())
+			if (!parsedResult.ok) continue
+			if (!isStructurallyValidSettledSettlement(parsedResult.value, parsedAuction)) continue
+			if (parsedResult.value.winningBidId) settledBidIds.add(parsedResult.value.winningBidId)
+			for (const p of parsedResult.value.payouts ?? []) settledBidIds.add(p.bidEventId)
+		}
+		const hasSettledSettlement = settledBidIds.size > 0
+
+		// Compute validated bids using quorum evidence.
+		const validatedBidSet = computeValidatedBids({
+			auction: parsedAuction,
+			bids: parsedBids,
+			verdicts: parsedVerdicts,
+			nut7States,
+			postSettlement: hasSettledSettlement,
+			settledBidIds,
+		})
+		const validatedBidderPubkeys = new Set(validatedBidSet.validBids.map((b) => b.bidderPubkey.toLowerCase()))
+		const hasReserveMeetingBid = validatedBidSet.validBids.some((b) => b.amount >= parsedAuction.reserve)
+
+		// Parse + validate each settlement.
+		const validSettlements: Array<{
+			ndkEvent: (typeof settlements)[0]
+			parsed: import('@/lib/auction/events').ParsedSettlementEvent
+			status: string
+		}> = []
+		for (const s of settlements) {
+			const parsedResult = parseSettlementEvent(s.rawEvent())
+			if (!parsedResult.ok) continue
+			const parsed = parsedResult.value
+
+			// Check 1: seller pubkey matches auction seller.
+			if (parsed.sellerPubkey.toLowerCase() !== auction.pubkey.toLowerCase()) continue
+			// Check 2: auction root + coordinate match.
+			if (parsed.auctionRootEventId !== parsedAuction.rootEventId || parsed.auctionCoordinate !== parsedAuction.coordinate) continue
+
+			// Check 3: For 'settled', verify winner pubkey matches a validated bid.
+			if (parsed.status === 'settled') {
+				if (!parsed.winnerPubkey || !validatedBidderPubkeys.has(parsed.winnerPubkey.toLowerCase())) continue
+			}
+
+			// Check 4: For 'reserve_not_met'/'cancelled', verify no reserve-meeting validated bid exists.
+			if (parsed.status === 'reserve_not_met' || parsed.status === 'cancelled') {
+				if (hasReserveMeetingBid) continue
+			}
+
+			validSettlements.push({ ndkEvent: s, parsed, status: parsed.status })
+		}
+
+		if (validSettlements.length === 0) return null
+
+		// Pick the latest valid settlement, preferring 'settled' (B3).
+		validSettlements.sort((a, b) => {
+			// Settled always wins over non-settled.
+			if (a.status === 'settled' && b.status !== 'settled') return -1
+			if (b.status === 'settled' && a.status !== 'settled') return 1
+			// Among same status, prefer newest by created_at.
+			return (b.parsed.createdAt || 0) - (a.parsed.createdAt || 0)
+		})
+
+		return validSettlements[0]?.ndkEvent ?? null
+	}, [auction, settlements, bids, verdictsData, nut7States])
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {

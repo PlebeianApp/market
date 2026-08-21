@@ -9,9 +9,13 @@
  *
  * Process-restart safety: everything here is rebuilt on subscribe.
  * Kind-30440 is parameterised-replaceable (d-tag = `<bidder>:<auction
- * root>`), so re-emitting an identical verdict is a no-op for relays
+ * root>:<bid_event_id>`, per-bid addressability — ADR-0003 §4.4.1
+ * amendment), so re-emitting an identical verdict is a no-op for relays
  * and clients. Restart re-derives + re-publishes → eventually
- * consistent without a journal.
+ * consistent without a journal. The validator's first-observation
+ * `observed_at` is recovered from its own prior kind-30440 verdicts on
+ * the relay on startup (`observedAtRecovery.ts`) so restarts after an
+ * auction closed no longer re-stamp in-window bids to `late_arrival`.
  *
  * No DB. No persistence. Memory-only.
  */
