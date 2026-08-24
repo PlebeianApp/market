@@ -32,15 +32,19 @@ interface Nip46LoginOptions {
 }
 
 function getAuthStorage(): Storage | undefined {
-	if (typeof window !== 'undefined' && window.localStorage) {
-		return window.localStorage
-	}
-
-	if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis) {
-		const storage = (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage
-		if (storage) {
-			return storage
+	try {
+		if (typeof window !== 'undefined' && window.localStorage) {
+			return window.localStorage
 		}
+
+		if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis) {
+			const storage = (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage
+			if (storage) {
+				return storage
+			}
+		}
+	} catch {
+		// Storage can be unavailable in non-browser and privacy-restricted contexts.
 	}
 
 	return undefined
@@ -58,12 +62,6 @@ export function persistAuthenticatedLoginState(
 
 	if (user?.pubkey) {
 		storage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
-	}
-
-	// Auto-login was historically enabled after a successful login. Preserve an
-	// explicit opt-out, while restoring that default for a first-time login.
-	if (storage.getItem(NOSTR_AUTO_LOGIN) === null) {
-		storage.setItem(NOSTR_AUTO_LOGIN, 'true')
 	}
 
 	if (privateKey) {
@@ -97,17 +95,12 @@ function cancelNip46HandshakeListeners(signer: NDKNip46Signer, knownResponseEven
 	}
 }
 
-function createNip46ResolvedSigner(signer: NDKNip46Signer, user: NDKUser): NDKNip46Signer {
-	return new Proxy(signer, {
-		get(target, property) {
-			if (property === 'user') return async () => user
-			if (property === 'userSync') return user
-			if (property === 'pubkey') return user.pubkey
-
-			const value = Reflect.get(target, property, target)
-			return typeof value === 'function' ? value.bind(target) : value
-		},
-	})
+function cacheResolvedNip46User(signer: NDKNip46Signer, user: NDKUser): void {
+	// NDKNip46Signer does not expose a public setter for the user it normally
+	// caches during blockUntilReady(). Recovery has already verified the same
+	// user with get_public_key, so populate that cache on the native signer
+	// instead of proxying its public identity and relay-facing behavior.
+	;(signer as unknown as { _user?: NDKUser })._user = user
 }
 
 function isHexPubkey(value: string): boolean {
@@ -119,7 +112,7 @@ async function recoverNip46UserPubkey(
 	expectedUserPubkey: string | undefined,
 	timeoutMs: number,
 ): Promise<string | null> {
-	const configuredUserPubkey = signer.userPubkey ?? undefined
+	const configuredUserPubkey = signer.userPubkey
 	const expectedPubkeys = new Set([expectedUserPubkey, configuredUserPubkey].filter((value): value is string => Boolean(value)))
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
 	const recoveryTimeoutMs = Math.max(1, Math.min(timeoutMs, NIP46_USER_PUBKEY_RECOVERY_TIMEOUT_MS))
@@ -150,6 +143,7 @@ async function recoverNip46UserPubkey(
 		signer.userPubkey = userPubkey
 		return userPubkey
 	} catch (error) {
+		signer.userPubkey = configuredUserPubkey
 		console.warn('[NIP46] get_public_key recovery failed', error)
 		return null
 	} finally {
@@ -206,7 +200,8 @@ export async function completeNip46LoginHandshake(
 	}
 
 	const user = resolvedNdk.getUser({ pubkey: userPubkey })
-	return { user, signer: createNip46ResolvedSigner(signer, user) }
+	cacheResolvedNip46User(signer, user)
+	return { user, signer }
 }
 
 const initialState: AuthState = {
@@ -223,6 +218,9 @@ export const authStore = new Store<AuthState>(initialState)
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
+			const storage = getAuthStorage()
+			if (!storage) return
+
 			// Check for migration (unencrypted private key) first
 			if (authActions.getNeedsMigration()) {
 				authStore.setState((state) => ({
@@ -235,19 +233,19 @@ export const authActions = {
 
 			// Only trigger auth check if auto-login is enabled
 
-			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
+			const autoLogin = storage.getItem(NOSTR_AUTO_LOGIN)
 			if (autoLogin !== 'true') return
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
 			// Signer / Bunker URL
 
-			const privateKeySigner = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
-			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
+			const privateKeySigner = storage.getItem(NOSTR_LOCAL_SIGNER_KEY)
+			const bunkerUrl = storage.getItem(NOSTR_CONNECT_KEY)
 
 			if (privateKeySigner && bunkerUrl) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
-					expectedUserPubkey: localStorage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
+					expectedUserPubkey: storage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
 				})
 				authActions.checkAndShowTermsDialog()
 				return
@@ -255,7 +253,7 @@ export const authActions = {
 
 			// Private key decryption
 
-			const privateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			const privateKey = storage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 
 			if (privateKey) {
 				authStore.setState((state) => ({ ...state, needsDecryptionPassword: true }))
@@ -275,7 +273,10 @@ export const authActions = {
 	decryptAndLogin: async (password: string) => {
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			const storage = getAuthStorage()
+			if (!storage) throw new Error('Browser storage is unavailable')
+
+			const encryptedPrivateKey = storage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 			if (!encryptedPrivateKey) {
 				throw new Error('No encrypted key found')
 			}
@@ -305,6 +306,8 @@ export const authActions = {
 	encryptAndSavePrivateKey: async (privateKey: string, password: string, logN: number = 18) => {
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+			const storage = getAuthStorage()
+			if (!storage) throw new Error('Browser storage is unavailable')
 
 			// Normalize the private key
 			const normalizedKey = privateKey.startsWith('nsec1') ? privateKey : nip19.nsecEncode(hexToBytes(privateKey))
@@ -316,7 +319,7 @@ export const authActions = {
 			const encryptedKey = encrypt(secretKeyBytes, password, logN, 1)
 
 			// Replace encrypted key with format: "pubkey:ncryptsec..."
-			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, `${pubkey}:${encryptedKey}`)
+			storage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, `${pubkey}:${encryptedKey}`)
 
 			return true
 		} catch (error) {
@@ -336,7 +339,7 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+		const wasLoggedOut = getAuthStorage()?.getItem(NOSTR_AUTO_LOGIN) !== 'true'
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
@@ -386,7 +389,7 @@ export const authActions = {
 			throw new Error('No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x) before logging in.')
 		}
 
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+		const wasLoggedOut = getAuthStorage()?.getItem(NOSTR_AUTO_LOGIN) !== 'true'
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
@@ -426,7 +429,7 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+		const wasLoggedOut = getAuthStorage()?.getItem(NOSTR_AUTO_LOGIN) !== 'true'
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true, bootstrapError: null }))
@@ -486,11 +489,12 @@ export const authActions = {
 		if (ndkStore.state.ndk) {
 			ndkActions.removeSigner()
 		}
-		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
-		localStorage.removeItem(NOSTR_CONNECT_KEY)
-		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
-		localStorage.removeItem(NOSTR_AUTO_LOGIN)
-		localStorage.removeItem(NOSTR_USER_PUBKEY)
+		const storage = getAuthStorage()
+		storage?.removeItem(NOSTR_LOCAL_SIGNER_KEY)
+		storage?.removeItem(NOSTR_CONNECT_KEY)
+		storage?.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+		storage?.removeItem(NOSTR_AUTO_LOGIN)
+		storage?.removeItem(NOSTR_USER_PUBKEY)
 		// Clear cart when user logs out
 		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
@@ -510,7 +514,7 @@ export const authActions = {
 	},
 
 	getNeedsMigration: (): boolean => {
-		const authData = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+		const authData = getAuthStorage()?.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 
 		if (authData) {
 			const privateKey = authData.split(':').at(1)
@@ -533,7 +537,7 @@ export const authActions = {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
 			// Get the unencrypted private key
-			const authData = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			const authData = getAuthStorage()?.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 			const privateKey = authData?.split(':').at(1)
 
 			if (!privateKey) {

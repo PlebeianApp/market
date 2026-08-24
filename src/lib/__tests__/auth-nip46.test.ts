@@ -43,10 +43,10 @@ describe('persistAuthenticatedLoginState', () => {
 		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
 	})
 
-	test('enables auto-login by default for a first successful login', () => {
+	test('does not enable auto-login without an explicit opt-in', () => {
 		persistAuthenticatedLoginState({ pubkey: 'remote-pubkey' } as any)
 
-		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
+		expect(localStorage.getItem('nostr_auto_login')).toBeNull()
 	})
 })
 
@@ -66,6 +66,50 @@ describe('logout', () => {
 
 		expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBeNull()
 	})
+
+	test('does not require storage to log out', () => {
+		const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		Object.defineProperty(globalThis, 'localStorage', {
+			value: undefined,
+			configurable: true,
+		})
+
+		try {
+			expect(() => authActions.logout()).not.toThrow()
+		} finally {
+			Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor!)
+		}
+	})
+})
+
+describe('auth storage bootstrap', () => {
+	beforeEach(() => {
+		const storage = createLocalStorageStub()
+		Object.defineProperty(globalThis, 'localStorage', {
+			value: storage,
+			configurable: true,
+		})
+	})
+
+	test('does nothing when storage is unavailable', async () => {
+		const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		const originalConsoleError = console.error
+		const consoleError = mock(() => {})
+		Object.defineProperty(globalThis, 'localStorage', {
+			value: undefined,
+			configurable: true,
+		})
+		console.error = consoleError
+
+		try {
+			await authActions.getAuthFromLocalStorageAndLogin()
+
+			expect(consoleError).not.toHaveBeenCalled()
+		} finally {
+			console.error = originalConsoleError
+			Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor!)
+		}
+	})
 })
 
 describe('completeNip46LoginHandshake', () => {
@@ -79,6 +123,19 @@ describe('completeNip46LoginHandshake', () => {
 			blockUntilReady: mock(() => new Promise(() => {})),
 			getPublicKey: mock(async () => actualUserPubkey),
 			userPubkey: undefined as string | undefined,
+			_user: undefined as { pubkey: string } | undefined,
+			user: mock(async function (this: { _user?: { pubkey: string } }) {
+				if (!this._user) throw new Error('Remote user not ready')
+				return this._user
+			}),
+			get userSync() {
+				if (!this._user) throw new Error('Remote user not ready synchronously')
+				return this._user
+			},
+			get pubkey() {
+				if (!this.userPubkey) throw new Error('Not ready')
+				return this.userPubkey
+			},
 			rpc: {
 				eventNames: mock(() => []),
 				removeAllListeners: mock(() => {}),
@@ -95,7 +152,9 @@ describe('completeNip46LoginHandshake', () => {
 		expect(signer.getPublicKey).toHaveBeenCalledTimes(1)
 		expect(signer.userPubkey).toBe(actualUserPubkey)
 		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
-		expect((signer as any)._user).toBeUndefined()
+		expect(loginResult?.signer).toBe(signer as any)
+		expect(loginResult?.signer.pubkey).toBe(actualUserPubkey)
+		expect((signer as any)._user?.pubkey).toBe(actualUserPubkey)
 		expect((await loginResult?.signer.user())?.pubkey).toBe(actualUserPubkey)
 		expect(loginResult?.signer.userSync.pubkey).toBe(actualUserPubkey)
 	})
@@ -132,7 +191,7 @@ describe('completeNip46LoginHandshake', () => {
 		expect(removeAllListeners).toHaveBeenCalledWith('response-get_public_key')
 	})
 
-	test('clears a configured user key and rejects a mismatched get_public_key response', async () => {
+	test('restores a configured user key when get_public_key returns a mismatch', async () => {
 		const signer = {
 			bunkerPubkey: remoteSignerPubkey,
 			blockUntilReady: mock(() => new Promise(() => {})),
@@ -154,7 +213,7 @@ describe('completeNip46LoginHandshake', () => {
 
 		expect(loginResult).toBeNull()
 		expect(signer.getPublicKey).toHaveBeenCalledTimes(1)
-		expect(signer.userPubkey).toBeUndefined()
+		expect(signer.userPubkey).toBe(expectedUserPubkey)
 		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
 	})
 
