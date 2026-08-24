@@ -21,6 +21,7 @@ import {
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
+import { resolvePublishPrice } from '@/lib/utils/productPriceResolution'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
@@ -267,7 +268,9 @@ export const productFormActions = {
 					name: title,
 					summary: summary,
 					description: description,
-					price: priceValue,
+					// For fiat products, price (sats) will be calculated in the UI from fiatPrice
+					// For sats/BTC products, use the stored value directly
+					price: isFiatCurrency ? '' : priceValue,
 					fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
 					currency: priceCurrency,
 					currencyMode: isFiatCurrency ? 'fiat' : 'sats',
@@ -424,35 +427,17 @@ export const productFormActions = {
 	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
-		// Apply currency conversion logic before publishing
-		let finalPrice = state.price
-		let finalCurrency = state.currency
-
-		// If we have a Bitcoin currency selected, always publish in SATS
-		if (state.currency === 'SATS' || state.currency === 'BTC') {
-			const bitcoinValue = parseFloat(state.price || '0')
-			if (state.bitcoinUnit === 'BTC') {
-				// Convert BTC to SATS for publishing
-				finalPrice = (bitcoinValue * 100000000).toString()
-			} else {
-				// Already in SATS
-				finalPrice = state.price || '0'
-			}
-			finalCurrency = 'SATS'
-		} else {
-			// Fiat currency selected - check currency mode
-			if (state.currencyMode === 'fiat') {
-				// Use fiat currency and fiat price
-				finalPrice = state.fiatPrice || state.price
-				finalCurrency = state.currency
-			} else {
-				// Use sats as currency (calculated on spot)
-				const bitcoinValue = parseFloat(state.price || '0')
-				const satsValue = state.bitcoinUnit === 'BTC' ? bitcoinValue * 100000000 : bitcoinValue
-				finalPrice = satsValue.toString()
-				finalCurrency = 'SATS'
-			}
+		// Resolve the price/currency pair to publish from the form's
+		// fiat-fixed/sats-fixed mode. Fails closed while the sats price is
+		// unresolved (exchange rates unavailable) instead of coercing it to
+		// '0' — which would publish the product as free.
+		const priceResolution = resolvePublishPrice(state)
+		if (priceResolution.status === 'error') {
+			console.error(`Cannot publish product: ${priceResolution.reason.replace('-', ' ')}`)
+			return false
 		}
+		const finalPrice = priceResolution.price
+		const finalCurrency = priceResolution.currency
 
 		// Convert state to ProductFormData format
 		const formData: ProductFormData = {

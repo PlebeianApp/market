@@ -89,7 +89,8 @@ test.describe('User Profile', () => {
 		await monitor.start()
 
 		await page.goto('/dashboard/account/profile')
-		await page.waitForLoadState('networkidle')
+		// Wait for DOM ready + hydration — NDK WebSocket keeps connections open
+		await page.waitForLoadState('domcontentloaded')
 
 		const nameInput = page.locator('#name')
 		await expect(nameInput).toBeVisible({ timeout: 10_000 })

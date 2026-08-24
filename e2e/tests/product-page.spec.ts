@@ -586,7 +586,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await expect(reactionBtn.getByText('1')).toBeVisible()
 	})
 
-	test.skip('should allow adding reaction to a comment', async ({ buyerPage }) => {
+	test('should allow adding reaction to a comment', async ({ buyerPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
 		await seedExistingComment()
 		await buyerPage.goto(`/products/${currentProductId}`)
@@ -614,10 +614,11 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 
 		// Verify reaction was added - check for filled state
 		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
-		// Verify the reaction chip appears on the same comment with count 1
-		const commentReactionsList = commentSocialInteractions.getByTestId('reactions-list').first()
-		const reactionChip = commentReactionsList.getByRole('button', { name: /❤️/ })
-		await expect(reactionChip).toBeVisible()
+		// Verify the reaction chip appears on the same comment with count 1.
+		// ReactionsList uses asChildren=true here, so it renders bare buttons
+		// without the 'reactions-list' wrapper div — query the button directly.
+		const reactionChip = commentSocialInteractions.getByRole('button', { name: /❤️/ }).last()
+		await expect(reactionChip).toBeVisible({ timeout: 15_000 })
 		await expect(reactionChip).toContainText('1')
 	})
 })
