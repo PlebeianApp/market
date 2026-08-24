@@ -1,6 +1,6 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
-import { ndkActions } from './ndk'
+import { ndkActions, ndkStore } from './ndk'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
@@ -483,8 +483,7 @@ export const authActions = {
 	},
 
 	logout: () => {
-		const ndk = ndkActions.getNDK()
-		if (ndk) {
+		if (ndkStore.state.ndk) {
 			ndkActions.removeSigner()
 		}
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
