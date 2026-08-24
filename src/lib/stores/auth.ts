@@ -484,8 +484,9 @@ export const authActions = {
 
 	logout: () => {
 		const ndk = ndkActions.getNDK()
-		if (!ndk) return
-		ndkActions.removeSigner()
+		if (ndk) {
+			ndkActions.removeSigner()
+		}
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
