@@ -452,6 +452,10 @@ export const authActions = {
 			}
 			const { user, signer: authenticatedSigner } = loginResult
 
+			// Await setSigner before flipping isAuthenticated so that a signer
+			// setup failure prevents the auth flag from being set. If setSigner
+			// rejects, the catch block sets isAuthenticated: false and the error
+			// propagates to the caller.
 			await ndkActions.setSigner(authenticatedSigner)
 			authStore.setState((state) => ({ ...state, bootstrapError: null }))
 			persistAuthenticatedLoginState(user, localSigner.privateKey || '', bunkerUrl)
