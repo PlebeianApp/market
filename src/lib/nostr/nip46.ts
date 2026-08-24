@@ -3,7 +3,8 @@ import { MAIN_RELAY_BY_STAGE } from '../constants'
 export interface NostrConnectMetadata {
 	name?: string
 	url?: string
-	image?: string
+	description?: string
+	icons?: string[]
 }
 
 export function normalizeRelayUrls(relay: string | string[]): string[] {
@@ -26,15 +27,6 @@ export function getNip46RelayUrls(relay: string | string[]): string[] {
 	return [MAIN_RELAY_BY_STAGE.development]
 }
 
-export function extractRelayUrlsFromConnectionUrl(connectionUrl: string): string[] {
-	try {
-		const parsed = new URL(connectionUrl)
-		return normalizeRelayUrls(parsed.searchParams.getAll('relay'))
-	} catch {
-		return []
-	}
-}
-
 export function buildNostrConnectUrl(
 	localPubkey: string,
 	relay: string | string[],
@@ -47,9 +39,7 @@ export function buildNostrConnectUrl(
 	}
 	params.set('secret', secret)
 
-	if (metadata?.name) params.set('name', metadata.name)
-	if (metadata?.url) params.set('url', metadata.url)
-	if (metadata?.image) params.set('image', metadata.image)
+	if (metadata) params.set('metadata', JSON.stringify(metadata))
 
 	return `nostrconnect://${localPubkey}?${params.toString()}`
 }

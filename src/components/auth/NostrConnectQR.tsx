@@ -130,7 +130,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		return buildNostrConnectUrl(localPubkey, explicitRelayUrls, tempSecret, {
 			name: 'Plebeian.market',
 			url: window.location.origin,
-			image: `${window.location.origin}/manifest.json`,
+			icons: [`${window.location.origin}/images/logo.svg`],
 		})
 	}, [localPubkey, config, tempSecret, isCustomRelay, customRelay, explicitRelayUrls])
 

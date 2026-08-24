@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import { completeNip46LoginHandshake, persistAuthenticatedLoginState } from '../stores/auth'
+import { authActions, completeNip46LoginHandshake, NOSTR_USER_PUBKEY, persistAuthenticatedLoginState } from '../stores/auth'
+import { ndkStore } from '../stores/ndk'
 
 const createLocalStorageStub = () => {
 	const store = new Map<string, string>()
@@ -47,6 +48,30 @@ describe('persistAuthenticatedLoginState', () => {
 		persistAuthenticatedLoginState({ pubkey: 'remote-pubkey' } as any)
 
 		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
+	})
+})
+
+describe('logout', () => {
+	beforeEach(() => {
+		const storage = createLocalStorageStub()
+		Object.defineProperty(globalThis, 'localStorage', {
+			value: storage,
+			configurable: true,
+		})
+	})
+
+	test('clears the persisted user pubkey', () => {
+		const originalNdkState = ndkStore.state
+		localStorage.setItem(NOSTR_USER_PUBKEY, 'remote-pubkey')
+		ndkStore.setState((state) => ({ ...state, ndk: {} as any }))
+
+		try {
+			authActions.logout()
+
+			expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBeNull()
+		} finally {
+			ndkStore.setState(() => originalNdkState)
+		}
 	})
 })
 

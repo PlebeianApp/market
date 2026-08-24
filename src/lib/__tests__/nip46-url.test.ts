@@ -19,16 +19,25 @@ describe('NIP-46 connection URL helpers', () => {
 		const url = buildNostrConnectUrl('a'.repeat(64), 'wss://relay.example.com', 'abc123', {
 			name: 'Plebeian.market',
 			url: 'https://plebeian.market',
-			image: 'https://plebeian.market/icon.png',
+			icons: ['https://plebeian.market/icon.png'],
 		})
+		const parsed = new URL(url)
 
 		expect(url).toContain(`nostrconnect://${'a'.repeat(64)}`)
 		expect(url).toContain('relay=wss%3A%2F%2Frelay.example.com')
 		expect(url).toContain('secret=abc123')
 		expect(url).toContain(`relay=${encodeURIComponent('wss://relay.example.com')}`)
 		expect(url).not.toContain(`relay=${encodeURIComponent(MAIN_RELAY_BY_STAGE.development)}`)
-		expect(url).toContain('name=Plebeian.market')
-		expect(url).toContain('url=https%3A%2F%2Fplebeian.market')
+		expect(parsed.searchParams.get('metadata')).toEqual(
+			JSON.stringify({
+				name: 'Plebeian.market',
+				url: 'https://plebeian.market',
+				icons: ['https://plebeian.market/icon.png'],
+			}),
+		)
+		expect(parsed.searchParams.has('name')).toBe(false)
+		expect(parsed.searchParams.has('url')).toBe(false)
+		expect(parsed.searchParams.has('image')).toBe(false)
 		expect(url).not.toContain('token=')
 	})
 
