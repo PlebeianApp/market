@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
-import { buildBunkerUrl, buildNostrConnectUrl, getNip46RelayUrls, normalizeRelayUrls } from '@/lib/nostr/nip46'
+import { buildBunkerUrlFromResolvedRelayUrls, buildNostrConnectUrlFromResolvedRelayUrls, getNip46RelayUrls } from '@/lib/nostr/nip46'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -112,22 +112,20 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		setCustomRelay(configuredRelay)
 	}, [config?.nip46Relay])
 
-	const relayUrls = useMemo(() => {
+	const explicitRelayUrls = useMemo(() => {
 		if (!config) return []
 		if (isCustomRelay && !customRelay.trim()) return []
 		if (!activeRelay.trim()) return []
 
-		return getNip46RelayUrls([activeRelay])
+		return getNip46RelayUrls(activeRelay)
 	}, [activeRelay, config, customRelay, isCustomRelay])
-
-	const explicitRelayUrls = useMemo(() => normalizeRelayUrls(relayUrls), [relayUrls])
 
 	const connectionUrl = useMemo(() => {
 		if (!localPubkey || !config) return null
 		if (isCustomRelay && !customRelay) return null
 		if (explicitRelayUrls.length === 0) return null
 
-		return buildNostrConnectUrl(localPubkey, explicitRelayUrls, tempSecret, {
+		return buildNostrConnectUrlFromResolvedRelayUrls(localPubkey, explicitRelayUrls, tempSecret, {
 			name: 'Plebeian.market',
 			url: window.location.origin,
 			icons: [`${window.location.origin}/images/logo.svg`],
@@ -135,7 +133,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	}, [localPubkey, config, tempSecret, isCustomRelay, customRelay, explicitRelayUrls])
 
 	const constructBunkerUrl = useCallback(
-		(event: NDKEvent) => buildBunkerUrl(event.pubkey, explicitRelayUrls, tempSecret),
+		(event: NDKEvent) => buildBunkerUrlFromResolvedRelayUrls(event.pubkey, explicitRelayUrls, tempSecret),
 		[explicitRelayUrls, tempSecret],
 	)
 
@@ -333,12 +331,9 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			disposed = true
 			if (timeout) clearTimeout(timeout)
 			cleanup()
-			cleanupPromise
-				.then((effectCleanup) => effectCleanup?.())
-				.catch((error) => {
-					console.error('Failed to clean up NIP-46 connection:', error)
-					cleanup()
-				})
+			void cleanupPromise.catch((error) => {
+				console.error('Failed to clean up NIP-46 connection:', error)
+			})
 		}
 	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup, explicitRelayUrls])
 

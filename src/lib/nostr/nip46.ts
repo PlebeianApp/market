@@ -27,14 +27,14 @@ export function getNip46RelayUrls(relay: string | string[]): string[] {
 	return [MAIN_RELAY_BY_STAGE.development]
 }
 
-export function buildNostrConnectUrl(
+export function buildNostrConnectUrlFromResolvedRelayUrls(
 	localPubkey: string,
-	relay: string | string[],
+	relayUrls: readonly string[],
 	secret: string,
 	metadata?: NostrConnectMetadata,
 ): string {
 	const params = new URLSearchParams()
-	for (const relayUrl of getNip46RelayUrls(relay)) {
+	for (const relayUrl of relayUrls) {
 		params.append('relay', relayUrl)
 	}
 	params.set('secret', secret)
@@ -44,11 +44,24 @@ export function buildNostrConnectUrl(
 	return `nostrconnect://${localPubkey}?${params.toString()}`
 }
 
-export function buildBunkerUrl(remoteSignerPubkey: string, relay: string | string[], secret: string): string {
+export function buildNostrConnectUrl(
+	localPubkey: string,
+	relay: string | string[],
+	secret: string,
+	metadata?: NostrConnectMetadata,
+): string {
+	return buildNostrConnectUrlFromResolvedRelayUrls(localPubkey, getNip46RelayUrls(relay), secret, metadata)
+}
+
+export function buildBunkerUrlFromResolvedRelayUrls(remoteSignerPubkey: string, relayUrls: readonly string[], secret: string): string {
 	const params = new URLSearchParams()
-	for (const relayUrl of getNip46RelayUrls(relay)) {
+	for (const relayUrl of relayUrls) {
 		params.append('relay', relayUrl)
 	}
 	params.set('secret', secret)
 	return `bunker://${remoteSignerPubkey}?${params.toString()}`
+}
+
+export function buildBunkerUrl(remoteSignerPubkey: string, relay: string | string[], secret: string): string {
+	return buildBunkerUrlFromResolvedRelayUrls(remoteSignerPubkey, getNip46RelayUrls(relay), secret)
 }

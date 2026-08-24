@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { MAIN_RELAY_BY_STAGE } from '../constants'
-import { buildNostrConnectUrl, buildBunkerUrl, getNip46RelayUrls, normalizeRelayUrls } from '../nostr/nip46'
+import {
+	buildNostrConnectUrl,
+	buildNostrConnectUrlFromResolvedRelayUrls,
+	buildBunkerUrl,
+	buildBunkerUrlFromResolvedRelayUrls,
+	getNip46RelayUrls,
+	normalizeRelayUrls,
+} from '../nostr/nip46'
 
 describe('NIP-46 connection URL helpers', () => {
 	test('preserves explicit relays without injecting the development relay when a relay is already provided', () => {
@@ -62,5 +69,13 @@ describe('NIP-46 connection URL helpers', () => {
 		expect(url).toContain('secret=abc123')
 		expect(url).toContain(`relay=${encodeURIComponent('wss://relay.example.com')}`)
 		expect(url).not.toContain('token=')
+	})
+
+	test('uses resolved relay URLs without resolving them again', () => {
+		const nostrConnectUrl = buildNostrConnectUrlFromResolvedRelayUrls('a'.repeat(64), [], 'abc123')
+		const bunkerUrl = buildBunkerUrlFromResolvedRelayUrls('b'.repeat(64), [], 'abc123')
+
+		expect(new URL(nostrConnectUrl).searchParams.getAll('relay')).toEqual([])
+		expect(new URL(bunkerUrl).searchParams.getAll('relay')).toEqual([])
 	})
 })
