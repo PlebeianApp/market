@@ -434,4 +434,42 @@ describe('loginWithNip46', () => {
 		expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBeNull()
 		expect(reconcileRemoteCartForUser).not.toHaveBeenCalled()
 	})
+
+	test('cleans up NIP-46 response listeners on the success path', async () => {
+		// Simulate that blockUntilReady() adds response listeners that were
+		// not present when the handshake started.  The knownResponseEvents
+		// snapshot is taken BEFORE blockUntilReady runs, so events that appear
+		// afterwards must be cleaned up.
+		const preEvents: string[] = []
+		const postEvents = ['response-connect', 'response-get_public_key']
+		const removeAllListeners = mock(() => {})
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => {
+				// Simulate NIP-46 RPC adding response listeners during handshake
+				preEvents.push(...postEvents)
+				return { pubkey: actualUserPubkey }
+			}),
+			getPublicKey: mock(async () => actualUserPubkey),
+			userPubkey: actualUserPubkey,
+			rpc: {
+				eventNames: () => preEvents,
+				removeAllListeners,
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 100, ndk as any)
+
+		// Success: user resolved from blockUntilReady
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+
+		// FIX #1: Listeners added during blockUntilReady must be cleaned up
+		// on ALL paths, not just timeout. The finally block must call
+		// cancelNip46HandshakeListeners.
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
+		expect(removeAllListeners).toHaveBeenCalledWith('response-get_public_key')
+	})
 })
