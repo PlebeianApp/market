@@ -490,6 +490,7 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		localStorage.removeItem(NOSTR_USER_PUBKEY)
 		// Clear cart when user logs out
 		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
