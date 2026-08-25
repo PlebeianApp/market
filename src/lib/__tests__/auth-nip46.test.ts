@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { authActions, authStore, completeNip46LoginHandshake, NOSTR_USER_PUBKEY, persistAuthenticatedLoginState } from '../stores/auth'
 import { cartActions } from '../stores/cart'
+import { NDKNip46Signer, NDKPrivateKeySigner } from '../nostr/ndk-events'
 import { ndkActions } from '../stores/ndk'
 
 const createLocalStorageStub = () => {

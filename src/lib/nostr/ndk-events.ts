@@ -1,9 +1,9 @@
-import { NDKEvent, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKNip46Signer, NDKPrivateKeySigner, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { verifyEvent, type Event } from 'nostr-tools'
 
 import type { NostrFilter, NostrIo } from './io'
 
-export { NDKEvent }
+export { NDKEvent, NDKNip46Signer, NDKPrivateKeySigner }
 export type { NDKFilter, NDKSigner }
 
 type NdkEventContext = ConstructorParameters<typeof NDKEvent>[0]
