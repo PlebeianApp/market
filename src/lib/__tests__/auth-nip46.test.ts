@@ -188,6 +188,40 @@ describe('completeNip46LoginHandshake', () => {
 		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
 	})
 
+	test('cleans up listeners registered after the handshake timeout', async () => {
+		const responseEvents = ['response-existing']
+		const removeAllListeners = mock(() => {})
+		let resolveReadiness!: (user: { pubkey: string }) => void
+		const readiness = new Promise<{ pubkey: string }>((resolve) => {
+			resolveReadiness = resolve
+		})
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => {
+				await readiness
+				responseEvents.push('response-late')
+				return { pubkey: actualUserPubkey }
+			}),
+			getPublicKey: mock(async () => actualUserPubkey),
+			userPubkey: undefined as string | undefined,
+			rpc: {
+				eventNames: () => responseEvents,
+				removeAllListeners,
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 1, ndk as any)
+		resolveReadiness({ pubkey: actualUserPubkey })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+		expect(removeAllListeners).toHaveBeenCalledWith('response-late')
+		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
+	})
+
 	test('fails closed when get_public_key does not respond after a timeout', async () => {
 		const responseEvents = ['response-existing']
 		const removeAllListeners = mock(() => {})
