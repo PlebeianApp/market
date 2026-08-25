@@ -12,6 +12,7 @@ import { productFormActions, productFormStore, type ProductShippingForm } from '
 import { uiStore } from '@/lib/stores/ui'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
 import { resolveProductShippingSelections, getProductShippingTotalCost } from '@/lib/utils/productShippingSelections'
+import { deriveSatsPriceFromFiat } from '@/lib/utils/productPriceResolution'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
@@ -207,7 +208,7 @@ export function DetailTab() {
 	useEffect(() => {
 		const derivedSats = deriveSatsPriceFromFiat(
 			{ currencyMode: storeCurrencyMode, fiatPrice, price, currency, hasExchangeRates },
-			convertCurrencyToSats,
+			convertCurrencyToSatsValue,
 		)
 		if (derivedSats !== null) {
 			productFormActions.updateValues({ price: derivedSats })
