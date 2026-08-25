@@ -90,8 +90,8 @@ export function DetailTab() {
 
 		productFormActions.updateValues({ price: satsValue.toString() })
 
-		// Update fiat field if a fiat currency is selected and visible
-		if (currency !== 'SATS' && currency !== 'BTC') {
+		// Update fiat field if a fiat currency is selected and rates are available
+		if (currency !== 'SATS' && currency !== 'BTC' && hasExchangeRates) {
 			const fiatValue = convertSatsToCurrencyValue(satsValue, currency)
 			setFiatDisplayValue(fiatValue.toFixed(2))
 		}
@@ -190,7 +190,10 @@ export function DetailTab() {
 	// Check if radio group should be visible
 	const showRadioGroup = showFiatField
 	const fiatConversionUnavailable =
-		showFiatField && fiatDisplayValue !== '' && !Number.isFinite(convertCurrencyToSatsValue(Number(fiatDisplayValue) || 0, currency))
+		currencyMode === 'fiat' &&
+		showFiatField &&
+		fiatDisplayValue !== '' &&
+		!Number.isFinite(convertCurrencyToSatsValue(Number(fiatDisplayValue) || 0, currency))
 
 	// Sync local state from store when store values change (for edit mode)
 	useEffect(() => {

@@ -95,11 +95,6 @@ export default function CartItem({
 		[productShippingSelections, sellerShippingOptions],
 	)
 
-	const selectedShippingOption = useMemo(() => {
-		if (!currentShippingId) return null
-		return productShippingOptions.find((option) => option.shippingRef === currentShippingId || option.id === currentShippingId) ?? null
-	}, [currentShippingId, productShippingOptions])
-
 	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
 	const isShippingOptionsLoading = productQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
 	const isShippingOptionsUnavailable = productQuery.isError || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
