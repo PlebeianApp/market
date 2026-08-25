@@ -95,15 +95,10 @@ function cancelNip46HandshakeListeners(signer: NDKNip46Signer, knownResponseEven
 }
 
 function cacheResolvedNip46User(signer: NDKNip46Signer, user: NDKUser): void {
-	// NDKNip46Signer does not expose a public setter for the user it normally
-	// caches during blockUntilReady(). Recovery has already verified the same
-	// user with get_public_key, so populate that cache on the native signer
-	// instead of proxying its public identity and relay-facing behavior.
-
-	// Option A: package.json pins NDK to 3.0.3 because NDKNip46Signer exposes no
-	// public setter for the user it caches during blockUntilReady(). Recovery has
-	// verified this user with get_public_key, so populate the native cache here.
-	// Replace this cast with an upstream public cache method before upgrading NDK.
+	// Option A: package.json and bun.lock pin NDK to 3.0.3 because NDKNip46Signer
+	// exposes no public setter for the user it caches during blockUntilReady().
+	// Recovery verified this user with get_public_key; replace this cast with an
+	// upstream public cache method before upgrading NDK.
 	;(signer as unknown as { _user?: NDKUser })._user = user
 }
 
@@ -170,10 +165,13 @@ export async function completeNip46LoginHandshake(
 	let timeout: ReturnType<typeof setTimeout> | undefined
 	const timeoutError = new Error('NIP-46 handshake timed out')
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
+	const readinessPromise = signer.blockUntilReady()
+	const cleanupLateListeners = () => cancelNip46HandshakeListeners(signer, knownResponseEvents)
+	void readinessPromise.then(cleanupLateListeners, cleanupLateListeners)
 
 	try {
 		const user = await Promise.race<NDKUser | null>([
-			signer.blockUntilReady(),
+			readinessPromise,
 			new Promise<never>((_, reject) => {
 				timeout = setTimeout(() => reject(timeoutError), timeoutMs)
 			}),
