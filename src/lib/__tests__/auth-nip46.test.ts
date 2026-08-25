@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import { authActions, completeNip46LoginHandshake, NOSTR_USER_PUBKEY, persistAuthenticatedLoginState } from '../stores/auth'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { NDKNip46Signer, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import { authActions, authStore, completeNip46LoginHandshake, NOSTR_USER_PUBKEY, persistAuthenticatedLoginState } from '../stores/auth'
+import { cartActions } from '../stores/cart'
+import { ndkActions } from '../stores/ndk'
 
 const createLocalStorageStub = () => {
 	const store = new Map<string, string>()
@@ -159,8 +162,34 @@ describe('completeNip46LoginHandshake', () => {
 		expect(loginResult?.signer.userSync.pubkey).toBe(actualUserPubkey)
 	})
 
+	test('cleans up response listeners after a successful handshake', async () => {
+		const responseEvents = ['response-existing']
+		const removeAllListeners = mock(() => {})
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => {
+				responseEvents.push('response-connect')
+				return { pubkey: actualUserPubkey }
+			}),
+			userPubkey: actualUserPubkey,
+			rpc: {
+				eventNames: () => responseEvents,
+				removeAllListeners,
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, actualUserPubkey, 1, ndk as any)
+
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
+		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
+	})
+
 	test('fails closed when get_public_key does not respond after a timeout', async () => {
-		const responseEvents: string[] = []
+		const responseEvents = ['response-existing']
 		const removeAllListeners = mock(() => {})
 		const signer = {
 			bunkerPubkey: remoteSignerPubkey,
@@ -189,6 +218,7 @@ describe('completeNip46LoginHandshake', () => {
 		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
 		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
 		expect(removeAllListeners).toHaveBeenCalledWith('response-get_public_key')
+		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
 	})
 
 	test('restores a configured user key when get_public_key returns a mismatch', async () => {
@@ -218,14 +248,19 @@ describe('completeNip46LoginHandshake', () => {
 	})
 
 	test('rejects a completed handshake that differs from the persisted expected user', async () => {
+		const responseEvents = ['response-existing']
+		const removeAllListeners = mock(() => {})
 		const signer = {
 			bunkerPubkey: remoteSignerPubkey,
-			blockUntilReady: mock(async () => ({ pubkey: actualUserPubkey })),
+			blockUntilReady: mock(async () => {
+				responseEvents.push('response-connect')
+				return { pubkey: actualUserPubkey }
+			}),
 			getPublicKey: mock(async () => actualUserPubkey),
 			userPubkey: actualUserPubkey,
 			rpc: {
-				eventNames: mock(() => []),
-				removeAllListeners: mock(() => {}),
+				eventNames: () => responseEvents,
+				removeAllListeners,
 			},
 		}
 		const ndk = {
@@ -237,20 +272,25 @@ describe('completeNip46LoginHandshake', () => {
 		expect(loginResult).toBeNull()
 		expect(signer.getPublicKey).not.toHaveBeenCalled()
 		expect(signer.userPubkey).toBe(actualUserPubkey)
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
+		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
 	})
 
 	test('fails closed when the handshake errors before resolving the user', async () => {
 		const getPublicKey = mock(async () => actualUserPubkey)
+		const responseEvents = ['response-existing']
+		const removeAllListeners = mock(() => {})
 		const signer = {
 			bunkerPubkey: remoteSignerPubkey,
 			blockUntilReady: mock(async () => {
+				responseEvents.push('response-connect')
 				throw new Error('relay handshake stalled')
 			}),
 			getPublicKey,
 			userPubkey: undefined as string | undefined,
 			rpc: {
-				eventNames: mock(() => []),
-				removeAllListeners: mock(() => {}),
+				eventNames: () => responseEvents,
+				removeAllListeners,
 			},
 		}
 		const ndk = {
@@ -261,5 +301,103 @@ describe('completeNip46LoginHandshake', () => {
 
 		expect(loginResult).toBeNull()
 		expect(getPublicKey).not.toHaveBeenCalled()
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect')
+		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
+	})
+})
+
+describe('loginWithNip46', () => {
+	const remoteSignerPubkey = 'a'.repeat(64)
+	const remoteUserPubkey = 'b'.repeat(64)
+	const bunkerUrl = `bunker://${remoteSignerPubkey}`
+	const authInitialState = {
+		user: null,
+		isAuthenticated: false,
+		needsDecryptionPassword: false,
+		isAuthenticating: false,
+		needsMigration: false,
+		bootstrapError: null,
+	}
+	let localStorageDescriptor: PropertyDescriptor | undefined
+	let originalGetNDK: typeof ndkActions.getNDK
+	let originalSetSigner: typeof ndkActions.setSigner
+	let originalReconcileRemoteCartForUser: typeof cartActions.reconcileRemoteCartForUser
+	let originalBlockUntilReady: typeof NDKNip46Signer.prototype.blockUntilReady
+
+	beforeEach(() => {
+		localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		Object.defineProperty(globalThis, 'localStorage', {
+			value: createLocalStorageStub(),
+			configurable: true,
+		})
+		authStore.setState(() => authInitialState)
+
+		originalGetNDK = ndkActions.getNDK
+		originalSetSigner = ndkActions.setSigner
+		originalReconcileRemoteCartForUser = cartActions.reconcileRemoteCartForUser
+		originalBlockUntilReady = NDKNip46Signer.prototype.blockUntilReady
+
+		const debug = Object.assign(() => {}, { extend: () => debug })
+		const ndk = {
+			debug,
+			pools: [],
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+		;(ndkActions as any).getNDK = () => ndk
+		;(cartActions as any).reconcileRemoteCartForUser = mock(async () => {})
+		;(NDKNip46Signer.prototype as any).blockUntilReady = mock(async () => ({ pubkey: remoteUserPubkey }))
+	})
+
+	afterEach(() => {
+		ndkActions.getNDK = originalGetNDK
+		ndkActions.setSigner = originalSetSigner
+		cartActions.reconcileRemoteCartForUser = originalReconcileRemoteCartForUser
+		NDKNip46Signer.prototype.blockUntilReady = originalBlockUntilReady
+		authStore.setState(() => authInitialState)
+		Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor!)
+	})
+
+	test('waits for signer setup before exposing an authenticated session', async () => {
+		let resolveSetSigner: () => void
+		let notifySignerSetupStarted: () => void
+		const signerSetup = new Promise<void>((resolve) => {
+			resolveSetSigner = resolve
+		})
+		const signerSetupStarted = new Promise<void>((resolve) => {
+			notifySignerSetupStarted = resolve
+		})
+		const setSigner = mock(() => {
+			notifySignerSetupStarted()
+			return signerSetup
+		})
+		;(ndkActions as any).setSigner = setSigner
+
+		const login = authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner('1'.repeat(64)))
+
+		await signerSetupStarted
+		expect(authStore.state.isAuthenticated).toBeFalse()
+		expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBeNull()
+
+		resolveSetSigner!()
+		await login
+
+		expect(setSigner).toHaveBeenCalledTimes(1)
+		expect(authStore.state.isAuthenticated).toBeTrue()
+		expect(authStore.state.user?.pubkey).toBe(remoteUserPubkey)
+		expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBe(remoteUserPubkey)
+	})
+
+	test('fails closed without persisting a session when signer setup rejects', async () => {
+		const setupError = new Error('signer setup failed')
+		const reconcileRemoteCartForUser = cartActions.reconcileRemoteCartForUser as ReturnType<typeof mock>
+		;(ndkActions as any).setSigner = mock(async () => {
+			throw setupError
+		})
+
+		await expect(authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner('1'.repeat(64)))).rejects.toThrow(setupError)
+
+		expect(authStore.state.isAuthenticated).toBeFalse()
+		expect(localStorage.getItem(NOSTR_USER_PUBKEY)).toBeNull()
+		expect(reconcileRemoteCartForUser).not.toHaveBeenCalled()
 	})
 })
