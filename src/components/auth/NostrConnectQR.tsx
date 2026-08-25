@@ -318,11 +318,6 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 					if (onError) onError('Connection timed out. Please try again.')
 				}
 			}, 300000) // 5 minutes
-
-			return () => {
-				if (timeout) clearTimeout(timeout)
-				cleanup()
-			}
 		}
 
 		const cleanupPromise = initNip46Connection()

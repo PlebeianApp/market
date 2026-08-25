@@ -8,7 +8,6 @@ import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
-import { toast } from 'sonner'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -188,10 +187,10 @@ export async function completeNip46LoginHandshake(
 			return null
 		}
 
-		cancelNip46HandshakeListeners(signer, knownResponseEvents)
 		console.warn('[NIP46] handshake timed out; resolving the user pubkey with get_public_key', error)
 	} finally {
 		if (timeout) clearTimeout(timeout)
+		cancelNip46HandshakeListeners(signer, knownResponseEvents)
 	}
 
 	const userPubkey = await recoverNip46UserPubkey(signer, expectedUserPubkey, timeoutMs)
@@ -450,19 +449,8 @@ export const authActions = {
 			}
 			const { user, signer: authenticatedSigner } = loginResult
 
-			// The handshake above establishes the signer. Relay and wallet bootstrap
-			// can continue in the background; surface failures without logging out.
-			void ndkActions.setSigner(authenticatedSigner).then(
-				() => {
-					authStore.setState((state) => ({ ...state, bootstrapError: null }))
-				},
-				(error) => {
-					const message = error instanceof Error ? error.message : 'Wallet and relay setup could not finish'
-					console.error('[NIP46] post-login signer setup failed', error)
-					authStore.setState((state) => ({ ...state, bootstrapError: message }))
-					toast.error('Signed in, but wallet and relay setup could not finish. You can continue using the marketplace.')
-				},
-			)
+			await ndkActions.setSigner(authenticatedSigner)
+			authStore.setState((state) => ({ ...state, bootstrapError: null }))
 			persistAuthenticatedLoginState(user, localSigner.privateKey || '', bunkerUrl)
 
 			authStore.setState((state) => ({
