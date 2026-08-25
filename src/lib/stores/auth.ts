@@ -99,6 +99,11 @@ function cacheResolvedNip46User(signer: NDKNip46Signer, user: NDKUser): void {
 	// caches during blockUntilReady(). Recovery has already verified the same
 	// user with get_public_key, so populate that cache on the native signer
 	// instead of proxying its public identity and relay-facing behavior.
+
+	// Option A: package.json pins NDK to 3.0.3 because NDKNip46Signer exposes no
+	// public setter for the user it caches during blockUntilReady(). Recovery has
+	// verified this user with get_public_key, so populate the native cache here.
+	// Replace this cast with an upstream public cache method before upgrading NDK.
 	;(signer as unknown as { _user?: NDKUser })._user = user
 }
 
