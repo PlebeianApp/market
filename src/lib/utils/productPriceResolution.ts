@@ -64,6 +64,31 @@ export type SatsDerivationState = {
 	hasExchangeRates: boolean
 }
 
+export type FiatDisplayConversionState = {
+	fiatDisplayValue: string
+	currency: string
+	hasExchangeRates: boolean
+}
+
+/**
+ * Returns whether a displayed fiat equivalent cannot be confirmed with the
+ * current exchange-rate data. This deliberately does not depend on currency
+ * mode: in sats-fixed mode, a visible fiat equivalent can be stale after
+ * exchange rates disappear.
+ */
+export function isFiatDisplayConversionUnavailable(
+	state: FiatDisplayConversionState,
+	convert: (amount: number, currency: string) => number,
+): boolean {
+	if (state.fiatDisplayValue === '') return false
+
+	const fiatValue = Number(state.fiatDisplayValue)
+	if (!Number.isFinite(fiatValue)) return true
+	if (!state.hasExchangeRates) return true
+
+	return !Number.isFinite(convert(fiatValue, state.currency))
+}
+
 /**
  * Derives the sats price from the fiat price once exchange rates are
  * available (fiat-fixed mode only).

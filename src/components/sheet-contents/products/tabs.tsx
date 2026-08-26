@@ -12,7 +12,7 @@ import { productFormActions, productFormStore, type ProductShippingForm } from '
 import { uiStore } from '@/lib/stores/ui'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
 import { resolveProductShippingSelections, getProductShippingTotalCost } from '@/lib/utils/productShippingSelections'
-import { deriveSatsPriceFromFiat } from '@/lib/utils/productPriceResolution'
+import { deriveSatsPriceFromFiat, isFiatDisplayConversionUnavailable } from '@/lib/utils/productPriceResolution'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
@@ -190,10 +190,7 @@ export function DetailTab() {
 	// Check if radio group should be visible
 	const showRadioGroup = showFiatField
 	const fiatConversionUnavailable =
-		currencyMode === 'fiat' &&
-		showFiatField &&
-		fiatDisplayValue !== '' &&
-		!Number.isFinite(convertCurrencyToSatsValue(Number(fiatDisplayValue) || 0, currency))
+		showFiatField && isFiatDisplayConversionUnavailable({ fiatDisplayValue, currency, hasExchangeRates }, convertCurrencyToSatsValue)
 
 	// Sync local state from store when store values change (for edit mode)
 	useEffect(() => {
@@ -279,7 +276,11 @@ export function DetailTab() {
 							className="w-full"
 						/>
 						{fiatConversionUnavailable && (
-							<p className="text-xs text-amber-600">Exchange rate unavailable for {currency}; enter a sats price or switch currency.</p>
+							<p className="text-xs text-amber-600">
+								{currencyMode === 'sats'
+									? `Exchange rate unavailable for ${currency}; the displayed fiat equivalent may be stale.`
+									: `Exchange rate unavailable for ${currency}; enter a sats price or switch currency.`}
+							</p>
 						)}
 					</div>
 				)}
