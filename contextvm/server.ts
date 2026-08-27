@@ -1,8 +1,9 @@
 import { NostrServerTransport, PrivateKeySigner, ApplesauceRelayPool } from '@contextvm/sdk'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
-import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
+import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema, walletStateSyncInputSchema, walletStateSyncOutputSchema, walletStateRequestInputSchema, walletStateRequestOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
+import { WalletStateStore } from './tools/wallet-state-store'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -29,9 +30,14 @@ function getCachePath(): string {
 	return process.env.CURRENCY_CACHE_PATH || './contextvm/data/rates-cache.sqlite'
 }
 
+function getWalletStatePath(): string {
+	return process.env.WALLET_STATE_PATH || './contextvm/data/wallet-state.sqlite'
+}
+
 const CACHE_TTL_MS = 1 * 60 * 1000
 
 let cache: RatesCache
+let walletStateStore: WalletStateStore
 
 function getCache(): RatesCache {
 	if (!cache) {
@@ -40,6 +46,15 @@ function getCache(): RatesCache {
 		cache = new RatesCache(cachePath)
 	}
 	return cache
+}
+
+function getWalletStateStore(): WalletStateStore {
+	if (!walletStateStore) {
+		const storePath = getWalletStatePath()
+		mkdirSync(dirname(storePath), { recursive: true })
+		walletStateStore = new WalletStateStore(storePath)
+	}
+	return walletStateStore
 }
 
 async function getRates(forceRefresh = false): Promise<AggregatedRates> {
@@ -149,6 +164,98 @@ async function main() {
 						rate,
 						fetchedAt: result.fetchedAt,
 						cached: result.cached,
+					},
+				}
+			} catch (error: any) {
+				return {
+					content: [],
+					structuredContent: { error: error.message },
+					isError: true,
+				}
+			}
+		},
+	)
+
+	mcpServer.registerTool(
+		'wallet_state_sync',
+		{
+			title: 'Sync Wallet State',
+			description:
+				'Store an encrypted wallet state snapshot (unspent proofs + derivation counter + heap pointer) for a pubkey. Returns a confirmation with the new version number. The payload is NIP-44 encrypted and stored encrypted at rest; the server never decrypts it.',
+			inputSchema: walletStateSyncInputSchema,
+			outputSchema: walletStateSyncOutputSchema,
+		},
+		async ({ pubkey, encryptedState, sequence, version }) => {
+			try {
+				const store = getWalletStateStore()
+				const newVersion = store.sync(pubkey, encryptedState, sequence, version)
+
+				if (newVersion === null) {
+					return {
+						content: [],
+						structuredContent: {
+							error: `Stale write rejected: expected version ${version} but current version differs. Re-request latest state and retry.`,
+						},
+						isError: true,
+					}
+				}
+
+				return {
+					content: [],
+					structuredContent: {
+						pubkey,
+						version: newVersion,
+						storedAt: Date.now(),
+						accepted: true,
+					},
+				}
+			} catch (error: any) {
+				return {
+					content: [],
+					structuredContent: { error: error.message },
+					isError: true,
+				}
+			}
+		},
+	)
+
+	mcpServer.registerTool(
+		'wallet_state_request',
+		{
+			title: 'Request Wallet State',
+			description:
+				'Return the latest stored wallet state snapshot for a given pubkey. Returns the NIP-44 encrypted payload, version, sequence counter, and stored timestamp, or found:false if none is stored.',
+			inputSchema: walletStateRequestInputSchema,
+			outputSchema: walletStateRequestOutputSchema,
+		},
+		async ({ pubkey }) => {
+			try {
+				const store = getWalletStateStore()
+				const record = store.get(pubkey)
+
+				if (!record) {
+					return {
+						content: [],
+						structuredContent: {
+							pubkey,
+							found: false,
+							encryptedState: null,
+							version: null,
+							sequence: null,
+							storedAt: null,
+						},
+					}
+				}
+
+				return {
+					content: [],
+					structuredContent: {
+						pubkey,
+						found: true,
+						encryptedState: record.encryptedState,
+						version: record.version,
+						sequence: record.sequence,
+						storedAt: record.storedAt,
 					},
 				}
 			} catch (error: any) {

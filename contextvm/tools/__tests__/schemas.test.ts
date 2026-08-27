@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { z } from 'zod'
-import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from '../../schemas'
+import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema, walletStateSyncInputSchema, walletStateSyncOutputSchema, walletStateRequestInputSchema, walletStateRequestOutputSchema } from '../../schemas'
 
 function parseSchema(schema: Record<string, z.ZodType>, data: unknown) {
 	const shape = z.object(schema)
@@ -150,5 +150,147 @@ describe('schemas', () => {
 			const result = parseSchema(getBtcPriceSingleOutputSchema, output)
 			expect(result.success).toBe(false)
 		})
-	})
+		})
+
+		describe('walletStateSyncInputSchema', () => {
+		const valid = {
+			pubkey: 'a'.repeat(64),
+			encryptedState: 'nip44:ciphertext:abc123',
+			sequence: 0,
+		}
+
+		test('accepts valid input', () => {
+			const result = parseSchema(walletStateSyncInputSchema, valid)
+			expect(result.success).toBe(true)
+			if (result.success) {
+				expect(result.data.pubkey).toBe(valid.pubkey)
+				expect(result.data.encryptedState).toBe(valid.encryptedState)
+				expect(result.data.sequence).toBe(0)
+			}
+		})
+
+		test('accepts optional version field', () => {
+			const result = parseSchema(walletStateSyncInputSchema, { ...valid, version: 3 })
+			expect(result.success).toBe(true)
+			if (result.success) {
+				expect(result.data.version).toBe(3)
+			}
+		})
+
+		test('rejects missing pubkey', () => {
+			const { pubkey, ...rest } = valid
+			expect(parseSchema(walletStateSyncInputSchema, rest).success).toBe(false)
+		})
+
+		test('rejects empty pubkey', () => {
+			expect(parseSchema(walletStateSyncInputSchema, { ...valid, pubkey: '' }).success).toBe(false)
+		})
+
+		test('rejects missing encryptedState', () => {
+			const { encryptedState, ...rest } = valid
+			expect(parseSchema(walletStateSyncInputSchema, rest).success).toBe(false)
+		})
+
+		test('rejects empty encryptedState', () => {
+			expect(parseSchema(walletStateSyncInputSchema, { ...valid, encryptedState: '' }).success).toBe(false)
+		})
+
+		test('rejects negative sequence', () => {
+			expect(parseSchema(walletStateSyncInputSchema, { ...valid, sequence: -1 }).success).toBe(false)
+		})
+
+		test('rejects non-integer sequence', () => {
+			expect(parseSchema(walletStateSyncInputSchema, { ...valid, sequence: 1.5 }).success).toBe(false)
+		})
+
+		test('rejects negative version', () => {
+			expect(parseSchema(walletStateSyncInputSchema, { ...valid, version: -1 }).success).toBe(false)
+		})
+		})
+
+		describe('walletStateSyncOutputSchema', () => {
+		test('accepts valid output', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				version: 1,
+				storedAt: Date.now(),
+				accepted: true,
+			}
+			const result = parseSchema(walletStateSyncOutputSchema, output)
+			expect(result.success).toBe(true)
+		})
+
+		test('rejects missing version', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				storedAt: Date.now(),
+				accepted: true,
+			}
+			expect(parseSchema(walletStateSyncOutputSchema, output).success).toBe(false)
+		})
+
+		test('rejects non-boolean accepted', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				version: 1,
+				storedAt: Date.now(),
+				accepted: 'yes',
+			}
+			expect(parseSchema(walletStateSyncOutputSchema, output).success).toBe(false)
+		})
+		})
+
+		describe('walletStateRequestInputSchema', () => {
+		test('accepts valid pubkey', () => {
+			const result = parseSchema(walletStateRequestInputSchema, { pubkey: 'a'.repeat(64) })
+			expect(result.success).toBe(true)
+		})
+
+		test('rejects missing pubkey', () => {
+			expect(parseSchema(walletStateRequestInputSchema, {}).success).toBe(false)
+		})
+
+		test('rejects empty pubkey', () => {
+			expect(parseSchema(walletStateRequestInputSchema, { pubkey: '' }).success).toBe(false)
+		})
+		})
+
+		describe('walletStateRequestOutputSchema', () => {
+		test('accepts found output with all fields', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				found: true,
+				encryptedState: 'nip44:ciphertext:abc123',
+				version: 2,
+				sequence: 1,
+				storedAt: Date.now(),
+			}
+			const result = parseSchema(walletStateRequestOutputSchema, output)
+			expect(result.success).toBe(true)
+		})
+
+		test('accepts not-found output with nulls', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				found: false,
+				encryptedState: null,
+				version: null,
+				sequence: null,
+				storedAt: null,
+			}
+			const result = parseSchema(walletStateRequestOutputSchema, output)
+			expect(result.success).toBe(true)
+		})
+
+		test('rejects missing found field', () => {
+			const output = {
+				pubkey: 'a'.repeat(64),
+				encryptedState: null,
+				version: null,
+				sequence: null,
+				storedAt: null,
+			}
+			expect(parseSchema(walletStateRequestOutputSchema, output).success).toBe(false)
+		})
+		})
 })
