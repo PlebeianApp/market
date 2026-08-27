@@ -79,9 +79,9 @@ export const applesauceIo: NostrIo = {
 			subscription?.unsubscribe()
 		}
 		subscription = getPool()
-			.subscription(urls, filters, { resubscribe: false })
+			.req(urls, filters, { resubscribe: false })
 			.subscribe((message) => {
-				if (message === 'EOSE') {
+				if (message.type === 'EOSE') {
 					if (opts?.closeOnEose) {
 						if (subscription) stop()
 						else {
@@ -91,7 +91,7 @@ export const applesauceIo: NostrIo = {
 					}
 					return
 				}
-				if (!stopped) onEvent(message as NostrEvent)
+				if (message.type === 'EVENT' && !stopped) onEvent(message.event as NostrEvent)
 			})
 		if (stopAfterSubscribe) subscription.unsubscribe()
 		return stop

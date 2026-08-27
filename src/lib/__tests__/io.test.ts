@@ -90,7 +90,7 @@ mock.module('applesauce-relay', () => ({
 		request = (urls: string[], filters: unknown) => ({
 			subscribe: (h: ReqHandlers) => poolRequestController(h, urls, filters),
 		})
-		subscription = (urls: string[], filters: unknown, opts: unknown) => ({
+		req = (urls: string[], filters: unknown, opts: unknown) => ({
 			subscribe: (cb: (msg: unknown) => void) => poolSubscriptionController(cb, urls, filters, opts),
 		})
 		publish = async (urls: string[], event: unknown) => poolPublishController(urls, event)
@@ -342,9 +342,9 @@ describe('applesauce adapter (io-applesauce)', () => {
 	test('subscribe forwards relay events, skips EOSE markers, and stop() unsubscribes', () => {
 		const unsubscribe = mock(() => {})
 		poolSubscriptionController = (cb) => {
-			cb(stubRawEvent)
-			cb('EOSE') // control marker — must be filtered out, not handed to onEvent
-			cb(stubRawEvent2)
+			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' }) // control marker — must be filtered out, not handed to onEvent
+			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent2 })
 			return { unsubscribe }
 		}
 		const seen: unknown[] = []
@@ -359,7 +359,7 @@ describe('applesauce adapter (io-applesauce)', () => {
 		const unsubscribe = mock(() => {})
 		const onEvent = mock(() => {})
 		poolSubscriptionController = (cb) => {
-			cb('EOSE')
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
 			return { unsubscribe }
 		}
 
@@ -378,7 +378,7 @@ describe('applesauce adapter (io-applesauce)', () => {
 		const unsubscribe = mock(() => {})
 		const onEvent = mock(() => {})
 		poolSubscriptionController = (cb) => {
-			cb('EOSE')
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
 			return { unsubscribe }
 		}
 
