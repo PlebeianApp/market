@@ -26,6 +26,7 @@
 | 0015         | Production-safe NDK Filter Handling and Stable Kind-0 Profile Fetching  | Accepted | `ADR-015-production-safe-ndk-filters-and-stable-kind-0-fetching.md` | PR #1207 (fix/ai-guardrails-profile-unload). **Was also claimed by PR #1174 (staging-relay-recovery, CLOSED) — that ADR needs renumbering if revived.** |
 | 0016         | Zap NDK External Relay Isolation                                        | Accepted | `ADR-016-zap-ndk-external-relay-isolation.md`                       | PR #1211. Legacy cluster (0013–0016) — reserved. **Conflict: PR #1215 (product-orthogonal-dimensions) also claims 0016 — needs renumbering to 0009.**   |
 | (unnumbered) | Add Product Workflow Boundaries                                         | Accepted | `ADR-add-product-workflow-boundaries.md`                            | Predates the numbering system.                                                                                                                          |
+| 0017         | Cashu Wallet Dependency Stack — Migration to @cashu/coco-core 2.0       | Proposed | `ADR-0017-cashu-wallet-dependency-stack.md`                         | Branch `adr/017-dependency-stack`. Pending team call + Amperstrand confirmation. D2 of wallet research handover.                                        |
 
 ## Pending Number Assignments
 
