@@ -27,8 +27,9 @@ export function OrderFinalizeComponent({
 	onViewOrders,
 	deliveryRequirements,
 }: OrderFinalizeComponentProps) {
-	const { cart } = useStore(cartStore)
+	const { cart, totalShippingInSats } = useStore(cartStore)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
+	const subtotalInSats = Math.max(0, totalInSats - totalShippingInSats)
 
 	const isAllPickup =
 		deliveryRequirements.isResolved &&
@@ -327,7 +328,11 @@ export function OrderFinalizeComponent({
 				<div className="space-y-2">
 					<div className="flex justify-between text-sm">
 						<span className="text-gray-600">Subtotal:</span>
-						<span className="font-medium">{formatSats(totalInSats)} sats</span>
+						<span className="font-medium">{formatSats(subtotalInSats)} sats</span>
+					</div>
+					<div className="flex justify-between text-sm">
+						<span className="text-gray-600">Shipping:</span>
+						<span className="font-medium">{formatSats(totalShippingInSats)} sats</span>
 					</div>
 					<div className="border-t pt-2 mt-3">
 						<div className="flex justify-between font-semibold text-lg">

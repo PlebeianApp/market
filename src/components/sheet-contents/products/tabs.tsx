@@ -677,7 +677,7 @@ const QUICK_SHIPPING_TEMPLATES: Array<{
 ]
 
 export function ShippingTab() {
-	const { shippings, price, fiatPrice, bitcoinUnit, currency: productCurrency, currencyMode } = useStore(productFormStore)
+	const { shippings, price, fiatPrice, currency: productCurrency, currencyMode } = useStore(productFormStore)
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
 	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
@@ -935,8 +935,8 @@ export function ShippingTab() {
 												if (productCurrency === 'SATS') {
 													productSats = Number(price) || 0
 												} else if (productCurrency === 'BTC') {
-													// If bitcoinUnit is BTC, `price` may be BTC amount; otherwise treat as sats
-													productSats = bitcoinUnit === 'BTC' ? convertCurrencyToSatsValue(Number(price) || 0, 'BTC') : Number(price) || 0
+													// The form stores Bitcoin-denominated product prices in sats.
+													productSats = Number(price) || 0
 												} else {
 													// Fiat currency
 													if (currencyMode === 'fiat' && fiatPrice) {
