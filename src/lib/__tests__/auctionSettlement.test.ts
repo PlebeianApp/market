@@ -7,11 +7,13 @@ import {
 	computeAuctionFloorMultiplier,
 	getAuctionBidAcceptanceEndAt,
 	getAuctionBiddingCutoffAt,
+	getAuctionBidAmount,
 	getAuctionCurrentPrice,
 	getAuctionEffectiveEndAt,
 	getAuctionMinBidCurve,
 	getAuctionRootEventId,
 	getAuctionWindowValidBids,
+	parseAuctionNonNegativeInt,
 	resolveAuctionVersionSet,
 } from '../auctionSettlement'
 
@@ -86,6 +88,22 @@ const makeAuction = (params: {
 	}) as NDKEvent
 
 describe('auctionSettlement helpers', () => {
+	test('parses only complete safe nonnegative integer strings', () => {
+		expect(parseAuctionNonNegativeInt('100')).toBe(100)
+		expect(parseAuctionNonNegativeInt(' 100 ')).toBe(100)
+		expect(parseAuctionNonNegativeInt('100abc')).toBe(0)
+		expect(parseAuctionNonNegativeInt('1e308')).toBe(0)
+		expect(parseAuctionNonNegativeInt('0x64')).toBe(0)
+		expect(parseAuctionNonNegativeInt('9007199254740992')).toBe(0)
+	})
+
+	test('rejects malformed amount tags instead of truncating them', () => {
+		const bid = makeBid({ id: 'malformed-amount', pubkey: 'alice', amount: 100, createdAt: 10 })
+		bid.tags.find((tag) => tag[0] === 'amount')![1] = '100abc'
+
+		expect(getAuctionBidAmount(bid)).toBe(0)
+	})
+
 	test('buildActiveAuctionBidChains reconstructs latest active chain per bidder', () => {
 		const firstAliceBid = makeBid({ id: 'alice-1', pubkey: 'alice', amount: 1000, createdAt: 10 })
 		const secondAliceBid = makeBid({ id: 'alice-2', pubkey: 'alice', amount: 1400, createdAt: 20, prevBidId: 'alice-1' })
