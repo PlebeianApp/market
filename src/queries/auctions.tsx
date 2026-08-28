@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
@@ -22,9 +22,12 @@ import {
 	getAuctionSettlementGrace as getAuctionSettlementGraceValue,
 	getAuctionRootEventId as getAuctionRootEventIdValue,
 	getAuctionStartAt as getAuctionStartAtValue,
+	getAuctionVerdictBackedBidIds,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -844,10 +847,34 @@ export const getBidLocktime = (bidEvent: NDKEvent | null): number => {
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
-export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: NDKEvent[], startingBid: number = 0): number =>
+export const getAuctionCurrentPriceFromBids = (
+	auction: NDKEvent | null,
+	bids: NDKEvent[],
+	startingBid: number = 0,
+	verdictBackedBidIds?: Set<string>,
+): number =>
 	auction
-		? computeAuctionCurrentPrice(auction, bids, startingBid)
+		? computeAuctionCurrentPrice(auction, bids, startingBid, verdictBackedBidIds)
 		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
+
+/**
+ * Bid ids an auditor quorum has actually confirmed for this auction —
+ * pass to `getAuctionCurrentPriceFromBids` so a self-signed kind-1023
+ * with a fabricated `amount` can't inflate the displayed price before a
+ * validator ever sees it (see AUCTIONS.md §6.0 / §7.5).
+ */
+export const useAuctionVerdictBackedBidIds = (auction: NDKEvent | null, auctionEventId: string, auctionCoordinates?: string) => {
+	const verdictsQuery = useAuctionVerdicts(auctionEventId, 500, auctionCoordinates)
+	return useMemo(() => {
+		if (!auction) return new Set<string>()
+		const parsedVerdicts: ParsedValidatorVerdictEvent[] = []
+		for (const event of verdictsQuery.data ?? []) {
+			const parsed = parseValidatorVerdictEvent(event)
+			if (parsed.ok) parsedVerdicts.push(parsed.value)
+		}
+		return getAuctionVerdictBackedBidIds(auction, parsedVerdicts)
+	}, [auction, verdictsQuery.data])
+}
 
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length

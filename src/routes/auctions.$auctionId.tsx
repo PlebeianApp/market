@@ -34,6 +34,7 @@ import {
 	getAuctionBidIncrement,
 	getAuctionCategories,
 	getAuctionCurrentPriceFromBids,
+	useAuctionVerdictBackedBidIds,
 	getAuctionBiddingCutoffAt,
 	getAuctionCurrency,
 	getAuctionId,
@@ -430,7 +431,8 @@ function AuctionDetailRoute() {
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const verdictBackedBidIds = useAuctionVerdictBackedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictBackedBidIds)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)

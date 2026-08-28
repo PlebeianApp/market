@@ -30,6 +30,7 @@ import {
 	getAuctionBidCountFromBids,
 	getAuctionBidIncrement,
 	getAuctionCurrentPriceFromBids,
+	useAuctionVerdictBackedBidIds,
 	getAuctionCurrency,
 	getAuctionPathIssuer,
 	getAuctionId,
@@ -264,7 +265,8 @@ function DashboardAuctionDetailRoute() {
 	const now = countdown.now
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const verdictBackedBidIds = useAuctionVerdictBackedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictBackedBidIds)
 	const bidCount = getAuctionBidCountFromBids(auction, bids)
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)

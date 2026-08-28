@@ -1,4 +1,5 @@
 import type { NostrEventLike } from './nostr/eventLike'
+import type { ParsedValidatorVerdictEvent } from './auction/events'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
@@ -6,6 +7,7 @@ import {
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
+	DEFAULT_AUDITOR_QUORUM,
 } from './auction/constants'
 import { auctionImmutableFieldsMatch as compareAuctionImmutableFields } from './auction/immutability'
 
@@ -335,8 +337,67 @@ export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: No
 	})
 }
 
-export const getAuctionCurrentPrice = (auctionEvent: NostrEventLike, bids: NostrEventLike[], startingBid: number = 0): number =>
-	getAuctionWindowValidBids(auctionEvent, bids).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
+/**
+ * Verdict claims meaning a listed auditor confirmed (at some point) that
+ * the bid's Cashu proof was actually locked/unspent on-mint per NUT-7 —
+ * AUCTIONS.md §7.5 step 3. A bare kind-1023 with a self-reported `amount`
+ * and no corroborating auditor never reaches one of these claims.
+ */
+const BID_CONFIRMED_VERDICT_CLAIMS = new Set([
+	'valid_bid_placed',
+	'won_pending_settlement',
+	'lost_pending_refund',
+	'settled_promptly',
+	'settled_late',
+])
+
+/**
+ * Bid event ids backed by `auditor_quorum` distinct listed `auditors`
+ * confirming the bid (AUCTIONS.md §6.0). Pass the result to
+ * `getAuctionCurrentPrice` so a self-signed kind-1023 with a fabricated
+ * `amount` and no locked proof behind it can't inflate the displayed
+ * price — only the settlement layer previously rejected such bids.
+ */
+export const getAuctionVerdictBackedBidIds = (auctionEvent: NostrEventLike, verdicts: ParsedValidatorVerdictEvent[]): Set<string> => {
+	const auditors = new Set(getAuctionTagValues(auctionEvent, 'auditors'))
+	if (auditors.size === 0) return new Set()
+
+	const quorum = Math.max(1, parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'auditor_quorum'), DEFAULT_AUDITOR_QUORUM))
+
+	const confirmingAuditorsByBid = new Map<string, Set<string>>()
+	for (const verdict of verdicts) {
+		if (!verdict.bidEventId) continue
+		if (!auditors.has(verdict.validatorPubkey)) continue
+		if (!BID_CONFIRMED_VERDICT_CLAIMS.has(verdict.claim)) continue
+
+		const confirmingAuditors = confirmingAuditorsByBid.get(verdict.bidEventId) ?? new Set<string>()
+		confirmingAuditors.add(verdict.validatorPubkey)
+		confirmingAuditorsByBid.set(verdict.bidEventId, confirmingAuditors)
+	}
+
+	const backedBidIds = new Set<string>()
+	for (const [bidEventId, confirmingAuditors] of confirmingAuditorsByBid) {
+		if (confirmingAuditors.size >= quorum) backedBidIds.add(bidEventId)
+	}
+	return backedBidIds
+}
+
+/**
+ * `verdictBackedBidIds`, when passed, restricts the price to bids an
+ * auditor quorum has actually confirmed (see `getAuctionVerdictBackedBidIds`)
+ * so an unbacked kind-1023 can't inflate the displayed price. Omitting it
+ * preserves the old (unfiltered) behaviour for callers that haven't wired
+ * verdicts up yet.
+ */
+export const getAuctionCurrentPrice = (
+	auctionEvent: NostrEventLike,
+	bids: NostrEventLike[],
+	startingBid: number = 0,
+	verdictBackedBidIds?: Set<string>,
+): number =>
+	getAuctionWindowValidBids(auctionEvent, bids)
+		.filter((bid) => !verdictBackedBidIds || verdictBackedBidIds.has(bid.id))
+		.reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
 
 export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<string, NostrEventLike>): NostrEventLike[] => {
 	const chain: NostrEventLike[] = []

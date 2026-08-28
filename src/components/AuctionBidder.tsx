@@ -18,6 +18,7 @@ import {
 	getAuctionCurrentPriceFromBids,
 	getAuctionBidCountFromBids,
 	getBidAmount,
+	useAuctionVerdictBackedBidIds,
 } from '@/queries/auctions'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
@@ -128,7 +129,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// "Not started yet" to "Place Bid" the moment start_at passes.
 	const notStarted = startAt > 0 && countdown.now < startAt
 
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const verdictBackedBidIds = useAuctionVerdictBackedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictBackedBidIds)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const hasPriorBids = bidsCount > 0
 	const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
