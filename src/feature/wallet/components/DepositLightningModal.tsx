@@ -5,10 +5,12 @@ import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useWallets, walletActions } from '@/lib/stores/wallet'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Copy, Check, Zap } from 'lucide-react'
+import { Loader2, Copy, Check, Zap, Circle, CircleCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { getMintHostname, normalizeMintUrl } from '@/lib/wallet'
+import type { AuctionBidFundingLifecycleState, BidVerdictWaitStatus } from '@/hooks/useAuctionBidFunding'
+import type { ValidatorClaim } from '@/lib/auction/constants'
 
 const isValidMintUrl = (mintUrl: string): boolean => {
 	const normalizedMintUrl = normalizeMintUrl(mintUrl)
@@ -43,6 +45,54 @@ interface DepositLightningModalProps {
 	 * "Top up your wallet" escape hatch into the classic form below.
 	 */
 	variant?: 'bid' | 'topup'
+	/**
+	 * When set (variant='bid' only), replaces the generic "Deposit
+	 * Successful!" screen with a staged mint/lock/publish/validate progress
+	 * view, followed by a "Your bid went through!" screen once the bid has
+	 * published and the validator wait has resolved (or timed out).
+	 */
+	bidProgress?: {
+		lifecycleState: AuctionBidFundingLifecycleState
+		verdictStatus: BidVerdictWaitStatus
+		verdictClaim: ValidatorClaim | null
+		bidAmount: number
+	}
+}
+
+type BidStageStatus = 'pending' | 'active' | 'done'
+
+interface BidStage {
+	key: string
+	label: string
+	status: BidStageStatus
+}
+
+const BID_PUBLISH_FAILURE_STATES = new Set<AuctionBidFundingLifecycleState>([
+	'invoice_paid_mint_failed_reclaimable',
+	'mint_succeeded_bid_publish_failed_reclaimable',
+])
+
+const getBidStages = (
+	lifecycleState: AuctionBidFundingLifecycleState,
+	verdictStatus: BidVerdictWaitStatus,
+	lockingRevealed: boolean,
+): BidStage[] => {
+	const mintingDone = lifecycleState === 'ecash_minted' || lifecycleState === 'bid_publish_attempted' || lifecycleState === 'bid_published'
+	const mintingActive = lifecycleState === 'payment_acknowledged' || lifecycleState === 'minting_started'
+	const lockingDone = lockingRevealed || lifecycleState === 'bid_published'
+	const publishingActive = lifecycleState === 'bid_publish_attempted' && lockingRevealed
+	const publishingDone = lifecycleState === 'bid_published'
+	const validatingActive = publishingDone && verdictStatus === 'waiting'
+	const validatingDone = publishingDone && (verdictStatus === 'received' || verdictStatus === 'timeout')
+
+	const stageStatus = (done: boolean, active: boolean): BidStageStatus => (done ? 'done' : active ? 'active' : 'pending')
+
+	return [
+		{ key: 'mint', label: 'Minting', status: stageStatus(mintingDone, mintingActive) },
+		{ key: 'lock', label: 'Locking funds', status: stageStatus(lockingDone, mintingDone && !lockingDone) },
+		{ key: 'publish', label: 'Publishing bid', status: stageStatus(publishingDone, publishingActive) },
+		{ key: 'validate', label: 'Validator approval', status: stageStatus(validatingDone, validatingActive) },
+	]
 }
 
 export type AuctionFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
@@ -61,6 +111,7 @@ export function DepositLightningModal({
 	onMintingStarted,
 	onFundingFailed,
 	variant = 'topup',
+	bidProgress,
 }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus, error: depositError } = useStore(nip60Store)
 	const { wallets, isInitialized: walletsInitialized, isLoading: walletsLoading, initialize: initializeWallets } = useWallets()
@@ -72,7 +123,28 @@ export function DepositLightningModal({
 	const [nwcPaymentStatus, setNwcPaymentStatus] = useState<NwcDepositPaymentStatus>('idle')
 	const [showClassicTopUp, setShowClassicTopUp] = useState(false)
 	const [isCheckingDeposit, setIsCheckingDeposit] = useState(false)
+	const [lockingRevealed, setLockingRevealed] = useState(false)
 	const isBidQuickView = variant === 'bid' && !showClassicTopUp
+	const bidLifecycleState = bidProgress?.lifecycleState
+	const bidVerdictStatus = bidProgress?.verdictStatus ?? 'idle'
+
+	// "Locking funds" and "publishing bid" both happen inside the single
+	// `bid_publish_attempted` state (see ADR-0004) — there's no real signal
+	// to distinguish them, so pace the reveal with a short timer instead of
+	// showing both as "active" simultaneously.
+	useEffect(() => {
+		if (bidLifecycleState !== 'bid_publish_attempted') {
+			if (bidLifecycleState !== 'bid_published') setLockingRevealed(false)
+			return
+		}
+		const timer = setTimeout(() => setLockingRevealed(true), 600)
+		return () => clearTimeout(timer)
+	}, [bidLifecycleState])
+
+	const isBidFullyDone =
+		!!bidProgress && bidLifecycleState === 'bid_published' && (bidVerdictStatus === 'received' || bidVerdictStatus === 'timeout')
+	const hasBidPublishFailed = !!bidProgress && bidLifecycleState && BID_PUBLISH_FAILURE_STATES.has(bidLifecycleState)
+	const showBidProgressView = variant === 'bid' && !showClassicTopUp && !!bidProgress && depositStatus === 'success' && !isBidFullyDone
 	const autoGenerateAttemptedKeyRef = useRef<string | null>(null)
 	const wasOpenRef = useRef(false)
 	const sentNwcInvoiceRef = useRef<string | null>(null)
@@ -322,15 +394,66 @@ export function DepositLightningModal({
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-yellow-500" />
-						{isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
+						{!isBidFullyDone && <Zap className="w-5 h-5 text-yellow-500" />}
+						{isBidFullyDone ? 'Your bid went through!' : isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
 					</DialogTitle>
 					<DialogDescription>
-						{isBidQuickView ? 'Pay this invoice to fund your bid.' : 'Generate a Lightning invoice to mint eCash'}
+						{isBidFullyDone
+							? 'Your bid is now live on the auction.'
+							: showBidProgressView
+								? 'Finalizing your bid…'
+								: isBidQuickView
+									? 'Pay this invoice to fund your bid.'
+									: 'Generate a Lightning invoice to mint eCash'}
 					</DialogDescription>
 				</DialogHeader>
 
-				{depositStatus === 'success' ? (
+				{isBidFullyDone && bidProgress ? (
+					<div className="py-2">
+						<div className="flex items-center gap-4">
+							<div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+								<CircleCheck className="w-8 h-8 text-green-600" />
+							</div>
+							<div>
+								<p className="text-xs text-muted-foreground">Top Bid</p>
+								<p className="text-2xl font-bold">{bidProgress.bidAmount.toLocaleString()} sats</p>
+							</div>
+						</div>
+						<div className="flex justify-end mt-6">
+							<Button onClick={handleClose}>Ok</Button>
+						</div>
+					</div>
+				) : showBidProgressView ? (
+					<div className="space-y-4 py-2">
+						<div className="flex justify-center">
+							<Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+						</div>
+						<ul className="space-y-2">
+							{getBidStages(bidLifecycleState ?? 'idle', bidVerdictStatus, lockingRevealed).map((stage) => (
+								<li key={stage.key} className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+									{stage.status === 'done' ? (
+										<CircleCheck className="w-4 h-4 text-green-600 shrink-0" />
+									) : stage.status === 'active' ? (
+										<Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+									) : (
+										<Circle className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+									)}
+									<span className={stage.status === 'pending' ? 'text-muted-foreground' : 'font-medium'}>{stage.label}</span>
+								</li>
+							))}
+						</ul>
+						{hasBidPublishFailed && (
+							<div className="space-y-2 text-center">
+								<p className="text-sm text-destructive">
+									Funding completed, but publishing the bid failed. Check your notifications for details.
+								</p>
+								<Button variant="outline" onClick={handleClose}>
+									Close
+								</Button>
+							</div>
+						)}
+					</div>
+				) : depositStatus === 'success' ? (
 					<div className="py-6 text-center">
 						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
 							<Check className="w-6 h-6 text-green-600" />

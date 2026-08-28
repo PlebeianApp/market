@@ -216,6 +216,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		useAuctionMintSelection(trustedMints, Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0, previousBidAmount)
 
 	const {
+		bidFundingLifecycleState,
 		isDepositOpen,
 		depositAmount,
 		preferredDepositMint,
@@ -227,6 +228,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
+		verdictStatus,
+		verdictClaim,
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
@@ -234,6 +237,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			setIsEditing(false)
 			onBidSuccess?.()
 		},
+		auctionRootEventId,
+		auctionCoordinates,
+		bidderPubkey: signedInBidderPubkey,
 	})
 
 	const hasInsufficientBidFunds =
@@ -420,6 +426,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				onMintingStarted={handleMintingStarted}
 				onFundingFailed={handleFundingFailed}
 				variant="bid"
+				bidProgress={{
+					lifecycleState: bidFundingLifecycleState,
+					verdictStatus,
+					verdictClaim,
+					bidAmount: parsedBidAmount,
+				}}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">

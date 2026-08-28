@@ -1,7 +1,20 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import type { AuctionBidFormData } from '@/publish/auctions'
-import { useCallback, useState } from 'react'
+import { useAuctionVerdicts } from '@/queries/auctions'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import type { ValidatorClaim } from '@/lib/auction/constants'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
+/**
+ * How long to wait for a kind-30440 validator verdict referencing the
+ * just-published bid before giving up and treating the bid as done anyway —
+ * the bid already landed on the relay at this point, so a slow/absent
+ * validator shouldn't trap the bidder in a pending UI forever.
+ */
+const VALIDATOR_VERDICT_WAIT_TIMEOUT_MS = 15000
+
+export type BidVerdictWaitStatus = 'idle' | 'waiting' | 'received' | 'timeout'
 
 export type AuctionBidFundingLifecycleState =
 	| 'idle'
@@ -60,8 +73,12 @@ interface StartFundingForBidInput {
 
 interface UseAuctionBidFundingOptions {
 	previousBidAmount: number
-	publishBid: (bidData: AuctionBidFormData) => Promise<unknown>
+	publishBid: (bidData: AuctionBidFormData) => Promise<string>
 	onBidSuccess?: () => void
+	/** Needed to look up the kind-30440 verdict for the bid just published. */
+	auctionRootEventId?: string
+	auctionCoordinates?: string
+	bidderPubkey?: string
 }
 
 const TERMINAL_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
@@ -111,28 +128,93 @@ const resolveAuctionBidFundingTransition = (
 	nextState: AuctionBidFundingLifecycleState,
 ): AuctionBidFundingLifecycleState => (canTransitionAuctionBidFundingState(currentState, nextState) ? nextState : currentState)
 
+/**
+ * Walks through several transitions in one shot, applying each only if
+ * valid from wherever the previous hop landed. Needed because
+ * `payment_acknowledged`/`minting_started` are otherwise only reached via
+ * the NWC-pay UI callbacks — a bidder paying externally (scanning the QR
+ * with their own wallet) never fires those, so a single-hop transition to
+ * `ecash_minted` would silently no-op and strand the state at
+ * `invoice_created` forever.
+ */
+const chainAuctionBidFundingTransitions = (
+	currentState: AuctionBidFundingLifecycleState,
+	path: AuctionBidFundingLifecycleState[],
+): AuctionBidFundingLifecycleState => path.reduce(resolveAuctionBidFundingTransition, currentState)
+
 export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	!CLOSE_NO_CANCEL_FUNDING_STATES.has(state)
 
 export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
 
-export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSuccess }: UseAuctionBidFundingOptions) {
+export function useAuctionBidFunding({
+	previousBidAmount,
+	publishBid,
+	onBidSuccess,
+	auctionRootEventId,
+	auctionCoordinates,
+	bidderPubkey,
+}: UseAuctionBidFundingOptions) {
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
 	const [preferredDepositMint, setPreferredDepositMint] = useState<string | undefined>(undefined)
 	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
+	const [publishedBidEventId, setPublishedBidEventId] = useState<string | null>(null)
+	const [verdictStatus, setVerdictStatus] = useState<BidVerdictWaitStatus>('idle')
+	const [verdictClaim, setVerdictClaim] = useState<ValidatorClaim | null>(null)
+	const verdictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	const clearVerdictTimeout = useCallback(() => {
+		if (verdictTimeoutRef.current) {
+			clearTimeout(verdictTimeoutRef.current)
+			verdictTimeoutRef.current = null
+		}
+	}, [])
+
+	const startVerdictWait = useCallback(() => {
+		clearVerdictTimeout()
+		setVerdictClaim(null)
+		setVerdictStatus('waiting')
+		verdictTimeoutRef.current = setTimeout(() => {
+			setVerdictStatus((current) => (current === 'waiting' ? 'timeout' : current))
+		}, VALIDATOR_VERDICT_WAIT_TIMEOUT_MS)
+	}, [clearVerdictTimeout])
+
+	useEffect(() => clearVerdictTimeout, [clearVerdictTimeout])
+
+	// Only poll while actively waiting on a verdict — otherwise pass empty
+	// ids so the underlying query stays disabled.
+	const verdictsQuery = useAuctionVerdicts(
+		verdictStatus === 'waiting' ? auctionRootEventId || '' : '',
+		500,
+		verdictStatus === 'waiting' ? auctionCoordinates : undefined,
+	)
+
+	useEffect(() => {
+		if (verdictStatus !== 'waiting' || !publishedBidEventId || !bidderPubkey) return
+		for (const event of verdictsQuery.data ?? []) {
+			const parsed = parseValidatorVerdictEvent(event)
+			if (parsed.ok && parsed.value.bidEventId === publishedBidEventId && parsed.value.bidderPubkey === bidderPubkey) {
+				setVerdictClaim(parsed.value.claim)
+				setVerdictStatus('received')
+				clearVerdictTimeout()
+				return
+			}
+		}
+	}, [verdictsQuery.data, verdictStatus, publishedBidEventId, bidderPubkey, clearVerdictTimeout])
 
 	const submitPreparedBid = useCallback(
 		async (bidData: AuctionBidFormData) => {
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
 			try {
-				await publishBid(bidData)
+				const bidEventId = await publishBid(bidData)
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				toast.success('Bid placed successfully')
 				setPendingBidSubmission(null)
-				setIsDepositOpen(false)
+				setPublishedBidEventId(bidEventId)
+				startVerdictWait()
 				onBidSuccess?.()
 				return true
 			} catch (error) {
@@ -144,7 +226,7 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 				return false
 			}
 		},
-		[onBidSuccess, publishBid],
+		[onBidSuccess, publishBid, startVerdictWait],
 	)
 
 	const startFundingForBid = useCallback(
@@ -185,7 +267,9 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 		if (!pendingBidSubmission) return
 
 		void (async () => {
-			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'ecash_minted'))
+			setBidFundingLifecycleState((currentState) =>
+				chainAuctionBidFundingTransitions(currentState, ['payment_acknowledged', 'minting_started', 'ecash_minted']),
+			)
 
 			try {
 				await nip60Actions.refresh()
@@ -196,7 +280,11 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 			const fundingMintCandidates = pendingBidSubmission.mintCandidates
 			if (!fundingMintCandidates.length) {
 				setBidFundingLifecycleState((currentState) =>
-					resolveAuctionBidFundingTransition(currentState, 'invoice_paid_mint_failed_reclaimable'),
+					chainAuctionBidFundingTransitions(currentState, [
+						'payment_acknowledged',
+						'minting_started',
+						'invoice_paid_mint_failed_reclaimable',
+					]),
 				)
 				toast.error('Invoice was paid, but no funding mint was selected for bid locking. Please retry the bid submission.')
 				return
@@ -208,7 +296,11 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 
 			if (!fundableMint) {
 				setBidFundingLifecycleState((currentState) =>
-					resolveAuctionBidFundingTransition(currentState, 'invoice_paid_mint_failed_reclaimable'),
+					chainAuctionBidFundingTransitions(currentState, [
+						'payment_acknowledged',
+						'minting_started',
+						'invoice_paid_mint_failed_reclaimable',
+					]),
 				)
 				toast.error('Invoice was paid, but minted funds are not yet spendable on any accepted mint. Please retry once minting completes.')
 				return
@@ -243,7 +335,12 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 		if (!shouldPreservePendingBidSubmissionOnModalClose(bidFundingLifecycleState)) {
 			setPendingBidSubmission(null)
 		}
-	}, [bidFundingLifecycleState])
+		// Stop polling for a verdict once nothing is showing it anymore.
+		clearVerdictTimeout()
+		setVerdictStatus('idle')
+		setVerdictClaim(null)
+		setPublishedBidEventId(null)
+	}, [bidFundingLifecycleState, clearVerdictTimeout])
 
 	return {
 		bidFundingLifecycleState,
@@ -258,5 +355,8 @@ export function useAuctionBidFunding({ previousBidAmount, publishBid, onBidSucce
 		handleMintingStarted,
 		handleFundingFailed,
 		handleDepositModalClose,
+		verdictStatus,
+		verdictClaim,
+		publishedBidEventId,
 	}
 }
