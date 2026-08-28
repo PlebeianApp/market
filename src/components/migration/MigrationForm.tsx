@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Media } from '@/components/Media'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -410,7 +411,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 								<Label>Images</Label>
 								<div className="grid grid-cols-2 gap-2 mt-2">
 									{nip15Data.images.map((url, index) => (
-										<img key={index} src={url} alt={`Product image ${index + 1}`} className="w-full h-32 object-cover rounded border" />
+										<Media key={index} src={url} alt={`Product image ${index + 1}`} className="w-full h-32 object-cover rounded border" />
 									))}
 								</div>
 							</div>

@@ -22,6 +22,34 @@ preferences, app settings, and wallet-related events.
 - Cache invalidation must not be used as proof that relays accepted or retained
   an event.
 
+## High-Sensitivity Publish Actions
+
+Some publish functions have irreversible financial consequences. These must be
+self-verifying: they independently fetch, validate, and derive canonical data
+before signing — they do not trust caller-supplied inputs.
+
+Mark high-sensitivity functions with a `@high-sensitivity` block comment at the
+top of the function:
+
+```ts
+/**
+ * @high-sensitivity
+ * This function publishes an event with irreversible financial consequences.
+ * It must independently verify all inputs before signing.
+ */
+```
+
+### Self-verification requirements for high-sensitivity functions
+
+- Fetch the source event(s) from the relay — do not trust caller data.
+- Derive canonical identifiers from tags, not from `event.id` (may be a
+  replacement). Read `auction_root_event_id` from the tag.
+- Verify time windows (e.g. auction has ended) before proceeding.
+- Cross-check caller assertions against independently derived results; throw
+  on mismatch.
+- For multi-leg operations, pre-check all legs' state before any mutation
+  (atomicity: all-or-nothing, no partial states).
+
 ## Instructions
 
 - Prefer existing publish helpers and tests when adding event flows.
@@ -30,6 +58,8 @@ preferences, app settings, and wallet-related events.
   where applicable.
 - Keep mutation success, relay acceptance, and canonical marketplace state
   separate in UI feedback and cache updates.
+- Reuse shared pure validation functions (e.g. `computeValidatedBids`) across
+  callers — do not duplicate validation logic in publishers.
 
 ## Safe Checks
 

@@ -9,7 +9,7 @@ import {
 import { profileQueryOptions } from '@/queries/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { nip19 } from 'nostr-tools'
+import { safeNpubEncode } from '@/lib/utils'
 
 interface FeaturedUserCardProps extends React.HTMLAttributes<'div'> {
 	userPubkey: string
@@ -18,24 +18,27 @@ interface FeaturedUserCardProps extends React.HTMLAttributes<'div'> {
 export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 	// Ensure userPubkey is a string
 	const pubkeyString = userPubkey.toString()
+	const npub = safeNpubEncode(pubkeyString)
+	const isValidPubkey = npub !== null
 
 	// Query user's profile
 	const { data: profile } = useQuery({
-		...profileQueryOptions(nip19.npubEncode(pubkeyString)),
-		enabled: !!userPubkey,
+		...profileQueryOptions(npub ?? ''),
+		enabled: isValidPubkey,
 	})
 
 	// Query user's products
+	const productOptions = productsByPubkeyQueryOptions(pubkeyString)
 	const { data: userProductsData, isLoading: isLoadingProducts } = useQuery({
-		...productsByPubkeyQueryOptions(pubkeyString),
-		enabled: !!userPubkey,
+		...productOptions,
+		enabled: productOptions.enabled,
 	})
 
 	// Get first 4 products for display
 	const userProducts = userProductsData?.slice(0, 4) || []
 
 	// Get user display info
-	const displayName = profile?.name || profile?.display_name || nip19.npubEncode(pubkeyString).slice(0, 12) + '...'
+	const displayName = profile?.name || profile?.display_name || (isValidPubkey ? npub!.slice(0, 12) + '...' : 'Unknown')
 	const about = profile?.about
 	const picture = profile?.picture
 

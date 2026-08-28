@@ -1,4 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { getMediaExtension, isVideoUrl } from '@/lib/media'
+import { Media } from '@/components/Media'
 import { Button } from '@/components/ui/button'
 import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -42,7 +44,9 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 			const url = window.URL.createObjectURL(blob)
 			const link = document.createElement('a')
 			link.href = url
-			link.download = `${images[currentIndex]?.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`
+			const mediaUrl = images[currentIndex]?.url || ''
+			const ext = getMediaExtension(mediaUrl) || (isVideoUrl(mediaUrl) ? 'mp4' : 'jpg')
+			link.download = `${images[currentIndex]?.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${ext}`
 			document.body.appendChild(link)
 			link.click()
 			document.body.removeChild(link)
@@ -72,30 +76,34 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 				{/* Toolbar */}
 				<div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
 					<div className="flex items-center gap-2">
-						<Button
-							variant="ghost"
-							size="icon"
-							onClick={handleZoomOut}
-							disabled={zoom <= 50}
-							className="text-white hover:bg-white/20"
-							aria-label="Zoom out"
-						>
-							<ZoomOut className="h-5 w-5" />
-						</Button>
-						<span className="text-white text-sm font-medium min-w-[4rem] text-center">{zoom}%</span>
-						<Button
-							variant="ghost"
-							size="icon"
-							onClick={handleZoomIn}
-							disabled={zoom >= 300}
-							className="text-white hover:bg-white/20"
-							aria-label="Zoom in"
-						>
-							<ZoomIn className="h-5 w-5" />
-						</Button>
-						<Button variant="ghost" size="icon" onClick={handleRotate} className="text-white hover:bg-white/20" aria-label="Rotate">
-							<RotateCw className="h-5 w-5" />
-						</Button>
+						{!isVideoUrl(images[currentIndex]?.url || '') && (
+							<>
+								<Button
+									variant="ghost"
+									size="icon"
+									onClick={handleZoomOut}
+									disabled={zoom <= 50}
+									className="text-white hover:bg-white/20"
+									aria-label="Zoom out"
+								>
+									<ZoomOut className="h-5 w-5" />
+								</Button>
+								<span className="text-white text-sm font-medium min-w-[4rem] text-center">{zoom}%</span>
+								<Button
+									variant="ghost"
+									size="icon"
+									onClick={handleZoomIn}
+									disabled={zoom >= 300}
+									className="text-white hover:bg-white/20"
+									aria-label="Zoom in"
+								>
+									<ZoomIn className="h-5 w-5" />
+								</Button>
+								<Button variant="ghost" size="icon" onClick={handleRotate} className="text-white hover:bg-white/20" aria-label="Rotate">
+									<RotateCw className="h-5 w-5" />
+								</Button>
+							</>
+						)}
 						<Button variant="ghost" size="icon" onClick={handleDownload} className="text-white hover:bg-white/20" aria-label="Download">
 							<Download className="h-5 w-5" />
 						</Button>
@@ -171,14 +179,26 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 					)}
 
 					<div className="relative flex items-center justify-center w-full h-full p-16">
-						<img
-							src={images[currentIndex]?.url}
-							alt={images[currentIndex]?.title}
-							className="max-w-full max-h-full object-contain transition-transform duration-200"
-							style={{
-								transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
-							}}
-						/>
+						{isVideoUrl(images[currentIndex]?.url) ? (
+							<Media
+								src={images[currentIndex]?.url}
+								alt={images[currentIndex]?.title}
+								className="max-w-full max-h-full object-contain"
+								controls
+								autoPlay
+								muted
+								playsInline
+							/>
+						) : (
+							<img
+								src={images[currentIndex]?.url}
+								alt={images[currentIndex]?.title}
+								className="max-w-full max-h-full object-contain transition-transform duration-200"
+								style={{
+									transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+								}}
+							/>
+						)}
 					</div>
 				</div>
 			</DialogContent>

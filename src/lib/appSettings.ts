@@ -1,18 +1,94 @@
-import NDK, { type NDKFilter, type NostrEvent } from '@nostr-dev-kit/ndk'
+import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
+import { isValidHexKey } from './utils'
+
+/** Kind for NIP-89 handler information / app-config events. */
+export const APP_SETTINGS_KIND = 31990
+/** Exact d tag that identifies the Plebeian Market app-settings event. */
+export const APP_SETTINGS_D_TAG = 'plebeian-market-handler'
+
+/**
+ * Structural shape needed to verify app-settings publisher authority. Kept
+ * minimal (and independent of the NDKEvent class) so it is easy to construct
+ * in tests.
+ */
+export interface AppSettingsEventLike {
+	kind?: number
+	pubkey: string
+	tags: Array<string[]>
+	created_at?: number
+	content: string
+}
+
+/**
+ * Select the latest app-settings event that matches the expected publisher
+ * authority: the event must be kind 31990, authored by `appPubkey`, and carry
+ * the exact d tag 'plebeian-market-handler'. Events from any other publisher
+ * (or with a different kind / d tag) are rejected — the content schema
+ * validates shape, not authority, so a spoofed event that passes the schema
+ * must still be refused here.
+ */
+export function selectAuthoritativeAppSettingsEvent(
+	events: ReadonlyArray<AppSettingsEventLike>,
+	appPubkey: string,
+): AppSettingsEventLike | undefined {
+	return events
+		.filter(
+			(e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === APP_SETTINGS_D_TAG),
+		)
+		.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+}
+
+/**
+ * Resolve the result of a completed app-settings relay query.
+ *
+ * `null` means the authoritative query completed and returned no candidate
+ * events. Returned-but-unusable state is indeterminate and fails closed.
+ */
+export function resolveFetchedAppSettings(events: ReadonlyArray<AppSettingsEventLike>, appPubkey: string): AppSettings | null {
+	if (events.length === 0) return null
+
+	const authoritativeEvent = selectAuthoritativeAppSettingsEvent(events, appPubkey)
+	if (!authoritativeEvent) {
+		throw new Error(`No authoritative app settings event from expected publisher: ${appPubkey}`)
+	}
+
+	let parsedContent: unknown
+	try {
+		parsedContent = JSON.parse(authoritativeEvent.content)
+	} catch {
+		throw new Error('Authoritative app settings contain invalid JSON')
+	}
+
+	const result = AppSettingsSchema.safeParse(parsedContent)
+	if (!result.success) {
+		throw new Error('Authoritative app settings failed schema validation')
+	}
+
+	return result.data
+}
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
+
+	// Reject a malformed app pubkey before creating an NDK instance or issuing
+	// any relay request. NDK's strict filter validation would also fail closed,
+	// but validating here gives a clear, early failure and guarantees the
+	// authors constraint is never satisfied by an unrelated publisher.
+	if (!isValidHexKey(appPubkey)) {
+		throw new Error(`Invalid app pubkey provided: ${appPubkey}`)
+	}
 
 	try {
 		// Create a fresh NDK instance for server-side initialization
 		// to avoid shared store issues with ndkActions
 		const ndk = new NDK({
 			explicitRelayUrls: [relayUrl],
-			// Skip AI guardrails that might filter out events during fetch
-			aiGuardrails: {
-				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
-			},
+			// Server-side, one-off fetch of app-config events. AI guardrails are a
+			// dev-time educational tool and have no place here. NDK's default strict
+			// filter validation is retained (a malformed appPubkey fails closed
+			// rather than broadening the query).
+			aiGuardrails: false,
 		})
 
 		// Connect with timeout
@@ -26,8 +102,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 			// Check if we have any connected relays despite the timeout
 			const connected = ndk.pool?.connectedRelays() || []
 			if (connected.length === 0) {
-				console.error('No relays connected, cannot fetch app settings')
-				return null
+				throw new Error('No relays connected, cannot fetch app settings')
 			}
 			console.log(`Connected to ${connected.length} relays despite timeout`)
 		}
@@ -56,30 +131,18 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 				})
 			})
 
-		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<any>
+		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<NDKEvent>
 		const eventArray = Array.from(events)
 		console.log(`Fetch returned ${eventArray.length} events`)
 
 		if (eventArray.length === 0) {
 			console.log(`No app settings events found for pubkey: ${appPubkey}`)
-			return null
 		}
 
-		console.log(`Found ${eventArray.length} app settings events`)
-		const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-
-		try {
-			const parsedContent = JSON.parse(latestEvent.content)
-			const validatedSettings = AppSettingsSchema.parse(parsedContent)
-
-			return validatedSettings
-		} catch (error) {
-			console.error('Failed to parse or validate app settings:', error)
-			return null
-		}
+		return resolveFetchedAppSettings(eventArray, appPubkey)
 	} catch (err) {
-		console.error('Failed to fetch app settings due to connection or relay error:', err)
-		return null
+		console.error('Failed to fetch app settings:', err)
+		throw err
 	}
 }
 

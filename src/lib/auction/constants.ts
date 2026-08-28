@@ -169,6 +169,17 @@ export const VALIDATOR_CLAIMS = [
 export type ValidatorClaim = (typeof VALIDATOR_CLAIMS)[number]
 
 /**
+ * Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3).
+ * Shared by the validator publisher (Fix 3: suppress late_arrival
+ * downgrades of a prior confirm) and the client quorum screen
+ * (`computeValidatedBids`). Kept here so both sides agree on the set.
+ */
+export const VALIDATOR_CONFIRM_CLAIMS: ReadonlySet<ValidatorClaim> = new Set<ValidatorClaim>(['valid_bid_placed', 'won_pending_settlement'])
+
+/** Verdict claims that condemn a bid as invalid. */
+export const VALIDATOR_CONDEMN_CLAIMS: ReadonlySet<ValidatorClaim> = new Set<ValidatorClaim>(['bid_invalid', 'fraudulent_bid'])
+
+/**
  * Standardised machine codes for `bid_invalid` / negative verdicts — §4.4.3.
  * Validators MAY emit additional implementation-specific reasons; compliant
  * clients SHOULD show unknown reasons verbatim rather than ignoring them.

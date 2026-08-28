@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { Media } from '@/components/Media'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { Badge } from '@/components/ui/badge'
@@ -40,13 +41,7 @@ import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-ro
 import { useSelector } from '@tanstack/react-store'
 import { CheckCheck, Clock, ExternalLink, Gavel, Hourglass, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import {
-	auctionSortOptionValues,
-	defaultAuctionFilters,
-	getAuctionSortOptionTitle,
-	useFilteredAuctions,
-	type AuctionSortOption,
-} from '@/lib/utils/auctions'
+import { auctionSortOptionValues, getAuctionSortOptionTitle, useFilteredAuctions, type AuctionSortOption } from '@/lib/utils/auctions'
 
 type AuctionStatus = 'Scheduled' | 'Live' | 'Settlement' | 'Ended'
 
@@ -398,7 +393,7 @@ function AuctionListItem({
 				<div className="flex shrink-0 items-center gap-3 lg:flex-col lg:items-center">
 					{thumbnailUrl ? (
 						<div className="overflow-hidden rounded-xl border border-white/60 bg-zinc-100 p-1 shadow-sm ring-1 ring-zinc-200/70">
-							<img src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 object-cover lg:h-32 lg:w-32" />
+							<Media src={thumbnailUrl} alt="" className="h-24 w-24 shrink-0 object-cover lg:h-32 lg:w-32" />
 						</div>
 					) : (
 						<div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 shadow-sm ring-1 ring-zinc-200/70 lg:h-32 lg:w-32">
@@ -520,7 +515,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 function AuctionsOverviewComponent() {
 	const { user, isAuthenticated } = useSelector(authStore)
 	const matchRoute = useMatchRoute()
-	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
+	const [sort, setSort] = useState<AuctionSortOption>('newest')
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()

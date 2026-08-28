@@ -113,6 +113,14 @@ export interface ParsedBidEvent {
 
 	// Bid value
 	amount: number
+	/**
+	 * The sats actually locked by THIS leg (the rebid delta).
+	 * Equals `amount` for a single-leg bid; less than `amount` for
+	 * a rebid chain leg. Parsed from the bid content's `leg_locked`
+	 * field. Falls back to `amount` when the field is absent
+	 * (legacy/unknown content format).
+	 */
+	legLockedAmount: number
 	currency: 'SAT'
 	mint: string
 
@@ -236,6 +244,23 @@ export interface ParsedSettlementEvent {
 	reason?: string
 }
 
+/**
+ * Structural `settled`-validity check shared by every consumer that needs to
+ * ask "does a structurally-valid settled settlement exist for this auction?"
+ * — the descriptor, the dashboard route, and the settlement publisher all
+ * used to copy-paste this predicate, which was a drift vector. Structural
+ * only (seller + auction refs): deeper completeness validation happens on
+ * the read path. A garbage third-party kind-1024 must NOT satisfy this.
+ */
+export const isStructurallyValidSettledSettlement = (
+	s: { status: string; sellerPubkey: string; auctionRootEventId: string; auctionCoordinate: string },
+	auction: { sellerPubkey: string; rootEventId: string; coordinate: string },
+): boolean =>
+	s.status === 'settled' &&
+	s.sellerPubkey.toLowerCase() === auction.sellerPubkey.toLowerCase() &&
+	s.auctionRootEventId === auction.rootEventId &&
+	s.auctionCoordinate === auction.coordinate
+
 // =========================================================================
 // kind 1026 — Fallback offer (seller-signed, optional) — §8.3
 // =========================================================================
@@ -269,12 +294,12 @@ export interface ParsedValidatorVerdictEvent {
 	createdAt: number
 
 	// Replaceable key components
-	/** Format: `<bidder_pubkey>:<auction_root_event_id>`. */
+	/** Format: `<bidder_pubkey>:<auction_root_event_id>:<bid_event_id>` (per-bid addressability, ADR-0003 §4.4.1 amendment). */
 	dTag: string
 	bidderPubkey: string
 	auctionRootEventId: string
 	auctionCoordinate: string
-	/** The most recent kind-1023 bid event id this verdict refers to. */
+	/** The kind-1023 bid event id this verdict refers to. */
 	bidEventId: string
 
 	claim: ValidatorClaim

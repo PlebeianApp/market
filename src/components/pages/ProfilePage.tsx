@@ -24,9 +24,9 @@ import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddres
 import { getProfileIdentifierValidationError } from '@/lib/utils/profileValidation'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-react'
+import { Edit, MapPin, MessageCircle, Minus, Plus, RotateCcw, Share2, Timer } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '../UserCard'
@@ -41,14 +41,29 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const [animationParent] = useAutoAnimate()
 	const validationError = getProfileIdentifierValidationError(profileId)
 
+	const profileOptions = profileByIdentifierQueryOptions(profileId)
 	const {
 		data: profileData,
-		isLoading: profileIsLoading,
 		isFetching: profileIsFetching,
+		isLoading: profileIsLoading,
 		isError: profileIsError,
+		error: profileError,
+		refetch: refetchProfile,
 	} = useQuery({
-		...profileByIdentifierQueryOptions(profileId),
-		enabled: !validationError,
+		...profileOptions,
+		enabled: profileOptions.enabled && !validationError,
+		// Profile metadata is slow-changing. Transient fetch failures reject,
+		// so React Query retains previously cached data rather than committing
+		// a null-shaped success. keepPreviousData preserves observer data while
+		// switching query keys.
+		//
+		// Window-focus refetching is disabled. The default reconnect policy
+		// covers browser online/offline recovery only; it does not observe NDK
+		// relay readiness. Initial failures remain recoverable through normal
+		// retries and the manual Try again action below.
+		placeholderData: keepPreviousData,
+		staleTime: 60_000,
+		refetchOnWindowFocus: false,
 	})
 	const { profile, user } = profileData || {}
 
@@ -61,9 +76,10 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}, [user])
 
+	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
 	const { data: sellerProducts = [], isLoading: sellerProductsIsLoading } = useQuery({
-		...productsByPubkeyQueryOptions(profilePubkey ?? ''),
-		enabled: !!profilePubkey,
+		...sellerProductOptions,
+		enabled: sellerProductOptions.enabled,
 	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
@@ -210,19 +226,46 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		validateBanner()
 	}, [profile?.banner])
 
-	const profileNotFoundError = !validationError && !profileIsLoading && !profileIsFetching && (profileIsError || !profile)
-	const invalidResolvedPubkeyError = !validationError && !profileIsLoading && !profileIsFetching && !!user && !profilePubkey
+	// Transport error: the query failed (timeout, disconnect, relay
+	// exception) on initial load with no cached profile to show. This is
+	// distinct from metadata not observed (below) — it is retryable. When a
+	// background refetch fails after a successful load, keepPreviousData
+	// retains the profile and `profile` stays non-null, so this does not
+	// fire and the profile remains visible (covered by profilesFetch.test.ts
+	// QueryClient test).
+	const profileTransportError = !validationError && !profileIsLoading && !profileIsFetching && profileIsError && !profile
+	// Metadata not observed: the query succeeded (no error) but no kind-0 metadata
+	// was observed from the configured relays for this user.
+	const profileNotFoundError = !validationError && !profileIsLoading && !profileIsFetching && !profileIsError && !profile
+	const invalidResolvedPubkeyError =
+		!validationError && !profileIsLoading && !profileIsFetching && !profileIsError && !!user && !profilePubkey
 	const errorMessage =
 		validationError ??
+		(profileTransportError
+			? `Could not load this profile: ${profileError instanceof Error ? profileError.message : 'the relay may be unreachable or still connecting'}. Please try again.`
+			: null) ??
 		(invalidResolvedPubkeyError ? 'This profile resolved to an invalid pubkey.' : null) ??
-		(profileNotFoundError ? 'This profile is unavailable or could not be loaded. Please try again later or check the URL.' : null)
+		(profileNotFoundError ? 'No profile metadata was observed from the configured relays for this user.' : null)
+
+	// Only transport errors are retryable; metadata not observed and invalid
+	// identifiers are settled states.
+	const canRetry = profileTransportError
+
+	const errorTitle = validationError
+		? 'Invalid profile identifier'
+		: profileTransportError
+			? 'Could not load user profile'
+			: invalidResolvedPubkeyError
+				? 'Invalid profile'
+				: 'Profile not found'
 
 	if (errorMessage) {
 		return (
 			<ProfileErrorState
-				title={validationError ? 'Invalid profile identifier' : 'Could not load user profile'}
+				title={errorTitle}
 				message={errorMessage}
 				gradientColor={profilePubkey ? getHexColorFingerprintFromHexPubkey(profilePubkey) : undefined}
+				onRetry={canRetry ? () => refetchProfile() : undefined}
 			/>
 		)
 	}
@@ -390,9 +433,10 @@ interface ProfileErrorStateProps {
 	title: string
 	message: string
 	gradientColor?: string
+	onRetry?: () => void
 }
 
-function ProfileErrorState({ title, message, gradientColor = 'hsl(0, 0%, 30%)' }: ProfileErrorStateProps) {
+function ProfileErrorState({ title, message, gradientColor = 'hsl(0, 0%, 30%)', onRetry }: ProfileErrorStateProps) {
 	return (
 		<div className="relative flex flex-col min-h-screen">
 			<div className="top-0 right-0 left-0 z-0 absolute bg-hero-image-margin h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
@@ -408,6 +452,12 @@ function ProfileErrorState({ title, message, gradientColor = 'hsl(0, 0%, 30%)' }
 				<div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-background/90 p-8 text-center shadow-xl backdrop-blur">
 					<h1 className="text-3xl font-semibold text-foreground">{title}</h1>
 					<p className="mt-4 text-sm text-muted-foreground">{message}</p>
+					{onRetry && (
+						<Button onClick={onRetry} className="mt-6" variant="secondary">
+							<RotateCcw className="w-4 h-4 mr-2" />
+							Try again
+						</Button>
+					)}
 				</div>
 			</div>
 		</div>

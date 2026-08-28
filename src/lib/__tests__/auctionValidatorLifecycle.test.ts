@@ -302,7 +302,7 @@ describe('deriveVerdict — pre-close', () => {
 		}
 	})
 
-	test('no NUT-7 signal → bid_pending_review', () => {
+	test('no NUT-7 signal → valid_bid_placed (NUT-7 step explicitly skipped)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -310,10 +310,15 @@ describe('deriveVerdict — pre-close', () => {
 		auctionState.bids.set(bid.id, bidState)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_pending_review')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
-	test('NUT-7 reports spent → bid_invalid: proof_spent', () => {
+	test('NUT-7 evidence is skipped by the validator (client-owned per ADR-0004)', () => {
+		// Validators no longer query the mint; their pre-close verdict asserts
+		// structural/rules validity only (validateBid with skipNut7Check).
+		// Even recorded NUT-7 spent evidence does not invalidate via this path —
+		// the CLIENT-side winner derivation (computeValidatedBids → validateBid
+		// without skipNut7Check) enforces proof_spent from mint-truthful data.
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -322,11 +327,10 @@ describe('deriveVerdict — pre-close', () => {
 		recordNut7State(bidState, bid.proofYs[0], 'spent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_invalid')
-		if (v.claim === 'bid_invalid') expect(v.reason).toBe('proof_spent')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
-	test('multi-proof aggregate — one spent flips the bid invalid', () => {
+	test('multi-proof spent evidence likewise skipped by the validator', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, {
 			lockSecrets: [
@@ -341,8 +345,7 @@ describe('deriveVerdict — pre-close', () => {
 		recordNut7State(bidState, bid.proofYs[1], 'spent', bid.createdAt)
 
 		const v = deriveVerdict({ auctionState, bidState, now: bid.createdAt })
-		expect(v.claim).toBe('bid_invalid')
-		if (v.claim === 'bid_invalid') expect(v.reason).toBe('proof_spent')
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 
 	test('multi-proof aggregate — all unspent → valid_bid_placed', () => {
@@ -869,7 +872,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		expect(verdict.detail).toMatch(/original bidder/)
 	})
 
-	test('kind-1025 missing cashu_token → fraudulent_bid', () => {
+	test('kind-1025 missing cashu_token → won_pending_settlement (validator skips cashu token validation)', () => {
 		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
@@ -884,11 +887,12 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		seedRelease(auctionState, bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey }))
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
-		expect(verdict.claim).toBe('fraudulent_bid')
-		expect(verdict.detail).toMatch(/cashu_token/)
+		// The validator skips cashu token validation (seller's job at redemption).
+		// A missing token is not fraud from the validator's perspective.
+		expect(verdict.claim).toBe('won_pending_settlement')
 	})
 
-	test('kind-1025 with token amount mismatch → fraudulent_bid', () => {
+	test('kind-1025 with token amount mismatch → won_pending_settlement (validator skips cashu token validation)', () => {
 		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
@@ -907,11 +911,12 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		)
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
-		expect(verdict.claim).toBe('fraudulent_bid')
-		expect(verdict.detail).toMatch(/proof sum 9 does not match expected leg amount 10/)
+		// The validator skips cashu token validation (seller's job at redemption).
+		// A token amount mismatch is not fraud from the validator's perspective.
+		expect(verdict.claim).toBe('won_pending_settlement')
 	})
 
-	test('loser cannot use release_reason=settlement', () => {
+	test('loser with a spurious settlement release stays lost_pending_refund (not fraudulent_bid)', () => {
 		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
@@ -935,8 +940,10 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		)
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
-		expect(verdict.claim).toBe('fraudulent_bid')
-		expect(verdict.detail).toMatch(/winning bid/)
+		// A losing bid with a spurious settlement release is NOT fraud — the
+		// release is irrelevant to a loser (they refund at locktime). Stay at
+		// lost_pending_refund rather than condemning as fraudulent_bid.
+		expect(verdict.claim).toBe('lost_pending_refund')
 	})
 
 	test('fallback bidder with valid fallback_settlement can settle', () => {
@@ -979,7 +986,7 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 
 	// ---- Deterministic release selection (review 4800100458) ---------------
 
-	test('an isolated unusable authorized release still flags fraudulent_bid (option a: selection does not redefine the fraud threshold)', () => {
+	test('an isolated unusable authorized release still flags fraudulent_bid when structurally invalid (wrong derivation path)', () => {
 		const auction = buildAuction({ p2pkXpub: REAL_XPUB, settlementGrace: 100 })
 		const path = 'm/0/0/0/0/0'
 		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
@@ -989,15 +996,13 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		const bidState = buildBidState(bid, bid.createdAt, { currentClaim: 'valid_bid_placed', postCloseDecision: 'winner' })
 		auctionState.bids.set(bid.id, bidState)
 
-		// Usable structure but no cashu_token → unusable. No valid candidate
-		// exists yet, so the earliest invalid candidate is returned and the
-		// verdict layer emits fraudulent_bid (the existing signal is kept).
-		seedRelease(auctionState, bid.id, buildPathRelease(bid, { derivationPath: path, childPubkey, releaseReason: 'settlement' }))
+		// Structurally invalid release (wrong derivation path → child_pubkey
+		// mismatch) → the validator still catches this as fraudulent_bid.
+		seedRelease(auctionState, bid.id, buildPathRelease(bid, { derivationPath: 'm/9/9/9/9/9', childPubkey, releaseReason: 'settlement' }))
 		recordNut7State(bidState, bid.proofYs[0], 'spent', auction.maxEndAt + 60)
 
 		const verdict = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		expect(verdict.claim).toBe('fraudulent_bid')
-		expect(verdict.detail).toMatch(/cashu_token/)
 	})
 
 	test('an early unusable release does not block a later valid release — relay-order independent', () => {
@@ -1175,10 +1180,11 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		const bid = buildBid(auction, { childPubkey })
 		const token = buildCashuToken(bid.mint, bid.lockSecrets, [bid.amount])
 
-		// releaseInvalid is unusable (no cashu_token); releaseValid is usable.
+		// releaseInvalid is structurally invalid (wrong derivation path →
+		// child_pubkey mismatch); releaseValid is usable.
 		const releaseInvalid = buildPathRelease(bid, {
 			id: 'i'.repeat(64),
-			derivationPath: path,
+			derivationPath: 'm/9/9/9/9/9',
 			childPubkey,
 			releaseReason: 'settlement',
 			createdAt: auction.maxEndAt + 10,
@@ -1220,6 +1226,48 @@ describe('deriveVerdict — kind-1025 settlement', () => {
 		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
 		// The good settlement (valid release) is selected → settled_promptly.
 		expect(v.claim).toBe('settled_promptly')
+	})
+
+	test('TDD: winner with an undecodable cashu_token in kind-1025 → won_pending_settlement (validator skips token validation)', () => {
+		// The validator must NOT condemn a bid for a cashu token it can't
+		// decode. Token decoding requires mint keyset info the validator
+		// doesn't have (the validator makes no mint interaction per the
+		// maintainer direction). Cashu token validation is the SELLER's job
+		// at redemption time. An undecodable token should leave the verdict
+		// at won_pending_settlement, not flip to fraudulent_bid.
+		//
+		// RED before the fix: currently returns fraudulent_bid because
+		// validatePathRelease throws on getDecodedToken and
+		// deriveSettlementVerdict maps any release invalidity to
+		// fraudulent_bid. GREEN after the fix skips the cashu token decode
+		// in the validator path.
+		const auction = buildAuction({ p2pkXpub: REAL_XPUB })
+		const path = 'm/0/0/0/0/0'
+		const { deriveAuctionChildP2pkPubkeyFromXpub } = require('../auctionP2pk') as typeof import('../auctionP2pk')
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_XPUB, path)
+		const bid = buildBid(auction, { childPubkey })
+
+		const auctionState = buildAuctionState(auction, { closeHandled: true })
+		const bidState = buildBidState(bid, bid.createdAt, {
+			currentClaim: 'valid_bid_placed',
+			postCloseDecision: 'winner',
+		})
+		auctionState.bids.set(bid.id, bidState)
+		// Valid derivation path + child_pubkey (passes those checks), but an
+		// undecodable cashu_token — a garbage string getDecodedToken can't parse.
+		seedRelease(
+			auctionState,
+			bid.id,
+			buildPathRelease(bid, {
+				derivationPath: path,
+				childPubkey,
+				cashuToken: 'cashuNOTAVALIDTOKEN!!!garbage-that-will-throw-on-decode',
+			}),
+		)
+		// No settlement — the validator should stay at won_pending_settlement.
+
+		const v = deriveVerdict({ auctionState, bidState, now: auction.maxEndAt + 60 })
+		expect(v.claim).toBe('won_pending_settlement')
 	})
 })
 

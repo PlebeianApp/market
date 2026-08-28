@@ -65,8 +65,9 @@ export function extractProofsByMint(wallet: NDKCashuWallet, knownMints?: string[
  * @returns Array of proofs or empty array
  */
 export function getProofsForMint(wallet: NDKCashuWallet, mintUrl: string): Proof[] {
-	const proofsByMint = extractProofsByMint(wallet, [mintUrl])
-	return proofsByMint.get(mintUrl) || []
+	// Pass onlyAvailable: true explicitly — dump() would otherwise return
+	// deleted proofs too, letting selectProofs pick already-spent inputs.
+	return wallet.state.getProofs({ mint: mintUrl, onlyAvailable: true }) ?? []
 }
 
 /**
@@ -90,6 +91,15 @@ export function getSpendableProofsForMint(wallet: NDKCashuWallet, mintUrl: strin
 		}
 	}
 
+	// Fallback: dump-based extraction with proof.state filtering.
+	// This path is hit when wallet.state.getProofs() is unavailable or throws.
+	// proof.state may be undefined for proofs that haven't been through NDK's
+	// state tracking, so the filter only excludes proofs explicitly marked as
+	// 'spent' or 'deleted' — undefined state is treated as spendable.
+	console.warn(
+		`[wallet/proofs] getSpendableProofsForMint: falling back to dump-based extraction for mint ${mintUrl}` +
+			` (wallet.state.getProofs unavailable or returned non-array)`,
+	)
 	const proofs = getProofsForMint(wallet, mintUrl)
 	return proofs.filter((proof) => {
 		const state = (proof as unknown as { state?: string }).state

@@ -3,8 +3,8 @@
  *
  * - kind 30440 — per-bid verdict (parameterized replaceable, §4.4.1).
  *   The bread-and-butter event: validators publish one of these per
- *   (validator, bidder, auction) and update it as the bid's state
- *   changes.
+ *   (validator, bidder, auction, bid) — per-bid addressability, ADR-0003
+ *   §4.4.1 amendment — and update it as the bid's state changes.
  *
  * - kind 30441 — validator policy declaration (parameterized
  *   replaceable, §4.4.2). What a validator will and won't accept.
@@ -65,8 +65,8 @@ export const ValidatorVerdictEventSchema = z
 		nut7ObservedAt: unixSeconds.optional(),
 		contentJson: z.unknown().optional(),
 	})
-	.refine((value) => value.dTag === `${value.bidderPubkey}:${value.auctionRootEventId}`, {
-		message: 'd tag must equal "<bidder_pubkey>:<auction_root_event_id>"',
+	.refine((value) => value.dTag === `${value.bidderPubkey}:${value.auctionRootEventId}:${value.bidEventId}`, {
+		message: 'd tag must equal "<bidder_pubkey>:<auction_root_event_id>:<bid_event_id>"',
 		path: ['dTag'],
 	})
 
@@ -84,8 +84,14 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 		}
 	}
 
+	// Read the canonical fields from their explicit tags rather than
+	// splitting the d-tag. The d-tag is `bidder:auction:bid` (ADR-0003 §4.4.1
+	// amendment) and is validated by the schema refine below; the `p`, `e`,
+	// and `bid` tags are the authoritative sources a client indexes on.
+	const bidderPubkey = readSingleTag(event, 'p') ?? ''
+	const auctionRootEventId = readSingleTag(event, 'e') ?? ''
+	const bidEventId = readSingleTag(event, 'bid') ?? ''
 	const dTag = readSingleTag(event, 'd') ?? ''
-	const [bidderPubkey = '', auctionRootEventId = ''] = dTag.split(':')
 
 	let contentJson: unknown = undefined
 	if (event.content) {
@@ -104,7 +110,7 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 		bidderPubkey,
 		auctionRootEventId,
 		auctionCoordinate: readSingleTag(event, 'a') ?? '',
-		bidEventId: readSingleTag(event, 'bid') ?? '',
+		bidEventId,
 		claim: (readSingleTag(event, 'claim') ?? '') as ValidatorClaim,
 		observedAt: Number.parseInt(readSingleTag(event, 'observed_at') ?? '0', 10) || 0,
 		reason: readSingleTag(event, 'reason'),

@@ -1,4 +1,5 @@
 import { uiActions } from '@/lib/stores/ui'
+import { Media } from '@/components/Media'
 import { getCollectionId, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
@@ -27,7 +28,7 @@ export function CollectionCard({ collection, className }: { collection: NDKEvent
 				onClick={handleCollectionClick}
 			>
 				{images && images.length > 0 ? (
-					<img
+					<Media
 						src={images[0][1]}
 						alt={title}
 						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"

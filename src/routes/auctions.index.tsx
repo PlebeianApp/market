@@ -1,4 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
+import { Media } from '@/components/Media'
 import { AuctionFilters } from '@/components/AuctionFilters'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Badge } from '@/components/ui/badge'
@@ -230,7 +231,7 @@ function AuctionsRoute() {
 			<div className="mb-2 w-40 h-40 lg:w-48 lg:h-48">
 				{backgroundImageUrl && (
 					<div className="relative w-full h-full overflow-hidden rounded-lg shadow-xl ring-2 ring-white/20">
-						<img src={backgroundImageUrl} alt={displayTitle} className="w-full h-full object-cover" />
+						<Media src={backgroundImageUrl} alt={displayTitle} className="w-full h-full object-cover" />
 					</div>
 				)}
 			</div>

@@ -63,7 +63,12 @@ export class EventHandler {
 		// Initialize core components
 		this.adminManager = new AdminManagerImpl(config.adminPubkeys)
 		this.editorManager = new EditorManagerImpl()
-		this.bootstrapManager = new BootstrapManagerImpl(this.adminManager, config.adminPubkeys.length)
+		this.bootstrapManager = new BootstrapManagerImpl(
+			this.adminManager,
+			config.adminPubkeys.length,
+			config.hasExistingSetup,
+			config.allowPublicBootstrap,
+		)
 		this.eventSigner = new EventSigner(config.appPrivateKey)
 		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
@@ -126,8 +131,17 @@ export class EventHandler {
 				console.warn('⚠️ App relay NDK setup failed, continuing anyway:', e)
 			}
 
-			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
-			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
+			// Subscribe on dedicated zap relays in production; some LSPs do not
+			// publish receipts to the app relay. Skip external relays in
+			// staging (must not leak events to public relays) and in CI/E2E
+			// (LOCAL_RELAY_ONLY — they waste 15s waiting for connections that
+			// will never succeed and aren't needed locally).
+			const isStaging = process.env.APP_STAGE === 'staging' || process.env.NODE_ENV === 'staging'
+			const isLocalOnly = process.env.LOCAL_RELAY_ONLY === 'true'
+			const skipExternalZapRelays = isStaging || isLocalOnly
+			const zapRelayUrls = skipExternalZapRelays
+				? [config.relayUrl].filter(Boolean)
+				: Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
 			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
 			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
 			try {

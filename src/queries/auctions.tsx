@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
-import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
+import { AUCTION_PATH_RELEASE_KIND, DEFAULT_AUDITOR_QUORUM, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
 	decryptPrivateAuctionClaimMessageWithSigner,
 	getAuctionClaimPublicMarkerFields,
@@ -501,8 +501,9 @@ export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordi
 
 /**
  * Fetch kind-30440 validator verdicts for an auction. These are
- * parameterised-replaceable per (validator, bidder, auction), so the
- * relay returns at most one per such tuple.
+ * parameterised-replaceable per (validator, bidder, auction, bid)
+ * — per-bid addressability, ADR-0003 §4.4.1 amendment — so the relay
+ * returns at most one verdict per bid per validator.
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
@@ -765,6 +766,13 @@ export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tag
  */
 export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
 	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
+
+/** Number of distinct auditor verdicts required for a bid to be confirmed (§4.1). */
+export const getAuctionAuditorQuorum = (event: NDKEvent | null): number => {
+	const raw = event?.tags.find((tag) => tag[0] === 'auditor_quorum' && !!tag[1])?.[1]
+	const parsed = raw ? parseInt(raw, 10) : NaN
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AUDITOR_QUORUM
+}
 
 /**
  * Legacy single-pubkey accessor preserved for callers still phrased

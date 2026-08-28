@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
 	AUCTION_MIN_DURATION_SECONDS,
@@ -57,9 +58,7 @@ const INITIAL_FORM: AuctionFormData = {
 	reserve: undefined,
 	startAt: '',
 	endAt: '',
-	// Anti-snipe defaults: no window, no curve, 1h settlement grace.
-	// Defaults are conservative — sellers must opt into the curve
-	// explicitly. AUCTIONS.md §6.1.
+	// Default anti-snipe to off; enabling applies the 5-min linear 2x preset.
 	antiSnipeWindowMinutes: 0,
 	minBidCurveShape: 'none',
 	minBidCurvePeakMultiplier: 2,
@@ -626,10 +625,10 @@ function formatAbsoluteCompact(tsSeconds: number): string {
 }
 
 /**
- * Anti-snipe window + curve picker. Single card on the auction form
- * with three rows of preset buttons:
+ * Anti-snipe toggle + curve picker. Single card on the auction form
+ * with basic anti-snipe enablement and curve controls:
  *
- *   1. Anti-snipe window (0 / 5 / 15 / 30 minutes added to end_at).
+ *   1. Anti-snipe On/Off (Off = 0 min window, On = 5 min window).
  *   2. Curve shape (none / linear / exponential).
  *   3. Peak multiplier (2× / 5× / 10×) — disabled when shape = none.
  *
@@ -668,7 +667,9 @@ function AntiSnipeCurveSettings({
 	]
 	const peakOptions: AuctionMinBidCurvePeakPreset[] = [...AUCTION_MIN_BID_CURVE_PEAK_PRESETS]
 
-	// `windowDisabled = true` when the seller picked "No window" —
+	const antiSnipeEnabled = formData.antiSnipeWindowMinutes > 0 || formData.minBidCurveShape !== 'none'
+
+	// `windowDisabled = true` when no anti-snipe window is selected —
 	// disables curve shape AND peak multiplier in one go. With no window,
 	// `max_end_at = end_at`, the curve has zero duration, and a non-`none`
 	// shape would have no effect anyway. Disabling the controls visually
@@ -679,15 +680,36 @@ function AntiSnipeCurveSettings({
 	return (
 		<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
 			<div>
-				<Label className="text-zinc-950">Anti-snipe</Label>
-				<p className="mt-1 text-xs text-zinc-500">
-					After flat bidding ends, bids can still land during the anti-snipe window — but the minimum bid ramps up to make sniping
-					expensive. The auction end is fixed at publish time.
-				</p>
+				<div className="flex items-center gap-3">
+					<Label className="text-zinc-950">Anti-snipe</Label>
+					<div className="flex items-center gap-3">
+						<span className={`text-xs ${!antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>Off</span>
+						<Switch
+							id="auction-anti-snipe-enabled"
+							checked={antiSnipeEnabled}
+							onCheckedChange={(checked) =>
+								setFormData((prev) =>
+									checked
+										? {
+												...prev,
+												antiSnipeWindowMinutes: 5,
+												minBidCurveShape: 'linear',
+												minBidCurvePeakMultiplier: 2,
+											}
+										: { ...prev, antiSnipeWindowMinutes: 0, minBidCurveShape: 'none' },
+								)
+							}
+						/>
+						<span className={`text-xs ${antiSnipeEnabled ? 'text-zinc-900' : 'text-zinc-500'}`}>On</span>
+					</div>
+				</div>
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className="text-xs uppercase tracking-wide text-zinc-500">Window</Label>
+				<Label className="text-xs uppercase tracking-wide text-zinc-500">Anti-snipe protection window</Label>
+				<p className="text-xs text-zinc-500">
+					Adds extra minutes to the end of the auction, where the minimum bid increment rises to make sniping more expensive
+				</p>
 				<div className="flex flex-wrap gap-2">
 					{windowOptions.map((minutes) => {
 						const isActive = formData.antiSnipeWindowMinutes === minutes
@@ -696,10 +718,6 @@ function AntiSnipeCurveSettings({
 								key={minutes}
 								type="button"
 								onClick={() =>
-									// Setting window=0 also resets curve to `none` —
-									// keeps the form state coherent so a re-enable
-									// doesn't surface a leftover shape the seller
-									// can't see.
 									setFormData((prev) =>
 										minutes === 0
 											? { ...prev, antiSnipeWindowMinutes: minutes, minBidCurveShape: 'none' }
@@ -720,7 +738,8 @@ function AntiSnipeCurveSettings({
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Curve shape</Label>
+				<Label className={`text-xs uppercase tracking-wide ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Bid curve</Label>
+				<p className={`text-xs ${windowDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>The shape of the bid curve</p>
 				<div className="flex flex-wrap gap-2">
 					{shapeOptions.map((option) => {
 						const isActive = formData.minBidCurveShape === option.value
@@ -746,7 +765,10 @@ function AntiSnipeCurveSettings({
 			</div>
 
 			<div className="grid gap-1.5">
-				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Peak multiplier</Label>
+				<Label className={`text-xs uppercase tracking-wide ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>Multiplier</Label>
+				<p className={`text-xs ${curveDisabled ? 'text-zinc-300' : 'text-zinc-500'}`}>
+					How much the bidding floor raises relative to the last bid
+				</p>
 				<div className="flex flex-wrap gap-2">
 					{peakOptions.map((peak) => {
 						const isActive = formData.minBidCurvePeakMultiplier === peak
@@ -878,7 +900,6 @@ function AuctionTabContent({
 	userRemovedMints: Set<string>
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
-	const [useReserve, setUseReserve] = useState(false)
 	const [inputSliderValue, setInputSliderValue] = useState<number>(() => {
 		const idx = DURATION_PRESETS.findIndex((p) => p.seconds === durationSeconds)
 		return idx >= 0 ? idx + 1 : 1
@@ -911,8 +932,7 @@ function AuctionTabContent({
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
 	const reserveNum = parseInt(formData.reserve ?? '', 10)
-	const showBidLadder =
-		formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0 && !isNaN(reserveNum)
+	const showBidLadder = formData.startingBid !== '' && startingBidNum > 0 && formData.bidIncrement !== '' && bidIncrementNum > 0
 	const antiSnipeWindowSeconds = formData.antiSnipeWindowMinutes * 60
 	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
@@ -1101,10 +1121,11 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="grid w-full gap-1.5">
+			<div className="grid w-full gap-1.5 rounded-lg border border-zinc-200 bg-white px-4 py-4">
 				<Label htmlFor="auction-starting-bid">
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Starting Bid (sats)</span>
 				</Label>
+				<p className="text-xs text-zinc-500">Amount bidders must meet or exceed to place the first bid.</p>
 				<Input
 					id="auction-starting-bid"
 					type="number"
@@ -1143,38 +1164,22 @@ function AuctionTabContent({
 								</div>
 
 								<div className="space-y-3">
-									<div className="flex items-center space-x-2">
-										<Checkbox
-											id="use-reserve"
-											checked={!!formData.reserve || useReserve}
-											onCheckedChange={(checked) => {
-												if (checked === true) {
-													setUseReserve(true)
-													setFormData((prev) => ({ ...prev, reserve: formData.startingBid }))
-												} else {
-													setUseReserve(false)
-													setFormData((prev) => ({ ...prev, reserve: undefined }))
-												}
-											}}
-										/>
-										<Label htmlFor="use-reserve">Set Reserve Price</Label>
-										<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve." />
-									</div>
-
-									{(!!formData.reserve || useReserve) && (
-										<div className="grid w-full gap-1.5">
+									<div className="grid w-full gap-1.5">
+										<div className="flex items-center space-x-2">
 											<Label htmlFor="auction-reserve">Reserve (sats)</Label>
-											<Input
-												id="auction-reserve"
-												type="number"
-												min="0"
-												value={formData.reserve}
-												onFocus={(e) => e.target.select()}
-												onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
-											/>
-											{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+											<InfoTooltip content="Minimum bid required for the auction to have a winner. No winner if highest bid is lower than the reserve. Leave empty for no reserve." />
 										</div>
-									)}
+										<Input
+											id="auction-reserve"
+											type="number"
+											min="0"
+											placeholder="Optional — no reserve if left empty"
+											value={formData.reserve ?? ''}
+											onFocus={(e) => e.target.select()}
+											onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
+										/>
+										{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
+									</div>
 								</div>
 
 								{showBidLadder && <BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />}
