@@ -61,13 +61,15 @@ jobs:
           # Pinning to this pre-regression commit ensures the build uses the
           # remote module source until the upstream issue is resolved.
           # Keep this pin in sync with the "Install nak" step in e2e.yml.
-          git clone https://github.com/fiatjaf/nak.git /tmp/nak
-          cd /tmp/nak
-          git checkout b65683886b58382890888fbdda90e5c2129df488
+          (
+            git clone https://github.com/fiatjaf/nak.git /tmp/nak
+            cd /tmp/nak
+            git checkout b65683886b58382890888fbdda90e5c2129df488
 
-          GOBIN="$(go env GOPATH)/bin"
-          mkdir -p "$GOBIN"
-          go build -o "$GOBIN/nak" .
+            GOBIN="$(go env GOPATH)/bin"
+            mkdir -p "$GOBIN"
+            go build -o "$GOBIN/nak" .
+          )
 
           cleanup() {
             if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
