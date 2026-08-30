@@ -37,11 +37,14 @@ jobs:
     timeout-minutes: 10
     # Preview Deploy is a follow-up enhancement (Layer G), not a trust-pipeline
     # blocker. The PR Trust Pipeline merge gate (Layer H) does not require this
-    # check. continue-on-error keeps preview-deploy flakiness (VPS provisioning,
-    # DNS propagation, SSH key rotation) from blocking PR merge while we iterate
-    # on the VPS side. Individual step failures still surface in the run log and
-    # the PR comment reports the live URL (or warming-up status) when it works.
-    continue-on-error: true
+    # check. NOTE: job-level continue-on-error here masks the RUN conclusion to
+    # "success" even when an individual step FAILS, which made the check appear
+    # as a red FAIL next to a green run. The per-step guards added below either
+    # deploy the preview (secrets present) or skip loudly with a clear warning
+    # and a visible PR comment (secrets absent / fork PR), so the check
+    # reflects the real outcome instead of a masked failure. Do NOT re-add
+    # job-level continue-on-error.
+    continue-on-error: false
     permissions:
       contents: read
       pull-requests: write # post / update the idempotent preview-URL comment
@@ -85,7 +88,31 @@ jobs:
             echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech"
           } >> "$GITHUB_OUTPUT"
 
+      # Guard: cross-repo (fork) PR branches never receive repository secrets
+      # under the `pull_request` trigger, so `secrets.PREVIEW_VPS_*` resolve to
+      # empty strings in the runner. Rather than let the Bootstrap step crash on
+      # an empty host (observed: `provision.sh: line 20: PREVIEW_VPS_HOST is
+      # required`), surface a clear annotation and skip all VPS/DNS steps. The
+      # check then reports a visible "skipped" instead of a confusing FAIL.
+      # See docs/ops/preview-deploy.md for the secrets to set and the
+      # `pull_request_target` option for real fork-PR previews.
+      - name: Check preview VPS secrets
+        id: secrets
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+        run: |
+          if [ -n "$PREVIEW_VPS_HOST" ] && [ -n "$PREVIEW_VPS_USER" ] && [ -n "$PREVIEW_VPS_SSH_KEY" ]; then
+            echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Preview deploy secrets present — proceeding with deployment."
+          else
+            echo "previews_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview deploy skipped::PREVIEW_VPS_* secrets are not configured (fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding). Skipping VPS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
+          fi
+
       - name: Bootstrap VPS (nsite gateway + Caddy route)
+        if: steps.secrets.outputs.previews_ready == 'true'
         env:
           PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
           PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
@@ -110,6 +137,7 @@ jobs:
           rm -f "$KEY_FILE"
 
       - name: Ensure remote preview directory exists
+        if: steps.secrets.outputs.previews_ready == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -119,6 +147,7 @@ jobs:
             mkdir -p "$HOME/previews/pr-${{ github.event.pull_request.number }}"
 
       - name: Upload deploy package to VPS
+        if: steps.secrets.outputs.previews_ready == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -129,6 +158,7 @@ jobs:
           strip_components: 1
 
       - name: Write docker-compose.yml and bring up services
+        if: steps.secrets.outputs.previews_ready == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -175,7 +205,7 @@ jobs:
       # This runs on every deploy (not just provisioning) so a long-lived PR
       # keeps the manager fresh without waiting for the next provisioning run.
       - name: Run preview-manager (idle + recency cleanup)
-        if: ${{ !cancelled() }}
+        if: ${{ steps.secrets.outputs.previews_ready == 'true' && !cancelled() }}
         continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -189,6 +219,7 @@ jobs:
             fi
 
       - name: Upsert Cloudflare DNS A record
+        if: steps.secrets.outputs.previews_ready == 'true'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -229,10 +260,12 @@ jobs:
             | jq .
 
       - name: Wait for Caddy auto-discovery
+        if: steps.secrets.outputs.previews_ready == 'true'
         run: sleep 15
 
       - name: Health check
         id: health
+        if: steps.secrets.outputs.previews_ready == 'true'
         continue-on-error: true
         run: |
           PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
@@ -257,9 +290,12 @@ jobs:
           PR="${{ github.event.pull_request.number }}"
           PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
           HEALTH="${{ steps.health.outcome }}"
+          READY="${{ steps.secrets.outputs.previews_ready }}"
           APP_PORT="${{ steps.ports.outputs.app_port }}"
           RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
-          if [ "$HEALTH" = "success" ]; then
+          if [ "$READY" != "true" ]; then
+            STATUS_LINE="⚠️ Preview deploy skipped — VPS secrets not configured on this fork PR (see docs/ops/preview-deploy.md)"
+          elif [ "$HEALTH" = "success" ]; then
             STATUS_LINE="✅ Preview is live"
           else
             STATUS_LINE="🟡 Preview deployed (health check still warming up — give it a minute)"
