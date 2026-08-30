@@ -50,7 +50,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          go install github.com/fiatjaf/nak@latest
+          # NOTE: We pin to commit b6568388 because the upstream 'nak' repository
+          # (commit 9c35de2 on Jul 16) introduced a breaking 'replace' directive
+          # in go.mod: `replace fiatjaf.com/nostr => ../nostrlib`.
+          # This local path reference fails in CI where the sibling 'nostrlib' repo
+          # does not exist, causing build failures.
+          # An unpinned `go install nak@latest` also resolves the newest
+          # fiatjaf.com/nostr pseudo-version, whose go-git/v5 dependency has hit
+          # transient sum.golang.org tile verification failures in CI.
+          # Pinning to this pre-regression commit ensures the build uses the
+          # remote module source until the upstream issue is resolved.
+          # Keep this pin in sync with the "Install nak" step in e2e.yml.
+          git clone https://github.com/fiatjaf/nak.git /tmp/nak
+          cd /tmp/nak
+          git checkout b65683886b58382890888fbdda90e5c2129df488
+
+          GOBIN="$(go env GOPATH)/bin"
+          mkdir -p "$GOBIN"
+          go build -o "$GOBIN/nak" .
 
           cleanup() {
             if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
