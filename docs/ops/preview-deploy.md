@@ -47,13 +47,13 @@ add these as **repository secrets** (the `deploy` job currently has no
 trigger is switched to `pull_request_target`, as secrets scoped to that
 environment:
 
-| Secret | Value |
-|--------|-------|
-| `PREVIEW_VPS_HOST` | Hostname or public IP of the preview VPS |
-| `PREVIEW_VPS_USER` | SSH user on that VPS (typically `debian`) |
-| `PREVIEW_VPS_SSH_KEY` | PEM private key for SSH/scp (multiline; must be a valid key) |
-| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit on the zone) |
-| `PREVIEW_CLOUDFLARE_ZONE_ID` | Cloudflare zone id for `test-market.orangesync.tech` |
+| Secret                         | Value                                                        |
+| ------------------------------ | ------------------------------------------------------------ |
+| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                     |
+| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                    |
+| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key) |
+| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit on the zone)                  |
+| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for `test-market.orangesync.tech`         |
 
 If any required secret is missing the workflow skips loudly instead of failing
 opaque — do not treat a green "skipped" check as proof previews are live.
