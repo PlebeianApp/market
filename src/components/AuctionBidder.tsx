@@ -23,6 +23,7 @@ import {
 	getAuctionTitle,
 	getAuctionImages,
 	getAuctionAuditors,
+	getAuctionAuditorQuorum,
 } from '@/queries/auctions'
 import { UserCard } from './UserCard'
 import { AvatarUser } from './AvatarUser'
@@ -193,6 +194,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const auctionTitle = getAuctionTitle(auction)
 	const auctionThumbnailUrl = getAuctionImages(auction)[0]?.[1] || ''
 	const auctionValidators = useMemo(() => getAuctionAuditors(auction), [auction])
+	const auctionAuditorQuorum = getAuctionAuditorQuorum(auction)
 
 	const isOwnAuction = signedInBidderPubkey === auction.pubkey
 	const auctionRulesBidderPubkey = signedInBidderPubkey || currentUserPubkey || ''
@@ -236,6 +238,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		bidFundingLifecycleState,
 		resumeBidAfterRulesAck,
 		retryBidPublish,
+		publishedBidEventId,
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
@@ -484,8 +487,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				lifecycleState={bidFundingLifecycleState}
 				auctionRootEventId={auctionRootEventId || auction.id}
 				auctionCoordinates={auctionCoordinates}
-				bidderPubkey={signedInBidderPubkey}
 				validatorPubkeys={auctionValidators}
+				bidEventId={publishedBidEventId ?? undefined}
+				auditorQuorum={auctionAuditorQuorum}
 				onRetryPublish={() => void retryBidPublish()}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>

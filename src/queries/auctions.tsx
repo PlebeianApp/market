@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
-import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
+import { AUCTION_PATH_RELEASE_KIND, DEFAULT_AUDITOR_QUORUM, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
 	decryptPrivateAuctionClaimMessageWithSigner,
 	getAuctionClaimPublicMarkerFields,
@@ -503,11 +503,17 @@ export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordi
  * Fetch kind-30440 validator verdicts for an auction. These are
  * parameterised-replaceable per (validator, bidder, auction), so the
  * relay returns at most one per such tuple.
+ *
+ * When `validatorPubkeys` is a non-empty list, verdicts are fetched only
+ * from the auction's configured auditors (`authors` filter) — without
+ * this, a forged kind-30440 from any pubkey would reach the client's
+ * quorum tally (NDK runs without signature verification configured).
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
+	validatorPubkeys?: string[],
 ): Promise<NDKEvent[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
@@ -519,6 +525,7 @@ export const fetchAuctionVerdicts = async (
 	}
 	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
 	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
+	if (validatorPubkeys && validatorPubkeys.length > 0) filter.authors = toStableUniqueStrings(validatorPubkeys)
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
@@ -650,10 +657,19 @@ export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: n
 		refetchInterval: 5000,
 	})
 
-export const auctionVerdictsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const auctionVerdictsQueryOptions = (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+	validatorPubkeys?: string[],
+) =>
 	queryOptions({
-		queryKey: [...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
-		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates),
+		queryKey: [
+			...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''),
+			auctionCoordinates || '',
+			validatorPubkeys ? toStableUniqueStrings(validatorPubkeys) : [],
+		],
+		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, validatorPubkeys),
 		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 5000,
 		refetchInterval: 5000,
@@ -765,6 +781,13 @@ export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tag
  */
 export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
 	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
+
+/** Number of distinct auditor verdicts required for a bid to be confirmed (§4.1). */
+export const getAuctionAuditorQuorum = (event: NDKEvent | null): number => {
+	const raw = event?.tags.find((tag) => tag[0] === 'auditor_quorum' && !!tag[1])?.[1]
+	const parsed = raw ? parseInt(raw, 10) : NaN
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AUDITOR_QUORUM
+}
 
 /**
  * Legacy single-pubkey accessor preserved for callers still phrased
@@ -990,9 +1013,9 @@ export const useAuctionPathReleases = (auctionEventId: string, limit: number = 2
 		...auctionPathReleasesQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
 
-export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string, validatorPubkeys?: string[]) =>
 	useQuery({
-		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates),
+		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates, validatorPubkeys),
 	})
 
 // ---------------------------------------------------------------------------

@@ -433,5 +433,6 @@ export function useAuctionBidFunding({
 		handleDepositModalClose,
 		resumeBidAfterRulesAck,
 		retryBidPublish,
+		publishedBidEventId,
 	}
 }

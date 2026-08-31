@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Check, AlertCircle } from 'lucide-react'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import { computeVerdictQuorum } from '@/lib/auction/verdictQuorum'
 import type { AuctionBidFundingLifecycleState } from '@/hooks/useAuctionBidFunding'
 import { AvatarUser } from '@/components/AvatarUser'
 import { cn } from '@/lib/utils'
@@ -25,13 +27,17 @@ interface AuctionBidProgressDialogProps {
 	lifecycleState: AuctionBidFundingLifecycleState
 	auctionRootEventId: string
 	auctionCoordinates: string
-	bidderPubkey: string
 	validatorPubkeys: string[]
+	/**
+	 * Id of the exact published kind-1023 bid event. When provided, only
+	 * verdicts bound to this bid count (a rebid's verdict cannot leak into an
+	 * earlier leg and vice-versa).
+	 */
+	bidEventId?: string
+	/** Number of distinct auditor verdicts required to confirm/reject the bid. */
+	auditorQuorum?: number
 	onRetryPublish?: () => void
 }
-
-const POSITIVE_VERDICT_CLAIMS = ['valid_bid_placed', 'won_pending_settlement', 'settled_promptly'] as const
-const NEGATIVE_VERDICT_CLAIMS = ['bid_invalid', 'fraudulent_bid', 'griefed', 'griefed_pending_fallback', 'cancelled'] as const
 
 type StageStatus = 'done' | 'active' | 'pending' | 'error'
 
@@ -76,30 +82,40 @@ export function AuctionBidProgressDialog({
 	lifecycleState,
 	auctionRootEventId,
 	auctionCoordinates,
-	bidderPubkey,
 	validatorPubkeys,
+	bidEventId,
+	auditorQuorum,
 	onRetryPublish,
 }: AuctionBidProgressDialogProps) {
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates)
+	// Fetch only verdicts from the auction's configured auditors (when the
+	// auction lists any) — forged verdicts from arbitrary pubkeys are never
+	// even requested, let alone counted.
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates, validatorPubkeys)
 
-	const myVerdict = useMemo(() => {
-		const raw = verdictsQuery.data ?? []
-		for (const event of raw) {
-			const parsed = parseValidatorVerdictEvent(event)
-			if (parsed.ok && parsed.value.bidderPubkey === bidderPubkey) {
-				return parsed.value
-			}
-		}
-		return null
-	}, [verdictsQuery.data, bidderPubkey])
+	const parsedVerdicts = useMemo(
+		() =>
+			(verdictsQuery.data ?? [])
+				.map(parseValidatorVerdictEvent)
+				.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
+				.map((r) => r.value),
+		[verdictsQuery.data],
+	)
+
+	// Quorum gate: bind to the exact published bid event, accept only the
+	// auction's configured auditors, dedupe per validator, and require
+	// `auditorQuorum` distinct confirms/condemns before a terminal state.
+	const { representativeVerdict, hasPositiveVerdict, hasNegativeVerdict, hasNeutralVerdict } = computeVerdictQuorum(
+		parsedVerdicts,
+		bidEventId,
+		validatorPubkeys,
+		auditorQuorum,
+	)
 
 	const isPublishAttempted = lifecycleState === 'bid_publish_attempted'
 	const isBidPublished = lifecycleState === 'bid_published'
 	const isPublishFailed = lifecycleState === 'mint_succeeded_bid_publish_failed_reclaimable'
 
-	const hasPositiveVerdict = !!myVerdict && (POSITIVE_VERDICT_CLAIMS as readonly string[]).includes(myVerdict.claim)
-	const hasNegativeVerdict = !!myVerdict && (NEGATIVE_VERDICT_CLAIMS as readonly string[]).includes(myVerdict.claim)
-	const isAwaitingValidator = isBidPublished && !myVerdict
+	const isAwaitingValidator = isBidPublished && !hasPositiveVerdict && !hasNegativeVerdict
 
 	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed
 
@@ -110,7 +126,7 @@ export function AuctionBidProgressDialog({
 		? 'done'
 		: hasNegativeVerdict
 			? 'error'
-			: isAwaitingValidator
+			: isAwaitingValidator && validatorPubkeys.length > 0
 				? 'active'
 				: 'pending'
 
@@ -140,7 +156,7 @@ export function AuctionBidProgressDialog({
 							: isPublishFailed
 								? 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
 								: hasNegativeVerdict
-									? `A validator has flagged this bid: ${myVerdict?.claim ?? 'rejected'}`
+									? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
 									: 'Tracking your bid through confirmation stages.'}
 					</DialogDescription>
 				</DialogHeader>
@@ -157,12 +173,16 @@ export function AuctionBidProgressDialog({
 						status={validatorStage}
 						description={
 							hasPositiveVerdict
-								? `Validator confirmed: ${myVerdict?.claim}`
+								? `Validator confirmed: ${representativeVerdict?.claim}`
 								: hasNegativeVerdict
-									? `Validator verdict: ${myVerdict?.claim}`
-									: isAwaitingValidator
-										? 'Waiting for kind-30440 verdict from auction validators'
-										: undefined
+									? `Validator verdict: ${representativeVerdict?.claim}`
+									: isAwaitingValidator && validatorPubkeys.length === 0
+										? 'No validators configured for this auction'
+										: isAwaitingValidator && hasNeutralVerdict
+											? `Validator review pending (${representativeVerdict?.claim}) — awaiting final verdict`
+											: isAwaitingValidator
+												? 'Waiting for kind-30440 verdict from auction validators'
+												: undefined
 						}
 					/>
 				</div>
