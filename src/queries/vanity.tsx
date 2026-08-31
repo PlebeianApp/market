@@ -89,19 +89,19 @@ export const useVanitySettings = (appPubkey?: string) => {
 			'#d': ['vanity-urls'],
 		}
 
-		const subscription = ndk.subscribe(vanityFilter, {
-			closeOnEose: false,
-		})
-
-		// Event handler for vanity updates
-		subscription.on('event', (newEvent) => {
-			queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002).
+		// Unpinned, like the previous NDK pool subscription.
+		const stop = applesauceIo.subscribe(
+			vanityFilter,
+			() => {
+				// Event handler for vanity updates
+				queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
+			},
+			{ closeOnEose: false },
+		)
 
 		// Clean up subscription when unmounting
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({

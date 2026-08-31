@@ -86,17 +86,17 @@ export const useNip05Settings = (appPubkey?: string) => {
 			'#d': ['nip05-names'],
 		}
 
-		const subscription = ndk.subscribe(nip05Filter, {
-			closeOnEose: false,
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002).
+		// Unpinned, like the previous NDK pool subscription.
+		const stop = applesauceIo.subscribe(
+			nip05Filter,
+			() => {
+				queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
+			},
+			{ closeOnEose: false },
+		)
 
-		subscription.on('event', () => {
-			queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
-		})
-
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({

@@ -1,5 +1,6 @@
-import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -77,32 +78,36 @@ export const useAdminSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(adminListFilter, {
-			closeOnEose: false, // Keep subscription open
-			relaySet: getAppRelaySet(),
-			exclusiveRelay: true, // Reject stale copies from other relays in the pool
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002),
+		// pinned to the app relay so stale copies from other relays in the
+		// pool can't race the canonical answer. The guards below handle any
+		// stale copies that slip through.
+		const mainRelay = getMainRelay()
+		if (!mainRelay) return
 
-		// Event handler for admin list updates - only react to newer events after EOSE
-		subscription.on('event', (newEvent) => {
-			const eventTime = newEvent.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
-				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
-				queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
-			}
-			if (eventTime > latestEventTime) {
-				latestEventTime = eventTime
-			}
-		})
-
-		subscription.on('eose', () => {
-			receivedEose = true
-		})
+		const stop = applesauceIo.subscribe(
+			adminListFilter,
+			(rawEvent) => {
+				const eventTime = rawEvent.created_at ?? 0
+				if (receivedEose && eventTime > latestEventTime) {
+					queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
+					queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
+				}
+				if (eventTime > latestEventTime) {
+					latestEventTime = eventTime
+				}
+			},
+			{
+				closeOnEose: false, // Keep subscription open
+				onEose: () => {
+					receivedEose = true
+				},
+				relayUrls: [mainRelay],
+			},
+		)
 
 		// Clean up subscription when unmounting
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({
@@ -226,32 +231,36 @@ export const useEditorSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(editorListFilter, {
-			closeOnEose: false, // Keep subscription open
-			relaySet: getAppRelaySet(),
-			exclusiveRelay: true, // Reject stale copies from other relays in the pool
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002),
+		// pinned to the app relay so stale copies from other relays in the
+		// pool can't race the canonical answer. The guards below handle any
+		// stale copies that slip through.
+		const mainRelay = getMainRelay()
+		if (!mainRelay) return
 
-		// Event handler for editor list updates - only react to newer events after EOSE
-		subscription.on('event', (newEvent) => {
-			const eventTime = newEvent.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
-				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
-				queryClient.refetchQueries({ queryKey: configKeys.editors(appPubkey) })
-			}
-			if (eventTime > latestEventTime) {
-				latestEventTime = eventTime
-			}
-		})
-
-		subscription.on('eose', () => {
-			receivedEose = true
-		})
+		const stop = applesauceIo.subscribe(
+			editorListFilter,
+			(rawEvent) => {
+				const eventTime = rawEvent.created_at ?? 0
+				if (receivedEose && eventTime > latestEventTime) {
+					queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
+					queryClient.refetchQueries({ queryKey: configKeys.editors(appPubkey) })
+				}
+				if (eventTime > latestEventTime) {
+					latestEventTime = eventTime
+				}
+			},
+			{
+				closeOnEose: false, // Keep subscription open
+				onEose: () => {
+					receivedEose = true
+				},
+				relayUrls: [mainRelay],
+			},
+		)
 
 		// Clean up subscription when unmounting
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({
