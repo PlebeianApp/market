@@ -3,7 +3,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
-import { buildBunkerUrlFromResolvedRelayUrls, buildNostrConnectUrlFromResolvedRelayUrls, getNip46RelayUrls } from '@/lib/nostr/nip46'
+import {
+	buildBunkerUrlFromResolvedRelayUrls,
+	buildNostrConnectUrlFromResolvedRelayUrls,
+	getNip46RelayUrls,
+	isApprovedNostrConnectResponse,
+} from '@/lib/nostr/nip46'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -261,9 +266,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							processedRequestIds.add(request.id)
 						}
 
-						const connectSecret = Array.isArray(request.params)
-							? (request.params[1] ?? request.params[0])
-							: (request.params?.secret ?? request.params?.token)
+						const connectSecret = Array.isArray(request.params) ? request.params[0] : (request.params?.secret ?? request.params?.token)
 
 						if (connectSecret === tempSecret) {
 							approvedSignerPubkeys.add(event.pubkey)
@@ -294,7 +297,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 								}
 							}
 						}
-					} else if (request.result === tempSecret || (request.result === 'ack' && approvedSignerPubkeys.has(event.pubkey))) {
+					} else if (isApprovedNostrConnectResponse(request.result, tempSecret, event.pubkey, approvedSignerPubkeys)) {
 						if (processedResponseIds.has(event.id)) {
 							return
 						}
