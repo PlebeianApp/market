@@ -1,10 +1,10 @@
-import { NDKEvent, NDKKind, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKKind, type NDKFilter, type NDKSigner, type NDKUser } from '@nostr-dev-kit/ndk'
 import { nip19, verifyEvent, type Event } from 'nostr-tools'
 
-import type { NostrFilter, NostrIo } from './io'
+import type { FetchOptions, NostrFilter, NostrIo } from './io'
 
 export { NDKEvent, NDKKind }
-export type { NDKFilter, NDKSigner }
+export type { NDKFilter, NDKSigner, NDKUser }
 
 const NIP33_A_REGEX = /^(\d+):([0-9A-Fa-f]+)(?::(.*))?$/
 const BECH32_REGEX = /^n(event|ote|profile|pub|addr)1[\d\w]+$/
@@ -58,7 +58,7 @@ export async function fetchNdkEventSet(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
 	filter: NDKFilter | NDKFilter[],
-	opts?: { timeoutMs?: number },
+	opts?: FetchOptions,
 ): Promise<Set<NDKEvent>> {
 	const rawEvents = await nostrIo.fetchEvents(filter as NostrFilter | NostrFilter[], opts)
 	const eventsById = new Map<string, NDKEvent>()
@@ -74,7 +74,7 @@ export async function fetchNdkEvent(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
 	filter: NDKFilter | NDKFilter[],
-	opts?: { timeoutMs?: number },
+	opts?: FetchOptions,
 ): Promise<NDKEvent | null> {
 	const events = await fetchNdkEventSet(nostrIo, ndk, filter, opts)
 	return events.size > 0 ? Array.from(events)[0] : null

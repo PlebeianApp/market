@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -36,7 +37,9 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 		limit: 1,
 	}
 
-	const events = await ndk.fetchEvents(vanityFilter)
+	// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+	// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+	const events = await fetchNdkEventSet(applesauceIo, ndk, vanityFilter)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {
