@@ -5,7 +5,8 @@ import { isValidHexKey } from '@/lib/utils'
 import type { PayWithNwcParams } from '@/publish/payment'
 import { payInvoiceWithNwc, payInvoiceWithWebln } from '@/publish/payment'
 import { LightningAddress, type Invoice, type NostrProvider } from '@getalby/lightning-tools'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEvent, fetchNdkEventSet, NDKEvent, NDKKind } from '@/lib/nostr/ndk-events'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip04, nip19 } from 'nostr-tools'
 import { toast } from 'sonner'
@@ -124,7 +125,7 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 		if (!ndk) throw new Error('NDK not initialized')
 
 		// Fetch the event
-		const event = await ndk.fetchEvent({
+		const event = await fetchNdkEvent(applesauceIo, ndk, {
 			ids: [id],
 		})
 
@@ -195,7 +196,7 @@ export const fetchUserPaymentDetails = async (userPubkey: string): Promise<Payme
 		if (!ndk) throw new Error('NDK not initialized')
 
 		// Fetch payment detail events for this user
-		const events = await ndk.fetchEvents({
+		const events = await fetchNdkEventSet(applesauceIo, ndk, {
 			kinds: [NDKKind.AppSpecificData],
 			authors: [userPubkey],
 			'#l': ['payment_detail'],
@@ -274,7 +275,7 @@ export const fetchProductPaymentDetails = async (coordinates: string, userPubkey
 		}
 
 		// Fetch payment detail events
-		const events = await ndk.fetchEvents(filter)
+		const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 
 		if (!events || events.size === 0) {
 			return []
@@ -644,7 +645,7 @@ export const updatePaymentDetail = async (params: UpdatePaymentDetailParams): Pr
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const originalNDKEvent = await ndk.fetchEvent({
+		const originalNDKEvent = await fetchNdkEvent(applesauceIo, ndk, {
 			ids: [params.paymentDetailId],
 		})
 
@@ -783,7 +784,7 @@ export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: str
 		if (!ndk) throw new Error('NDK not initialized')
 
 		// Fetch wallet detail events
-		const events = await ndk.fetchEvents({
+		const events = await fetchNdkEventSet(applesauceIo, ndk, {
 			kinds: [NDKKind.AppSpecificData],
 			'#l': ['wallet_detail'],
 			'#a': [`30078:${userPubkey}:${paymentDetailId}`],
@@ -1166,7 +1167,7 @@ export const resolvePaymentDetailsForProduct = async (productId: string, sellerP
 
 		// 2. Check if product is in a collection and get collection-specific payment details
 		// First, fetch the product event to see if it has collection references
-		const productEvent = await ndk.fetchEvent({
+		const productEvent = await fetchNdkEvent(applesauceIo, ndk, {
 			kinds: [30402],
 			authors: [sellerPubkey],
 			'#d': [productId],
