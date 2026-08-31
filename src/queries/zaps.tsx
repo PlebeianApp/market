@@ -1,7 +1,9 @@
 import { ndkStore } from '@/lib/stores/ndk'
 import { zapKeys } from './queryKeyFactory'
 import { useQuery } from '@tanstack/react-query'
-import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { ZAP_RELAYS } from '@/lib/constants'
 import { decode } from 'light-bolt11-decoder'
 
 export interface LightningZap {
@@ -36,11 +38,13 @@ const getUserLud16 = async (userPubkey: string): Promise<string | null> => {
 	const ndk = ndkStore.state.zapNdk
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const profileEvents = await ndk.fetchEvents({
-		kinds: [0],
-		authors: [userPubkey],
-		limit: 1,
-	})
+	// ADR-016 zap reads go through the applesauceIo seam (ADR-0002), pinned to
+	// the same relay set the zap NDK mirrors: ZAP_RELAYS plus the app's
+	// explicit relays. zapNdk stays the rehydration context and the staging/CI
+	// guard — when external zap relays are disabled it is null and this read
+	// throws exactly as before.
+	const relayUrls = Array.from(new Set([...ZAP_RELAYS, ...ndkStore.state.explicitRelayUrls]))
+	const profileEvents = await fetchNdkEventSet(applesauceIo, ndk, { kinds: [0], authors: [userPubkey], limit: 1 }, { relayUrls })
 
 	const profile = Array.from(profileEvents)[0]
 	if (!profile) return null
@@ -116,7 +120,11 @@ export const fetchZapsForUserViaProvider = async (userPubkey: string, targetEven
 		filter['#e'] = [targetEventId]
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	// Same seam + relay pinning as getUserLud16 above: the zap NDK's relay
+	// set is ZAP_RELAYS plus the app's explicit relays, so the seam fetch is
+	// pinned to the same union instead of the app-pool default.
+	const relayUrls = Array.from(new Set([...ZAP_RELAYS, ...ndkStore.state.explicitRelayUrls]))
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { relayUrls })
 	const validZaps: LightningZap[] = []
 
 	for (const event of Array.from(events)) {
