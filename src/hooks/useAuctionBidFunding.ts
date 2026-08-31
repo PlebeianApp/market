@@ -127,6 +127,19 @@ interface UseAuctionBidFundingOptions {
 	onBidSuccess?: () => void
 	onPendingRulesAck?: () => void
 	hasAcknowledgedRules: boolean
+	/**
+	 * #12 (Blocker 1): Rebroadcast an already-signed kind-1023 bid event by id.
+	 *
+	 * When a bid was successfully signed and published once (so
+	 * `publishedBidEventId` is set) but a subsequent relay broadcast
+	 * failed (e.g. transient relay outage on retry), retrying the publish
+	 * must NOT re-run `publishAuctionBid` — that would re-lock funds and
+	 * re-sign a new event, double-charging the bidder. Instead, this
+	 * callback fetches the original signed event by id and rebroadcasts it
+	 * verbatim. Falls back to `publishBid` (full re-submit) when unset or
+	 * when no event id was captured.
+	 */
+	republishBid?: (bidEventId: string) => Promise<void>
 }
 
 const TERMINAL_FUNDING_STATES: AuctionBidFundingLifecycleState[] = [
@@ -152,6 +165,8 @@ const CLOSE_NO_CANCEL_FUNDING_STATES = new Set<AuctionBidFundingLifecycleState>(
 const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecycleState>([
 	...FUNDED_IN_FLIGHT_FUNDING_STATES,
 	'mint_succeeded_bid_publish_failed_reclaimable',
+	'invoice_paid_mint_failed_reclaimable',
+	'invoice_unpaid_or_expired_reclaimable',
 ])
 
 const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycleState, ReadonlySet<AuctionBidFundingLifecycleState>> = {
@@ -167,7 +182,7 @@ const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycle
 	invoice_unpaid_or_expired_reclaimable: new Set(['funding_session_created']),
 	invoice_paid_mint_failed_reclaimable: new Set(['funding_session_created']),
 	mint_succeeded_bid_publish_failed_reclaimable: new Set(['bid_publish_attempted', 'funding_session_created']),
-	funding_canceled: new Set(['funding_session_created']),
+	funding_canceled: new Set(['funding_session_created', 'invoice_unpaid_or_expired_reclaimable', 'invoice_paid_mint_failed_reclaimable']),
 }
 
 export const canTransitionAuctionBidFundingState = (from: AuctionBidFundingLifecycleState, to: AuctionBidFundingLifecycleState): boolean =>
@@ -190,6 +205,7 @@ export function useAuctionBidFunding({
 	onBidSuccess,
 	onPendingRulesAck,
 	hasAcknowledgedRules,
+	republishBid,
 }: UseAuctionBidFundingOptions) {
 	const [isDepositOpen, setIsDepositOpen] = useState(false)
 	const [depositAmount, setDepositAmount] = useState(0)
@@ -197,12 +213,26 @@ export function useAuctionBidFunding({
 	const [pendingBidSubmission, setPendingBidSubmission] = useState<AuctionBidFormData | null>(null)
 	const [pendingRulesAckBidData, setPendingRulesAckBidData] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
+	// #12 (Blocker 1): id of the kind-1023 bid event that was already signed
+	// and published for the current `pendingBidSubmission`. Set only AFTER the
+	// publish succeeds, so `retryBidPublish` can rebroadcast the exact same
+	// signed event instead of re-running `publishAuctionBid` (which would
+	// re-lock funds and re-sign a new event — double-charging the bidder).
+	const [publishedBidEventId, setPublishedBidEventId] = useState<string | null>(null)
 
 	const submitPreparedBid = useCallback(
 		async (bidData: AuctionBidFormData) => {
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
 			try {
-				await publishBid(bidData)
+				const publishResult = await publishBid(bidData)
+				// Capture the published event id (if the publish path returned one)
+				// so a later retry can rebroadcast this exact signed event instead
+				// of re-running the full lock+sign pipeline. `publishBid` is wired
+				// to `bidMutation.mutateAsync` in AuctionBidder, whose mutationFn
+				// resolves to `publishAuctionBid`'s return value — the bid event id.
+				if (typeof publishResult === 'string' && publishResult) {
+					setPublishedBidEventId(publishResult)
+				}
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				toast.success('Bid placed successfully')
 				setPendingBidSubmission(null)
@@ -223,6 +253,11 @@ export function useAuctionBidFunding({
 
 	const startFundingForBid = useCallback(
 		({ bidData, hasInsufficientBidFunds, depositMint, deltaAmount, mintError, selectedMint, canFund }: StartFundingForBidInput) => {
+			// New funding session — clear any captured publish id from a previous
+			// leg. Without this, a later retry in a NEW bid session could try to
+			// rebroadcast the PREVIOUS leg's event (stale cross-leg leak), which
+			// would silently announce an old bid instead of the new one.
+			setPublishedBidEventId(null)
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
 					toast.error(mintError || 'No suitable mint available for bidding.')
@@ -310,14 +345,52 @@ export function useAuctionBidFunding({
 	}, [pendingRulesAckBidData, submitPreparedBid])
 
 	/**
-	 * Retry bid publish from the mint_succeeded_bid_publish_failed_reclaimable
-	 * state. Uses the preserved pendingBidSubmission so the user doesn't need
-	 * to re-enter the bid amount or reselect mints.
+	 * #12 (Blocker 1): Retry bid publish from the
+	 * mint_succeeded_bid_publish_failed_reclaimable state.
+	 *
+	 * Two retry paths:
+	 *
+	 * - **Idempotent rebroadcast (preferred):** if the bid was already
+	 *   signed and published once (captured in `publishedBidEventId`) and a
+	 *   `republishBid` callback is wired, rebroadcast the exact signed
+	 *   kind-1023 event by id. This is a relay-only rebroadcast — no
+	 *   re-lock, no re-sign, no new event id. This is the correct path
+	 *   when the original publish broadcast threw after the event was
+	 *   signed (e.g. relay timeout) OR when a prior successful publish
+	 *   needs to be re-announced to relays that missed it.
+	 *
+	 * - **Full re-submit (fallback):** when no event id was captured (the
+	 *   publish threw before signing completed, so there's nothing to
+	 *   rebroadcast) or no `republishBid` callback is wired, fall back to
+	 *   `submitPreparedBid`, which re-runs `publishAuctionBid` (re-lock +
+	 *   re-sign). This only happens when there's genuinely no signed event
+	 *   to rebroadcast.
+	 *
+	 * The rebroadcast path is what makes this idempotent: retrying a
+	 * completed-but-not-broadcast publish never double-charges the bidder.
 	 */
 	const retryBidPublish = useCallback(async () => {
 		if (!pendingBidSubmission) return
+		if (publishedBidEventId && republishBid) {
+			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
+			try {
+				await republishBid(publishedBidEventId)
+				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
+				setPendingBidSubmission(null)
+				setIsDepositOpen(false)
+				setPublishedBidEventId(null)
+				onBidSuccess?.()
+			} catch (error) {
+				setBidFundingLifecycleState((currentState) =>
+					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
+				)
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				toast.error(`Bid rebroadcast failed: ${errorMessage}`)
+			}
+			return
+		}
 		await submitPreparedBid(pendingBidSubmission)
-	}, [pendingBidSubmission, submitPreparedBid])
+	}, [pendingBidSubmission, publishedBidEventId, republishBid, submitPreparedBid, onBidSuccess])
 
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))

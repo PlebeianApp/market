@@ -640,6 +640,46 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	return bidEvent.id
 }
 
+/**
+ * #12 (Blocker 1): Rebroadcast an already-signed kind-1023 auction bid event
+ * by id, without re-locking funds or re-signing.
+ *
+ * Used by the `retryBidPublish` idempotent-retry path in `useAuctionBidFunding`:
+ * when a bid was successfully signed and published once (so `publishedBidEventId`
+ * is known) but a subsequent relay broadcast failed (transient relay outage on
+ * retry, or relays that missed the original announcement), retrying must NOT
+ * re-run `publishAuctionBid` — that would re-lock funds and re-sign a new event,
+ * double-charging the bidder. Instead we fetch the original signed event by id
+ * from the relay pool and republish it verbatim.
+ *
+ * This is a relay rebroadcast only: the event's id, signature, and tags are
+ * preserved exactly, so relays that already have it deduplicate and relays
+ * that missed it ingest it. No mint interaction, no signer interaction.
+ *
+ * @param bidEventId  id of the previously-signed kind-1023 bid event
+ * @param ndk         NDK instance to fetch/publish through
+ * @throws if NDK is unavailable, the event can't be found by id, or the found
+ *         event is not a kind-1023 bid event (defends against rebroadcasting
+ *         an unrelated/attacker-supplied id)
+ */
+export const republishAuctionBid = async (bidEventId: string, ndk: NDK): Promise<void> => {
+	if (!bidEventId) throw new Error('Cannot rebroadcast auction bid: bidEventId is empty')
+	if (!ndk) throw new Error('Cannot rebroadcast auction bid: NDK is not initialized')
+
+	const fetched = await ndk.fetchEvent({ ids: [bidEventId], kinds: [AUCTION_BID_KIND] })
+	if (!fetched) {
+		throw new Error(`Could not find signed bid event ${bidEventId} on any relay to rebroadcast`)
+	}
+	if (fetched.kind !== AUCTION_BID_KIND) {
+		throw new Error(`Refusing to rebroadcast event ${bidEventId}: expected kind ${AUCTION_BID_KIND}, got kind ${fetched.kind}`)
+	}
+	if (!fetched.sig) {
+		throw new Error(`Refusing to rebroadcast event ${bidEventId}: it is not signed`)
+	}
+
+	await ndkActions.publishEvent(fetched)
+}
+
 const bytesToLowerHex = (bytes: Uint8Array): string => {
 	let out = ''
 	for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, '0')

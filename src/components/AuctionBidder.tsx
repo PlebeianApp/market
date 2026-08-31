@@ -4,7 +4,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
-import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
+import { usePublishAuctionBidMutation, republishAuctionBid, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
@@ -41,6 +41,7 @@ import { nip60Store } from '@/lib/stores/nip60'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
+import { ndkActions } from '@/lib/stores/ndk'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
@@ -245,6 +246,15 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		hasAcknowledgedRules: hasAcknowledgedAuctionRules,
 		onPendingRulesAck: () => {
 			setIsRulesDialogOpen(true)
+		},
+		// #12 (Blocker 1): retry of a failed publish rebroadcasts the already-
+		// signed kind-1023 event by id instead of re-running the lock+sign
+		// pipeline (which would double-charge the bidder). Falls back to the
+		// full re-submit inside the hook when no event id was captured.
+		republishBid: async (bidEventId) => {
+			const ndk = ndkActions.getNDK()
+			if (!ndk) throw new Error('NDK not initialized — cannot rebroadcast bid event')
+			await republishAuctionBid(bidEventId, ndk)
 		},
 	})
 
