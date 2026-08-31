@@ -358,8 +358,13 @@ describe('applesauce adapter (io-applesauce)', () => {
 	test('subscribe with closeOnEose unsubscribes on EOSE without forwarding it', () => {
 		const unsubscribe = mock(() => {})
 		const onEvent = mock(() => {})
+		// Capture the message callback and emit EOSE only after .subscribe()
+		// returns. Production reaches the post-subscribe path because the pool
+		// defers req() behind relay readiness, so the synchronous variant only
+		// exercised the stopAfterSubscribe branch production can't reach.
+		let emit: ((msg: unknown) => void) | undefined
 		poolSubscriptionController = (cb) => {
-			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			emit = cb
 			return { unsubscribe }
 		}
 
@@ -367,6 +372,8 @@ describe('applesauce adapter (io-applesauce)', () => {
 			closeOnEose: true,
 			relayUrls: ['wss://relay.example'],
 		})
+
+		emit?.({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
 
 		expect(onEvent).not.toHaveBeenCalled()
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
@@ -388,6 +395,32 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(unsubscribe).not.toHaveBeenCalled()
 		stop()
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
+	})
+
+	test('subscribe warns on per-relay CLOSED and ERROR messages without forwarding them', () => {
+		const unsubscribe = mock(() => {})
+		const onEvent = mock(() => {})
+		const warns: unknown[][] = []
+		const warn = console.warn
+		console.warn = (...args: unknown[]) => warns.push(args)
+		try {
+			let emit: ((msg: unknown) => void) | undefined
+			poolSubscriptionController = (cb) => {
+				emit = cb
+				return { unsubscribe }
+			}
+			const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, { relayUrls: ['wss://relay.example'] })
+			// CLOSED/ERROR are surfaced but never forwarded to onEvent; events still flow.
+			emit?.({ type: 'CLOSED', from: 'wss://relay.example', id: 'sub-1', reason: 'rate-limited' })
+			emit?.({ type: 'ERROR', from: 'wss://relay.example', id: 'sub-1', error: new Error('conn fail') })
+			emit?.({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
+			expect(warns.length).toBe(2)
+			expect(onEvent).toHaveBeenCalledTimes(1)
+			stop()
+			expect(unsubscribe).toHaveBeenCalledTimes(1)
+		} finally {
+			console.warn = warn
+		}
 	})
 
 	test('publish throws when no relays are configured', async () => {
