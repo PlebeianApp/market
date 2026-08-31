@@ -190,7 +190,6 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 	// Relay-pinned read through the applesauceIo seam (ADR-0002). Mirrors the
 	// previous fetchLatestAppEvent behavior: null when NDK or the app relay
 	// isn't ready yet.
-	const ndk = ndkActions.getNDK()
 	const mainRelay = getMainRelay()
 	const latestEvent =
 		ndk && mainRelay
