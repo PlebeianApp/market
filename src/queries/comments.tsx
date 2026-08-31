@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { commentKeys } from './queryKeyFactory'
 import { isAddressableKind } from 'nostr-tools/kinds'
@@ -121,11 +122,14 @@ export const fetchProductComments = async (event: NDKEvent): Promise<Comment[]> 
 		})
 	}
 
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
 	const [events, replies, fallbackEvents] = await Promise.all([
-		ndkActions.fetchEventsWithTimeout(filters, { timeoutMs: 8000 }),
-		ndkActions.fetchEventsWithTimeout(filtersReplies, { timeoutMs: 8000 }),
+		fetchNdkEventSet(applesauceIo, ndk, filters, { timeoutMs: 8000 }),
+		fetchNdkEventSet(applesauceIo, ndk, filtersReplies, { timeoutMs: 8000 }),
 		isAddressableKind(event.kind)
-			? ndkActions.fetchEventsWithTimeout([{ kinds: [COMMENT_KIND], limit: 200 }], { timeoutMs: 8000 })
+			? fetchNdkEventSet(applesauceIo, ndk, [{ kinds: [COMMENT_KIND], limit: 200 }], { timeoutMs: 8000 })
 			: Promise.resolve(new Set<NDKEvent>()),
 	])
 

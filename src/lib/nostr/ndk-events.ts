@@ -1,20 +1,47 @@
-import NDK from '@nostr-dev-kit/ndk'
-import {
-	NDKEvent,
-	NDKRelaySet,
-	NDKUser,
-	type NDKEncryptionScheme,
-	type NDKFilter,
-	type NDKKind,
-	type NDKSigner,
-	type NDKTag,
-} from '@nostr-dev-kit/ndk'
-import { verifyEvent, type Event } from 'nostr-tools'
+import { NDKEvent, NDKKind, type NDKFilter, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { nip19, verifyEvent, type Event } from 'nostr-tools'
 
-import type { FetchOptions, NostrFilter, NostrIo } from './io'
+import type { NostrFilter, NostrIo } from './io'
 
-export { NDK as default, NDKEvent, NDKRelaySet, NDKUser }
-export type { NDKEncryptionScheme, NDKFilter, NDKKind, NDKSigner, NDKTag }
+export { NDKEvent, NDKKind }
+export type { NDKFilter, NDKSigner }
+
+const NIP33_A_REGEX = /^(\d+):([0-9A-Fa-f]+)(?::(.*))?$/
+const BECH32_REGEX = /^n(event|ote|profile|pub|addr)1[\d\w]+$/
+
+/**
+ * Mirrors NDK's internal `filterFromId` so `ndk.fetchEvent(id)` call sites keep
+ * identical filters when routed through the seam: `kind:pubkey[:d]` NIP-33
+ * coordinates, bech32 entities (nevent/note/naddr), or a bare `{ ids: [id] }`.
+ */
+export function ndkFilterFromId(id: string): NDKFilter {
+	if (NIP33_A_REGEX.test(id)) {
+		const [kind, pubkey, identifier] = id.split(':')
+		const filter: NDKFilter = { authors: [pubkey], kinds: [Number.parseInt(kind)] }
+		if (identifier) filter['#d'] = [identifier]
+		return filter
+	}
+	if (BECH32_REGEX.test(id)) {
+		try {
+			const decoded = nip19.decode(id)
+			if (decoded.type === 'nevent') {
+				const filter: NDKFilter = { ids: [decoded.data.id] }
+				if (decoded.data.author) filter.authors = [decoded.data.author]
+				if (decoded.data.kind) filter.kinds = [decoded.data.kind]
+				return filter
+			}
+			if (decoded.type === 'note') return { ids: [decoded.data] }
+			if (decoded.type === 'naddr') {
+				const filter: NDKFilter = { authors: [decoded.data.pubkey], kinds: [decoded.data.kind] }
+				if (decoded.data.identifier) filter['#d'] = [decoded.data.identifier]
+				return filter
+			}
+		} catch {
+			// Fall through to the bare-ids filter, exactly like NDK does.
+		}
+	}
+	return { ids: [id] }
+}
 
 type NdkEventContext = ConstructorParameters<typeof NDKEvent>[0]
 
@@ -31,7 +58,7 @@ export async function fetchNdkEventSet(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
 	filter: NDKFilter | NDKFilter[],
-	opts?: FetchOptions,
+	opts?: { timeoutMs?: number },
 ): Promise<Set<NDKEvent>> {
 	const rawEvents = await nostrIo.fetchEvents(filter as NostrFilter | NostrFilter[], opts)
 	const eventsById = new Map<string, NDKEvent>()
@@ -42,28 +69,15 @@ export async function fetchNdkEventSet(
 	return new Set(eventsById.values())
 }
 
-/**
- * Fetch a single event for a filter with deterministic newest-wins selection.
- *
- * NDK's `fetchEvent` resolves a coordinate/replaceable kind to its newest
- * event regardless of which relay returns first. `fetchNdkEventSet` dedupes by
- * id (first arrival wins), which would make `limit: 1` replaceable reads
- * relay-arrival-order dependent. This helper restores the newest-wins contract
- * (created_at desc, event id asc as tiebreaker) for single-event coordinate
- * fetches.
- */
+/** First matching event from a seam fetch, or null when nothing matched. */
 export async function fetchNdkEvent(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
 	filter: NDKFilter | NDKFilter[],
-	opts?: FetchOptions,
+	opts?: { timeoutMs?: number },
 ): Promise<NDKEvent | null> {
 	const events = await fetchNdkEventSet(nostrIo, ndk, filter, opts)
-	if (events.size === 0) return null
-	return Array.from(events).sort((a, b) => {
-		if ((b.created_at ?? 0) !== (a.created_at ?? 0)) return (b.created_at ?? 0) - (a.created_at ?? 0)
-		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-	})[0]
+	return events.size > 0 ? Array.from(events)[0] : null
 }
 
 export function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
