@@ -244,6 +244,23 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		stop()
 	})
 
+	test('subscribe forwards onEose into NDK subscription options', () => {
+		const ndk = makeMockNdk()
+		mockNdkStore.state.ndk = ndk
+		const onEose = mock(() => {})
+		ndk.subscribe.mockImplementation((_filter, opts) => {
+			;(opts as { onEose?: () => void }).onEose?.()
+			return { stop: () => {} }
+		})
+
+		const stop = ndkIo.subscribe({ kinds: [1] }, () => {}, { onEose })
+
+		const [[, opts]] = ndk.subscribe.mock.calls
+		expect((opts as { onEose?: () => void }).onEose).toBe(onEose)
+		expect(onEose).toHaveBeenCalledTimes(1)
+		stop()
+	})
+
 	test('publish throws "NDK not initialized" when the singleton is absent', async () => {
 		mockNdkStore.state.ndk = null
 		await expect(ndkIo.publish(stubRawEvent as never)).rejects.toThrow('NDK not initialized')
@@ -429,6 +446,64 @@ describe('applesauce adapter (io-applesauce)', () => {
 		} finally {
 			console.warn = warn
 		}
+	})
+
+	test('subscribe invokes onEose when relays signal EOSE', () => {
+		const onEose = mock(() => {})
+		const onEvent = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe: () => {} }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, {
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		expect(onEvent).toHaveBeenCalledTimes(1)
+		stop()
+	})
+
+	test('subscribe stays open after onEose fires (EOSE is not a stop signal)', () => {
+		const onEose = mock(() => {})
+		const unsubscribe = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, () => {}, {
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		// closeOnEose unset -> the subscription must remain active after EOSE.
+		expect(unsubscribe).not.toHaveBeenCalled()
+		stop()
+	})
+
+	test('subscribe forwards EOSE to onEose before a closeOnEose unsubscribe', () => {
+		const onEose = mock(() => {})
+		const unsubscribe = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, () => {}, {
+			closeOnEose: true,
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
+		stop()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
 
 	test('publish throws when no relays are configured', async () => {
