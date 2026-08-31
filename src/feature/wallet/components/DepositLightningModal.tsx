@@ -9,6 +9,7 @@ import { Loader2, Copy, Check, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { getMintHostname, normalizeMintUrl } from '@/lib/wallet'
+import { resolveAuctionBidFundingFailureReason } from '@/hooks/useAuctionBidFunding'
 
 const isValidMintUrl = (mintUrl: string): boolean => {
 	const normalizedMintUrl = normalizeMintUrl(mintUrl)
@@ -28,7 +29,13 @@ const normalizeValidMintUrl = (mintUrl: string): string | null => {
 
 interface DepositLightningModalProps {
 	open: boolean
-	onClose: () => void
+	/**
+	 * Called when the user closes the modal. On a close while a deposit is
+	 * still pending, the paid-or-unknown failure classification is handed over
+	 * as `reason` so the funding lifecycle classifies BEFORE the modal-open
+	 * state flips (and exactly once per failure path). Plain closes pass null.
+	 */
+	onClose: (reason?: AuctionFundingFailureReason | null) => void
 	initialAmount?: number
 	preferredMint?: string
 	allowedMints?: string[]
@@ -178,8 +185,17 @@ export function DepositLightningModal({
 		if (depositStatus !== 'error') return
 		if (failureNotifiedRef.current) return
 		failureNotifiedRef.current = true
-		onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
-	}, [depositStatus, onFundingFailed])
+		// Paid-or-unknown classification: NWC failures with no payment sent are
+		// genuinely unpaid; QR failures can't be observed, so lean toward
+		// "paid but mint failed" instead of stranding a paid user's sats at the
+		// mint behind an "invoice unpaid/expired" message.
+		onFundingFailed?.(
+			resolveAuctionBidFundingFailureReason({
+				paymentAcknowledged: paymentAcknowledgedRef.current,
+				nwcPaymentAttempted,
+			}),
+		)
+	}, [depositStatus, onFundingFailed, nwcPaymentAttempted])
 
 	useEffect(() => {
 		if (depositStatus !== 'success') {
@@ -295,12 +311,20 @@ export function DepositLightningModal({
 
 		const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
 
-		// Always tear down the deposit so the modal starts fresh on reopen.
-		// For pending deposits, notify the funding lifecycle so it transitions
-		// to a reclaimable terminal state instead of hanging.
+		// Paid-or-unknown close classification (error/close/timeout each fire
+		// exactly once): a QR payer can't be observed by the app, so lean toward
+		// reclaimable instead of claiming "unpaid" and stranding their sats at
+		// the mint. The reason is handed to the funding hook via onClose so the
+		// classification lands BEFORE the modal-open state flips and cannot be
+		// clobbered by the hook's funding_canceled fallback.
+		let closeReason: AuctionFundingFailureReason | null = null
 		if (isPendingDeposit && !failureNotifiedRef.current) {
-			onFundingFailed?.(paymentAcknowledgedRef.current ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
+			closeReason = resolveAuctionBidFundingFailureReason({
+				paymentAcknowledged: paymentAcknowledgedRef.current,
+				nwcPaymentAttempted,
+			})
 		}
+
 		// cancelDeposit() unconditionally resets the store to idle — works for
 		// pending, terminal, and idle states. This replaces the previous
 		// conditional cancel/clear that left stale state in the NWC-sent case.
@@ -318,7 +342,7 @@ export function DepositLightningModal({
 		setShowClassicTopUp(false)
 		setIsCheckingDeposit(false)
 		autoGenerateAttemptedKeyRef.current = null
-		onClose()
+		onClose(closeReason)
 	}
 
 	return (

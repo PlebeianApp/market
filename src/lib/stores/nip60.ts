@@ -1639,6 +1639,11 @@ export const nip60Actions = {
 
 			// Listen for deposit completion
 			deposit.on('success', (token) => {
+				// Identity guard, mirroring monitorDepositConfirmation's timeout guard:
+				// a stale deposit object (canceled or replaced by a newer deposit) can
+				// still emit a late 'success' — only the currently-active deposit may
+				// flip the global deposit status.
+				if (nip60Store.state.activeDeposit !== deposit) return
 				nip60Store.setState((s) => ({
 					...s,
 					depositStatus: 'success',

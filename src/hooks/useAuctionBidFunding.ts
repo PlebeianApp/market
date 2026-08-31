@@ -172,7 +172,17 @@ const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecy
 const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycleState, ReadonlySet<AuctionBidFundingLifecycleState>> = {
 	idle: new Set(['funding_session_created', 'invoice_unpaid_or_expired_reclaimable', 'bid_publish_attempted', 'funding_canceled']),
 	funding_session_created: new Set(['invoice_created', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
-	invoice_created: new Set(['payment_acknowledged', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
+	invoice_created: new Set([
+		'payment_acknowledged',
+		// Paid-or-unknown close/error classification (QR path): the app cannot
+		// observe an external wallet's payment, so a failure while an invoice is
+		// outstanding leans toward "paid but mint failed" instead of stranding a
+		// paid user's sats behind an "unpaid" claim. payment_acknowledged is
+		// implied-but-unobserved here, hence the direct edge.
+		'invoice_unpaid_or_expired_reclaimable',
+		'invoice_paid_mint_failed_reclaimable',
+		'funding_canceled',
+	]),
 	payment_acknowledged: new Set(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
 	minting_started: new Set(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
 	ecash_minted: new Set(['ecash_minted_pending_rules_ack', 'bid_publish_attempted', 'invoice_paid_mint_failed_reclaimable']),
@@ -198,6 +208,62 @@ export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycl
 
 export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
+
+/**
+ * Paid-or-unknown failure classification (S2/S4).
+ *
+ * Used by BOTH deposit-failure paths (the modal's error effect and the modal's
+ * user-close path):
+ *
+ * - NWC: `paymentAcknowledged` tells us whether the invoice was actually
+ *   sent/paid, so an NWC failure with no payment sent is genuinely "unpaid".
+ * - QR: we can't observe the external wallet's payment, so lean toward
+ *   "paid but mint failed" rather than stranding a paid user's sats at the
+ *   mint behind an "invoice unpaid/expired" message that implies nothing
+ *   was paid.
+ */
+export const resolveAuctionBidFundingFailureReason = ({
+	paymentAcknowledged,
+	nwcPaymentAttempted,
+}: {
+	paymentAcknowledged: boolean
+	nwcPaymentAttempted: boolean
+}): AuctionBidFundingFailureReason =>
+	paymentAcknowledged || !nwcPaymentAttempted ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable'
+
+export interface AuctionBidFundingModalCloseResolution {
+	/** Lifecycle state after the close: classified failure reason applied, then the funding_canceled fallback. */
+	nextState: AuctionBidFundingLifecycleState
+	/** Whether the preserved pending bid submission must survive this close. */
+	preservePendingSubmission: boolean
+}
+
+/**
+ * Resolve a deposit-modal close against the funding lifecycle.
+ *
+ * Ported from the lost full-UX lineage so closing cannot race or double-fire:
+ * the (optional) failure classification is applied against the CURRENT state
+ * inside a functional state updater, and the `funding_canceled` fallback is
+ * only considered AFTER classification — so a reclaimable terminal state can
+ * never be clobbered by funding_canceled.
+ *
+ * A close that carries a failure reason (error/close/timeout classification)
+ * always preserves the pending bid submission; a plain close falls back to
+ * the state-based CLOSE_PRESERVE_PENDING_SUBMISSION_STATES rule.
+ */
+export const resolveAuctionBidFundingModalClose = (
+	currentState: AuctionBidFundingLifecycleState,
+	reason?: AuctionBidFundingFailureReason | null,
+): AuctionBidFundingModalCloseResolution => {
+	const classifiedState = reason ? resolveAuctionBidFundingTransition(currentState, reason) : currentState
+	const nextState = shouldCancelFundingOnModalClose(classifiedState)
+		? resolveAuctionBidFundingTransition(classifiedState, 'funding_canceled')
+		: classifiedState
+	return {
+		nextState,
+		preservePendingSubmission: reason != null || shouldPreservePendingBidSubmissionOnModalClose(classifiedState),
+	}
+}
 
 export function useAuctionBidFunding({
 	previousBidAmount,
@@ -294,6 +360,18 @@ export function useAuctionBidFunding({
 		if (!pendingBidSubmission) return
 
 		void (async () => {
+			// Advance through the intermediate funding states to ecash_minted.
+			// For QR-scan deposits, payment_acknowledged and minting_started are not
+			// separately observable (only the final mint 'success' event fires), so
+			// the lifecycle may still be at invoice_created when the deposit
+			// confirms. Walk forward through the unobservable intermediate states so
+			// the transition is valid regardless of which pre-mint state we last
+			// observed. Each step is a silent no-op if the state already moved on
+			// (invalid transitions keep the current state; self-transitions are
+			// allowed), so this is safe and idempotent on the NWC path too, where the
+			// modal's payment effect may already have advanced the lifecycle.
+			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'payment_acknowledged'))
+			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'minting_started'))
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'ecash_minted'))
 
 			try {
@@ -408,15 +486,20 @@ export function useAuctionBidFunding({
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, reason))
 	}, [])
 
-	const handleDepositModalClose = useCallback(() => {
-		if (shouldCancelFundingOnModalClose(bidFundingLifecycleState)) {
-			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'funding_canceled'))
-		}
-		setIsDepositOpen(false)
-		if (!shouldPreservePendingBidSubmissionOnModalClose(bidFundingLifecycleState)) {
-			setPendingBidSubmission(null)
-		}
-	}, [bidFundingLifecycleState])
+	const handleDepositModalClose = useCallback(
+		(reason?: AuctionBidFundingFailureReason | null) => {
+			// Apply the (optional) close classification BEFORE the modal-open state
+			// flips, against the CURRENT lifecycle state inside a functional updater,
+			// so a reclaimable classification can never be clobbered by the
+			// funding_canceled fallback and closing cannot race or double-fire.
+			setBidFundingLifecycleState((current) => resolveAuctionBidFundingModalClose(current, reason).nextState)
+			setIsDepositOpen(false)
+			setPendingBidSubmission((current) =>
+				resolveAuctionBidFundingModalClose(bidFundingLifecycleState, reason).preservePendingSubmission ? current : null,
+			)
+		},
+		[bidFundingLifecycleState],
+	)
 
 	return {
 		bidFundingLifecycleState,

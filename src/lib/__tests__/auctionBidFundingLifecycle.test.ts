@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
 	canTransitionAuctionBidFundingState,
 	isAuctionBidFundingReclaimableState,
+	resolveAuctionBidFundingFailureReason,
+	resolveAuctionBidFundingModalClose,
 	shouldCancelFundingOnModalClose,
 	shouldPreservePendingBidSubmissionOnModalClose,
 	AUCTION_BID_FUNDING_RECLAIMABLE_STATES,
@@ -294,5 +296,101 @@ describe('retryBidPublish rebroadcast path (Blocker 1)', () => {
 		// Runtime behavior is verified in the component/integration layer.
 		const republishBid: ((bidEventId: string) => Promise<void>) | undefined = undefined
 		expect(republishBid).toBeUndefined()
+	})
+})
+
+describe('QR-path funding success walk-forward (M1: flagship flow lifecycle advancement)', () => {
+	test('QR deposit success walks invoice_created forward to ecash_minted and on to bid_published', () => {
+		// The QR path never separately observes payment_acknowledged or
+		// minting_started — handleFundingSuccess walks the lifecycle forward
+		// through them, so every step of the chain must be a valid transition.
+		expect(canTransitionAuctionBidFundingState('invoice_created', 'payment_acknowledged')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('payment_acknowledged', 'minting_started')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('minting_started', 'ecash_minted')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('ecash_minted', 'bid_publish_attempted')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'bid_published')).toBe(true)
+	})
+
+	test('walk-forward steps are idempotent when the NWC path already advanced the lifecycle', () => {
+		// Already past a step: re-resolving it is an invalid transition, so the
+		// resolver keeps the current state (silent no-op).
+		expect(canTransitionAuctionBidFundingState('minting_started', 'payment_acknowledged')).toBe(false)
+		expect(canTransitionAuctionBidFundingState('ecash_minted', 'payment_acknowledged')).toBe(false)
+		expect(canTransitionAuctionBidFundingState('ecash_minted', 'minting_started')).toBe(false)
+		// Already at the target state: self-transition is an allowed no-op.
+		expect(canTransitionAuctionBidFundingState('ecash_minted', 'ecash_minted')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'bid_publish_attempted')).toBe(true)
+	})
+
+	test('walk-forward cannot skip states from pre-funded states', () => {
+		expect(canTransitionAuctionBidFundingState('invoice_created', 'ecash_minted')).toBe(false)
+		expect(canTransitionAuctionBidFundingState('invoice_created', 'bid_publish_attempted')).toBe(false)
+		expect(canTransitionAuctionBidFundingState('funding_session_created', 'ecash_minted')).toBe(false)
+	})
+})
+
+describe('close classification: paid-or-unknown safety (S2/S4)', () => {
+	test('QR user close (nwcPaymentAttempted=false) during invoice_created classifies paid-or-unknown, preserves pending submission, and cannot be overwritten by funding_canceled', () => {
+		// QR flow: the app cannot observe the external wallet's payment.
+		const reason = resolveAuctionBidFundingFailureReason({ paymentAcknowledged: false, nwcPaymentAttempted: false })
+		expect(reason).toBe('invoice_paid_mint_failed_reclaimable')
+
+		// User close hands the reason to the funding hook BEFORE the modal-open
+		// state flips; the hook resolves it against the CURRENT state.
+		const close = resolveAuctionBidFundingModalClose('invoice_created', reason)
+		expect(close.nextState).toBe('invoice_paid_mint_failed_reclaimable')
+		// pendingBidSubmission is preserved for the reclaimable classification.
+		expect(close.preservePendingSubmission).toBe(true)
+		expect(shouldPreservePendingBidSubmissionOnModalClose(close.nextState)).toBe(true)
+
+		// Ordering guarantee: a subsequent close/cancel pass cannot clobber the
+		// reclaimable classification with funding_canceled.
+		expect(resolveAuctionBidFundingModalClose(close.nextState, null).nextState).toBe('invoice_paid_mint_failed_reclaimable')
+		expect(resolveAuctionBidFundingModalClose(close.nextState, undefined).nextState).toBe('invoice_paid_mint_failed_reclaimable')
+		expect(canTransitionAuctionBidFundingState(close.nextState, 'funding_canceled')).toBe(false)
+	})
+
+	test('NWC close with no payment sent classifies as unpaid/expired (observable non-payment)', () => {
+		const reason = resolveAuctionBidFundingFailureReason({ paymentAcknowledged: false, nwcPaymentAttempted: true })
+		expect(reason).toBe('invoice_unpaid_or_expired_reclaimable')
+
+		const close = resolveAuctionBidFundingModalClose('invoice_created', reason)
+		expect(close.nextState).toBe('invoice_unpaid_or_expired_reclaimable')
+		expect(close.preservePendingSubmission).toBe(true)
+		expect(resolveAuctionBidFundingModalClose(close.nextState, null).nextState).toBe('invoice_unpaid_or_expired_reclaimable')
+	})
+
+	test('NWC-sent close from payment_acknowledged classifies as paid/mint-failed and is not canceled', () => {
+		const reason = resolveAuctionBidFundingFailureReason({ paymentAcknowledged: true, nwcPaymentAttempted: true })
+		expect(reason).toBe('invoice_paid_mint_failed_reclaimable')
+
+		const close = resolveAuctionBidFundingModalClose('payment_acknowledged', reason)
+		expect(close.nextState).toBe('invoice_paid_mint_failed_reclaimable')
+		expect(close.preservePendingSubmission).toBe(true)
+	})
+
+	test('QR close from a pre-invoice state (no reason) still cancels funding', () => {
+		const close = resolveAuctionBidFundingModalClose('funding_session_created', null)
+		expect(close.nextState).toBe('funding_canceled')
+		expect(close.preservePendingSubmission).toBe(false)
+	})
+
+	test('plain close from invoice_created cancels funding and clears the pending submission', () => {
+		const close = resolveAuctionBidFundingModalClose('invoice_created', null)
+		expect(close.nextState).toBe('funding_canceled')
+		expect(close.preservePendingSubmission).toBe(false)
+	})
+
+	test('plain close never downgrades an already-terminal state', () => {
+		expect(resolveAuctionBidFundingModalClose('mint_succeeded_bid_publish_failed_reclaimable', null).nextState).toBe(
+			'mint_succeeded_bid_publish_failed_reclaimable',
+		)
+		expect(resolveAuctionBidFundingModalClose('bid_published', null).nextState).toBe('bid_published')
+	})
+
+	test('funding_canceled can be re-classified to a reclaimable state (batch 1 retry path)', () => {
+		expect(resolveAuctionBidFundingModalClose('funding_canceled', 'invoice_paid_mint_failed_reclaimable').nextState).toBe(
+			'invoice_paid_mint_failed_reclaimable',
+		)
 	})
 })
