@@ -1,6 +1,7 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { walletActions } from '@/lib/stores/wallet'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, NDKEvent, NDKKind } from '@/lib/nostr/ndk-events'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from './queryKeyFactory'
@@ -29,7 +30,7 @@ export const fetchUserNwcWallets = async (userPubkey: string): Promise<UserNwcWa
 	}
 
 	try {
-		const events = await ndk.fetchEvents({
+		const events = await fetchNdkEventSet(applesauceIo, ndk, {
 			kinds: [USER_NWC_WALLET_LIST_KIND],
 			authors: [userPubkey],
 			'#l': [USER_NWC_WALLET_LIST_LABEL],
