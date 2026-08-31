@@ -21,7 +21,6 @@ interface AuthState {
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
 	needsMigration: boolean
-	bootstrapError: string | null
 }
 
 interface Nip46LoginOptions {
@@ -63,12 +62,15 @@ export function persistAuthenticatedLoginState(
 		storage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
 	}
 
-	if (privateKey) {
+	// NIP-46 auto-login is valid only as a complete credential pair. A
+	// non-NIP-46 login must not leave an older signer/connection pair behind
+	// for the next auto-login attempt.
+	if (privateKey && connectionUrl) {
 		storage.setItem(NOSTR_LOCAL_SIGNER_KEY, privateKey)
-	}
-
-	if (connectionUrl) {
 		storage.setItem(NOSTR_CONNECT_KEY, connectionUrl)
+	} else {
+		storage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
+		storage.removeItem(NOSTR_CONNECT_KEY)
 	}
 }
 
@@ -78,7 +80,6 @@ interface Nip46LoginResult {
 }
 
 const NIP46_RESPONSE_EVENT_PREFIX = 'response-'
-const NIP46_USER_PUBKEY_RECOVERY_TIMEOUT_MS = 2000
 
 function getNip46ResponseEventNames(signer: NDKNip46Signer): string[] {
 	return signer.rpc
@@ -114,7 +115,7 @@ async function recoverNip46UserPubkey(
 	const configuredUserPubkey = signer.userPubkey
 	const expectedPubkeys = new Set([expectedUserPubkey, configuredUserPubkey].filter((value): value is string => Boolean(value)))
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
-	const recoveryTimeoutMs = Math.max(1, Math.min(timeoutMs, NIP46_USER_PUBKEY_RECOVERY_TIMEOUT_MS))
+	const recoveryTimeoutMs = Math.max(1, timeoutMs)
 	const timeoutError = new Error('NIP-46 get_public_key recovery timed out')
 	let timeout: ReturnType<typeof setTimeout> | undefined
 
@@ -165,8 +166,16 @@ export async function completeNip46LoginHandshake(
 	let timeout: ReturnType<typeof setTimeout> | undefined
 	const timeoutError = new Error('NIP-46 handshake timed out')
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
+	let recoveryInProgress = false
 	const readinessPromise = signer.blockUntilReady()
-	const cleanupLateListeners = () => cancelNip46HandshakeListeners(signer, knownResponseEvents)
+	const cleanupLateListeners = () => {
+		// Recovery registers its own response listeners after the primary
+		// handshake times out. Do not let a late blockUntilReady() resolution
+		// remove those in-flight listeners; recovery cleans them up in finally.
+		if (recoveryInProgress) return
+
+		cancelNip46HandshakeListeners(signer, knownResponseEvents)
+	}
 	void readinessPromise.then(cleanupLateListeners, cleanupLateListeners)
 
 	try {
@@ -196,14 +205,20 @@ export async function completeNip46LoginHandshake(
 		cancelNip46HandshakeListeners(signer, knownResponseEvents)
 	}
 
-	const userPubkey = await recoverNip46UserPubkey(signer, expectedUserPubkey, timeoutMs)
-	if (!userPubkey) {
-		return null
-	}
+	recoveryInProgress = true
+	try {
+		const userPubkey = await recoverNip46UserPubkey(signer, expectedUserPubkey, timeoutMs)
+		if (!userPubkey) {
+			return null
+		}
 
-	const user = resolvedNdk.getUser({ pubkey: userPubkey })
-	cacheResolvedNip46User(signer, user)
-	return { user, signer }
+		const user = resolvedNdk.getUser({ pubkey: userPubkey })
+		cacheResolvedNip46User(signer, user)
+		return { user, signer }
+	} finally {
+		recoveryInProgress = false
+		cleanupLateListeners()
+	}
 }
 
 const initialState: AuthState = {
@@ -212,7 +227,6 @@ const initialState: AuthState = {
 	needsDecryptionPassword: false,
 	isAuthenticating: false,
 	needsMigration: false,
-	bootstrapError: null,
 }
 
 export const authStore = new Store<AuthState>(initialState)
@@ -244,13 +258,21 @@ export const authActions = {
 
 			const privateKeySigner = storage.getItem(NOSTR_LOCAL_SIGNER_KEY)
 			const bunkerUrl = storage.getItem(NOSTR_CONNECT_KEY)
+			const expectedUserPubkey = storage.getItem(NOSTR_USER_PUBKEY)
 
-			if (privateKeySigner && bunkerUrl) {
+			if (privateKeySigner && bunkerUrl && expectedUserPubkey) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
-					expectedUserPubkey: storage.getItem(NOSTR_USER_PUBKEY) ?? undefined,
+					expectedUserPubkey,
 				})
 				authActions.checkAndShowTermsDialog()
 				return
+			}
+
+			if (privateKeySigner || bunkerUrl) {
+				// Without the persisted account identity, this NIP-46 pair cannot
+				// be safely associated with the session being restored.
+				storage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
+				storage.removeItem(NOSTR_CONNECT_KEY)
 			}
 
 			// Private key decryption
@@ -350,6 +372,7 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
+			persistAuthenticatedLoginState(user)
 
 			authStore.setState((state) => ({
 				...state,
@@ -434,7 +457,7 @@ export const authActions = {
 		const wasLoggedOut = getAuthStorage()?.getItem(NOSTR_AUTO_LOGIN) !== 'true'
 
 		try {
-			authStore.setState((state) => ({ ...state, isAuthenticating: true, bootstrapError: null }))
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 
 			if (options?.onAuthUrl) {
@@ -457,7 +480,6 @@ export const authActions = {
 			// rejects, the catch block sets isAuthenticated: false and the error
 			// propagates to the caller.
 			await ndkActions.setSigner(authenticatedSigner)
-			authStore.setState((state) => ({ ...state, bootstrapError: null }))
 			persistAuthenticatedLoginState(user, localSigner.privateKey || '', bunkerUrl)
 
 			authStore.setState((state) => ({

@@ -51,6 +51,19 @@ describe('persistAuthenticatedLoginState', () => {
 
 		expect(localStorage.getItem('nostr_auto_login')).toBeNull()
 	})
+
+	test('clears stale NIP-46 credentials when persisting a non-NIP-46 login', () => {
+		localStorage.setItem('nostr_auto_login', 'true')
+		localStorage.setItem('nostr_local_signer_key', 'stale-local-key')
+		localStorage.setItem('nostr_connect_url', 'bunker://stale-signer?secret=stale')
+
+		persistAuthenticatedLoginState({ pubkey: 'extension-user' } as any)
+
+		expect(localStorage.getItem('nostr_user_pubkey')).toBe('extension-user')
+		expect(localStorage.getItem('nostr_auto_login')).toBe('true')
+		expect(localStorage.getItem('nostr_local_signer_key')).toBeNull()
+		expect(localStorage.getItem('nostr_connect_url')).toBeNull()
+	})
 })
 
 describe('logout', () => {
@@ -111,6 +124,31 @@ describe('auth storage bootstrap', () => {
 		} finally {
 			console.error = originalConsoleError
 			Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor!)
+		}
+	})
+
+	test('does not auto-login with a NIP-46 pair that has no persisted user identity', async () => {
+		localStorage.setItem('nostr_auto_login', 'true')
+		localStorage.setItem('nostr_local_signer_key', 'stale-local-key')
+		localStorage.setItem('nostr_connect_url', 'bunker://stale-signer?secret=stale')
+
+		const originalLoginWithNip46 = authActions.loginWithNip46
+		const originalLoginWithExtension = authActions.loginWithExtension
+		const loginWithNip46 = mock(async () => ({ pubkey: 'unexpected-nip46-user' }) as any)
+		const loginWithExtension = mock(async () => ({ pubkey: 'extension-user' }) as any)
+		;(authActions as any).loginWithNip46 = loginWithNip46
+		;(authActions as any).loginWithExtension = loginWithExtension
+
+		try {
+			await authActions.getAuthFromLocalStorageAndLogin()
+
+			expect(loginWithNip46).not.toHaveBeenCalled()
+			expect(loginWithExtension).toHaveBeenCalledTimes(1)
+			expect(localStorage.getItem('nostr_local_signer_key')).toBeNull()
+			expect(localStorage.getItem('nostr_connect_url')).toBeNull()
+		} finally {
+			authActions.loginWithNip46 = originalLoginWithNip46
+			authActions.loginWithExtension = originalLoginWithExtension
 		}
 	})
 })
@@ -220,6 +258,68 @@ describe('completeNip46LoginHandshake', () => {
 		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
 		expect(removeAllListeners).toHaveBeenCalledWith('response-late')
 		expect(removeAllListeners).not.toHaveBeenCalledWith('response-existing')
+	})
+
+	test('does not remove recovery listeners when readiness resolves during recovery', async () => {
+		const responseEvents = ['response-existing']
+		const removedEvents = new Set<string>()
+		const removeAllListeners = mock((eventName: string) => {
+			removedEvents.add(eventName)
+			const eventIndex = responseEvents.indexOf(eventName)
+			if (eventIndex >= 0) responseEvents.splice(eventIndex, 1)
+		})
+		let resolveReadiness!: (user: { pubkey: string }) => void
+		let resolveRecoveredPubkey!: () => void
+		let notifyRecoveryStarted!: () => void
+		const readiness = new Promise<{ pubkey: string }>((resolve) => {
+			resolveReadiness = resolve
+		})
+		const recoveryStarted = new Promise<void>((resolve) => {
+			notifyRecoveryStarted = resolve
+		})
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(async () => {
+				await readiness
+				responseEvents.push('response-connect-late')
+				return { pubkey: actualUserPubkey }
+			}),
+			getPublicKey: mock(() => {
+				responseEvents.push('response-get_public_key')
+				notifyRecoveryStarted()
+
+				return new Promise<string>((resolve) => {
+					resolveRecoveredPubkey = () => {
+						// A responsive signer can only answer while its RPC listener
+						// remains registered.
+						if (!removedEvents.has('response-get_public_key')) resolve(actualUserPubkey)
+					}
+				})
+			}),
+			userPubkey: undefined as string | undefined,
+			rpc: {
+				eventNames: () => responseEvents,
+				removeAllListeners,
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginPromise = completeNip46LoginHandshake(signer as any, undefined, 20, ndk as any)
+		await recoveryStarted
+
+		// Resolve the late primary handshake after recovery has registered its
+		// response listener. The late-listener cleanup must defer to recovery.
+		resolveReadiness({ pubkey: actualUserPubkey })
+		await Promise.resolve()
+		await Promise.resolve()
+		resolveRecoveredPubkey()
+
+		const loginResult = await loginPromise
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+		expect(removeAllListeners).toHaveBeenCalledWith('response-get_public_key')
+		expect(removeAllListeners).toHaveBeenCalledWith('response-connect-late')
 	})
 
 	test('fails closed when get_public_key does not respond after a timeout', async () => {
@@ -350,7 +450,6 @@ describe('loginWithNip46', () => {
 		needsDecryptionPassword: false,
 		isAuthenticating: false,
 		needsMigration: false,
-		bootstrapError: null,
 	}
 	let localStorageDescriptor: PropertyDescriptor | undefined
 	let originalGetNDK: typeof ndkActions.getNDK
@@ -448,10 +547,10 @@ describe('loginWithNip46', () => {
 			blockUntilReady: mock(async () => {
 				// Simulate NIP-46 RPC adding response listeners during handshake
 				preEvents.push(...postEvents)
-				return { pubkey: actualUserPubkey }
+				return { pubkey: remoteUserPubkey }
 			}),
-			getPublicKey: mock(async () => actualUserPubkey),
-			userPubkey: actualUserPubkey,
+			getPublicKey: mock(async () => remoteUserPubkey),
+			userPubkey: remoteUserPubkey,
 			rpc: {
 				eventNames: () => preEvents,
 				removeAllListeners,
@@ -464,7 +563,7 @@ describe('loginWithNip46', () => {
 		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 100, ndk as any)
 
 		// Success: user resolved from blockUntilReady
-		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+		expect(loginResult?.user.pubkey).toBe(remoteUserPubkey)
 
 		// FIX #1: Listeners added during blockUntilReady must be cleaned up
 		// on ALL paths, not just timeout. The finally block must call

@@ -6,6 +6,7 @@ import {
 	buildBunkerUrl,
 	buildBunkerUrlFromResolvedRelayUrls,
 	getNip46RelayUrls,
+	isApprovedNostrConnectResponse,
 	normalizeRelayUrls,
 } from '../nostr/nip46'
 
@@ -77,5 +78,14 @@ describe('NIP-46 connection URL helpers', () => {
 
 		expect(new URL(nostrConnectUrl).searchParams.getAll('relay')).toEqual([])
 		expect(new URL(bunkerUrl).searchParams.getAll('relay')).toEqual([])
+	})
+
+	test('only accepts NostrConnect responses from an approved signer', () => {
+		const tempSecret = 'temporary-secret'
+		const approvedSignerPubkeys = new Set(['approved-signer'])
+
+		expect(isApprovedNostrConnectResponse(tempSecret, tempSecret, 'approved-signer', approvedSignerPubkeys)).toBe(true)
+		expect(isApprovedNostrConnectResponse(tempSecret, tempSecret, 'unapproved-signer', approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse('ack', tempSecret, 'unapproved-signer', approvedSignerPubkeys)).toBe(false)
 	})
 })

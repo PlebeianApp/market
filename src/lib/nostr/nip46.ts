@@ -65,3 +65,12 @@ export function buildBunkerUrlFromResolvedRelayUrls(remoteSignerPubkey: string, 
 export function buildBunkerUrl(remoteSignerPubkey: string, relay: string | string[], secret: string): string {
 	return buildBunkerUrlFromResolvedRelayUrls(remoteSignerPubkey, getNip46RelayUrls(relay), secret)
 }
+
+export function isApprovedNostrConnectResponse(
+	result: unknown,
+	tempSecret: string,
+	signerPubkey: string,
+	approvedSignerPubkeys: ReadonlySet<string>,
+): boolean {
+	return approvedSignerPubkeys.has(signerPubkey) && (result === tempSecret || result === 'ack')
+}

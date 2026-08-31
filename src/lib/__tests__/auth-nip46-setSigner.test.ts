@@ -140,7 +140,6 @@ describe('loginWithNip46 setSigner ordering', () => {
 			needsDecryptionPassword: false,
 			isAuthenticating: false,
 			needsMigration: false,
-			bootstrapError: null,
 		}))
 		setSignerImpl = async () => {}
 	})
