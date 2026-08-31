@@ -119,6 +119,18 @@ For behavior changes, when relevant and authorized by the task:
 Commands that build, start services, seed data, run generators, deploy, or run
 full e2e suites require explicit approval before execution.
 
+## PR Review Documentation
+
+- `docs/REVIEWER_SYSTEM_PROMPT.md` and `docs/PR_REVIEW_CHECKLIST.md`
+  document the repository's review doctrine and the blocking criteria for PR
+  review. They are distilled from a review-profile audit of this repository
+  and describe intended review behavior, not verified code behavior; code,
+  tests, accepted ADRs, and maintainer direction still win.
+- Review-related agent work should consult `docs/PR_REVIEW_CHECKLIST.md`
+  for pass/fail criteria and `docs/REVIEWER_SYSTEM_PROMPT.md` for process,
+  voice, and known failure modes. Do not treat these
+  files as authorization to push, merge, rerun CI, or mutate GitHub metadata.
+
 ## Subdirectory AGENTS.md Template
 
 ```markdown
