@@ -38,7 +38,12 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 	const mainRelay = getMainRelay()
 	const latestEvent =
 		ndk && mainRelay
-			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [30000], authors: [targetPubkey], '#d': ['admins'] }, { relayUrls: [mainRelay] })
+			? await fetchLatestNdkEvent(
+					applesauceIo,
+					ndk,
+					{ kinds: [30000], authors: [targetPubkey], '#d': ['admins'] },
+					{ relayUrls: [mainRelay] },
+				)
 			: null
 
 	if (!latestEvent) {
@@ -193,7 +198,12 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 	const mainRelay = getMainRelay()
 	const latestEvent =
 		ndk && mainRelay
-			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [30000], authors: [targetPubkey], '#d': ['editors'] }, { relayUrls: [mainRelay] })
+			? await fetchLatestNdkEvent(
+					applesauceIo,
+					ndk,
+					{ kinds: [30000], authors: [targetPubkey], '#d': ['editors'] },
+					{ relayUrls: [mainRelay] },
+				)
 			: null
 
 	if (!latestEvent) {
