@@ -79,7 +79,12 @@ export const applesauceIo: NostrIo = {
 			subscription?.unsubscribe()
 		}
 		subscription = getPool()
-			.req(urls, filters, { resubscribe: false })
+			// reconnect: true restores the 5.2 subscription() default of retrying
+			// connection errors (3x linear backoff). Raw req() treats undefined
+			// reconnect as NO retries, so without this a transient WebSocket blip
+			// would permanently and silently drop a relay's events from this
+			// long-lived subscription.
+			.req(urls, filters, { resubscribe: false, reconnect: true })
 			.subscribe((message) => {
 				if (message.type === 'EOSE') {
 					if (opts?.closeOnEose) {
@@ -89,6 +94,14 @@ export const applesauceIo: NostrIo = {
 							stopAfterSubscribe = true
 						}
 					}
+					return
+				}
+				// Surface per-relay failures instead of dropping them silently:
+				// with resubscribe: false a CLOSED or ERROR permanently removes
+				// that relay from this subscription, and there is no other trace
+				// of why its events stopped arriving.
+				if (message.type === 'CLOSED' || message.type === 'ERROR') {
+					console.warn('[nostr:subscribe] relay subscription issue:', message)
 					return
 				}
 				if (message.type === 'EVENT' && !stopped) onEvent(message.event as NostrEvent)
