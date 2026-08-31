@@ -1,6 +1,6 @@
-import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import { fetchLatestNdkEvent, type NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -32,11 +32,14 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['admins'],
-	})
+	// Relay-pinned read through the applesauceIo seam (ADR-0002). Mirrors the
+	// previous fetchLatestAppEvent behavior: null when NDK or the app relay
+	// isn't ready yet.
+	const mainRelay = getMainRelay()
+	const latestEvent =
+		ndk && mainRelay
+			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [30000], authors: [targetPubkey], '#d': ['admins'] }, { relayUrls: [mainRelay] })
+			: null
 
 	if (!latestEvent) {
 		console.log(`No admin settings found for app pubkey: ${targetPubkey}`)
@@ -184,11 +187,15 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['editors'],
-	})
+	// Relay-pinned read through the applesauceIo seam (ADR-0002). Mirrors the
+	// previous fetchLatestAppEvent behavior: null when NDK or the app relay
+	// isn't ready yet.
+	const ndk = ndkActions.getNDK()
+	const mainRelay = getMainRelay()
+	const latestEvent =
+		ndk && mainRelay
+			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [30000], authors: [targetPubkey], '#d': ['editors'] }, { relayUrls: [mainRelay] })
+			: null
 
 	if (!latestEvent) {
 		console.log(`No editor settings found for app pubkey: ${targetPubkey}`)

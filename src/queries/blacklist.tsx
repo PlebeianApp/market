@@ -1,6 +1,6 @@
-import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import { fetchLatestNdkEvent, type NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -24,10 +24,15 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [10000], // NIP-51 mute list
-		authors: [targetPubkey],
-	})
+	// Relay-pinned read through the applesauceIo seam (ADR-0002). Mirrors the
+	// previous fetchLatestAppEvent behavior: null when NDK or the app relay
+	// isn't ready yet.
+	const ndk = ndkActions.getNDK()
+	const mainRelay = getMainRelay()
+	const latestEvent =
+		ndk && mainRelay
+			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [10000], authors: [targetPubkey] }, { relayUrls: [mainRelay] })
+			: null
 
 	if (!latestEvent) {
 		console.log(`No blacklist settings found for app pubkey: ${targetPubkey}`)

@@ -80,6 +80,24 @@ export async function fetchNdkEvent(
 	return events.size > 0 ? Array.from(events)[0] : null
 }
 
+/**
+ * Latest (highest created_at) event from a seam fetch, or null. The
+ * relay-pinned replacement for `fetchLatestAppEvent` in flipped modules:
+ * pass `relayUrls` to pin the read, and null `ndk` mirrors the original's
+ * "NDK or app relay not ready -> null" behavior.
+ */
+export async function fetchLatestNdkEvent(
+	nostrIo: Pick<NostrIo, 'fetchEvents'>,
+	ndk: NdkEventContext | null,
+	filter: NDKFilter | NDKFilter[],
+	opts?: FetchOptions,
+): Promise<NDKEvent | null> {
+	if (!ndk) return null
+	const events = Array.from(await fetchNdkEventSet(nostrIo, ndk, filter, opts))
+	if (events.length === 0) return null
+	return events.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+}
+
 export function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
 	const eventsById = new Map<string, NDKEvent>()
 	for (const eventSet of eventSets) {
