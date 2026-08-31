@@ -1,8 +1,8 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { isValidHexKey } from '@/lib/utils'
 
 export type NostrAuthor = {
@@ -34,7 +34,7 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {

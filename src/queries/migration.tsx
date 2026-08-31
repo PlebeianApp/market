@@ -1,7 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { configStore } from '@/lib/stores/config'
 import { migrationKeys } from '@/queries/queryKeyFactory'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions } from '@tanstack/react-query'
 
 export { migrationKeys }
@@ -13,7 +14,7 @@ export const fetchUserRelayList = async (userPubkey: string): Promise<string[]> 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
+	const events = await fetchNdkEventSet(applesauceIo, ndk, {
 		kinds: [10002],
 		authors: [userPubkey],
 		limit: 1,
@@ -109,7 +110,7 @@ export const fetchNip15Products = async (userPubkey: string): Promise<NDKEvent[]
 	}
 
 	try {
-		const events = await ndk.fetchEvents(filter)
+		const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 		const eventsArray = Array.from(events)
 		return eventsArray
 	} catch (error) {
@@ -145,7 +146,7 @@ export const fetchMigratedEvents = async (userPubkey: string): Promise<Set<strin
 	}
 
 	try {
-		const events = await ndk.fetchEvents(filter)
+		const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 		const migratedOriginalIds = new Set<string>()
 
 		events.forEach((event) => {

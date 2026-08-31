@@ -1,11 +1,12 @@
 import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent } from '@/lib/nostr/ndk-events'
 import {
 	DEFAULT_RELAY_PREFERENCES,
 	getRelayPreferencesDTag,
 	publishRelayPreferences,
 	type RelayPreferencesSettings,
 } from '@/publish/relay-preferences'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 export const relayPreferencesKeys = {
@@ -23,7 +24,7 @@ export async function fetchRelayPreferences(userPubkey: string): Promise<RelayPr
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
+	const events = await fetchNdkEventSet(applesauceIo, ndk, {
 		kinds: [30078],
 		authors: [userPubkey],
 		'#d': [getRelayPreferencesDTag()],
