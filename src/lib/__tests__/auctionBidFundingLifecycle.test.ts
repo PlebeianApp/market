@@ -6,7 +6,9 @@ import {
 	resolveAuctionBidFundingModalClose,
 	shouldCancelFundingOnModalClose,
 	shouldPreservePendingBidSubmissionOnModalClose,
+	shouldOpenBidProgressDialog,
 	AUCTION_BID_FUNDING_RECLAIMABLE_STATES,
+	AUCTION_BID_PROGRESS_DIALOG_OPEN_STATES,
 	type AuctionBidFundingLifecycleState,
 } from '@/hooks/useAuctionBidFunding'
 
@@ -326,6 +328,52 @@ describe('QR-path funding success walk-forward (M1: flagship flow lifecycle adva
 		expect(canTransitionAuctionBidFundingState('invoice_created', 'ecash_minted')).toBe(false)
 		expect(canTransitionAuctionBidFundingState('invoice_created', 'bid_publish_attempted')).toBe(false)
 		expect(canTransitionAuctionBidFundingState('funding_session_created', 'ecash_minted')).toBe(false)
+	})
+})
+
+describe('staged bid progress dialog open-set (lost-UX port)', () => {
+	test.each<AuctionBidFundingLifecycleState>(['ecash_minted', 'ecash_minted_pending_rules_ack', 'bid_publish_attempted', 'bid_published'])(
+		'opens the progress dialog for post-funding state %s',
+		(state) => {
+			expect(shouldOpenBidProgressDialog(state)).toBe(true)
+		},
+	)
+
+	test('opens the progress dialog for the publish-failure state so a failed publish keeps a retry surface (M7)', () => {
+		expect(shouldOpenBidProgressDialog('mint_succeeded_bid_publish_failed_reclaimable')).toBe(true)
+	})
+
+	test.each<AuctionBidFundingLifecycleState>([
+		'idle',
+		'funding_session_created',
+		'invoice_created',
+		'payment_acknowledged',
+		'minting_started',
+		'invoice_unpaid_or_expired_reclaimable',
+		'invoice_paid_mint_failed_reclaimable',
+		'funding_canceled',
+	])('keeps the progress dialog closed for funding-phase/cancel state %s (deposit modal is the sole UI)', (state) => {
+		expect(shouldOpenBidProgressDialog(state)).toBe(false)
+	})
+
+	test('the open-set is exactly the post-funding + publish-failure states', () => {
+		const expected: AuctionBidFundingLifecycleState[] = [
+			'ecash_minted',
+			'ecash_minted_pending_rules_ack',
+			'bid_publish_attempted',
+			'bid_published',
+			'mint_succeeded_bid_publish_failed_reclaimable',
+		]
+		expect([...AUCTION_BID_PROGRESS_DIALOG_OPEN_STATES].sort()).toEqual([...expected].sort())
+	})
+
+	test('dialog reopens when a dismissed publish attempt later fails (close cannot hide the retry affordance)', () => {
+		// Walk the publish attempt: dialog opens on attempt, user dismisses it
+		// (dialog state only — lifecycle untouched), then the publish fails —
+		// the open-set must still fire for the failure state.
+		expect(shouldOpenBidProgressDialog('bid_publish_attempted')).toBe(true)
+		expect(canTransitionAuctionBidFundingState('bid_publish_attempted', 'mint_succeeded_bid_publish_failed_reclaimable')).toBe(true)
+		expect(shouldOpenBidProgressDialog('mint_succeeded_bid_publish_failed_reclaimable')).toBe(true)
 	})
 })
 

@@ -1,12 +1,25 @@
 /**
- * Bid submission progress dialog — shows a visual stepper tracking the
- * bid from e-cash minting through relay publication to third-party
- * validator (kind-30440) confirmation.
+ * Bid submission progress dialog — a single modal that tracks the entire
+ * bid lifecycle from e-cash funding through relay publication to
+ * third-party validator (kind-30440) confirmation.
  *
- * Rendered by AuctionBidder when the funding lifecycle enters the
- * publish/validator phase. The dialog stays open until the user
- * dismisses it or a terminal outcome (validator confirmed, bid
- * rejected, or publish failure) is reached.
+ * Protocol stages per AUCTIONS.md:
+ *
+ *   Funding phase (when deposit is needed):
+ *     1a. Invoice created (Lightning invoice for selected mint)
+ *     1b. Payment acknowledged (wallet detects payment)
+ *     1c. E-cash minted (mint returns P2PK-locked proofs)
+ *
+ *   Publication phase:
+ *     2. Locking e-cash (P2PK lock with seller child pubkey + refund timelock)
+ *     3. Publishing bid to relays (kind-1023 event signed and published)
+ *
+ *   Validation phase:
+ *     4. Validator checks bid (kind-30440 verdict — rules + NUT-7 proof state)
+ *     5. Bid confirmed (valid_bid_placed from enough distinct auditors)
+ *
+ * The dialog does NOT auto-close. The user dismisses it explicitly after
+ * a terminal state (confirmed, rejected, or failed).
  */
 
 import { useMemo } from 'react'
@@ -36,6 +49,10 @@ interface AuctionBidProgressDialogProps {
 	bidEventId?: string
 	/** Number of distinct auditor verdicts required to confirm/reject the bid. */
 	auditorQuorum?: number
+	/** The bid amount (sats) placed for this submission — shown in the success summary. */
+	bidAmount?: number
+	/** Unix seconds at which the locked funds become refundable (cutoff + settlement grace). */
+	refundLocktime?: number
 	onRetryPublish?: () => void
 }
 
@@ -46,6 +63,27 @@ interface StageProps {
 	status: StageStatus
 	description?: string
 }
+
+// Lifecycle state groups
+const FUNDING_STATES: ReadonlySet<string> = new Set([
+	'funding_session_created',
+	'invoice_created',
+	'payment_acknowledged',
+	'minting_started',
+])
+const FUNDING_DONE_STATES: ReadonlySet<string> = new Set([
+	'ecash_minted',
+	'ecash_minted_pending_rules_ack',
+	'bid_publish_attempted',
+	'bid_published',
+])
+const FUNDING_FAILED_STATES: ReadonlySet<string> = new Set([
+	'invoice_unpaid_or_expired_reclaimable',
+	'invoice_paid_mint_failed_reclaimable',
+])
+const PUBLISH_ACTIVE_STATES: ReadonlySet<string> = new Set(['bid_publish_attempted'])
+const PUBLISH_DONE_STATES: ReadonlySet<string> = new Set(['bid_published'])
+const PUBLISH_FAILED_STATES: ReadonlySet<string> = new Set(['mint_succeeded_bid_publish_failed_reclaimable'])
 
 function ProgressStage({ label, status, description }: StageProps) {
 	const icon = {
@@ -76,6 +114,18 @@ function ProgressStage({ label, status, description }: StageProps) {
 	)
 }
 
+function formatLocktime(unixSeconds: number): string {
+	if (!unixSeconds || unixSeconds <= 0) return ''
+	try {
+		return new Date(unixSeconds * 1000).toLocaleString(undefined, {
+			dateStyle: 'medium',
+			timeStyle: 'short',
+		})
+	} catch {
+		return ''
+	}
+}
+
 export function AuctionBidProgressDialog({
 	open,
 	onClose,
@@ -85,6 +135,8 @@ export function AuctionBidProgressDialog({
 	validatorPubkeys,
 	bidEventId,
 	auditorQuorum,
+	bidAmount,
+	refundLocktime,
 	onRetryPublish,
 }: AuctionBidProgressDialogProps) {
 	// Fetch only verdicts from the auction's configured auditors (when the
@@ -111,17 +163,30 @@ export function AuctionBidProgressDialog({
 		auditorQuorum,
 	)
 
-	const isPublishAttempted = lifecycleState === 'bid_publish_attempted'
-	const isBidPublished = lifecycleState === 'bid_published'
-	const isPublishFailed = lifecycleState === 'mint_succeeded_bid_publish_failed_reclaimable'
+	const isFundingActive = FUNDING_STATES.has(lifecycleState)
+	const isFundingDone = FUNDING_DONE_STATES.has(lifecycleState)
+	const isFundingFailed = FUNDING_FAILED_STATES.has(lifecycleState)
+	const isPublishActive = PUBLISH_ACTIVE_STATES.has(lifecycleState)
+	const isPublishDone = PUBLISH_DONE_STATES.has(lifecycleState)
+	const isPublishFailed = PUBLISH_FAILED_STATES.has(lifecycleState)
 
-	const isAwaitingValidator = isBidPublished && !hasPositiveVerdict && !hasNegativeVerdict
+	const isAwaitingValidator = isPublishDone && !hasPositiveVerdict && !hasNegativeVerdict
 
-	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed
+	const isTerminal = hasPositiveVerdict || hasNegativeVerdict || isPublishFailed || isFundingFailed
 
 	// Stage statuses
-	const fundingStage: StageStatus = 'done' // Funding is always complete by the time the dialog opens
-	const publishStage: StageStatus = isPublishFailed ? 'error' : isBidPublished ? 'done' : isPublishAttempted ? 'active' : 'pending'
+	const fundingStage: StageStatus = isFundingFailed ? 'error' : isFundingDone ? 'done' : isFundingActive ? 'active' : 'pending'
+
+	const lockStage: StageStatus = isPublishFailed
+		? 'error'
+		: isPublishActive || isPublishDone
+			? 'done'
+			: isFundingDone
+				? 'active'
+				: 'pending'
+
+	const publishStage: StageStatus = isPublishFailed ? 'error' : isPublishDone ? 'done' : isPublishActive ? 'active' : 'pending'
+
 	const validatorStage: StageStatus = hasPositiveVerdict
 		? 'done'
 		: hasNegativeVerdict
@@ -130,6 +195,25 @@ export function AuctionBidProgressDialog({
 				? 'active'
 				: 'pending'
 
+	// Funding sub-step label (more granular within the funding stage)
+	const fundingDescription = (() => {
+		switch (lifecycleState) {
+			case 'funding_session_created':
+				return 'Creating Lightning invoice...'
+			case 'invoice_created':
+				return 'Invoice generated — waiting for payment'
+			case 'payment_acknowledged':
+				return 'Payment received — minting e-cash...'
+			case 'minting_started':
+				return 'Mint processing proofs...'
+			case 'ecash_minted':
+			case 'ecash_minted_pending_rules_ack':
+				return 'E-cash minted with P2PK lock'
+			default:
+				return undefined
+		}
+	})()
+
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
 			<DialogContent className="sm:max-w-md">
@@ -137,57 +221,116 @@ export function AuctionBidProgressDialog({
 					<DialogTitle className="flex items-center gap-2">
 						{hasPositiveVerdict ? (
 							<Check className="w-5 h-5 text-green-500" />
-						) : isPublishFailed || hasNegativeVerdict ? (
+						) : isFundingFailed || isPublishFailed || hasNegativeVerdict ? (
 							<AlertCircle className="w-5 h-5 text-destructive" />
 						) : (
 							<Loader2 className="w-5 h-5 animate-spin text-blue-500" />
 						)}
 						{hasPositiveVerdict
-							? 'Bid Confirmed'
-							: isPublishFailed
-								? 'Bid Publish Failed'
-								: hasNegativeVerdict
-									? 'Bid Rejected'
-									: 'Placing Your Bid'}
+							? 'Bid successfully placed!'
+							: isFundingFailed
+								? 'Funding Failed'
+								: isPublishFailed
+									? 'Bid Publish Failed'
+									: hasNegativeVerdict
+										? 'Bid Rejected'
+										: 'Placing Your Bid'}
 					</DialogTitle>
 					<DialogDescription>
 						{hasPositiveVerdict
-							? 'Your bid has been published and validated by the auction validators.'
-							: isPublishFailed
-								? 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
-								: hasNegativeVerdict
-									? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
-									: 'Tracking your bid through confirmation stages.'}
+							? `Your bid of ${bidAmount?.toLocaleString() ?? ''} sats has been published and validated by the auction validators.`
+							: isFundingFailed
+								? 'The Lightning payment could not be completed. Your funds are reclaimable.'
+								: isPublishFailed
+									? 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
+									: hasNegativeVerdict
+										? `A validator has flagged this bid: ${representativeVerdict?.claim ?? 'rejected'}`
+										: 'Tracking your bid through confirmation stages.'}
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-1 py-2">
-					<ProgressStage label="Funding confirmed" status={fundingStage} description="Lightning payment received and e-cash minted" />
-					<ProgressStage
-						label="Publishing bid to relays"
-						status={publishStage}
-						description={isPublishFailed ? 'Failed to publish — retry available below' : undefined}
-					/>
-					<ProgressStage
-						label="Awaiting validator check"
-						status={validatorStage}
-						description={
-							hasPositiveVerdict
-								? `Validator confirmed: ${representativeVerdict?.claim}`
-								: hasNegativeVerdict
-									? `Validator verdict: ${representativeVerdict?.claim}`
-									: isAwaitingValidator && validatorPubkeys.length === 0
-										? 'No validators configured for this auction'
-										: isAwaitingValidator && hasNeutralVerdict
-											? `Validator review pending (${representativeVerdict?.claim}) — awaiting final verdict`
-											: isAwaitingValidator
-												? 'Waiting for kind-30440 verdict from auction validators'
-												: undefined
-						}
-					/>
-				</div>
+				{hasPositiveVerdict ? (
+					/* Success summary — bid amount + refund locktime */
+					<div className="space-y-3 py-2">
+						<div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+							<Check className="w-8 h-8 text-green-500 mx-auto mb-2" />
+							<p className="text-2xl font-bold text-green-700">{bidAmount?.toLocaleString() ?? 0} sats</p>
+							<p className="text-sm text-green-600 mt-1">bid locked</p>
+						</div>
+						{refundLocktime && refundLocktime > 0 && (
+							<div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+								<span>Refund available after:</span>
+								<span className="font-medium text-foreground">{formatLocktime(refundLocktime)}</span>
+							</div>
+						)}
+						<div className="space-y-1 pt-1">
+							<ProgressStage label="E-cash funded" status="done" />
+							<ProgressStage label="P2PK lock applied" status="done" />
+							<ProgressStage label="Bid published to relays" status="done" description="Kind-1023 event with P2PK lock" />
+							<ProgressStage
+								label="Validator confirmed"
+								status="done"
+								description={representativeVerdict ? `Verdict: ${representativeVerdict.claim}` : undefined}
+							/>
+						</div>
+					</div>
+				) : (
+					/* Active/error stepper — shows all protocol stages */
+					<div className="space-y-1 py-2">
+						<ProgressStage
+							label="Funding e-cash"
+							status={fundingStage}
+							description={
+								isFundingFailed ? 'Lightning payment failed or expired' : isFundingDone ? 'E-cash minted and ready' : fundingDescription
+							}
+						/>
+						<ProgressStage
+							label="Locking e-cash (P2PK)"
+							status={lockStage}
+							description={
+								isPublishFailed
+									? undefined
+									: lockStage === 'done'
+										? 'Seller child pubkey + refund timelock applied'
+										: lockStage === 'active'
+											? 'Deriving path and applying NUT-11 lock...'
+											: undefined
+							}
+						/>
+						<ProgressStage
+							label="Publishing bid to relays"
+							status={publishStage}
+							description={
+								isPublishFailed
+									? 'Failed to publish — retry available below'
+									: isPublishDone
+										? 'Kind-1023 event published'
+										: isPublishActive
+											? 'Signing and broadcasting kind-1023...'
+											: undefined
+							}
+						/>
+						<ProgressStage
+							label="Awaiting validator check"
+							status={validatorStage}
+							description={
+								hasPositiveVerdict
+									? `Validator confirmed: ${representativeVerdict?.claim}`
+									: hasNegativeVerdict
+										? `Validator verdict: ${representativeVerdict?.claim}`
+										: isAwaitingValidator && validatorPubkeys.length === 0
+											? 'No validators configured for this auction'
+											: isAwaitingValidator && hasNeutralVerdict
+												? `Validator review pending (${representativeVerdict?.claim}) — awaiting final verdict`
+												: isAwaitingValidator
+													? 'Waiting for kind-30440 verdict from auction validators'
+													: undefined
+							}
+						/>
+					</div>
+				)}
 
-				{validatorPubkeys.length > 0 && (
+				{validatorPubkeys.length > 0 && !hasPositiveVerdict && (
 					<div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
 						<span>Validators:</span>
 						{validatorPubkeys.map((pk) => (
@@ -198,8 +341,8 @@ export function AuctionBidProgressDialog({
 
 				<DialogFooter>
 					{isPublishFailed && onRetryPublish && (
-						<Button onClick={onRetryPublish} disabled={isPublishAttempted}>
-							{isPublishAttempted ? (
+						<Button onClick={onRetryPublish} disabled={isPublishActive}>
+							{isPublishActive ? (
 								<>
 									<Loader2 className="w-4 h-4 animate-spin mr-2" />
 									Retrying...
@@ -210,7 +353,7 @@ export function AuctionBidProgressDialog({
 						</Button>
 					)}
 					<Button variant={isTerminal ? 'default' : 'outline'} onClick={onClose}>
-						{isTerminal ? 'Done' : 'Close'}
+						{isTerminal ? 'Done' : 'Cancel'}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

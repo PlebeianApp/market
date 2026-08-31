@@ -210,6 +210,46 @@ export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBid
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
 
 /**
+ * Lifecycle states in which the staged bid progress dialog is (or becomes)
+ * open.
+ *
+ * Ported from the lost full-UX lineage (AuctionBidder's `POST_FUNDING_STATES`):
+ * the dialog opens only AFTER funding is complete — i.e. once e-cash has been
+ * minted and the flow is in the publish/validation phase. During the funding
+ * stage (invoice_created, payment_acknowledged, …) the DepositLightningModal
+ * is the sole UI — showing both simultaneously causes interference and
+ * duplicate dialogs.
+ *
+ * The set deliberately includes:
+ *
+ * - `ecash_minted` / `ecash_minted_pending_rules_ack`: the deposit modal is
+ *   closed as funding completes (see `handleFundingSuccess`), so the progress
+ *   dialog must take over immediately — otherwise no modal is visible during
+ *   the lock+sign+publish leg. The rules-ack variant stacks the rules dialog
+ *   on top until the user acknowledges.
+ * - `mint_succeeded_bid_publish_failed_reclaimable`: a failed publish keeps a
+ *   retry surface — even if the user dismissed the dialog during the publish
+ *   attempt, it reopens with the "Retry publish" affordance (fixes M7's
+ *   close-then-fail dead end).
+ *
+ * The dialog never auto-closes: the user dismisses it explicitly via the
+ * Done/Cancel button after a terminal outcome (confirmed, rejected, or
+ * failed). Closing the dialog does NOT touch the funding lifecycle.
+ */
+export const AUCTION_BID_PROGRESS_DIALOG_OPEN_STATES: readonly AuctionBidFundingLifecycleState[] = [
+	'ecash_minted',
+	'ecash_minted_pending_rules_ack',
+	'bid_publish_attempted',
+	'bid_published',
+	'mint_succeeded_bid_publish_failed_reclaimable',
+]
+
+const AUCTION_BID_PROGRESS_DIALOG_OPEN_STATE_SET = new Set<AuctionBidFundingLifecycleState>(AUCTION_BID_PROGRESS_DIALOG_OPEN_STATES)
+
+export const shouldOpenBidProgressDialog = (state: AuctionBidFundingLifecycleState): boolean =>
+	AUCTION_BID_PROGRESS_DIALOG_OPEN_STATE_SET.has(state)
+
+/**
  * Paid-or-unknown failure classification (S2/S4).
  *
  * Used by BOTH deposit-failure paths (the modal's error effect and the modal's
@@ -300,7 +340,9 @@ export function useAuctionBidFunding({
 					setPublishedBidEventId(publishResult)
 				}
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
-				toast.success('Bid placed successfully')
+				// No success toast here: the staged bid progress dialog ("Bid
+				// successfully placed!") is the success surface — a duplicate toast
+				// was never part of the staged UX.
 				setPendingBidSubmission(null)
 				setIsDepositOpen(false)
 				onBidSuccess?.()
@@ -358,6 +400,13 @@ export function useAuctionBidFunding({
 
 	const handleFundingSuccess = useCallback(() => {
 		if (!pendingBidSubmission) return
+
+		// Close the deposit modal immediately so the bid progress dialog
+		// (which opens on the ecash_minted state transition below) is
+		// visible without being obscured by the "Deposit Successful!"
+		// screen. The progress dialog's stepper shows the funding stage
+		// as completed, so the success screen in the modal is redundant.
+		setIsDepositOpen(false)
 
 		void (async () => {
 			// Advance through the intermediate funding states to ecash_minted.

@@ -44,7 +44,7 @@ import { uiActions } from '@/lib/stores/ui'
 import { normalizeMintUrl } from '@/lib/wallet'
 import { ndkActions } from '@/lib/stores/ndk'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
-import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
+import { useAuctionBidFunding, shouldOpenBidProgressDialog } from '@/hooks/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
@@ -290,14 +290,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		}
 	}, [auctionRulesAckKey])
 
-	// Open the bid progress dialog when the lifecycle enters the publish phase,
-	// and auto-close when returning to idle or canceled.
+	// Open the bid progress dialog only AFTER funding is complete — i.e.,
+	// when e-cash has been minted and we're in the publish/validation phase.
+	// During the funding stage (invoice_created, payment_acknowledged, etc.)
+	// the DepositLightningModal is the sole UI — showing both simultaneously
+	// causes interference and duplicate dialogs. The publish-failure state is
+	// in the open-set so a failed publish keeps a retry surface even if the
+	// user dismissed the dialog mid-attempt.
+	// The dialog does NOT auto-close — the user dismisses it explicitly via
+	// the Done/Cancel button after reaching a terminal state, and closing the
+	// dialog never touches the funding lifecycle.
 	useEffect(() => {
-		if (['bid_publish_attempted', 'bid_published'].includes(bidFundingLifecycleState)) {
+		if (shouldOpenBidProgressDialog(bidFundingLifecycleState)) {
 			setIsBidProgressDialogOpen(true)
-		}
-		if (['idle', 'funding_canceled'].includes(bidFundingLifecycleState)) {
-			setIsBidProgressDialogOpen(false)
 		}
 	}, [bidFundingLifecycleState])
 
@@ -490,6 +495,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				validatorPubkeys={auctionValidators}
 				bidEventId={publishedBidEventId ?? undefined}
 				auditorQuorum={auctionAuditorQuorum}
+				bidAmount={Number.isFinite(parsedBidAmount) ? parsedBidAmount : undefined}
+				refundLocktime={biddingCutoffAt + getAuctionSettlementGrace(auction)}
 				onRetryPublish={() => void retryBidPublish()}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
