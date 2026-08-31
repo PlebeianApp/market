@@ -1,6 +1,14 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
-import { NDKWoT } from '@nostr-dev-kit/wot'
+import { applesauceIo } from '@/lib/nostr/io'
+import {
+	fetchNdkUser,
+	fetchNdkUserProfile,
+	fetchNdkUserZapInfo,
+	fetchNdkWoTScore,
+	NDKUser,
+	type NDKEvent,
+	type NDKUserProfile,
+} from '@/lib/nostr/ndk-events'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { validateProfileIdentifier } from '@/lib/utils/profileValidation'
 import { isValidHexKey } from '@/lib/utils'
@@ -41,9 +49,9 @@ export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile |
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = await ndk.fetchUser(npub)
+		const user = await fetchNdkUser(ndk, npub)
 		if (!user) throw new Error('User not found')
-		return await user.fetchProfile()
+		return await fetchNdkUserProfile(applesauceIo, ndk, user.pubkey)
 	} catch (e) {
 		console.error('Failed to fetch profile with NDK user method', e)
 		return null
@@ -55,9 +63,9 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = await ndk.fetchUser(nip05)
+		const user = await fetchNdkUser(ndk, nip05)
 		if (!user) throw new Error('User not found')
-		return await user.fetchProfile()
+		return await fetchNdkUserProfile(applesauceIo, ndk, user.pubkey)
 	} catch (e) {
 		console.error('Failed to fetch profile with NDK user method', e)
 		return null
@@ -69,10 +77,10 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 	if (!ndk) throw new Error('NDK not initialized')
 
 	// Reject invalid identifiers (empty, whitespace, truncated, or otherwise
-	// malformed) before any relay request — ndk.fetchUser builds an NDKUser
+	// malformed) before any relay request — fetchNdkUser builds an NDKUser
 	// whose pubkey ends up in a { kinds: [0], authors: [...] } filter, and an
-	// invalid value trips NDK's strict filter validation. This accepts hex,
-	// npub, nprofile, and nip05 (everything ndk.fetchUser accepts).
+	// invalid value trips strict filter validation. This accepts hex,
+	// npub, nprofile, and nip05 (everything fetchNdkUser accepts).
 	if (!validateProfileIdentifier(identifier).isValid) {
 		return { profile: null, user: null }
 	}
@@ -97,9 +105,12 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 	// (genuine absence) produces the null-shaped success below.
 	return await Promise.race([
 		(async () => {
-			const user = await ndk.fetchUser(identifier)
+			const user = await fetchNdkUser(ndk, identifier)
 			if (!user) return { profile: null, user: null }
-			const profile = await user.fetchProfile()
+			// NIP-05 resolution (HTTP .well-known) happens first; the kind-0
+			// profile read goes through the applesauceIo seam AFTER the
+			// identifier resolved to a pubkey.
+			const profile = await fetchNdkUserProfile(applesauceIo, ndk, user.pubkey)
 			return { profile, user }
 		})(),
 		new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), timeoutMs)),
@@ -134,12 +145,14 @@ export const validateNip05 = async (pubkey: string): Promise<boolean | null> => 
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = await ndk.fetchUser(pubkey)
+		const user = await fetchNdkUser(ndk, pubkey)
 		if (!user) return null
 
-		const profile = await user.fetchProfile()
+		const profile = await fetchNdkUserProfile(applesauceIo, ndk, user.pubkey)
 		if (!profile?.nip05) return null
 
+		// NIP-05 HTTP verification stays on the NDKUser instance method
+		// (identity resolution via the .well-known lookup, not relay I/O).
 		return await user.validateNip05(profile.nip05)
 	} catch (e) {
 		console.error('Error validating NIP-05:', e)
@@ -198,10 +211,10 @@ export const checkZapCapability = async (event: NDKEvent | NDKUser): Promise<boo
 
 	try {
 		const baseUser = event instanceof NDKUser ? event : event.author
-		const userToZap = baseUser?.ndk ? baseUser : await ndk.fetchUser(pubkey)
+		const userToZap = baseUser?.ndk ? baseUser : await fetchNdkUser(ndk, pubkey)
 		if (!userToZap) return false
 
-		const zapInfo = await userToZap.getZapInfo()
+		const zapInfo = await fetchNdkUserZapInfo(applesauceIo, ndk, userToZap.pubkey)
 		return zapInfo.size > 0
 	} catch (e) {
 		console.error('Failed to check zap capability:', e)
@@ -241,12 +254,12 @@ export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> =
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		// Get user from NDK (ensures NDK instance is attached)
-		const user = await ndk.fetchUser(npub)
+		// Resolve the user identifier (ensures NDK instance is attached)
+		const user = await fetchNdkUser(ndk, npub)
 		if (!user) return false
 
 		// Check zap capability - get zap info directly
-		const zapInfo = await user.getZapInfo()
+		const zapInfo = await fetchNdkUserZapInfo(applesauceIo, ndk, user.pubkey)
 		return zapInfo.size > 0
 	} catch (error) {
 		console.error('Error checking zap capability by npub:', error)
@@ -271,12 +284,12 @@ export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityI
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		// Get user from NDK (ensures NDK instance is attached)
-		const user = await ndk.fetchUser(npub)
+		// Resolve the user identifier (ensures NDK instance is attached)
+		const user = await fetchNdkUser(ndk, npub)
 		if (!user) return defaultResult
 
-		// Get zap info
-		const zapInfo = await user.getZapInfo()
+		// Get zap info through the seam
+		const zapInfo = await fetchNdkUserZapInfo(applesauceIo, ndk, user.pubkey)
 
 		const methods: ZapMethod[] = []
 		let hasLightning = false
@@ -335,15 +348,7 @@ export const getWotScore = async (pubkey: string): Promise<number | null> => {
 	if (!ndk.activeUser) return null
 
 	try {
-		const wot = new NDKWoT(ndk, pubkey)
-		await wot.load({
-			depth: 2,
-			maxFollows: 1000,
-			timeout: 1000,
-		})
-
-		const score = wot.getScores([pubkey]).get(pubkey) || 0
-		return score
+		return await fetchNdkWoTScore(ndk, pubkey)
 	} catch (e) {
 		console.error('Error calculating WoT score:', e)
 		return null
