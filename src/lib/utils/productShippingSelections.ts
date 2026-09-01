@@ -1,4 +1,5 @@
 import type { RichShippingInfo } from '@/lib/stores/cart'
+import type { getShippingInfo } from '@/queries/shipping'
 
 export type ProductShippingSelection = {
 	shippingRef: string
@@ -98,9 +99,10 @@ export const findReusablePublishedShippingSelection = ({
 }
 
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
+	const legacyShipping = 'shipping' in input ? input.shipping : null
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
-		(typeof input.shipping?.id === 'string' && input.shipping.id.trim()) ||
+		(typeof legacyShipping?.id === 'string' && legacyShipping.id.trim()) ||
 		''
 
 	if (!shippingRef) return null
@@ -181,4 +183,24 @@ export const resolvePublishedProductShippingOptions = ({
 				isResolved: true,
 			}
 		})
+}
+
+// Helper for displaying a shipping option's base and per-product extra cost.
+export const getProductShippingTotalCost = (baseCost: number | undefined, extraCost: string): number => {
+	const base = typeof baseCost === 'number' && Number.isFinite(baseCost) ? baseCost : 0
+	const extra = Number(extraCost) || 0
+	return base + extra
+}
+
+export const formatShippingDisplayText = (shippingRef: string | undefined, shippingOption: ReturnType<typeof getShippingInfo> | null) => {
+	if (!shippingRef) return ''
+	if (!shippingOption) return shippingRef
+
+	const amount = shippingOption.price?.amount
+	const currency = shippingOption.price?.currency
+	const costLabel = amount !== undefined && amount !== null && amount !== '' ? `${amount}${currency ? ` ${currency}` : ''}` : ''
+	const title = shippingOption.title?.trim()
+
+	if (!title) return shippingRef
+	return costLabel ? `${title} • ${costLabel}` : title
 }

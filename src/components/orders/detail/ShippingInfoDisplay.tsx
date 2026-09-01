@@ -11,6 +11,8 @@ interface ShippingInfoDisplayProps {
 }
 
 export function ShippingInfoDisplay({ shippingInfo }: ShippingInfoDisplayProps) {
+	const costDisplay = `${shippingInfo.price.amount} ${shippingInfo.price.currency}`
+
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 			<div>
@@ -19,7 +21,7 @@ export function ShippingInfoDisplay({ shippingInfo }: ShippingInfoDisplayProps) 
 			</div>
 			<div>
 				<span className="text-sm text-muted-foreground">Cost:</span>
-				<span className="ml-2 font-medium">{`${shippingInfo.price.amount} ${shippingInfo.price.currency}`}</span>
+				<span className="ml-2 font-medium">{costDisplay}</span>
 			</div>
 			{shippingInfo.service && (
 				<div>

@@ -9,7 +9,12 @@ mock.module('@/publish/products', () => ({
 
 import { publishProduct } from '@/publish/products'
 import { productFormActions } from '@/lib/stores/product'
-import { applyFiatPriceEdit, deriveSatsPriceFromFiat, resolvePublishPrice } from '@/lib/utils/productPriceResolution'
+import {
+	applyFiatPriceEdit,
+	deriveSatsPriceFromFiat,
+	isFiatDisplayConversionUnavailable,
+	resolvePublishPrice,
+} from '@/lib/utils/productPriceResolution'
 
 // Deterministic converter for tests: 1 unit of currency = 100_000 sats.
 // Like the real converter, it returns 0 for currencies it has no rate for.
@@ -59,6 +64,40 @@ describe('applyFiatPriceEdit', () => {
 	test('keeps previous store values for partial input', () => {
 		expect(applyFiatPriceEdit('-', convertUsdLike, { currency: 'USD', hasExchangeRates: true })).toBeNull()
 		expect(applyFiatPriceEdit('abc', convertUsdLike, { currency: 'USD', hasExchangeRates: true })).toBeNull()
+	})
+})
+
+describe('isFiatDisplayConversionUnavailable', () => {
+	test('marks a visible fiat equivalent unavailable when rates disappear', () => {
+		expect(
+			isFiatDisplayConversionUnavailable({ fiatDisplayValue: '25.00', currency: 'USD', hasExchangeRates: false }, convertUsdLike),
+		).toBe(true)
+	})
+
+	test('does not warn when there is no fiat equivalent displayed', () => {
+		expect(isFiatDisplayConversionUnavailable({ fiatDisplayValue: '', currency: 'USD', hasExchangeRates: false }, convertUsdLike)).toBe(
+			false,
+		)
+	})
+
+	test('warns for an invalid displayed fiat value', () => {
+		expect(
+			isFiatDisplayConversionUnavailable({ fiatDisplayValue: 'not-a-number', currency: 'USD', hasExchangeRates: true }, convertUsdLike),
+		).toBe(true)
+	})
+
+	test('marks a visible fiat equivalent unavailable when its selected rate is missing', () => {
+		const missingRate = () => Number.NaN
+
+		expect(isFiatDisplayConversionUnavailable({ fiatDisplayValue: '25.00', currency: 'USD', hasExchangeRates: true }, missingRate)).toBe(
+			true,
+		)
+	})
+
+	test('accepts a visible fiat equivalent with an available selected rate', () => {
+		expect(isFiatDisplayConversionUnavailable({ fiatDisplayValue: '25.00', currency: 'USD', hasExchangeRates: true }, convertUsdLike)).toBe(
+			false,
+		)
 	})
 })
 

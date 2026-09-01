@@ -27,8 +27,9 @@ export function OrderFinalizeComponent({
 	onViewOrders,
 	deliveryRequirements,
 }: OrderFinalizeComponentProps) {
-	const { cart } = useStore(cartStore)
+	const { cart, totalShippingInSats } = useStore(cartStore)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
+	const subtotalInSats = Math.max(0, totalInSats - totalShippingInSats)
 
 	const isAllPickup =
 		deliveryRequirements.isResolved &&
@@ -46,6 +47,49 @@ export function OrderFinalizeComponent({
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
 	}
+
+	const formatShippingAmount = (amount: number, currency: string | null): string => {
+		const formattedAmount = Number.isFinite(amount) ? amount.toLocaleString() : ''
+		return [formattedAmount, currency?.trim()].filter(Boolean).join(' ')
+	}
+
+	const selectedShippingMethods = useMemo(() => {
+		const summaries = new Map<
+			string,
+			{
+				id: string
+				name: string
+				cost: number
+				currency: string | null
+				itemCount: number
+			}
+		>()
+
+		for (const product of Object.values(cart.products)) {
+			if (!product.shippingMethodId) continue
+
+			const currency = product.shippingCostCurrency?.trim() || null
+			const key = `${product.shippingMethodId}:${currency ?? ''}`
+			const existing = summaries.get(key)
+			const shippingCost = Number.isFinite(product.shippingCost) ? product.shippingCost : 0
+
+			if (existing) {
+				existing.cost += shippingCost
+				existing.itemCount += 1
+				continue
+			}
+
+			summaries.set(key, {
+				id: key,
+				name: product.shippingMethodName?.trim() || 'Selected shipping method',
+				cost: shippingCost,
+				currency,
+				itemCount: 1,
+			})
+		}
+
+		return Array.from(summaries.values())
+	}, [cart.products])
 
 	// Collect pickup addresses for display only; delivery requirements are resolved by checkout state.
 	useEffect(() => {
@@ -259,13 +303,36 @@ export function OrderFinalizeComponent({
 				)
 			)}
 
+			{selectedShippingMethods.length > 0 && (
+				<div className="bg-gray-50 rounded-lg p-4">
+					<h3 className="font-medium text-gray-900 mb-3">
+						{selectedShippingMethods.length === 1 ? 'Shipping Method' : 'Shipping Methods'}
+					</h3>
+					<div className="space-y-2">
+						{selectedShippingMethods.map((method) => (
+							<div key={method.id} className="flex items-center justify-between gap-4 text-sm">
+								<div>
+									<p className="font-medium text-gray-900">{method.name}</p>
+									{method.itemCount > 1 && <p className="text-xs text-gray-500">{method.itemCount} items</p>}
+								</div>
+								{method.currency && <span className="font-medium text-gray-700">{formatShippingAmount(method.cost, method.currency)}</span>}
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
 			{/* Order Total */}
 			<div className="bg-gray-50 rounded-lg p-4">
 				<h3 className="font-medium text-gray-900 mb-3">Order Total</h3>
 				<div className="space-y-2">
 					<div className="flex justify-between text-sm">
 						<span className="text-gray-600">Subtotal:</span>
-						<span className="font-medium">{formatSats(totalInSats)} sats</span>
+						<span className="font-medium">{formatSats(subtotalInSats)} sats</span>
+					</div>
+					<div className="flex justify-between text-sm">
+						<span className="text-gray-600">Shipping:</span>
+						<span className="font-medium">{formatSats(totalShippingInSats)} sats</span>
 					</div>
 					<div className="border-t pt-2 mt-3">
 						<div className="flex justify-between font-semibold text-lg">
