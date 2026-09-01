@@ -8,8 +8,10 @@
  *
  * MINT_A and MINT_B point to the same local mint via different hostnames
  * (localhost vs 127.0.0.1) so the wallet treats them as separate mints.
- * MINT_UNTRUSTED is a non-working local URL; mintTestEcash falls back to
- * the trusted dev mints when the preferred URL is not in the trusted list.
+ * MINT_UNTRUSTED is a non-working local URL used to verify mint filtering;
+ * it is registered in the wallet (zero balance) but never funded — mintTestEcash
+ * is always called with { allowFallback: false } (ADR-0005: never fall back to
+ * the external dev testnet mints), and the untrusted URL has no mint behind it.
  */
 
 import { test, expect } from '../fixtures'
@@ -20,6 +22,7 @@ import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { devUser1, devUser2, XPUB } from '../../src/lib/fixtures'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 useWebSocketImplementation(WebSocket)
 
@@ -30,6 +33,33 @@ const MINT_A = 'http://localhost:3338'
 const MINT_B = 'http://127.0.0.1:3338'
 const MINT_UNTRUSTED = 'http://untrusted.localhost:3340'
 const SCREENSHOT_DIR = 'test-results'
+
+const __filename = fileURLToPath(import.meta.url)
+const LOCAL_IMAGE_PATH = path.join(path.dirname(__filename), '..', 'fixtures', 'test-product-image.png')
+
+/**
+ * Intercepts requests to placehold.co (the image URL embedded in seeded
+ * auction events by seedAuction) and serves a local fixture image instead.
+ * ADR-0005: tests make ZERO external network calls — modeled on the
+ * interceptCdnImages pattern in product-page.spec.ts. The <img> still loads
+ * (so visibility assertions pass), but no request ever leaves localhost.
+ */
+async function interceptPlaceholdImages(page: import('@playwright/test').Page) {
+	await page.route('**/placehold.co/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/png',
+			path: LOCAL_IMAGE_PATH,
+		})
+	})
+}
+
+// ADR-0005: every test in this file navigates to a seeded auction page whose
+// event embeds a placehold.co image URL — intercept it on the (per-test)
+// buyerPage before any navigation to the auction detail page.
+test.beforeEach(async ({ buyerPage }) => {
+	await interceptPlaceholdImages(buyerPage)
+})
 
 async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
 	const skBytes = hexToBytes(devUser1.sk)
@@ -44,7 +74,14 @@ async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: st
 			created_at: now,
 			content: 'E2E auction for mint selection testing',
 			tags: [
-				['d', overrides.dTag ?? D_TAG],
+				// Append a per-run timestamp so every seed mints a FRESH auction:
+				// bids (kind-1023) persist on the shared local relay across runs, so a
+				// fixed d would leave the auction's current price above the bid
+				// amount ensureInsufficientBidFunds computes on a re-run — the
+				// confirm dialog would stay under-floor (Confirm disabled) and the
+				// deposit modal would never open. Tests navigate by event id, so the
+				// d tag value is opaque (same pattern as app-settings.spec.ts).
+				['d', `${overrides.dTag ?? D_TAG}-${Date.now()}`],
 				['title', 'E2E Mint Test Auction'],
 				['summary', 'Auction with multiple mints for e2e testing'],
 				['auction_type', 'english'],
@@ -91,7 +128,11 @@ async function fundWallet(page: import('@playwright/test').Page, amount: number,
 		async ({ amount: amt, mintUrl: mint }) => {
 			const w = (window as any).__nip60
 			if (!w) throw new Error('__nip60 bridge not available')
-			return await w.mintTestEcash(amt, mint)
+			// ADR-0005: mint e-cash from the requested (local) mint ONLY — never
+			// fall back to the external dev testnet mints. Without this, a failed
+			// local mint minting silently continues to testnut.cashu.space etc.
+			// (real external network calls from an e2e test).
+			return await w.mintTestEcash(amt, mint, { allowFallback: false })
 		},
 		{ amount, mintUrl },
 	)
@@ -371,7 +412,13 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 			await waitForWalletReady(buyerPage)
 			await fundWallet(buyerPage, 20, MINT_A)
 			await fundWallet(buyerPage, 20, MINT_B)
-			await fundWallet(buyerPage, 5_000, MINT_UNTRUSTED)
+			// ADR-0005: fund the wallet's large balance from the LOCAL mint only
+			// (mintTestEcash no longer falls back to the external dev testnet
+			// mints, so MINT_UNTRUSTED — which has no mint behind it — cannot be
+			// funded). The untrusted mint is still REGISTERED below so the mint
+			// selector's filtering is exercised against a real non-auction mint
+			// with zero balance.
+			await fundWallet(buyerPage, 5_000, MINT_B)
 			await buyerPage.reload()
 			await waitForWalletBalance(buyerPage, 5_000)
 			// Explicitly register mints after reload — the wallet re-inits from
@@ -382,7 +429,7 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 					const w = (window as any).__nip60
 					if (w?.addMint) mints.forEach((m: string) => w.addMint(m))
 				},
-				[MINT_A, MINT_B],
+				[MINT_A, MINT_B, MINT_UNTRUSTED],
 			)
 
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
@@ -424,11 +471,15 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Direct Lightning Bid Funding — video-recorded e2e scenarios (PR #1205)
+// Direct Lightning Bid Funding — video-recorded e2e scenarios (PR #1205/#1235)
 //
 // These tests exercise the full bid → deposit → mint → publish lifecycle
-// using the __nip60 dev bridge to simulate Lightning payment confirmation
-// without a real Lightning node. Video recording is always on for this group.
+// against the REAL local Cashu mint. The invoice the app creates (NUT-04) is
+// settled by the local mint's FakeWallet backend instantly, and the wallet's
+// deposit monitor completes the real NUT-05 minting round trip on its own —
+// the __nip60 dev bridge is used only for wallet set-up (mintTestEcash,
+// addMint) and to READ deposit status (getDepositStatus). No payment is
+// faked via simulateDepositSuccess.
 //
 // NOTE: These tests require a running dev server (port 34567), local relay
 // (nak serve on port 10547), and a local Cashu mint (port 3338, started
@@ -436,7 +487,9 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Direct Lightning Bid Funding (video recorded)', () => {
-	// video: 'on' set in playwright.config.ts
+	// Video is scoped to this suite by the spec-level test.use({ video: 'on' })
+	// at the top of this file; the global default in playwright.config.ts is
+	// retain-on-failure.
 	test.slow()
 
 	test.beforeEach(async () => {
@@ -468,20 +521,30 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 	}
 
 	/**
-	 * Simulate a Lightning invoice payment by emitting 'success' on the active
-	 * deposit via the __nip60 dev bridge. This triggers the same store
-	 * transition as a real mint confirmation.
+	 * Read the current deposit status via the __nip60 dev bridge (read-only —
+	 * the bridge is never used to fake payment state in these scenarios).
 	 */
-	async function simulateDepositPayment(page: import('@playwright/test').Page) {
-		const ok = await page.evaluate(() => {
+	async function getDepositStatus(page: import('@playwright/test').Page) {
+		return await page.evaluate(() => {
 			const w = (window as any).__nip60
-			if (w?.simulateDepositSuccess) {
-				w.simulateDepositSuccess()
-				return true
-			}
-			return false
+			return w?.getDepositStatus?.() ?? null
 		})
-		expect(ok).toBe(true)
+	}
+
+	/**
+	 * Block the local mint's NUT-05 token-issuing endpoint (POST
+	 * /v1/mint/bolt11) so the wallet's deposit monitor can never mint the
+	 * proofs for the quote it created. The FakeWallet backend settles
+	 * invoices instantly, so without this interception a natural payment
+	 * timeout can never occur against the local mint: with the endpoint
+	 * blocked, the deposit cannot finalize and the 15s confirmation timeout
+	 * fires exactly as it would for an unpaid invoice on a real Lightning
+	 * backend. The quote-creation endpoint (NUT-04, /v1/mint/quote/bolt11)
+	 * and the keyset/info endpoints stay reachable, so the invoice itself
+	 * is real. This intercepts LOCAL traffic only (ADR-0005 is unaffected).
+	 */
+	async function blockMintTokenEndpoint(page: import('@playwright/test').Page) {
+		await page.route('**/v1/mint/bolt11', (route) => route.abort())
 	}
 
 	/**
@@ -581,13 +644,16 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// Verify the invoice amount is displayed.
 			await expect(depositDialog.getByText(/sats/i)).toBeVisible({ timeout: 10_000 })
 
-			// Simulate the Lightning payment being received by the mint.
-			// This triggers depositStatus → 'success' → onSuccess callback →
-			// handleFundingSuccess → submitPreparedBid → kind-1023 published.
-			await simulateDepositPayment(buyerPage)
-
-			// Verify the deposit success UI appears.
-			await expect(buyerPage.getByText('Deposit Successful!')).toBeVisible({ timeout: 30_000 })
+			// The local mint's FakeWallet backend settles the invoice instantly, so
+			// the wallet's deposit monitor completes the REAL NUT-04 → NUT-05 round
+			// trip on its own: the quote is paid, proofs are minted and stored, and
+			// the deposit emits 'success' → onSuccess → handleFundingSuccess →
+			// submitPreparedBid → kind-1023 published. No payment simulation is used.
+			//
+			// Assert the bid progress dialog (the modal's transient
+			// 'Deposit Successful!' screen is torn down immediately by
+			// handleFundingSuccess, so asserting it would be flake-prone).
+			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
 
 			// Verify the bid event (kind 1023) was published to the relay.
 			const bidEvent = await waitForBidEvent(relay, auctionEvent.id, 30_000)
@@ -659,8 +725,13 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
 
+			// Block the mint's NUT-05 token endpoint BEFORE the deposit monitor can
+			// mint proofs, so the 15 s confirmation timeout fires (see
+			// blockMintTokenEndpoint). The invoice (NUT-04 quote) itself is real.
+			await blockMintTokenEndpoint(buyerPage)
+
 			// Wait for the QR invoice to appear.
-			await waitForDepositQR(buyerPage)
+			const depositDialog = await waitForDepositQR(buyerPage)
 
 			// Wait for the deposit confirmation timeout (15 s + buffer).
 			// The deposit monitor sets depositStatus to 'awaiting_confirmation_retry'.
@@ -668,36 +739,42 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 
 			// Verify the deposit status is 'awaiting_confirmation_retry' via
 			// the __nip60 dev bridge.
-			const depositStatus = await buyerPage.evaluate(() => {
-				const w = (window as any).__nip60
-				return w?.getDepositStatus?.() ?? null
-			})
+			const depositStatus = await getDepositStatus(buyerPage)
 			expect(depositStatus).not.toBeNull()
 			expect(depositStatus.depositStatus).toBe('awaiting_confirmation_retry')
 
-			// Switch to the classic top-up view where the "Retry confirmation"
-			// button is rendered (the bid-variant view uses the same "Confirm"
-			// button for both initial check and retry).
-			const depositDialog = buyerPage.getByRole('dialog')
-			await depositDialog.getByRole('button', { name: /or top up your wallet/i }).click()
-
-			// In the classic view, the "Retry confirmation" button appears
-			// when needsConfirmationRetry is true.
+			// The bid-variant deposit view renders the needsConfirmationRetry UI:
+			// a "Confirmation timed out." status and a "Retry check" button that
+			// calls retryDepositConfirmation() (DepositLightningModal.tsx). This
+			// is the real user surface — there is no classic top-up view in the
+			// bid variant (the previously targeted 'or top up your wallet' button
+			// does not exist anywhere in src/).
 			await expect(depositDialog.getByText(/confirmation timed out/i)).toBeVisible({ timeout: 10_000 })
-			const retryButton = depositDialog.getByRole('button', { name: /retry confirmation/i })
+			const retryButton = depositDialog.getByRole('button', { name: /retry check/i })
 			await expect(retryButton).toBeVisible({ timeout: 10_000 })
 
-			// Click "Retry confirmation" — this calls retryDepositConfirmation()
-			// which resets depositStatus to 'pending' and re-checks the mint.
+			// Click "Retry check" — this calls retryDepositConfirmation()
+			// which resets depositStatus to 'pending' and re-checks the mint for
+			// the SAME deposit (quote identity is preserved).
 			await retryButton.click()
 
-			// Verify the deposit status returned to 'pending' after retry.
-			const postRetryStatus = await buyerPage.evaluate(() => {
-				const w = (window as any).__nip60
-				return w?.getDepositStatus?.() ?? null
-			})
+			// Verify the deposit status returned to 'pending' after retry. This is
+			// deterministic while the NUT-05 endpoint is still blocked — the retry
+			// re-check cannot succeed, so the status cannot advance past the
+			// synchronous 'pending' reset performed by retryDepositConfirmation().
+			const postRetryStatus = await getDepositStatus(buyerPage)
 			expect(postRetryStatus).not.toBeNull()
 			expect(postRetryStatus.depositStatus).toBe('pending')
+
+			// Unblock the mint's token endpoint: the deposit monitor (re-armed by
+			// the retry) reconciles the SAME quote against the real local mint —
+			// the FakeWallet backend has already settled the invoice — mints the
+			// proofs and completes the funding flow into bid publication. This is
+			// the e2e-level proof of the retry reconciliation invariant: after a
+			// paid-or-uncertain timeout, retrying must confirm the same payment
+			// without creating a new funding session.
+			await buyerPage.unroute('**/v1/mint/bolt11')
+			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
 
 			await buyerPage.screenshot({
 				path: path.join(SCREENSHOT_DIR, 'pr1205-ln-bid-funding-timeout.png'),
@@ -783,11 +860,13 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 
 			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
 
-			// Wait for the deposit QR invoice to appear, then simulate the
-			// Lightning payment. This triggers depositStatus → 'success' →
-			// onSuccess → submitPreparedBid → kind-1023 publish (which fails).
+			// Wait for the deposit QR invoice to appear. The local mint's
+			// FakeWallet backend settles the invoice instantly, so the wallet's
+			// deposit monitor completes the real NUT-04 → NUT-05 round trip on
+			// its own (no payment simulation). This triggers depositStatus →
+			// 'success' → onSuccess → submitPreparedBid → kind-1023 publish
+			// (which fails — signEvent is intercepted above).
 			await waitForDepositQR(buyerPage)
-			await simulateDepositPayment(buyerPage)
 
 			// Verify the error toast appears indicating publish failure.
 			await expect(buyerPage.getByText(/bid publishing failed/i)).toBeVisible({ timeout: 30_000 })
@@ -801,8 +880,20 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				}
 			})
 
-			// Verify the bid button is still available for retry.
-			await expect(buyerPage.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i }).first()).toBeVisible({ timeout: 10_000 })
+			// Verify the publish-failure terminal state and its retry affordance.
+			// After the deposit succeeds and the publish fails, the funding hook
+			// opens the bid progress dialog in the
+			// 'mint_succeeded_bid_publish_failed_reclaimable' state: the dialog
+			// (which does NOT auto-close) shows "Bid Publish Failed" and a
+			// "Retry publish" button — the designed retry affordance
+			// (AuctionBidProgressDialog). The page-level bid button is not
+			// reachable while the dialog is open, so assert the affordance where
+			// it actually lives.
+			const failureDialog = buyerPage.getByRole('dialog').filter({ hasText: /bid publish failed/i })
+			await expect(failureDialog).toBeVisible({ timeout: 10_000 })
+			const retryPublishButton = failureDialog.getByRole('button', { name: /retry publish/i })
+			await expect(retryPublishButton).toBeVisible()
+			await expect(retryPublishButton).toBeEnabled()
 
 			await buyerPage.screenshot({
 				path: path.join(SCREENSHOT_DIR, 'pr1205-ln-bid-funding-publish-failure.png'),
