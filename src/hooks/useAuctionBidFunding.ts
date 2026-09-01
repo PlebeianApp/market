@@ -1,5 +1,5 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
-import type { AuctionBidFormData } from '@/publish/auctions'
+import { AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -142,6 +142,21 @@ interface StartFundingForBidInput {
 interface UseAuctionBidFundingOptions {
 	previousBidAmount: number
 	publishBid: (bidData: AuctionBidFormData) => Promise<string>
+	/**
+	 * #1235 Blocking 1: rebroadcast an already-built kind-1023 bid event by id.
+	 *
+	 * When a bid was funded (funds locked, recovery record persisted, event
+	 * built and cached) but the relay broadcast failed, retrying the publish
+	 * must NOT re-run `publishAuctionBid` — that would re-derive a fresh path,
+	 * generate a fresh refund keypair, and re-lock funds at the mint
+	 * (double-lock). Instead this callback rebroadcasts the exact persisted
+	 * signed event: same event id, zero additional Cashu swap/lock.
+	 *
+	 * When unset, retry from `mint_succeeded_bid_publish_failed_reclaimable`
+	 * never falls back to the full (re-locking) pipeline — it surfaces an
+	 * error instead, because a retry must never double-lock the bidder.
+	 */
+	republishBid?: (bidEventId: string) => Promise<string>
 	onBidSuccess?: () => void
 	onPendingRulesAck?: () => void
 	hasAcknowledgedRules: boolean
@@ -205,6 +220,7 @@ export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBid
 export function useAuctionBidFunding({
 	previousBidAmount,
 	publishBid,
+	republishBid,
 	onBidSuccess,
 	onPendingRulesAck,
 	hasAcknowledgedRules,
@@ -229,6 +245,15 @@ export function useAuctionBidFunding({
 				onBidSuccess?.()
 				return true
 			} catch (error) {
+				// #1235 Blocking 1: when the relay broadcast failed AFTER the funds
+				// were locked and the kind-1023 event was built and cached, the
+				// publisher throws AuctionBidPublishFailedError carrying the event
+				// id. Record it so retryBidPublish can rebroadcast the EXACT signed
+				// event (same id, zero additional Cashu swap/lock) instead of
+				// re-running the full lock pipeline.
+				if (error instanceof AuctionBidPublishFailedError) {
+					setPublishedBidEventId(error.bidEventId)
+				}
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
 				)
@@ -345,14 +370,56 @@ export function useAuctionBidFunding({
 	}, [pendingRulesAckBidData, submitPreparedBid])
 
 	/**
-	 * Retry bid publish from the mint_succeeded_bid_publish_failed_reclaimable
-	 * state. Uses the preserved pendingBidSubmission so the user doesn't need
-	 * to re-enter the bid amount or reselect mints.
+	 * #1235 Blocking 1 — idempotent retry from
+	 * `mint_succeeded_bid_publish_failed_reclaimable`.
+	 *
+	 * Two retry paths:
+	 *
+	 * - **Idempotent rebroadcast (preferred, whenever the failed publish
+	 *   produced an event id):** `republishBid` rebroadcasts the exact
+	 *   persisted signed kind-1023 — same event id, ZERO additional Cashu
+	 *   swap/lock. Relays that already have the event deduplicate; relays
+	 *   that missed it ingest it. Retrying a funded-but-unbroadcast publish
+	 *   never double-locks the bidder.
+	 *
+	 * - **No id captured (publish failed before the event was built — nothing
+	 *   was locked for this leg yet):** falls back to the full
+	 *   `submitPreparedBid` pipeline. When an id IS known but no
+	 *   `republishBid` callback is wired, we surface an error instead of
+	 *   falling back — a retry must never re-run the lock pipeline on an
+	 *   already-locked leg.
+	 *
+	 * Uses the preserved pendingBidSubmission so the user doesn't need to
+	 * re-enter the bid amount or reselect mints.
 	 */
 	const retryBidPublish = useCallback(async () => {
 		if (!pendingBidSubmission) return
+		if (publishedBidEventId) {
+			if (!republishBid) {
+				toast.error('Bid publish retry is unavailable — your funds remain locked and reclaimable. No second lock was attempted.')
+				return
+			}
+			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
+			try {
+				await republishBid(publishedBidEventId)
+				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
+				setPendingBidSubmission(null)
+				setIsDepositOpen(false)
+				onBidSuccess?.()
+			} catch (error) {
+				setBidFundingLifecycleState((currentState) =>
+					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
+				)
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
+			}
+			return
+		}
+		// No event id captured — the failure happened before the kind-1023 was
+		// built, so nothing was locked for this leg yet: a full re-submit is
+		// safe (no double-lock).
 		await submitPreparedBid(pendingBidSubmission)
-	}, [pendingBidSubmission, submitPreparedBid])
+	}, [pendingBidSubmission, publishedBidEventId, republishBid, submitPreparedBid, onBidSuccess])
 
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))
