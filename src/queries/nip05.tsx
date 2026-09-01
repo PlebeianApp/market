@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
-import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { fetchLatestNdkEvent, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -38,19 +38,18 @@ export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Setti
 
 	// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
 	// verified and rehydrated into NDKEvents so consumer shapes stay identical.
-	const events = await fetchNdkEventSet(applesauceIo, ndk, nip05Filter)
-	const eventArray = Array.from(events)
+	// Conflicting replaceable versions resolve deterministically to the newest
+	// created_at (fetchLatestNdkEvent — NDK dedup-key parity, relay-arrival
+	// order must not decide which copy wins).
+	const latestEvent = await fetchLatestNdkEvent(applesauceIo, ndk, nip05Filter)
 
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		return {
 			entries: [],
 			lastUpdated: 0,
 			event: null,
 		}
 	}
-
-	// Get the latest event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	// Extract nip05 entries from 'nip05' tags
 	// Format: ["nip05", username, pubkey, validUntil]
