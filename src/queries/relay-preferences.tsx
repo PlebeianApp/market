@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
-import { fetchNdkEventSet, type NDKEvent } from '@/lib/nostr/ndk-events'
+import { fetchLatestNdkEvent } from '@/lib/nostr/ndk-events'
 import {
 	DEFAULT_RELAY_PREFERENCES,
 	getRelayPreferencesDTag,
@@ -24,25 +24,14 @@ export async function fetchRelayPreferences(userPubkey: string): Promise<RelayPr
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await fetchNdkEventSet(applesauceIo, ndk, {
+	// Conflicting replaceable versions resolve deterministically to the newest
+	// created_at (fetchLatestNdkEvent — NDK dedup-key parity, relay-arrival
+	// order must not decide which copy wins).
+	const mostRecentEvent = await fetchLatestNdkEvent(applesauceIo, ndk, {
 		kinds: [30078],
 		authors: [userPubkey],
 		'#d': [getRelayPreferencesDTag()],
 		limit: 1,
-	})
-
-	if (events.size === 0) {
-		return null
-	}
-
-	// Get the most recent event
-	let mostRecentEvent: NDKEvent | undefined
-	let mostRecentTimestamp = 0
-	events.forEach((event) => {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
 	})
 
 	if (!mostRecentEvent) {

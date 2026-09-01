@@ -81,7 +81,16 @@ export async function fetchNdkEventSet(
 	return new Set(eventsById.values())
 }
 
-/** First matching event from a seam fetch, or null when nothing matched. */
+/**
+ * First matching event from a seam fetch, or null when nothing matched.
+ *
+ * Deterministic latest-wins (NDK dedup-key parity): replaceable and
+ * parameterized events can arrive as multiple conflicting `created_at`
+ * versions — one per relay, each that relay's current "latest" — and NDK's
+ * deduplication kept the newest copy on conflict. Sort candidates by
+ * `created_at` desc instead of keeping the first arrival. For immutable
+ * events every copy has identical content, so the sort is a no-op.
+ */
 export async function fetchNdkEvent(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
@@ -89,7 +98,8 @@ export async function fetchNdkEvent(
 	opts?: FetchOptions,
 ): Promise<NDKEvent | null> {
 	const events = await fetchNdkEventSet(nostrIo, ndk, filter, opts)
-	return events.size > 0 ? Array.from(events)[0] : null
+	if (events.size === 0) return null
+	return Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 }
 
 /**

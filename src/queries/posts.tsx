@@ -41,7 +41,7 @@ export const fetchPost = async (id: string) => {
 	const events = await fetchNdkEventSet(applesauceIo, ndk, {
 		ids: [id],
 	})
-	const event = events.size > 0 ? [...events][0] : null
+	const event = events.size > 0 ? Array.from(events)[0] : null
 	if (!event) {
 		throw new Error('Post not found')
 	}
