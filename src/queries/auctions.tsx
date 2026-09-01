@@ -31,6 +31,8 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { excludeTestLabeledEvents, fetchTestLabels } from '@/queries/testLabels'
+import { getATagFromCoords } from '@/lib/utils/coords'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
@@ -164,7 +166,8 @@ const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: nu
 		},
 		{ timeoutMs: 8000 },
 	)
-	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))
+	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
+	return excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))))
 }
 
 export const fetchAuctions = async (limit: number = 200) => {
@@ -180,9 +183,9 @@ export const fetchAuctions = async (limit: number = 200) => {
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
-		(a, b) => (b.created_at || 0) - (a.created_at || 0),
-	)
+	// Filter out blacklisted auctions, locally-deleted auctions, then test-labeled items (ADR-0009)
+	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))))
+	return collapseAuctionVersions(ndk, filteredEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuction = async (id: string) => {
@@ -206,6 +209,12 @@ export const fetchAuction = async (id: string) => {
 	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
 	if (!dTag) return filterBlacklistedEvents([event])[0] || null
 
+	// Check the test label for this auction's coordinate (ADR-0009). A
+	// test-labeled auction resolves to null in detail views.
+	const coordinate = getATagFromCoords({ kind: AUCTION_KIND, pubkey: event.pubkey, identifier: dTag })
+	const labels = await fetchTestLabels([coordinate])
+	if (labels.has(coordinate)) return null
+
 	const versionEvents = await fetchAuctionVersionEvents(event.pubkey, dTag)
 	return resolveCanonicalAuctionEvent(ndk, dedupeEventsById([event, ...versionEvents]))
 }
@@ -222,15 +231,22 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
-		(a, b) => (b.created_at || 0) - (a.created_at || 0),
-	)
+	// Filter out blacklisted auctions, locally-deleted auctions, then test-labeled items (ADR-0009)
+	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))))
+	return collapseAuctionVersions(ndk, filteredEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
+
+	// Check the test label before resolving the item (ADR-0009). Must run
+	// before the version-events fallback so a labeled auction resolves to
+	// null instead of falling through to the raw naddr fetch.
+	const coordinate = getATagFromCoords({ kind: AUCTION_KIND, pubkey, identifier: dTag })
+	const labels = await fetchTestLabels([coordinate])
+	if (labels.has(coordinate)) return null
 
 	const versionEvents = await fetchAuctionVersionEvents(pubkey, dTag)
 	if (versionEvents.length === 0) {

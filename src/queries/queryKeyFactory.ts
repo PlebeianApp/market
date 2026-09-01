@@ -8,6 +8,12 @@ export const productKeys = {
 	paginated: (limit: number, until?: number) => [...productKeys.all, 'paginated', limit, until] as const,
 } as const
 
+export const testLabelKeys = {
+	all: ['testLabels'] as const,
+	forCoordinates: (coords: string[]) => [...testLabelKeys.all, 'coords', coords] as const,
+	forCoordinate: (coord: string) => [...testLabelKeys.all, 'coord', coord] as const,
+} as const
+
 export const auctionKeys = {
 	all: ['auctions'] as const,
 	details: (id: string) => [...auctionKeys.all, id] as const,
