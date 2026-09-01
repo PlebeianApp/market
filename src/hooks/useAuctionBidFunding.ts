@@ -21,8 +21,8 @@ export type AuctionBidFundingLifecycleState =
 export type AuctionBidFundingFailureReason = 'invoice_unpaid_or_expired_reclaimable' | 'invoice_paid_mint_failed_reclaimable'
 
 /**
- * #12: ADR-0004 state mapping. The ADR lists a full payment/bid state model
- * (see ADR-0004 §"Payment and Bid State Model"). Most ADR states map 1:1 to
+ * #12: ADR-0008 state mapping. The ADR lists a full payment/bid state model
+ * (see ADR-0008 §"Payment and Bid State Model"). Most ADR states map 1:1 to
  * lifecycle states with identical names; only the two non-obvious mappings
  * below need explicit documentation.
  *
@@ -185,28 +185,67 @@ const CLOSE_NO_CANCEL_FUNDING_STATES = new Set<AuctionBidFundingLifecycleState>(
 const CLOSE_PRESERVE_PENDING_SUBMISSION_STATES = new Set<AuctionBidFundingLifecycleState>([
 	...FUNDED_IN_FLIGHT_FUNDING_STATES,
 	'mint_succeeded_bid_publish_failed_reclaimable',
+	// #1235 Blocking 2: closing the deposit modal from a state in which a
+	// payment may have been made must preserve the session — the two invoice
+	// reclaimable states are reachable exactly on those paths (QR-payer
+	// close classification + deposit-error classification).
+	'invoice_unpaid_or_expired_reclaimable',
+	'invoice_paid_mint_failed_reclaimable',
 ])
 
 const AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS: Record<AuctionBidFundingLifecycleState, ReadonlySet<AuctionBidFundingLifecycleState>> = {
-	idle: new Set(['funding_session_created', 'invoice_unpaid_or_expired_reclaimable', 'bid_publish_attempted', 'funding_canceled']),
-	funding_session_created: new Set(['invoice_created', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
-	invoice_created: new Set(['payment_acknowledged', 'invoice_unpaid_or_expired_reclaimable', 'funding_canceled']),
-	payment_acknowledged: new Set(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
-	minting_started: new Set(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
-	ecash_minted: new Set(['ecash_minted_pending_rules_ack', 'bid_publish_attempted', 'invoice_paid_mint_failed_reclaimable']),
-	ecash_minted_pending_rules_ack: new Set(['bid_publish_attempted', 'funding_session_created']),
-	bid_publish_attempted: new Set(['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable']),
-	bid_published: new Set(['funding_session_created']),
-	invoice_unpaid_or_expired_reclaimable: new Set(['funding_session_created']),
-	invoice_paid_mint_failed_reclaimable: new Set(['funding_session_created']),
-	mint_succeeded_bid_publish_failed_reclaimable: new Set(['bid_publish_attempted', 'funding_session_created']),
-	funding_canceled: new Set(['funding_session_created']),
+	idle: new Set<AuctionBidFundingLifecycleState>([
+		'funding_session_created',
+		'invoice_unpaid_or_expired_reclaimable',
+		'bid_publish_attempted',
+		'funding_canceled',
+	]),
+	funding_session_created: new Set<AuctionBidFundingLifecycleState>([
+		'invoice_created',
+		'invoice_unpaid_or_expired_reclaimable',
+		'funding_canceled',
+	]),
+	invoice_created: new Set<AuctionBidFundingLifecycleState>([
+		'payment_acknowledged',
+		'invoice_unpaid_or_expired_reclaimable',
+		// #1235 Blocking 2: a QR payer's payment is unobservable by the app, so
+		// a paid-or-unknown classification while the deposit is pending must be
+		// able to land in the reclaimable state directly from invoice_created.
+		'invoice_paid_mint_failed_reclaimable',
+		'funding_canceled',
+	]),
+	payment_acknowledged: new Set<AuctionBidFundingLifecycleState>(['minting_started', 'invoice_paid_mint_failed_reclaimable']),
+	minting_started: new Set<AuctionBidFundingLifecycleState>(['ecash_minted', 'invoice_paid_mint_failed_reclaimable']),
+	ecash_minted: new Set<AuctionBidFundingLifecycleState>([
+		'ecash_minted_pending_rules_ack',
+		'bid_publish_attempted',
+		'invoice_paid_mint_failed_reclaimable',
+	]),
+	ecash_minted_pending_rules_ack: new Set<AuctionBidFundingLifecycleState>(['bid_publish_attempted', 'funding_session_created']),
+	bid_publish_attempted: new Set<AuctionBidFundingLifecycleState>(['bid_published', 'mint_succeeded_bid_publish_failed_reclaimable']),
+	bid_published: new Set<AuctionBidFundingLifecycleState>(['funding_session_created']),
+	invoice_unpaid_or_expired_reclaimable: new Set<AuctionBidFundingLifecycleState>(['funding_session_created']),
+	invoice_paid_mint_failed_reclaimable: new Set<AuctionBidFundingLifecycleState>(['funding_session_created']),
+	mint_succeeded_bid_publish_failed_reclaimable: new Set<AuctionBidFundingLifecycleState>([
+		'bid_publish_attempted',
+		'funding_session_created',
+	]),
+	funding_canceled: new Set<AuctionBidFundingLifecycleState>([
+		'funding_session_created',
+		// #1235 Blocking 2: defense in depth for close-ordering races — if the
+		// deposit store's paid-or-unknown classification arrives after
+		// handleDepositModalClose already canceled the session, the lifecycle
+		// must still be able to land in a reclaimable state instead of
+		// stranding a paid user's sats behind "canceled".
+		'invoice_unpaid_or_expired_reclaimable',
+		'invoice_paid_mint_failed_reclaimable',
+	]),
 }
 
 export const canTransitionAuctionBidFundingState = (from: AuctionBidFundingLifecycleState, to: AuctionBidFundingLifecycleState): boolean =>
 	from === to || AUCTION_BID_FUNDING_ALLOWED_TRANSITIONS[from].has(to)
 
-const resolveAuctionBidFundingTransition = (
+export const resolveAuctionBidFundingTransition = (
 	currentState: AuctionBidFundingLifecycleState,
 	nextState: AuctionBidFundingLifecycleState,
 ): AuctionBidFundingLifecycleState => (canTransitionAuctionBidFundingState(currentState, nextState) ? nextState : currentState)
@@ -216,6 +255,60 @@ export const shouldCancelFundingOnModalClose = (state: AuctionBidFundingLifecycl
 
 export const shouldPreservePendingBidSubmissionOnModalClose = (state: AuctionBidFundingLifecycleState): boolean =>
 	CLOSE_PRESERVE_PENDING_SUBMISSION_STATES.has(state)
+
+/**
+ * Whether the nip60 deposit store still has a Lightning payment in flight —
+ * `pending` (invoice shown, payment unobservable by the app) or
+ * `awaiting_confirmation_retry` (paid-or-unknown, mint confirmation timed
+ * out once and is retryable).
+ */
+export const isDepositPendingOrAwaitingConfirmation = (depositStatus: string | null | undefined): boolean =>
+	depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
+
+/**
+ * #1235 Blocking 2 — close/cancel must never erase paid-or-uncertain state.
+ *
+ * A QR payer's payment is unobservable by the app: closing the deposit modal
+ * while the deposit is `pending` or `awaiting_confirmation_retry` means a
+ * payment may have been made. The close must land the lifecycle in a
+ * reclaimable state and preserve the session — NEVER `funding_canceled` with
+ * a cleared `pendingBidSubmission` (which would claim "nothing was paid"
+ * while the user's sats may already be at the mint).
+ *
+ * This resolves the lifecycle state for a deposit-modal close given the
+ * deposit store's status at close time:
+ *
+ * - deposit still pending/awaiting-confirmation-retry → the reclaimable
+ *   failure state (`invoice_paid_mint_failed_reclaimable`), preserving the
+ *   pending submission;
+ * - otherwise → the pre-existing close semantics: `funding_canceled` for
+ *   cancelable states (idle / funding_session_created / invoice_created
+ *   with no deposit in flight), current state otherwise.
+ */
+export const resolveDepositModalCloseLifecycleState = (
+	currentState: AuctionBidFundingLifecycleState,
+	depositStatus: string | null | undefined,
+): AuctionBidFundingLifecycleState => {
+	if (isDepositPendingOrAwaitingConfirmation(depositStatus)) {
+		return resolveAuctionBidFundingTransition(currentState, 'invoice_paid_mint_failed_reclaimable')
+	}
+	if (shouldCancelFundingOnModalClose(currentState)) {
+		return resolveAuctionBidFundingTransition(currentState, 'funding_canceled')
+	}
+	return currentState
+}
+
+/**
+ * Whether a deposit-modal close must preserve `pendingBidSubmission`.
+ *
+ * A payment may have been made whenever the deposit is still
+ * pending/awaiting-confirmation-retry — the session is preserved so the
+ * funding can be retried or reclaimed without re-entering the bid.
+ */
+export const shouldPreservePendingBidSubmissionOnDepositModalClose = (
+	state: AuctionBidFundingLifecycleState,
+	depositStatus: string | null | undefined,
+): boolean => isDepositPendingOrAwaitingConfirmation(depositStatus) || shouldPreservePendingBidSubmissionOnModalClose(state)
 
 export function useAuctionBidFunding({
 	previousBidAmount,
@@ -434,11 +527,15 @@ export function useAuctionBidFunding({
 	}, [])
 
 	const handleDepositModalClose = useCallback(() => {
-		if (shouldCancelFundingOnModalClose(bidFundingLifecycleState)) {
-			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'funding_canceled'))
-		}
+		// #1235 Blocking 2 — read the deposit store's status at close time:
+		// closing while a payment may have been made (pending /
+		// awaiting_confirmation_retry) must land the lifecycle in a
+		// reclaimable state with the session preserved, never funding_canceled
+		// with a cleared pendingBidSubmission.
+		const depositStatus = nip60Store.state.depositStatus
+		setBidFundingLifecycleState((currentState) => resolveDepositModalCloseLifecycleState(currentState, depositStatus))
 		setIsDepositOpen(false)
-		if (!shouldPreservePendingBidSubmissionOnModalClose(bidFundingLifecycleState)) {
+		if (!shouldPreservePendingBidSubmissionOnDepositModalClose(bidFundingLifecycleState, depositStatus)) {
 			setPendingBidSubmission(null)
 		}
 	}, [bidFundingLifecycleState])
