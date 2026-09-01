@@ -637,7 +637,11 @@ const sha256Hex = async (value: string): Promise<string> => {
 
 const isLocalDevHost = (): boolean => {
 	if (typeof window === 'undefined') return false
-	const host = window.location.hostname
+	// Total predicate: never throw when `location` is absent (some test
+	// environments define a `window` global without one) — a dev-mode check
+	// must not be able to take down the caller's flow.
+	const host = window.location?.hostname
+	if (!host) return false
 	return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
 }
 
@@ -1209,7 +1213,12 @@ export const nip60Actions = {
 					simulateDepositSuccess: () => {
 						const deposit = nip60Store.state.activeDeposit
 						if (deposit) {
-							deposit.emit('success', null)
+							// Dev-only fake: the real 'success' event carries the minted
+							// NDKCashuToken, but this simulation never minted one. Store
+							// listeners ignore the payload, so the null payload is cast to
+							// the emitter's expected event type instead of relying on
+							// emit()'s unsound acceptance of null (review #1235, blocker 3).
+							deposit.emit('success', null as never)
 						}
 					},
 					/**
@@ -1688,8 +1697,12 @@ export const nip60Actions = {
 				depositInvoice: invoice ?? null,
 			}))
 
-			// Listen for deposit completion
+			// Listen for deposit completion. Both listeners are identity-guarded
+			// (`activeDeposit === deposit`, the same guard monitorDepositConfirmation
+			// applies below): a stale listener from an earlier deposit session must
+			// never overwrite a newer session's status (review #1235, blocker 3).
 			deposit.on('success', (token) => {
+				if (nip60Store.state.activeDeposit !== deposit) return
 				nip60Store.setState((s) => ({
 					...s,
 					depositStatus: 'success',
@@ -1701,6 +1714,7 @@ export const nip60Actions = {
 			})
 
 			deposit.on('error', (err: Error | string) => {
+				if (nip60Store.state.activeDeposit !== deposit) return
 				console.error('[nip60] Deposit error:', err)
 				nip60Store.setState((s) => ({
 					...s,
@@ -1795,16 +1809,39 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Cancel an active deposit
+	 * Cancel an active deposit.
+	 *
+	 * Default (no options / `preserveRecovery` unset): full clear of the
+	 * deposit session — quote identity, invoice, and UI status are all reset
+	 * (unchanged historical behavior).
+	 *
+	 * `{ preserveRecovery: true }`: the deposit UI is being closed while the
+	 * payment outcome is paid-or-uncertain (`depositStatus` 'pending' or
+	 * 'awaiting_confirmation_retry'). Release the UI but KEEP the deposit /
+	 * quote identity (`activeDeposit` + `depositInvoice`) so
+	 * `retryDepositConfirmation()` and `checkDepositNow()` can still
+	 * reconcile the SAME Lightning payment without a fresh funding session
+	 * (review #1235, blocker 3); only the transient error display is reset.
+	 * Terminal (`success`/`error`) and `idle` states have no recoverable
+	 * quote to preserve, so they fall through to the full clear.
 	 */
-	cancelDeposit: (): void => {
-		nip60Store.setState((s) => ({
-			...s,
-			activeDeposit: null,
-			depositInvoice: null,
-			depositStatus: 'idle',
-			error: null,
-		}))
+	cancelDeposit: (options?: { preserveRecovery?: boolean }): void => {
+		const preserveRecovery = options?.preserveRecovery ?? false
+		nip60Store.setState((s) => {
+			const recoverable = s.depositStatus === 'pending' || s.depositStatus === 'awaiting_confirmation_retry'
+			if (preserveRecovery && s.activeDeposit && recoverable) {
+				// Keep activeDeposit / depositInvoice / depositStatus — the
+				// reconciliation handle for the SAME Lightning payment.
+				return { ...s, error: null }
+			}
+			return {
+				...s,
+				activeDeposit: null,
+				depositInvoice: null,
+				depositStatus: 'idle',
+				error: null,
+			}
+		})
 	},
 
 	/**
