@@ -204,7 +204,7 @@ describe('QueryClient retains cached profile data after a rejected same-key refe
 		// Prove that keepPreviousData + the throw-on-transient contract work
 		// together: after a successful fetch, a rejected refetch of the same
 		// query key does NOT evict the cached data. RQ v5's fetchFailed reducer
-		// does `...state` (preversing data) before setting status: "error".
+		// does `...state` (preserving data) before setting status: "error".
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
 		})

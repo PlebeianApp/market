@@ -33,7 +33,12 @@ function makeMockNdk(relayUrls: string[] = []) {
 		}),
 	)
 	return {
-		subscribe: mock(() => ({ stop: mock(() => {}) })),
+		// Params are declared (optional, unused) purely so mock.calls keeps a
+		// typed tuple: assertions destructure recorded (filter, opts[, relaySet])
+		// arguments, which a zero-param mock types as '[]' (TS2493) and forces
+		// casts from undefined (TS2352). Runtime behavior is unchanged — bun
+		// mocks accept any argument count.
+		subscribe: mock((_filter?: unknown, _opts?: unknown, _relaySet?: unknown) => ({ stop: mock(() => {}) })),
 		pool: {
 			relays,
 			useTemporaryRelay: mock((relay: { url: string }) => {
@@ -56,8 +61,9 @@ const mockNdkStore = {
 	},
 }
 const mockNdkActions = {
-	fetchEventsWithTimeout: mock(async () => new Set([stubNdkEvent])),
-	publishEvent: mock(async () => new Set(['wss://relay.example'])),
+	// Optional unused params keep mock.calls destructurable (see makeMockNdk).
+	fetchEventsWithTimeout: mock(async (_filter?: unknown, _opts?: unknown) => new Set([stubNdkEvent])),
+	publishEvent: mock(async (_event?: unknown, _relaySet?: unknown) => new Set(['wss://relay.example'])),
 	getSigner: () => undefined,
 	getUser: mock(async () => null as { pubkey: string } | null),
 }
@@ -250,7 +256,7 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		const onEose = mock(() => {})
 		ndk.subscribe.mockImplementation((_filter, opts) => {
 			;(opts as { onEose?: () => void }).onEose?.()
-			return { stop: () => {} }
+			return { stop: mock(() => {}) }
 		})
 
 		const stop = ndkIo.subscribe({ kinds: [1] }, () => {}, { onEose })
