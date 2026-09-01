@@ -1,4 +1,5 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
+import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
@@ -138,5 +139,15 @@ function EditProductComponent() {
 	}
 
 	// Ready to show the form - pass productDTag for draft checking and productId for reloading
-	return <ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} workflow={workflow} />
+	return (
+		<div className="space-y-4">
+			{/* ADR-0009: authorized labelers can mark / unmark this item as a test listing */}
+			{productDTag && (
+				<div className="flex justify-end">
+					<TestLabelButton kind={30402} pubkey={product.pubkey} dTag={productDTag} itemLabel="Product" />
+				</div>
+			)}
+			<ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} workflow={workflow} />
+		</div>
+	)
 }

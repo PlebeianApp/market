@@ -311,6 +311,17 @@ export const invalidateTestLabelCache = (coordinate?: string) => {
 }
 
 /**
+ * Write a label result into the module cache as if freshly fetched.
+ * Used by the publish flows to keep the optimistic store state consistent
+ * with the cache during the relay round-trip (prevents a concurrent refetch
+ * from reverting the optimistic update before propagation completes).
+ */
+export const setCachedTestLabel = (coordinate: string, label: TestLabelInfo | null) => {
+	if (!coordinate) return
+	testLabelCache.set(coordinate, { fetchedAt: Date.now(), label })
+}
+
+/**
  * Fetch labels for all item coordinates in an event list, then filter out
  * test-labeled items. This is the complete per-fetch label check used across
  * the product/auction fetch pipeline (Approach A in the handover: pre-fetch
