@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { isProductInStock } from '@/queries/products'
+import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
+import { fetchTestLabels } from '@/queries/testLabels'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 
@@ -31,9 +33,14 @@ interface UseStreamingProductsReturn {
 	count: number
 }
 
+/** Buffer window for batching test-label checks during streaming (ms) */
+const TEST_LABEL_STREAM_FLUSH_MS = 250
+
 /**
  * Hook that streams products progressively as they arrive from relays.
- * Products appear immediately as each event is received, rather than waiting for all.
+ * Products appear in small batches as events are received, rather than waiting
+ * for all — each batch gets a batched test-label check before rendering
+ * (ADR-0009), so labeled items never flash into the feed.
  */
 export function useStreamingProducts({
 	limit = 500,
@@ -51,44 +58,99 @@ export function useStreamingProducts({
 	const seenIds = useRef(new Set<string>())
 	const subscriptionRef = useRef<NDKSubscription | null>(null)
 
-	// Stable callback to add a product
-	const addProduct = useCallback(
-		(event: NDKEvent) => {
-			const key = event.deduplicationKey()
-			if (seenIds.current.has(key)) return
-			seenIds.current.add(key)
+	// Buffer incoming events so test-label checks can be batched per flush
+	// window instead of issuing one relay query per event (ADR-0009).
+	const pendingBufferRef = useRef<NDKEvent[]>([])
+	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const flushLockRef = useRef(false)
+
+	// Stable per-event business filters (blacklist, visibility, stock, country)
+	const passesBusinessFilters = useCallback(
+		(event: NDKEvent): boolean => {
+			// Filter out blacklisted products and authors
+			if (filterBlacklistedEvents([event]).length === 0) return false
 
 			// Check visibility
 			const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
 			const visibility = visibilityTag?.[1] || 'on-sale'
 
 			// Filter hidden products (unless includeHidden is true)
-			if (!includeHidden && visibility === 'hidden') return
+			if (!includeHidden && visibility === 'hidden') return false
 
 			// Filter pre-order products (if hidePreorder is true)
-			if (hidePreorder && visibility === 'pre-order') return
+			if (hidePreorder && visibility === 'pre-order') return false
 
 			// Filter out-of-stock products (unless showOutOfStock is true)
-			if (!showOutOfStock && !isProductInStock(event)) return
+			if (!showOutOfStock && !isProductInStock(event)) return false
 
 			// Filter by country (match against location tag)
 			if (country) {
 				const location = event.tags.find((t) => t[0] === 'location')?.[1] || ''
-				if (!location.toLowerCase().includes(country.toLowerCase())) return
+				if (!location.toLowerCase().includes(country.toLowerCase())) return false
 			}
 
-			// Add product and sort by created_at (newest first)
-			setProducts((prev) => {
-				const filtered = filterBlacklistedEvents([event])
-				if (filtered.length === 0) return prev
-
-				const newProduct = filtered[0]
-				const updated = [...prev, newProduct]
-				updated.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-				return updated.slice(0, limit)
-			})
+			return true
 		},
-		[includeHidden, showOutOfStock, hidePreorder, country, limit],
+		[includeHidden, showOutOfStock, hidePreorder, country],
+	)
+
+	/**
+	 * Drain the pending buffer: batch-fetch test labels for the buffered
+	 * coordinates, then release the non-labeled events into the product list.
+	 * Batching keeps feeds N+1-free; buffering until the flush avoids the
+	 * appear-then-disappear flicker of per-event label checks.
+	 */
+	const flushPendingEvents = useCallback(async () => {
+		if (flushLockRef.current) return
+		flushLockRef.current = true
+		try {
+			while (pendingBufferRef.current.length > 0) {
+				const buffered = pendingBufferRef.current
+				pendingBufferRef.current = []
+
+				const eligible = buffered.filter(passesBusinessFilters)
+				if (eligible.length === 0) continue
+
+				// Batch label check for this flush window, then sync store filter
+				const coordinates = collectTestLabelCoordinates(eligible)
+				if (coordinates.length > 0) {
+					try {
+						await fetchTestLabels(coordinates)
+					} catch (error) {
+						console.warn('Test label fetch failed during streaming:', error)
+					}
+				}
+				const nonLabeled = filterTestLabeledEvents(eligible)
+				if (nonLabeled.length === 0) continue
+
+				setProducts((prev) => {
+					const updated = [...prev, ...nonLabeled]
+					updated.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+					return updated.slice(0, limit)
+				})
+			}
+		} finally {
+			flushLockRef.current = false
+		}
+	}, [limit, passesBusinessFilters])
+
+	// Stable callback to buffer a product for the next flush window
+	const addProduct = useCallback(
+		(event: NDKEvent) => {
+			const key = event.deduplicationKey()
+			if (seenIds.current.has(key)) return
+			seenIds.current.add(key)
+
+			// Buffer the event; the flush window batches the label check
+			pendingBufferRef.current.push(event)
+			if (!flushTimerRef.current) {
+				flushTimerRef.current = setTimeout(() => {
+					flushTimerRef.current = null
+					void flushPendingEvents()
+				}, TEST_LABEL_STREAM_FLUSH_MS)
+			}
+		},
+		[flushPendingEvents],
 	)
 
 	useEffect(() => {
@@ -101,6 +163,11 @@ export function useStreamingProducts({
 		// Reset state when filter changes
 		setProducts([])
 		seenIds.current.clear()
+		pendingBufferRef.current = []
+		if (flushTimerRef.current) {
+			clearTimeout(flushTimerRef.current)
+			flushTimerRef.current = null
+		}
 		setIsStreaming(true)
 
 		const filter: NDKFilter = {
@@ -120,24 +187,30 @@ export function useStreamingProducts({
 		})
 
 		subscription.on('eose', () => {
-			setIsStreaming(false)
+			// Flush whatever is still buffered before declaring the stream done
+			void flushPendingEvents().finally(() => setIsStreaming(false))
 		})
 
 		subscription.on('close', () => {
-			setIsStreaming(false)
+			void flushPendingEvents().finally(() => setIsStreaming(false))
 		})
 
 		// Timeout fallback - stop streaming after 10s even if no EOSE
 		const timeout = setTimeout(() => {
-			setIsStreaming(false)
+			void flushPendingEvents().finally(() => setIsStreaming(false))
 		}, 10000)
 
 		return () => {
 			clearTimeout(timeout)
+			if (flushTimerRef.current) {
+				clearTimeout(flushTimerRef.current)
+				flushTimerRef.current = null
+			}
+			pendingBufferRef.current = []
 			subscription.stop()
 			subscriptionRef.current = null
 		}
-	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country])
+	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country, flushPendingEvents])
 
 	return {
 		products,
