@@ -310,6 +310,26 @@ export const shouldPreservePendingBidSubmissionOnDepositModalClose = (
 	depositStatus: string | null | undefined,
 ): boolean => isDepositPendingOrAwaitingConfirmation(depositStatus) || shouldPreservePendingBidSubmissionOnModalClose(state)
 
+/**
+ * #1235 Blocking 5 — cross-leg verdict leak.
+ *
+ * `publishedBidEventId` is session-scoped: it tracks the kind-1023 event id
+ * produced by the CURRENT funding attempt only. The progress dialog binds
+ * validator verdicts to it, so on a rebid the PREVIOUS leg's id must never
+ * leak — `computeVerdictQuorum` bound to the stale id would render
+ * "Bid successfully placed!" for the new, not-yet-published bid.
+ *
+ * `startFundingForBid` calls this at the top of every new funding session;
+ * the id only becomes non-null again when THIS session's publish attempt
+ * produces one (publish success, or a funded-but-unbroadcast failure whose
+ * event id was captured for the idempotent retry).
+ *
+ * Takes the previous session's id purely to make the reset rule explicit
+ * and unit-testable: whatever the previous leg published, a new session
+ * starts with no published event id.
+ */
+export const nextPublishedBidEventIdOnSessionStart = (_previousSessionBidEventId: string | null): string | null => null
+
 export function useAuctionBidFunding({
 	previousBidAmount,
 	publishBid,
@@ -360,6 +380,10 @@ export function useAuctionBidFunding({
 
 	const startFundingForBid = useCallback(
 		({ bidData, hasInsufficientBidFunds, depositMint, deltaAmount, mintError, selectedMint, canFund }: StartFundingForBidInput) => {
+			// #1235 Blocking 5 — cross-leg verdict leak: a NEW funding session must
+			// never inherit the PREVIOUS leg's published event id (see
+			// nextPublishedBidEventIdOnSessionStart).
+			setPublishedBidEventId((previousSessionBidEventId) => nextPublishedBidEventIdOnSessionStart(previousSessionBidEventId))
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
 					toast.error(mintError || 'No suitable mint available for bidding.')

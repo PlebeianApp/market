@@ -29,7 +29,7 @@ import { Loader2, Check, AlertCircle } from 'lucide-react'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
-import { computeVerdictQuorum } from '@/lib/auction/verdictQuorum'
+import { computeVerdictQuorum, type VerdictQuorumResult } from '@/lib/auction/verdictQuorum'
 import type { AuctionBidFundingLifecycleState } from '@/hooks/useAuctionBidFunding'
 import { AvatarUser } from '@/components/AvatarUser'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,44 @@ interface AuctionBidProgressDialogProps {
 }
 
 type StageStatus = 'done' | 'active' | 'pending' | 'error'
+
+/**
+ * Quorum result shown while the current funding session has not yet produced a
+ * published bid event id (#1235 Blocking 5): no verdicts bound, nothing
+ * confirmed, nothing condemned.
+ */
+const NO_SESSION_VERDICT_QUORUM: VerdictQuorumResult = {
+	representativeVerdict: null,
+	confirmCount: 0,
+	condemnCount: 0,
+	hasPositiveVerdict: false,
+	hasNegativeVerdict: false,
+	hasNeutralVerdict: false,
+}
+
+/**
+ * #1235 Blocking 5 — cross-leg verdict leak: verdict binding is scoped to the
+ * CURRENT session's published bid event.
+ *
+ * The dialog must never display a validator verdict bound to an event id
+ * other than the bid published in the current session. `bidEventId` is
+ * undefined until the current session's publish attempt produced an id (e.g.
+ * a rebid's new leg at `ecash_minted` / `bid_publish_attempted`); until then
+ * NO verdict may be attributed to the bid at all — `computeVerdictQuorum`
+ * without an id falls back to a legacy no-filter mode that would happily
+ * count the PREVIOUS leg's confirm verdicts and render "Bid successfully
+ * placed!" for a bid that has not been published yet.
+ *
+ * Exported for unit tests (the dialog itself is portal-rendered, so its output
+ * is not directly assertable in the SSR-based unit suite).
+ */
+export const resolveProgressDialogVerdictQuorum = (
+	verdicts: ParsedValidatorVerdictEvent[],
+	bidEventId: string | undefined,
+	validatorPubkeys: string[],
+	auditorQuorum: number | undefined,
+): VerdictQuorumResult =>
+	bidEventId ? computeVerdictQuorum(verdicts, bidEventId, validatorPubkeys, auditorQuorum) : NO_SESSION_VERDICT_QUORUM
 
 // Lifecycle state groups
 const FUNDING_STATES: ReadonlySet<string> = new Set([
@@ -136,11 +174,9 @@ export function AuctionBidProgressDialog({
 		[verdictsQuery.data],
 	)
 
-	const { representativeVerdict, hasPositiveVerdict, hasNegativeVerdict, hasNeutralVerdict } = computeVerdictQuorum(
-		parsedVerdicts,
-		bidEventId,
-		validatorPubkeys,
-		auditorQuorum,
+	const { representativeVerdict, hasPositiveVerdict, hasNegativeVerdict, hasNeutralVerdict } = useMemo(
+		() => resolveProgressDialogVerdictQuorum(parsedVerdicts, bidEventId, validatorPubkeys, auditorQuorum),
+		[parsedVerdicts, bidEventId, validatorPubkeys, auditorQuorum],
 	)
 
 	const isFundingActive = FUNDING_STATES.has(lifecycleState)
@@ -314,7 +350,9 @@ export function AuctionBidProgressDialog({
 					<div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
 						<span>Validators:</span>
 						{validatorPubkeys.map((pk) => (
-							<AvatarUser key={pk} pubkey={pk} colored deterministicFallbackText className="h-5 w-5" />
+							// `colored`/`deterministicFallbackText` are not AvatarUser props —
+							// PR-introduced tsc error class, fixed for this file's instance only.
+							<AvatarUser key={pk} pubkey={pk} className="h-5 w-5" />
 						))}
 					</div>
 				)}
