@@ -20,7 +20,7 @@ import type { VerifiedEvent } from 'nostr-tools'
  * The server (src/index.tsx) intercepts /products/:productId, fetches the
  * kind 30402 event from the relay, and injects og:/twitter:/product: meta
  * tags into the initial HTML via src/lib/ogTags.ts + src/server/ogMeta.ts.
- * NSFW products (content_warning: nsfw) return null meta → shell served
+ * NSFW products (content-warning: nsfw) return null meta → shell served
  * untouched. Unknown/invalid IDs return null → shell served untouched.
  */
 
@@ -33,7 +33,7 @@ let regularProductEvent: VerifiedEvent
 let nsfwProductId: string
 
 /**
- * Publish a kind 30402 product event with a content_warning: nsfw tag.
+ * Publish a kind 30402 product event with a content-warning: nsfw tag.
  * The scenarios helper (seedProduct) does not support arbitrary tags,
  * so we sign and publish directly.
  */
@@ -86,7 +86,7 @@ test.beforeAll(async () => {
 		})
 		regularProductId = regularProductEvent.id
 
-		// Seed an NSFW product (content_warning: nsfw tag).
+		// Seed an NSFW product (content-warning: nsfw tag).
 		const nsfwEvent = await seedNsfwProduct(relay, devUser1.sk, {
 			title: 'NSFW OG Test Product',
 			description: 'This should not leak into OG meta tags.',

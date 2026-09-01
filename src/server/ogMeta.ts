@@ -83,14 +83,42 @@ async function fetchVerifiedProductEvent(relayUrl: string, productId: string): P
 	try {
 		const deadline = Date.now() + OG_FETCH_TIMEOUT_MS
 
+		// The connect deadline is the terminal failure path for a slow
+		// relay: race the connect against it and observe the losing
+		// connect even after the race is over, so a connect that
+		// resolves late can never leak an open socket.
 		const connectTimeout = rejectAfter(OG_FETCH_TIMEOUT_MS, 'og: relay connect timeout')
+		const connectPromise = Relay.connect(relayUrl)
+		try {
+			relay = await Promise.race([connectPromise, connectTimeout.promise])
+		} catch (error) {
+			// The deadline won while `relay` was still null, so the
+			// cleanup below is a no-op — yet the connect can still
+			// resolve later with an open WebSocket nobody would close.
+			// Close it on late success; a late failure has no socket.
+			connectPromise
+				.then((lateRelay) => {
+					try {
+						lateRelay.close()
+					} catch {
+						// Connection may already be closed.
+					}
+				})
+				.catch(() => {
+					// Connect ultimately failed; nothing to close.
+				})
+			throw error
+		} finally {
+			// Clear the deadline timer as soon as the race settles, so
+			// the winning path does not carry a pending timer into the
+			// request phase.
+			connectTimeout.cancel()
+		}
+
 		const requestTimeout = rejectAfter(Math.max(deadline - Date.now(), 1), 'og: relay request timeout')
 		try {
-			relay = await Promise.race([Relay.connect(relayUrl), connectTimeout.promise])
-
 			return await Promise.race([requestProductEvent(relay, productId), requestTimeout.promise])
 		} finally {
-			connectTimeout.cancel()
 			requestTimeout.cancel()
 		}
 	} catch (error) {
