@@ -46,6 +46,8 @@ export interface SubscribeOptions {
 	 * lifetime should add their own timeout.
 	 */
 	closeOnEose?: boolean
+	/** Invoked once relays signal EOSE (end of stored events). Not a stop signal. */
+	onEose?: () => void
 	/** Restrict the subscription to these relay URLs. Default: adapter's configured relays. */
 	relayUrls?: string[]
 }

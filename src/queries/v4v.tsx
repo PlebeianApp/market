@@ -1,6 +1,7 @@
 import type { V4VDTO } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, NDKEvent } from '@/lib/nostr/ndk-events'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
 import { v4 as uuidv4 } from 'uuid'
@@ -165,7 +166,9 @@ export const fetchV4VConfiguration = async (pubkey: string): Promise<V4VConfigur
 			return { shares: [], state: 'unknown' }
 		}
 
-		const events = await ndk.fetchEvents({
+		// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+		// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+		const events = await fetchNdkEventSet(applesauceIo, ndk, {
 			kinds: [30078],
 			authors: [pubkey],
 			'#l': ['v4v_share'],
@@ -306,7 +309,9 @@ export const fetchV4VMerchants = async (): Promise<string[]> => {
 		throw new Error('NDK not ready, cannot fetch merchants')
 	}
 
-	const events = await ndk.fetchEvents({
+	// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+	// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+	const events = await fetchNdkEventSet(applesauceIo, ndk, {
 		kinds: [30078],
 		'#l': ['v4v_share'],
 		limit: 100, // Limit to 100 most recent merchants

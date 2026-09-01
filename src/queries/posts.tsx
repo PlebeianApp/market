@@ -1,8 +1,8 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { postKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 
 export type NostrPost = {
 	id: string
@@ -27,7 +27,7 @@ export const fetchPosts = async () => {
 		limit: 20,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	const posts = Array.from(events).map(transformEvent)
 
 	// Sort by newest first
@@ -38,9 +38,10 @@ export const fetchPost = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const event = await ndk.fetchEvent({
+	const events = await fetchNdkEventSet(applesauceIo, ndk, {
 		ids: [id],
 	})
+	const event = events.size > 0 ? Array.from(events)[0] : null
 	if (!event) {
 		throw new Error('Post not found')
 	}

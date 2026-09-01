@@ -33,7 +33,12 @@ function makeMockNdk(relayUrls: string[] = []) {
 		}),
 	)
 	return {
-		subscribe: mock(() => ({ stop: mock(() => {}) })),
+		// Params are declared (optional, unused) purely so mock.calls keeps a
+		// typed tuple: assertions destructure recorded (filter, opts[, relaySet])
+		// arguments, which a zero-param mock types as '[]' (TS2493) and forces
+		// casts from undefined (TS2352). Runtime behavior is unchanged — bun
+		// mocks accept any argument count.
+		subscribe: mock((_filter?: unknown, _opts?: unknown, _relaySet?: unknown) => ({ stop: mock(() => {}) })),
 		pool: {
 			relays,
 			useTemporaryRelay: mock((relay: { url: string }) => {
@@ -56,8 +61,9 @@ const mockNdkStore = {
 	},
 }
 const mockNdkActions = {
-	fetchEventsWithTimeout: mock(async () => new Set([stubNdkEvent])),
-	publishEvent: mock(async () => new Set(['wss://relay.example'])),
+	// Optional unused params keep mock.calls destructurable (see makeMockNdk).
+	fetchEventsWithTimeout: mock(async (_filter?: unknown, _opts?: unknown) => new Set([stubNdkEvent])),
+	publishEvent: mock(async (_event?: unknown, _relaySet?: unknown) => new Set(['wss://relay.example'])),
 	getSigner: () => undefined,
 	getUser: mock(async () => null as { pubkey: string } | null),
 }
@@ -241,6 +247,23 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		expect(filter).toEqual({ kinds: [1] })
 		expect((opts as { closeOnEose: boolean }).closeOnEose).toBe(false)
 		expect(relaySetUrls(relaySet)).toEqual(['wss://sub.example/'])
+		stop()
+	})
+
+	test('subscribe forwards onEose into NDK subscription options', () => {
+		const ndk = makeMockNdk()
+		mockNdkStore.state.ndk = ndk
+		const onEose = mock(() => {})
+		ndk.subscribe.mockImplementation((_filter, opts) => {
+			;(opts as { onEose?: () => void }).onEose?.()
+			return { stop: mock(() => {}) }
+		})
+
+		const stop = ndkIo.subscribe({ kinds: [1] }, () => {}, { onEose })
+
+		const [[, opts]] = ndk.subscribe.mock.calls
+		expect((opts as { onEose?: () => void }).onEose).toBe(onEose)
+		expect(onEose).toHaveBeenCalledTimes(1)
 		stop()
 	})
 
@@ -429,6 +452,64 @@ describe('applesauce adapter (io-applesauce)', () => {
 		} finally {
 			console.warn = warn
 		}
+	})
+
+	test('subscribe invokes onEose when relays signal EOSE', () => {
+		const onEose = mock(() => {})
+		const onEvent = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe: () => {} }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, {
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		expect(onEvent).toHaveBeenCalledTimes(1)
+		stop()
+	})
+
+	test('subscribe stays open after onEose fires (EOSE is not a stop signal)', () => {
+		const onEose = mock(() => {})
+		const unsubscribe = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, () => {}, {
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		// closeOnEose unset -> the subscription must remain active after EOSE.
+		expect(unsubscribe).not.toHaveBeenCalled()
+		stop()
+	})
+
+	test('subscribe forwards EOSE to onEose before a closeOnEose unsubscribe', () => {
+		const onEose = mock(() => {})
+		const unsubscribe = mock(() => {})
+		poolSubscriptionController = (cb) => {
+			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			return { unsubscribe }
+		}
+
+		const stop = applesauceIo.subscribe({ kinds: [1] }, () => {}, {
+			closeOnEose: true,
+			onEose,
+			relayUrls: ['wss://relay.example'],
+		})
+
+		expect(onEose).toHaveBeenCalledTimes(1)
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
+		stop()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
 
 	test('publish throws when no relays are configured', async () => {

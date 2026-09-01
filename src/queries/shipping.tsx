@@ -3,8 +3,8 @@ import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEvent, fetchNdkEventSet, ndkFilterFromId, NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { orderKeys, shippingKeys } from './queryKeyFactory'
@@ -96,7 +96,7 @@ export const fetchShippingOptions = async () => {
 		limit: 50,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	return filterDeletedShippingOptions(Array.from(events))
 }
 
@@ -109,7 +109,7 @@ export const fetchShippingOption = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const event = await ndk.fetchEvent(id)
+	const event = await fetchNdkEvent(applesauceIo, ndk, ndkFilterFromId(id))
 	if (!event) {
 		throw new Error('Shipping option not found')
 	}
@@ -128,7 +128,7 @@ export const fetchShippingOptionByCoordinates = async (pubkey: string, dTag: str
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const naddr = naddrFromAddress(SHIPPING_KIND, pubkey, dTag)
-	const event = await ndk.fetchEvent(naddr)
+	const event = await fetchNdkEvent(applesauceIo, ndk, ndkFilterFromId(naddr))
 
 	if (!event) {
 		throw new Error('Shipping option not found')
@@ -155,7 +155,7 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 		authors: [pubkey],
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	return filterDeletedShippingOptions(Array.from(events))
 }
 
@@ -453,7 +453,7 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
 	if (!signer) throw new Error('No active user')
 
 	// Fetch the original order to get the counterparty pubkey
-	const originalOrder = await ndk.fetchEvent({
+	const originalOrder = await fetchNdkEvent(applesauceIo, ndk, {
 		ids: [params.orderEventId],
 	})
 

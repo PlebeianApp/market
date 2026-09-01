@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchLatestNdkEvent, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -35,19 +36,20 @@ export const fetchNip05Settings = async (appPubkey?: string): Promise<Nip05Setti
 		limit: 1,
 	}
 
-	const events = await ndk.fetchEvents(nip05Filter)
-	const eventArray = Array.from(events)
+	// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+	// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+	// Conflicting replaceable versions resolve deterministically to the newest
+	// created_at (fetchLatestNdkEvent — NDK dedup-key parity, relay-arrival
+	// order must not decide which copy wins).
+	const latestEvent = await fetchLatestNdkEvent(applesauceIo, ndk, nip05Filter)
 
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		return {
 			entries: [],
 			lastUpdated: 0,
 			event: null,
 		}
 	}
-
-	// Get the latest event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	// Extract nip05 entries from 'nip05' tags
 	// Format: ["nip05", username, pubkey, validUntil]
@@ -83,17 +85,17 @@ export const useNip05Settings = (appPubkey?: string) => {
 			'#d': ['nip05-names'],
 		}
 
-		const subscription = ndk.subscribe(nip05Filter, {
-			closeOnEose: false,
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002).
+		// Unpinned, like the previous NDK pool subscription.
+		const stop = applesauceIo.subscribe(
+			nip05Filter,
+			() => {
+				queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
+			},
+			{ closeOnEose: false },
+		)
 
-		subscription.on('event', () => {
-			queryClient.invalidateQueries({ queryKey: configKeys.nip05(appPubkey) })
-		})
-
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({

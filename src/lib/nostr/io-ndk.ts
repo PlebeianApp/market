@@ -34,6 +34,7 @@ export const ndkIo: NostrIo = {
 		const subscriptionOpts = {
 			closeOnEose: opts?.closeOnEose ?? false,
 			onEvent: (event: NDKEvent) => onEvent(toRaw(event)),
+			onEose: opts?.onEose,
 		}
 		const subscription = relaySet
 			? ndk.subscribe(filter as NostrFilter[], subscriptionOpts, relaySet)

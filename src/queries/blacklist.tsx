@@ -1,5 +1,6 @@
-import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchLatestNdkEvent, type NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -23,10 +24,15 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 		throw new Error('App pubkey is required')
 	}
 
-	const latestEvent = await fetchLatestAppEvent({
-		kinds: [10000], // NIP-51 mute list
-		authors: [targetPubkey],
-	})
+	// Relay-pinned read through the applesauceIo seam (ADR-0002). Mirrors the
+	// previous fetchLatestAppEvent behavior: null when NDK or the app relay
+	// isn't ready yet.
+	const ndk = ndkActions.getNDK()
+	const mainRelay = getMainRelay()
+	const latestEvent =
+		ndk && mainRelay
+			? await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [10000], authors: [targetPubkey] }, { relayUrls: [mainRelay] })
+			: null
 
 	if (!latestEvent) {
 		console.log(`No blacklist settings found for app pubkey: ${targetPubkey}`)
@@ -79,31 +85,35 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		let latestEventTime = 0
 		let receivedEose = false
 
-		const subscription = ndk.subscribe(blacklistFilter, {
-			closeOnEose: false, // Keep subscription open
-			relaySet: getAppRelaySet(),
-			exclusiveRelay: true, // Reject stale copies from other relays in the pool
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002),
+		// pinned to the app relay so stale copies from other relays in the
+		// pool can't race the canonical answer. The latestEventTime /
+		// receivedEose guards below handle any stale copies that slip through.
+		const mainRelay = getMainRelay()
+		if (!mainRelay) return
 
-		// Event handler for blacklist updates - only react to newer events after EOSE
-		subscription.on('event', (newEvent) => {
-			const eventTime = newEvent.created_at ?? 0
-			if (receivedEose && eventTime > latestEventTime) {
-				queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
-			}
-			if (eventTime > latestEventTime) {
-				latestEventTime = eventTime
-			}
-		})
-
-		subscription.on('eose', () => {
-			receivedEose = true
-		})
+		const stop = applesauceIo.subscribe(
+			blacklistFilter,
+			(rawEvent) => {
+				const eventTime = rawEvent.created_at ?? 0
+				if (receivedEose && eventTime > latestEventTime) {
+					queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
+				}
+				if (eventTime > latestEventTime) {
+					latestEventTime = eventTime
+				}
+			},
+			{
+				closeOnEose: false, // Keep subscription open
+				onEose: () => {
+					receivedEose = true
+				},
+				relayUrls: [mainRelay],
+			},
+		)
 
 		// Clean up subscription when unmounting
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({
