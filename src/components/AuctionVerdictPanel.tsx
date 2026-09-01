@@ -21,6 +21,14 @@ import { AvatarUser } from '@/components/AvatarUser'
 interface Props {
 	auctionRootEventId: string
 	auctionCoordinate: string
+	/**
+	 * The auction event's `auditors` tags (getAuctionAuditors). When
+	 * provided it is sent as the relay `authors` filter for verdict events
+	 * (review #1235, Should-fix 3 trust boundary). Optional for backwards
+	 * compatibility; the signature check inside fetchAuctionVerdicts is
+	 * live regardless.
+	 */
+	validatorPubkeys?: string[]
 }
 
 const claimToneClass = (claim: string): string => {
@@ -41,8 +49,8 @@ const formatTs = (ts: number): string => {
 	}
 }
 
-export const AuctionVerdictPanel = ({ auctionRootEventId, auctionCoordinate }: Props) => {
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinate)
+export const AuctionVerdictPanel = ({ auctionRootEventId, auctionCoordinate, validatorPubkeys }: Props) => {
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinate, validatorPubkeys)
 	const rawVerdicts = verdictsQuery.data ?? []
 
 	const verdicts = useMemo<ParsedValidatorVerdictEvent[]>(() => {

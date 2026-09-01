@@ -163,7 +163,7 @@ export function AuctionBidProgressDialog({
 	refundLocktime,
 	onRetryPublish,
 }: AuctionBidProgressDialogProps) {
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates)
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates, validatorPubkeys)
 
 	const parsedVerdicts = useMemo(
 		() =>

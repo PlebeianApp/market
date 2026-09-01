@@ -38,6 +38,7 @@ import {
 	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
+	getAuctionAuditors,
 	getAuctionReserve,
 	getAuctionRootEventId,
 	getAuctionSchema,
@@ -269,7 +270,11 @@ function DashboardAuctionDetailRoute() {
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
 	const settlements = settlementsQuery.data ?? []
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
+	// configured auditors (relay authors filter) — null-safe; an unloaded or
+	// auditor-less auction fails closed (no verdicts authorized).
+	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const verdictsData = verdictsQuery.data ?? []
 
 	// B4: Validate settlements before using them. The previous code read
@@ -941,7 +946,11 @@ function DashboardAuctionDetailRoute() {
 								</div>
 							)}
 
-							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
+							<AuctionVerdictPanel
+								auctionRootEventId={auctionRootEventId || auctionId}
+								auctionCoordinate={auctionCoordinates}
+								validatorPubkeys={auctionAuditorPubkeys}
+							/>
 
 							{/* Tech accordion — visible to all but only really useful for seller / debugging */}
 							<Accordion type="multiple" className="rounded-2xl border border-zinc-200 bg-white px-4">
