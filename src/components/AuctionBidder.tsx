@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { DetailField } from '@/components/ui/DetailField'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
-import { usePublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
+import { usePublishAuctionBidMutation, useRepublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
@@ -112,6 +112,9 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 
 export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
 	const bidMutation = usePublishAuctionBidMutation()
+	// #1235 Blocking 1: idempotent rebroadcast for a funded-but-unpublished
+	// bid — never re-locks funds on retry.
+	const republishBidMutation = useRepublishAuctionBidMutation()
 	const { status: nip60Status } = useStore(nip60Store)
 	const { isAuthenticated, user } = useStore(authStore)
 
@@ -319,6 +322,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
+		republishBid: republishBidMutation.mutateAsync,
 		onBidSuccess: () => {
 			setHasStartedEditingBidAmount(false)
 			onBidSuccess?.()

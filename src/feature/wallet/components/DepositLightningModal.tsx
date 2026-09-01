@@ -296,6 +296,20 @@ export function DepositLightningModal({
 		nip60Actions.retryDepositConfirmation()
 	}
 
+	// #1235 Blocking 2 — classify a pending deposit as paid-or-unknown.
+	// A QR payer's payment is unobservable by the app, so leaning toward
+	// "paid but mint failed (reclaimable)" instead of claiming "unpaid" is
+	// what keeps a paid user's sats recoverable. Shared by the user-driven
+	// close path (handleClose) and the open→closed effect's fallback so every
+	// close path classifies before the funding session is torn down.
+	const notifyFundingFailureForPendingDeposit = useCallback(() => {
+		const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
+		if (!isPendingDeposit || failureNotifiedRef.current) return
+		failureNotifiedRef.current = true
+		const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
+		onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
+	}, [depositStatus, onFundingFailed, nwcPaymentAttempted])
+
 	// Root-cause reset: when the modal closes — whether by user action
 	// (overlay/escape → handleClose → onClose) or programmatically (parent
 	// sets open={false}, e.g. submitPreparedBid after bid_published) — the
@@ -307,16 +321,19 @@ export function DepositLightningModal({
 		if (!prevOpenRef.current && !open) return // was closed, still closed
 		if (prevOpenRef.current && !open) {
 			// Transition: open → closed — reset everything.
+			// Fallback classification for close paths that did not go through
+			// handleClose (e.g. a future programmatic close with a deposit still
+			// pending); user-driven closes already classified in handleClose.
+			notifyFundingFailureForPendingDeposit()
+			// #1235 Blocking 3 seam (fix-nip60 contract): preserve the deposit
+			// identity for paid-or-uncertain closes so the SAME Lightning payment
+			// can still be reconciled (retryDepositConfirmation /
+			// checkDepositNow) after the modal closes — only the transient UI
+			// status resets. A settled/failed/never-started deposit is fully
+			// cleared as before.
 			const isPendingDeposit = depositStatus === 'pending' || depositStatus === 'awaiting_confirmation_retry'
-
-			if (isPendingDeposit && !failureNotifiedRef.current) {
-				// Same paid/unknown classification as the error path: a QR payer
-				// can't be observed by the app, so lean toward reclaimable instead of
-				// claiming "unpaid" and stranding their sats at the mint.
-				const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
-				onFundingFailed?.(paidOrUnknown ? 'invoice_paid_mint_failed_reclaimable' : 'invoice_unpaid_or_expired_reclaimable')
-			}
-			nip60Actions.cancelDeposit()
+			const paidOrUnknown = paymentAcknowledgedRef.current || !nwcPaymentAttempted
+			nip60Actions.cancelDeposit(isPendingDeposit && paidOrUnknown ? { preserveRecovery: true } : undefined)
 
 			setAmount('')
 			setCopied(false)
@@ -335,6 +352,14 @@ export function DepositLightningModal({
 
 	const handleClose = () => {
 		if (isPayingWithNwc) return
+		// #1235 Blocking 2 — classify BEFORE canceling. The parent's
+		// handleDepositModalClose runs synchronously on onClose and would
+		// transition the lifecycle to funding_canceled (clearing the pending
+		// submission) before this modal's open→closed effect could classify;
+		// the state machine would then reject the reclaimable transition.
+		// Classifying first lands the lifecycle in the reclaimable failure
+		// state while the session is still intact.
+		notifyFundingFailureForPendingDeposit()
 		onClose()
 	}
 

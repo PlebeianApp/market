@@ -24,6 +24,7 @@ import {
 	upsertBidderRecord,
 	walkBidderRecordChain,
 } from '@/lib/auction/bidderRecords'
+import { loadUserData, saveUserData } from '@/lib/wallet/storage'
 import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
@@ -593,30 +594,25 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		prevBidId: prevLeg?.bidEventId,
 	}) as NDKTag[]
 
-	await bidEvent.sign(signer)
-	await ndkActions.publishEvent(bidEvent)
-	const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
-		kind: 'auction_bid',
-		auctionEventId: formData.auctionEventId,
-		auctionCoordinates: formData.auctionCoordinates,
-		bidEventId: bidEvent.id,
-		sellerPubkey: formData.sellerPubkey,
-		pathIssuerPubkey: '',
-		lockPubkey: lockResult.lockPubkey,
-		refundPubkey: lockResult.refundPubkey,
-		locktime: lockResult.locktime,
-		derivationPath: lockResult.derivationPath,
-		childPubkey: lockResult.childPubkey,
-		grantId: lockResult.grantId,
-	})
-	if (!updatedPendingToken) {
-		console.warn('[auctions] Published auction bid but could not attach bid event id to the local pending lock record')
-	}
+	// Step 7a — finalize the event fields WITHOUT signing. `toNostrEvent`
+	// fills in `pubkey`/`created_at` and computes the FINAL event id (the
+	// signature never participates in the id), so the id computed here is
+	// exactly the id the signed event will keep. Finalizing before the
+	// publish attempt lets us persist the durable recovery record and the
+	// retry cache ahead of any sign/broadcast failure (#1235 Blocking 1).
+	bidEvent.pubkey = bidderPubkey
+	await bidEvent.toNostrEvent()
 
-	// Step 8 — persist the bidder-side record. Loss of this record makes
-	// settlement (and timelock refund) impossible for this bid, so we
-	// write it after the lock succeeds but before returning so the
-	// caller can't observe a "bid event but no record" state.
+	// Step 7b — durable recovery state BEFORE the publish attempt
+	// (#1235 Blocking 1, prescription 2). Until this record is written the
+	// refund private key exists only in a local variable; if signing or
+	// publishing threw first, the locked leg would not even be
+	// locktime-reclaimable (the refund branch requires the refund privkey).
+	// The record also carries the full locked proofs, so the leg is
+	// recoverable from the moment the lock exists — even when publish throws.
+	// NOTE: bidderRecords is plaintext localStorage; encrypt-at-rest is a
+	// named follow-up (review Should-fix 7) and is intentionally out of
+	// scope here.
 	upsertBidderRecord({
 		bidEventId: bidEvent.id,
 		auctionRootEventId: formData.auctionEventId,
@@ -638,8 +634,212 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		createdAt: now,
 		status: 'live',
 	})
+	const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
+		kind: 'auction_bid',
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates: formData.auctionCoordinates,
+		bidEventId: bidEvent.id,
+		sellerPubkey: formData.sellerPubkey,
+		pathIssuerPubkey: '',
+		lockPubkey: lockResult.lockPubkey,
+		refundPubkey: lockResult.refundPubkey,
+		locktime: lockResult.locktime,
+		derivationPath: lockResult.derivationPath,
+		childPubkey: lockResult.childPubkey,
+		grantId: lockResult.grantId,
+	})
+	if (!updatedPendingToken) {
+		console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
+	}
 
-	void bidderPubkey
+	// Step 7c — cache the event so a retry can rebroadcast it VERBATIM
+	// (#1235 Blocking 1, prescription 1). The cache entry is written before
+	// signing (so even a sign failure is retryable via re-signing the same
+	// event) and refreshed with the signature once signing completes.
+	cacheAuctionBidEventForRepublish(bidEvent)
+	try {
+		await bidEvent.sign(signer)
+		cacheAuctionBidEventForRepublish(bidEvent)
+		await ndkActions.publishEvent(bidEvent)
+	} catch (error) {
+		// The recovery record and the signed (or signable) event are already
+		// persisted — surface the event id so the funding lifecycle retries
+		// with a pure rebroadcast (republishAuctionBid) instead of re-running
+		// the lock pipeline (which would swap/lock funds a second time).
+		throw new AuctionBidPublishFailedError(bidEvent.id, error)
+	}
+	// Published — the rebroadcast cache entry is no longer needed.
+	discardAuctionBidEventRepublishCacheEntry(bidEvent.id)
+
+	return bidEvent.id
+}
+
+/**
+ * #1235 Blocking 1: thrown by `publishAuctionBid` when the bid's funds were
+ * locked, the durable recovery record was written, and the kind-1023 event was
+ * built — but signing or the relay broadcast failed.
+ *
+ * Carries the bid event id so the funding lifecycle (`useAuctionBidFunding`)
+ * can offer an idempotent retry (`republishAuctionBid`) that rebroadcasts the
+ * exact persisted signed event instead of re-deriving a fresh path, generating
+ * a fresh refund keypair, and re-locking funds at the mint (double-lock).
+ */
+export class AuctionBidPublishFailedError extends Error {
+	/** The kind-1023 event id that failed to broadcast (already persisted and recoverable). */
+	public readonly bidEventId: string
+	/** The underlying sign/publish failure. */
+	public override readonly cause: unknown
+
+	constructor(bidEventId: string, cause: unknown) {
+		const causeMessage = cause instanceof Error ? cause.message : String(cause)
+		super(`Auction bid ${bidEventId} was funded and signed but could not be published: ${causeMessage}`)
+		this.name = 'AuctionBidPublishFailedError'
+		this.bidEventId = bidEventId
+		this.cause = cause
+	}
+}
+
+// ============================================================================
+// Idempotent bid-publish retry cache (#1235 Blocking 1)
+// ============================================================================
+//
+// `retryBidPublish` must rebroadcast the EXACT persisted signed kind-1023:
+// re-running `publishAuctionBid` would re-derive a fresh path, generate a FRESH
+// refund keypair, and re-lock via `lockAuctionBidFunds` (a fresh swap at the
+// mint — new proofs, new event id; N retries = N locked legs). Instead,
+// `publishAuctionBid` caches the built event here (in-memory + user-scoped
+// localStorage) immediately before the first publish attempt, and
+// `republishAuctionBid` reads it back and only re-broadcasts:
+//
+//   - same event id, same tags, same content (integrity-checked by
+//     recomputing the event hash);
+//   - ZERO additional Cashu swap/lock — no mint interaction at all;
+//   - re-signs only when the cached entry predates signing (a sign failure),
+//     which does not change the event id and does not touch the mint.
+//
+// Entries are removed once the event is confirmed published, so the cache
+// only ever holds legs whose broadcast is genuinely pending/retryable.
+
+const AUCTION_BID_REPUBLISH_CACHE_KEY = 'auction_bid_republish_events_v1'
+const AUCTION_BID_REPUBLISH_CACHE_MAX_ENTRIES = 25
+
+/** Serialized kind-1023 payload persisted for idempotent retry. */
+type SerializedAuctionBidEventPayload = ReturnType<NDKEvent['rawEvent']>
+
+interface CachedAuctionBidEvent {
+	bidEventId: string
+	payload: SerializedAuctionBidEventPayload
+	savedAt: number
+}
+
+/** Cache of built-but-not-confirmed-published bid events, keyed by event id. */
+type AuctionBidRepublishCache = Record<string, CachedAuctionBidEvent>
+
+// Same-session fallback for when user-scoped localStorage is unavailable
+// (e.g. not signed in / storage disabled): an in-session retry must still
+// be able to rebroadcast without re-locking.
+const auctionBidRepublishMemoryCache: AuctionBidRepublishCache = {}
+
+const loadAuctionBidRepublishCache = (): AuctionBidRepublishCache => {
+	const persisted = loadUserData<AuctionBidRepublishCache>(AUCTION_BID_REPUBLISH_CACHE_KEY, {})
+	const cache: AuctionBidRepublishCache = {}
+	for (const [bidEventId, entry] of Object.entries(persisted ?? {})) {
+		if (entry?.bidEventId === bidEventId && entry.payload) cache[bidEventId] = entry
+	}
+	for (const [bidEventId, entry] of Object.entries(auctionBidRepublishMemoryCache)) {
+		if (!cache[bidEventId]) cache[bidEventId] = entry
+	}
+	return cache
+}
+
+const persistAuctionBidRepublishCache = (cache: AuctionBidRepublishCache): void => {
+	// Keep the cache bounded — drop the oldest entries first. Retry entries
+	// are short-lived (discarded on publish success), so 25 legs is far more
+	// than any realistic pending-retry backlog.
+	const idsBySavedAt = Object.entries(cache)
+		.sort(([, a], [, b]) => a.savedAt - b.savedAt)
+		.map(([bidEventId]) => bidEventId)
+	while (idsBySavedAt.length > AUCTION_BID_REPUBLISH_CACHE_MAX_ENTRIES) {
+		const oldestId = idsBySavedAt.shift()
+		if (oldestId === undefined) break
+		delete cache[oldestId]
+	}
+	for (const key of Object.keys(auctionBidRepublishMemoryCache)) delete auctionBidRepublishMemoryCache[key]
+	Object.assign(auctionBidRepublishMemoryCache, cache)
+	saveUserData(AUCTION_BID_REPUBLISH_CACHE_KEY, cache)
+}
+
+const cacheAuctionBidEventForRepublish = (bidEvent: NDKEvent): void => {
+	if (!bidEvent.id) return
+	const cache = loadAuctionBidRepublishCache()
+	cache[bidEvent.id] = { bidEventId: bidEvent.id, payload: bidEvent.rawEvent(), savedAt: Date.now() }
+	persistAuctionBidRepublishCache(cache)
+}
+
+const discardAuctionBidEventRepublishCacheEntry = (bidEventId: string): void => {
+	const cache = loadAuctionBidRepublishCache()
+	if (!cache[bidEventId]) return
+	delete cache[bidEventId]
+	persistAuctionBidRepublishCache(cache)
+}
+
+/**
+ * #1235 Blocking 1: rebroadcast an already-built kind-1023 auction bid event
+ * by id — WITHOUT re-deriving the lock path, generating a fresh refund
+ * keypair, or touching the mint in any way.
+ *
+ * Used by the `retryBidPublish` idempotent-retry path in `useAuctionBidFunding`:
+ * when a bid was funded (funds locked, recovery record persisted, event built
+ * and cached) but the relay broadcast failed, retrying must NOT re-run
+ * `publishAuctionBid` — that would lock the delta AGAIN at the mint
+ * (double-lock). Instead we re-publish the cached event verbatim: same id,
+ * same tags, same content, same signature. Relays that already have it
+ * deduplicate; relays that missed it ingest it. No swap, no lock, no signer
+ * interaction unless the cached entry predates signing (in which case the
+ * event is re-signed locally — the id is unaffected by the signature).
+ *
+ * @param bidEventId id of the previously-built kind-1023 bid event
+ * @param signer     signer to re-sign with when the cached entry is unsigned
+ * @param ndk        NDK instance to publish through
+ * @returns the rebroadcast bid event id
+ * @throws when nothing is cached for the id, the cached payload is not a
+ *         kind-1023 bid, the payload does not hash to the requested id
+ *         (corrupted/tampered cache), or the rebroadcast fails
+ */
+export const republishAuctionBid = async (bidEventId: string, signer: NDKSigner, ndk: NDK): Promise<string> => {
+	if (!bidEventId) throw new Error('Cannot rebroadcast auction bid: bidEventId is empty')
+	const cached = loadAuctionBidRepublishCache()[bidEventId]
+	if (!cached) {
+		throw new Error(
+			`No cached bid event for ${bidEventId} — cannot rebroadcast. Do not retry the full publish pipeline: the funds for this leg are already locked.`,
+		)
+	}
+
+	const bidEvent = new NDKEvent(ndk, cached.payload)
+	if (bidEvent.kind !== AUCTION_BID_KIND) {
+		throw new Error(`Refusing to rebroadcast ${bidEventId}: expected kind ${AUCTION_BID_KIND}, got kind ${bidEvent.kind}`)
+	}
+	// Integrity: the cached payload must still hash to the requested id —
+	// guards against a corrupted or tampered cache entry.
+	if (bidEvent.getEventHash() !== bidEventId) {
+		throw new Error(`Refusing to rebroadcast ${bidEventId}: cached payload does not hash to the requested event id`)
+	}
+
+	if (!bidEvent.sig) {
+		// Cached between event construction and signing (a sign failure).
+		// Signing is local, does not touch the mint, and does not change the
+		// event id — this stays idempotent.
+		await bidEvent.sign(signer)
+		cacheAuctionBidEventForRepublish(bidEvent)
+	}
+
+	try {
+		await ndkActions.publishEvent(bidEvent)
+	} catch (error) {
+		throw new AuctionBidPublishFailedError(bidEventId, error)
+	}
+	// Published — the rebroadcast cache entry is no longer needed.
+	discardAuctionBidEventRepublishCacheEntry(bidEventId)
 	return bidEvent.id
 }
 
@@ -875,6 +1075,39 @@ export const usePublishAuctionBidMutation = () => {
 		onError: (error) => {
 			console.error('Failed to publish auction bid:', error)
 			toast.error(`Failed to submit bid: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+/**
+ * Mutation wrapper for `republishAuctionBid` — the idempotent retry path for a
+ * bid whose funds are already locked and whose kind-1023 event was built and
+ * cached but whose relay broadcast failed (#1235 Blocking 1). Unlike
+ * `usePublishAuctionBidMutation`, this NEVER re-locks funds: it only
+ * rebroadcasts the exact persisted signed event by id.
+ */
+export const useRepublishAuctionBidMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (bidEventId: string) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+			return republishAuctionBid(bidEventId, signer, ndk)
+		},
+		onSuccess: async (bidEventId) => {
+			// The rebroadcast leg's bid may now be visible to bidders queries.
+			// Cache invalidation is a UI-refresh aid, not proof of relay
+			// acceptance (src/publish/AGENTS.md).
+			void bidEventId
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
+		},
+		onError: (error) => {
+			// Toasting happens in the funding lifecycle's retry handler so the
+			// user gets exactly one message per retry attempt.
+			console.error('Failed to republish auction bid:', error)
 		},
 	})
 }
