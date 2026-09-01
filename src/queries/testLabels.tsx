@@ -1,7 +1,5 @@
 import { configActions } from '@/lib/stores/config'
-import { getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
 import { testLabelActions, type TestLabelInfo } from '@/lib/stores/testLabels'
-import { fetchAdminSettings } from '@/queries/app-settings'
 import { testLabelKeys } from '@/queries/queryKeyFactory'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
 import type { NDKEvent, NDKFilter, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -83,6 +81,7 @@ export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> =>
 	}
 
 	try {
+		const { fetchAdminSettings } = await import('@/queries/app-settings')
 		const settings = await fetchAdminSettings(configActions.getAppPublicKey())
 		if (!settings) return null
 		authorizedLabelersCache = { fetchedAt: now, pubkeys: settings.admins }
@@ -189,6 +188,7 @@ export const reconcileActiveTestLabels = (
 
 const fetchAuthorizedLabelEvents = async (coordinates: string[], adminPubkeys: string[], relaySet?: NDKRelaySet): Promise<NDKEvent[]> => {
 	const labelEvents: NDKEvent[] = []
+	const { ndkActions } = await import('@/lib/stores/ndk')
 	for (const chunk of chunkStrings(coordinates, TEST_LABEL_FETCH_CHUNK_SIZE)) {
 		// Batched relay query: one filter for the whole chunk of coordinates.
 		// `#L` narrows to our namespace at the relay; tags are re-validated
@@ -207,6 +207,7 @@ const fetchAuthorizedLabelEvents = async (coordinates: string[], adminPubkeys: s
 
 const fetchLabelDeletionEvents = async (labelEventIds: string[], adminPubkeys: string[], relaySet?: NDKRelaySet): Promise<NDKEvent[]> => {
 	const deletionEvents: NDKEvent[] = []
+	const { ndkActions } = await import('@/lib/stores/ndk')
 	for (const chunk of chunkStrings(labelEventIds, TEST_LABEL_FETCH_CHUNK_SIZE)) {
 		const filter: NDKFilter = {
 			kinds: [LABEL_DELETION_KIND],
@@ -256,6 +257,7 @@ export const fetchTestLabels = async (coordinates: string[]): Promise<Map<string
 		const adminPubkeys = await getAuthorizedLabelerPubkeys()
 		if (adminPubkeys !== null) {
 			authorizationResolved = true
+			const { ndkActions, getAppRelaySet } = await import('@/lib/stores/ndk')
 			const ndk = ndkActions.getNDK()
 			if (ndk) {
 				let activeLabels = new Map<string, TestLabelInfo>()
