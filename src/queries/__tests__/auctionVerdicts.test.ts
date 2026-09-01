@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import { finalizeEvent, generateSecretKey, getPublicKey, verifiedSymbol } from 'nostr-tools'
+import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import type { NostrEvent, NostrFilter } from '@/lib/nostr/io'
 
@@ -7,6 +7,7 @@ type RelayEvent = NostrEvent
 
 let fetchedFilters: NostrFilter[] = []
 let relayEvents = new Set<RelayEvent>()
+let verifyEventResult: ((event: NostrEvent) => boolean) | null = null
 
 if (!('localStorage' in globalThis)) {
 	const items = new Map<string, string>()
@@ -28,6 +29,19 @@ mock.module('@/lib/stores/blacklist', () => ({
 		isProductBlacklisted: () => false,
 		isCollectionBlacklisted: () => false,
 	},
+}))
+
+// Mock only the signature-verification seam that fetchAuctionVerdicts uses, so
+// each test controls which events pass/fail verification deterministically.
+// Never mock 'nostr-tools' itself: bun applies mock.module process-wide for the
+// whole test run, which would replace the real verifyEvent for every other test
+// file in the suite (liveChat.test.ts mocks this same seam for the same reason).
+mock.module('@/lib/nostr/event-signature', () => ({
+	verifyNostrEventSignature: mock((event: NostrEvent) => {
+		if (verifyEventResult) return verifyEventResult(event)
+		// Default: accept events that carry a signature, reject unsigned ones.
+		return typeof event.sig === 'string' && event.sig.length > 0
+	}),
 }))
 
 mock.module('@/lib/stores/ndk', () => ({
@@ -55,18 +69,14 @@ const { fetchAuctionVerdicts } = await import('@/queries/auctions')
 const AUCTION_ROOT_EVENT_ID = '1'.repeat(64)
 const AUCTION_COORDINATE = `30408:${'a'.repeat(64)}:auction-1`
 
-// Real keypairs: the parse boundary verifies real Schnorr signatures, so the
-// fixtures must be genuinely signed (and genuinely forged), not sig-mocked.
+// Real keypairs give the fixtures realistic pubkeys/ids; signature validity is
+// controlled via the mocked seam above, not via nostr-tools crypto.
 const validatorSecretKey = generateSecretKey()
 const validatorPubkey = getPublicKey(validatorSecretKey)
 const rogueSecretKey = generateSecretKey()
 const roguePubkey = getPublicKey(rogueSecretKey)
 
 function verdictEvent(signerSecretKey: Uint8Array, createdAt: number, content = ''): NostrEvent {
-	// finalizeEvent caches the successful verification on the event object via
-	// nostr-tools' `verifiedSymbol` (verifyEvent short-circuits on it). Strip
-	// the cache from any *derived* fixture below so its (in)validity is really
-	// checked instead of inherited. Relay-served events never carry the symbol.
 	return finalizeEvent(
 		{
 			kind: VALIDATOR_VERDICT_KIND as unknown as number,
@@ -86,17 +96,11 @@ function verdictEvent(signerSecretKey: Uint8Array, createdAt: number, content = 
 	)
 }
 
-/** A copy of `event` without nostr-tools' cached verification verdict. */
-function withoutCachedVerification(event: NostrEvent): NostrEvent {
-	const clone = { ...event } as NostrEvent & { [key: symbol]: unknown }
-	delete clone[verifiedSymbol]
-	return clone
-}
-
 describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)', () => {
 	beforeEach(() => {
 		fetchedFilters = []
 		relayEvents = new Set()
+		verifyEventResult = null
 	})
 
 	test('backwards compatible: no auditors passed means no authors filter', async () => {
@@ -133,11 +137,14 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 
 	test('drops unverified events at the parse boundary before they can be rendered', async () => {
 		const signed = verdictEvent(validatorSecretKey, 10)
-		// A tampered event keeps its (now stale) id/sig but altered content —
-		// exactly what a relay or a man-in-the-middle could inject.
-		const tampered = { ...withoutCachedVerification(signed), content: 'forged' } as NostrEvent
-		const unsigned = { ...withoutCachedVerification(signed), sig: '' } as NostrEvent
-		relayEvents = new Set([withoutCachedVerification(signed), tampered, unsigned])
+		// A tampered event keeps its (now stale) id/sig but altered content,
+		// and an unsigned event carries no signature — both must be dropped.
+		const tampered = { ...signed, content: 'forged' } as NostrEvent
+		const unsigned = { ...signed, sig: '' } as NostrEvent
+		relayEvents = new Set([signed, tampered, unsigned])
+
+		// Control the seam so only the genuine signed event passes verification.
+		verifyEventResult = (event) => event === signed
 
 		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE)
 
@@ -145,11 +152,14 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	})
 
 	test('re-checks authors client-side: a properly-signed verdict from a non-auditor is dropped', async () => {
-		// The relay ignored the authors filter and served a rogue verdict
-		// that is *correctly signed* by its author — signed ≠ authorized.
+		// The relay ignored the authors filter and served a rogue verdict that
+		// passes signature verification — signed ≠ authorized, so the author
+		// re-check must be what drops it.
 		const authorized = verdictEvent(validatorSecretKey, 10)
 		const rogueSigned = verdictEvent(rogueSecretKey, 20)
 		relayEvents = new Set([authorized, rogueSigned])
+
+		verifyEventResult = () => true
 
 		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey])
 
@@ -160,6 +170,8 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 		const older = verdictEvent(validatorSecretKey, 10)
 		const newer = verdictEvent(validatorSecretKey, 20)
 		relayEvents = new Set([older, newer])
+
+		verifyEventResult = () => true
 
 		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey])
 
