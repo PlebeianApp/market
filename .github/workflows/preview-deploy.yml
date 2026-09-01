@@ -9,14 +9,22 @@ name: Preview Deploy
 #     idempotent PR comment with the live URL.
 #   - PR closed: `docker compose down`, delete the DNS A record, update the
 #     comment to "Preview torn down".
-#   - Lazy-start: a preview_manager.py daemon on the VPS stops containers that
-#     have been idle for more than IDLE_HOURS and wakes them on the next access
-#     (Caddy's tls-ask endpoint doubles as the wake hook). Open-PR recency
-#     ranking keeps only the top-K (K=5) most recently pushed previews running.
+#   - Lazy-start: a preview_gateway.py router on the VPS fronts Caddy for
+#     *.test-market.orangesync.tech — it approves on-demand-TLS ask requests,
+#     routes Host pr{N} to this PR's app port, and pokes the manager
+#     (preview_manager.py --wake N) on EVERY request, so stopped previews
+#     boot on the next visit even when Caddy already holds the cached
+#     certificate. A systemd-timer preview_manager.py cycle stops containers
+#     idle beyond IDLE_HOURS (per the Caddy access log) and tears down
+#     closed-PR previews; open-PR recency ranking keeps only the top-K (K=5)
+#     most recently pushed previews running, fail-closed on any GitHub API
+#     failure (no teardown decisions when the open-PR list is not trusted).
 #
-# Port offsets (PR_OFFSET = (PR_NUMBER % 100) * 10) keep concurrent previews
-# from colliding; Caddy on the VPS uses on-demand TLS to serve each
-# pr{N}.test-market.orangesync.tech subdomain.
+# Port offsets (PR_OFFSET = (PR_NUMBER % 100) * 10) are claimed on the VPS via
+# marker files (preview_manager.py --claim-port-offset N) BEFORE compose up;
+# a PR colliding with a live preview (congruent mod 100) fails the deploy
+# loudly instead of racing on shared host ports. Caddy on the VPS uses
+# on-demand TLS to serve each pr{N}.test-market.orangesync.tech subdomain.
 
 on:
   pull_request:
@@ -102,8 +110,9 @@ jobs:
           PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
           PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
         run: |
-          if [ -n "$PREVIEW_VPS_HOST" ] && [ -n "$PREVIEW_VPS_USER" ] && [ -n "$PREVIEW_VPS_SSH_KEY" ]; then
+          if [ -n "$PREVIEW_VPS_HOST" ] && [ -n "$PREVIEW_VPS_USER" ] && [ -n "$PREVIEW_VPS_SSH_KEY" ] && [ -n "$PREVIEW_VPS_HOST_FINGERPRINT" ]; then
             echo "previews_ready=true" >> "$GITHUB_OUTPUT"
             echo "Preview deploy secrets present — proceeding with deployment."
           else
@@ -111,12 +120,15 @@ jobs:
             echo "::warning title=Preview deploy skipped::PREVIEW_VPS_* secrets are not configured (fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding). Skipping VPS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
           fi
 
-      - name: Bootstrap VPS (nsite gateway + Caddy route)
+      - name: Bootstrap VPS (gateway + Caddy route + manager env)
         if: steps.secrets.outputs.previews_ready == 'true'
         env:
           PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
           PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
           # Write the SSH key to a temp file for scp/ssh.
@@ -124,46 +136,56 @@ jobs:
           # the PEM key format and causes "hostname contains invalid
           # characters" errors from ssh.
           KEY_FILE=$(mktemp)
+          # Clean up the key file on exit (success OR failure — a bare rm at
+          # the end would be skipped under set -e if provisioning fails).
+          trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s' "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
           # Convert literal \n to real newlines (GitHub secrets may escape them)
           sed -i 's/\\n/\n/g' "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
-          # Run the idempotent provision script — starts Docker services
-          # (nsite gateway + ask endpoint) and ensures Caddy has the
-          # *.nsite.orangesync.tech on-demand TLS route. Also installs and
-          # starts the preview_manager.py lazy-start daemon.
+          # Run the idempotent provision script. It verifies the VPS host
+          # key against PREVIEW_VPS_HOST_FINGERPRINT before any key
+          # exchange, ships preview_manager.py + preview_gateway.py, writes
+          # manager.env (Cloudflare creds for DNS cleanup, chmod 600),
+          # installs the gateway + manager systemd units, and ensures
+          # Caddy has the on-demand-TLS ask endpoint, the JSON access log,
+          # and the *.test-market.orangesync.tech route → gateway router.
           bash infra/preview-vps/provision.sh
-          rm -f "$KEY_FILE"
+          # $KEY_FILE is removed by the EXIT trap above, including after
+          # successful completion.
 
       - name: Ensure remote preview directory exists
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
           script: |
             mkdir -p "$HOME/previews/pr-${{ github.event.pull_request.number }}"
 
       - name: Upload deploy package to VPS
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
           source: 'deploy-package/*'
           target: '/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package'
           strip_components: 1
 
-      - name: Write docker-compose.yml and bring up services
+      - name: Claim host-port offset (M6) then bring up services
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
           script: |
             set -euo pipefail
             PR_NUMBER="${{ github.event.pull_request.number }}"
@@ -171,6 +193,18 @@ jobs:
             RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
             APP_DIR="$HOME/previews/pr-$PR_NUMBER"
             cd "$APP_DIR"
+
+            # ── Port-offset claim (M6) ──
+            # PRs congruent mod 100 (e.g. 1257 and 1357) share the same host
+            # port offset. Claim the marker in ~/previews/ports/<offset> BEFORE
+            # compose up; if another PR's preview holds the offset, the claim
+            # fails loudly and this step aborts instead of two deploy jobs
+            # racing on the same host ports (one compose up silently fails).
+            if ! python3 "$HOME/preview-infra/preview_manager.py" --claim-port-offset "$PR_NUMBER" --preview-root "$HOME/previews"; then
+              echo "FATAL: Port-offset collision — another preview holds offset ${{ steps.ports.outputs.pr_offset }} (PR congruent mod 100). Close that PR or wait for its preview to be torn down." >&2
+              exit 1
+            fi
+
             cat > docker-compose.yml <<EOF
             services:
               market-app:
@@ -200,24 +234,13 @@ jobs:
             docker compose up -d --remove-orphans
             docker compose ps
 
-      # Lazy-start integration: after bringing up this PR's services, run the
-      # manager so it can stop idle previews and apply recency-based cleanup.
-      # This runs on every deploy (not just provisioning) so a long-lived PR
-      # keeps the manager fresh without waiting for the next provisioning run.
-      - name: Run preview-manager (idle + recency cleanup)
-        if: ${{ steps.secrets.outputs.previews_ready == 'true' && !cancelled() }}
-        continue-on-error: true
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PREVIEW_VPS_HOST }}
-          username: ${{ secrets.PREVIEW_VPS_USER }}
-          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
-          script: |
-            set -uo pipefail
-            if [ -f "$HOME/preview-infra/preview_manager.py" ]; then
-              python3 "$HOME/preview-infra/preview_manager.py" --cron
-            fi
-
+      # B1: The systemd timer on the VPS owns the preview lifecycle (idle
+      # stop, recency ranking, closed-PR cleanup). CI must never run the
+      # manager (preview_manager.py --cron) — over SSH it has no GitHub
+      # credentials, so the open-PR list resolves empty and the cycle would
+      # treat every live preview as belonging to a closed PR and destroy it
+      # (fail-open destructive). The timer's unit is provisioned with
+      # GITHUB_REPO and the Caddy access log; the gateway wakes previews.
       - name: Upsert Cloudflare DNS A record
         if: steps.secrets.outputs.previews_ready == 'true'
         env:
@@ -269,6 +292,12 @@ jobs:
         continue-on-error: true
         run: |
           PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          # Individual failed attempts inside this loop are TRANSIENT warm-up
+          # (preview booting, DNS propagating, Caddy issuing the cert). Only
+          # after all 12 attempts (~3 min) are exhausted is this a FINAL
+          # failure — at that point exit nonzero (continue-on-error keeps
+          # the job green) so the comment step posts the explicit degraded
+          # state instead of an open-ended "give it a minute".
           for _ in $(seq 1 12); do
             if curl -sf -o /dev/null --max-time 10 "$PREVIEW_URL"; then
               echo "Preview is live: $PREVIEW_URL"
@@ -277,8 +306,9 @@ jobs:
             fi
             sleep 5
           done
-          echo "::warning::Preview health check failed for $PREVIEW_URL"
+          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL"
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          exit 1
 
       - name: Post / update preview URL PR comment
         if: ${{ !cancelled() }}
@@ -293,12 +323,21 @@ jobs:
           READY="${{ steps.secrets.outputs.previews_ready }}"
           APP_PORT="${{ steps.ports.outputs.app_port }}"
           RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           if [ "$READY" != "true" ]; then
             STATUS_LINE="⚠️ Preview deploy skipped — VPS secrets not configured on this fork PR (see docs/ops/preview-deploy.md)"
           elif [ "$HEALTH" = "success" ]; then
             STATUS_LINE="✅ Preview is live"
+          elif [ "$HEALTH" = "failure" ]; then
+            # FINAL health failure: the ~3-min retry loop already exhausted
+            # all transient warm-up attempts. Never report this as "warming
+            # up" — post the explicit degraded state with the run link.
+            STATUS_LINE="🔴 Preview deployment degraded — the health check failed after exhausting its retry loop. Inspect the logs: $RUN_URL"
           else
-            STATUS_LINE="🟡 Preview deployed (health check still warming up — give it a minute)"
+            # The health step never ran because an earlier deploy step failed
+            # (port-offset collision, compose up, DNS, …). Same explicit
+            # failure state — never a green-adjacent "give it a minute".
+            STATUS_LINE="🔴 Preview deployment failed — a deploy step failed before the health check ran. Inspect the logs: $RUN_URL"
           fi
           MARKER="<!-- preview-deploy -->"
           BODY=$(cat <<EOF
@@ -312,7 +351,9 @@ jobs:
           - Commit: \`${{ github.sha }}\`
 
           The preview is torn down automatically when this PR is closed.
-          Idle previews are stopped after a few hours and wake on the next visit.
+          Idle previews are stopped after a few hours; the gateway on the VPS
+          wakes them on the next visit to the preview URL (first load may
+          take up to ~15 s while the preview boots).
           EOF
           )
           CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
@@ -340,16 +381,21 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
 
-      - name: Stop containers and clean up VPS directory
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Release port offset, stop containers, clean up VPS directory
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
           script: |
             set -uo pipefail
             PR_NUMBER="${{ github.event.pull_request.number }}"
             APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+            # Release the shared host-port offset marker (M6) so a future PR
+            # congruent mod 100 can claim it. Owner-checked: a marker held by
+            # a different PR is left alone (and logged) rather than deleted.
+            python3 "$HOME/preview-infra/preview_manager.py" --release-port-offset "$PR_NUMBER" --preview-root "$HOME/previews" || true
             if [ -f "$APP_DIR/docker-compose.yml" ]; then
               cd "$APP_DIR"
               docker compose down --remove-orphans --volumes || true

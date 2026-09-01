@@ -14,10 +14,13 @@ set -euo pipefail
 #   PREVIEW_VPS_HOST             — VPS hostname or IP (SSH port 22)
 #   PREVIEW_VPS_USER             — SSH user (typically "debian")
 #   PREVIEW_VPS_SSH_KEY          — path to the SSH private key file
-#   PREVIEW_VPS_HOST_FINGERPRINT — VPS SSH *host* public key line
-#                                  (e.g. "ssh-ed25519 AAAA…", from
-#                                  `ssh-keyscan <host>`); the connection
-#                                  is pinned to it — no TOFU, no
+#   PREVIEW_VPS_HOST_FINGERPRINT — VPS SSH *host* key SHA256 fingerprint
+#                                  (format: `SHA256:...`, exactly as printed
+#                                  by `ssh-keyscan -t ed25519 <host> |
+#                                  ssh-keygen -lf -`; the SAME secret the
+#                                  appleboy actions verify via their
+#                                  `fingerprint:` input). The connection is
+#                                  pinned to it — no TOFU, no
 #                                  StrictHostKeyChecking=no.
 #   PREVIEW_CLOUDFLARE_API_TOKEN — Cloudflare token (DNS edit on the zone);
 #                                  shipped to the VPS as manager.env so the
@@ -37,16 +40,36 @@ CF_TOKEN="${PREVIEW_CLOUDFLARE_API_TOKEN:?PREVIEW_CLOUDFLARE_API_TOKEN is requir
 CF_ZONE="$(echo -n "${PREVIEW_CLOUDFLARE_ZONE_ID:?PREVIEW_CLOUDFLARE_ZONE_ID is required}" | tr -d '[:space:]')"
 
 # ── Pinned host-key verification (no MITM window, no TOFU) ──────────────
-# Build a known_hosts holding exactly the pinned host key. ssh then runs
-# with StrictHostKeyChecking=yes against it: a key mismatch aborts the
-# connection instead of silently handing the private key to an impostor.
+# Scan the host key, compare its SHA256 fingerprint against the pinned
+# secret, and abort BEFORE any private-key material is exchanged: a
+# mismatch means impostor and the deploy key is never handed over. The
+# pinned line is then written to a private known_hosts and ssh runs with
+# StrictHostKeyChecking=yes against it. HostKeyAlgorithms pins the
+# negotiation to the verified ed25519 key, so an impostor cannot offer a
+# different key type that was never pinned.
+echo "==> Verifying VPS host key fingerprint for ${HOST}"
+HOSTKEY_LINE="$(ssh-keyscan -T 10 -t ed25519 "${HOST}" 2>/dev/null | head -n 1)"
+if [ -z "${HOSTKEY_LINE}" ]; then
+  echo "FATAL: ssh-keyscan could not reach ${HOST} to fetch its host key" >&2
+  exit 1
+fi
+ACTUAL_FP="$(printf '%s\n' "${HOSTKEY_LINE}" | ssh-keygen -lf - | awk '{print $2}')"
+if [ "${ACTUAL_FP}" != "${FINGERPRINT}" ]; then
+  echo "FATAL: host key fingerprint mismatch for ${HOST}" >&2
+  echo "  pinned: ${FINGERPRINT}" >&2
+  echo "  actual: ${ACTUAL_FP}" >&2
+  echo "  Refusing to hand the deploy key to an unverified host." >&2
+  exit 1
+fi
+echo "  Host key fingerprint verified (${FINGERPRINT})"
+
 KNOWN_HOSTS="$(mktemp)"
-printf '%s %s\n' "${HOST}" "${FINGERPRINT}" > "${KNOWN_HOSTS}"
+printf '%s\n' "${HOSTKEY_LINE}" > "${KNOWN_HOSTS}"
 chmod 600 "${KNOWN_HOSTS}"
 trap 'rm -f "${KNOWN_HOSTS}"' EXIT
 
-SSH_BASE=(ssh -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o LogLevel=ERROR)
-SCP_BASE=(scp -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o LogLevel=ERROR)
+SSH_BASE=(ssh -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
+SCP_BASE=(scp -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
 
 echo "==> Provisioning VPS ${_VPS_USER}@${HOST} (host key pinned)"
 
