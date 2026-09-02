@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (rev 2 — supersedes the blacklist-based rev 1 discussed in #1243; docs-only portion extracted from #1260)
+Accepted (rev 3 — browsing-only gating + inspectability toggle; implemented in PR #1260)
 
 ## Date
 
@@ -23,7 +23,7 @@ discretion during the launch phase.
 The mechanism should be:
 
 - **Reusable** — one mechanism covering products and auctions, wherever
-  official feeds or detail views are rendered.
+  browsing and discovery surfaces are rendered.
 - **Flexible** — applicable at our discretion, before, during, or after any
   launch phase, without schema changes.
 - **Implementation-independent** — a Nostr-native signal any client or
@@ -47,6 +47,10 @@ Use **NIP-32 labeling events** (kind 1985) to tag items as tests.
   presence (shop, products, community) is unaffected while the item is
   curated. Whole-pubkey hiding remains the job of the existing spam
   blacklist and is explicitly out of scope here.
+- **Browsing-only gating** — a test label hides an item from browsing and
+  discovery surfaces only (home feed, paginated browse, search, collections,
+  auction feed). The item remains reachable via direct link, the seller's
+  profile, and the owner's dashboard.
 
 ### Label event example
 
@@ -96,8 +100,8 @@ Per NIP-09, the `e`-tag references the specific label event by id, and the
 are not replaceable (NIP-32 explicitly rejects a `d`-tag for this reason).
 Clients MUST validate that the deletion event's pubkey matches the label
 event's pubkey before treating the label as deleted. Once a valid deletion
-is seen, the item reappears in feeds and detail views without further
-action.
+is seen, the item reappears in browsing feeds without further action (it
+was never hidden from direct-link, profile, or dashboard views).
 
 ### Why NIP-32 labels, not NIP-51 blacklists
 
@@ -115,23 +119,25 @@ action.
 The label check runs in the query layer **alongside the existing delete and
 blacklist checks, before queries return data**:
 
-1. When listing or resolving products/auctions, after delete-status and
-   blacklist filtering, check each item coordinate for an active `test`
-   label.
+1. When listing products/auctions on browsing and discovery read paths —
+   home feed, paginated browse, search (NIP-50), collections, and the
+   auction feed — after delete-status and blacklist filtering, check each
+   item coordinate for an active `test` label.
 2. Labels are fetched per coordinate (kind 1985 filtered by `#a`); feeds
    batch the check for the page's items.
-3. Items carrying an authorized `test` label are excluded from feeds and
-   resolve to nothing in detail views — the same depth of gating as
-   blacklisted items.
+3. Items carrying an authorized `test` label are excluded from browsing and
+   discovery feeds only. Detail-by-id, detail-by-a-tag, and by-pubkey
+   (seller profile / owner dashboard) read paths return the item regardless
+   of label — the label never removes the item from direct navigation.
 4. Un-labeling is a NIP-09 deletion event (kind 5) signed by the same
    labeler, referencing the original label event's `id` in an `e` tag with
    a `k`-tag of `1985`. Clients MUST validate that the deletion event's
    pubkey matches the label event's pubkey before treating the label as
    deleted. The query layer treats a deleted label as absent — the item
    reappears without further action.
-5. When resolving a single item (detail view), the label check also looks
-   for a matching deletion event so that a freshly un-labeled item does
-   not appear hidden due to a stale cached label.
+5. The label check runs only on browsing/discovery read paths, so a freshly
+   un-labeled item reappears in those feeds without further action (it was
+   never hidden from direct-link, profile, or dashboard views).
 
 ### UI
 
@@ -149,6 +155,13 @@ pages:
 Both actions provide immediate UI feedback (optimistic state update),
 then reconcile with the relay round-trip. Non-authorized users never see
 these controls.
+
+A **"Show test listings"** toggle is available to all users (admins and
+regular users alike) on the browsing surface. It defaults to **hidden**
+(labeled items are filtered out of browsing feeds); turning it on reveals
+test-labeled items in those feeds. The toggle only affects
+browsing/discovery read paths — direct links, seller profiles, and owner
+dashboards always show the item.
 
 ## Consequences
 
@@ -176,9 +189,12 @@ these controls.
    (products on master; auctions on the `auctions` branch).
 3. Dashboard actions: **Mark as "Test" Product** / **Unmark as "Test"
    Product** by coordinate, with pre-filled contact reference in `.content`.
-4. e2e: a labeled item is excluded from feeds and resolves to `null`; an
-   un-labeled item reappears after the NIP-09 deletion event is processed.
-5. Optional automation (e.g. an automated labeler key) for discretionary
+4. e2e: a labeled item is excluded from browsing feeds but still reachable
+   by direct link, seller profile, and dashboard; an un-labeled item
+   reappears after the NIP-09 deletion event is processed.
+5. "Show test listings" toggle (all users, default hidden) to reveal
+   test-labeled items in browsing feeds.
+6. Optional automation (e.g. an automated labeler key) for discretionary
    use during launch phases.
 
 ## Related
