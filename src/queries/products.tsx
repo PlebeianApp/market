@@ -21,7 +21,7 @@ import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
-import { excludeTestLabeledEvents, fetchTestLabels } from '@/queries/testLabels'
+import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { isValidHexKey } from '@/lib/utils'
 
@@ -236,14 +236,6 @@ export const fetchProduct = async (id: string) => {
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const event = Array.from(events)[0] ?? null
 	if (event) {
-		// Check the test label for this item's coordinate (ADR-0009). A
-		// test-labeled product resolves to nothing in detail views.
-		const dTag = event.tagValue('d')
-		if (dTag) {
-			const coordinate = getATagFromCoords({ kind: 30402, pubkey: event.pubkey, identifier: dTag })
-			const labels = await fetchTestLabels([coordinate])
-			if (labels.has(coordinate)) return null
-		}
 		return event
 	}
 
@@ -279,15 +271,12 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 	// Then filter out locally-deleted products
 	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
 
-	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
-	const nonTestLabeledEvents = await excludeTestLabeledEvents(filteredEvents)
-
 	// Filter out hidden products unless explicitly included
 	if (includeHidden) {
-		return nonTestLabeledEvents
+		return filteredEvents
 	}
 
-	return nonTestLabeledEvents.filter((event) => {
+	return filteredEvents.filter((event) => {
 		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
 		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
 		if (visibility === 'hidden') return false
@@ -300,13 +289,6 @@ export const fetchProductByATag = async (pubkey: string, dTag: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
-
-	// Check the test label before resolving the item (ADR-0009). A
-	// test-labeled product resolves to null — the same depth of gating as
-	// blacklisted items.
-	const coordinate = getATagFromCoords({ kind: 30402, pubkey, identifier: dTag })
-	const labels = await fetchTestLabels([coordinate])
-	if (labels.has(coordinate)) return null
 
 	const naddr = naddrFromAddress(30402, pubkey, dTag)
 	return await ndk.fetchEvent(naddr)

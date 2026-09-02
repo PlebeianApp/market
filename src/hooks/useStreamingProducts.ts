@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { testLabelStore } from '@/lib/stores/testLabels'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { isProductInStock } from '@/queries/products'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
@@ -53,6 +54,7 @@ export function useStreamingProducts({
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
 	const isConnected = useStore(ndkStore, (s) => s.isConnected)
+	const showTestListings = useStore(testLabelStore, (s) => s.showTestListings)
 
 	// Track seen event IDs to prevent duplicates
 	const seenIds = useRef(new Set<string>())
@@ -111,16 +113,20 @@ export function useStreamingProducts({
 				const eligible = buffered.filter(passesBusinessFilters)
 				if (eligible.length === 0) continue
 
-				// Batch label check for this flush window, then sync store filter
-				const coordinates = collectTestLabelCoordinates(eligible)
-				if (coordinates.length > 0) {
-					try {
-						await fetchTestLabels(coordinates)
-					} catch (error) {
-						console.warn('Test label fetch failed during streaming:', error)
+				// Batch label check for this flush window, then sync store filter.
+				// Skipped entirely when the user opted to reveal test listings.
+				let nonLabeled = eligible
+				if (!showTestListings) {
+					const coordinates = collectTestLabelCoordinates(eligible)
+					if (coordinates.length > 0) {
+						try {
+							await fetchTestLabels(coordinates)
+						} catch (error) {
+							console.warn('Test label fetch failed during streaming:', error)
+						}
 					}
+					nonLabeled = filterTestLabeledEvents(eligible)
 				}
-				const nonLabeled = filterTestLabeledEvents(eligible)
 				if (nonLabeled.length === 0) continue
 
 				setProducts((prev) => {
@@ -132,7 +138,7 @@ export function useStreamingProducts({
 		} finally {
 			flushLockRef.current = false
 		}
-	}, [limit, passesBusinessFilters])
+	}, [limit, passesBusinessFilters, showTestListings])
 
 	// Stable callback to buffer a product for the next flush window
 	const addProduct = useCallback(

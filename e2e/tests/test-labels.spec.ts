@@ -135,12 +135,13 @@ async function waitForProductsFeedLoaded(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 1: labeled product is excluded from feeds and detail views
+// Scenario 1: labeled product is hidden from the feed but reachable via link
 // ---------------------------------------------------------------------------
 
 test.describe('Test listing labels (ADR-0009)', () => {
-	test('product with an active test label is excluded from the feed and resolves to not-found', async ({ unauthenticatedPage }) => {
-		const product = await seedProduct(devUser1.sk, `Test Label Hidden Product ${Date.now()}`)
+	test('product with an active test label is hidden from the feed but reachable via direct link', async ({ unauthenticatedPage }) => {
+		const title = `Test Label Hidden Product ${Date.now()}`
+		const product = await seedProduct(devUser1.sk, title)
 		const coordinate = productCoordinate(product)
 
 		// Label it with an authorized labeler key (devUser1 is in the admin set)
@@ -149,12 +150,18 @@ test.describe('Test listing labels (ADR-0009)', () => {
 		await safeGoto(unauthenticatedPage, '/products')
 		await waitForProductsFeedLoaded(unauthenticatedPage)
 
-		// The labeled product must not appear in the feed
-		await expect(unauthenticatedPage.getByText(product.tags.find((t) => t[0] === 'title')?.[1] ?? '')).toHaveCount(0)
+		// The labeled product must not appear in the browse feed (default hidden)
+		await expect(unauthenticatedPage.getByText(title)).toHaveCount(0)
 
-		// Detail view: the item resolves to nothing → "Product Not Found"
+		// Detail view: the item is still reachable via direct link (no "not found")
 		await safeGoto(unauthenticatedPage, `/products/${product.id}`)
-		await expect(unauthenticatedPage.getByRole('heading', { name: 'Product Not Found' })).toBeVisible({ timeout: 15_000 })
+		await expect(unauthenticatedPage.getByText(title)).toBeVisible({ timeout: 15_000 })
+
+		// Toggling "Show test listings" reveals the item in the browse feed
+		await safeGoto(unauthenticatedPage, '/products')
+		await unauthenticatedPage.getByRole('checkbox', { name: 'Show test listings' }).check()
+		await waitForProductsFeedLoaded(unauthenticatedPage)
+		await expect(unauthenticatedPage.getByText(title)).toBeVisible({ timeout: 30_000 })
 	})
 
 	// -----------------------------------------------------------------------

@@ -20,6 +20,9 @@ export interface TestLabelState {
 	// coordinate -> pubkey of the labeler who applied the active label
 	labelerPubkeys: Map<string, string>
 
+	// Whether the user opted to reveal test-labeled items in browsing surfaces
+	showTestListings: boolean
+
 	// Metadata
 	lastUpdated: number
 	isLoaded: boolean
@@ -29,6 +32,7 @@ const initialState: TestLabelState = {
 	testLabelCoordinates: new Set<string>(),
 	labelEventIds: new Map<string, string>(),
 	labelerPubkeys: new Map<string, string>(),
+	showTestListings: false,
 	lastUpdated: 0,
 	isLoaded: false,
 }
@@ -172,6 +176,26 @@ export const testLabelActions = {
 	 */
 	getLastUpdated: (): number => {
 		return testLabelStore.state.lastUpdated
+	},
+
+	/**
+	 * Set whether test-labeled items are revealed in browsing surfaces.
+	 */
+	setShowTestListings: (show: boolean) => {
+		testLabelStore.setState((state) => ({
+			...state,
+			showTestListings: show,
+		}))
+	},
+
+	/**
+	 * Toggle whether test-labeled items are revealed in browsing surfaces.
+	 */
+	toggleShowTestListings: () => {
+		testLabelStore.setState((state) => ({
+			...state,
+			showTestListings: !state.showTestListings,
+		}))
 	},
 
 	/**

@@ -9,10 +9,17 @@ import {
 	LABEL_EVENT_KIND,
 	LABEL_NAMESPACE,
 	LABEL_VALUE_TEST,
+	TEST_LABEL_PRODUCT_KIND,
 	l_TAG,
 } from '@/lib/constants/testLabels'
 import { testLabelActions, testLabelStore } from '@/lib/stores/testLabels'
-import { getAuthorizedLabelerPubkeys, isLabelDeletionForLabel, isValidAuthorizedTestLabel, reconcileActiveTestLabels } from '../testLabels'
+import {
+	excludeTestLabeledEvents,
+	getAuthorizedLabelerPubkeys,
+	isLabelDeletionForLabel,
+	isValidAuthorizedTestLabel,
+	reconcileActiveTestLabels,
+} from '../testLabels'
 
 // --- Test fixtures ---
 
@@ -343,5 +350,41 @@ describe('fetchTestLabels fail-open (via store)', () => {
 
 		expect(result.size).toBe(0)
 		expect(testLabelActions.areLabelsLoaded()).toBe(false)
+	})
+})
+
+// --- Show-test-listings toggle (ADR-0009 rev 3) ---
+
+describe('excludeTestLabeledEvents toggle', () => {
+	const makeProductEvent = (dTag: string): NDKEvent =>
+		({
+			kind: TEST_LABEL_PRODUCT_KIND,
+			pubkey: MERCHANT_PUBKEY,
+			id: `product-${dTag}`,
+			created_at: 1724178700,
+			tags: [['d', dTag]],
+			content: '',
+			tagValue: (name: string) => (name === 'd' ? dTag : undefined),
+		}) as unknown as NDKEvent
+
+	test('returns events unfiltered when showTestListings is true', async () => {
+		testLabelActions.clearLabels()
+		testLabelActions.setShowTestListings(true)
+
+		// No store population needed: the short-circuit returns before any fetch.
+		const result = await excludeTestLabeledEvents([makeProductEvent('my-product')])
+
+		expect(result).toHaveLength(1)
+	})
+
+	test('still filters labeled events when showTestListings is false', async () => {
+		testLabelActions.clearLabels()
+		// Load the store so filtering is active, with PRODUCT_COORD labeled.
+		testLabelActions.applyFetchedLabels(new Map([[PRODUCT_COORD, { eventId: 'label-1', labelerPubkey: ADMIN_PUBKEY }]]), [PRODUCT_COORD])
+		testLabelActions.setShowTestListings(false)
+
+		const result = await excludeTestLabeledEvents([makeProductEvent('my-product')])
+
+		expect(result).toHaveLength(0)
 	})
 })

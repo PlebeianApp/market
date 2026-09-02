@@ -333,6 +333,9 @@ export const setCachedTestLabel = (coordinate: string, label: TestLabelInfo | nu
  * excludeTestLabeledEvents → (business filters) → return.
  */
 export const excludeTestLabeledEvents = async <T extends NDKEvent>(events: T[]): Promise<T[]> => {
+	// Show-test-listings toggle: reveal test-labeled items without filtering.
+	if (testLabelStore.state.showTestListings) return events
+
 	const coordinates = collectTestLabelCoordinates(events)
 	if (coordinates.length === 0) return events
 

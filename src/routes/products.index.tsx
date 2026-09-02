@@ -24,6 +24,7 @@ import {
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
 import { SelectableBadge } from '@/components/shared/SelectableBadge'
+import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -351,7 +352,10 @@ function ProductsRoute() {
 							))}
 						</div>
 					</div>
-					<ProductFilters filters={filters} onFiltersChange={setFilters} />
+					<div className="flex items-center gap-3">
+						<ShowTestListingsToggle />
+						<ProductFilters filters={filters} onFiltersChange={setFilters} />
+					</div>
 				</div>
 			</div>
 
