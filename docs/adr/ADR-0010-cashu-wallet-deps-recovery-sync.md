@@ -1,4 +1,4 @@
-# ADR-0017: Cashu Wallet — Dependencies, Recovery, and Synchronization
+# ADR-0010: Cashu Wallet — Dependencies, Recovery, and Synchronization
 
 ## Status
 
