@@ -11,7 +11,7 @@ Proposed
 ## Related
 
 - ADR-0002 (Nostr I/O migration; Waves A3/A3b deferred the signer paths — this ADR specifies them)
-- ADR-0017 (Cashu wallet; **Proposed via PR #1255**, file `ADR-0017-cashu-wallet-deps-recovery-sync.md`; shares the unified target stack — wallet seat only)
+- ADR-0010 (Cashu wallet; **Proposed via PR #1255**, file `ADR-0010-cashu-wallet-deps-recovery-sync.md`; shares the unified target stack — wallet seat only)
 - Supersedes no prior ADR. Wave A3b supersedes the implementation approach of PR #1199 (see "Sequencing").
 
 ## Context
@@ -45,7 +45,7 @@ All four login paths sign through NDK signers, centered on `src/lib/stores/auth.
 - Cashu libraries **cannot sign nostr events**: `@cashu/coco-core` 2.0.0 (which depends
   on `@cashu/cashu-ts` 5.0.0-rc.4) and current `@cashu/cashu-ts` (latest 4.10.0) have
   zero nostr event-signing capability. The NUT-27 hypothesis is disproven for the TS
-  libraries. (These are ADR-0017 _target-stack_ versions; the repo currently pins
+  libraries. (These are ADR-0010 _target-stack_ versions; the repo currently pins
   `@cashu/cashu-ts ^2.1` and `coco-cashu-core rc11`.)
 
 ### Baseline disclosure: this ADR's baseline is `master`, not PR #1199
@@ -257,7 +257,7 @@ Negative / tradeoffs:
 ## References
 
 - ADR-0002: `ADR-0002-nostr-io-migration-ndk-to-applesauce.md`
-- ADR-0017 (Proposed, PR #1255): `ADR-0017-cashu-wallet-deps-recovery-sync.md`
+- ADR-0010 (Proposed, PR #1255): `ADR-0010-cashu-wallet-deps-recovery-sync.md`
 - `applesauce-signers` on npm (6.2.2, 2026-07-01, hzrd149; depends on
   `applesauce-core ^6.2.0`)
 - PR #1253 (applesauce-core/relay 5.2 → 6.2, merged 2026-09-01)
