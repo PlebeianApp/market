@@ -35,6 +35,7 @@ import { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 
 type EventFetcher = (filter: NostrFilter | NostrFilter[]) => Promise<NostrEventLike[]>
@@ -172,7 +173,8 @@ const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: nu
 		'#d': [dTag],
 		limit,
 	})
-	return filterDeletedAuctions(filterBlacklistedEvents(events))
+	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
+	return excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
 }
 
 export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike[]> => {
@@ -182,9 +184,9 @@ export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike
 	}
 
 	const events = await applesauceIo.fetchEvents(filter)
-	return collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))).sort(
-		(a, b) => (b.created_at || 0) - (a.created_at || 0),
-	)
+	// Filter out blacklisted auctions, locally-deleted auctions, then test-labeled items (ADR-0009)
+	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
+	return collapseAuctionVersions(filteredEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuction = async (id: string, verifySignatures = false): Promise<NostrEventLike | null> => {
@@ -231,6 +233,7 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 	}
 
 	const events = await applesauceIo.fetchEvents(filter)
+	// By-pubkey surface stays reachable by design (ADR-0009: browsing-only gating) — no label filter here.
 	return collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
