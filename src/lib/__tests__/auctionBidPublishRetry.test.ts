@@ -153,7 +153,12 @@ mock.module('@/lib/stores/ndk', () => ({
 
 // Import the module under test AFTER the mocks are registered (same module
 // ordering as `orders.test.ts` — bun applies mock.module to this import).
-import { AuctionBidPublishFailedError, publishAuctionBid, republishAuctionBid } from '@/publish/auctions'
+import {
+	AuctionBidLockedButUnpublishedError,
+	AuctionBidPublishFailedError,
+	publishAuctionBid,
+	republishAuctionBid,
+} from '@/publish/auctions'
 
 // =============================================================================
 // Test lifecycle
@@ -318,5 +323,119 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
 		expect(retriedId).toBe(bidEventId)
 		expect(publishedPayloads[2].sig).toBe(publishedPayloads[0].sig)
+	})
+})
+
+// =============================================================================
+// #1235 follow-up 3 — post-lock error model: locked-but-unpublished failures
+// must be DISTINCT from publish-failed-with-id failures, so the funding
+// lifecycle never falls back to the full re-locking pipeline for a leg whose
+// funds are already locked. Two injection points, both AFTER the lock:
+//
+//   (i)  `toNostrEvent` throws — no event id exists yet, no recovery record,
+//        no cache entry. Funds locked.
+//   (ii) The STRICT bidder-record write fails (storage quota/disabled) — the
+//        refund private key is NOT durably persisted, so the publish must
+//        fail CLOSED instead of broadcasting a locked leg with no recoverable
+//        refund key.
+// =============================================================================
+
+describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
+	test('(i) event finalization failure surfaces the DISTINCT locked error carrying the lock tokenId — never a bare error', async () => {
+		// Inject a throw at toNostrEvent (real NDKEvent class, prototype-level
+		// stub, restored immediately) — the failure happens AFTER
+		// lockAuctionBidFunds but BEFORE the event id exists.
+		const originalToNostrEvent = NDKEvent.prototype.toNostrEvent
+		let caught: unknown
+		try {
+			NDKEvent.prototype.toNostrEvent = async function () {
+				throw new Error('toNostrEvent exploded')
+			}
+			try {
+				await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+			} catch (error) {
+				caught = error
+			}
+		} finally {
+			NDKEvent.prototype.toNostrEvent = originalToNostrEvent
+		}
+
+		// Distinct, identifiable error class — NOT a bare Error, and NOT
+		// AuctionBidPublishFailedError (there is no id to rebroadcast).
+		expect(caught).toBeInstanceOf(AuctionBidLockedButUnpublishedError)
+		expect(caught).not.toBeInstanceOf(AuctionBidPublishFailedError)
+		const lockedError = caught as AuctionBidLockedButUnpublishedError
+		// Carries the lock result's tokenId — the pending-token record the
+		// locked proofs live on, reclaimable after the refund timelock.
+		expect(lockedError.lockTokenId).toBe('pending-token-1')
+		expect(lockedError.bidEventId).toBeNull() // id never finalized
+		expect((lockedError.cause as Error).message).toBe('toNostrEvent exploded')
+
+		// The lock ran EXACTLY once; the bid was never built or broadcast.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+		expect(publishEventMock).not.toHaveBeenCalled()
+		// No recovery record could exist (id never finalized) — the leg's
+		// ONLY durable trace is the wallet's pending token (tokenId above).
+		expect(updatePendingTokenContextMock).not.toHaveBeenCalled()
+	})
+
+	test('(ii) storage failure at the bidder-record write fails CLOSED — surfaced as the distinct locked error, never a silent success', async () => {
+		// The lock result's first call gets tokenId 'pending-token-1' (call
+		// index 0 — see buildLockResult).
+		let caught: unknown
+		const originalSetItem = localStorage.setItem.bind(localStorage)
+		let bidderRecordWriteFailed = false
+		try {
+			// Simulate a quota/serialization failure scoped to the bidder
+			// records key — every other storage write keeps working.
+			localStorage.setItem = (key: string, _value: string) => {
+				if (key.startsWith('auction_bidder_records_v1')) {
+					bidderRecordWriteFailed = true
+					throw new Error('QuotaExceededError: setItem failed')
+				}
+				originalSetItem(key, _value)
+			}
+			try {
+				await publishAuctionBid(buildFormData(600), signer, ndkInstance)
+			} catch (error) {
+				caught = error
+			}
+		} finally {
+			localStorage.setItem = originalSetItem
+		}
+
+		// The bidder-record write genuinely failed (the injection fired).
+		expect(bidderRecordWriteFailed).toBe(true)
+
+		// Fail-closed: the publish is ABORTED with the distinct locked error
+		// (event id WAS finalized here, but without the durable recovery
+		// record the leg is NOT safely rebroadcastable — the refund key is
+		// lost, so broadcasting would strand the locked leg).
+		expect(caught).toBeInstanceOf(AuctionBidLockedButUnpublishedError)
+		expect(caught).not.toBeInstanceOf(AuctionBidPublishFailedError)
+		const lockedError = caught as AuctionBidLockedButUnpublishedError
+		expect(lockedError.lockTokenId).toBe('pending-token-1')
+		expect(lockedError.bidEventId).toHaveLength(64) // diagnostics only
+		expect((lockedError.cause as Error).message).toContain('QuotaExceededError')
+
+		// The locked leg was NEVER broadcast (fail closed, not silent success).
+		expect(publishEventMock).not.toHaveBeenCalled()
+		// No recovery record was persisted — retrying via the full pipeline
+		// (re-lock) is exactly what the distinct error forbids.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+	})
+
+	test('locked-but-unpublished legs are retryable ONLY via reclaim — the distinct error is not an AuctionBidPublishFailedError, so no rebroadcast affordance exists', () => {
+		// The hook maps AuctionBidPublishFailedError → publishedBidEventId
+		// (rebroadcast retry) and AuctionBidLockedButUnpublishedError →
+		// lockedUnpublishedTokenId (reclaim-only). The two classes must stay
+		// distinct siblings — never a subclass relationship, or the
+		// rebroadcast affordance would leak into reclaim-only legs.
+		const publishFailed = new AuctionBidPublishFailedError('f'.repeat(64), new Error('relay down'))
+		const locked = new AuctionBidLockedButUnpublishedError('pending-token-1', new Error('storage'), 'a'.repeat(64))
+		expect(publishFailed).not.toBeInstanceOf(AuctionBidLockedButUnpublishedError)
+		expect(locked).not.toBeInstanceOf(AuctionBidPublishFailedError)
+		expect(publishFailed.bidEventId).toBe('f'.repeat(64))
+		expect(locked.lockTokenId).toBe('pending-token-1')
 	})
 })

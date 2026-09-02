@@ -1,5 +1,5 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
-import { AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
+import { AuctionBidLockedButUnpublishedError, AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -331,6 +331,23 @@ export const shouldPreservePendingBidSubmissionOnDepositModalClose = (
 export const nextPublishedBidEventIdOnSessionStart = (_previousSessionBidEventId: string | null): string | null => null
 
 /**
+ * #1235 follow-up 3 — session-scoped "locked but unpublished" state.
+ *
+ * `AuctionBidLockedButUnpublishedError` is thrown when the bid's funds were
+ * LOCKED at the mint but the leg never became safely publishable (event
+ * finalization or the STRICT recovery-record write failed). The funding
+ * lifecycle records the lock token id so `retryBidPublish` can refuse the
+ * retry with a RECLAIM-ONLY message instead of falling back to the full
+ * re-submit pipeline (which would re-lock the delta — double-lock).
+ *
+ * Like `publishedBidEventId`, this tracker is session-scoped: whatever the
+ * previous session locked, a NEW session starts with no locked-unpublished
+ * token — the previous leg's pending token stays reclaimable via the
+ * wallet, but it must not block or steer the new session.
+ */
+export const nextLockedUnpublishedTokenIdOnSessionStart = (_previousSessionLockedUnpublishedTokenId: string | null): string | null => null
+
+/**
  * #1235 follow-ups 1+2 — session-token guard on async completion writes.
  *
  * A funding session's async completions (`submitPreparedBid` /
@@ -367,6 +384,11 @@ export function useAuctionBidFunding({
 	const [pendingRulesAckBidData, setPendingRulesAckBidData] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
 	const [publishedBidEventId, setPublishedBidEventId] = useState<string | null>(null)
+	// #1235 follow-up 3: lock token id of a leg that failed post-lock but
+	// pre-publishable (see AuctionBidLockedButUnpublishedError) — non-null
+	// means funds for THIS session's leg are known to be locked, so a retry
+	// must be RECLAIM-ONLY, never a re-locking re-submit.
+	const [lockedUnpublishedTokenId, setLockedUnpublishedTokenId] = useState<string | null>(null)
 	// #1235 follow-ups 1+2: epoch token for the CURRENT funding session —
 	// bumped at the top of every `startFundingForBid` call so async
 	// continuations from older sessions can detect (and refuse) writing.
@@ -403,8 +425,15 @@ export function useAuctionBidFunding({
 				// id. Record it so retryBidPublish can rebroadcast the EXACT signed
 				// event (same id, zero additional Cashu swap/lock) instead of
 				// re-running the full lock pipeline.
+				// #1235 follow-up 3: when the failure left the leg locked but NOT
+				// safely publishable (event finalization / STRICT recovery-record
+				// write failed), the publisher throws AuctionBidLockedButUnpublishedError
+				// carrying the lock token id — record it so retryBidPublish takes the
+				// RECLAIM-ONLY path instead of the full re-submit (double-lock).
 				if (error instanceof AuctionBidPublishFailedError) {
 					setPublishedBidEventId(error.bidEventId)
+				} else if (error instanceof AuctionBidLockedButUnpublishedError) {
+					setLockedUnpublishedTokenId(error.lockTokenId)
 				}
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
@@ -427,6 +456,13 @@ export function useAuctionBidFunding({
 			// never inherit the PREVIOUS leg's published event id (see
 			// nextPublishedBidEventIdOnSessionStart).
 			setPublishedBidEventId((previousSessionBidEventId) => nextPublishedBidEventIdOnSessionStart(previousSessionBidEventId))
+			// #1235 follow-up 3: the previous session's locked-unpublished leg
+			// stays reclaimable via the wallet's pending token — a NEW session
+			// starts with no locked-unpublished token (session-scoped state,
+			// same rule as publishedBidEventId).
+			setLockedUnpublishedTokenId((previousSessionLockedTokenId) =>
+				nextLockedUnpublishedTokenIdOnSessionStart(previousSessionLockedTokenId),
+			)
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
 					toast.error(mintError || 'No suitable mint available for bidding.')
@@ -533,7 +569,14 @@ export function useAuctionBidFunding({
 	 * #1235 Blocking 1 — idempotent retry from
 	 * `mint_succeeded_bid_publish_failed_reclaimable`.
 	 *
-	 * Two retry paths:
+	 * Three retry paths:
+	 *
+	 * - **Reclaim-only (#1235 follow-up 3, when the leg failed post-lock but
+	 *   pre-publishable):** `AuctionBidLockedButUnpublishedError` recorded the
+	 *   lock token id — funds are known to be locked but there is no
+	 *   durably-recoverable publishable kind-1023. Retry must NEVER re-run
+	 *   the pipeline (double-lock) and has nothing to rebroadcast: surface
+	 *   the reclaim path instead.
 	 *
 	 * - **Idempotent rebroadcast (preferred, whenever the failed publish
 	 *   produced an event id):** `republishBid` rebroadcasts the exact
@@ -542,18 +585,30 @@ export function useAuctionBidFunding({
 	 *   that missed it ingest it. Retrying a funded-but-unbroadcast publish
 	 *   never double-locks the bidder.
 	 *
-	 * - **No id captured (publish failed before the event was built — nothing
-	 *   was locked for this leg yet):** falls back to the full
-	 *   `submitPreparedBid` pipeline. When an id IS known but no
-	 *   `republishBid` callback is wired, we surface an error instead of
-	 *   falling back — a retry must never re-run the lock pipeline on an
-	 *   already-locked leg.
+	 * - **No id captured and nothing known to be locked (publish failed
+	 *   before the kind-1023 was built — nothing was locked for this leg
+	 *   yet):** falls back to the full `submitPreparedBid` pipeline. When an
+	 *   id IS known but no `republishBid` callback is wired, we surface an
+	 *   error instead of falling back — a retry must never re-run the lock
+	 *   pipeline on an already-locked leg.
 	 *
 	 * Uses the preserved pendingBidSubmission so the user doesn't need to
 	 * re-enter the bid amount or reselect mints.
 	 */
 	const retryBidPublish = useCallback(async () => {
 		if (!pendingBidSubmission) return
+		// #1235 follow-up 3 — RECLAIM-ONLY path: this session's leg failed
+		// post-lock but pre-publishable (event finalization or the STRICT
+		// recovery-record write failed). Funds are known to be locked, so the
+		// retry must NEVER fall back to the full re-submit pipeline (it would
+		// re-derive a fresh path and re-lock the delta — double-lock) and
+		// there is no publishable event to rebroadcast either.
+		if (lockedUnpublishedTokenId) {
+			toast.error(
+				'Your bid funds are locked and reclaimable, but the bid could not be prepared for publishing. Retry is unavailable — reclaim your funds from the wallet once the refund timelock opens. No second lock was attempted.',
+			)
+			return
+		}
 		if (publishedBidEventId) {
 			if (!republishBid) {
 				toast.error('Bid publish retry is unavailable — your funds remain locked and reclaimable. No second lock was attempted.')
@@ -578,6 +633,12 @@ export function useAuctionBidFunding({
 				// #1235 follow-ups 1+2: a stale catch must not write into the
 				// newer session (no failure-state transition, no toast).
 				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
+				// #1235 follow-up 3: defensive — a republish callback wired to a
+				// rebroadcast that ends up locked-but-unpublished must land in the
+				// reclaim-only state, not be silently forgotten.
+				if (error instanceof AuctionBidLockedButUnpublishedError) {
+					setLockedUnpublishedTokenId(error.lockTokenId)
+				}
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
 				)
@@ -586,11 +647,12 @@ export function useAuctionBidFunding({
 			}
 			return
 		}
-		// No event id captured — the failure happened before the kind-1023 was
-		// built, so nothing was locked for this leg yet: a full re-submit is
-		// safe (no double-lock).
+		// No event id captured and nothing known to be locked — the failure
+		// happened before the kind-1023 was built (pre-lock validation), so
+		// nothing was locked for this leg yet: a full re-submit is safe
+		// (no double-lock).
 		await submitPreparedBid(pendingBidSubmission)
-	}, [pendingBidSubmission, publishedBidEventId, republishBid, submitPreparedBid, onBidSuccess])
+	}, [pendingBidSubmission, publishedBidEventId, lockedUnpublishedTokenId, republishBid, submitPreparedBid, onBidSuccess])
 
 	const handleInvoiceCreated = useCallback(() => {
 		setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'invoice_created'))
@@ -639,5 +701,11 @@ export function useAuctionBidFunding({
 		resumeBidAfterRulesAck,
 		retryBidPublish,
 		publishedBidEventId,
+		// #1235 follow-up 3: exposed so the UI (and tests) can distinguish a
+		// reclaim-only failure (leg locked but never publishable — retry
+		// refused, reclaim after the refund timelock) from a rebroadcastable
+		// failure. Additive to the return shape; no existing consumer is
+		// affected.
+		lockedUnpublishedTokenId,
 	}
 }

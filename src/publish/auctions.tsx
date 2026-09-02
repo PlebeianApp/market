@@ -556,122 +556,154 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		childPubkey,
 	})
 
-	// Step 6 — extract lock_secret + proof_y directly from the locked
-	// proofs. We pull `proofs` off the lock result rather than
-	// decoding the encoded `token` because token decode fails on v2
-	// short keyset IDs without a mint keyset map — see
-	// AUCTIONS.md §5 history and `LockAuctionBidFundsResult.proofs`.
-	const proofs = lockResult.proofs
-	if (!proofs.length) throw new Error('Lock result contained no proofs')
-	const lockSecrets = proofs.map((proof: Proof) => proof.secret)
-	const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
-
-	// Step 7 — publish kind-1023. `amount` is the cumulative bid value
-	// (what the validator uses for the min-increment check); the lock
-	// itself is only the delta. `prev_bid` chains the leg to the
-	// previous one when this is a rebid.
-	const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
-	const bidEvent = new NDKEvent(ndk)
-	bidEvent.kind = AUCTION_BID_KIND
-	bidEvent.content = JSON.stringify({
-		type: 'auction_bid_v1',
-		amount: formData.amount,
-		mint: lockResult.mintUrl,
-	})
-	bidEvent.tags = buildBidEventTags({
-		auctionRootEventId: formData.auctionEventId,
-		auctionCoordinate: formData.auctionCoordinates,
-		sellerPubkey: formData.sellerPubkey,
-		amount: formData.amount,
-		mint: lockResult.mintUrl,
-		locktime,
-		refundPubkey,
-		childPubkey,
-		lockSecrets,
-		proofYs,
-		createdForEndAt: formData.auctionEffectiveEndAt,
-		bidNonce,
-		prevBidId: prevLeg?.bidEventId,
-	}) as NDKTag[]
-
-	// Step 7a — finalize the event fields WITHOUT signing. `toNostrEvent`
-	// fills in `pubkey`/`created_at` and computes the FINAL event id (the
-	// signature never participates in the id), so the id computed here is
-	// exactly the id the signed event will keep. Finalizing before the
-	// publish attempt lets us persist the durable recovery record and the
-	// retry cache ahead of any sign/broadcast failure (#1235 Blocking 1).
-	bidEvent.pubkey = bidderPubkey
-	await bidEvent.toNostrEvent()
-
-	// Step 7b — durable recovery state BEFORE the publish attempt
-	// (#1235 Blocking 1, prescription 2). Until this record is written the
-	// refund private key exists only in a local variable; if signing or
-	// publishing threw first, the locked leg would not even be
-	// locktime-reclaimable (the refund branch requires the refund privkey).
-	// The record also carries the full locked proofs, so the leg is
-	// recoverable from the moment the lock exists — even when publish throws.
-	// NOTE: bidderRecords is plaintext localStorage; encrypt-at-rest is a
-	// named follow-up (review Should-fix 7) and is intentionally out of
-	// scope here.
-	upsertBidderRecord({
-		bidEventId: bidEvent.id,
-		auctionRootEventId: formData.auctionEventId,
-		auctionCoordinate: formData.auctionCoordinates,
-		sellerPubkey: formData.sellerPubkey,
-		p2pkXpub: formData.p2pkXpub,
-		derivationPath,
-		childPubkey,
-		refundPubkey,
-		refundPrivateKey,
-		mintUrl: lockResult.mintUrl,
-		amount: formData.amount, // cumulative bid value
-		legLockedAmount: lockResult.amount, // sats actually locked by this leg
-		prevBidEventId: prevLeg?.bidEventId ?? null,
-		locktime,
-		proofs,
-		lockSecrets,
-		proofYs,
-		createdAt: now,
-		status: 'live',
-	})
-	const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
-		kind: 'auction_bid',
-		auctionEventId: formData.auctionEventId,
-		auctionCoordinates: formData.auctionCoordinates,
-		bidEventId: bidEvent.id,
-		sellerPubkey: formData.sellerPubkey,
-		pathIssuerPubkey: '',
-		lockPubkey: lockResult.lockPubkey,
-		refundPubkey: lockResult.refundPubkey,
-		locktime: lockResult.locktime,
-		derivationPath: lockResult.derivationPath,
-		childPubkey: lockResult.childPubkey,
-		grantId: lockResult.grantId,
-	})
-	if (!updatedPendingToken) {
-		console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
-	}
-
-	// Step 7c — cache the event so a retry can rebroadcast it VERBATIM
-	// (#1235 Blocking 1, prescription 1). The cache entry is written before
-	// signing (so even a sign failure is retryable via re-signing the same
-	// event) and refreshed with the signature once signing completes.
-	cacheAuctionBidEventForRepublish(bidEvent)
+	// #1235 follow-up (post-lock error model): from the moment the lock
+	// above succeeds, the leg's sats are locked at the mint and every step
+	// below can still fail. Two failure tiers with DIFFERENT recovery
+	// semantics, which the funding lifecycle must be able to distinguish:
+	//
+	//   1. Sign/broadcast failure AFTER the durable recovery record + the
+	//      rebroadcast cache were persisted (inner try below) →
+	//      AuctionBidPublishFailedError(bidEvent.id): the leg is safely
+	//      retryable by rebroadcasting the exact cached signed event.
+	//
+	//   2. ANY other post-lock failure (proof extraction, event
+	//      finalization, the STRICT recovery-record write, cache write)
+	//      → AuctionBidLockedButUnpublishedError(lockResult.tokenId):
+	//      funds are locked but there is no durably-recoverable publishable
+	//      kind-1023. Retrying MUST NOT fall back to the full pipeline —
+	//      that would re-derive a fresh path and RE-LOCK the delta
+	//      (double-lock). Recovery for this leg is RECLAIM-ONLY.
+	let finalizedBidEventId: string | null = null
 	try {
-		await bidEvent.sign(signer)
-		cacheAuctionBidEventForRepublish(bidEvent)
-		await ndkActions.publishEvent(bidEvent)
-	} catch (error) {
-		// The recovery record and the signed (or signable) event are already
-		// persisted — surface the event id so the funding lifecycle retries
-		// with a pure rebroadcast (republishAuctionBid) instead of re-running
-		// the lock pipeline (which would swap/lock funds a second time).
-		throw new AuctionBidPublishFailedError(bidEvent.id, error)
-	}
-	// Published — the rebroadcast cache entry is no longer needed.
-	discardAuctionBidEventRepublishCacheEntry(bidEvent.id)
+		// Step 6 — extract lock_secret + proof_y directly from the locked
+		// proofs. We pull `proofs` off the lock result rather than
+		// decoding the encoded `token` because token decode fails on v2
+		// short keyset IDs without a mint keyset map — see
+		// AUCTIONS.md §5 history and `LockAuctionBidFundsResult.proofs`.
+		const proofs = lockResult.proofs
+		if (!proofs.length) throw new Error('Lock result contained no proofs')
+		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
+		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
 
-	return bidEvent.id
+		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
+		// (what the validator uses for the min-increment check); the lock
+		// itself is only the delta. `prev_bid` chains the leg to the
+		// previous one when this is a rebid.
+		const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
+		const bidEvent = new NDKEvent(ndk)
+		bidEvent.kind = AUCTION_BID_KIND
+		bidEvent.content = JSON.stringify({
+			type: 'auction_bid_v1',
+			amount: formData.amount,
+			mint: lockResult.mintUrl,
+		})
+		bidEvent.tags = buildBidEventTags({
+			auctionRootEventId: formData.auctionEventId,
+			auctionCoordinate: formData.auctionCoordinates,
+			sellerPubkey: formData.sellerPubkey,
+			amount: formData.amount,
+			mint: lockResult.mintUrl,
+			locktime,
+			refundPubkey,
+			childPubkey,
+			lockSecrets,
+			proofYs,
+			createdForEndAt: formData.auctionEffectiveEndAt,
+			bidNonce,
+			prevBidId: prevLeg?.bidEventId,
+		}) as NDKTag[]
+
+		// Step 7a — finalize the event fields WITHOUT signing. `toNostrEvent`
+		// fills in `pubkey`/`created_at` and computes the FINAL event id (the
+		// signature never participates in the id), so the id computed here is
+		// exactly the id the signed event will keep. Finalizing before the
+		// publish attempt lets us persist the durable recovery record and the
+		// retry cache ahead of any sign/broadcast failure (#1235 Blocking 1).
+		bidEvent.pubkey = bidderPubkey
+		await bidEvent.toNostrEvent()
+		finalizedBidEventId = bidEvent.id
+
+		// Step 7b — durable recovery state BEFORE the publish attempt
+		// (#1235 Blocking 1, prescription 2). Until this record is written the
+		// refund private key exists only in a local variable; if signing or
+		// publishing threw first, the locked leg would not even be
+		// locktime-reclaimable (the refund branch requires the refund privkey).
+		// The record also carries the full locked proofs, so the leg is
+		// recoverable from the moment the lock exists — even when publish throws.
+		// #1235 follow-up: the write is STRICT (fail-closed) — a storage
+		// failure here must abort the publish rather than silently strand
+		// the locked leg with no recoverable refund key while the bid still
+		// broadcasts.
+		// NOTE: bidderRecords is plaintext localStorage; encrypt-at-rest is a
+		// named follow-up (review Should-fix 7) and is intentionally out of
+		// scope here.
+		upsertBidderRecord({
+			bidEventId: bidEvent.id,
+			auctionRootEventId: formData.auctionEventId,
+			auctionCoordinate: formData.auctionCoordinates,
+			sellerPubkey: formData.sellerPubkey,
+			p2pkXpub: formData.p2pkXpub,
+			derivationPath,
+			childPubkey,
+			refundPubkey,
+			refundPrivateKey,
+			mintUrl: lockResult.mintUrl,
+			amount: formData.amount, // cumulative bid value
+			legLockedAmount: lockResult.amount, // sats actually locked by this leg
+			prevBidEventId: prevLeg?.bidEventId ?? null,
+			locktime,
+			proofs,
+			lockSecrets,
+			proofYs,
+			createdAt: now,
+			status: 'live',
+		})
+		const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
+			kind: 'auction_bid',
+			auctionEventId: formData.auctionEventId,
+			auctionCoordinates: formData.auctionCoordinates,
+			bidEventId: bidEvent.id,
+			sellerPubkey: formData.sellerPubkey,
+			pathIssuerPubkey: '',
+			lockPubkey: lockResult.lockPubkey,
+			refundPubkey: lockResult.refundPubkey,
+			locktime: lockResult.locktime,
+			derivationPath: lockResult.derivationPath,
+			childPubkey: lockResult.childPubkey,
+			grantId: lockResult.grantId,
+		})
+		if (!updatedPendingToken) {
+			console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
+		}
+
+		// Step 7c — cache the event so a retry can rebroadcast it VERBATIM
+		// (#1235 Blocking 1, prescription 1). The cache entry is written before
+		// signing (so even a sign failure is retryable via re-signing the same
+		// event) and refreshed with the signature once signing completes.
+		cacheAuctionBidEventForRepublish(bidEvent)
+		try {
+			await bidEvent.sign(signer)
+			cacheAuctionBidEventForRepublish(bidEvent)
+			await ndkActions.publishEvent(bidEvent)
+		} catch (error) {
+			// The recovery record and the signed (or signable) event are already
+			// persisted — surface the event id so the funding lifecycle retries
+			// with a pure rebroadcast (republishAuctionBid) instead of re-running
+			// the lock pipeline (which would swap/lock funds a second time).
+			throw new AuctionBidPublishFailedError(bidEvent.id, error)
+		}
+		// Published — the rebroadcast cache entry is no longer needed.
+		discardAuctionBidEventRepublishCacheEntry(bidEvent.id)
+
+		return bidEvent.id
+	} catch (error) {
+		// Tier 1 — already correctly modeled by the inner try above.
+		if (error instanceof AuctionBidPublishFailedError) throw error
+		// Tier 2 — post-lock but NOT safely publishable: surface the distinct
+		// locked-but-unpublished error carrying the lock token id, so the
+		// funding lifecycle NEVER falls back to the full re-locking pipeline.
+		throw new AuctionBidLockedButUnpublishedError(lockResult.tokenId, error, finalizedBidEventId)
+	}
 }
 
 /**
@@ -695,6 +727,53 @@ export class AuctionBidPublishFailedError extends Error {
 		super(`Auction bid ${bidEventId} was funded and signed but could not be published: ${causeMessage}`)
 		this.name = 'AuctionBidPublishFailedError'
 		this.bidEventId = bidEventId
+		this.cause = cause
+	}
+}
+
+/**
+ * #1235 follow-up (post-lock error model): thrown by `publishAuctionBid`
+ * when the bid's funds were LOCKED at the mint but the leg never became
+ * safely publishable — the kind-1023 event could not be finalized
+ * (`toNostrEvent`), the STRICT durable recovery-record write failed
+ * (quota / disabled storage / no user scope), or any other post-lock
+ * pre-publish step threw before the signed event + recovery record +
+ * rebroadcast cache were all in place.
+ *
+ * Distinct from `AuctionBidPublishFailedError`, whose legs ARE safely
+ * retryable by rebroadcast (recovery record + cached signed event already
+ * persisted, event id known). A leg carrying THIS error must NEVER fall
+ * back to the full re-submit pipeline (`submitPreparedBid` →
+ * `publishAuctionBid`) — that would re-derive a fresh path and RE-LOCK the
+ * already-locked delta (double-lock). Recovery is RECLAIM-ONLY: the locked
+ * proofs live on as a pending token in the NIP-60 wallet (its id is
+ * `lockTokenId`), reclaimable via `reclaimToken` after the refund timelock
+ * opens.
+ *
+ * `bidEventId` is set when the event id was finalized before the failure —
+ * diagnostics only. It does NOT make the leg rebroadcast-safe: e.g. when
+ * the recovery-record write failed, the refund private key is lost and
+ * broadcasting the bid would strand the locked leg with no usable refund
+ * branch.
+ */
+export class AuctionBidLockedButUnpublishedError extends Error {
+	/** Id of the wallet's pending-token record holding the locked proofs. */
+	public readonly lockTokenId: string
+	/** Finalized kind-1023 event id when known (diagnostics only; may be null). */
+	public readonly bidEventId: string | null
+	/** The underlying post-lock failure. */
+	public override readonly cause: unknown
+
+	constructor(lockTokenId: string, cause: unknown, bidEventId?: string | null) {
+		const causeMessage = cause instanceof Error ? cause.message : String(cause)
+		super(
+			`Auction bid funds were locked (pending token ${lockTokenId}) but could not be prepared for publishing: ${causeMessage}` +
+				(bidEventId ? ` — bid event ${bidEventId}` : '') +
+				' — do NOT re-submit this bid; reclaim the locked funds after the refund timelock opens.',
+		)
+		this.name = 'AuctionBidLockedButUnpublishedError'
+		this.lockTokenId = lockTokenId
+		this.bidEventId = bidEventId ?? null
 		this.cause = cause
 	}
 }

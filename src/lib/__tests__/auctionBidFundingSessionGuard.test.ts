@@ -29,8 +29,13 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import { nip60Store } from '@/lib/stores/nip60'
-import { AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
-import { isSessionCurrent, useAuctionBidFunding, type UseAuctionBidFundingOptions } from '@/hooks/useAuctionBidFunding'
+import { AuctionBidLockedButUnpublishedError, AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
+import {
+	isSessionCurrent,
+	nextLockedUnpublishedTokenIdOnSessionStart,
+	useAuctionBidFunding,
+	type UseAuctionBidFundingOptions,
+} from '@/hooks/useAuctionBidFunding'
 
 // =============================================================================
 // Minimal DOM shim — react-dom/client requires a DOM to render into.
@@ -624,5 +629,115 @@ describe('submitPreparedBid session-token guard (#1235 follow-ups 1+2)', () => {
 		expect(h.calls.onBidSuccess).toBe(1)
 
 		await h.unmount()
+	})
+})
+
+describe('locked-but-unpublished legs map to a RECLAIM-ONLY retry (#1235 follow-up 3)', () => {
+	/**
+	 * Drive one funding session through the REAL funding-success flow until
+	 * its publish fails post-lock but PRE-publishable — the publish pipeline
+	 * throws AuctionBidLockedButUnpublishedError carrying the lock token id
+	 * (event finalization or the STRICT recovery-record write failed).
+	 */
+	const driveSessionToLockedUnpublishedFailure = async (
+		h: FundingHarness,
+		bidData: AuctionBidFormData,
+		lockTokenId: string,
+	): Promise<void> => {
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 } }))
+		})
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		await settleInsideAct(() => publish.reject(new AuctionBidLockedButUnpublishedError(lockTokenId, new Error('toNostrEvent exploded'))))
+		expect(h.latest.current.lockedUnpublishedTokenId).toBe(lockTokenId)
+		expect(h.latest.current.publishedBidEventId).toBeNull()
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+	}
+
+	test('a locked-but-unpublished failure is recorded as reclaim-only state, with NO rebroadcast affordance', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+
+		await driveSessionToLockedUnpublishedFailure(h, bidDataA, 'pending-token-7')
+
+		// The failure is surfaced (not silent) and the session is preserved
+		// for the reclaim flow.
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataA)
+		expect(toastErrorMessages.length).toBeGreaterThan(0)
+		expect(toastErrorMessages[0]).toContain('Funding completed, but bid publishing failed')
+
+		await h.unmount()
+	})
+
+	test('retry from the locked-unpublished state NEVER re-submits the pipeline — reclaim-only, no re-lock', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+
+		await driveSessionToLockedUnpublishedFailure(h, bidDataA, 'pending-token-7')
+
+		const publishCallsBeforeRetry = h.calls.publishBid
+		const republishCallsBeforeRetry = h.calls.republishBid
+
+		// Retry: must take the RECLAIM-ONLY path — neither a full re-submit
+		// (would re-lock the delta) nor a rebroadcast (nothing publishable
+		// exists for this leg).
+		await act(async () => {
+			await h.latest.current.retryBidPublish()
+		})
+
+		expect(h.calls.publishBid).toBe(publishCallsBeforeRetry) // NO second publishBid → NO second lockAuctionBidFunds
+		expect(h.calls.republishBid).toBe(republishCallsBeforeRetry) // no rebroadcast either
+		expect(h.calls.onBidSuccess).toBe(0)
+		// Reclaim-only guidance is surfaced to the user.
+		expect(toastErrorMessages.some((message) => message.toLowerCase().includes('reclaim'))).toBe(true)
+		// The session stays in the reclaimable state with the pending
+		// submission preserved — reclaim happens through the wallet.
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataA)
+		expect(h.latest.current.lockedUnpublishedTokenId).toBe('pending-token-7')
+
+		await h.unmount()
+	})
+
+	test('a NEW funding session resets the locked-unpublished tracker — the new session is not blocked', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+		const bidDataB = buildBidData(2_500)
+
+		await driveSessionToLockedUnpublishedFailure(h, bidDataA, 'pending-token-7')
+
+		// The previous leg stays reclaimable via the wallet's pending token,
+		// but a NEW session starts with no locked-unpublished state.
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidDataB)
+		})
+		expect(h.latest.current.lockedUnpublishedTokenId).toBeNull()
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataB)
+
+		// The new session's retry falls back to the full pipeline — nothing
+		// is locked for the NEW session yet, so a re-submit is safe.
+		const publishB = deferred<string>()
+		h.setPublishBid(() => publishB.promise)
+		await act(async () => {
+			void h.latest.current.retryBidPublish()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.calls.publishBid).toBe(2)
+		await settleInsideAct(() => publishB.resolve(LEG_B_EVENT_ID))
+		expect(h.calls.onBidSuccess).toBe(1)
+
+		await h.unmount()
+	})
+
+	test('nextLockedUnpublishedTokenIdOnSessionStart: a new session starts with no locked-unpublished token', () => {
+		expect(nextLockedUnpublishedTokenIdOnSessionStart('pending-token-7')).toBeNull()
+		expect(nextLockedUnpublishedTokenIdOnSessionStart(null)).toBeNull()
 	})
 })
