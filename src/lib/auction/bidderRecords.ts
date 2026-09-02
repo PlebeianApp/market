@@ -18,7 +18,7 @@
  */
 
 import type { Proof } from '@cashu/cashu-ts'
-import { loadUserData, saveUserData } from '../wallet/storage'
+import { loadUserData, saveUserData, type SaveUserDataOptions } from '../wallet/storage'
 
 const BIDDER_RECORDS_KEY = 'auction_bidder_records_v1'
 
@@ -102,9 +102,22 @@ export interface BidderBidRecord {
 
 export const loadBidderRecords = (): BidderBidRecord[] => loadUserData<BidderBidRecord[]>(BIDDER_RECORDS_KEY, [])
 
-export const saveBidderRecords = (records: BidderBidRecord[]): void => saveUserData(BIDDER_RECORDS_KEY, records)
+export const saveBidderRecords = (records: BidderBidRecord[], options?: SaveUserDataOptions): void =>
+	saveUserData(BIDDER_RECORDS_KEY, records, options)
 
-/** Insert or overwrite by `bidEventId`. */
+/**
+ * Insert or overwrite by `bidEventId`.
+ *
+ * #1235 follow-up (fail-closed bidder records): STRICT persistence. This
+ * record is the ONLY durable copy of the locked leg's refund private key
+ * and full locked proofs — a silent storage failure (quota, disabled
+ * storage, no user scope) would strand the locked leg with no recoverable
+ * refund key while the publish pipeline otherwise continued (and could
+ * even succeed). The strict write rethrows so the bid publish flow fails
+ * CLOSED instead of publishing a locked leg without a durable recovery
+ * record. Other record writes (status updates, removals) keep the
+ * historical swallow-by-default behavior.
+ */
 export const upsertBidderRecord = (record: BidderBidRecord): void => {
 	const records = loadBidderRecords()
 	const existing = records.findIndex((r) => r.bidEventId === record.bidEventId)
@@ -113,7 +126,7 @@ export const upsertBidderRecord = (record: BidderBidRecord): void => {
 	} else {
 		records.push(record)
 	}
-	saveBidderRecords(records)
+	saveBidderRecords(records, { strict: true })
 }
 
 export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefined => {

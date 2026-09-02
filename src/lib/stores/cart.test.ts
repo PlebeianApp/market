@@ -150,7 +150,7 @@ describe('cart store persistence orchestration', () => {
 			},
 		})
 
-		await cartActions.addProduct('buyer', {
+		await cartActions.addProduct({
 			id: 'product-1',
 			amount: 1,
 			shippingMethodId: null,
