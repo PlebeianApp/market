@@ -1,4 +1,4 @@
-# ADR-017: Cashu Wallet — Dependencies, Recovery, and Synchronization
+# ADR-0017: Cashu Wallet — Dependencies, Recovery, and Synchronization
 
 ## Status
 
@@ -24,7 +24,7 @@ that coco 2.0 / a cashu-ts v5 release candidate is production-safe to follow.
 - ADR-0002 — `@nostr-dev-kit/wallet` is NDK-coupled and conflicts with the
   applesauce migration; relays are transport, not database
 - ADR-0005 — mints are external services and must be mocked in tests
-- ADR-0022 — signer migration (separate ADR, PR #1252)
+- ADR-0008: Signer Migration to applesauce-signers (separate ADR, PR #1252)
 - Colleague's transport-independent wallet safety boundary ADR (in review,
   2026-08-27) — this ADR composes with it; see "Safety" below
 - Incident context: 2026-08-21 demo wallet audit (decision D1)
