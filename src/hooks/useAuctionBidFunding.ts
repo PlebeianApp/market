@@ -1,6 +1,6 @@
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { AuctionBidPublishFailedError, type AuctionBidFormData } from '@/publish/auctions'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 export type AuctionBidFundingLifecycleState =
@@ -139,7 +139,7 @@ interface StartFundingForBidInput {
 	canFund: boolean
 }
 
-interface UseAuctionBidFundingOptions {
+export interface UseAuctionBidFundingOptions {
 	previousBidAmount: number
 	publishBid: (bidData: AuctionBidFormData) => Promise<string>
 	/**
@@ -330,6 +330,28 @@ export const shouldPreservePendingBidSubmissionOnDepositModalClose = (
  */
 export const nextPublishedBidEventIdOnSessionStart = (_previousSessionBidEventId: string | null): string | null => null
 
+/**
+ * #1235 follow-ups 1+2 — session-token guard on async completion writes.
+ *
+ * A funding session's async completions (`submitPreparedBid` /
+ * `retryBidPublish` continuations) can settle long after the user has
+ * started a NEW funding session: Cancel is never disabled mid-publish
+ * (AuctionBidProgressDialog) and no new-bid entry point is gated on the
+ * publish mutations being in flight. Without a guard, a stale
+ * continuation's raw writes wipe the new session's `pendingBidSubmission`,
+ * force-close its deposit modal, and re-pollute its `publishedBidEventId`
+ * — the new session then dead-ends at `handleFundingSuccess`'s
+ * `if (!pendingBidSubmission) return` and the bid is silently lost
+ * (same cross-leg-leak class as Blocking 5).
+ *
+ * `startFundingForBid` bumps the funding-session token at the top of
+ * every new session; async flows capture the token before each `await`
+ * and gate EVERY post-await write — success, terminal, and catch paths
+ * alike — on this predicate. A completion that no longer belongs to the
+ * funding session that started it must not write anything.
+ */
+export const isSessionCurrent = (tokenAtStart: number, tokenNow: number): boolean => tokenAtStart === tokenNow
+
 export function useAuctionBidFunding({
 	previousBidAmount,
 	publishBid,
@@ -345,12 +367,22 @@ export function useAuctionBidFunding({
 	const [pendingRulesAckBidData, setPendingRulesAckBidData] = useState<AuctionBidFormData | null>(null)
 	const [bidFundingLifecycleState, setBidFundingLifecycleState] = useState<AuctionBidFundingLifecycleState>('idle')
 	const [publishedBidEventId, setPublishedBidEventId] = useState<string | null>(null)
+	// #1235 follow-ups 1+2: epoch token for the CURRENT funding session —
+	// bumped at the top of every `startFundingForBid` call so async
+	// continuations from older sessions can detect (and refuse) writing.
+	const fundingSessionTokenRef = useRef(0)
 
 	const submitPreparedBid = useCallback(
 		async (bidData: AuctionBidFormData) => {
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
+			// #1235 follow-ups 1+2: capture the funding-session token BEFORE the
+			// first await — every write below belongs to the session that started
+			// this publish and must be dropped if a newer session has started by
+			// the time the await settles (isSessionCurrent).
+			const sessionTokenAtStart = fundingSessionTokenRef.current
 			try {
 				const bidEventId = await publishBid(bidData)
+				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return false
 				setPublishedBidEventId(bidEventId)
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				setPendingBidSubmission(null)
@@ -358,6 +390,13 @@ export function useAuctionBidFunding({
 				onBidSuccess?.()
 				return true
 			} catch (error) {
+				// #1235 follow-ups 1+2: a stale catch completion (a NEW funding
+				// session started while this publish was in flight) must not write
+				// anything — in particular it must not pollute the new session's
+				// publishedBidEventId with this leg's id (Blocking 5 leak class)
+				// nor land the new session in a failure state for a leg it never
+				// started.
+				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return false
 				// #1235 Blocking 1: when the relay broadcast failed AFTER the funds
 				// were locked and the kind-1023 event was built and cached, the
 				// publisher throws AuctionBidPublishFailedError carrying the event
@@ -380,6 +419,10 @@ export function useAuctionBidFunding({
 
 	const startFundingForBid = useCallback(
 		({ bidData, hasInsufficientBidFunds, depositMint, deltaAmount, mintError, selectedMint, canFund }: StartFundingForBidInput) => {
+			// #1235 follow-ups 1+2: a new funding session starts a new epoch —
+			// any async completion still in flight from a previous session is
+			// now stale and must not write state when its awaits settle.
+			fundingSessionTokenRef.current += 1
 			// #1235 Blocking 5 — cross-leg verdict leak: a NEW funding session must
 			// never inherit the PREVIOUS leg's published event id (see
 			// nextPublishedBidEventIdOnSessionStart).
@@ -517,13 +560,24 @@ export function useAuctionBidFunding({
 				return
 			}
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
+			// #1235 follow-ups 1+2: capture the funding-session token BEFORE the
+			// await — the rebroadcast continuation belongs to the session that
+			// started this retry and must not write if a newer session has
+			// started while the rebroadcast was in flight (a stale completion
+			// here used to wipe the new session's pendingBidSubmission and
+			// force-close its deposit modal).
+			const sessionTokenAtStart = fundingSessionTokenRef.current
 			try {
 				await republishBid(publishedBidEventId)
+				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				setPendingBidSubmission(null)
 				setIsDepositOpen(false)
 				onBidSuccess?.()
 			} catch (error) {
+				// #1235 follow-ups 1+2: a stale catch must not write into the
+				// newer session (no failure-state transition, no toast).
+				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
 				)
@@ -569,6 +623,12 @@ export function useAuctionBidFunding({
 		isDepositOpen,
 		depositAmount,
 		preferredDepositMint,
+		// #1235 follow-ups 1+2: exposed so the session-token guard's core
+		// invariant — a stale async completion must not clear a newer session's
+		// pending submission — is observable (and regression-tested) from
+		// outside the hook. Additive to the return shape; no existing caller
+		// is affected.
+		pendingBidSubmission,
 		startFundingForBid,
 		submitPreparedBid,
 		handleFundingSuccess,
