@@ -11,6 +11,7 @@ import {
 	getAuctionEffectiveEndAt,
 	getAuctionMinBidCurve,
 	getAuctionRootEventId,
+	getAuctionVerdictValidatedBids,
 	getAuctionVerdictValidatedBidIds,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
@@ -263,6 +264,7 @@ describe('auctionSettlement helpers', () => {
 
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(999999999)
 		expect(getAuctionCurrentPrice(auction, bids, 1000, verdictValidatedBidIds)).toBe(1200)
+		expect(getAuctionVerdictValidatedBids(auction, bids, verdictValidatedBidIds).map((bid) => bid.id)).toEqual(['bid-real'])
 	})
 
 	test('bidding cutoff is max_end_at when max_end_at is after end_at', () => {

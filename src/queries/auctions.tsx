@@ -22,6 +22,7 @@ import {
 	getAuctionSettlementGrace as getAuctionSettlementGraceValue,
 	getAuctionRootEventId as getAuctionRootEventIdValue,
 	getAuctionStartAt as getAuctionStartAtValue,
+	getAuctionVerdictValidatedBids,
 	getAuctionVerdictValidatedBidIds,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
@@ -877,6 +878,15 @@ export const useAuctionVerdictValidatedBidIds = (auction: NDKEvent | null, aucti
 
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
+
+export const getAuctionVerdictValidatedBidCountFromBids = (
+	auction: NDKEvent | null,
+	bids: NDKEvent[],
+	verdictValidatedBidIds: Set<string>,
+): number =>
+	auction
+		? getAuctionVerdictValidatedBids(auction, bids, verdictValidatedBidIds).length
+		: bids.filter((bid) => verdictValidatedBidIds.has(bid.id)).length
 
 export const getAuctionTopBidFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): NDKEvent | null => {
 	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids

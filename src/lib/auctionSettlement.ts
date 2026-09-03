@@ -337,6 +337,12 @@ export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: No
 	})
 }
 
+export const getAuctionVerdictValidatedBids = (
+	auctionEvent: NostrEventLike,
+	bids: NostrEventLike[],
+	verdictValidatedBidIds: Set<string>,
+): NostrEventLike[] => getAuctionWindowValidBids(auctionEvent, bids).filter((bid) => verdictValidatedBidIds.has(bid.id))
+
 /**
  * Verdict claims that establish a bid passed the validator's applicable
  * structural and auction-rule checks. They do not establish that the Cashu
@@ -393,9 +399,10 @@ export const getAuctionCurrentPrice = (
 	startingBid: number = 0,
 	verdictValidatedBidIds?: Set<string>,
 ): number =>
-	getAuctionWindowValidBids(auctionEvent, bids)
-		.filter((bid) => !verdictValidatedBidIds || verdictValidatedBidIds.has(bid.id))
-		.reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
+	(verdictValidatedBidIds
+		? getAuctionVerdictValidatedBids(auctionEvent, bids, verdictValidatedBidIds)
+		: getAuctionWindowValidBids(auctionEvent, bids)
+	).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
 
 export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<string, NostrEventLike>): NostrEventLike[] => {
 	const chain: NostrEventLike[] = []
