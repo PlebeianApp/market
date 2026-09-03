@@ -22,7 +22,7 @@ import {
 	getAuctionSettlementGrace as getAuctionSettlementGraceValue,
 	getAuctionRootEventId as getAuctionRootEventIdValue,
 	getAuctionStartAt as getAuctionStartAtValue,
-	getAuctionVerdictBackedBidIds,
+	getAuctionVerdictValidatedBidIds,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
@@ -851,19 +851,18 @@ export const getAuctionCurrentPriceFromBids = (
 	auction: NDKEvent | null,
 	bids: NDKEvent[],
 	startingBid: number = 0,
-	verdictBackedBidIds?: Set<string>,
+	verdictValidatedBidIds?: Set<string>,
 ): number =>
 	auction
-		? computeAuctionCurrentPrice(auction, bids, startingBid, verdictBackedBidIds)
+		? computeAuctionCurrentPrice(auction, bids, startingBid, verdictValidatedBidIds)
 		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
 
 /**
- * Bid ids an auditor quorum has actually confirmed for this auction —
- * pass to `getAuctionCurrentPriceFromBids` so a self-signed kind-1023
- * with a fabricated `amount` can't inflate the displayed price before a
- * validator ever sees it (see AUCTIONS.md §6.0 / §7.5).
+ * Bid ids an auditor quorum has validated for this auction. Pass the result
+ * to `getAuctionCurrentPriceFromBids` to exclude unreviewed bids from the
+ * displayed price. Verdicts do not verify Cashu collateral value.
  */
-export const useAuctionVerdictBackedBidIds = (auction: NDKEvent | null, auctionEventId: string, auctionCoordinates?: string) => {
+export const useAuctionVerdictValidatedBidIds = (auction: NDKEvent | null, auctionEventId: string, auctionCoordinates?: string) => {
 	const verdictsQuery = useAuctionVerdicts(auctionEventId, 500, auctionCoordinates)
 	return useMemo(() => {
 		if (!auction) return new Set<string>()
@@ -872,7 +871,7 @@ export const useAuctionVerdictBackedBidIds = (auction: NDKEvent | null, auctionE
 			const parsed = parseValidatorVerdictEvent(event)
 			if (parsed.ok) parsedVerdicts.push(parsed.value)
 		}
-		return getAuctionVerdictBackedBidIds(auction, parsedVerdicts)
+		return getAuctionVerdictValidatedBidIds(auction, parsedVerdicts)
 	}, [auction, verdictsQuery.data])
 }
 

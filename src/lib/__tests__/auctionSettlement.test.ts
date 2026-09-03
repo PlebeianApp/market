@@ -11,7 +11,7 @@ import {
 	getAuctionEffectiveEndAt,
 	getAuctionMinBidCurve,
 	getAuctionRootEventId,
-	getAuctionVerdictBackedBidIds,
+	getAuctionVerdictValidatedBidIds,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '../auctionSettlement'
@@ -219,7 +219,7 @@ describe('auctionSettlement helpers', () => {
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1300)
 	})
 
-	test('getAuctionVerdictBackedBidIds only counts bids confirmed by a quorum of listed auditors', () => {
+	test('getAuctionVerdictValidatedBidIds only counts bids validated by a quorum of listed auditors', () => {
 		const auction = makeAuction({
 			id: 'auction-root',
 			endAt: 200,
@@ -238,31 +238,31 @@ describe('auctionSettlement helpers', () => {
 			makeVerdict({ validatorPubkey: 'validator-b', bidEventId: 'bid-invalid', claim: 'bid_invalid' }),
 		]
 
-		const backed = getAuctionVerdictBackedBidIds(auction, verdicts)
+		const validated = getAuctionVerdictValidatedBidIds(auction, verdicts)
 
-		expect(backed).toEqual(new Set(['bid-quorum']))
+		expect(validated).toEqual(new Set(['bid-quorum']))
 	})
 
-	test('getAuctionVerdictBackedBidIds returns empty when the auction lists no auditors', () => {
+	test('getAuctionVerdictValidatedBidIds returns empty when the auction lists no auditors', () => {
 		const auction = makeAuction({ id: 'auction-root', endAt: 200 })
 		const verdicts = [makeVerdict({ validatorPubkey: 'validator-a', bidEventId: 'bid-1', claim: 'valid_bid_placed' })]
 
-		expect(getAuctionVerdictBackedBidIds(auction, verdicts)).toEqual(new Set())
+		expect(getAuctionVerdictValidatedBidIds(auction, verdicts)).toEqual(new Set())
 	})
 
-	test('getAuctionCurrentPrice ignores unbacked bids when verdictBackedBidIds is provided (fake amount inflation)', () => {
+	test('getAuctionCurrentPrice ignores unreviewed bids when verdictValidatedBidIds is provided', () => {
 		const auction = makeAuction({ id: 'auction-root', endAt: 200, auditors: ['validator-a'], auditorQuorum: 1 })
 		const bids = [
 			makeBid({ id: 'bid-real', pubkey: 'alice', amount: 1200, createdAt: 110 }),
-			// Attacker-crafted kind-1023 with a fabricated amount and no backing proof.
+			// Unreviewed kind-1023 claims a much higher amount.
 			makeBid({ id: 'bid-fake', pubkey: 'mallory', amount: 999999999, createdAt: 120 }),
 		]
-		const verdictBackedBidIds = getAuctionVerdictBackedBidIds(auction, [
+		const verdictValidatedBidIds = getAuctionVerdictValidatedBidIds(auction, [
 			makeVerdict({ validatorPubkey: 'validator-a', bidEventId: 'bid-real', claim: 'valid_bid_placed' }),
 		])
 
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(999999999)
-		expect(getAuctionCurrentPrice(auction, bids, 1000, verdictBackedBidIds)).toBe(1200)
+		expect(getAuctionCurrentPrice(auction, bids, 1000, verdictValidatedBidIds)).toBe(1200)
 	})
 
 	test('bidding cutoff is max_end_at when max_end_at is after end_at', () => {

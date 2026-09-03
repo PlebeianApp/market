@@ -22,7 +22,7 @@ import {
 	getAuctionStartingBid,
 	getAuctionTitle,
 	useAuctionBids,
-	useAuctionVerdictBackedBidIds,
+	useAuctionVerdictValidatedBidIds,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
@@ -75,9 +75,9 @@ export function AuctionCard({
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
-	const verdictBackedBidIds = useAuctionVerdictBackedBidIds(auction, auctionRootEventId || auction.id, auctionCoordinates)
+	const verdictValidatedBidIds = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auction.id, auctionCoordinates)
 
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictBackedBidIds)
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const ended = countdown.isEnded
 	// Lower-bound gate: bids cannot be placed before start_at. Mirrors the
