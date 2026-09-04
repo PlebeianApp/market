@@ -260,7 +260,7 @@ export const authActions = {
 			const bunkerUrl = storage.getItem(NOSTR_CONNECT_KEY)
 			const expectedUserPubkey = storage.getItem(NOSTR_USER_PUBKEY)
 
-			if (privateKeySigner && bunkerUrl && expectedUserPubkey) {
+			if (privateKeySigner && bunkerUrl) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
 					expectedUserPubkey,
 				})
