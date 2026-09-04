@@ -861,19 +861,22 @@ export const getAuctionCurrentPriceFromBids = (
 /**
  * Bid ids an auditor quorum has validated for this auction. Pass the result
  * to `getAuctionCurrentPriceFromBids` to exclude unreviewed bids from the
- * displayed price. Verdicts do not verify Cashu collateral value.
+ * displayed price. Verdicts do not verify Cashu collateral value. Consumers
+ * that initiate economic actions must wait for `isReady`.
  */
 export const useAuctionVerdictValidatedBidIds = (auction: NDKEvent | null, auctionEventId: string, auctionCoordinates?: string) => {
 	const verdictsQuery = useAuctionVerdicts(auctionEventId, 500, auctionCoordinates)
-	return useMemo(() => {
-		if (!auction) return new Set<string>()
+	const verdictValidatedBidIds = useMemo(() => {
+		if (!auction || !verdictsQuery.isSuccess) return new Set<string>()
 		const parsedVerdicts: ParsedValidatorVerdictEvent[] = []
 		for (const event of verdictsQuery.data ?? []) {
 			const parsed = parseValidatorVerdictEvent(event)
 			if (parsed.ok) parsedVerdicts.push(parsed.value)
 		}
 		return getAuctionVerdictValidatedBidIds(auction, parsedVerdicts)
-	}, [auction, verdictsQuery.data])
+	}, [auction, verdictsQuery.data, verdictsQuery.isSuccess])
+
+	return { verdictValidatedBidIds, isReady: !!auction && verdictsQuery.isSuccess }
 }
 
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>

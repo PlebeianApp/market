@@ -75,7 +75,7 @@ export function AuctionCard({
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
-	const verdictValidatedBidIds = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auction.id, auctionCoordinates)
+	const { verdictValidatedBidIds } = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auction.id, auctionCoordinates)
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)

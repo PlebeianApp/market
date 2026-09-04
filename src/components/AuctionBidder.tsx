@@ -129,7 +129,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// "Not started yet" to "Place Bid" the moment start_at passes.
 	const notStarted = startAt > 0 && countdown.now < startAt
 
-	const verdictValidatedBidIds = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const { verdictValidatedBidIds, isReady: areVerdictsReady } = useAuctionVerdictValidatedBidIds(
+		auction,
+		auctionRootEventId || auctionId,
+		auctionCoordinates,
+	)
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidsCount = getAuctionVerdictValidatedBidCountFromBids(auction, bids, verdictValidatedBidIds)
 	const hasPriorBids = bidsCount > 0
@@ -209,6 +213,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const hasInsufficientBidFunds =
 		hasSignedInBidder &&
+		areVerdictsReady &&
 		isNip60Ready &&
 		!ended &&
 		!notStarted &&
@@ -238,7 +243,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}, [auctionRulesAckKey])
 
 	// Disable logic
-	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
+	const isDisabledInput = ended || notStarted || isOwnAuction || !areVerdictsReady || bidMutation.isPending
 	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
 	// Button text logic
@@ -253,7 +258,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
 
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
-		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
+		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction || !areVerdictsReady) return null
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {

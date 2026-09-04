@@ -431,7 +431,7 @@ function AuctionDetailRoute() {
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
-	const verdictValidatedBidIds = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const { verdictValidatedBidIds } = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))

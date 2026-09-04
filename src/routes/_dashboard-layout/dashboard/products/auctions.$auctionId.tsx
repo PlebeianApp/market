@@ -265,7 +265,7 @@ function DashboardAuctionDetailRoute() {
 	const now = countdown.now
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
-	const verdictValidatedBidIds = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const { verdictValidatedBidIds } = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidCount = getAuctionBidCountFromBids(auction, bids)
 
