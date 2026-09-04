@@ -225,6 +225,15 @@ export class Nip46Mock {
 			}
 		})
 
+		// Publish the NIP-46 signer-initiated connect request so the client
+		// approves this signer before processing the secret response.
+		const connectRequest = {
+			id: crypto.randomUUID(),
+			method: 'connect',
+			params: [secret],
+		}
+		await this.sendEncrypted(localPubkey, connectRequest)
+
 		// Publish the NIP-46 client-initiated connect response.
 		const connectResponse = {
 			id: crypto.randomUUID(),

@@ -127,9 +127,9 @@ describe('auth storage bootstrap', () => {
 		}
 	})
 
-	test('does not auto-login with a NIP-46 pair that has no persisted user identity', async () => {
+	test('migrates a NIP-46 pair that has no persisted user identity', async () => {
 		localStorage.setItem('nostr_auto_login', 'true')
-		localStorage.setItem('nostr_local_signer_key', 'stale-local-key')
+		localStorage.setItem('nostr_local_signer_key', '1'.repeat(64))
 		localStorage.setItem('nostr_connect_url', 'bunker://stale-signer?secret=stale')
 
 		const originalLoginWithNip46 = authActions.loginWithNip46
@@ -142,10 +142,11 @@ describe('auth storage bootstrap', () => {
 		try {
 			await authActions.getAuthFromLocalStorageAndLogin()
 
-			expect(loginWithNip46).not.toHaveBeenCalled()
-			expect(loginWithExtension).toHaveBeenCalledTimes(1)
-			expect(localStorage.getItem('nostr_local_signer_key')).toBeNull()
-			expect(localStorage.getItem('nostr_connect_url')).toBeNull()
+			expect(loginWithNip46).toHaveBeenCalledTimes(1)
+			expect(loginWithNip46.mock.calls[0]?.[2]).toEqual({ expectedUserPubkey: null })
+			expect(loginWithExtension).not.toHaveBeenCalled()
+			expect(localStorage.getItem('nostr_local_signer_key')).toBe('1'.repeat(64))
+			expect(localStorage.getItem('nostr_connect_url')).toBe('bunker://stale-signer?secret=stale')
 		} finally {
 			authActions.loginWithNip46 = originalLoginWithNip46
 			authActions.loginWithExtension = originalLoginWithExtension
