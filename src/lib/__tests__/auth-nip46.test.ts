@@ -14,6 +14,16 @@ const createLocalStorageStub = () => {
 	}
 }
 
+const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+
+afterEach(() => {
+	if (originalLocalStorageDescriptor) {
+		Object.defineProperty(globalThis, 'localStorage', originalLocalStorageDescriptor)
+	} else {
+		Reflect.deleteProperty(globalThis, 'localStorage')
+	}
+})
+
 describe('persistAuthenticatedLoginState', () => {
 	beforeEach(() => {
 		const storage = createLocalStorageStub()
@@ -143,7 +153,7 @@ describe('auth storage bootstrap', () => {
 			await authActions.getAuthFromLocalStorageAndLogin()
 
 			expect(loginWithNip46).toHaveBeenCalledTimes(1)
-			expect(loginWithNip46.mock.calls[0]?.[2]).toEqual({ expectedUserPubkey: null })
+			expect((loginWithNip46.mock.calls[0] as any)?.[2]).toEqual({ expectedUserPubkey: null })
 			expect(loginWithExtension).not.toHaveBeenCalled()
 			expect(localStorage.getItem('nostr_local_signer_key')).toBe('1'.repeat(64))
 			expect(localStorage.getItem('nostr_connect_url')).toBe('bunker://stale-signer?secret=stale')
@@ -488,7 +498,11 @@ describe('loginWithNip46', () => {
 		cartActions.reconcileRemoteCartForUser = originalReconcileRemoteCartForUser
 		NDKNip46Signer.prototype.blockUntilReady = originalBlockUntilReady
 		authStore.setState(() => authInitialState)
-		Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor!)
+		if (localStorageDescriptor) {
+			Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor)
+		} else {
+			Reflect.deleteProperty(globalThis, 'localStorage')
+		}
 	})
 
 	test('waits for signer setup before exposing an authenticated session', async () => {
