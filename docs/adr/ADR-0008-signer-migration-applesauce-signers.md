@@ -272,8 +272,11 @@ builds and shows as a QR) or bunker-initiated (`bunker://`).
    `nostrconnect://` flow, an unknown remote signer MUST NOT be bound from a bare `ack`.
    The NIP-46 `connect` result is either `"ack"` or the echoed connect secret
    (`applesauce-signers` types it `"ack" | string`); the app verifies the expected
-   connect secret (the `connectSecret` parsed from the `nostrconnect://` URI —
-   `NostrConnectSignerOptions.connectSecret`, the older `secret` field is deprecated)
+   connect secret (the `connectSecret` the app generates — settable on the signer
+   as the `signer.connectSecret` instance property, defaulting to random — and
+   publishes in the `nostrconnect://` URI; the bunker echoes it back and the app
+   verifies the match; the older `secret` field is a deprecated alias for
+   `connectSecret`)
    before treating the remote signer as the authenticated peer. A generic `ack` — or any
    secret mismatch — fails closed and does not persist a session.
 2. **Remote-signer pubkey ≠ authenticated user pubkey.** The remote-signer pubkey (the
@@ -311,9 +314,10 @@ crypto primitive:
 
 - **Local signers** (`PrivateKeySigner`, `PasswordSigner`) implement `nip44` locally —
   their `nip44` is non-optional.
-- **Delegating signers** (`ExtensionSigner` for NIP-07, `NostrConnectSigner` for NIP-46)
-  expose `nip44` only when the underlying window extension / remote bunker supports it; it
-  may legitimately be `undefined`.
+- **Delegating signers differ.** `NostrConnectSigner` (NIP-46) delegates
+  `nip04`/`nip44` over NIP-46 RPC (`nip44_encrypt`/`nip44_decrypt`) and always
+  exposes them. `ExtensionSigner` (NIP-07) exposes `nip44` only when
+  `window.nostr.nip44` exists and may legitimately be `undefined`.
 - **Consumers fail closed.** An operation that requires NIP-44 (NIP-59 gift-wrap
   seal/encrypt/decrypt) checks the capability first and throws/rejects if absent. A NIP-07
   user may authenticate without Plebeian ever seeing their private key, so NIP-59 cannot
