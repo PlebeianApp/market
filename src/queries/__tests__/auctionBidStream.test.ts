@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { buildAuctionBidFilters, buildAuctionVerdictFilter, mergeAndSortBids } from '@/queries/auctions'
+import { buildAuctionBidFilters, buildAuctionVerdictFilter, getAuctionCurrentPriceFromBids, mergeAndSortBids } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 const AUCTION_BID_KIND = 1023
@@ -62,6 +62,21 @@ describe('buildAuctionVerdictFilter', () => {
 
 	test('does not create an unscoped verdict request without configured auditors', () => {
 		expect(buildAuctionVerdictFilter('root123', undefined, [])).toBeNull()
+	})
+})
+
+describe('getAuctionCurrentPriceFromBids', () => {
+	test('filters unvalidated bids when auction context is unavailable', () => {
+		const validatedBid = {
+			...makeBid('validated', 100),
+			tags: [['amount', '1200']],
+		}
+		const unvalidatedBid = {
+			...makeBid('unvalidated', 101),
+			tags: [['amount', '999999999']],
+		}
+
+		expect(getAuctionCurrentPriceFromBids(null, [validatedBid, unvalidatedBid], 1000, new Set(['validated']))).toBe(1200)
 	})
 })
 

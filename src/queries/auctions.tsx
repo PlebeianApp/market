@@ -879,7 +879,10 @@ export const getAuctionCurrentPriceFromBids = (
 ): number =>
 	auction
 		? computeAuctionCurrentPrice(auction, bids, startingBid, verdictValidatedBidIds)
-		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
+		: (verdictValidatedBidIds ? bids.filter((bid) => verdictValidatedBidIds.has(bid.id)) : bids).reduce(
+				(max, bid) => Math.max(max, getBidAmount(bid)),
+				startingBid,
+			)
 
 /**
  * Bid ids an auditor quorum has validated for this auction. Pass the result
