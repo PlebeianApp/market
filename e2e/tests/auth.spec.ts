@@ -101,8 +101,8 @@ async function openLoginDialog(page: Page) {
 }
 
 /** Verify the user is authenticated (dashboard button visible) */
-async function expectAuthenticated(page: Page) {
-	await expect(page.locator('[data-testid="dashboard-button"]').first()).toBeVisible({ timeout: 10_000 })
+async function expectAuthenticated(page: Page, timeout = 10_000) {
+	await expect(page.locator('[data-testid="dashboard-button"]').first()).toBeVisible({ timeout })
 }
 
 /** Verify the user is NOT authenticated (login button visible) */
@@ -398,11 +398,11 @@ test.describe('Authentication', () => {
 	})
 
 	test.describe('NIP-46 Nostr Connect', () => {
-		test('QR code login with NIP-46 mock', async ({ browser }) => {
+		test('QR login keeps the remote signer endpoint distinct from the authenticated user', async ({ browser }) => {
 			test.setTimeout(60_000)
 			const context = await browser.newContext()
 			const page = await createFreshPage(context)
-			const mock = new Nip46Mock(devUser2.sk)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
 
 			try {
 				await page.goto('/')
@@ -434,6 +434,8 @@ test.describe('Authentication', () => {
 				// successfully!" briefly before closing via onSuccess(). Verify
 				// auth directly since the intermediate text may flash too fast.
 				await expectAuthenticated(page)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 
 				// Verify localStorage has NIP-46 keys
 				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
@@ -441,7 +443,36 @@ test.describe('Authentication', () => {
 
 				const connectUrl = await page.evaluate(() => localStorage.getItem('nostr_connect_url'))
 				expect(connectUrl).toBeTruthy()
-				expect(connectUrl).toContain('bunker://')
+				expect(connectUrl).toContain(`bunker://${mock.pk}`)
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
+		test('QR timeout recovery authenticates as get_public_key user, not the remote signer', async ({ browser }) => {
+			test.setTimeout(60_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
+
+			try {
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="qr-tab"]').click()
+				await page.locator('[role="combobox"]').click()
+				await page.locator('[role="option"]').filter({ hasText: 'Custom relay...' }).click()
+				await page.locator('input[placeholder="wss://..."]').fill(RELAY_URL)
+
+				const urlInput = page.locator('input[readonly]')
+				await expect(urlInput).toBeVisible({ timeout: 15_000 })
+				await mock.respondToConnect(await urlInput.inputValue(), { connectAckDelayMs: 9_000 })
+
+				await expectAuthenticated(page, 15_000)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 			} finally {
 				mock.close()
 				await context.close()
@@ -482,6 +513,34 @@ test.describe('Authentication', () => {
 
 				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
 				expect(signerKey).toBeTruthy()
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
+		test('Bunker URL timeout recovery authenticates as get_public_key user, not the remote signer', async ({ browser }) => {
+			test.setTimeout(60_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser1.sk, devUser2.sk)
+			const secret = 'slow-test-secret-' + Date.now()
+
+			try {
+				await mock.startSignerLoop(RELAY_URL, { connectAckDelayMs: 9_000 })
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await openLoginDialog(page)
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+				await page
+					.locator('[data-testid="bunker-url-input"]')
+					.fill(`bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}&secret=${secret}`)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				await expectAuthenticated(page, 15_000)
+				expect(mock.pk).not.toBe(mock.userPk)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_user_pubkey'))).toBe(mock.userPk)
 			} finally {
 				mock.close()
 				await context.close()
