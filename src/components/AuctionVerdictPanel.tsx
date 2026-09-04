@@ -21,6 +21,7 @@ import { AvatarUser } from '@/components/AvatarUser'
 interface Props {
 	auctionRootEventId: string
 	auctionCoordinate: string
+	auditorPubkeys: string[]
 }
 
 const claimToneClass = (claim: string): string => {
@@ -41,8 +42,8 @@ const formatTs = (ts: number): string => {
 	}
 }
 
-export const AuctionVerdictPanel = ({ auctionRootEventId, auctionCoordinate }: Props) => {
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinate)
+export const AuctionVerdictPanel = ({ auctionRootEventId, auctionCoordinate, auditorPubkeys }: Props) => {
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinate, auditorPubkeys)
 	const rawVerdicts = verdictsQuery.data ?? []
 
 	const verdicts = useMemo<ParsedValidatorVerdictEvent[]>(() => {

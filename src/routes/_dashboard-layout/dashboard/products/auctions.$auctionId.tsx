@@ -30,6 +30,7 @@ import {
 	getAuctionBidCountFromBids,
 	getAuctionBidIncrement,
 	getAuctionCurrentPriceFromBids,
+	getAuctionAuditors,
 	useAuctionVerdictValidatedBidIds,
 	getAuctionCurrency,
 	getAuctionPathIssuer,
@@ -943,7 +944,11 @@ function DashboardAuctionDetailRoute() {
 								</div>
 							)}
 
-							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
+							<AuctionVerdictPanel
+								auctionRootEventId={auctionRootEventId || auctionId}
+								auctionCoordinate={auctionCoordinates}
+								auditorPubkeys={getAuctionAuditors(auction)}
+							/>
 
 							{/* Tech accordion — visible to all but only really useful for seller / debugging */}
 							<Accordion type="multiple" className="rounded-2xl border border-zinc-200 bg-white px-4">

@@ -513,20 +513,34 @@ export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
+	auditorPubkeys: string[] = [],
 ): Promise<NDKEvent[]> => {
-	if (!auctionEventId && !auctionCoordinates) return []
+	const filter = buildAuctionVerdictFilter(auctionEventId, auctionCoordinates, auditorPubkeys, limit)
+	if (!filter) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+export function buildAuctionVerdictFilter(
+	auctionEventId: string,
+	auctionCoordinates: string | undefined,
+	auditorPubkeys: string[],
+	limit: number = 500,
+): NDKFilter | null {
+	const auditors = [...new Set(auditorPubkeys.map((pubkey) => pubkey.trim()).filter(Boolean))]
+	if ((!auctionEventId && !auctionCoordinates) || auditors.length === 0) return null
+
 	const filter: NDKFilter = {
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
+		authors: auditors,
 		limit,
 	}
 	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
 	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
-
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return filter
 }
 
 export const auctionsQueryOptions = (limit: number = 200) =>
@@ -655,11 +669,20 @@ export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: n
 		refetchInterval: 5000,
 	})
 
-export const auctionVerdictsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const auctionVerdictsQueryOptions = (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+	auditorPubkeys: string[] = [],
+) =>
 	queryOptions({
-		queryKey: [...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
-		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates),
-		enabled: !!(auctionEventId || auctionCoordinates),
+		queryKey: [
+			...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''),
+			auctionCoordinates || '',
+			[...new Set(auditorPubkeys)].sort(),
+		],
+		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, auditorPubkeys),
+		enabled: !!(auctionEventId || auctionCoordinates) && auditorPubkeys.length > 0,
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})
@@ -865,7 +888,8 @@ export const getAuctionCurrentPriceFromBids = (
  * that initiate economic actions must wait for `isReady`.
  */
 export const useAuctionVerdictValidatedBidIds = (auction: NDKEvent | null, auctionEventId: string, auctionCoordinates?: string) => {
-	const verdictsQuery = useAuctionVerdicts(auctionEventId, 500, auctionCoordinates)
+	const auditorPubkeys = getAuctionAuditors(auction)
+	const verdictsQuery = useAuctionVerdicts(auctionEventId, 500, auctionCoordinates, auditorPubkeys)
 	const verdictValidatedBidIds = useMemo(() => {
 		if (!auction || !verdictsQuery.isSuccess) return new Set<string>()
 		const parsedVerdicts: ParsedValidatorVerdictEvent[] = []
@@ -876,7 +900,7 @@ export const useAuctionVerdictValidatedBidIds = (auction: NDKEvent | null, aucti
 		return getAuctionVerdictValidatedBidIds(auction, parsedVerdicts)
 	}, [auction, verdictsQuery.data, verdictsQuery.isSuccess])
 
-	return { verdictValidatedBidIds, isReady: !!auction && verdictsQuery.isSuccess }
+	return { verdictValidatedBidIds, isReady: !!auction && auditorPubkeys.length > 0 && verdictsQuery.isSuccess }
 }
 
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
@@ -1030,9 +1054,14 @@ export const useAuctionPathReleases = (auctionEventId: string, limit: number = 2
 		...auctionPathReleasesQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
 
-export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const useAuctionVerdicts = (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+	auditorPubkeys: string[] = [],
+) =>
 	useQuery({
-		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates),
+		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates, auditorPubkeys),
 	})
 
 // ---------------------------------------------------------------------------
