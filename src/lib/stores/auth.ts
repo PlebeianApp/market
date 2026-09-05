@@ -1,4 +1,4 @@
-import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
@@ -8,7 +8,7 @@ import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
-import { createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
+import { createExtensionSigner, createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -214,12 +214,17 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip07Signer()
+			// NIP-07 lane: build the applesauce ExtensionSigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0008 strangler-fig). No key is held locally.
+			const capability = createExtensionSigner()
+			const signer = new NdkSignerAdapter(capability)
+			setSignerCapability(capability)
+			// blockUntilReady awaits getPublicKey — the extension-available check
+			// (ExtensionSigner throws ExtensionMissingError when window.nostr is
+			// absent, on top of the getAvailableNostrExtensions guard above).
 			await signer.blockUntilReady()
-			// NIP-07 lane has no signer capability yet (A3-3): clear any stale
-			// capability in lockstep so io-applesauce.sign() can't sign with a
-			// key from a previous login.
-			setSignerCapability(undefined)
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
