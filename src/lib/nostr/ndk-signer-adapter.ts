@@ -19,6 +19,7 @@
 import type { NDKSigner, NDKEncryptionScheme } from '@/lib/nostr/ndk-events'
 import { NDKUser } from '@/lib/nostr/ndk-events'
 import { ndkActions } from '@/lib/stores/ndk'
+import { isValidHexKey } from '@/lib/utils'
 import type { NostrEvent } from 'nostr-tools/pure'
 import { hasNip04, hasNip44, type SignerCapability } from './signer-capability'
 
@@ -33,6 +34,19 @@ export class NdkSignerAdapter implements NDKSigner {
 	constructor(capability: SignerCapability) {
 		if (!capability) throw new Error('Cannot build a signer adapter without a signer capability')
 		this.capability = capability
+	}
+
+	/**
+	 * Reject malformed pubkeys AT THE SEAM (the capability boundary) instead of
+	 * propagating an empty or non-hex `getPublicKey()` result to NDKUser /
+	 * `cachedPubkey`. The signer library does not validate the pubkey shape, so
+	 * a garbage value would otherwise flow into every downstream
+	 * `signer.user().pubkey` consumer.
+	 */
+	private assertValidPubkey(pubkey: string): void {
+		if (!isValidHexKey(pubkey)) {
+			throw new Error(`Signer returned an invalid public key (${JSON.stringify(pubkey)}): expected a 64-character hex string`)
+		}
 	}
 
 	get pubkey(): string {
@@ -51,6 +65,7 @@ export class NdkSignerAdapter implements NDKSigner {
 
 	async user(): Promise<NDKUser> {
 		const pubkey = await this.capability.getPublicKey()
+		this.assertValidPubkey(pubkey)
 		this.cachedPubkey = pubkey
 		// Fetch-free: resolve an NDKUser from the capability pubkey without any
 		// relay round-trip. Consumers that need a profile fetch keep their own
@@ -62,6 +77,7 @@ export class NdkSignerAdapter implements NDKSigner {
 
 	async sign(event: NdkSignableEvent): Promise<string> {
 		const capabilityPubkey = await this.capability.getPublicKey()
+		this.assertValidPubkey(capabilityPubkey)
 		const signed = await this.capability.signEvent(event as unknown as NostrEvent)
 		if (signed.pubkey !== capabilityPubkey) {
 			throw new Error('Signer returned an event for a different pubkey than the authenticated user')

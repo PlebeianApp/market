@@ -153,4 +153,28 @@ describe('NdkSignerAdapter', () => {
 		expect(await bareAdapter.encryptionEnabled()).toEqual([])
 		expect(await bareAdapter.encryptionEnabled('nip44')).toEqual([])
 	})
+
+	test('throws when constructed without a signer capability', () => {
+		expect(() => new NdkSignerAdapter(null as unknown as SignerCapability)).toThrow(
+			'Cannot build a signer adapter without a signer capability',
+		)
+	})
+
+	test('pubkey and userSync throw "Not ready" before any user()/blockUntilReady resolves them', () => {
+		const signer = PrivateKeySigner.fromKey(crypto.getRandomValues(new Uint8Array(32)))
+		const adapter = new NdkSignerAdapter(capabilityFor(signer))
+
+		expect(() => adapter.pubkey).toThrow('Not ready')
+		expect(() => adapter.userSync).toThrow('Not ready')
+	})
+
+	test('rejects an empty or non-hex public key from the capability (fail closed at the seam)', async () => {
+		const signer = PrivateKeySigner.fromKey(crypto.getRandomValues(new Uint8Array(32)))
+
+		const emptyPubkey: SignerCapability = { ...capabilityFor(signer), getPublicKey: async () => '' }
+		const nonHexPubkey: SignerCapability = { ...capabilityFor(signer), getPublicKey: async () => 'not-a-hex-pubkey' }
+
+		await expect(new NdkSignerAdapter(emptyPubkey).user()).rejects.toThrow(/invalid public key/)
+		await expect(new NdkSignerAdapter(nonHexPubkey).user()).rejects.toThrow(/invalid public key/)
+	})
 })
