@@ -49,8 +49,11 @@ export const getAuctionTagValues = (event: NostrEventLike, tagName: string): str
 	event.tags.filter((tag) => tag[0] === tagName && !!tag[1]).map((tag) => tag[1] || '')
 
 export const parseAuctionNonNegativeInt = (value?: string, fallback: number = 0): number => {
-	const parsed = value ? parseInt(value, 10) : NaN
-	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+	const text = value?.trim() ?? ''
+	if (!/^\d+$/.test(text)) return fallback
+
+	const parsed = Number(text)
+	return Number.isSafeInteger(parsed) ? parsed : fallback
 }
 
 export const getAuctionBidAmount = (bidEvent: NostrEventLike): number => {
