@@ -6,15 +6,17 @@
  * are mirrored from the NDK store for now (temporary coupling that goes away
  * when the NDK singleton is deleted in Wave D).
  *
- * `sign` is intentionally not wired here: it lands in Wave A3 once the
- * signer (NIP-07 / nsec) is migrated off NDK. Until then, callers that need
- * signing keep routing through the NDK bridge (NIP-46 stays there longest).
+ * `sign` routes through the attached signer capability (Wave A3): when a user
+ * has logged in the `signer-registry` holds their capability and signing is
+ * delegated to it with a fail-closed pubkey-equality assertion; when no
+ * capability is attached it still throws (there is nothing to sign with).
  */
 import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
 import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
+import { getSignerCapability } from './signer-registry'
 
 let pool: RelayPool | null = null
 
@@ -157,8 +159,20 @@ export const applesauceIo: NostrIo = {
 		await getPool().publish(urls, event)
 	},
 
-	async sign(_template: EventTemplate) {
-		throw new Error('applesauceIo.sign is not wired until Wave A3 (auth/signer migration)')
+	async sign(template: EventTemplate): Promise<NostrEvent> {
+		const capability = getSignerCapability()
+		if (!capability) {
+			throw new Error('applesauceIo.sign: no signer capability attached (login first)')
+		}
+		const signed = await capability.signEvent(template)
+		const pubkey = await capability.getPublicKey()
+		// ADR-0008 signed-event identity invariant: in-signer verification alone
+		// does not prove WHICH key signed — assert the pubkey matches the
+		// authenticated user's, and fail closed otherwise.
+		if (signed.pubkey !== pubkey) {
+			throw new Error('Signer returned an event for a different pubkey than the authenticated user')
+		}
+		return signed
 	},
 
 	async getUser() {
