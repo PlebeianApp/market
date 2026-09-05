@@ -7,6 +7,7 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
+import { setSignerCapability } from '@/lib/nostr/signer-registry'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -522,6 +523,13 @@ export const ndkActions = {
 				console.error('[ndk] Failed to initialize NIP-60 wallet:', e)
 			}
 		} else {
+			// Clear the attached signer capability in lockstep with the NDK
+			// signer. `setSigner(undefined)` is the single chokepoint through
+			// which EVERY detach path runs (authActions.logout, removeSigner,
+			// NIP-60 reset) — so clearing the registry HERE guarantees
+			// `io-applesauce.sign()` fails closed again no matter who removed
+			// the signer, not just authActions.logout.
+			setSignerCapability(undefined)
 			ndkActions.setActiveNwcWalletUri(null)
 			nip60Actions.reset()
 		}
