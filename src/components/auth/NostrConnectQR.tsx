@@ -167,7 +167,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				}
 
 				setConnectionStatus('connected')
-				await authActions.loginWithNip46(bunkerUrl, localSigner)
+				await authActions.loginWithNip46(bunkerUrl, localSigner.privateKey)
 
 				triggerSuccess()
 			} catch (err) {

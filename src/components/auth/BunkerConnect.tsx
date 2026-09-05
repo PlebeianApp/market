@@ -3,7 +3,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { authActions } from '@/lib/stores/auth'
-import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { ExternalLink, Loader2, QrCode } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import { Scanner } from '@yudiel/react-qr-scanner'
@@ -96,12 +95,9 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 			setError(null)
 			setAuthUrl(null)
 
-			// Generate a local signer for the connection
-			const localSigner = NDKPrivateKeySigner.generate()
-			await localSigner.blockUntilReady()
-
-			// Connect using the bunker URL
-			await authActions.loginWithNip46(bunkerUrl, localSigner, {
+			// Connect using the bunker URL (the client key is generated and
+			// persisted by loginWithNip46).
+			await authActions.loginWithNip46(bunkerUrl, undefined, {
 				onAuthUrl: (url) => {
 					const safeAuthUrl = getSafeAuthUrl(url)
 
