@@ -216,6 +216,10 @@ export const authActions = {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip07Signer()
 			await signer.blockUntilReady()
+			// NIP-07 lane has no signer capability yet (A3-3): clear any stale
+			// capability in lockstep so io-applesauce.sign() can't sign with a
+			// key from a previous login.
+			setSignerCapability(undefined)
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
@@ -267,6 +271,10 @@ export const authActions = {
 			}
 
 			await signer.blockUntilReady()
+			// NIP-46 lane has no signer capability yet (B-2): clear any stale
+			// capability in lockstep so io-applesauce.sign() can't sign with a
+			// key from a previous login.
+			setSignerCapability(undefined)
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
 
