@@ -13,6 +13,7 @@ import {
 	type CheckoutDeliveryRequirements,
 } from '@/lib/checkout/deliveryRequirements'
 import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import { getSignerCapability } from '@/lib/nostr/signer-registry'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { Event } from 'nostr-tools'
@@ -855,7 +856,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 	}
 
 	const signerRequired = preflight.some(({ requirements }) => requiresPrivateBuyerDeliveryDetails(requirements))
-	const signer = signerRequired ? ndkActions.getSigner() : undefined
+	const signer = signerRequired ? getSignerCapability() : undefined
 	if (signerRequired && !signer) {
 		throw new Error('Encrypted seller delivery could not be prepared')
 	}
