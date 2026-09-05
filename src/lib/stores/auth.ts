@@ -1,4 +1,4 @@
-import { NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
+import { NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
@@ -9,7 +9,7 @@ import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
 import { createExtensionSigner, createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
-import { createNip46Signer } from '@/lib/nostr/nip46-signer-capability'
+import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -66,7 +66,7 @@ export const authActions = {
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 
 			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
+				await authActions.loginWithNip46(bunkerUrl, privateKeySigner)
 				authActions.checkAndShowTermsDialog()
 				return
 			}
@@ -258,7 +258,7 @@ export const authActions = {
 		}
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
+	loginWithNip46: async (bunkerUrl: string, clientKeyHex?: string, options?: Nip46LoginOptions) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
@@ -266,29 +266,30 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const { signer, capability } = createNip46Signer(ndk, bunkerUrl, localSigner)
-
-			if (options?.onAuthUrl) {
-				signer.on('authUrl', (url) => {
-					if (typeof url === 'string' && url.length > 0) {
-						options.onAuthUrl?.(url)
-					}
-				})
-			}
-
-			await signer.blockUntilReady()
-			// Interim NIP-46 bridge (ADR-0008, until B-2): wrap the NDK bunker signer
-			// in the app-owned SignerCapability seam so the NIP-59 private-delivery
-			// paths (publish + read) resolve it for the bunker lane exactly like the
-			// nsec / NIP-07 lanes. Without this, bunker buyers hit "Encrypted seller
-			// delivery could not be prepared" and seller decryption silently no-ops.
+			// NIP-46 bunker lane: build the applesauce NostrConnectSigner behind
+			// the signer capability seam (ADR-0008 Wave A3b / B-2), then attach an
+			// NDKSigner adapter so the ~70 `signer.user()` consumers (and the wallet
+			// NWC paths) keep working unchanged. The app-side wrappers enforce the
+			// ADR invariants the library does NOT provide (strict connect-secret
+			// binding, RPC timeouts, authUrl → onAuth, pubkey-equality on sign).
+			const { capability, clientKeyHex: persistedClientKey } = await connectBunkerSigner(bunkerUrl, {
+				clientKeyHex,
+				onAuth: options?.onAuthUrl
+					? (url) => {
+							options.onAuthUrl?.(url)
+							return Promise.resolve()
+						}
+					: undefined,
+			})
+			const adapter = new NdkSignerAdapter(capability)
 			setSignerCapability(capability)
-			ndkActions.setSigner(signer)
-			const user = await signer.user()
+			await adapter.blockUntilReady()
+			ndkActions.setSigner(adapter)
+			const user = await adapter.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
 
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
+			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, persistedClientKey)
 			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
 			authStore.setState((state) => ({
@@ -297,7 +298,7 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
