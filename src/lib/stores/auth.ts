@@ -1,4 +1,4 @@
-import { NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
+import { NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
@@ -9,6 +9,7 @@ import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
 import { createExtensionSigner, createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
+import { createNip46Signer } from '@/lib/nostr/nip46-signer-capability'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -265,7 +266,7 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+			const { signer, capability } = createNip46Signer(ndk, bunkerUrl, localSigner)
 
 			if (options?.onAuthUrl) {
 				signer.on('authUrl', (url) => {
@@ -276,10 +277,12 @@ export const authActions = {
 			}
 
 			await signer.blockUntilReady()
-			// NIP-46 lane has no signer capability yet (B-2): clear any stale
-			// capability in lockstep so io-applesauce.sign() can't sign with a
-			// key from a previous login.
-			setSignerCapability(undefined)
+			// Interim NIP-46 bridge (ADR-0008, until B-2): wrap the NDK bunker signer
+			// in the app-owned SignerCapability seam so the NIP-59 private-delivery
+			// paths (publish + read) resolve it for the bunker lane exactly like the
+			// nsec / NIP-07 lanes. Without this, bunker buyers hit "Encrypted seller
+			// delivery could not be prepared" and seller decryption silently no-ops.
+			setSignerCapability(capability)
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
 
