@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, nip44, type Event } from 'nostr-tools'
+import type { EventTemplate } from 'nostr-tools/pure'
 import { createNip17GiftWrapsWithSigner } from '../nostr/nip17'
 import { NIP59_GIFT_WRAP_KIND } from '../nostr/nip59'
 import { NIP17_DM_RELAY_LIST_KIND, type Nip17DmRelayListEvent } from '../nostr/nip17Relays'
@@ -30,28 +31,21 @@ function createSigner(privateKey: Uint8Array, supportsNip44 = true): Nip17OrderT
 	const pubkey = getPublicKey(privateKey)
 
 	return {
-		user: async () => ({ pubkey }),
-		encryptionEnabled: async () => (supportsNip44 ? ['nip44'] : []),
-		encrypt: async (recipient: { pubkey: string }, plaintext: string) => {
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipient.pubkey)
-			return nip44.v2.encrypt(plaintext, conversationKey)
-		},
-		decrypt: async (sender: { pubkey: string }, ciphertext: string) => {
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, sender.pubkey)
-			return nip44.v2.decrypt(ciphertext, conversationKey)
-		},
-		sign: async (event: { kind: number; created_at: number; tags: string[][]; content: string }) => {
-			return finalizeEvent(
-				{
-					kind: event.kind,
-					created_at: event.created_at,
-					tags: event.tags,
-					content: event.content,
-				},
-				privateKey,
-			).sig
-		},
-	} as unknown as Nip17OrderTransportSigner
+		getPublicKey: async () => pubkey,
+		signEvent: async (template) => finalizeEvent(template as EventTemplate, privateKey),
+		nip44: supportsNip44
+			? {
+					encrypt: async (recipientPubkey: string, plaintext: string) => {
+						const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipientPubkey)
+						return nip44.v2.encrypt(plaintext, conversationKey)
+					},
+					decrypt: async (senderPubkey: string, ciphertext: string) => {
+						const conversationKey = nip44.v2.utils.getConversationKey(privateKey, senderPubkey)
+						return nip44.v2.decrypt(ciphertext, conversationKey)
+					},
+				}
+			: undefined,
+	}
 }
 
 function malformedGiftWrap(recipientPubkey: string): Event {

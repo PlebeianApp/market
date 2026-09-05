@@ -1,4 +1,4 @@
-import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
@@ -8,6 +8,15 @@ import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
+import {
+	createExtensionSigner,
+	createPrivateKeySigner,
+	runSignerTeardown,
+	setSignerCapability,
+	setSignerTeardown,
+} from '@/lib/nostr/signer-registry'
+import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
+import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -63,7 +72,7 @@ export const authActions = {
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 
 			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
+				await authActions.loginWithNip46(bunkerUrl, privateKeySigner)
 				authActions.checkAndShowTermsDialog()
 				return
 			}
@@ -155,7 +164,14 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKPrivateKeySigner(privateKey)
+			// nsec lane: build the applesauce PrivateKeySigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0008 strangler-fig). No NEW plaintext is persisted here
+			// — the nsec key stays in-memory until Wave B-3 unifies session storage.
+			const capability = createPrivateKeySigner(privateKey)
+			const signer = new NdkSignerAdapter(capability)
+			setSignerCapability(capability)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 
@@ -205,7 +221,16 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip07Signer()
+			// NIP-07 lane: build the applesauce ExtensionSigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0008 strangler-fig). No key is held locally.
+			const capability = createExtensionSigner()
+			const signer = new NdkSignerAdapter(capability)
+			setSignerCapability(capability)
+			// blockUntilReady awaits getPublicKey — the extension-available check
+			// (ExtensionSigner throws ExtensionMissingError when window.nostr is
+			// absent, on top of the getAvailableNostrExtensions guard above).
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 
@@ -239,7 +264,7 @@ export const authActions = {
 		}
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
+	loginWithNip46: async (bunkerUrl: string, clientKeyHex?: string, options?: Nip46LoginOptions) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
@@ -247,23 +272,35 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
-
-			if (options?.onAuthUrl) {
-				signer.on('authUrl', (url) => {
-					if (typeof url === 'string' && url.length > 0) {
-						options.onAuthUrl?.(url)
-					}
-				})
-			}
-
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			const user = await signer.user()
+			// NIP-46 bunker lane: build the applesauce NostrConnectSigner behind
+			// the signer capability seam (ADR-0008 Wave A3b / B-2), then attach an
+			// NDKSigner adapter so the ~70 `signer.user()` consumers (and the wallet
+			// NWC paths) keep working unchanged. The app-side wrappers enforce the
+			// ADR invariants the library does NOT provide (strict connect-secret
+			// binding, RPC timeouts, authUrl → onAuth, pubkey-equality on sign).
+			const bundle = await connectBunkerSigner(bunkerUrl, {
+				clientKeyHex,
+				onAuth: options?.onAuthUrl
+					? (url) => {
+							options.onAuthUrl?.(url)
+							return Promise.resolve()
+						}
+					: undefined,
+			})
+			const adapter = new NdkSignerAdapter(bundle.capability)
+			setSignerCapability(bundle.capability)
+			// Keep the live signer handle so any detach path (logout / removeSigner)
+			// can tear it down. `NostrConnectSigner.logout()` notifies the remote and
+			// close()s the repeat()/retry() REQ subscription — without this, a
+			// re-login stacks a second kind-24133 subscription on the shared pool.
+			setSignerTeardown(() => bundle.signer.logout())
+			await adapter.blockUntilReady()
+			ndkActions.setSigner(adapter)
+			const user = await adapter.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
 
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
+			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, bundle.clientKeyHex)
 			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
 			authStore.setState((state) => ({
@@ -272,7 +309,7 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
@@ -288,6 +325,12 @@ export const authActions = {
 
 	logout: () => {
 		const ndk = ndkActions.getNDK()
+		// Tear down the NIP-46 signer session (closes its REQ subscription) in
+		// lockstep with the capability, so re-login does not stack subscriptions.
+		void runSignerTeardown()
+		// Clear the signer capability in lockstep with the NDK signer so the
+		// io-applesauce `sign()` port fails closed again after logout.
+		setSignerCapability(undefined)
 		if (!ndk) return
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)

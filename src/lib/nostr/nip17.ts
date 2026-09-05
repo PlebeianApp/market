@@ -1,4 +1,4 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { SignerCapability } from './signer-capability'
 import { createNip59GiftWrapWithSigner, type UnsignedRumor } from './nip59'
 
 const NIP17_MAX_TIMESTAMP_RANDOMIZATION_SECONDS = 2 * 24 * 60 * 60
@@ -7,7 +7,7 @@ type Nip59SignerWrapResult = Awaited<ReturnType<typeof createNip59GiftWrapWithSi
 
 export type CreateNip17GiftWrapsWithSignerParams = {
 	rumor: UnsignedRumor
-	signer: NDKSigner
+	signer: SignerCapability
 	recipientPubkey: string
 	recipientWrapperPrivateKey?: Uint8Array
 	senderWrapperPrivateKey?: Uint8Array
@@ -25,10 +25,10 @@ export function randomizeNip17CreatedAt(now = Math.floor(Date.now() / 1000), ran
 	return now - offset
 }
 
-async function signerPubkey(signer: NDKSigner): Promise<string> {
-	const user = await signer.user()
-	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
-	return user.pubkey
+async function signerPubkey(signer: SignerCapability): Promise<string> {
+	const pubkey = await signer.getPublicKey()
+	if (!pubkey) throw new Error('Signer pubkey unavailable')
+	return pubkey
 }
 
 export async function createNip17GiftWrapsWithSigner(

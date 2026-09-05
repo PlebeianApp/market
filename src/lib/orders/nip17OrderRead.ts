@@ -1,13 +1,13 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import type { Event } from 'nostr-tools'
 import { unwrapNip59GiftWrapWithSigner } from '../nostr/nip59'
+import type { SignerCapability } from '../nostr/signer-capability'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
 export type Nip17OrderMessageDirection = 'sent' | 'received'
 
 export type UnwrapNip17OrderMessageParams = {
 	giftWrap: Event
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 }
 
 export type UnwrappedNip17OrderMessage = {
@@ -22,7 +22,7 @@ export type UnwrappedNip17OrderMessage = {
 
 export type UnwrapNip17OrderMessagesParams = {
 	giftWraps: Event[]
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 }
 
 export async function unwrapNip17OrderMessage(params: UnwrapNip17OrderMessageParams): Promise<UnwrappedNip17OrderMessage> {
@@ -81,13 +81,13 @@ export async function unwrapNip17OrderMessages(params: UnwrapNip17OrderMessagesP
 	return Array.from(messagesByRumorId.values()).sort(compareUnwrappedNip17OrderMessages)
 }
 
-async function getSignerPubkey(signer: NDKSigner | null | undefined): Promise<string> {
+async function getSignerPubkey(signer: SignerCapability | null | undefined): Promise<string> {
 	if (!signer) throw new Error('Signer pubkey unavailable')
 
-	const user = await signer.user()
-	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
+	const pubkey = await signer.getPublicKey()
+	if (!pubkey) throw new Error('Signer pubkey unavailable')
 
-	return user.pubkey
+	return pubkey
 }
 
 function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string {

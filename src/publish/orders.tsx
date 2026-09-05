@@ -1,8 +1,7 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND, ORDER_STATUS } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { orderKeys } from '@/queries/queryKeyFactory'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKTag } from '@nostr-dev-kit/ndk'
+import { NDKEvent, type NDKTag } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
@@ -13,6 +12,7 @@ import {
 	type CheckoutDeliveryRequirements,
 } from '@/lib/checkout/deliveryRequirements'
 import { createEncryptedPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import { getSignerCapability } from '@/lib/nostr/signer-registry'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 import type { Event } from 'nostr-tools'
@@ -855,7 +855,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 	}
 
 	const signerRequired = preflight.some(({ requirements }) => requiresPrivateBuyerDeliveryDetails(requirements))
-	const signer = signerRequired ? ndkActions.getSigner() : undefined
+	const signer = signerRequired ? getSignerCapability() : undefined
 	if (signerRequired && !signer) {
 		throw new Error('Encrypted seller delivery could not be prepared')
 	}

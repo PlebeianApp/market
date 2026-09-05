@@ -1,37 +1,29 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey, nip44, type Event } from 'nostr-tools'
+import type { EventTemplate } from 'nostr-tools/pure'
+import type { SignerCapability } from '../nostr/signer-capability'
 import { createNip17GiftWrapsWithSigner } from '../nostr/nip17'
 import { NIP59_GIFT_WRAP_KIND } from '../nostr/nip59'
 import { unwrapNip17OrderMessage, unwrapNip17OrderMessages } from '../orders/nip17OrderRead'
 import { createOrderCreationRumor, createPaymentReceiptRumor } from '../orders/orderMessageRumor'
 
-function createSigner(privateKey: Uint8Array): NDKSigner {
+function createSigner(privateKey: Uint8Array): SignerCapability {
 	const pubkey = getPublicKey(privateKey)
 
 	return {
-		user: async () => ({ pubkey }),
-		encryptionEnabled: async () => ['nip44'],
-		encrypt: async (recipient: { pubkey: string }, plaintext: string) => {
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipient.pubkey)
-			return nip44.v2.encrypt(plaintext, conversationKey)
+		getPublicKey: async () => pubkey,
+		signEvent: async (template) => finalizeEvent(template as EventTemplate, privateKey),
+		nip44: {
+			encrypt: async (recipientPubkey: string, plaintext: string) => {
+				const conversationKey = nip44.v2.utils.getConversationKey(privateKey, recipientPubkey)
+				return nip44.v2.encrypt(plaintext, conversationKey)
+			},
+			decrypt: async (senderPubkey: string, ciphertext: string) => {
+				const conversationKey = nip44.v2.utils.getConversationKey(privateKey, senderPubkey)
+				return nip44.v2.decrypt(ciphertext, conversationKey)
+			},
 		},
-		decrypt: async (sender: { pubkey: string }, ciphertext: string) => {
-			const conversationKey = nip44.v2.utils.getConversationKey(privateKey, sender.pubkey)
-			return nip44.v2.decrypt(ciphertext, conversationKey)
-		},
-		sign: async (event: { kind: number; created_at: number; tags: string[][]; content: string }) => {
-			return finalizeEvent(
-				{
-					kind: event.kind,
-					created_at: event.created_at,
-					tags: event.tags,
-					content: event.content,
-				},
-				privateKey,
-			).sig
-		},
-	} as unknown as NDKSigner
+	}
 }
 
 function malformedGiftWrap(recipientPubkey: string): Event {
