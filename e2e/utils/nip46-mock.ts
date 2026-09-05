@@ -29,10 +29,30 @@ interface SignerLoopOptions {
 }
 
 export class Nip46Mock {
-	/** Hex secret key of the "remote signer" user */
-	readonly sk: string
-	/** Hex public key */
-	readonly pk: string
+	/**
+	 * Hex secret key of the remote signer (bunker) — the NIP-46 channel identity.
+	 * Encrypts/decrypts RPC messages and signs the kind-24133 transport events,
+	 * but is NEVER the identity returned by get_public_key.
+	 */
+	readonly remoteSignerSk: string
+	/** Remote signer (bunker) hex public key. */
+	readonly remoteSignerPk: string
+	/**
+	 * Hex secret key of the authenticated user the bunker signs for.
+	 * Defaults to the remote-signer key (legacy single-key collapse).
+	 */
+	readonly userSk: string
+	/** Authenticated user hex public key (what get_public_key returns). */
+	readonly userPk: string
+
+	/**
+	 * Legacy read-alias for {@link remoteSignerPk} — the bunker pubkey the client
+	 * addresses (used by the existing e2e bunker-URL fixtures). Remote-signer and
+	 * user identities diverge once the B-2 three-key call sites pass distinct keys.
+	 */
+	get pk(): string {
+		return this.remoteSignerPk
+	}
 
 	private ws: WebSocket | null = null
 	private subId: string | null = null
@@ -45,29 +65,31 @@ export class Nip46Mock {
 	private eventHandler: ((event: any) => Promise<void>) | null = null
 	private bufferedEvents: any[] = []
 
-	constructor(userSk: string) {
-		this.sk = userSk
-		this.pk = getPublicKey(hexToBytes(userSk))
+	constructor(remoteSignerSk: string, userSk?: string) {
+		this.remoteSignerSk = remoteSignerSk
+		this.remoteSignerPk = getPublicKey(hexToBytes(remoteSignerSk))
+		this.userSk = userSk ?? remoteSignerSk
+		this.userPk = getPublicKey(hexToBytes(this.userSk))
 	}
 
 	// ─── Encryption helpers ────────────────────────────────────
 
-	/** Auto-detect encryption scheme and decrypt */
+	/** Auto-detect encryption scheme and decrypt (channel with the remote signer) */
 	private async decryptContent(senderPubkey: string, content: string): Promise<string> {
 		if (content.includes('?iv=')) {
-			return await nip04Decrypt(this.sk, senderPubkey, content)
+			return await nip04Decrypt(this.remoteSignerSk, senderPubkey, content)
 		}
 		try {
-			const conversationKey = nip44.utils.getConversationKey(hexToBytes(this.sk), senderPubkey)
+			const conversationKey = nip44.utils.getConversationKey(hexToBytes(this.remoteSignerSk), senderPubkey)
 			return nip44.decrypt(content, conversationKey)
 		} catch {
-			return await nip04Decrypt(this.sk, senderPubkey, content)
+			return await nip04Decrypt(this.remoteSignerSk, senderPubkey, content)
 		}
 	}
 
-	/** Encrypt with NIP-04 */
+	/** Encrypt with NIP-04 (channel with the remote signer) */
 	private async encryptContent(recipientPubkey: string, plaintext: string): Promise<string> {
-		return await nip04Encrypt(this.sk, recipientPubkey, plaintext)
+		return await nip04Encrypt(this.remoteSignerSk, recipientPubkey, plaintext)
 	}
 
 	// ─── Single message handler ───────────────────────────────
@@ -133,7 +155,7 @@ export class Nip46Mock {
 				this.eoseResolve = resolve as () => void
 
 				// Subscribe to Kind 24133 events addressed to our pubkey
-				ws.send(JSON.stringify(['REQ', this.subId, { kinds: [24133], '#p': [this.pk] }]))
+				ws.send(JSON.stringify(['REQ', this.subId, { kinds: [24133], '#p': [this.remoteSignerPk] }]))
 			})
 
 			setTimeout(() => reject(new Error('Timeout connecting to relay')), 10_000)
@@ -190,10 +212,10 @@ export class Nip46Mock {
 	/**
 	 * Complete the nostrconnect:// handshake and start the signer loop.
 	 *
-	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, token
+	 * 1. Parse the nostrconnect:// URL for localPubkey, relay, secret
 	 * 2. Connect to relay and subscribe
 	 * 3. Set up event handler for responses
-	 * 4. Publish a `connect` request with the token
+	 * 4. Publish a `connect` request with the secret
 	 * 5. Event handler processes approval → sends ack
 	 * 6. Event handler processes signer requests (connect, get_public_key, sign_event)
 	 *
@@ -205,7 +227,8 @@ export class Nip46Mock {
 		const localPubkey = withoutProtocol.slice(0, qIdx)
 		const params = new URLSearchParams(withoutProtocol.slice(qIdx + 1))
 		const relayUrl = params.get('relay')!
-		const token = params.get('token')!
+		// Spec `secret` param is primary; legacy `token` is a read-alias until B-4 removes it.
+		const secret = params.get('secret') ?? params.get('token') ?? ''
 
 		// Connect and wait for subscription EOSE
 		await this.connectAndSubscribe(relayUrl)
@@ -231,7 +254,7 @@ export class Nip46Mock {
 		const connectRequest = {
 			id: crypto.randomUUID(),
 			method: 'connect',
-			params: { token },
+			params: { secret },
 		}
 		await this.sendEncrypted(localPubkey, connectRequest)
 
@@ -281,27 +304,43 @@ export class Nip46Mock {
 				break
 
 			case 'get_public_key':
-				response = { id: request.id, result: this.pk }
+				response = { id: request.id, result: this.userPk }
 				break
 
 			case 'sign_event': {
 				const eventToSign = typeof request.params[0] === 'string' ? JSON.parse(request.params[0]) : request.params[0]
-				const signed = finalizeEvent(eventToSign, hexToBytes(this.sk))
+				const signed = finalizeEvent(eventToSign, hexToBytes(this.userSk))
 				response = { id: request.id, result: JSON.stringify(signed) }
 				break
 			}
 
 			case 'nip04_encrypt': {
 				const [thirdPartyPubkey, plaintext] = request.params
-				const ciphertext = await nip04Encrypt(this.sk, thirdPartyPubkey, plaintext)
+				const ciphertext = await nip04Encrypt(this.userSk, thirdPartyPubkey, plaintext)
 				response = { id: request.id, result: ciphertext }
 				break
 			}
 
 			case 'nip04_decrypt': {
 				const [thirdPartyPubkey2, ciphertext2] = request.params
-				const plaintext2 = await nip04Decrypt(this.sk, thirdPartyPubkey2, ciphertext2)
+				const plaintext2 = await nip04Decrypt(this.userSk, thirdPartyPubkey2, ciphertext2)
 				response = { id: request.id, result: plaintext2 }
+				break
+			}
+
+			case 'nip44_encrypt': {
+				const [thirdPartyPubkey, plaintext] = request.params
+				const conversationKey = nip44.utils.getConversationKey(hexToBytes(this.userSk), thirdPartyPubkey)
+				const ciphertext = nip44.encrypt(plaintext, conversationKey)
+				response = { id: request.id, result: ciphertext }
+				break
+			}
+
+			case 'nip44_decrypt': {
+				const [thirdPartyPubkey, ciphertext] = request.params
+				const conversationKey = nip44.utils.getConversationKey(hexToBytes(this.userSk), thirdPartyPubkey)
+				const plaintext = nip44.decrypt(ciphertext, conversationKey)
+				response = { id: request.id, result: plaintext }
 				break
 			}
 
@@ -328,7 +367,7 @@ export class Nip46Mock {
 				content: encrypted,
 				tags: [['p', recipientPubkey]],
 			}
-			const event = finalizeEvent(template, hexToBytes(this.sk))
+			const event = finalizeEvent(template, hexToBytes(this.remoteSignerSk))
 			const result = await this.publishEvent(event)
 
 			if (result.accepted) {
