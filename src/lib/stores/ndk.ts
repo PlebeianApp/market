@@ -7,7 +7,7 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
-import { setSignerCapability } from '@/lib/nostr/signer-registry'
+import { runSignerTeardown, setSignerCapability } from '@/lib/nostr/signer-registry'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -530,6 +530,10 @@ export const ndkActions = {
 			// `io-applesauce.sign()` fails closed again no matter who removed
 			// the signer, not just authActions.logout.
 			setSignerCapability(undefined)
+			// Also tear down the NIP-46 signer session (closes its REQ subscription)
+			// so every detach path — logout, removeSigner, NIP-60 reset — stops the
+			// leak, not just authActions.logout.
+			void runSignerTeardown()
 			ndkActions.setActiveNwcWalletUri(null)
 			nip60Actions.reset()
 		}

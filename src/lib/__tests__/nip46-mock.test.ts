@@ -191,3 +191,60 @@ describe('Nip46Mock nostrconnect URI secret handling', () => {
 		expect(sends[0].params.secret).toBe('oldtoken')
 	})
 })
+
+describe('Nip46Mock channel-side oracle (ADR-0008 B-2fix item 2d)', () => {
+	test('kind-24133 transport events are signed by the CHANNEL key while RPC results derive from the USER key', async () => {
+		const mock = new Nip46Mock(REMOTE_SIGNER_SK, USER_SK)
+		const published: any[] = []
+		// Capture the finalized transport EVENT (not just the payload) so the
+		// envelope's signing key is observable.
+		;(mock as any).publishEvent = async (event: any) => {
+			published.push(event)
+			return { accepted: true }
+		}
+
+		await (mock as any).handleSignerRequest(clientPk, {
+			id: 'getpk',
+			method: 'get_public_key',
+			params: [],
+		})
+
+		expect(published).toHaveLength(1)
+		expect(published[0].kind).toBe(24133)
+		// The transport ENVELOPE is signed by the CHANNEL key (remoteSignerSk)…
+		expect(published[0].pubkey).toBe(remoteSignerPk)
+		expect(published[0].pubkey).not.toBe(userPk)
+		// …while the decrypted RPC result is the authenticated USER identity.
+		const decrypted = await nip04Decrypt(CLIENT_SK, remoteSignerPk, published[0].content)
+		const msg = JSON.parse(decrypted)
+		expect(msg.result).toBe(userPk)
+		expect(msg.result).not.toBe(remoteSignerPk)
+	})
+
+	test('sign_event transport is channel-signed while the signed event inside is user-signed', async () => {
+		const mock = new Nip46Mock(REMOTE_SIGNER_SK, USER_SK)
+		const published: any[] = []
+		;(mock as any).publishEvent = async (event: any) => {
+			published.push(event)
+			return { accepted: true }
+		}
+
+		const template = { kind: 1, created_at: 1234, tags: [], content: 'signed by the user' }
+		await (mock as any).handleSignerRequest(clientPk, {
+			id: 'sign',
+			method: 'sign_event',
+			params: [JSON.stringify(template)],
+		})
+
+		expect(published).toHaveLength(1)
+		expect(published[0].kind).toBe(24133)
+		expect(published[0].pubkey).toBe(remoteSignerPk)
+		// The RPC result (decoded) is an event signed by the USER key.
+		const decrypted = await nip04Decrypt(CLIENT_SK, remoteSignerPk, published[0].content)
+		const response = JSON.parse(decrypted)
+		const signed = JSON.parse(response.result)
+		expect(signed.pubkey).toBe(userPk)
+		expect(signed.pubkey).not.toBe(remoteSignerPk)
+		expect(verifyEvent(signed)).toBe(true)
+	})
+})

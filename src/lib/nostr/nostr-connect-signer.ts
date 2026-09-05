@@ -234,14 +234,27 @@ export function createNostrConnectCapability(
 	signer: NostrConnectSignerLike,
 	rpcTimeoutMs: number = NIP46_RPC_TIMEOUT_MS,
 ): SignerCapability {
+	// Cache the authenticated user pubkey so the signed-event identity assert
+	// (ADR-0008 invariant 3) does not issue a fresh `get_public_key` RPC on
+	// every sign. The cache is scoped to THIS capability instance: each
+	// `connectBunkerSigner` call builds a fresh capability, so a close/reconnect
+	// (which tears the signer down on logout) inherently invalidates it.
+	let cachedPubkey: string | undefined
+	const resolvePubkey = (): Promise<string> => {
+		if (cachedPubkey !== undefined) return Promise.resolve(cachedPubkey)
+		return withRpcTimeout('get_public_key', signer.getPublicKey(), rpcTimeoutMs).then((pubkey) => {
+			cachedPubkey = pubkey
+			return pubkey
+		})
+	}
 	return {
-		getPublicKey: () => withRpcTimeout('get_public_key', signer.getPublicKey(), rpcTimeoutMs),
+		getPublicKey: () => resolvePubkey(),
 		signEvent: async (template) => {
 			const signed = await withRpcTimeout('sign_event', signer.signEvent(template as EventTemplate & { pubkey?: string }), rpcTimeoutMs)
 			// ADR-0008 invariant 3: in-signer verification does not prove WHICH key
 			// signed. Assert the returned event's pubkey equals the authenticated
 			// user pubkey; a valid signature from the wrong key fails closed.
-			const userPubkey = await withRpcTimeout('get_public_key', signer.getPublicKey(), rpcTimeoutMs)
+			const userPubkey = await resolvePubkey()
 			if (signed.pubkey !== userPubkey) {
 				throw new Error('Signer returned an event for a different pubkey than the authenticated user')
 			}

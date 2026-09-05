@@ -8,7 +8,13 @@ import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
-import { createExtensionSigner, createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
+import {
+	createExtensionSigner,
+	createPrivateKeySigner,
+	runSignerTeardown,
+	setSignerCapability,
+	setSignerTeardown,
+} from '@/lib/nostr/signer-registry'
 import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
@@ -272,7 +278,7 @@ export const authActions = {
 			// NWC paths) keep working unchanged. The app-side wrappers enforce the
 			// ADR invariants the library does NOT provide (strict connect-secret
 			// binding, RPC timeouts, authUrl → onAuth, pubkey-equality on sign).
-			const { capability, clientKeyHex: persistedClientKey } = await connectBunkerSigner(bunkerUrl, {
+			const bundle = await connectBunkerSigner(bunkerUrl, {
 				clientKeyHex,
 				onAuth: options?.onAuthUrl
 					? (url) => {
@@ -281,15 +287,20 @@ export const authActions = {
 						}
 					: undefined,
 			})
-			const adapter = new NdkSignerAdapter(capability)
-			setSignerCapability(capability)
+			const adapter = new NdkSignerAdapter(bundle.capability)
+			setSignerCapability(bundle.capability)
+			// Keep the live signer handle so any detach path (logout / removeSigner)
+			// can tear it down. `NostrConnectSigner.logout()` notifies the remote and
+			// close()s the repeat()/retry() REQ subscription — without this, a
+			// re-login stacks a second kind-24133 subscription on the shared pool.
+			setSignerTeardown(() => bundle.signer.logout())
 			await adapter.blockUntilReady()
 			ndkActions.setSigner(adapter)
 			const user = await adapter.user()
 
 			// Wait until user is logged in successfully before saving the bunkerURL/private key.
 
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, persistedClientKey)
+			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, bundle.clientKeyHex)
 			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
 			authStore.setState((state) => ({
@@ -314,6 +325,9 @@ export const authActions = {
 
 	logout: () => {
 		const ndk = ndkActions.getNDK()
+		// Tear down the NIP-46 signer session (closes its REQ subscription) in
+		// lockstep with the capability, so re-login does not stack subscriptions.
+		void runSignerTeardown()
 		// Clear the signer capability in lockstep with the NDK signer so the
 		// io-applesauce `sign()` port fails closed again after logout.
 		setSignerCapability(undefined)
