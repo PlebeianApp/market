@@ -28,7 +28,7 @@ export type AuctionFormDraft = {
 
 const storageKey = (pubkey: string) => `auction_form_draft_${pubkey}`
 
-const isBrowser = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+const isBrowser = () => typeof globalThis.localStorage !== 'undefined'
 
 function str(v: unknown, fallback = ''): string {
 	return typeof v === 'string' ? v : fallback
