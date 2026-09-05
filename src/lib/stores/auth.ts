@@ -8,6 +8,8 @@ import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
+import { createPrivateKeySigner, setSignerCapability } from '@/lib/nostr/signer-registry'
+import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -155,7 +157,14 @@ export const authActions = {
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKPrivateKeySigner(privateKey)
+			// nsec lane: build the applesauce PrivateKeySigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0008 strangler-fig). No NEW plaintext is persisted here
+			// — the nsec key stays in-memory until Wave B-3 unifies session storage.
+			const capability = createPrivateKeySigner(privateKey)
+			const signer = new NdkSignerAdapter(capability)
+			setSignerCapability(capability)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 
@@ -288,6 +297,9 @@ export const authActions = {
 
 	logout: () => {
 		const ndk = ndkActions.getNDK()
+		// Clear the signer capability in lockstep with the NDK signer so the
+		// io-applesauce `sign()` port fails closed again after logout.
+		setSignerCapability(undefined)
 		if (!ndk) return
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
