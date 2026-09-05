@@ -17,13 +17,19 @@
  * repo's nostr-tools NIP-44 v2 (format-compatible with the library's nested
  * copy), and signatures are honest (`finalizeEvent`).
  */
-import { describe, expect, test } from 'bun:test'
-import { ReplaySubject, type Observable } from 'rxjs'
+import { describe, expect, mock, test } from 'bun:test'
+import { ReplaySubject, Observable } from 'rxjs'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import { hexToBytes } from 'nostr-tools/utils'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
-import { createNostrConnectCapability, createNostrConnectClient, withRpcTimeout } from '@/lib/nostr/nostr-connect-signer'
+import {
+	connectBunkerSigner,
+	createNostrConnectCapability,
+	createNostrConnectClient,
+	withRpcTimeout,
+} from '@/lib/nostr/nostr-connect-signer'
+import { runSignerTeardown, setSignerTeardown } from '@/lib/nostr/signer-registry'
 import type { SignerCapability } from '@/lib/nostr/signer-capability'
 
 const CLIENT_SK = '11'.repeat(32)
@@ -222,5 +228,110 @@ describe('nostr-connect RPC timeout wrapper (gap 1)', () => {
 
 	test('does not swallow an underlying rejection', async () => {
 		await expect(withRpcTimeout('connect', Promise.reject(new Error('bunker refused')), 10_000)).rejects.toThrow('bunker refused')
+	})
+})
+
+describe('nostr-connect signer session teardown (B-2fix item 1)', () => {
+	test('runSignerTeardown invokes the registered teardown once and clears it (idempotent)', async () => {
+		const teardown = mock(async () => {})
+		setSignerTeardown(teardown)
+
+		await runSignerTeardown()
+		expect(teardown).toHaveBeenCalledTimes(1)
+
+		// A second run is a no-op — the teardown was cleared before it ran, so
+		// calling this from every detach chokepoint (logout AND removeSigner)
+		// tears the signer down exactly once.
+		await runSignerTeardown()
+		expect(teardown).toHaveBeenCalledTimes(1)
+	})
+
+	/**
+	 * A fake `NostrPool` whose `subscription` counts ACTIVE subscriptions (a live
+	 * one increments until the rxjs subscription is unsubscribed). A bunker
+	 * emulator responds to the client's published RPC requests so the full
+	 * `connectBunkerSigner` handshake completes against no network.
+	 */
+	function countingBunkerTransport() {
+		const incoming = new ReplaySubject<NostrEvent | string>()
+		let active = 0
+		const pool = {
+			subscription: (_relays: string[], _filters: unknown[]): Observable<NostrEvent | string> => {
+				active++
+				return new Observable<NostrEvent | string>((subscriber) => {
+					const sub = incoming.subscribe(subscriber)
+					return () => {
+						sub.unsubscribe()
+						active--
+					}
+				})
+			},
+			publish: async (_relays: string[], event: unknown): Promise<unknown> => {
+				// Emulate the bunker: decrypt the client's nip44 request, dispatch the
+				// RPC, and emit a signed response back into the subscription.
+				const conversationKey = nip44.v2.utils.getConversationKey(hexToBytes(REMOTE_SK), clientPk)
+				const req = JSON.parse(nip44.v2.decrypt((event as NostrEvent).content, conversationKey))
+				let result: string
+				if (req.method === 'get_public_key') {
+					result = userPk
+				} else if (req.method === 'sign_event') {
+					const template = typeof req.params[0] === 'string' ? JSON.parse(req.params[0]) : req.params[0]
+					result = JSON.stringify(finalizeEvent(template as EventTemplate, hexToBytes(USER_SK)))
+				} else {
+					result = 'ack' // connect / logout / ping
+				}
+				incoming.next(inboundEvent(REMOTE_SK, { id: req.id, result }))
+				return []
+			},
+		}
+		return { pool, active: () => active }
+	}
+
+	test('login-logout-login closes the REQ subscription so it does not stack (B-2fix item 1)', async () => {
+		const bunkerUrl = `bunker://${remotePk}?relay=wss://signer.example.com&secret=bunkersecret`
+
+		// Login 1 — the production seam (connectBunkerSigner), mirroring loginWithNip46.
+		const t1 = countingBunkerTransport()
+		const bundle1 = await connectBunkerSigner(bunkerUrl, { clientKeyHex: CLIENT_SK, pool: t1.pool, rpcTimeoutMs: 1000 })
+		expect(t1.active()).toBe(1)
+
+		// Register the teardown exactly as loginWithNip46 does, then log out.
+		setSignerTeardown(() => bundle1.signer.logout())
+		await runSignerTeardown()
+		expect(t1.active()).toBe(0)
+
+		// Login 2 — a fresh signer must NOT stack on top of a leaked subscription.
+		const t2 = countingBunkerTransport()
+		const bundle2 = await connectBunkerSigner(bunkerUrl, { clientKeyHex: CLIENT_SK, pool: t2.pool, rpcTimeoutMs: 1000 })
+		expect(t2.active()).toBe(1)
+		// Close the second signer so the test leaves no dangling subscription.
+		setSignerTeardown(() => bundle2.signer.logout())
+		await runSignerTeardown()
+		expect(t2.active()).toBe(0)
+	})
+})
+
+describe('nostr-connect capability pubkey cache (B-2fix item 3)', () => {
+	test('signEvent reuses the cached authenticated pubkey — one get_public_key RPC total', async () => {
+		let getPublicKeyCalls = 0
+		const delegated = {
+			getPublicKey: async () => {
+				getPublicKeyCalls++
+				return userPk
+			},
+			signEvent: async (t: EventTemplate) => finalizeEvent(t, hexToBytes(USER_SK)) as unknown as NostrEvent,
+			nip04: undefined,
+			nip44: undefined,
+		}
+		const capability = createNostrConnectCapability(delegated as never)
+
+		await capability.getPublicKey()
+		await capability.getPublicKey()
+		await capability.signEvent({ kind: 1, content: 'a', tags: [], created_at: 1 })
+		await capability.signEvent({ kind: 1, content: 'b', tags: [], created_at: 2 })
+
+		// Before the cache, each sign issued a fresh get_public_key RPC only for
+		// the equality assert — now it is issued once and reused.
+		expect(getPublicKeyCalls).toBe(1)
 	})
 })

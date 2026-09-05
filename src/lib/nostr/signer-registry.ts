@@ -30,6 +30,36 @@ export function setSignerCapability(capability: SignerCapability | undefined): v
 }
 
 /**
+ * Teardown callback for the currently-attached signer session.
+ *
+ * The NIP-46 bunker lane attaches a teardown that closes its `NostrConnectSigner`
+ * (unsubscribing the repeat()/retry() REQ subscription on the shared relay pool);
+ * the local (nsec) and extension lanes have no teardown. See `runSignerTeardown`.
+ */
+let signerTeardown: (() => void | Promise<void>) | undefined
+
+/** Register (or clear, with `undefined`) the teardown to run on signer detach. */
+export function setSignerTeardown(teardown: (() => void | Promise<void>) | undefined): void {
+	signerTeardown = teardown
+}
+
+/** Read the currently-registered teardown (undefined when none). */
+export function getSignerTeardown(): (() => void | Promise<void>) | undefined {
+	return signerTeardown
+}
+
+/**
+ * Run and clear the registered signer teardown. Idempotent: the teardown is
+ * cleared before it runs, so calling this from every detach chokepoint
+ * (authActions.logout AND ndkActions.removeSigner) tears the signer down once.
+ */
+export async function runSignerTeardown(): Promise<void> {
+	const teardown = signerTeardown
+	signerTeardown = undefined
+	if (teardown) await teardown()
+}
+
+/**
  * Build a local nsec signer (applesauce `PrivateKeySigner`) wrapped as a
  * {@link SignerCapability}. NIP-44/NIP-04 are the signer's LOCAL
  * implementations (non-optional for a key-held signer).
