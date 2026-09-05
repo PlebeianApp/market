@@ -30,6 +30,8 @@ import {
 	getAuctionBidCountFromBids,
 	getAuctionBidIncrement,
 	getAuctionCurrentPriceFromBids,
+	getAuctionAuditors,
+	useAuctionVerdictValidatedBidIds,
 	getAuctionCurrency,
 	getAuctionPathIssuer,
 	getAuctionId,
@@ -264,7 +266,8 @@ function DashboardAuctionDetailRoute() {
 	const now = countdown.now
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const { verdictValidatedBidIds } = useAuctionVerdictValidatedBidIds(auction, auctionRootEventId || auctionId, auctionCoordinates)
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
 	const bidCount = getAuctionBidCountFromBids(auction, bids)
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
@@ -941,7 +944,11 @@ function DashboardAuctionDetailRoute() {
 								</div>
 							)}
 
-							<AuctionVerdictPanel auctionRootEventId={auctionRootEventId || auctionId} auctionCoordinate={auctionCoordinates} />
+							<AuctionVerdictPanel
+								auctionRootEventId={auctionRootEventId || auctionId}
+								auctionCoordinate={auctionCoordinates}
+								auditorPubkeys={getAuctionAuditors(auction)}
+							/>
 
 							{/* Tech accordion — visible to all but only really useful for seller / debugging */}
 							<Accordion type="multiple" className="rounded-2xl border border-zinc-200 bg-white px-4">

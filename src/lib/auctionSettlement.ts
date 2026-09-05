@@ -1,4 +1,5 @@
 import type { NostrEventLike } from './nostr/eventLike'
+import type { ParsedValidatorVerdictEvent } from './auction/events'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
@@ -6,6 +7,7 @@ import {
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
 	ACTIVE_AUCTION_BID_STATUSES,
+	DEFAULT_AUDITOR_QUORUM,
 } from './auction/constants'
 import { auctionImmutableFieldsMatch as compareAuctionImmutableFields } from './auction/immutability'
 
@@ -335,8 +337,72 @@ export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: No
 	})
 }
 
-export const getAuctionCurrentPrice = (auctionEvent: NostrEventLike, bids: NostrEventLike[], startingBid: number = 0): number =>
-	getAuctionWindowValidBids(auctionEvent, bids).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
+export const getAuctionVerdictValidatedBids = (
+	auctionEvent: NostrEventLike,
+	bids: NostrEventLike[],
+	verdictValidatedBidIds: Set<string>,
+): NostrEventLike[] => getAuctionWindowValidBids(auctionEvent, bids).filter((bid) => verdictValidatedBidIds.has(bid.id))
+
+/**
+ * Verdict claims that establish a bid passed the validator's applicable
+ * structural and auction-rule checks. They do not establish that the Cashu
+ * proofs have the declared value or remain locked/unspent on-mint.
+ */
+const BID_CONFIRMED_VERDICT_CLAIMS = new Set([
+	'valid_bid_placed',
+	'won_pending_settlement',
+	'lost_pending_refund',
+	'settled_promptly',
+	'settled_late',
+])
+
+/**
+ * Bid event ids validated by `auditor_quorum` distinct listed `auditors`
+ * (AUCTIONS.md §6.0). Pass the result to `getAuctionCurrentPrice` to exclude
+ * unreviewed bids from the displayed price. This is not collateral
+ * verification; settlement remains responsible for that check.
+ */
+export const getAuctionVerdictValidatedBidIds = (auctionEvent: NostrEventLike, verdicts: ParsedValidatorVerdictEvent[]): Set<string> => {
+	const auditors = new Set(getAuctionTagValues(auctionEvent, 'auditors'))
+	if (auditors.size === 0) return new Set()
+
+	const quorum = Math.max(1, parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'auditor_quorum'), DEFAULT_AUDITOR_QUORUM))
+
+	const confirmingAuditorsByBid = new Map<string, Set<string>>()
+	for (const verdict of verdicts) {
+		if (!verdict.bidEventId) continue
+		if (!auditors.has(verdict.validatorPubkey)) continue
+		if (!BID_CONFIRMED_VERDICT_CLAIMS.has(verdict.claim)) continue
+
+		const confirmingAuditors = confirmingAuditorsByBid.get(verdict.bidEventId) ?? new Set<string>()
+		confirmingAuditors.add(verdict.validatorPubkey)
+		confirmingAuditorsByBid.set(verdict.bidEventId, confirmingAuditors)
+	}
+
+	const validatedBidIds = new Set<string>()
+	for (const [bidEventId, confirmingAuditors] of confirmingAuditorsByBid) {
+		if (confirmingAuditors.size >= quorum) validatedBidIds.add(bidEventId)
+	}
+	return validatedBidIds
+}
+
+/**
+ * `verdictValidatedBidIds`, when passed, restricts the price to bids an
+ * auditor quorum has validated (see `getAuctionVerdictValidatedBidIds`).
+ * This only excludes unreviewed bids; it does not verify collateral value.
+ * Omitting it preserves the old (unfiltered) behaviour for callers that
+ * haven't wired verdicts up yet.
+ */
+export const getAuctionCurrentPrice = (
+	auctionEvent: NostrEventLike,
+	bids: NostrEventLike[],
+	startingBid: number = 0,
+	verdictValidatedBidIds?: Set<string>,
+): number =>
+	(verdictValidatedBidIds
+		? getAuctionVerdictValidatedBids(auctionEvent, bids, verdictValidatedBidIds)
+		: getAuctionWindowValidBids(auctionEvent, bids)
+	).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
 
 export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<string, NostrEventLike>): NostrEventLike[] => {
 	const chain: NostrEventLike[] = []

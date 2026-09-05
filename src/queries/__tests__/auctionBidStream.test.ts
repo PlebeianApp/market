@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { buildAuctionBidFilters, mergeAndSortBids } from '@/queries/auctions'
+import { buildAuctionBidFilters, buildAuctionVerdictFilter, getAuctionCurrentPriceFromBids, mergeAndSortBids } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 const AUCTION_BID_KIND = 1023
@@ -48,6 +48,35 @@ describe('buildAuctionBidFilters', () => {
 	test('every filter targets AUCTION_BID_KIND', () => {
 		const filters = buildAuctionBidFilters('root123', '30408:pubkey:dtag', 500)
 		expect(filters.every((f) => f.kinds?.includes(AUCTION_BID_KIND as never))).toBe(true)
+	})
+})
+
+describe('buildAuctionVerdictFilter', () => {
+	test('restricts verdict requests to configured auditors', () => {
+		const filter = buildAuctionVerdictFilter('root123', '30408:pubkey:dtag', ['auditor-a', 'auditor-b'], 500)
+
+		expect(filter?.authors).toEqual(['auditor-a', 'auditor-b'])
+		expect((filter as { '#e'?: string[] })['#e']).toEqual(['root123'])
+		expect((filter as { '#a'?: string[] })['#a']).toEqual(['30408:pubkey:dtag'])
+	})
+
+	test('does not create an unscoped verdict request without configured auditors', () => {
+		expect(buildAuctionVerdictFilter('root123', undefined, [])).toBeNull()
+	})
+})
+
+describe('getAuctionCurrentPriceFromBids', () => {
+	test('filters unvalidated bids when auction context is unavailable', () => {
+		const validatedBid = {
+			...makeBid('validated', 100),
+			tags: [['amount', '1200']],
+		}
+		const unvalidatedBid = {
+			...makeBid('unvalidated', 101),
+			tags: [['amount', '999999999']],
+		}
+
+		expect(getAuctionCurrentPriceFromBids(null, [validatedBid, unvalidatedBid], 1000, new Set(['validated']))).toBe(1200)
 	})
 })
 

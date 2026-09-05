@@ -12,12 +12,14 @@ import {
 	getAuctionP2pkXpub,
 	getAuctionMints,
 	getAuctionId,
+	getAuctionAuditors,
 	useAuctionBids,
 	getAuctionRootEventId,
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
-	getAuctionBidCountFromBids,
+	getAuctionVerdictValidatedBidCountFromBids,
 	getBidAmount,
+	useAuctionVerdictValidatedBidIds,
 } from '@/queries/auctions'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
@@ -128,8 +130,16 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// "Not started yet" to "Place Bid" the moment start_at passes.
 	const notStarted = startAt > 0 && countdown.now < startAt
 
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const { verdictValidatedBidIds, isReady: areVerdictsReady } = useAuctionVerdictValidatedBidIds(
+		auction,
+		auctionRootEventId || auctionId,
+		auctionCoordinates,
+	)
+	// No auditor means no validator can ever confirm a bid's collateral, so bids
+	// here can never be verified as backed. AUCTIONS.md §9.5.
+	const hasNoAuditors = !!auction && getAuctionAuditors(auction).length === 0
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid, verdictValidatedBidIds)
+	const bidsCount = getAuctionVerdictValidatedBidCountFromBids(auction, bids, verdictValidatedBidIds)
 	const hasPriorBids = bidsCount > 0
 	const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
 	const signedInBidderPubkey = isAuthenticated ? user?.pubkey || currentUserPubkey || '' : ''
@@ -207,6 +217,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const hasInsufficientBidFunds =
 		hasSignedInBidder &&
+		areVerdictsReady &&
 		isNip60Ready &&
 		!ended &&
 		!notStarted &&
@@ -236,7 +247,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}, [auctionRulesAckKey])
 
 	// Disable logic
-	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
+	const isDisabledInput = ended || notStarted || isOwnAuction || hasNoAuditors || !areVerdictsReady || bidMutation.isPending
 	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
 	// Button text logic
@@ -245,13 +256,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (ended) return 'Auction Ended'
 		if (notStarted) return 'Bidding not started'
 		if (bidMutation.isPending) return 'Submitting...'
+		if (hasNoAuditors) return 'Bidding unavailable'
 		if (!hasSignedInBidder) return 'Sign in to bid'
 		if (compact) return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
 		return 'Place Bid'
-	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
+	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasNoAuditors, hasSignedInBidder, compact, parsedBidAmount])
 
 	const prepareBidSubmission = (): AuctionBidFormData | null => {
-		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return null
+		if (hasNoAuditors) {
+			toast.error('This auction lists no auditors, so its bids cannot be verified as backed. Bidding is disabled.')
+			return null
+		}
+
+		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction || !areVerdictsReady) return null
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
@@ -437,6 +454,14 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+			{hasNoAuditors && (
+				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+					<p className="font-semibold">Bidding unavailable — no auditors listed</p>
+					<p className="mt-0.5 text-amber-700">
+						No validator can confirm that bids on this auction are backed by locked e-cash, so any amounts shown are unverified.
+					</p>
+				</div>
+			)}
 			{/* Anti-snipe curve banner — visible only when we're inside
 			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
 			    Tells the bidder why the floor is higher than they'd expect

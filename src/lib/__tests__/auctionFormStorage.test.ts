@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
 	clearAuctionFormDraft,
 	getAuctionFormDraft,
@@ -26,8 +26,13 @@ const localStorageMock = {
 	},
 }
 
-Object.defineProperty(globalThis, 'window', { value: globalThis, writable: true })
-Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true })
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, writable: true, configurable: true })
+
+// bun test runs every test file in the same process and shares one globalThis.
+// Undo the localStorage shim once this file's tests finish.
+afterAll(() => {
+	delete (globalThis as any).localStorage
+})
 
 // ---------------------------------------------------------------------------
 // Fixtures
