@@ -18,6 +18,13 @@
  * Every entry point here is best-effort: on any failure (relay down, timeout,
  * unknown id, bad signature) it returns null and the caller serves the
  * untouched SPA shell. A crawler-friendly page must never hang or 5xx.
+ *
+ * SEAM NOTE (ADR-0002): this module performs server-runtime relay I/O via raw
+ * nostr-tools. ADR-0002 scopes the io.ts seam to app-first migration and
+ * defers server runtime to Wave E; the seam's default adapter (NDK browser
+ * singleton) cannot execute under Bun. This mirrors the existing
+ * `src/index.tsx` server pattern, adds no `@nostr-dev-kit`/`applesauce-*`
+ * imports, and is flagged for the Wave E io-server adapter.
  */
 import { Relay } from 'nostr-tools'
 import { verifyEvent } from 'nostr-tools/pure'

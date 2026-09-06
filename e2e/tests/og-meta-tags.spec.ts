@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { RELAY_URL } from '../test-config'
+import { RELAY_URL, TEST_PORT } from '../test-config'
 import { devUser1 } from '@/lib/fixtures'
 import { seedProduct } from '../scenarios'
 import type { VerifiedEvent } from 'nostr-tools'
@@ -26,11 +26,17 @@ import type { VerifiedEvent } from 'nostr-tools'
 
 test.use({ scenario: 'base' })
 
+// Feature Quality Gate: always record video for this gate spec so the happy
+// path produces a viewable video on success (overrides the config default of
+// retain-on-failure). See Gate 2 in docs/PR_REVIEW_CHECKLIST.md.
+test.use({ video: 'on' })
+
 // --- Shared state seeded once before all tests ---
 
 let regularProductId: string
 let regularProductEvent: VerifiedEvent
 let nsfwProductId: string
+let noImageProductId: string
 
 /**
  * Publish a kind 30402 product event with a content-warning: nsfw tag.
@@ -70,6 +76,42 @@ async function seedNsfwProduct(
 	return event as VerifiedEvent
 }
 
+/**
+ * Publish a kind 30402 product event with NO image tag, so tests can cover
+ * the A-with-image → B-without-image SPA transition (B must not inherit A's
+ * og:image). seedProduct always adds an image, so we sign and publish directly.
+ */
+async function seedProductWithoutImage(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		title: string
+		description: string
+		price: string
+		currency: string
+		dTag: string
+	},
+): Promise<VerifiedEvent> {
+	const skBytes = hexToBytes(skHex)
+	const event = finalizeEvent(
+		{
+			kind: 30_402,
+			created_at: Math.floor(Date.now() / 1000),
+			content: opts.description,
+			tags: [
+				['d', opts.dTag],
+				['title', opts.title],
+				['price', opts.price, opts.currency],
+				['status', 'on-sale'],
+				['t', 'Bitcoin'],
+			],
+		},
+		skBytes,
+	)
+	await relay.publish(event)
+	return event as VerifiedEvent
+}
+
 test.beforeAll(async () => {
 	const relay = await Relay.connect(RELAY_URL)
 	try {
@@ -85,6 +127,17 @@ test.beforeAll(async () => {
 			dTag: 'og-meta-test-' + Date.now(),
 		})
 		regularProductId = regularProductEvent.id
+
+		// Seed an image-less product for the A-with-image → B-without-image
+		// SPA ownership test.
+		const noImageEvent = await seedProductWithoutImage(relay, devUser1.sk, {
+			title: 'OG Meta No Image Product',
+			description: 'A product with no image for OG meta ownership testing.',
+			price: '2500',
+			currency: 'SATS',
+			dTag: 'og-meta-no-image-' + Date.now(),
+		})
+		noImageProductId = noImageEvent.id
 
 		// Seed an NSFW product (content-warning: nsfw tag).
 		const nsfwEvent = await seedNsfwProduct(relay, devUser1.sk, {
@@ -228,6 +281,132 @@ test.describe('OG Meta Tags - Happy Path (Video)', () => {
 
 		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
 		await expect(ogImage).toHaveCount(1)
-		await expect(ogImage).toHaveAttribute('content', /cdn\.satellite\.earth/)
+		await expect(ogImage).toHaveAttribute('content', /cdn\\.satellite\\.earth/)
+	})
+})
+
+// ==========================================
+// == SECTION: Hostile Host Regression      ==
+// ==========================================
+// Blocker 1: the shell fetch destination must be server-controlled, never
+// derived from the incoming Host header. A forged Host must neither redirect
+// the fetch nor poison og:url/og:image, and the page must still serve 200.
+
+test.describe('OG Meta Tags - Hostile Host Regression', () => {
+	test('forged Host header never redirects shell fetch or poisons og:url', async ({ unauthenticatedPage }) => {
+		// Override the Host header — Playwright's request.get allows this.
+		const response = await unauthenticatedPage.request.get(`http://localhost:${TEST_PORT}/products/${regularProductId}`, {
+			headers: { Host: 'evil.example' },
+		})
+		expect(response.status()).toBe(200)
+
+		const html = await response.text()
+		// og:url names the server-controlled loopback origin, not the forged host.
+		expect(html).toContain(`og:url" content="http://localhost:${TEST_PORT}/products/${regularProductId}`)
+		expect(html).not.toContain('evil.example')
+		// The enrichment still ran (a real product emits og:title).
+		expect(html).toContain('og:title')
+	})
+
+	test('forged failing port Host still serves 200 with og tags', async ({ unauthenticatedPage }) => {
+		// Host: 127.0.0.1:1 — a port that would refuse a connection. If the
+		// shell fetch had followed this host it would fail (and, without the
+		// fix, 503). With the server-controlled origin it serves 200 + og tags.
+		const response = await unauthenticatedPage.request.get(`http://localhost:${TEST_PORT}/products/${regularProductId}`, {
+			headers: { Host: '127.0.0.1:1' },
+		})
+		expect(response.status()).toBe(200)
+
+		const html = await response.text()
+		expect(html).toContain(`og:url" content="http://localhost:${TEST_PORT}/products/${regularProductId}`)
+		expect(html).not.toContain('127.0.0.1:1')
+		expect(html).toContain('og:title')
+	})
+})
+
+// ==========================================
+// == SECTION: SPA Nav Ownership Matrix     ==
+// ==========================================
+// Blocker 2: the product route owns every og/twitter selector while mounted
+// and removes them all on unmount (no restore of remembered content), so no
+// tag from a previous product leaks onto the next route. The matrix covers
+// A→B, A-with-image→B-without-image, product→non-product, and A→B→A.
+
+test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
+	// Helper: SPA-navigate to a product by clicking its card in the
+	// "More from this seller" grid (a TanStack Link → client-side nav).
+	async function spaNavTo(page: import('@playwright/test').Page, productId: string) {
+		const link = page.locator('a[href="/products/' + productId + '"]').first()
+		await expect(link).toBeVisible({ timeout: 30_000 })
+		await link.click()
+		await expect(page.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+	}
+
+	test('SPA nav A→B: B tags replace A tags, no stale og:title', async ({ unauthenticatedPage }) => {
+		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+
+		await spaNavTo(unauthenticatedPage, noImageProductId)
+
+		const ogTitle = unauthenticatedPage.locator('meta[property="og:title"]')
+		await expect(ogTitle).toHaveCount(1)
+		await expect(ogTitle).toHaveAttribute('content', 'OG Meta No Image Product')
+	})
+
+	test('SPA nav A-with-image→B-without-image: no stale og:image', async ({ unauthenticatedPage }) => {
+		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+
+		await spaNavTo(unauthenticatedPage, noImageProductId)
+
+		// B has no image: og:image must be gone entirely, and the card is summary.
+		await expect(unauthenticatedPage.locator('meta[property="og:image"]')).toHaveCount(0)
+		await expect(unauthenticatedPage.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary')
+	})
+
+	test('product→non-product route removes all owned tags', async ({ unauthenticatedPage }) => {
+		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+
+		// Client-side nav to the homepage via the header home link.
+		const homeLink = unauthenticatedPage.getByTestId('home-link')
+		await expect(homeLink).toBeVisible()
+		await homeLink.click()
+		await expect(unauthenticatedPage).toHaveURL(/\/$/)
+
+		// No owned og/twitter/description meta remains on the non-product page.
+		for (const sel of [
+			'meta[property="og:type"]',
+			'meta[property="og:title"]',
+			'meta[property="og:description"]',
+			'meta[property="og:url"]',
+			'meta[property="og:site_name"]',
+			'meta[property="og:image"]',
+			'meta[property="product:price:amount"]',
+			'meta[name="twitter:card"]',
+			'meta[name="twitter:title"]',
+			'meta[name="twitter:description"]',
+			'meta[name="twitter:image"]',
+		]) {
+			await expect(unauthenticatedPage.locator(sel)).toHaveCount(0)
+		}
+		// document.title restored to the static default.
+		await expect(unauthenticatedPage).toHaveTitle('Plebeian Market')
+	})
+
+	test('A→B→A produces no duplicate tags', async ({ unauthenticatedPage }) => {
+		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+
+		await spaNavTo(unauthenticatedPage, noImageProductId)
+		await spaNavTo(unauthenticatedPage, regularProductId)
+
+		// Each owned selector appears exactly once, with the current product's data.
+		const ogTitle = unauthenticatedPage.locator('meta[property="og:title"]')
+		await expect(ogTitle).toHaveCount(1)
+		await expect(ogTitle).toHaveAttribute('content', 'OG Meta Test Product')
+		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
+		await expect(ogImage).toHaveCount(1)
+		await expect(unauthenticatedPage.locator('meta[name="twitter:card"]')).toHaveCount(1)
 	})
 })
