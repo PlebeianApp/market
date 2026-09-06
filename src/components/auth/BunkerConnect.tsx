@@ -41,6 +41,7 @@ function getSafeAuthUrl(url: string): string | null {
 
 export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 	const [bunkerUrl, setBunkerUrl] = useState('')
+	const [sessionPassphrase, setSessionPassphrase] = useState('')
 	const [isConnecting, setIsConnecting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [authUrl, setAuthUrl] = useState<string | null>(null)
@@ -96,8 +97,11 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 			setAuthUrl(null)
 
 			// Connect using the bunker URL (the client key is generated and
-			// persisted by loginWithNip46).
+			// persisted by loginWithNip46). With a session passphrase the
+			// nbunksec session is persisted encrypted at rest (ADR-0008 B-3);
+			// without one it stays in-memory only.
 			await authActions.loginWithNip46(bunkerUrl, undefined, {
+				sessionPassphrase: sessionPassphrase || undefined,
 				onAuthUrl: (url) => {
 					const safeAuthUrl = getSafeAuthUrl(url)
 
@@ -206,6 +210,22 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 						</Button>
 					</div>
 				)}
+			</div>
+
+			<div className="space-y-2 max-w-full">
+				<Label htmlFor="session-passphrase">Session passphrase (optional)</Label>
+				<p className="text-sm text-muted-foreground">
+					Set a passphrase to save this session encrypted on this device. Leave empty to keep the session in memory only — you will need to
+					reconnect after restarting the app.
+				</p>
+				<Input
+					id="session-passphrase"
+					type="password"
+					placeholder="Encrypt and remember this session"
+					value={sessionPassphrase}
+					onChange={(e) => setSessionPassphrase(e.target.value)}
+					data-testid="session-passphrase-input"
+				/>
 			</div>
 
 			<Button onClick={handleConnect} disabled={isConnecting || !bunkerUrl.trim()} className="w-full" data-testid="connect-bunker-button">
