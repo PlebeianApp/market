@@ -27,7 +27,7 @@ import {
 	unlockVault,
 	discardLegacySession,
 } from '@/lib/nostr/session-vault'
-import type { WrapOptions } from '@/lib/nostr/session-vault'
+import type { UnlockOptions, WrapOptions } from '@/lib/nostr/session-vault'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -382,7 +382,7 @@ export const authActions = {
 	 * rehydrated into a live `NostrConnectSigner` and the user is signed in.
 	 * Fails closed on a wrong passphrase (nothing migrated, prompt stays up).
 	 */
-	unlockVaultedSession: async (passphrase: string, options?: WrapOptions) => {
+	unlockVaultedSession: async (passphrase: string, options?: WrapOptions & Partial<UnlockOptions>) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
@@ -397,7 +397,8 @@ export const authActions = {
 				;({ nbunksec } = await migrateLegacySessionToVault(passphrase, options))
 			} else {
 				if (!hasVaultedSession()) throw new Error('No vaulted session to unlock')
-				nbunksec = await unlockVault(undefined, passphrase)
+				const { iterations: _wrapOnly, ...unlockOptions } = options ?? {}
+				nbunksec = await unlockVault(undefined, passphrase, unlockOptions)
 			}
 
 			// Restore path: derive → decrypt → fromNbunksec → NostrConnectSigner.

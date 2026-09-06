@@ -71,7 +71,7 @@ describe('session vault wrap/unwrap', () => {
 		// Ciphertext must not contain the plaintext session.
 		expect(envelope.ct).not.toContain(nbunksec)
 
-		const unlocked = await unlockVault(envelope, 'correct horse battery staple')
+		const unlocked = await unlockVault(envelope, 'correct horse battery staple', { minIterations: TEST_ITERATIONS })
 		expect(unlocked).toBe(nbunksec)
 	})
 
@@ -88,6 +88,34 @@ describe('session vault wrap/unwrap', () => {
 
 	test('default PBKDF2 iterations meet the >= 600k brief floor', () => {
 		expect(PBKDF2_ITERATIONS).toBeGreaterThanOrEqual(600_000)
+	})
+
+	test('iteration-downgrade tamper: lowered iterations are rejected even with the CORRECT passphrase', async () => {
+		// Attacker model (Gate 2.5 BLOCKER): edit localStorage iterations
+		// 600000 -> 1, exfiltrate the envelope, brute-force offline at
+		// 1-iter/guess. validateEnvelope must reject before any derivation
+		// (not merely fail later at the AES-GCM auth tag).
+		const envelope = await wrapSession('nbunksec1secret', 'right-pass', { iterations: 200_000 })
+		const downgraded = { ...envelope, iterations: 1 }
+		await expect(unlockVault(downgraded, 'right-pass')).rejects.toThrow(
+			'iteration count is below the accepted minimum',
+		)
+	})
+
+	test('iterations below the default 100k floor are rejected without an explicit test seam', async () => {
+		const envelope = await wrapSession('nbunksec1secret', 'pass', { iterations: 1_000 })
+		await expect(unlockVault(envelope, 'pass')).rejects.toThrow('iteration count is below the accepted minimum')
+	})
+
+	test('non-integer iterations are rejected as a tampered envelope', async () => {
+		const envelope = await wrapSession('nbunksec1secret', 'pass', { iterations: 1_000 })
+		const fractional = { ...envelope, iterations: 600_000.5 }
+		await expect(unlockVault(fractional, 'pass', { minIterations: 1_000 })).rejects.toThrow(SessionVaultError)
+	})
+
+	test('minIterations seam: low-cost envelopes unlock when the floor is explicitly lowered for tests', async () => {
+		const envelope = await wrapSession('nbunksec1secret', 'pass', { iterations: 1_000 })
+		await expect(unlockVault(envelope, 'pass', { minIterations: 1_000 })).resolves.toBe('nbunksec1secret')
 	})
 
 	test('each wrap uses a fresh random salt + iv', async () => {
@@ -114,7 +142,7 @@ describe('vaulted session storage lifecycle', () => {
 	test('unlockVault reads the stored envelope when none is passed', async () => {
 		const { saveVaultedSession } = await import('@/lib/nostr/session-vault')
 		await saveVaultedSession('nbunksec1stored', 'pass', { iterations: TEST_ITERATIONS })
-		await expect(unlockVault(undefined, 'pass')).resolves.toBe('nbunksec1stored')
+		await expect(unlockVault(undefined, 'pass', { minIterations: TEST_ITERATIONS })).resolves.toBe('nbunksec1stored')
 	})
 
 	test('corrupt stored envelope fails closed', async () => {
@@ -145,7 +173,7 @@ describe('legacy plaintext migration (read ONCE policy)', () => {
 		expect(info.secret).toBe('hunter2')
 
 		// And the vault unwraps with the chosen passphrase.
-		await expect(unlockVault(undefined, 'migration-pass')).resolves.toBe(nbunksec)
+		await expect(unlockVault(undefined, 'migration-pass', { minIterations: TEST_ITERATIONS })).resolves.toBe(nbunksec)
 	})
 
 	test('refusal path: discardLegacySession deletes plaintext and writes NO vault', () => {

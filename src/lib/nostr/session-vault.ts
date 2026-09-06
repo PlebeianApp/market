@@ -28,6 +28,15 @@ export const LEGACY_CONNECT_URL_KEY = 'nostr_connect_url'
 /** PBKDF2 iteration count — the brief's >= 600k floor (OWASP 2023 guidance). */
 export const PBKDF2_ITERATIONS = 600_000
 
+/**
+ * Minimum PBKDF2 iteration count accepted when UNLOCKING an envelope.
+ * `iterations` is attacker-writable localStorage: without this floor an
+ * attacker can lower it (600k -> 1), exfiltrate the envelope, and brute-force
+ * the passphrase offline at one iteration per guess. Envelopes below the
+ * floor are rejected before any key derivation (Gate 2.5 blocker).
+ */
+export const MIN_PBKDF2_ITERATIONS = 100_000
+
 const SALT_BYTES = 16
 const IV_BYTES = 12
 const KEY_BITS = 256
@@ -48,6 +57,14 @@ export interface SessionVaultEnvelope {
 /** Options overriding KDF cost — tests use a low iteration count. */
 export interface WrapOptions {
 	iterations?: number
+}
+
+/**
+ * Options for {@link unlockVault}. `minIterations` lowers the tamper floor —
+ * tests wrapping at a low cost must pass the matching floor explicitly.
+ */
+export interface UnlockOptions {
+	minIterations?: number
 }
 
 /** Error type for every fail-closed vault path (never a raw DOMException). */
@@ -119,18 +136,14 @@ export async function wrapSession(nbunksec: string, passphrase: string, options:
 
 /** Serialize + persist an envelope under {@link VAULT_STORAGE_KEY}. */
 export function saveVaultedSession(nbunksec: string, passphrase: string, options: WrapOptions = {}): Promise<void> {
-	return wrapSession(nbunksec, passphrase, options)
-		.then((envelope) => {
-			localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope))
-		})
-		.catch((error: unknown) => {
-			throw error
-		})
+	return wrapSession(nbunksec, passphrase, options).then((envelope) => {
+		localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope))
+	})
 }
 
-function readEnvelope(envelope?: SessionVaultEnvelope | string): SessionVaultEnvelope {
+function readEnvelope(envelope?: SessionVaultEnvelope | string, options: UnlockOptions = {}): SessionVaultEnvelope {
 	if (envelope != null && typeof envelope === 'object') {
-		validateEnvelope(envelope)
+		validateEnvelope(envelope, options)
 		return envelope
 	}
 	const raw = envelope ?? localStorage.getItem(VAULT_STORAGE_KEY)
@@ -141,23 +154,34 @@ function readEnvelope(envelope?: SessionVaultEnvelope | string): SessionVaultEnv
 	} catch (cause) {
 		throw new SessionVaultError('Vault envelope is corrupt', { cause })
 	}
-	validateEnvelope(parsed)
+	validateEnvelope(parsed, options)
 	return parsed
 }
 
-function validateEnvelope(parsed: SessionVaultEnvelope): void {
+function validateEnvelope(parsed: SessionVaultEnvelope, options: UnlockOptions = {}): void {
 	if (parsed?.v !== 1 || parsed?.kdf !== 'PBKDF2-SHA256' || !parsed?.salt || !parsed?.iv || !parsed?.ct) {
 		throw new SessionVaultError('Vault envelope has an unsupported shape')
+	}
+	// Iteration-downgrade tamper check (Gate 2.5 blocker): `iterations` is
+	// attacker-writable, so reject anything below the floor BEFORE deriving.
+	const minIterations = options.minIterations ?? MIN_PBKDF2_ITERATIONS
+	if (!Number.isInteger(parsed.iterations) || parsed.iterations < minIterations) {
+		throw new SessionVaultError('Vault envelope iteration count is below the accepted minimum (possible tampering)')
 	}
 }
 
 /**
  * Derive + decrypt a vault envelope back to the plaintext nbunksec session.
  * Fails closed (`SessionVaultError`) on a wrong passphrase — AES-GCM's auth
- * tag rejects it — on tampered ciphertext, and on a corrupt/absent envelope.
+ * tag rejects it — on tampered ciphertext, on a downgraded iteration count,
+ * and on a corrupt/absent envelope.
  */
-export async function unlockVault(envelope: SessionVaultEnvelope | string | undefined, passphrase: string): Promise<string> {
-	const parsed = readEnvelope(envelope)
+export async function unlockVault(
+	envelope: SessionVaultEnvelope | string | undefined,
+	passphrase: string,
+	options: UnlockOptions = {},
+): Promise<string> {
+	const parsed = readEnvelope(envelope, options)
 	try {
 		const key = await deriveKey(passphrase, fromBase64(parsed.salt), parsed.iterations)
 		const plaintext = await crypto.subtle.decrypt(

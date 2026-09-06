@@ -187,7 +187,7 @@ describe('unlock: migrate + rehydrate', () => {
 	test('unlock of a vaulted session rehydrates without legacy keys', async () => {
 		await seedVault('nbunksec1vaulted', 'pass')
 
-		await authActions.unlockVaultedSession('pass', { iterations: TEST_ITERATIONS })
+		await authActions.unlockVaultedSession('pass', { minIterations: TEST_ITERATIONS })
 
 		expect(rehydratedSessions).toEqual(['nbunksec1vaulted'])
 		expect(authStore.state.isAuthenticated).toBe(true)
@@ -234,7 +234,7 @@ describe('loginWithNip46 persistence', () => {
 		expect(memoryStorage.has(NOSTR_LOCAL_SIGNER_KEY)).toBe(false)
 		expect(memoryStorage.has(NOSTR_CONNECT_KEY)).toBe(false)
 		// The vault unwraps to the session's nbunksec.
-		await expect(unlockVault(undefined, 'device-pass')).resolves.toBe('nbunksec1fresh')
+		await expect(unlockVault(undefined, 'device-pass', { minIterations: TEST_ITERATIONS })).resolves.toBe('nbunksec1fresh')
 	})
 
 	test('without a passphrase → nothing persisted at all (in-memory session)', async () => {
@@ -266,6 +266,40 @@ describe('PasswordSigner locked-deadlock guard (gap 4)', () => {
 		await expect(session.capability.signEvent({ kind: 1, content: 'x', tags: [], created_at: 1 })).rejects.toThrow(
 			PasswordSignerLockedError,
 		)
+	})
+
+	test('locked signer: nip04/nip44 capability calls reject PROMPTLY (no library deadlock)', async () => {
+		const session = await createPasswordSignerSession(await makeNcryptsec('ncrypt-pass'), 'ncrypt-pass')
+		session.lock()
+
+		// The library's own nip04Encrypt/nip04Decrypt/nip44Encrypt/nip44Decrypt
+		// await a never-resolved requestUnlock() Deferred when locked — the
+		// capability seam must reject fast instead of hanging (gap 4).
+		const PEER_PUBKEY = 'aa'.repeat(32)
+		const calls = [
+			session.capability.nip04?.encrypt(PEER_PUBKEY, 'plain'),
+			session.capability.nip04?.decrypt(PEER_PUBKEY, 'cipher'),
+			session.capability.nip44?.encrypt(PEER_PUBKEY, 'plain'),
+			session.capability.nip44?.decrypt(PEER_PUBKEY, 'cipher'),
+		]
+		expect(calls.every((call) => call != null)).toBe(true)
+		for (const call of calls) {
+			await expect(call).rejects.toThrow(PasswordSignerLockedError)
+		}
+	})
+
+	test('unlocked signer: nip04/nip44 round-trip through the capability', async () => {
+		const session = await createPasswordSignerSession(await makeNcryptsec('ncrypt-pass'), 'ncrypt-pass')
+		const peer = 'aa'.repeat(32)
+
+		const nip04Cipher = await session.capability.nip04!.encrypt(peer, 'hello-nip04')
+		expect(typeof nip04Cipher).toBe('string')
+		expect(nip04Cipher.length).toBeGreaterThan(0)
+		expect(await session.capability.nip04!.decrypt(peer, nip04Cipher)).toBe('hello-nip04')
+
+		const nip44Cipher = await session.capability.nip44!.encrypt(peer, 'hello-nip44')
+		expect(typeof nip44Cipher).toBe('string')
+		expect(await session.capability.nip44!.decrypt(peer, nip44Cipher)).toBe('hello-nip44')
 	})
 
 	test('unlocked signer: round-trip sign works through the capability', async () => {
