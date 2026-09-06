@@ -291,7 +291,7 @@ describe('removeOwnedOgMetaTags', () => {
 			url: 'http://localhost:34567/products/abc',
 			price: 100,
 			currency: 'USD',
-		}).map((e) => `meta[${e.attr}="${e.key}"]`)
+		}).map((e) => `meta[${e.attr}="${e.key}"]` as (typeof OG_OWNED_META_SELECTORS)[number])
 		for (const sel of emittedKeys) {
 			expect(OG_OWNED_META_SELECTORS).toContain(sel)
 		}

@@ -7,7 +7,7 @@ import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { resolveCvmServerPubkey } from './lib/cvm-identity'
-import { renderProductPageHtml, resolveServerOrigins, serveProductPageWithOg } from './lib/ogTags'
+import { renderProductPageHtml, resolveServerOrigins, serveProductPageWithOg, type ServerOriginsEnv } from './lib/ogTags'
 import { getProductOgMeta } from './server/ogMeta'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
@@ -251,14 +251,17 @@ console.log(`App port: ${PORT}`)
  * failure never reduces product-page availability.
  */
 async function productPageWithOg(productId: string): Promise<Response> {
-	const { shellOrigin, publicOrigin } = resolveServerOrigins(process.env, PORT)
+	const { shellOrigin, publicOrigin } = resolveServerOrigins(
+		{ APP_SHELL_ORIGIN: process.env.APP_SHELL_ORIGIN, APP_PUBLIC_ORIGIN: process.env.APP_PUBLIC_ORIGIN } satisfies ServerOriginsEnv,
+		PORT,
+	)
 	return serveProductPageWithOg(productId, {
 		shellOrigin,
 		publicOrigin,
 		relayUrl: RELAY_URL,
 		indexShell: index,
 		getProductOgMeta,
-	})
+	}) as Promise<Response>
 }
 
 export const server = serve({

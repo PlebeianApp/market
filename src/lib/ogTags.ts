@@ -94,11 +94,12 @@ export function buildOwnedMetaEmissions(source: OwnedMetaSource): Array<{ attr: 
 
 /**
  * Minimal structural interface so `removeOwnedOgMetaTags` is unit-testable
- * with a fake head in bun without a DOM. Loosely `Iterable` so both an Array
- * (test fake) and a real `NodeList` satisfy it.
+ * with a fake head in bun without a DOM. `ArrayLike` matches both a real DOM
+ * `NodeListOf` (from `document.head.querySelectorAll`) and a plain test
+ * `Array`, and indexes cleanly without a downlevel-iteration flag.
  */
 export interface HeadLike {
-	querySelectorAll(sel: string): Iterable<{ remove(): void }>
+	querySelectorAll(sel: string): ArrayLike<{ remove(): void }>
 }
 
 /**
@@ -109,8 +110,9 @@ export interface HeadLike {
 export function removeOwnedOgMetaTags(head: HeadLike): number {
 	let removed = 0
 	for (const sel of OG_OWNED_META_SELECTORS) {
-		for (const el of head.querySelectorAll(sel)) {
-			el.remove()
+		const els = head.querySelectorAll(sel)
+		for (let i = 0; i < els.length; i++) {
+			els[i].remove()
 			removed++
 		}
 	}
