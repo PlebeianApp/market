@@ -179,16 +179,18 @@ describe('Nip46Mock nostrconnect URI secret handling', () => {
 		expect(sends[0].params.secret).toBe('abc123')
 	})
 
-	test('still reads the legacy "token" param as an alias until B-4 removes it', async () => {
+	test('REJECTS a legacy "token"-only URI (fail closed — ADR-0008 B-4 / #807)', async () => {
 		const mock = new Nip46Mock(REMOTE_SIGNER_SK, USER_SK)
 		const sends: any[] = []
 		stubTransport(mock, sends)
 
-		await mock.respondToConnect(`nostrconnect://${clientPk}?relay=ws%3A%2F%2Ftest&token=oldtoken`)
-
-		expect(sends).toHaveLength(1)
-		expect(sends[0].method).toBe('connect')
-		expect(sends[0].params.secret).toBe('oldtoken')
+		// Legacy nostrconnect URIs used `token=`. The library parseNostrConnectURI
+		// throws on a missing `secret`, so a token-only URI must fail closed with
+		// a friendly error and NOT send a connect request (spec-compliant secret only).
+		await expect(mock.respondToConnect(`nostrconnect://${clientPk}?relay=ws%3A%2F%2Ftest&token=oldtoken`)).rejects.toThrow(
+			/secret|legacy|nostrconnect/i,
+		)
+		expect(sends).toHaveLength(0)
 	})
 })
 

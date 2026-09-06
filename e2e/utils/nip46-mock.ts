@@ -19,6 +19,7 @@ import { finalizeEvent, getPublicKey, type EventTemplate } from 'nostr-tools/pur
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { encrypt as nip04Encrypt, decrypt as nip04Decrypt } from 'nostr-tools/nip04'
 import { v2 as nip44 } from 'nostr-tools/nip44'
+import { parseNostrConnectURI } from 'applesauce-signers/helpers'
 import WebSocket from 'ws'
 import { RELAY_URL } from '../test-config'
 
@@ -222,13 +223,19 @@ export class Nip46Mock {
 	 * Returns a cleanup function.
 	 */
 	async respondToConnect(nostrconnectUrl: string): Promise<() => void> {
-		const withoutProtocol = nostrconnectUrl.replace('nostrconnect://', '')
-		const qIdx = withoutProtocol.indexOf('?')
-		const localPubkey = withoutProtocol.slice(0, qIdx)
-		const params = new URLSearchParams(withoutProtocol.slice(qIdx + 1))
-		const relayUrl = params.get('relay')!
-		// Spec `secret` param is primary; legacy `token` is a read-alias until B-4 removes it.
-		const secret = params.get('secret') ?? params.get('token') ?? ''
+		// Spec-compliant parsing via the library's parseNostrConnectURI — it
+		// THROWS on a missing `secret` (legacy `token`-only URIs fail closed,
+		// ADR-0008 B-4 / #807). Manual `?? get('token')` silently defaulted to
+		// empty and was the loophole; the token read-alias was removed.
+		let parsed: ReturnType<typeof parseNostrConnectURI>
+		try {
+			parsed = parseNostrConnectURI(nostrconnectUrl)
+		} catch (e) {
+			throw new Error(`Unsupported nostrconnect URI (missing secret): ${(e as Error).message}`)
+		}
+		const localPubkey = parsed.client
+		const relayUrl = parsed.relays[0]
+		const secret = parsed.secret!
 
 		// Connect and wait for subscription EOSE
 		await this.connectAndSubscribe(relayUrl)
