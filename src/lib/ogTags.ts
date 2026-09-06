@@ -20,6 +20,182 @@ export interface OgProductMeta {
 	currency?: string
 }
 
+/**
+ * Static, never-a-product title restored to `document.title` when a product
+ * route unmounts or its meta config changes. Deliberately not a snapshot of
+ * the previous product's title (see removeOwnedOgMetaTags / useDocumentMeta).
+ */
+export const DEFAULT_DOCUMENT_TITLE = 'Plebeian Market'
+
+/**
+ * Complete list of og:/twitter:/product:/description selectors that the
+ * product route owns while mounted. Cleanup removes ALL of these via
+ * {@link removeOwnedOgMetaTags} rather than restoring remembered content, so
+ * no tag from a previously-viewed product can leak onto the next route
+ * (see Blocker 2 — stale-restore fix).
+ */
+export const OG_OWNED_META_SELECTORS = [
+	'meta[property="og:type"]',
+	'meta[property="og:title"]',
+	'meta[property="og:description"]',
+	'meta[property="og:url"]',
+	'meta[property="og:site_name"]',
+	'meta[property="og:image"]',
+	'meta[property="product:price:amount"]',
+	'meta[property="product:price:currency"]',
+	'meta[name="twitter:card"]',
+	'meta[name="twitter:title"]',
+	'meta[name="twitter:description"]',
+	'meta[name="twitter:image"]',
+	'meta[name="description"]',
+] as const
+
+/** The tag descriptors emitted by the product route's meta hook. Mirrors the
+ * attribute keys the route can write, so OG_OWNED_META_SELECTORS stays
+ * exactly in sync (drift guard). */
+export const OG_OWNED_META_TAGS = OG_OWNED_META_SELECTORS.map((sel) => {
+	const m = sel.match(/^meta\[(property|name)="(.+)"\]$/)
+	if (!m) throw new Error(`Unexpected owned selector: ${sel}`)
+	return { attr: m[1] as 'property' | 'name', key: m[2] }
+})
+
+/**
+ * The branded meta attributes the product page may write for a given source
+ * (title/description/image/price/currency). `useDocumentMeta` iterates this
+ * list to emit tags, so the drift-guard unit test can assert the owned
+ * selector list covers exactly these.
+ */
+export interface OwnedMetaSource {
+	title: string
+	description: string
+	image?: string
+	url: string
+	price?: number
+	currency?: string
+}
+
+export function buildOwnedMetaEmissions(source: OwnedMetaSource): Array<{ attr: 'property' | 'name'; key: string }> {
+	const emissions: Array<{ attr: 'property' | 'name'; key: string }> = [
+		{ attr: 'property', key: 'og:type' },
+		{ attr: 'property', key: 'og:title' },
+		{ attr: 'property', key: 'og:description' },
+		{ attr: 'property', key: 'og:url' },
+		{ attr: 'property', key: 'og:site_name' },
+	]
+	if (source.image) emissions.push({ attr: 'property', key: 'og:image' })
+	if (source.price !== undefined && source.currency) {
+		emissions.push({ attr: 'property', key: 'product:price:amount' }, { attr: 'property', key: 'product:price:currency' })
+	}
+	emissions.push({ attr: 'name', key: 'twitter:card' }, { attr: 'name', key: 'twitter:title' }, { attr: 'name', key: 'twitter:description' })
+	if (source.image) emissions.push({ attr: 'name', key: 'twitter:image' })
+	emissions.push({ attr: 'name', key: 'description' })
+	return emissions
+}
+
+/**
+ * Minimal structural interface so `removeOwnedOgMetaTags` is unit-testable
+ * with a fake head in bun without a DOM. Loosely `Iterable` so both an Array
+ * (test fake) and a real `NodeList` satisfy it.
+ */
+export interface HeadLike {
+	querySelectorAll(sel: string): Iterable<{ remove(): void }>
+}
+
+/**
+ * Remove every element matching {@link OG_OWNED_META_SELECTORS} from `head`,
+ * returning how many were removed. Selector-based and complete, so duplicates
+ * can never survive cleanup (the A→B→A duplicate guard).
+ */
+export function removeOwnedOgMetaTags(head: HeadLike): number {
+	let removed = 0
+	for (const sel of OG_OWNED_META_SELECTORS) {
+		for (const el of head.querySelectorAll(sel)) {
+			el.remove()
+			removed++
+		}
+	}
+	return removed
+}
+
+/**
+ * Resolve the server-controlled shell origin and the canonical public origin.
+ * Neither is ever derived from an incoming request (Blocker 1): shellOrigin
+ * is `APP_SHELL_ORIGIN` or a fixed loopback; publicOrigin is
+ * `APP_PUBLIC_ORIGIN` or falls back to shellOrigin.
+ */
+export interface ServerOriginsEnv {
+	APP_SHELL_ORIGIN?: string
+	APP_PUBLIC_ORIGIN?: string
+}
+
+export interface ServerOrigins {
+	shellOrigin: string
+	publicOrigin: string
+}
+
+export function resolveServerOrigins(env: ServerOriginsEnv, port: number): ServerOrigins {
+	const shell = env.APP_SHELL_ORIGIN?.trim()
+	const publicOrigin = env.APP_PUBLIC_ORIGIN?.trim()
+	const shellOrigin = shell || `http://localhost:${port}`
+	return {
+		shellOrigin,
+		publicOrigin: publicOrigin || shellOrigin,
+	}
+}
+
+/**
+ * The shell URL the server fetches itself to obtain the SPA shell. Takes no
+ * request argument — the fetch destination cannot be influenced by a hostile
+ * `Host` header.
+ */
+export function resolveShellUrl(env: ServerOriginsEnv, port: number): string {
+	return new URL('/', resolveServerOrigins(env, port).shellOrigin).toString()
+}
+
+/** Context passed to {@link serveProductPageWithOg}, all server-controlled. */
+export interface ServeProductOgContext<Shell extends Response | object> {
+	shellOrigin: string
+	publicOrigin: string
+	relayUrl: string | undefined
+	/** The fallback shell served on shell-fetch failure. In practice Bun's
+	 * `./index.html` HTML bundle (the same value used by the `/*` catch-all
+	 * route); typed generic so any fetchable Response also works. */
+	indexShell: Shell
+	getProductOgMeta: (relayUrl: string | undefined, productId: string) => Promise<OgProductMeta | null>
+}
+
+/**
+ * Serve `/products/:productId` HTML: fetch the module shell from the
+ * server-controlled origin, inject og:/twitter:/product: meta, and degrade
+ * gracefully — on ANY shell-fetch failure the untouched module shell is
+ * served with HTTP 200, so an SEO-only enrichment failure can never 5xx the
+ * product page. `fetcher` is injectable (default global fetch) for unit
+ * testing the shell-failure path without a server.
+ */
+export async function serveProductPageWithOg<Shell extends Response | object>(
+	productId: string,
+	ctx: ServeProductOgContext<Shell>,
+	fetcher: (url: URL | string, init?: RequestInit) => Promise<{ ok: boolean; text(): Promise<string> }> = fetch,
+): Promise<Response | Shell> {
+	let baseHtml: string | null = null
+	try {
+		const res = await fetcher(new URL('/', ctx.shellOrigin), { signal: AbortSignal.timeout(2_500) })
+		if (res.ok) baseHtml = await res.text()
+	} catch (e) {
+		// SEO-only enrichment: never let shell acquisition take down the page.
+		console.warn('og: shell fetch failed, serving module shell:', e)
+	}
+	if (baseHtml === null) return ctx.indexShell
+
+	const meta = await ctx.getProductOgMeta(ctx.relayUrl, productId)
+	return new Response(renderProductPageHtml(baseHtml, meta, `${ctx.publicOrigin}/products/${productId}`, ctx.publicOrigin), {
+		headers: {
+			'Content-Type': 'text/html;charset=utf-8',
+			'Cache-Control': 'no-cache',
+		},
+	})
+}
+
 /** Minimal shape of a kind 30402 product event needed to derive preview meta. */
 export interface OgTagSourceEvent {
 	content: string

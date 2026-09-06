@@ -14,7 +14,7 @@ import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
-import { truncateForMeta } from '@/lib/ogTags'
+import { DEFAULT_DOCUMENT_TITLE, buildOwnedMetaEmissions, removeOwnedOgMetaTags, truncateForMeta } from '@/lib/ogTags'
 import { authStore } from '@/lib/stores/auth'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -104,19 +104,17 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		const { title, description, image, url, price, currency, enabled = true } = config
 		if (!enabled) return
 		const createdElements: HTMLElement[] = []
-		const restoredContents: Array<{ element: Element; originalContent: string | null }> = []
 
 		// Helper to apply a meta tag. Server-side og injection (see
 		// src/index.tsx + src/lib/ogTags.ts) already renders og:/twitter:
 		// tags into the initial HTML for product pages, so reuse those
-		// elements instead of appending duplicates — snapshotting their
-		// original content so cleanup can restore the server-rendered value.
+		// elements instead of appending duplicates. The product route owns
+		// every such element while mounted and removes them all on cleanup
+		// (selector-based, complete removal — see removeOwnedOgMetaTags).
 		const addMeta = (attributes: Record<string, string>) => {
 			const selector = attributes.property !== undefined ? `meta[property="${attributes.property}"]` : `meta[name="${attributes.name}"]`
 			let meta = document.head.querySelector<HTMLMetaElement>(selector)
-			if (meta) {
-				restoredContents.push({ element: meta, originalContent: meta.getAttribute('content') })
-			} else {
+			if (!meta) {
 				meta = document.createElement('meta')
 				createdElements.push(meta)
 			}
@@ -127,7 +125,6 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		}
 
 		// Set document title
-		const originalTitle = document.title
 		document.title = `${title} | Plebeian Market`
 
 		// Open Graph tags
@@ -158,18 +155,22 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		// Standard meta description
 		addMeta({ name: 'description', content: description })
 
-		// Cleanup on unmount or when config changes
+		// Cleanup on unmount or when config changes. Ownership semantics: the
+		// product route OWNS every selector in OG_OWNED_META_SELECTORS while
+		// mounted; on unmount it removes them all, sets the static app title,
+		// and never restores any remembered content. This prevents a previous
+		// product's SSR metadata (e.g. A's og:image on B, or A's tags after a
+		// product→non-product nav) from leaking onto the next route.
 		return () => {
-			document.title = originalTitle
+			document.title = DEFAULT_DOCUMENT_TITLE
 			createdElements.forEach((el) => {
 				if (el.parentNode) {
 					el.parentNode.removeChild(el)
 				}
 			})
-			restoredContents.forEach(({ element, originalContent }) => {
-				if (originalContent === null) element.removeAttribute('content')
-				else element.setAttribute('content', originalContent)
-			})
+			// Selector-based and complete: removes reused SSR elements too, so
+			// duplicates can never survive (A→B→A guard).
+			removeOwnedOgMetaTags(document.head)
 		}
 	}, [config.title, config.description, config.image, config.url, config.price, config.currency, config.enabled])
 }

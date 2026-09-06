@@ -7,7 +7,7 @@ import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { resolveCvmServerPubkey } from './lib/cvm-identity'
-import { renderProductPageHtml } from './lib/ogTags'
+import { renderProductPageHtml, resolveServerOrigins, serveProductPageWithOg } from './lib/ogTags'
 import { getProductOgMeta } from './server/ogMeta'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
@@ -241,37 +241,23 @@ console.log(`App port: ${PORT}`)
  * into the initial HTML, so crawlers and link unfurlers see the product's
  * title/description/image without executing JavaScript (issue #459).
  *
- * The shell is obtained by fetching `/` from this same server, which runs it
- * through Bun's HTML import pipeline (asset rewrites, dev scripts) — so the
- * injected page stays byte-identical to the catch-all shell apart from the
- * extra <meta> tags. On any lookup miss (unknown id, relay timeout, NSFW
- * product) the untouched shell is served and the SPA renders as before.
+ * The shell is obtained by fetching `/` from a SERVER-CONTROLLED origin
+ * (`APP_SHELL_ORIGIN` / fixed loopback — never the request Host), which runs
+ * it through Bun's HTML import pipeline (asset rewrites, dev scripts) — so
+ * the injected page stays byte-identical to the catch-all shell apart from
+ * the extra <meta> tags. og:url / og:image use `APP_PUBLIC_ORIGIN`. On any
+ * shell-fetch or lookup miss (unknown id, relay timeout, NSFW product) the
+ * untouched module shell is served with HTTP 200 — an SEO-only enrichment
+ * failure never reduces product-page availability.
  */
-async function serveProductPageWithOg(productId: string, requestUrl: string): Promise<Response> {
-	const url = new URL(requestUrl)
-	let baseHtml: string
-	let contentType: string
-
-	try {
-		const baseResponse = await fetch(new URL('/', url))
-		if (!baseResponse.ok) throw new Error(`index shell fetch returned ${baseResponse.status}`)
-		baseHtml = await baseResponse.text()
-		contentType = baseResponse.headers.get('Content-Type') || 'text/html;charset=utf-8'
-	} catch (error) {
-		console.error('og: failed to load index shell:', error)
-		return new Response('Product page unavailable', { status: 503 })
-	}
-
-	const meta = await getProductOgMeta(RELAY_URL, productId)
-	const html = renderProductPageHtml(baseHtml, meta, `${url.origin}/products/${productId}`, url.origin)
-
-	// Body differs per product: only carry over the content type, and force
-	// revalidation so a cached shell from one product is never served for another.
-	return new Response(html, {
-		headers: {
-			'Content-Type': contentType,
-			'Cache-Control': 'no-cache',
-		},
+async function productPageWithOg(productId: string): Promise<Response> {
+	const { shellOrigin, publicOrigin } = resolveServerOrigins(process.env, PORT)
+	return serveProductPageWithOg(productId, {
+		shellOrigin,
+		publicOrigin,
+		relayUrl: RELAY_URL,
+		indexShell: index,
+		getProductOgMeta,
 	})
 }
 
@@ -365,7 +351,7 @@ export const server = serve({
 		// Product pages get og: meta tags server-rendered into the initial
 		// HTML (must beat the catch-all so the crawler response carries them).
 		'/products/:productId': {
-			GET: ({ params, url }) => serveProductPageWithOg(params.productId, url),
+			GET: ({ params }) => productPageWithOg(params.productId),
 		},
 		'/*': index,
 	},

@@ -3,9 +3,16 @@ import {
 	absolutizeImageUrl,
 	buildOgMetaTagsHtml,
 	buildOgProductMeta,
+	buildOwnedMetaEmissions,
 	escapeHtmlAttribute,
 	injectIntoHead,
+	OG_OWNED_META_SELECTORS,
+	OG_OWNED_META_TAGS,
+	removeOwnedOgMetaTags,
 	renderProductPageHtml,
+	resolveServerOrigins,
+	resolveShellUrl,
+	serveProductPageWithOg,
 	truncateForMeta,
 	type OgTagSourceEvent,
 } from '../ogTags'
@@ -212,5 +219,180 @@ describe('renderProductPageHtml', () => {
 
 	test('null meta (NSFW, miss, or timeout) serves the shell untouched', () => {
 		expect(renderProductPageHtml(BASE_HTML, null, 'http://x/p/1', 'http://x')).toBe(BASE_HTML)
+	})
+})
+
+describe('removeOwnedOgMetaTags', () => {
+	// Minimal structural fake of document.head. Elements record their selector
+	// and a removed flag; querySelectorAll(sel) returns the matching elements.
+	const makeElement = (selector: string) => ({
+		selector,
+		removed: false,
+		remove() {
+			this.removed = true
+		},
+	})
+	const makeHead = (elements: Array<ReturnType<typeof makeElement>>) => ({
+		querySelectorAll(this: unknown, sel: string) {
+			return elements.filter((el) => el.selector === sel && !el.removed)
+		},
+	})
+
+	function ownedSelectors(elements: Array<ReturnType<typeof makeElement>>): string[] {
+		return elements.map((el) => el.selector)
+	}
+
+	test('removes every owned selector including og:image', () => {
+		const elements = OG_OWNED_META_SELECTORS.map((sel) => makeElement(sel))
+		const head = makeHead(elements)
+
+		const removed = removeOwnedOgMetaTags(head)
+
+		expect(removed).toBe(OG_OWNED_META_SELECTORS.length)
+		expect(elements.every((el) => el.removed)).toBe(true)
+		// Keep the selector list honest: what we removed is exactly what we expected.
+		expect(ownedSelectors(elements)).toEqual([...OG_OWNED_META_SELECTORS])
+	})
+
+	test('removes duplicate owned elements', () => {
+		// Two clones of the same owned selector exist — both must go.
+		const elements = [...OG_OWNED_META_SELECTORS, ...OG_OWNED_META_SELECTORS].map((sel) => makeElement(sel))
+		const head = makeHead(elements)
+
+		const removed = removeOwnedOgMetaTags(head)
+
+		expect(removed).toBe(OG_OWNED_META_SELECTORS.length * 2)
+		expect(elements.every((el) => el.removed)).toBe(true)
+	})
+
+	test('leaves non-owned meta untouched', () => {
+		const elements = [makeElement('meta[name="viewport"]'), makeElement('meta[charset]'), makeElement('meta[name="description"]')]
+		const head = makeHead(elements)
+
+		const removed = removeOwnedOgMetaTags(head)
+
+		expect(removed).toBe(1) // only the description meta is owned
+		expect(elements.filter((el) => !el.removed)).toHaveLength(2)
+		// The two non-owned elements (viewport, charset) are untouched.
+		expect(elements.map((el) => el.selector)).toEqual(['meta[name="viewport"]', 'meta[charset]', 'meta[name="description"]'])
+		expect(elements.every((el) => el.removed)).toBe(false)
+	})
+
+	test('on empty head returns 0 without throwing', () => {
+		const head = makeHead([])
+		expect(removeOwnedOgMetaTags(head)).toBe(0)
+	})
+
+	test('owned selector list covers exactly the tags useDocumentMeta writes', () => {
+		const emittedKeys = buildOwnedMetaEmissions({
+			title: 'T',
+			description: 'D',
+			image: 'https://x/i.png',
+			url: 'http://localhost:34567/products/abc',
+			price: 100,
+			currency: 'USD',
+		}).map((e) => `meta[${e.attr}="${e.key}"]`)
+		for (const sel of emittedKeys) {
+			expect(OG_OWNED_META_SELECTORS).toContain(sel)
+		}
+		// And conversely, no owned selector is orphaned.
+		expect(new Set(emittedKeys).size).toBe(OG_OWNED_META_SELECTORS.length)
+	})
+})
+
+describe('resolveServerOrigins / resolveShellUrl', () => {
+	test('unset env resolves to the fixed loopback origin', () => {
+		expect(resolveServerOrigins({}, 34567)).toEqual({
+			shellOrigin: 'http://localhost:34567',
+			publicOrigin: 'http://localhost:34567',
+		})
+		expect(resolveShellUrl({}, 34567)).toBe('http://localhost:34567/')
+	})
+
+	test('APP_SHELL_ORIGIN wins over everything and also sets public origin', () => {
+		const env = { APP_SHELL_ORIGIN: 'https://shell.internal' }
+		expect(resolveServerOrigins(env, 34567)).toEqual({
+			shellOrigin: 'https://shell.internal',
+			publicOrigin: 'https://shell.internal',
+		})
+		expect(resolveShellUrl(env, 34567)).toBe('https://shell.internal/')
+	})
+
+	test('APP_PUBLIC_ORIGIN overrides the canonical public origin independently', () => {
+		expect(
+			resolveServerOrigins({ APP_SHELL_ORIGIN: 'https://shell.internal', APP_PUBLIC_ORIGIN: 'https://market.example' }, 34567),
+		).toEqual({
+			shellOrigin: 'https://shell.internal',
+			publicOrigin: 'https://market.example',
+		})
+	})
+
+	test('garbage/whitespace env falls back to loopback', () => {
+		expect(resolveServerOrigins({ APP_SHELL_ORIGIN: '   ' }, 34567).shellOrigin).toBe('http://localhost:34567')
+		expect(resolveServerOrigins({ APP_SHELL_ORIGIN: '' }, 34567).publicOrigin).toBe('http://localhost:34567')
+		expect(resolveShellUrl({ APP_SHELL_ORIGIN: '\n	 ' }, 34567)).toBe('http://localhost:34567/')
+	})
+
+	// The pin: the function doesn't accept a request argument, so no simulated
+	// host header / request URL can change the resolved shell destination.
+	test('simulated request inputs cannot redirect the shell URL', () => {
+		const requestDerived = 'http://evil.example:1337'
+		const env = { APP_SHELL_ORIGIN: 'https://shell.internal', APP_PUBLIC_ORIGIN: 'https://market.example' }
+		const shell = resolveShellUrl(env, 34567)
+		expect(shell).toBe('https://shell.internal/')
+		expect(shell.startsWith(requestDerived)).toBe(false)
+	})
+})
+
+describe('serveProductPageWithOg (shell acquisition)', () => {
+	const SHELL = '<html><head></head><body><div id="root"></div></body></html>'
+	const indexShell = () => new Response(SHELL, { headers: { 'Content-Type': 'text/html;charset=utf-8' } })
+
+	function okFetcher(html: string) {
+		return async () => ({ ok: true, text: async () => html })
+	}
+
+	test('shell fetch failure still serves 200 with the module shell (no 503)', async () => {
+		const rejectingFetch = () => Promise.reject(new Error('connection refused'))
+		// Stub global fetch used as the default argument when none injected:
+		const res = await serveProductPageWithOg(
+			'abc',
+			{ shellOrigin: 'http://localhost:34567', publicOrigin: 'http://localhost:34567', relayUrl: 'ws://x', indexShell: indexShell(), getProductOgMeta: async () => null },
+			rejectingFetch,
+		)
+		expect(res.status).toBe(200)
+		expect(await res.text()).toBe(SHELL)
+	})
+
+	test('non-ok shell response serves the module shell with 200', async () => {
+		const res = await serveProductPageWithOg(
+			'abc',
+			{ shellOrigin: 'http://localhost:34567', publicOrigin: 'http://localhost:34567', relayUrl: 'ws://x', indexShell: indexShell(), getProductOgMeta: async () => null },
+			async () => ({ ok: false, status: 500, text: async () => '' }),
+		)
+		expect(res.status).toBe(200)
+		expect(await res.text()).toBe(SHELL)
+	})
+
+	test('healthy shell fetch injects og tags with the public origin', async () => {
+		const res = await serveProductPageWithOg(
+			'64hexproductid0123456789abcdef0123456789abcdef0123456789abcdef',
+			{
+				shellOrigin: 'http://localhost:34567',
+				publicOrigin: 'https://market.example',
+				relayUrl: 'ws://x',
+				indexShell: indexShell(),
+				getProductOgMeta: async () => ({ title: 'A', description: 'B', imageUrl: '/img.png', price: 100, currency: 'USD' }),
+			},
+			okFetcher(SHELL),
+		)
+		expect(res.status).toBe(200)
+		const html = await res.text()
+		expect(html).toContain('<meta property="og:title" content="A" />')
+		expect(html).toContain('og:url')
+		expect(html).toContain('https://market.example/products/64hexproductid0123456789abcdef0123456789abcdef0123456789abcdef')
+		expect(html).toContain('og:image')
+		// hostile host never reaches the tags (public origin is server-controlled)
+		expect(html).not.toContain('evil.example')
 	})
 })
