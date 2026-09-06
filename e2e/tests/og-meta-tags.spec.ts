@@ -103,6 +103,7 @@ async function seedProductWithoutImage(
 				['title', opts.title],
 				['price', opts.price, opts.currency],
 				['status', 'on-sale'],
+				['stock', '10'],
 				['t', 'Bitcoin'],
 			],
 		},
@@ -281,7 +282,7 @@ test.describe('OG Meta Tags - Happy Path (Video)', () => {
 
 		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
 		await expect(ogImage).toHaveCount(1)
-		await expect(ogImage).toHaveAttribute('content', /cdn\\.satellite\\.earth/)
+		await expect(ogImage).toHaveAttribute('content', /cdn\.satellite\.earth/)
 	})
 })
 
