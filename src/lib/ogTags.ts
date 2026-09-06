@@ -86,7 +86,11 @@ export function buildOwnedMetaEmissions(source: OwnedMetaSource): Array<{ attr: 
 	if (source.price !== undefined && source.currency) {
 		emissions.push({ attr: 'property', key: 'product:price:amount' }, { attr: 'property', key: 'product:price:currency' })
 	}
-	emissions.push({ attr: 'name', key: 'twitter:card' }, { attr: 'name', key: 'twitter:title' }, { attr: 'name', key: 'twitter:description' })
+	emissions.push(
+		{ attr: 'name', key: 'twitter:card' },
+		{ attr: 'name', key: 'twitter:title' },
+		{ attr: 'name', key: 'twitter:description' },
+	)
 	if (source.image) emissions.push({ attr: 'name', key: 'twitter:image' })
 	emissions.push({ attr: 'name', key: 'description' })
 	return emissions

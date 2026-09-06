@@ -357,7 +357,13 @@ describe('serveProductPageWithOg (shell acquisition)', () => {
 		// Stub global fetch used as the default argument when none injected:
 		const res = await serveProductPageWithOg(
 			'abc',
-			{ shellOrigin: 'http://localhost:34567', publicOrigin: 'http://localhost:34567', relayUrl: 'ws://x', indexShell: indexShell(), getProductOgMeta: async () => null },
+			{
+				shellOrigin: 'http://localhost:34567',
+				publicOrigin: 'http://localhost:34567',
+				relayUrl: 'ws://x',
+				indexShell: indexShell(),
+				getProductOgMeta: async () => null,
+			},
 			rejectingFetch,
 		)
 		expect(res.status).toBe(200)
@@ -367,7 +373,13 @@ describe('serveProductPageWithOg (shell acquisition)', () => {
 	test('non-ok shell response serves the module shell with 200', async () => {
 		const res = await serveProductPageWithOg(
 			'abc',
-			{ shellOrigin: 'http://localhost:34567', publicOrigin: 'http://localhost:34567', relayUrl: 'ws://x', indexShell: indexShell(), getProductOgMeta: async () => null },
+			{
+				shellOrigin: 'http://localhost:34567',
+				publicOrigin: 'http://localhost:34567',
+				relayUrl: 'ws://x',
+				indexShell: indexShell(),
+				getProductOgMeta: async () => null,
+			},
 			async () => ({ ok: false, status: 500, text: async () => '' }),
 		)
 		expect(res.status).toBe(200)
