@@ -6,7 +6,7 @@ import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
-import { decrypt, encrypt } from 'nostr-tools/nip49'
+import { encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
 import {
 	createExtensionSigner,
@@ -16,6 +16,7 @@ import {
 	setSignerTeardown,
 } from '@/lib/nostr/signer-registry'
 import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
+import { createPasswordSignerSession } from '@/lib/nostr/password-signer-session'
 import { rehydrateNostrConnectSession } from '@/lib/nostr/nostr-connect-session'
 import {
 	clearVaultedSession,
@@ -129,11 +130,14 @@ export const authActions = {
 			// Extract the ncryptsec part (format: "pubkey:ncryptsec...")
 			const [, encryptedKey] = encryptedPrivateKey.split(':')
 
-			// Use nostr-tools decrypt function
-			const decryptedBytes = decrypt(encryptedKey, password)
-
-			// Convert Uint8Array to hex string
-			const privateKeyHex = Array.from(decryptedBytes)
+			// NIP-49 lane via PasswordSigner (ADR-0008 B-3/B-4): the ncryptsec is
+			// decrypted inside the signer, which then holds the key in memory
+			// behind the capability seam — the app never materializes the raw
+			// key hex anymore. `fromNcryptsec` throws on a wrong password
+			// ("failed to decrypt key"), preserving the fail-closed UX.
+			const session = await createPasswordSignerSession(encryptedKey, password)
+			if (!session.signer.key) throw new Error('Failed to decrypt key')
+			const privateKeyHex = Array.from(session.signer.key)
 				.map((byte) => byte.toString(16).padStart(2, '0'))
 				.join('')
 
