@@ -22,6 +22,8 @@ import {
 	clearVaultedSession,
 	hasLegacyPlaintextSession,
 	hasVaultedSession,
+	LEGACY_CONNECT_URL_KEY,
+	LEGACY_LOCAL_SIGNER_KEY,
 	migrateLegacySessionToVault,
 	saveVaultedSession,
 	unlockVault,
@@ -30,8 +32,12 @@ import {
 import type { UnlockOptions, WrapOptions } from '@/lib/nostr/session-vault'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
-export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
-export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
+// Single source of truth for the legacy plaintext-pair literals is
+// session-vault.ts (LEGACY_*_KEY) — these aliases keep the historical
+// auth.ts names importable while preventing drift between the two
+// definitions (Gate 2.5: duplicated constants silently break migration).
+export const NOSTR_CONNECT_KEY = LEGACY_CONNECT_URL_KEY
+export const NOSTR_LOCAL_SIGNER_KEY = LEGACY_LOCAL_SIGNER_KEY
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
 export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
@@ -132,9 +138,11 @@ export const authActions = {
 
 			// NIP-49 lane via PasswordSigner (ADR-0008 B-3/B-4): the ncryptsec is
 			// decrypted inside the signer, which then holds the key in memory
-			// behind the capability seam — the app never materializes the raw
-			// key hex anymore. `fromNcryptsec` throws on a wrong password
-			// ("failed to decrypt key"), preserving the fail-closed UX.
+			// behind the capability seam. TRANSITIONAL: decryptAndLogin still
+			// derives the raw key hex below because loginWithPrivateKey expects
+			// it — B-4 unifies session storage and removes this materialization.
+			// `fromNcryptsec` throws on a wrong password ("failed to decrypt
+			// key"), preserving the fail-closed UX.
 			const session = await createPasswordSignerSession(encryptedKey, password)
 			if (!session.signer.key) throw new Error('Failed to decrypt key')
 			const privateKeyHex = Array.from(session.signer.key)
@@ -440,6 +448,9 @@ export const authActions = {
 	discardVaultedSession: () => {
 		// Intentional forced re-login: delete the plaintext pair (migration
 		// refused) AND any vault (the user wants out), plus the auto-login flag.
+		// cartActions.clear is intentionally NOT called here, unlike logout():
+		// no signer was ever attached on this path, so there is no user-scoped
+		// cart state to reconcile — the asymmetry is deliberate.
 		discardLegacySession()
 		clearVaultedSession()
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)

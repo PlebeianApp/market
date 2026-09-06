@@ -21,7 +21,9 @@ import { encodeNbunksec, parseBunkerURI } from 'applesauce-signers/helpers'
 /** localStorage key holding the JSON vault envelope. */
 export const VAULT_STORAGE_KEY = 'nostr_session_v1'
 
-/** Legacy plaintext keys (auth.ts pre-B-3) — read once, then gone. */
+// Legacy plaintext keys (auth.ts pre-B-3) — read once, then gone. Single
+// definition site: auth.ts re-exports these as NOSTR_LOCAL_SIGNER_KEY /
+// NOSTR_CONNECT_KEY.
 export const LEGACY_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
 export const LEGACY_CONNECT_URL_KEY = 'nostr_connect_url'
 
