@@ -70,22 +70,20 @@ export function SessionUnlockDialog() {
 					<DialogTitle>{isLegacyMigration ? 'Secure Your Session' : 'Unlock Your Session'}</DialogTitle>
 					{isLegacyMigration ? (
 						<DialogDescription>
-							Choose a passphrase to encrypt your saved Nostr session. The unsecured copy is removed from this device after
-							the session is re-encrypted — if you forget this passphrase, the saved session cannot be recovered.
+							Choose a passphrase to encrypt your saved Nostr session. The unsecured copy is removed from this device after the session is
+							re-encrypted — if you forget this passphrase, the saved session cannot be recovered.
 						</DialogDescription>
 					) : (
 						<DialogDescription>
-							Enter the passphrase protecting your saved Nostr session. The session is re-encrypted on this device and the
-							unsecured copy is removed.
+							Enter the passphrase protecting your saved Nostr session. The session is re-encrypted on this device and the unsecured copy is
+							removed.
 						</DialogDescription>
 					)}
 				</DialogHeader>
 
 				<div className="space-y-4 py-4">
 					<div className="space-y-2">
-						<Label htmlFor="session-passphrase">
-							{isLegacyMigration ? 'New session passphrase' : 'Session passphrase'}
-						</Label>
+						<Label htmlFor="session-passphrase">{isLegacyMigration ? 'New session passphrase' : 'Session passphrase'}</Label>
 						<Input
 							id="session-passphrase"
 							type="password"
@@ -123,12 +121,7 @@ export function SessionUnlockDialog() {
 
 					{error && <p className="text-sm text-red-500">{error}</p>}
 
-					<Button
-						onClick={handleUnlock}
-						disabled={isAuthenticating || !canSubmit}
-						className="w-full"
-						data-testid="session-unlock-button"
-					>
+					<Button onClick={handleUnlock} disabled={isAuthenticating || !canSubmit} className="w-full" data-testid="session-unlock-button">
 						{isAuthenticating ? <Loader2 className="h-4 w-4 animate-spin" /> : isLegacyMigration ? 'Secure & Continue' : 'Unlock'}
 					</Button>
 
@@ -150,8 +143,7 @@ export function SessionUnlockDialog() {
 					</Button>
 
 					<p className="text-xs text-muted-foreground text-center mt-2">
-						Discarding deletes the saved session from this device. You will need your bunker URL or another login method to
-						sign in again.
+						Discarding deletes the saved session from this device. You will need your bunker URL or another login method to sign in again.
 					</p>
 				</div>
 			</DialogContent>

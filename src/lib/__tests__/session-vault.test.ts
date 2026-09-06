@@ -97,9 +97,7 @@ describe('session vault wrap/unwrap', () => {
 		// (not merely fail later at the AES-GCM auth tag).
 		const envelope = await wrapSession('nbunksec1secret', 'right-pass', { iterations: 200_000 })
 		const downgraded = { ...envelope, iterations: 1 }
-		await expect(unlockVault(downgraded, 'right-pass')).rejects.toThrow(
-			'iteration count is below the accepted minimum',
-		)
+		await expect(unlockVault(downgraded, 'right-pass')).rejects.toThrow('iteration count is below the accepted minimum')
 	})
 
 	test('iterations below the default 100k floor are rejected without an explicit test seam', async () => {
