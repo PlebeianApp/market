@@ -40,6 +40,7 @@ beforeEach(() => {
 		needsDecryptionPassword: false,
 		isAuthenticating: false,
 		needsMigration: false,
+		needsSessionUnlock: false,
 	}))
 	memoryStorage.clear()
 	// window present, but no injected `nostr` — the "extension missing" shape.

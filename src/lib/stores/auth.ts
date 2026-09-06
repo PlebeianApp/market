@@ -16,6 +16,17 @@ import {
 	setSignerTeardown,
 } from '@/lib/nostr/signer-registry'
 import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
+import { rehydrateNostrConnectSession } from '@/lib/nostr/nostr-connect-session'
+import {
+	clearVaultedSession,
+	hasLegacyPlaintextSession,
+	hasVaultedSession,
+	migrateLegacySessionToVault,
+	saveVaultedSession,
+	unlockVault,
+	discardLegacySession,
+} from '@/lib/nostr/session-vault'
+import type { WrapOptions } from '@/lib/nostr/session-vault'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -30,10 +41,21 @@ interface AuthState {
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
 	needsMigration: boolean
+	/** A vaulted/legacy NIP-46 session exists — the unlock prompt is showing. */
+	needsSessionUnlock: boolean
 }
 
 interface Nip46LoginOptions {
 	onAuthUrl?: (url: string) => void
+	/**
+	 * Session passphrase for encrypted-at-rest persistence (ADR-0008 B-3 /
+	 * #996 H8). When supplied, the nbunksec session is wrapped
+	 * PBKDF2+AES-GCM under `nostr_session_v1`. Without it the session is
+	 * in-memory only — the plaintext pair is NEVER written again.
+	 */
+	sessionPassphrase?: string
+	/** KDF cost override (tests only; default is the >= 600k floor). */
+	vaultIterations?: number
 }
 
 const initialState: AuthState = {
@@ -42,6 +64,7 @@ const initialState: AuthState = {
 	needsDecryptionPassword: false,
 	isAuthenticating: false,
 	needsMigration: false,
+	needsSessionUnlock: false,
 }
 
 export const authStore = new Store<AuthState>(initialState)
@@ -66,14 +89,13 @@ export const authActions = {
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
-			// Signer / Bunker URL
+			// Signer / Bunker URL — legacy plaintext pair (ADR-0008 invariant 4:
+			// persisted-session migration policy). Read ONCE: surface the unlock
+			// prompt; the user either completes the migrate-on-unlock (wrap +
+			// delete) or is logged out. NEVER silently re-login with plaintext.
 
-			const privateKeySigner = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
-			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
-
-			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, privateKeySigner)
-				authActions.checkAndShowTermsDialog()
+			if (hasLegacyPlaintextSession() || hasVaultedSession()) {
+				authStore.setState((state) => ({ ...state, needsSessionUnlock: true }))
 				return
 			}
 
@@ -298,10 +320,14 @@ export const authActions = {
 			ndkActions.setSigner(adapter)
 			const user = await adapter.user()
 
-			// Wait until user is logged in successfully before saving the bunkerURL/private key.
-
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, bundle.clientKeyHex)
-			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
+			// Session persistence (ADR-0008 B-3 / #996 H8): with a passphrase the
+			// nbunksec session is wrapped PBKDF2+AES-GCM under nostr_session_v1;
+			// without one the session stays in-memory. The legacy plaintext pair
+			// is NEVER written again.
+			if (options?.sessionPassphrase) {
+				const wrapOptions: WrapOptions | undefined = options.vaultIterations != null ? { iterations: options.vaultIterations } : undefined
+				await saveVaultedSession(bundle.signer.getNbunksec(), options.sessionPassphrase, wrapOptions)
+			}
 
 			authStore.setState((state) => ({
 				...state,
@@ -337,9 +363,82 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		// Lock on logout (ADR-0008 B-3): the vaulted NIP-46 session is removed
+		// with the rest of the persisted auth state.
+		clearVaultedSession()
 		// Clear cart when user logs out
 		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
+	},
+
+	/**
+	 * Unlock prompt completion (ADR-0008 B-3). With a legacy plaintext pair
+	 * this migrates it into the encrypted vault (wrap + delete); otherwise it
+	 * unwraps the stored vault. Either way the recovered nbunksec session is
+	 * rehydrated into a live `NostrConnectSigner` and the user is signed in.
+	 * Fails closed on a wrong passphrase (nothing migrated, prompt stays up).
+	 */
+	unlockVaultedSession: async (passphrase: string, options?: WrapOptions) => {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+
+		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+
+			let nbunksec: string
+			if (hasLegacyPlaintextSession()) {
+				// Read-ONCE migration: wrap the plaintext pair, then delete it.
+				;({ nbunksec } = await migrateLegacySessionToVault(passphrase, options))
+			} else {
+				if (!hasVaultedSession()) throw new Error('No vaulted session to unlock')
+				nbunksec = await unlockVault(undefined, passphrase)
+			}
+
+			// Restore path: derive → decrypt → fromNbunksec → NostrConnectSigner.
+			const bundle = await rehydrateNostrConnectSession(nbunksec)
+			const adapter = new NdkSignerAdapter(bundle.capability)
+			setSignerCapability(bundle.capability)
+			setSignerTeardown(() => bundle.signer.logout())
+			await adapter.blockUntilReady()
+			ndkActions.setSigner(adapter)
+			const user = await adapter.user()
+
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
+			authStore.setState((state) => ({
+				...state,
+				user,
+				isAuthenticated: true,
+				needsSessionUnlock: false,
+			}))
+
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
+			authActions.checkAndShowTermsDialog()
+
+			return user
+		} catch (error) {
+			authStore.setState((state) => ({ ...state, isAuthenticated: false }))
+			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+		}
+	},
+
+	/**
+	 * Unlock prompt refusal (ADR-0008 invariant 4b): the user declined the
+	 * migration, so the session is discarded — plaintext pair deleted, NO
+	 * vault written, user logged out. An intentional, user-visible forced
+	 * re-login; never silent plaintext retention.
+	 */
+	discardVaultedSession: () => {
+		// Intentional forced re-login: delete the plaintext pair (migration
+		// refused) AND any vault (the user wants out), plus the auto-login flag.
+		discardLegacySession()
+		clearVaultedSession()
+		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		authStore.setState((state) => ({ ...state, needsSessionUnlock: false, isAuthenticated: false, user: null }))
 	},
 
 	userHasProducts: async (): Promise<boolean> => {
