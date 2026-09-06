@@ -131,8 +131,12 @@ export const parseBidEvent = (event: NostrEventLike): ParseBidEventResult => {
 	}
 }
 
+// Same grammar as `parseAuctionNonNegativeInt`: a non-canonical value like
+// "100abc" must not be truncated to 100, since `amount` drives bid ranking.
 const parseIntegerOrZero = (raw: string | undefined): number => {
-	if (raw === undefined) return 0
-	const n = Number.parseInt(raw, 10)
-	return Number.isFinite(n) ? n : 0
+	const text = raw?.trim() ?? ''
+	if (!/^\d+$/.test(text)) return 0
+
+	const parsed = Number(text)
+	return Number.isSafeInteger(parsed) ? parsed : 0
 }
