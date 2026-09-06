@@ -23,8 +23,8 @@
  * nostr-tools. ADR-0002 scopes the io.ts seam to app-first migration and
  * defers server runtime to Wave E; the seam's default adapter (NDK browser
  * singleton) cannot execute under Bun. This mirrors the existing
- * `src/index.tsx` server pattern, adds no `@nostr-dev-kit`/`applesauce-*`
- * imports, and is flagged for the Wave E io-server adapter.
+ * `src/index.tsx` server pattern, adds no NDK/adapter imports, and is flagged
+ * for the Wave E io-server adapter.
  */
 import { Relay } from 'nostr-tools'
 import { verifyEvent } from 'nostr-tools/pure'
