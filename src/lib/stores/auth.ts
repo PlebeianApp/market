@@ -1,6 +1,6 @@
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
-import { ndkActions } from './ndk'
+import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'

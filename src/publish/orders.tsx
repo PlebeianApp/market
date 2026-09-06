@@ -1,5 +1,5 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND, ORDER_STATUS } from '@/lib/schemas/order'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import { orderKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, type NDKTag } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
