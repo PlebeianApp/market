@@ -65,7 +65,29 @@ export function createPasswordSignerCapability(signer: PasswordSigner): SignerCa
 			assertUnlocked()
 			return signer.signEvent(template as EventTemplate)
 		},
-		nip04: signer.nip04,
-		nip44: signer.nip44,
+		// nip04/nip44 behind the same gap-4 guard: the library's
+		// nip04Encrypt/nip04Decrypt/nip44Encrypt/nip44Decrypt all await a
+		// never-resolved requestUnlock() Deferred when locked — passing the
+		// sub-objects through unguarded would deadlock any consumer.
+		nip04: {
+			encrypt: async (pubkey: string, plaintext: string) => {
+				assertUnlocked()
+				return signer.nip04Encrypt(pubkey, plaintext)
+			},
+			decrypt: async (pubkey: string, ciphertext: string) => {
+				assertUnlocked()
+				return signer.nip04Decrypt(pubkey, ciphertext)
+			},
+		},
+		nip44: {
+			encrypt: async (pubkey: string, plaintext: string) => {
+				assertUnlocked()
+				return signer.nip44Encrypt(pubkey, plaintext)
+			},
+			decrypt: async (pubkey: string, ciphertext: string) => {
+				assertUnlocked()
+				return signer.nip44Decrypt(pubkey, ciphertext)
+			},
+		},
 	}
 }
