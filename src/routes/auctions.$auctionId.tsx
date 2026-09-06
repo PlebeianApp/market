@@ -76,7 +76,7 @@ import { AuctionBidder } from '@/components/AuctionBidder'
 import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
-import { useAuctionVerdicts } from '@/queries/auctions'
+import { getAuctionAuditors, useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
@@ -499,7 +499,7 @@ function AuctionDetailRoute() {
 		[bids],
 	)
 
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, getAuctionAuditors(auction))
 	const parsedVerdicts = useMemo(() => {
 		return (verdictsQuery.data ?? [])
 			.map((e) =>

@@ -272,7 +272,7 @@ function DashboardAuctionDetailRoute() {
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
 	const settlements = settlementsQuery.data ?? []
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, getAuctionAuditors(auction))
 	const verdictsData = verdictsQuery.data ?? []
 
 	// B4: Validate settlements before using them. The previous code read
