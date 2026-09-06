@@ -504,11 +504,16 @@ export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordi
  * parameterised-replaceable per (validator, bidder, auction, bid)
  * — per-bid addressability, ADR-0003 §4.4.1 amendment — so the relay
  * returns at most one verdict per bid per validator.
+ *
+ * When `auditorPubkeys` is provided the filter is scoped to only those
+ * validators' events (`authors`); without it all verdicts referencing the
+ * auction are fetched (display path — the UI renders everything).
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
+	auditorPubkeys?: string[],
 ): Promise<NDKEvent[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
@@ -520,9 +525,37 @@ export const fetchAuctionVerdicts = async (
 	}
 	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
 	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
+	if (auditorPubkeys && auditorPubkeys.length > 0) (filter as { authors?: string[] }).authors = auditorPubkeys
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+/**
+ * Fetch verdicts with a bounded retry window for transient relay
+ * propagation lag. Retries every 300 ms for up to 2500 ms — designed
+ * for publish-path quorum gates where a missing verdict is deterministic
+ * failure, not flake. After the window the caller MUST fail closed;
+ * this helper only retries on empty results, never on partial matches.
+ */
+export const fetchAuctionVerdictsWithRetry = async (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+	auditorPubkeys?: string[],
+	retryWindowMs: number = 2500,
+	retryStepMs: number = 300,
+): Promise<NDKEvent[]> => {
+	const deadline = Date.now() + retryWindowMs
+	let lastResult: NDKEvent[] = []
+
+	while (Date.now() < deadline) {
+		lastResult = await fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, auditorPubkeys)
+		if (lastResult.length > 0) return lastResult
+		await new Promise((resolve) => setTimeout(resolve, retryStepMs))
+	}
+
+	return lastResult
 }
 
 export const auctionsQueryOptions = (limit: number = 200) =>

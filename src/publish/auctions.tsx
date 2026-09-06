@@ -746,35 +746,51 @@ export const publishBidderPathRelease = async (
 	// release based on stale or incomplete information.
 	const latestLeg = chain[chain.length - 1]
 	try {
-		const [{ fetchAuctionVerdicts, fetchAuction }, { getAuctionTagValue }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] =
+		const [{ fetchAuctionVerdictsWithRetry, fetchAuction }, { getAuctionTagValue }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] =
 			await Promise.all([
 				import('@/queries/auctions'),
 				import('@/lib/auctionSettlement'),
 				import('@/lib/schemas/auction/validatorEvents'),
 				import('@/lib/schemas/auction/auctionEvent'),
 			])
-		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, 500, latestLeg.auctionCoordinate)
+		// Fetch the auction FIRST to get auditor list. The publish gate
+		// must scope the verdict query to only the auction's declared
+		// auditors so transient cross-validator noise doesn't pollute
+		// the quorum check.
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
+		if (!auctionEvent) {
+			throw new Error(
+				'Cannot release path: auction not found on relay. ' +
+					'The quorum gate must positively establish auditor consensus before releasing locked proofs.',
+			)
+		}
+		const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
+		if (!parsedAuctionResult.ok) {
+			throw new Error(
+				`Cannot release path: auction event is malformed (${'error' in parsedAuctionResult ? parsedAuctionResult.error.message : 'unknown'}). ` +
+					'The quorum gate cannot proceed without a well-formed auction event.',
+			)
+		}
+		const auction = parsedAuctionResult.value
+		const verdictEvents = await fetchAuctionVerdictsWithRetry(
+			latestLeg.auctionRootEventId,
+			500,
+			latestLeg.auctionCoordinate,
+			auction.auditors,
+		)
 		const parsedVerdicts = verdictEvents
 			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 			.filter((v) => v.bidEventId === input.bidEventId && v.claim === 'won_pending_settlement')
 
-		// Fetch the auction to get auditor list + quorum threshold.
-		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
-		if (auctionEvent) {
-			const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
-			if (parsedAuctionResult.ok) {
-				const auction = parsedAuctionResult.value
-				const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
-				const auditorCount = auction.auditors.filter((a) => confirmingAuditors.has(a)).length
-				if (auditorCount < auction.auditorQuorum) {
-					throw new Error(
-						`Cannot release path: only ${auditorCount}/${auction.auditors.length} auditors confirmed ` +
-							`won_pending_settlement (quorum requires ${auction.auditorQuorum}). Wait for more validators.`,
-					)
-				}
-			}
+		const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
+		const auditorCount = auction.auditors.filter((a) => confirmingAuditors.has(a)).length
+		if (auditorCount < auction.auditorQuorum) {
+			throw new Error(
+				`Cannot release path: only ${auditorCount}/${auction.auditors.length} auditors confirmed ` +
+					`won_pending_settlement (quorum requires ${auction.auditorQuorum}). Wait for more validators.`,
+			)
 		}
 	} catch (err) {
 		// Quorum verification is a hard gate for path release (M2): the
@@ -915,7 +931,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// Lazy imports to avoid pulling settlement-only deps into the bid
 	// path's bundle.
 	const [
-		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionSettlements, fetchAuctionVerdicts, getBidAmount },
+		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionSettlements, fetchAuctionVerdictsWithRetry, getBidAmount },
 		auctionSettlementMod,
 		settlementEventsMod,
 		constantsMod,
@@ -1021,7 +1037,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
 			fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-			fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+			fetchAuctionVerdictsWithRetry(formData.auctionEventId, 1000, auctionCoordinate, parsedAuction.auditors),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(b.rawEvent()))
@@ -1086,7 +1102,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
 		fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-		fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+		fetchAuctionVerdictsWithRetry(formData.auctionEventId, 1000, auctionCoordinate, parsedAuction.auditors),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
