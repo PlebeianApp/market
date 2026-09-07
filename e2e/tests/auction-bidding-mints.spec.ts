@@ -733,6 +733,15 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// Wait for the QR invoice to appear.
 			const depositDialog = await waitForDepositQR(buyerPage)
 
+			// #1235 round-3 fix 2 (felixfelix #2) — capture the invoice identity from
+			// the modal's readOnly invoice input BEFORE the timeout/retry: the retry
+			// below must reconcile THIS payment, never create a fresh quote.
+			// (The input truncates visually, but inputValue() returns the full string.)
+			const invoiceInput = depositDialog.locator('input[type="text"]')
+			await expect(invoiceInput).not.toHaveValue('', { timeout: 15_000 })
+			const invoiceBeforeRetry = await invoiceInput.inputValue()
+			expect(invoiceBeforeRetry.length).toBeGreaterThan(0)
+
 			// Wait for the deposit confirmation timeout (15 s + buffer).
 			// The deposit monitor sets depositStatus to 'awaiting_confirmation_retry'.
 			await buyerPage.waitForTimeout(DEPOSIT_TIMEOUT_MS + 2_000)
@@ -765,16 +774,37 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			const postRetryStatus = await getDepositStatus(buyerPage)
 			expect(postRetryStatus).not.toBeNull()
 			expect(postRetryStatus.depositStatus).toBe('pending')
+			// Invoice-identity invariant, part 1 (read via the __nip60 dev bridge,
+			// after the retry click but before the retry can complete): the store
+			// still holds the SAME invoice the modal displayed — the retry re-arms
+			// the confirmation monitor for the ORIGINAL quote; no new funding
+			// session (which would show a fresh invoice here) was created.
+			expect(postRetryStatus.depositInvoice).toBe(invoiceBeforeRetry)
 
 			// Unblock the mint's token endpoint: the deposit monitor (re-armed by
 			// the retry) reconciles the SAME quote against the real local mint —
 			// the FakeWallet backend has already settled the invoice — mints the
-			// proofs and completes the funding flow into bid publication. This is
-			// the e2e-level proof of the retry reconciliation invariant: after a
-			// paid-or-uncertain timeout, retrying must confirm the same payment
-			// without creating a new funding session.
+			// proofs and completes the funding flow into bid publication.
+			//
+			// What is proven below, e2e-level, for the retry reconciliation
+			// invariant: (1) the invoice captured before the retry is still the
+			// active deposit invoice in the store after the retry click (same
+			// quote reconciled — no fresh NUT-04 quote), (2) the SAME deposit
+			// settles and the flow reaches bid publication (success text), and
+			// (3) after success the store shows the terminal success state with
+			// the deposit invoice cleared — no NEW quote/deposit was created
+			// anywhere in the reconciliation (a second funding session would
+			// have left a fresh pending deposit + invoice behind instead).
 			await buyerPage.unroute('**/v1/mint/bolt11')
 			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
+
+			// Invoice-identity invariant, part 2 (read via the __nip60 dev bridge,
+			// after success): the SAME deposit settled to terminal success and no
+			// new deposit/invoice exists.
+			const finalDepositStatus = await getDepositStatus(buyerPage)
+			expect(finalDepositStatus).not.toBeNull()
+			expect(finalDepositStatus.depositStatus).toBe('success')
+			expect(finalDepositStatus.depositInvoice).toBeNull()
 
 			await buyerPage.screenshot({
 				path: path.join(SCREENSHOT_DIR, 'pr1205-ln-bid-funding-timeout.png'),
