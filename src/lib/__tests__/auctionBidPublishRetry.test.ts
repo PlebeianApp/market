@@ -680,3 +680,44 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 		expect(Object.keys(loadPreLockRecoveryRecords())).toHaveLength(0)
 	})
 })
+
+// =============================================================================
+// #1235 round-3 fix 5 (felixfelix #11) — the uncertain-error copy must gate
+// the reclaim promise on a durably persisted pending token. When the wallet's
+// STRICT pending-token save never succeeded, the leg is record-only: the
+// wallet holds no durable observation of the mint-issued proofs, so claiming
+// "reclaimable from the wallet" would promise a reclaim the app cannot
+// perform.
+// =============================================================================
+
+describe('AuctionBidLockOutcomeUncertainError reclaim copy is gated on pendingTokenPersisted (#1235 round-3 fix 5)', () => {
+	const baseParams = {
+		recoveryRecordId: '11111111-2222-3333-4444-555555555555',
+		mintUrl: 'https://mint.test',
+		legAmount: 500,
+		refundPubkey: '03' + 'e'.repeat(64),
+		cause: new Error('swap send failed mid-flight'),
+	}
+
+	test('pendingTokenPersisted: true → the existing reclaim-after-timelock copy stays', () => {
+		const persisted = new AuctionBidLockOutcomeUncertainError({ ...baseParams, pendingTokenPersisted: true })
+		expect(persisted.pendingTokenPersisted).toBe(true)
+		expect(persisted.message).toContain('reclaimable from the wallet once the refund timelock opens')
+		expect(persisted.message).not.toContain('could not be observed')
+		// Shared copy: the uncertain outcome and the no-second-lock stance.
+		expect(persisted.message).toContain('uncertain')
+		expect(persisted.message).toContain('No second lock was attempted')
+	})
+
+	test('pendingTokenPersisted: false or omitted (honest default) → record-only copy, never a wallet-reclaim promise', () => {
+		const recordOnly = new AuctionBidLockOutcomeUncertainError({ ...baseParams })
+		expect(recordOnly.pendingTokenPersisted).toBe(false)
+		expect(recordOnly.message).toContain('could not be observed by the wallet and may not be recoverable in-app')
+		expect(recordOnly.message).toContain('a recovery record with your refund key was saved')
+		expect(recordOnly.message).not.toContain('reclaimable')
+
+		const explicitFalse = new AuctionBidLockOutcomeUncertainError({ ...baseParams, pendingTokenPersisted: false })
+		expect(explicitFalse.pendingTokenPersisted).toBe(false)
+		expect(explicitFalse.message).toBe(recordOnly.message)
+	})
+})

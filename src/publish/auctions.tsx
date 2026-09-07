@@ -618,6 +618,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 				legAmount: error.amount,
 				refundPubkey,
 				cause: error,
+				// #1235 round-3 fix 5: the reclaim promise is only honest when the
+				// wallet durably observed the proofs — thread the flag through.
+				pendingTokenPersisted: error.pendingTokenPersisted,
 			})
 		}
 		removePreLockRecoveryRecord(refundPubkey)
@@ -906,6 +909,14 @@ export class AuctionBidPreLockRecordWriteFailedError extends Error {
  * durably holds the leg's refund private key, and the wallet's pending-token
  * record — when the swap response was processed — makes the leg reclaimable
  * after the refund timelock opens.
+ *
+ * #1235 round-3 fix 5 (felixfelix #11): the reclaim promise is gated on
+ * `pendingTokenPersisted` — the wallet's STRICT pending-token save
+ * succeeded. When false the leg is record-only (no durable observation of
+ * the mint-issued proofs), so the message must NOT promise a wallet
+ * reclaim the app cannot perform; it says the proofs could not be observed
+ * and may not be recoverable in-app, and that the recovery record holds the
+ * refund key. Honest default: false.
  */
 export class AuctionBidLockOutcomeUncertainError extends Error {
 	/** Id of the persisted pre-lock recovery record holding the refund authority. */
@@ -916,21 +927,35 @@ export class AuctionBidLockOutcomeUncertainError extends Error {
 	public readonly legAmount: number
 	/** Refund pubkey of the uncertain leg. */
 	public readonly refundPubkey: string
+	/** Whether the wallet durably observed the proofs (STRICT pending-token save succeeded). */
+	public readonly pendingTokenPersisted: boolean
 	/** The underlying mutation-possible failure. */
 	public override readonly cause: unknown
 
-	constructor(params: { recoveryRecordId: string; mintUrl: string; legAmount: number; refundPubkey: string; cause: unknown }) {
+	constructor(params: {
+		recoveryRecordId: string
+		mintUrl: string
+		legAmount: number
+		refundPubkey: string
+		cause: unknown
+		pendingTokenPersisted?: boolean
+	}) {
 		const causeMessage = params.cause instanceof Error ? params.cause.message : String(params.cause)
+		const pendingTokenPersisted = params.pendingTokenPersisted ?? false
 		super(
 			`The outcome of the auction bid lock is uncertain — a lock request may already have been sent to ${params.mintUrl} ` +
 				`for ${params.legAmount} sats (${causeMessage}). No second lock was attempted. A recovery record with the refund key ` +
-				`was saved (${params.recoveryRecordId}); the leg may be reclaimable from the wallet once the refund timelock opens.`,
+				`was saved (${params.recoveryRecordId}); ` +
+				(pendingTokenPersisted
+					? 'the leg may be reclaimable from the wallet once the refund timelock opens.'
+					: 'the mint-issued proofs could not be observed by the wallet and may not be recoverable in-app; a recovery record with your refund key was saved.'),
 		)
 		this.name = 'AuctionBidLockOutcomeUncertainError'
 		this.recoveryRecordId = params.recoveryRecordId
 		this.mintUrl = params.mintUrl
 		this.legAmount = params.legAmount
 		this.refundPubkey = params.refundPubkey
+		this.pendingTokenPersisted = pendingTokenPersisted
 		this.cause = params.cause
 	}
 }

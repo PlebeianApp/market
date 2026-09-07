@@ -772,7 +772,11 @@ describe('locked-but-unpublished legs map to a RECLAIM-ONLY retry (#1235 follow-
 describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B1)', () => {
 	const UNCERTAIN_RECOVERY_RECORD_ID = '11111111-2222-3333-4444-555555555555'
 
-	const driveSessionToLockOutcomeUncertainFailure = async (h: FundingHarness, bidData: AuctionBidFormData): Promise<void> => {
+	const driveSessionToLockOutcomeUncertainFailure = async (
+		h: FundingHarness,
+		bidData: AuctionBidFormData,
+		pendingTokenPersisted?: boolean,
+	): Promise<void> => {
 		await act(async () => {
 			startDepositFunding(h.latest.current, bidData)
 			h.latest.current.handleInvoiceCreated()
@@ -792,6 +796,9 @@ describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B
 					legAmount: bidData.amount,
 					refundPubkey: '03' + 'e'.repeat(64),
 					cause: new Error('swap send failed mid-flight'),
+					// #1235 round-3 fix 5: omitted → honest default false (record-only
+					// leg); pass true to model a durably persisted pending token.
+					...(pendingTokenPersisted === undefined ? {} : { pendingTokenPersisted }),
 				}),
 			),
 		)
@@ -885,6 +892,9 @@ describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B
 			startDepositFunding(h.latest.current, bidDataB)
 		})
 		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBeNull()
+		// #1235 round-3 fix 5: the pending-token-persisted flag resets with the
+		// other uncertain trackers (session-scoped; null = no uncertain leg).
+		expect(h.latest.current.lockOutcomeUncertainPendingTokenPersisted).toBeNull()
 		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataB)
 
 		// The new session's retry falls back to the full pipeline — nothing is
@@ -905,6 +915,56 @@ describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B
 	test('nextLockOutcomeUncertainOnSessionStart: a new session starts with no uncertain-outcome record id', () => {
 		expect(nextLockOutcomeUncertainOnSessionStart('recovery-record-1')).toBeNull()
 		expect(nextLockOutcomeUncertainOnSessionStart(null)).toBeNull()
+	})
+
+	test('uncertain-leg copy is gated on pendingTokenPersisted (#1235 round-3 fix 5) — record-only legs never claim a wallet reclaim', async () => {
+		// ── Flag FALSE (omitted → honest default): the STRICT pending-token save
+		// never succeeded — the leg is record-only. Both the failure toast and
+		// the retry-refusal toast must say the proofs could not be observed and
+		// must NOT promise "reclaimable".
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+
+		await driveSessionToLockOutcomeUncertainFailure(h, bidDataA)
+		expect(h.latest.current.lockOutcomeUncertainPendingTokenPersisted).toBe(false)
+
+		const failureToastRecordOnly = toastErrorMessages[0]
+		expect(failureToastRecordOnly).toContain('could not be observed')
+		expect(failureToastRecordOnly).not.toContain('reclaimable')
+
+		await act(async () => {
+			await h.latest.current.retryBidPublish()
+		})
+		const refusalToastRecordOnly = toastErrorMessages[toastErrorMessages.length - 1]
+		expect(refusalToastRecordOnly).toContain('could not be observed')
+		expect(refusalToastRecordOnly).not.toContain('reclaimable')
+
+		await h.unmount()
+
+		// ── Flag TRUE: the STRICT pending-token save succeeded — the wallet
+		// durably observed the proofs, so the existing reclaim-after-timelock
+		// copy stays.
+		const h2 = await mountFundingHook()
+		const bidDataB = buildBidData(1_500)
+
+		// The first harness recorded two toasts (failure + refusal); h2's
+		// failure toast is the NEXT one.
+		const toastCountBeforeH2 = toastErrorMessages.length
+		await driveSessionToLockOutcomeUncertainFailure(h2, bidDataB, true)
+		expect(h2.latest.current.lockOutcomeUncertainPendingTokenPersisted).toBe(true)
+
+		const failureToastPersisted = toastErrorMessages[toastCountBeforeH2]
+		expect(failureToastPersisted).toContain('reclaimable from the wallet once the refund timelock opens')
+		expect(failureToastPersisted).not.toContain('could not be observed')
+
+		await act(async () => {
+			await h2.latest.current.retryBidPublish()
+		})
+		const refusalToastPersisted = toastErrorMessages[toastErrorMessages.length - 1]
+		expect(refusalToastPersisted).toContain('reclaimable from the wallet once the refund timelock opens')
+		expect(refusalToastPersisted).not.toContain('could not be observed')
+
+		await h2.unmount()
 	})
 })
 

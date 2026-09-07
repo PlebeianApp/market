@@ -1002,10 +1002,26 @@ export class AuctionBidLockMutationPossibleError extends Error {
 	public readonly refundPubkey: string
 	/** Cashu locktime (unix seconds) the leg attempted. */
 	public readonly locktime: number
+	/**
+	 * #1235 round-3 fix 5 (felixfelix #11) — whether the wallet's STRICT
+	 * pending-token save had already succeeded when the failure escaped.
+	 * When false the leg is record-only: the wallet holds no durable
+	 * observation of the mint-issued proofs, so an in-app reclaim is NOT
+	 * promised. Honest default: false.
+	 */
+	public readonly pendingTokenPersisted: boolean
 	/** The underlying failure. */
 	public override readonly cause: unknown
 
-	constructor(params: { mintUrl: string; amount: number; lockPubkey: string; refundPubkey: string; locktime: number; cause: unknown }) {
+	constructor(params: {
+		mintUrl: string
+		amount: number
+		lockPubkey: string
+		refundPubkey: string
+		locktime: number
+		cause: unknown
+		pendingTokenPersisted?: boolean
+	}) {
 		const causeMessage = params.cause instanceof Error ? params.cause.message : String(params.cause)
 		super(
 			`Auction bid lock outcome is uncertain: a swap/lock request may already have been sent to ${params.mintUrl} ` +
@@ -1018,6 +1034,7 @@ export class AuctionBidLockMutationPossibleError extends Error {
 		this.lockPubkey = params.lockPubkey
 		this.refundPubkey = params.refundPubkey
 		this.locktime = params.locktime
+		this.pendingTokenPersisted = params.pendingTokenPersisted ?? false
 		this.cause = params.cause
 	}
 }
@@ -2103,6 +2120,14 @@ export const nip60Actions = {
 			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
 		}
 
+		// #1235 round-3 fix 5 (felixfelix #11) — whether the wallet durably
+		// observed the mint-issued proofs (the STRICT pending-token save below
+		// succeeded) before any later failure escaped. Read by the catch below
+		// and threaded onto AuctionBidLockMutationPossibleError: without the
+		// pending token the leg is record-only and an in-app reclaim must not
+		// be promised.
+		let pendingTokenPersisted = false
+
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
@@ -2204,6 +2229,10 @@ export const nip60Actions = {
 			// to the wrong key is still reclaim-eligible after the refund
 			// timelock instead of silently stranded.
 			savePendingTokens(pendingTokens, { strict: true })
+			// #1235 round-3 fix 5: the STRICT save succeeded — from here on, any
+			// escaping failure leaves a leg the wallet CAN observe (and reclaim
+			// after the refund timelock).
+			pendingTokenPersisted = true
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
 			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
@@ -2288,6 +2317,12 @@ export const nip60Actions = {
 				refundPubkey,
 				locktime,
 				cause: err,
+				// #1235 round-3 fix 5 (felixfelix #11): thread the durable-observation
+				// flag through — the post-lock copy above decides between honest
+				// reclaim guidance (persisted) and honest record-only guidance
+				// (never persisted). Honest default false (never claims a reclaim
+				// the wallet cannot perform).
+				pendingTokenPersisted,
 			})
 		}
 	},

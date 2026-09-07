@@ -215,6 +215,10 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		expect(mutationPossible.amount).toBe(500)
 		expect(mutationPossible.refundPubkey).toBe(REFUND_PUBKEY)
 		expect((mutationPossible.cause as Error).message).toContain('QuotaExceededError')
+		// #1235 round-3 fix 5: the STRICT pending-token save FAILED — the leg is
+		// record-only (the wallet never durably observed the proofs), so the
+		// flag must be false and the copy must not promise a wallet reclaim.
+		expect(mutationPossible.pendingTokenPersisted).toBe(false)
 
 		// The swap was attempted EXACTLY once — no hidden retry.
 		expect(swapCalls).toHaveLength(1)
@@ -260,6 +264,10 @@ describe('lockAuctionBidFunds mint boundary (#1235 round-3 B1)', () => {
 		// WAS sent — the inputs may already be consumed).
 		expect(caught).toBeInstanceOf(realNip60.AuctionBidLockMutationPossibleError)
 		expect(((caught as AuctionBidLockMutationPossibleErrorInstance).cause as Error).message).toContain('wrong P2PK pubkey')
+		// #1235 round-3 fix 5: the STRICT pending-token save SUCCEEDED before the
+		// assert threw — the flag must be true (the wallet can observe and
+		// reclaim the proofs after the refund timelock).
+		expect((caught as AuctionBidLockMutationPossibleErrorInstance).pendingTokenPersisted).toBe(true)
 		expect(swapCalls).toHaveLength(1)
 
 		// THE ORDERING INVARIANT: the pending-token record IS durably on disk

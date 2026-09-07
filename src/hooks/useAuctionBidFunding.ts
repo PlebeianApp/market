@@ -475,6 +475,12 @@ export function useAuctionBidFunding({
 	// so a retry must be refused outright (no re-locking re-submit, and there
 	// may be nothing publishable or reclaimable yet either).
 	const [lockOutcomeUncertainRecoveryRecordId, setLockOutcomeUncertainRecoveryRecordId] = useState<string | null>(null)
+	// #1235 round-3 fix 5 (felixfelix #11): whether the uncertain leg's STRICT
+	// pending-token save succeeded (the wallet durably observed the mint-
+	// issued proofs). null = no uncertain leg this session; false = record-
+	// only leg — the copy must NOT promise a wallet reclaim the app cannot
+	// perform; true = the reclaim-after-timelock guidance is honest.
+	const [lockOutcomeUncertainPendingTokenPersisted, setLockOutcomeUncertainPendingTokenPersisted] = useState<boolean | null>(null)
 	// #1235 follow-ups 1+2: epoch token for the CURRENT funding session —
 	// bumped at the top of every `startFundingForBid` call so async
 	// continuations from older sessions can detect (and refuse) writing.
@@ -560,6 +566,9 @@ export function useAuctionBidFunding({
 					// the lock consumed either way (fail closed).
 					bidLockConsumedRef.current = true
 					setLockOutcomeUncertainRecoveryRecordId(error.recoveryRecordId)
+					// #1235 round-3 fix 5: record whether the wallet durably observed
+					// the proofs — the retry-refusal copy below is gated on it.
+					setLockOutcomeUncertainPendingTokenPersisted(error.pendingTokenPersisted)
 				}
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
@@ -571,8 +580,15 @@ export function useAuctionBidFunding({
 					// nor a lock. The recovery record IS evidenced (it was persisted
 					// pre-lock). Copy-only fix: the lifecycle state stays
 					// mint_succeeded_bid_publish_failed_reclaimable.
+					// #1235 round-3 fix 5 (felixfelix #11) — the reclaim promise is
+					// gated on the wallet's STRICT pending-token save having
+					// succeeded: without it the leg is record-only and the proofs
+					// may not be recoverable in-app.
 					toast.error(
-						'The outcome of your bid lock is uncertain — no second lock was attempted; a recovery record with your refund key was saved.',
+						'The outcome of your bid lock is uncertain — no second lock was attempted; a recovery record with your refund key was saved. ' +
+							(error.pendingTokenPersisted
+								? 'Your funds may be reclaimable from the wallet once the refund timelock opens.'
+								: 'The mint-issued proofs could not be observed and may not be recoverable in-app.'),
 					)
 				} else {
 					const errorMessage = error instanceof Error ? error.message : String(error)
@@ -610,6 +626,9 @@ export function useAuctionBidFunding({
 			setLockOutcomeUncertainRecoveryRecordId((previousSessionRecoveryRecordId) =>
 				nextLockOutcomeUncertainOnSessionStart(previousSessionRecoveryRecordId),
 			)
+			// #1235 round-3 fix 5: same session-scoped reset for the pending-
+			// token-persisted flag (null = no uncertain leg for the new session).
+			setLockOutcomeUncertainPendingTokenPersisted(null)
 			// #1235 round-3.5: a NEW session starts with no consumed lock — the
 			// previous session's uncertain/locked leg stays recoverable via its
 			// persisted record + the wallet (session-scoped, same rule as the
@@ -797,7 +816,15 @@ export function useAuctionBidFunding({
 		if (lockedUnpublishedTokenId || lockOutcomeUncertainRecoveryRecordId) {
 			toast.error(
 				lockOutcomeUncertainRecoveryRecordId
-					? 'The outcome of your bid lock is uncertain — a lock request may already have been sent to the mint, so retry is refused and no second lock was attempted. A recovery record with your refund key was saved; your funds may be reclaimable from the wallet once the refund timelock opens.'
+					? // #1235 round-3 fix 5 (felixfelix #11): gate the reclaim promise on
+						// the wallet's STRICT pending-token save having succeeded. Without
+						// it the leg is record-only — claiming "reclaimable from the
+						// wallet" would promise a reclaim the app cannot perform.
+						`The outcome of your bid lock is uncertain — a lock request may already have been sent to the mint, so retry is refused and no second lock was attempted. ` +
+							`A recovery record with your refund key was saved; ` +
+							(lockOutcomeUncertainPendingTokenPersisted
+								? 'your funds may be reclaimable from the wallet once the refund timelock opens.'
+								: 'the mint-issued proofs could not be observed and may not be recoverable in-app.')
 					: 'Your bid funds are locked and reclaimable, but the bid could not be prepared for publishing. Retry is unavailable — reclaim your funds from the wallet once the refund timelock opens. No second lock was attempted.',
 			)
 			return
@@ -850,6 +877,7 @@ export function useAuctionBidFunding({
 		publishedBidEventId,
 		lockedUnpublishedTokenId,
 		lockOutcomeUncertainRecoveryRecordId,
+		lockOutcomeUncertainPendingTokenPersisted,
 		republishBid,
 		submitPreparedBid,
 		onBidSuccess,
@@ -924,5 +952,10 @@ export function useAuctionBidFunding({
 		// rebroadcastable and the known-locked failures. Additive to the return
 		// shape; no existing consumer is affected.
 		lockOutcomeUncertainRecoveryRecordId,
+		// #1235 round-3 fix 5 (felixfelix #11): null = no uncertain leg this
+		// session; false = record-only leg (no durable pending token — the UI
+		// copy must not promise a wallet reclaim); true = reclaim-after-timelock
+		// guidance is honest. Additive to the return shape.
+		lockOutcomeUncertainPendingTokenPersisted,
 	}
 }
