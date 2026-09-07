@@ -542,6 +542,7 @@ export function useAuctionBidFunding({
 				// write failed), the publisher throws AuctionBidLockedButUnpublishedError
 				// carrying the lock token id — record it so retryBidPublish takes the
 				// RECLAIM-ONLY path instead of the full re-submit (double-lock).
+				const isLockOutcomeUncertain = error instanceof AuctionBidLockOutcomeUncertainError
 				if (error instanceof AuctionBidPublishFailedError) {
 					// #1235 round-3.5: the mint boundary was crossed (locked, publish
 					// failed) — mark the lock consumed for this session.
@@ -550,7 +551,7 @@ export function useAuctionBidFunding({
 				} else if (error instanceof AuctionBidLockedButUnpublishedError) {
 					bidLockConsumedRef.current = true
 					setLockedUnpublishedTokenId(error.lockTokenId)
-				} else if (error instanceof AuctionBidLockOutcomeUncertainError) {
+				} else if (isLockOutcomeUncertain) {
 					// #1235 round-3 B1 — the lock outcome is uncertain: a recovery
 					// record was durably persisted BEFORE the mint call; record its id
 					// so retryBidPublish refuses the retry (no second lock) with the
@@ -563,8 +564,20 @@ export function useAuctionBidFunding({
 				setBidFundingLifecycleState((currentState) =>
 					resolveAuctionBidFundingTransition(currentState, 'mint_succeeded_bid_publish_failed_reclaimable'),
 				)
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
+				if (isLockOutcomeUncertain) {
+					// #1235 round-3 fix 3 (felixfelix #6) — honest branding: the shared
+					// toast claims "Funding completed", but for an uncertain lock
+					// outcome NOTHING is evidenced — neither the funding completing
+					// nor a lock. The recovery record IS evidenced (it was persisted
+					// pre-lock). Copy-only fix: the lifecycle state stays
+					// mint_succeeded_bid_publish_failed_reclaimable.
+					toast.error(
+						'The outcome of your bid lock is uncertain — no second lock was attempted; a recovery record with your refund key was saved.',
+					)
+				} else {
+					const errorMessage = error instanceof Error ? error.message : String(error)
+					toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
+				}
 				return false
 			} finally {
 				bidSubmissionInFlightRef.current = false

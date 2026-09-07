@@ -319,6 +319,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		resumeBidAfterRulesAck,
 		retryBidPublish,
 		publishedBidEventId,
+		// #1235 round-3 fix 3 (felixfelix #6): drives the progress dialog's
+		// honest uncertain-lock variant (session-scoped tracker; null = no
+		// uncertain leg this session).
+		lockOutcomeUncertainRecoveryRecordId,
 	} = useAuctionBidFunding({
 		previousBidAmount,
 		publishBid: bidMutation.mutateAsync,
@@ -621,6 +625,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				bidAmount={Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : undefined}
 				refundLocktime={biddingCutoffAt + getAuctionSettlementGrace(auction)}
 				onRetryPublish={() => void retryBidPublish()}
+				lockOutcomeUncertain={lockOutcomeUncertainRecoveryRecordId !== null}
 			/>
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">

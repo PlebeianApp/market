@@ -46,6 +46,15 @@ interface AuctionBidProgressDialogProps {
 	bidAmount?: number
 	refundLocktime?: number
 	onRetryPublish?: () => void
+	/**
+	 * #1235 round-3 fix 3 (felixfelix #6) — true when the CURRENT session's
+	 * leg ended in an uncertain lock outcome (a lock request may already
+	 * have been sent to the mint; a recovery record with the refund key was
+	 * saved). Renders an honest uncertain-lock variant of the publish-failed
+	 * state (mirroring the deposit_outcome_uncertain branch): neither
+	 * "funding completed" nor a retry affordance is claimed.
+	 */
+	lockOutcomeUncertain?: boolean
 }
 
 type StageStatus = 'done' | 'active' | 'pending' | 'error'
@@ -162,6 +171,7 @@ export function AuctionBidProgressDialog({
 	bidAmount,
 	refundLocktime,
 	onRetryPublish,
+	lockOutcomeUncertain,
 }: AuctionBidProgressDialogProps) {
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId, 500, auctionCoordinates, validatorPubkeys)
 
@@ -189,6 +199,11 @@ export function AuctionBidProgressDialog({
 	const isPublishActive = PUBLISH_ACTIVE_STATES.has(lifecycleState)
 	const isPublishDone = PUBLISH_DONE_STATES.has(lifecycleState)
 	const isPublishFailed = PUBLISH_FAILED_STATES.has(lifecycleState)
+	// #1235 round-3 fix 3 (felixfelix #6): an uncertain lock outcome lands the
+	// SAME publish-failed lifecycle state, but neither "minted then publish
+	// failed" nor a retry affordance is evidenced for it — the variant below
+	// re-brands only the copy, mirroring the deposit_outcome_uncertain branch.
+	const isLockOutcomeUncertain = lockOutcomeUncertain === true && isPublishFailed
 
 	const isAwaitingValidator = isPublishDone && !hasPositiveVerdict && !hasNegativeVerdict
 
@@ -252,7 +267,9 @@ export function AuctionBidProgressDialog({
 							: isFundingFailed
 								? 'Funding Failed'
 								: isPublishFailed
-									? 'Bid Publish Failed'
+									? isLockOutcomeUncertain
+										? 'Bid lock outcome unconfirmed'
+										: 'Bid Publish Failed'
 									: isDepositOutcomeUncertain
 										? 'Payment outcome unconfirmed'
 										: hasNegativeVerdict
@@ -265,7 +282,9 @@ export function AuctionBidProgressDialog({
 							: isFundingFailed
 								? 'The Lightning payment could not be completed. Your funds are reclaimable.'
 								: isPublishFailed
-									? 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
+									? isLockOutcomeUncertain
+										? 'The outcome of your bid lock at the mint could not be confirmed — a lock request may already have been sent. No second lock was attempted, and a recovery record with your refund key was saved.'
+										: 'Your e-cash was minted but the bid could not be published to relays. You can retry or reclaim your funds.'
 									: isDepositOutcomeUncertain
 										? 'The result of your Lightning payment could not be confirmed — we can neither claim it was paid nor that it went unpaid. The deposit stays preserved: if it settles, this flow continues automatically. Your wallet recovery paths remain available.'
 										: hasNegativeVerdict
@@ -320,7 +339,9 @@ export function AuctionBidProgressDialog({
 							status={lockStage}
 							description={
 								isPublishFailed
-									? undefined
+									? isLockOutcomeUncertain
+										? 'Lock outcome unconfirmed — a lock request may already have been sent to the mint; no second lock was attempted'
+										: undefined
 									: lockStage === 'done'
 										? 'Seller child pubkey + refund timelock applied'
 										: lockStage === 'active'
@@ -333,7 +354,9 @@ export function AuctionBidProgressDialog({
 							status={publishStage}
 							description={
 								isPublishFailed
-									? 'Failed to publish — retry available below'
+									? isLockOutcomeUncertain
+										? 'Not attempted — the lock outcome must be confirmed before publishing'
+										: 'Failed to publish — retry available below'
 									: isPublishDone
 										? 'Kind-1023 event published'
 										: isPublishActive
@@ -373,7 +396,11 @@ export function AuctionBidProgressDialog({
 				)}
 
 				<DialogFooter>
-					{isPublishFailed && onRetryPublish && (
+					{/* #1235 round-3 fix 3: no retry affordance for an uncertain lock
+					 outcome — the hook refuses the retry outright (a second lock
+					 could double-consume the bidder's inputs at the mint), so
+					 rendering the button would be a false promise. */}
+					{isPublishFailed && !isLockOutcomeUncertain && onRetryPublish && (
 						<Button onClick={onRetryPublish} disabled={isPublishActive}>
 							{isPublishActive ? (
 								<>

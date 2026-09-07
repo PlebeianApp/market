@@ -800,6 +800,44 @@ describe('lock-outcome-uncertain legs refuse the retry outright (#1235 round-3 B
 		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
 	}
 
+	test('uncertain-lock FAILURE toast is honest — no "Funding completed" claim, states no second lock + recovery record (#1235 round-3 fix 3)', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+
+		await driveSessionToLockOutcomeUncertainFailure(h, bidDataA)
+
+		// The FAILURE toast itself (not just the later retry-refusal toast) must
+		// be honest: for an uncertain lock outcome nothing is evidenced —
+		// neither that the funding completed nor that the leg locked. The old
+		// shared copy claimed "Funding completed, but bid publishing failed".
+		const failureToast = toastErrorMessages[0]
+		expect(failureToast).toContain('no second lock')
+		expect(failureToast.toLowerCase()).toContain('uncertain')
+		expect(failureToast.toLowerCase()).toContain('recovery record')
+		expect(failureToast).not.toContain('Funding completed')
+		// The honest copy fires exactly once for the failure.
+		expect(toastErrorMessages).toHaveLength(1)
+
+		// The failure landed in the shared terminal state with the tracker set
+		// (copy-only fix: the lifecycle state itself is unchanged).
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+		expect(h.latest.current.lockOutcomeUncertainRecoveryRecordId).toBe(UNCERTAIN_RECOVERY_RECORD_ID)
+
+		// Retry: refused — publishBid count unchanged (no second lock), no
+		// rebroadcast either; the refusal surfaces honest copy again.
+		const publishCallsBeforeRetry = h.calls.publishBid
+		const republishCallsBeforeRetry = h.calls.republishBid
+		await act(async () => {
+			await h.latest.current.retryBidPublish()
+		})
+		expect(h.calls.publishBid).toBe(publishCallsBeforeRetry)
+		expect(h.calls.republishBid).toBe(republishCallsBeforeRetry)
+		expect(h.calls.onBidSuccess).toBe(0)
+		expect(toastErrorMessages[toastErrorMessages.length - 1]).toContain('no second lock')
+
+		await h.unmount()
+	})
+
 	test('lock-outcome-uncertain failure → retry refused, no second publishBid (no second lock attempt)', async () => {
 		const h = await mountFundingHook()
 		const bidDataA = buildBidData(1_000)
