@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Date
 
@@ -53,38 +53,53 @@ kind-1025 path release already publishes full proofs at settlement.
 
 ## Decision
 
-1. **Collateral publication.** Kind-1023 extends to publish the full locked proofs —
-   `amount`, keyset id, `C`, and DLEQ `{e, s, r}` per proof — alongside the existing
-   `lock_secret` and `proof_y` tags. Exact tag serialization is resolved against §4.2 in
-   implementation (one JSON-encoded tag per proof, ordered to pair with
-   `lock_secret`/`proof_y`).
-2. **Bid-time verification (composition).** A bid counts as economically validated at
-   ingestion only if, for every proof: (a) DLEQ verifies offline against the mint's public
-   keys for the claimed amount; (b) `sum(proofs.amount)` equals the declared `amount` tag
-   (for rebid legs, the leg delta); and (c) NUT-7 on `proof_y` returns `unspent`. These
-   compose with the existing §7 structural checks. Missing or invalid DLEQ data fails
-   closed (`collateral_unverified`).
-3. **Privacy trade-off accepted.** Revealing `r` lets the mint correlate issuance to proof
-   if it sees the bid (NUT-12's disclosed limitation). Accepted: the bidder's identity is
-   already revealed by the Nostr signature, and the token is spendable only by the seller
-   child key.
-4. **Mint compatibility, fail-closed.** Auctions require NUT-12-capable mints in their
-   allowlist (advertised via `/v1/info`). The wallet's non-DLEQ fallback (ADR-0004 known
-   limitation) is a hard reject for auction bids, not a silent pass.
-5. **Verification ownership stays client-side.** Consistent with ADR-0004's NUT-7
-   ownership model: the client verifies DLEQ + NUT-7 at the request boundary. Validators MAY
-   later attest collateral in verdicts (new claim, e.g. `collateral_verified`) as a
-   follow-up; verdict semantics otherwise remain rules/policy.
-6. **Migration by `start_at`.** Auctions starting after rollout require DLEQ mints; live
-   auctions with in-flight bids are grandfathered.
-7. **Documented residuals (not solved here).**
-   - `child_pubkey` cannot be verified against the seller's `p2pk_xpub` before kind-1025 —
-     deliberate, since early path disclosure would let the seller derive the child privkey
-     and drain bids mid-auction.
-   - DLEQ proves the mint _promised_ the amount; mint solvency remains a separate trust axis
-     (mint allowlist, `vadium_ratio_bps`).
-   - NUT-7 `unspent` remains a point-in-time reading; the practical double-spend race is
-     bounded by the lock (funds cannot move pre-`T_unlock` without the seller key).
+1. **Per-proof DLEQ publication.** Kind-1023 gains one `dleq_proof` tag per locked
+   proof, ordered parallel to the existing `lock_secret`/`proof_y` arrays. Value =
+   compact JSON:
+   `{"id":"<keyset_id>","amount":<int>,"C":"<compressed_pubkey_hex>","e":"<hex>","s":"<hex>","r":"<hex>"}`.
+   `r` (blinding factor) is REQUIRED — it is what lets third parties reblind-verify
+   offline (this is the NUT-12 proving-possession-without-spending mechanism).
+2. **Offline verification.** Each `dleq_proof` is verified against the mint's public
+   keys (`/v1/keys` for the claimed keyset) for the claimed `amount`. False amount /
+   forged `C` / wrong keyset fails. Library: `hasValidDleq(proof, keyset)`.
+3. **Sum check.** `sum(dleq_proof[].amount) == declared leg delta`
+   (`amount - prev_bid.amount`, or `amount` for a single-leg bid). This is the
+   §9.1.1 invariant.
+4. **Compose with NUT-7.** DLEQ verification runs alongside the existing NUT-7
+   `unspent` check at the client ingestion boundary. A bid is "fully valid for
+   settlement CTAs" only when **both** pass; NUT-7 failure →
+   `bid_pending_review`/`proof_spent`, DLEQ failure → `bid_invalid`/`fraudulent_bid`
+   (`reason=dleq_invalid`).
+5. **Fail-closed mint compatibility.** Auctions starting after rollout REQUIRE
+   NUT-12 capable mints (checked via `CashuMint.getInfo().isSupported(12)`).
+   Non-DLEQ bids are **hard rejected** — the `nip60.ts` non-DLEQ silent fallback is
+   removed for post-rollout auctions.
+6. **Client-side ownership at ingestion.** DLEQ verification is owned by the client
+   (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
+   verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps
+   the "validator is structural/opinion-only" architecture intact.
+7. **Migration by `start_at`.** Auctions with `start_at >= DLEQ_ROLLOUT_START_AT` require
+   the DLEQ path; live auctions (already open) are grandfathered under the legacy
+   non-DLEQ path so they are not broken mid-flight.
+
+### Tag serialization (resolved per AUCTIONS.md §4.2)
+
+- **Tag format:** one `["dleq_proof", "<json>"]` tag per proof, JSON-encoded,
+  parallel to `lock_secret`/`proof_y` (matches the existing parallel-array design;
+  simple to parse with Zod + a JSON-typed refine; relays treat it as an opaque
+  tag). Explicit `id` (keyset id) is included because a mint may have multiple
+  keysets and the verifier must fetch the right one.
+- **Library/dependency:** use `hasValidDleq` from `@cashu/cashu-ts` (already
+  pinned 2.9.0). No new package. Wrap in try/catch because it `throw`s on a
+  missing amount key.
+- **Where DLEQ tags are produced:** in `src/lib/auction/tagBuilders.ts`
+  `buildBidEventTags`, fed from the locked proofs returned by
+  `lockAuctionBidProofs` (which now carries DLEQ via `includeDleq: true`).
+- **Mint keys acquisition:** the verification module accepts pre-fetched
+  `MintKeys` (via a small `getMintKeyset(mintUrl, keysetId, {customRequest})`
+  helper on `CashuMint.getKeys`), so pure verification stays a pure function and
+  network policy stays at the caller (validator allowlist pattern in
+  `mintReachability.ts`).
 
 ## Alternatives considered
 
@@ -106,9 +121,11 @@ kind-1025 path release already publishes full proofs at settlement.
 - Bid event size grows, bidders must use DLEQ-capable wallets, and the compatible mint set
   narrows to NUT-12-supporting mints.
 
-## Amendments deferred to implementation
+## Amendments
+
+Implementation is co-located in this PR (code + docs). The ADR-locked decisions define
+the invariants; the code implements them. Specific docs amendments:
 
 - AUCTIONS.md §4.2 (tag set + forbidden-tag review), §7 pipeline (atomic checklist section in
   ADR-0003 format), §9.1.1 (gap closed), §6.0 if validators later attest collateral.
 - ADR-0004 "Known limitations" updated to reference this ADR.
-- Implementation proceeds as separate PRs after this ADR advances to Accepted.
