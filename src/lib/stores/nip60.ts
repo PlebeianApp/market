@@ -2144,43 +2144,12 @@ export const nip60Actions = {
 			let lockedProofs: Proof[] = []
 			let changeProofs: Proof[] = []
 
-			try {
-				const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, buildLockOptions(true))
-				lockedProofs = result.send
-				changeProofs = result.keep
-			} catch (primaryErr) {
-				const message = primaryErr instanceof Error ? primaryErr.message.toLowerCase() : String(primaryErr).toLowerCase()
-				const insufficient = message.includes('not enough funds available to send')
-				if (!insufficient) {
-					throw primaryErr
-				}
-
-				try {
-					// Some wallet states contain proofs without DLEQ metadata.
-					// Retry without DLEQ requirement using full mint proofs for demo reliability.
-					const retry = await lockAuctionBidProofs(cashuWallet, amount, mintProofs, buildLockOptions(false))
-					lockedProofs = retry.send
-					changeProofs = retry.keep
-				} catch (secondaryErr) {
-					const secondaryMessage = secondaryErr instanceof Error ? secondaryErr.message.toLowerCase() : String(secondaryErr).toLowerCase()
-					const stillInsufficient = secondaryMessage.includes('not enough funds available to send')
-					if (!stillInsufficient) {
-						throw secondaryErr
-					}
-
-					// Last-resort path: reconcile wallet state, then retry once.
-					try {
-						await nip60Actions.consolidateProofs()
-					} catch (consolidateErr) {
-						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
-					}
-
-					const refreshedProofs = getSpendableProofsForMint(wallet, targetMint)
-					const retryAfterConsolidate = await lockAuctionBidProofs(cashuWallet, amount, refreshedProofs, buildLockOptions(false))
-					lockedProofs = retryAfterConsolidate.send
-					changeProofs = retryAfterConsolidate.keep
-				}
-			}
+			// DLEQ-only locking (fail-closed). The mint MUST return NUT-12 DLEQ
+			// proofs for the bid collateral; if it cannot, we surface the error
+			// instead of silently falling back to non-DLEQ proofs — see ADR-0011.
+			const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, buildLockOptions(true))
+			lockedProofs = result.send
+			changeProofs = result.keep
 
 			if (!lockedProofs.length) {
 				throw new Error('Mint returned no locked proofs for bid')
