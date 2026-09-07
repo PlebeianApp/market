@@ -204,29 +204,18 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	})
 
 	// Parse shipping reference and fetch shipping option details
-	const parsedShippingData = useMemo(() => {
-		if (!shippingRef) return null
-
-		if (shippingRef.includes(':')) {
-			const parts = shippingRef.split(':')
-			if (parts.length === 3 && parts[0] === '30406') {
-				return { pubkey: parts[1], dTag: parts[2] }
-			}
-		}
-
-		return null
-	}, [shippingRef])
+	const parsedShippingData = useMemo(() => parseShippingReference(shippingRef || ''), [shippingRef])
 
 	// Fetch shipping option by coordinates if we have parsed data
 	const { data: shippingOptionByCoords } = useQuery({
-		...shippingOptionByCoordinatesQueryOptions(parsedShippingData?.pubkey || '', parsedShippingData?.dTag || ''),
-		enabled: !!parsedShippingData,
+		...shippingOptionByCoordinatesQueryOptions(parsedShippingData.pubkey || '', parsedShippingData.dTag || ''),
+		enabled: Boolean(parsedShippingData.pubkey && parsedShippingData.dTag),
 	})
 
 	// Fetch shipping option by ID if we don't have coordinates
 	const { data: shippingOptionById } = useQuery({
-		...shippingOptionQueryOptions(parseShippingReference(shippingRef || '')),
-		enabled: !!shippingRef && !parsedShippingData,
+		...shippingOptionQueryOptions(parsedShippingData.id || ''),
+		enabled: Boolean(parsedShippingData.id && !parsedShippingData.pubkey),
 	})
 
 	// Use the appropriate shipping option

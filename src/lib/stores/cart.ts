@@ -7,6 +7,7 @@ import { getProductId, getProductPrice, getProductSellerPubkey, productQueryOpti
 import {
 	getShippingInfo,
 	getShippingPrice,
+	parseShippingReference,
 	shippingOptionQueryOptions,
 	shippingOptionsByPubkeyQueryOptions,
 	shippingOptionByCoordinatesQueryOptions,
@@ -21,6 +22,7 @@ import {
 	resolvePublishedProductShippingOptions,
 	type ProductShippingSelection,
 } from '@/lib/utils/productShippingSelections'
+import { MempoolService } from '@/lib/utils/mempool'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -114,7 +116,7 @@ interface CartState {
 		{
 			satsTotal: number
 			currencyTotals: Record<string, number>
-			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number }
+			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number; communityPercentage: number }
 			shippingSats: number
 		}
 	>
@@ -355,19 +357,14 @@ const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): 
 
 const fetchShippingEventFromQueries = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
 	try {
-		if (shippingReferenceId.startsWith(`${SHIPPING_KIND}:`)) {
-			const parts = shippingReferenceId.split(':')
-			if (parts.length === 3) {
-				const pubkey = parts[1]
-				const dTag = parts[2]
-
-				const event = (await cartQueryClient.fetchQuery(shippingOptionByCoordinatesQueryOptions(pubkey, dTag))) as NDKEvent | null
-				return event
-			} else {
-				console.warn(`Invalid shipping reference format: ${shippingReferenceId}`)
-				return null
-			}
+		const reference = parseShippingReference(shippingReferenceId)
+		if (reference.pubkey && reference.dTag) {
+			return (await cartQueryClient.fetchQuery(
+				shippingOptionByCoordinatesQueryOptions(reference.pubkey, reference.dTag),
+			)) as NDKEvent | null
 		}
+		if (reference.id) return (await cartQueryClient.fetchQuery(shippingOptionQueryOptions(reference.id))) as NDKEvent | null
+		console.warn(`Invalid shipping reference format: ${shippingReferenceId}`)
 		return null
 	} catch (error) {
 		console.error(`Failed to fetch shipping event ${shippingReferenceId} via queryClient:`, error)
@@ -814,7 +811,8 @@ export const cartActions = {
 		let validatedShippingId = shipping.id || null
 		if (shipping.id && typeof shipping.id === 'string' && shipping.id.trim().length > 0) {
 			const trimmedId = shipping.id.trim()
-			if (!trimmedId.endsWith(':') && trimmedId.split(':').length === 3) {
+			const parsedReference = parseShippingReference(trimmedId)
+			if ((parsedReference.pubkey && parsedReference.dTag) || parsedReference.id) {
 				validatedShippingId = trimmedId
 			} else {
 				console.warn('Invalid shipping ID format:', shipping.id)
@@ -1485,17 +1483,17 @@ export const cartActions = {
 		if (!exchangeRates || !amount) return 0
 
 		const upperCurrency = currency.toUpperCase()
+		const sats = MempoolService.convertCurrencyToSats({
+			amount,
+			fromCurrency: upperCurrency,
+			exchangeRates,
+		})
 
-		if (upperCurrency === 'SATS') return Math.round(amount)
-		if (upperCurrency === 'BTC') return Math.round(amount * numSatsInBtc)
-
-		const rate = exchangeRates[upperCurrency]
-		if (!rate) {
+		if (!Number.isFinite(sats)) {
 			console.warn(`Exchange rate not found for ${upperCurrency}`)
 			return 0
 		}
 
-		const sats = (amount / rate) * numSatsInBtc
 		return Math.round(sats)
 	},
 
@@ -1591,15 +1589,20 @@ export const cartActions = {
 
 				// V4V shares are calculated ONLY from product price, not including shipping
 				const shares = cartActions.calculateShares(sellerPubkey, sellerTotal)
-
-				// Add shipping cost entirely to seller's amount (shipping is not shared with V4V)
-				const adjustedShares = {
-					sellerAmount: shares.sellerAmount + shippingSats,
-					communityAmount: shares.communityAmount, // V4V shares stay the same
-					sellerPercentage: shares.sellerPercentage, // Keep original percentage for display
-				}
-
 				const totalWithShipping = sellerTotal + shippingSats
+				const sellerAmount = shares.sellerAmount + shippingSats
+
+				// Add shipping cost entirely to the seller's amount (shipping is not shared with V4V).
+				// Both displayed percentages use the final amount paid as their denominator.
+				const sellerPercentage = totalWithShipping > 0 ? (sellerAmount / totalWithShipping) * 100 : 100
+				const communityPercentage = totalWithShipping > 0 ? (shares.communityAmount / totalWithShipping) * 100 : 0
+
+				const adjustedShares = {
+					sellerAmount,
+					communityAmount: shares.communityAmount,
+					sellerPercentage,
+					communityPercentage,
+				}
 
 				newSellerData[sellerPubkey] = {
 					satsTotal: totalWithShipping,
@@ -1723,11 +1726,8 @@ export const cartActions = {
 
 					for (const shippingRef of Array.from(productShippingRefs)) {
 						try {
-							// Parse the shipping reference
-							const parts = shippingRef.split(':')
-							if (parts.length !== 3) continue
-
-							const [kind, pubkey, dTag] = parts
+							const parsedReference = parseShippingReference(shippingRef)
+							if (!parsedReference.pubkey && !parsedReference.id) continue
 
 							// Fetch the shipping event
 							const shippingEvent = await getShippingEvent(shippingRef)

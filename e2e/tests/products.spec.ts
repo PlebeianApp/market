@@ -173,6 +173,38 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByTestId('product-name-input')).toHaveValue('Back Nav Product')
 	})
 
+	test('warns that the fiat equivalent may be stale in sats mode when rates are unavailable', async ({ merchantPage }) => {
+		await merchantPage.addInitScript(() => {
+			const NativeWebSocket = window.WebSocket
+			window.WebSocket = class extends NativeWebSocket {
+				constructor(url: string | URL, protocols?: string | string[]) {
+					if (String(url).includes('relay.contextvm.org')) {
+						throw new Error('Blocked external currency relay in e2e test')
+					}
+					super(url, protocols)
+				}
+			} as typeof WebSocket
+		})
+		await merchantPage.route('https://api.yadio.io/**', (route) => route.abort())
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await merchantPage.getByTestId('product-name-input').fill('Stale Fiat Warning Product')
+		await merchantPage.getByTestId('product-description-input').fill('Verifies the sats-mode stale fiat warning')
+		await merchantPage.getByTestId('product-next-button').click()
+
+		const currencySelect = merchantPage.getByRole('combobox').first()
+		await currencySelect.click()
+		await merchantPage.getByRole('option', { name: 'USD', exact: true }).click()
+
+		const fiatPriceInput = merchantPage.locator('#fiat-price')
+		await fiatPriceInput.fill('25')
+		await merchantPage.getByRole('radio', { name: /Fix the price in sats/i }).click()
+
+		await expect(fiatPriceInput).toHaveValue('25')
+		await expect(merchantPage.getByText('Exchange rate unavailable for USD; the displayed fiat equivalent may be stale.')).toBeVisible()
+	})
+
 	test('publish remains disabled until the full required set is valid', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products/new')
 		await waitForProductForm(merchantPage)
