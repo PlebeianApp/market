@@ -21,6 +21,10 @@ readonly LISTEN_ADDR="127.0.0.1:10549"
 
 # Emergency one-minute gates, not long-term storage limits.
 readonly MIN_FREE=$((2 * 1024 * 1024 * 1024))
+# The readiness deadline is configurable. Sixty seconds is the initial
+# candidate until measured staging startup behavior establishes a better value.
+readonly READINESS_SECONDS="${RELAY_READINESS_SECONDS:-60}"
+readonly READINESS_TIMEOUT_STATUS=75
 readonly OBSERVE_SECONDS=60
 readonly SAMPLE_SECONDS=5
 readonly MAX_RAW_GROWTH=$((16 * 1024 * 1024))
@@ -40,25 +44,47 @@ PRE_BINARY_SHA=""
 PRE_RUNNING_SHA=""
 PRE_UNIT_SHA=""
 
-for path in "$SOURCE_BIN" "$SOURCE_UNIT"; do
-	[[ -f "$path" && ! -L "$path" ]] || {
-		echo "Missing or unsafe deploy artifact: $path"
-		exit 1
-	}
-done
-
-grep -Fxq "User=${SERVICE_USER}" "$SOURCE_UNIT" &&
-	grep -Fxq "Group=${SERVICE_GROUP}" "$SOURCE_UNIT" &&
-	grep -Fxq "EnvironmentFile=${REMOTE_ENV}" "$SOURCE_UNIT" &&
-	grep -Fxq "ExecStart=${REMOTE_BIN}" "$SOURCE_UNIT" || {
-	echo "Staged systemd unit does not match the staging deployment contract"
-	exit 1
-}
-
 uint() {
 	case "$1" in
 		''|*[!0-9]*) return 1 ;;
 	esac
+}
+
+validate_config() {
+	uint "$READINESS_SECONDS" && ((10#$READINESS_SECONDS > 0)) || {
+		echo "Relay readiness deadline must be a positive integer"
+		return 1
+	}
+}
+
+validate_payload() {
+	local path
+	for path in "$SOURCE_BIN" "$SOURCE_UNIT"; do
+		[[ -f "$path" && ! -L "$path" ]] || {
+			echo "Missing or unsafe deploy artifact: $path"
+			return 1
+		}
+	done
+
+	grep -Fxq "User=${SERVICE_USER}" "$SOURCE_UNIT" &&
+		grep -Fxq "Group=${SERVICE_GROUP}" "$SOURCE_UNIT" &&
+		grep -Fxq "EnvironmentFile=${REMOTE_ENV}" "$SOURCE_UNIT" &&
+		grep -Fxq "ExecStart=${REMOTE_BIN}" "$SOURCE_UNIT" || {
+		echo "Staged systemd unit does not match the staging deployment contract"
+		return 1
+	}
+}
+
+boot_id() {
+	cat /proc/sys/kernel/random/boot_id
+}
+
+readiness_now() {
+	awk '{print int($1)}' /proc/uptime
+}
+
+readiness_sleep() {
+	sleep "$1"
 }
 
 property() {
@@ -118,7 +144,7 @@ preflight() {
 	PRE_PID="$(property MainPID)"
 	restarts="$(property NRestarts)"
 	PRE_INVOCATION="$(property InvocationID)"
-	PRE_BOOT_ID="$(cat /proc/sys/kernel/random/boot_id)"
+	PRE_BOOT_ID="$(boot_id)"
 
 	[[ "$active" == "active" && "$substate" == "running" ]] || {
 		echo "Staging relay must be active/running before activation"
@@ -266,7 +292,8 @@ make_backup() {
 }
 
 rollback() {
-	local pid invocation restarts active substate
+	local pid invocation restarts active substate readiness_status rollback_epoch
+	local raw_before search_before free_before
 
 	sudo systemctl stop "$SERVICE_NAME" || {
 		echo "Unable to stop failed staging relay"
@@ -302,8 +329,24 @@ rollback() {
 		echo "Rollback unit has unexpected systemd drop-ins"
 		return 1
 	}
+
+	raw_before="$(allocated "$RAW_DIR")"
+	search_before="$(allocated "$SEARCH_DIR")"
+	free_before="$(free_bytes)"
+	uint "$raw_before" && uint "$search_before" && uint "$free_before" || {
+		echo "Unable to read numeric rollback-readiness storage metrics"
+		return 1
+	}
+	((free_before >= MIN_FREE)) || {
+		echo "Staging relay data filesystem is below the rollback free-space gate"
+		return 1
+	}
+
+	rollback_epoch="$(date +%s)" || {
+		echo "Unable to capture rollback journal epoch"
+		return 1
+	}
 	sudo systemctl restart "$SERVICE_NAME" || return 1
-	sleep 5
 	active="$(property ActiveState)" || return 1
 	substate="$(property SubState)" || return 1
 	[[ "$active" == "active" && "$substate" == "running" ]] || {
@@ -329,20 +372,46 @@ rollback() {
 		echo "Rollback running process does not match the previous binary"
 		return 1
 	}
-	local_health || {
-		echo "Rollback relay local NIP-11 check failed"
-		return 1
-	}
 
-	printf 'rollback_main_pid=%s\n' "$pid"
-	printf 'rollback_invocation_id=%s\n' "$invocation"
-	printf 'rollback_nrestarts=%s\n' "$restarts"
-	echo "Previous staging relay binary and unit restored"
+	if wait_for_readiness "Rollback" "$pid" "$invocation" "$PRE_BINARY_SHA" \
+		"$raw_before" "$search_before" "$free_before"; then
+		readiness_status=0
+	else
+		readiness_status=$?
+	fi
+
+	case "$readiness_status" in
+		0|"$READINESS_TIMEOUT_STATUS")
+			check_journal_window "Rollback" "$rollback_epoch" || return 1
+			check_runtime_sample "Rollback post-journal check" "$pid" "$invocation" "$PRE_BINARY_SHA" \
+				"$raw_before" "$search_before" "$free_before" || return 1
+			;;
+	esac
+
+	case "$readiness_status" in
+		0)
+			printf 'rollback_main_pid=%s\n' "$pid"
+			printf 'rollback_invocation_id=%s\n' "$invocation"
+			printf 'rollback_nrestarts=%s\n' "$restarts"
+			echo "Rollback restoration and readiness succeeded"
+			return 0
+			;;
+		"$READINESS_TIMEOUT_STATUS")
+			echo "Rollback files and process were restored, but local NIP-11 readiness was not confirmed before the deadline"
+			echo "The restored process remains running with verified identity; operator review is required"
+			return "$READINESS_TIMEOUT_STATUS"
+			;;
+		*)
+			echo "Rollback readiness structural verification failed"
+			return 1
+			;;
+	esac
 }
 
 on_exit() {
 	local status=$?
-	local rollback_ok=1
+	local rollback_status=0
+	local retain_backup=0
 
 	trap - EXIT
 	set +e
@@ -350,14 +419,30 @@ on_exit() {
 		echo "Staging relay deployment failed; beginning guarded rollback"
 		sudo systemctl status "$SERVICE_NAME" --no-pager || true
 		sudo journalctl -u "$SERVICE_NAME" -n 100 --no-pager || true
-		if ! rollback; then
-			rollback_ok=0
-			status=70
-			echo "Guarded rollback failed; manual intervention is required"
+		if rollback; then
+			rollback_status=0
+		else
+			rollback_status=$?
 		fi
+
+		case "$rollback_status" in
+			0)
+				;;
+			"$READINESS_TIMEOUT_STATUS")
+				retain_backup=1
+				status="$READINESS_TIMEOUT_STATUS"
+				echo "Guarded rollback restored the files and process, but health was not confirmed"
+				echo "Workflow remains failed; operator review is required"
+				;;
+			*)
+				retain_backup=1
+				status=70
+				echo "Guarded rollback structurally failed; manual intervention is required"
+				;;
+		esac
 	fi
 	if [[ -n "$BACKUP_DIR" ]]; then
-		if ((rollback_ok == 1)); then
+		if ((retain_backup == 0)); then
 			rm -rf "$BACKUP_DIR"
 		else
 			echo "Rollback backup retained at $BACKUP_DIR"
@@ -374,7 +459,7 @@ check_growth() {
 	search_now="$(allocated "$SEARCH_DIR")"
 	free_now="$(free_bytes)"
 	uint "$raw_now" && uint "$search_now" && uint "$free_now" || {
-		echo "Unable to read numeric observation storage metrics"
+		echo "Unable to read numeric relay storage metrics"
 		return 1
 	}
 
@@ -383,15 +468,15 @@ check_growth() {
 	free_loss="$(positive_delta "$free_before" "$free_now")"
 
 	((raw_growth <= MAX_RAW_GROWTH)) || {
-		echo "Staging raw allocation exceeded the observation gate"
+		echo "Staging raw allocation exceeded the emergency growth gate"
 		return 1
 	}
 	((search_growth <= MAX_SEARCH_GROWTH)) || {
-		echo "Staging search allocation exceeded the observation gate"
+		echo "Staging search allocation exceeded the emergency growth gate"
 		return 1
 	}
 	((free_loss <= MAX_FREE_LOSS)) || {
-		echo "Staging filesystem free-space loss exceeded the observation gate"
+		echo "Staging filesystem free-space loss exceeded the emergency growth gate"
 		return 1
 	}
 	((free_now >= MIN_FREE)) || {
@@ -406,28 +491,145 @@ check_growth() {
 }
 
 check_runtime_sample() {
-	local pid="$1" invocation="$2" binary_sha="$3"
-	local raw_before="$4" search_before="$5" free_before="$6"
+	local context="$1" pid="$2" invocation="$3" binary_sha="$4"
+	local raw_before="$5" search_before="$6" free_before="$7"
 
-	[[ "$(cat /proc/sys/kernel/random/boot_id)" == "$PRE_BOOT_ID" ]] || { echo "Runtime sample failed: boot_id changed during observation"; return 1; }
-	[[ "$(property ActiveState)" == "active" && "$(property SubState)" == "running" ]] || { echo "Runtime sample failed: service is not active/running"; return 1; }
-	[[ "$(property MainPID)" == "$pid" ]] || { echo "Runtime sample failed: MainPID changed during observation"; return 1; }
-	[[ "$(property InvocationID)" == "$invocation" ]] || { echo "Runtime sample failed: InvocationID changed during observation"; return 1; }
-	[[ "$(property NRestarts)" == "0" ]] || { echo "Runtime sample failed: NRestarts is nonzero during observation"; return 1; }
-	[[ "$(hash_file "/proc/${pid}/exe")" == "$binary_sha" ]] || { echo "Runtime sample failed: running binary hash does not match expected"; return 1; }
+	[[ "$(boot_id)" == "$PRE_BOOT_ID" ]] || { echo "${context}: boot ID changed"; return 1; }
+	[[ "$(property ActiveState)" == "active" && "$(property SubState)" == "running" ]] || { echo "${context}: service is not active/running"; return 1; }
+	[[ "$(property MainPID)" == "$pid" ]] || { echo "${context}: MainPID changed"; return 1; }
+	[[ "$(property InvocationID)" == "$invocation" ]] || { echo "${context}: InvocationID changed"; return 1; }
+	[[ "$(property NRestarts)" == "0" ]] || { echo "${context}: NRestarts is nonzero"; return 1; }
+	[[ "$(hash_file "/proc/${pid}/exe")" == "$binary_sha" ]] || { echo "${context}: running binary hash does not match expected"; return 1; }
 	check_growth "$raw_before" "$search_before" "$free_before"
+}
+
+wait_for_readiness() {
+	local context="$1" pid="$2" invocation="$3" binary_sha="$4"
+	local raw_before="$5" search_before="$6" free_before="$7"
+	local start deadline now elapsed remaining sleep_for attempts=0
+
+	start="$(readiness_now)"
+	uint "$start" || {
+		echo "${context} readiness could not read a monotonic start time"
+		return 1
+	}
+	deadline=$((start + 10#$READINESS_SECONDS))
+
+	while :; do
+		now="$(readiness_now)"
+		uint "$now" || {
+			echo "${context} readiness could not read a monotonic sample time"
+			return 1
+		}
+		((attempts == 0 || now < deadline)) || break
+
+		attempts=$((attempts + 1))
+		check_runtime_sample "${context} readiness check" "$pid" "$invocation" "$binary_sha" \
+			"$raw_before" "$search_before" "$free_before" || return 1
+
+		if local_health; then
+			# The request can race with a process restart or storage spike. Recheck
+			# all structural and emergency gates after the successful response.
+			check_runtime_sample "${context} post-health readiness check" "$pid" "$invocation" "$binary_sha" \
+				"$raw_before" "$search_before" "$free_before" || return 1
+			now="$(readiness_now)"
+			uint "$now" || {
+				echo "${context} readiness could not read a monotonic completion time"
+				return 1
+			}
+			if ((now <= deadline)); then
+				elapsed=$((now - start))
+				printf 'readiness_context=%s\n' "$context"
+				printf 'readiness_attempts=%s\n' "$attempts"
+				printf 'readiness_elapsed_seconds=%s\n' "$elapsed"
+				echo "${context} local NIP-11 readiness confirmed"
+				return 0
+			fi
+			break
+		fi
+
+		now="$(readiness_now)"
+		uint "$now" || {
+			echo "${context} readiness could not read a monotonic sample time"
+			return 1
+		}
+		((now < deadline)) || break
+
+		printf '%s local NIP-11 is not ready yet (attempt %s); retrying\n' "$context" "$attempts"
+		remaining=$((deadline - now))
+		sleep_for="$SAMPLE_SECONDS"
+		((sleep_for <= remaining)) || sleep_for="$remaining"
+		readiness_sleep "$sleep_for" || {
+			echo "${context} readiness retry sleep failed"
+			return 1
+		}
+	done
+
+	# Timeout is a distinct state only while process identity and storage remain
+	# valid. Any drift at the deadline is a structural failure instead.
+	check_runtime_sample "${context} readiness deadline check" "$pid" "$invocation" "$binary_sha" \
+		"$raw_before" "$search_before" "$free_before" || return 1
+	elapsed=$((now - start))
+	printf 'readiness_context=%s\n' "$context"
+	printf 'readiness_elapsed_seconds=%s\n' "$elapsed"
+	echo "${context} local NIP-11 readiness was not confirmed within ${READINESS_SECONDS} seconds"
+	return "$READINESS_TIMEOUT_STATUS"
+}
+
+check_journal_window() {
+	local context="$1" epoch="$2"
+	local service_journal kernel_journal grep_status
+
+	if service_journal="$(sudo journalctl -u "$SERVICE_NAME" -n 1000 --since "@${epoch}" --no-pager 2>&1)"; then
+		:
+	else
+		echo "${context}: unable to read relay service journal"
+		return 1
+	fi
+	if kernel_journal="$(sudo journalctl -k -n 1000 --since "@${epoch}" --no-pager 2>&1)"; then
+		:
+	else
+		echo "${context}: unable to read kernel journal"
+		return 1
+	fi
+
+	if grep -Eiq \
+		'scheduled restart job|automatic restarting|restart counter is at' \
+		<<<"$service_journal"; then
+		echo "${context}: automatic relay restart evidence found"
+		return 1
+	else
+		grep_status=$?
+		if ((grep_status != 1)); then
+			echo "${context}: unable to inspect relay restart evidence"
+			return 1
+		fi
+	fi
+
+	if grep -Eiq \
+		'out of memory|oom-kill|killed process' \
+		<<<"$kernel_journal"; then
+		echo "${context}: kernel OOM evidence found"
+		return 1
+	else
+		grep_status=$?
+		if ((grep_status != 1)); then
+			echo "${context}: unable to inspect kernel OOM evidence"
+			return 1
+		fi
+	fi
 }
 
 observe() {
 	local epoch="$1" pid="$2" invocation="$3" binary_sha="$4"
 	local raw_before="$5" search_before="$6" free_before="$7"
-	local deadline service_journal kernel_journal grep_status
+	local deadline
 	local health_failures=0
 
 	deadline=$((SECONDS + OBSERVE_SECONDS))
 	while ((SECONDS < deadline)); do
 		sleep "$SAMPLE_SECONDS"
-		check_runtime_sample "$pid" "$invocation" "$binary_sha" \
+		check_runtime_sample "Steady-state observation sample" "$pid" "$invocation" "$binary_sha" \
 			"$raw_before" "$search_before" "$free_before"
 
 		if local_health; then
@@ -447,7 +649,7 @@ observe() {
 	# cannot pass if runtime identity or growth drifts during the health retry.
 	if ((health_failures == 1)); then
 		sleep "$SAMPLE_SECONDS"
-		check_runtime_sample "$pid" "$invocation" "$binary_sha" \
+		check_runtime_sample "Steady-state observation sample" "$pid" "$invocation" "$binary_sha" \
 			"$raw_before" "$search_before" "$free_before"
 		if local_health; then
 			health_failures=0
@@ -459,36 +661,10 @@ observe() {
 		fi
 	fi
 
-	service_journal="$(sudo journalctl -u "$SERVICE_NAME" -n 1000 --since "@${epoch}" --no-pager 2>&1)"
-	kernel_journal="$(sudo journalctl -k -n 1000 --since "@${epoch}" --no-pager 2>&1)"
-	if grep -Eiq \
-		'scheduled restart job|automatic restarting|restart counter is at' \
-		<<<"$service_journal"; then
-		echo "Automatic relay restart evidence found during observation"
-		return 1
-	else
-		grep_status=$?
-		if ((grep_status != 1)); then
-			echo "Unable to inspect relay restart evidence"
-			return 1
-		fi
-	fi
-
-	if grep -Eiq \
-		'out of memory|oom-kill|killed process' \
-		<<<"$kernel_journal"; then
-		echo "Kernel OOM evidence found during observation"
-		return 1
-	else
-		grep_status=$?
-		if ((grep_status != 1)); then
-			echo "Unable to inspect kernel OOM evidence"
-			return 1
-		fi
-	fi
+	check_journal_window "Activation observation" "$epoch"
 
 	# Reconfirm the terminal runtime/storage state after journal collection.
-	check_runtime_sample "$pid" "$invocation" "$binary_sha" \
+	check_runtime_sample "Steady-state terminal sample" "$pid" "$invocation" "$binary_sha" \
 		"$raw_before" "$search_before" "$free_before"
 
 	printf 'post_main_pid=%s\n' "$pid"
@@ -500,8 +676,11 @@ observe() {
 
 main() {
 	local expected_bin expected_unit installed_bin installed_unit running_bin
-	local raw_before search_before free_before epoch pid invocation restarts
+	local raw_before search_before free_before activation_epoch pid invocation restarts
+	local observe_raw_before observe_search_before observe_free_before
 
+	validate_config
+	validate_payload
 	preflight
 	trap on_exit EXIT
 	make_backup
@@ -535,13 +714,15 @@ main() {
 		return 1
 	}
 
-	epoch="$(date +%s)"
 	sudo systemctl daemon-reload
 	[[ "$(property FragmentPath)" == "$REMOTE_SERVICE" ]] || { echo "Post-install unit fragment path is not from expected location"; return 1; }
 	[[ "$(property NeedDaemonReload)" == "no" ]] || { echo "Post-install unit still requires daemon-reload"; return 1; }
 	[[ -z "$(property DropInPaths)" ]] || { echo "Post-install unit has unexpected systemd drop-ins"; return 1; }
+	activation_epoch="$(date +%s)" || {
+		echo "Unable to capture activation journal epoch"
+		return 1
+	}
 	sudo systemctl restart "$SERVICE_NAME"
-	sleep 5
 
 	[[ "$(property ActiveState)" == "active" && "$(property SubState)" == "running" ]] || { echo "Staging relay is not active/running after activation"; return 1; }
 	pid="$(property MainPID)"
@@ -562,13 +743,30 @@ main() {
 	running_bin="$(hash_file "/proc/${pid}/exe")"
 	printf 'running_binary_sha256=%s\n' "$running_bin"
 	[[ "$running_bin" == "$expected_bin" ]] || { echo "Running binary hash does not match expected artifact hash"; return 1; }
-	local_health
-	check_growth "$raw_before" "$search_before" "$free_before"
-	observe "$epoch" "$pid" "$invocation" "$expected_bin" \
+
+	wait_for_readiness "Activation" "$pid" "$invocation" "$expected_bin" \
 		"$raw_before" "$search_before" "$free_before"
+
+	# The steady-state emergency window starts only after readiness and uses a
+	# fresh baseline so one-minute gates are not stretched across both phases.
+	observe_raw_before="$(allocated "$RAW_DIR")"
+	observe_search_before="$(allocated "$SEARCH_DIR")"
+	observe_free_before="$(free_bytes)"
+	uint "$observe_raw_before" && uint "$observe_search_before" && uint "$observe_free_before" || {
+		echo "Unable to read numeric post-readiness storage metrics"
+		return 1
+	}
+	((observe_free_before >= MIN_FREE)) || {
+		echo "Staging relay data filesystem is below the post-readiness free-space gate"
+		return 1
+	}
+	observe "$activation_epoch" "$pid" "$invocation" "$expected_bin" \
+		"$observe_raw_before" "$observe_search_before" "$observe_free_before"
 
 	DEPLOY_COMPLETE=1
 	echo "Staging relay deployed successfully"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi
