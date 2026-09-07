@@ -12,6 +12,7 @@
 
 import type { AuctionSettlementStatus, Nut7ProofState, PathReleaseReason, ValidatorClaim, ValidatorReason } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
+import type { DleqProof } from '../cashu/dleq'
 
 // =========================================================================
 // kind 30408 — Auction listing (seller-signed, addressable) — §4.1
@@ -148,6 +149,16 @@ export interface ParsedBidEvent {
 	 * MUST be parallel to {@link lockSecrets} (same length, same order).
 	 */
 	proofYs: string[]
+	/**
+	 * NUT-12 DLEQ proofs — one per locked proof, parallel to {@link
+	 * lockSecrets} and {@link proofYs}. Absent (empty/undefined) for
+	 * grandfathered pre-rollout bids that predate ADR-0011 collateral
+	 * publication. Post-rollout bids MUST carry one `dleq_proof` tag per
+	 * locked proof; the Zod schema enforces the triple-parallel invariant
+	 * and the validation pipeline enforces presence via
+	 * `requiresDleqForAuction`.
+	 */
+	dleqProofs?: DleqProof[]
 
 	// Bookkeeping
 	createdForEndAt: number

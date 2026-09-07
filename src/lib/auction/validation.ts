@@ -30,6 +30,8 @@ import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
 	BID_FLOOR_TIME_GRACE_SECONDS,
+	APP_AUCTION_DLEQ_ROLLOUT_START_AT,
+	requiresDleqForAuction,
 	type PathReleaseReason,
 	type Nut7ProofState,
 	type ValidatorClaim,
@@ -425,6 +427,22 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 
+	// --- Step 3.5: NUT-12 DLEQ collateral presence (ADR-0011 Decision 6/7) --
+	// Auctions starting at/after the rollout boundary require every bid to
+	// publish one DLEQ proof per locked proof. Missing or mismatched DLEQ
+	// collateral fails closed (`dleq_invalid`) rather than grandfathering the
+	// economic-verification gap. Pre-rollout auctions are grandfathered.
+	if (requiresDleqForAuction(auction.startAt)) {
+		const dleqProofs = bid.dleqProofs ?? []
+		if (dleqProofs.length !== bid.lockSecrets.length) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'dleq_invalid',
+				detail: `post-rollout auction (start_at=${auction.startAt} >= ${APP_AUCTION_DLEQ_ROLLOUT_START_AT}) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
+			}
+		}
+	}
+
 	// --- Step 4: lock secret structure --------------------------------------
 
 	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
@@ -451,9 +469,11 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// Cashu token has a unique secret and Y value by construction.
 	const seenLockSecrets = new Set<string>()
 	const seenProofYs = new Set<string>()
+	const seenDleqCs = new Set<string>()
 	for (let i = 0; i < bid.lockSecrets.length; i++) {
 		const secretLower = bid.lockSecrets[i].toLowerCase()
 		const proofYLower = bid.proofYs[i].toLowerCase()
+		const dleqC = bid.dleqProofs?.[i]?.C?.toLowerCase()
 		if (seenLockSecrets.has(secretLower)) {
 			return {
 				claim: 'bid_invalid',
@@ -468,8 +488,16 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 				detail: `duplicate proof_y at index ${i} — each proof must have a unique Y value`,
 			}
 		}
+		if (dleqC && seenDleqCs.has(dleqC)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'dleq_invalid',
+				detail: `duplicate dleq_proof C at index ${i} — each proof must have a unique mint signature`,
+			}
+		}
 		seenLockSecrets.add(secretLower)
 		seenProofYs.add(proofYLower)
+		if (dleqC) seenDleqCs.add(dleqC)
 	}
 	// Validate every proof's secret independently. All MUST share the same
 	// lock parameters — the bidder split their input across multiple

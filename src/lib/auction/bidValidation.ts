@@ -354,6 +354,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	// observedAt (earliest wins).
 	const seenLockSecretsByBidder = new Map<string, Set<string>>()
 	const seenProofYsByBidder = new Map<string, Set<string>>()
+	const seenDleqCsByBidder = new Map<string, Set<string>>()
 	const sortedByObserved = [...classified].sort((a, b) => a.observedAt - b.observedAt)
 	const bidsWithDuplicateProofs = new Set<string>()
 	for (const c of sortedByObserved) {
@@ -361,6 +362,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		const bidder = c.bid.bidderPubkey.toLowerCase()
 		const bidderSeenSecrets = seenLockSecretsByBidder.get(bidder) ?? new Set()
 		const bidderSeenProofYs = seenProofYsByBidder.get(bidder) ?? new Set()
+		const bidderSeenDleqCs = seenDleqCsByBidder.get(bidder) ?? new Set()
 		let hasDup = false
 		for (const secret of c.bid.lockSecrets) {
 			if (bidderSeenSecrets.has(secret.toLowerCase())) {
@@ -376,13 +378,29 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 				}
 			}
 		}
+		if (!hasDup) {
+			// M5: extend the dup check to DLEQ mint signatures `C` — two proofs
+			// sharing the same `C` are the same proof (fabricated collateral).
+			for (const proof of c.bid.dleqProofs ?? []) {
+				const dleqC = proof.C?.toLowerCase()
+				if (dleqC && bidderSeenDleqCs.has(dleqC)) {
+					hasDup = true
+					break
+				}
+			}
+		}
 		if (hasDup) {
 			bidsWithDuplicateProofs.add(c.bid.id)
 		} else {
 			for (const secret of c.bid.lockSecrets) bidderSeenSecrets.add(secret.toLowerCase())
 			for (const proofY of c.bid.proofYs) bidderSeenProofYs.add(proofY.toLowerCase())
+			for (const proof of c.bid.dleqProofs ?? []) {
+				const dleqC = proof.C?.toLowerCase()
+				if (dleqC) bidderSeenDleqCs.add(dleqC)
+			}
 			seenLockSecretsByBidder.set(bidder, bidderSeenSecrets)
 			seenProofYsByBidder.set(bidder, bidderSeenProofYs)
+			seenDleqCsByBidder.set(bidder, bidderSeenDleqCs)
 		}
 	}
 	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
