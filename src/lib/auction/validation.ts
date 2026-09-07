@@ -129,6 +129,82 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	return keysets
 }
 
+// ---------- DLEQ mint support (ADR-0011, Decisions 4 & 6) -----------------
+
+/** Options for {@link mintSupportsDleq}. */
+export interface MintDleqSupportOptions {
+	/**
+	 * Pre-built CashuMint instance. When provided, no fresh client is
+	 * constructed — mirrors `CheckProofStateOptions.mintClient` in
+	 * `src/lib/cashu/nut7.ts` so callers (and tests) can inject a
+	 * policy-enforcing or fake transport.
+	 */
+	mintClient?: CashuMint
+}
+
+/**
+ * Whether a mint advertises NUT-12 DLEQ support (ADR-0011, Decision 4).
+ *
+ * NUT-12 support is signalled by the mint's `/v1/info` endpoint: the `nuts`
+ * map carries a `"12"` entry with `supported: true` when the mint produces
+ * DLEQ proofs at issuance/swap. This is the same advertisement the reference
+ * nutshell mint emits.
+ *
+ * Fail-closed by design: any network error, malformed response, or missing
+ * `"12"` entry resolves to `false`, never to a permissive `true` — a mint we
+ * couldn't confirm is treated as non-DLEQ so a post-rollout auction can never
+ * slip through on an unverified mint.
+ */
+export async function mintSupportsDleq(mintUrl: string, options: MintDleqSupportOptions = {}): Promise<boolean> {
+	try {
+		const mint = options.mintClient ?? new CashuMint(mintUrl)
+		const info = await mint.getInfo()
+		return info.nuts['12']?.supported === true
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Enforce the DLEQ publish gate (ADR-0011, Decision 6: migration by `start_at`).
+ *
+ * When `startAt` is at or after {@link APP_AUCTION_DLEQ_ROLLOUT_START_AT}, every
+ * allowlisted mint must advertise NUT-12 DLEQ support. Any mint that fails the
+ * probe is a hard reject with a clear error naming each offending mint; the
+ * auction is not created. Auctions starting before the boundary (or with an
+ * empty mint allowlist) pass without any network probes — live auctions are
+ * grandfathered under the legacy non-DLEQ path.
+ *
+ * @param supportsDleq injectable probe (defaults to {@link mintSupportsDleq}) —
+ *   lets callers and tests substitute a policy-enforcing or fake transport.
+ */
+export async function assertAuctionMintsSupportDleq(
+	startAt: number,
+	mints: readonly string[],
+	supportsDleq: (mintUrl: string) => Promise<boolean> = mintSupportsDleq,
+): Promise<void> {
+	if (!requiresDleqForAuction(startAt)) return
+
+	const unsupported: string[] = []
+	for (const mint of mints) {
+		let ok = false
+		try {
+			ok = await supportsDleq(mint)
+		} catch {
+			ok = false
+		}
+		if (!ok) unsupported.push(mint)
+	}
+
+	if (unsupported.length > 0) {
+		throw new Error(
+			`This auction starts after the DLEQ rollout boundary (ADR-0011), but the following trusted ` +
+				`mint(s) do not advertise NUT-12 DLEQ support: ${unsupported.join(', ')}. ` +
+				`Use NUT-12-capable mints or set an earlier start time.`,
+		)
+	}
+}
+
 /**
  * Output of {@link validateBid}. Discriminated by {@link claim}:
  *

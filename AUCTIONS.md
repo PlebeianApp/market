@@ -2105,14 +2105,17 @@ and prod deploys, so the canonical stage is read from `/api/config`
 - Enforce immutable auction mechanics after first valid bid.
 - Compute `max_end_at` deterministically and expose it in UI.
 - Track settlement deadlines and alert seller on pending close.
-- Set the DLEQ rollout boundary (ADR-0011, Decision 7). Auctions whose
-  `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` follow the DLEQ-required path:
-  every allowlisted mint must advertise NUT-12 support and bids must publish
-  `dleq_proof` tags; auctions started before the boundary are grandfathered.
-  The boundary is configurable via the `APP_AUCTION_DLEQ_ROLLOUT_START_AT`
-  environment variable (epoch seconds; inlined at build time for browser
-  bundles — see `src/lib/auction/constants.ts`), defaulting to the rollout
-  epoch.
+- Enforce the DLEQ rollout boundary (ADR-0011, Decisions 4 & 6). Auctions
+  whose `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` follow the
+  DLEQ-required path: at publish time the platform verifies every allowlisted
+  `mint` advertises NUT-12 DLEQ support (mint `/v1/info` `nuts["12"]`) via
+  `assertAuctionMintsSupportDleq` and rejects the publish with a clear error
+  naming any non-compliant mint; bids must also publish `dleq_proof` tags.
+  Auctions started before the boundary are grandfathered under the legacy
+  non-DLEQ path. The boundary is configurable via the
+  `APP_AUCTION_DLEQ_ROLLOUT_START_AT` environment variable (epoch seconds;
+  inlined at build time for browser bundles — see
+  `src/lib/auction/constants.ts`), defaulting to the rollout epoch.
 
 Note: in the bidder-held-path scheme, the platform does NOT release paths
 or hold bidder funds. The bidder generates and releases the path; the seller
