@@ -815,9 +815,9 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 		}
 	})
 
-	// ── Scenario 3: Publish Failure ────────────────────────────────────
+	// ── Scenario 3: Signing Failure ────────────────────────────────────
 
-	test('publish failure: deposit succeeds → bid publish fails → retry available', async ({ buyerPage }) => {
+	test('signing failure: deposit succeeds → bid publish fails → retry available', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auctionEvent = await seedAuction(relay, {
@@ -854,11 +854,17 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// Dynamically set bid amount to exceed actual wallet balance, ensuring
 			// hasInsufficientBidFunds = true regardless of accumulated balance.
 			await ensureInsufficientBidFunds(buyerPage)
-			// Intercept NIP-07 signEvent for kind-1023 to simulate a publish
-			// failure (e.g., relay rejection). After the deposit succeeds and
-			// e-cash is minted, the bid mutation will throw, and the funding
-			// hook transitions to
-			// 'mint_succeeded_bid_publish_failed_reclaimable' with a toast.
+			// #1235 round-3 fix 7 (felixfelix #10) — intercept NIP-07 signEvent for
+			// kind-1023 to simulate a SIGNING failure (NOT a relay rejection: the
+			// event never reaches a relay). The publish pipeline caches the built
+			// UNSIGNED event before signing, so the signEvent throw surfaces as
+			// AuctionBidPublishFailedError carrying the finalized event id: after
+			// the deposit succeeds and e-cash is minted, the bid mutation throws,
+			// the funding hook transitions to
+			// 'mint_succeeded_bid_publish_failed_reclaimable' with a toast, and the
+			// Retry publish path can re-sign the SAME cached event (same id, zero
+			// additional mint interaction) — the unsigned-cache re-sign path this
+			// scenario exercises.
 			await buyerPage.evaluate(() => {
 				const nostr = (window as any).nostr
 				if (!nostr) return
@@ -898,7 +904,8 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// (which fails — signEvent is intercepted above).
 			await waitForDepositQR(buyerPage)
 
-			// Verify the error toast appears indicating publish failure.
+			// Verify the error toast appears indicating the bid publish step
+			// failed (the failure is the local signing of the kind-1023).
 			await expect(buyerPage.getByText(/bid publishing failed/i)).toBeVisible({ timeout: 30_000 })
 
 			// Restore the original signEvent so a retry can succeed.
@@ -929,6 +936,47 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				path: path.join(SCREENSHOT_DIR, 'pr1205-ln-bid-funding-publish-failure.png'),
 				fullPage: true,
 			})
+
+			// #1235 round-3 fix 7 (felixfelix #10 + #9) — complete the retry and
+			// traverse the hook→publisher seam: clicking Retry publish must drive
+			// retryBidPublish → republishAuctionBid on the cached UNSIGNED kind-1023
+			// — re-signing it locally (signEvent restored above), keeping the SAME
+			// event id, and touching the mint ZERO additional times — all the way
+			// to a relay-visible bid event.
+			await retryPublishButton.click()
+
+			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
+
+			// The relay receives the retried kind-1023 for this auction.
+			const retriedBidEvent = await waitForBidEvent(relay, auctionEvent.id, 30_000)
+			expect(retriedBidEvent).not.toBeNull()
+			expect(retriedBidEvent!.kind).toBe(AUCTION_BID_KIND)
+			expect(retriedBidEvent!.pubkey).toBe(devUser2.pk)
+			// The bid event must reference the auction root event id via 'e' tag.
+			expect(retriedBidEvent!.tags.some((t) => t[0] === 'e' && t[1] === auctionEvent.id)).toBe(true)
+
+			// In-app identity check: the bidder record the app persisted for
+			// this leg (written before the first publish attempt) carries the
+			// same event id the relay received — the retry published the SAME
+			// event, not a re-built one. The dev bridge exposes no bid-event id,
+			// so read the app's durable per-user bidder records from
+			// localStorage (user-scoped key includes 'auction_bidder_records_v1').
+			const localBidEventIds = await buyerPage.evaluate(() => {
+				const ids: string[] = []
+				for (let index = 0; index < localStorage.length; index++) {
+					const key = localStorage.key(index)
+					if (!key || !key.includes('auction_bidder_records_v1')) continue
+					try {
+						const parsed = JSON.parse(localStorage.getItem(key) ?? '[]')
+						if (!Array.isArray(parsed)) continue
+						for (const record of parsed) if (record && typeof record.bidEventId === 'string') ids.push(record.bidEventId)
+					} catch {
+						// ignore malformed entries
+					}
+				}
+				return ids
+			})
+			expect(localBidEventIds).toContain(retriedBidEvent!.id)
 		} finally {
 			relay.close()
 		}
