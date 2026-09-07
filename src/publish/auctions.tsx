@@ -1048,6 +1048,21 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
+		// #1271 B3 hardening: verdicts are unreadable — fail closed.
+		// When the auction has declared auditors and bids exist, empty
+		// verdicts after the retry window means we cannot determine
+		// whether a canonical winner exists. The seller must retry or
+		// contact support rather than publishing reserve_not_met on
+		// an ambiguous verdict state (which could deny a real winner).
+		if (rnmParsedVerdicts.length === 0 && parsedAuction.auditors.length > 0 && rnmParsedBids.length > 0) {
+			throw new Error(
+				'Cannot publish reserve_not_met: verdicts are unreadable from all ' +
+					`${parsedAuction.auditors.length} declared auditor(s) after the retry window. ` +
+					'Without verdicts we cannot confirm that no reserve-meeting winner exists. ' +
+					'Retry, or contact support for manual reconciliation.',
+			)
+		}
+
 		const rnmNut7States = await fetchNut7StatesForBids(rnmParsedBids)
 		const rnmValidated = computeValidatedBids({
 			auction: parsedAuction,
