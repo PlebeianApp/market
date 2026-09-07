@@ -861,7 +861,17 @@ export function useAuctionBidFunding({
 		// reclaimable state with the session preserved, never funding_canceled
 		// with a cleared pendingBidSubmission.
 		const depositStatus = nip60Store.state.depositStatus
-		setBidFundingLifecycleState((currentState) => resolveDepositModalCloseLifecycleState(currentState, depositStatus))
+		// #1235 round-3 fix 2 (felixfelix #1) — resolve the close's landing state
+		// BEFORE setState (the updater must stay pure — React may invoke it
+		// twice), so the uncertain-outcome guidance fires exactly once per
+		// close event. Closing with an unevidenced payment outcome is silent
+		// otherwise: the user gets no hint that the preserved deposit may still
+		// settle and continue their bid automatically.
+		const resolvedCloseState = resolveDepositModalCloseLifecycleState(bidFundingLifecycleState, depositStatus)
+		setBidFundingLifecycleState(resolvedCloseState)
+		if (resolvedCloseState === 'deposit_outcome_uncertain') {
+			toast.info('Payment outcome unconfirmed — if it settles, your bid continues automatically')
+		}
 		setIsDepositOpen(false)
 		if (!shouldPreservePendingBidSubmissionOnDepositModalClose(bidFundingLifecycleState, depositStatus)) {
 			setPendingBidSubmission(null)

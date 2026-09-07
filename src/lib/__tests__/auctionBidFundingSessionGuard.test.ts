@@ -242,6 +242,16 @@ const stubToastError = ((message: string) => {
 	toastErrorMessages.push(message)
 }) as unknown as ToastError
 
+// #1235 round-3 fix 2 (felixfelix #1) — toast.info stub, mirroring the
+// toast.error stub above exactly (messages array + reset + restore) so
+// the uncertain-close guidance toast is observable in tests.
+type ToastInfo = typeof toast.info
+const realToastInfo = toast.info
+const toastInfoMessages: string[] = []
+const stubToastInfo = ((message: string) => {
+	toastInfoMessages.push(message)
+}) as unknown as ToastInfo
+
 /** Settle a deferred inside act so the hook continuation's writes flush. */
 const settleInsideAct = async (settle: () => void): Promise<void> => {
 	await act(async () => {
@@ -387,7 +397,9 @@ afterAll(() => {
 
 beforeEach(() => {
 	toastErrorMessages.length = 0
+	toastInfoMessages.length = 0
 	;(toast as { error: ToastError }).error = stubToastError
+	;(toast as { info: ToastInfo }).info = stubToastInfo
 	// Deterministic wallet-store state regardless of file ordering — the hook
 	// reads mintBalances during handleFundingSuccess and refresh() is a
 	// no-op without a wallet.
@@ -396,6 +408,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	;(toast as { error: ToastError }).error = realToastError
+	;(toast as { info: ToastInfo }).info = realToastInfo
 })
 
 // =============================================================================
@@ -999,6 +1012,63 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		})
 		expect(h.latest.current.bidFundingLifecycleState).toBe('funding_canceled')
 		expect(h.latest.current.pendingBidSubmission).toBeNull()
+
+		await h.unmount()
+	})
+})
+
+// =============================================================================
+// #1235 round-3 fix 2 (felixfelix #1) — closing the deposit modal while the
+// payment's outcome is unevidenced (pending / awaiting_confirmation_retry)
+// must not be silent: the honest deposit_outcome_uncertain landing is
+// surfaced via toast.info so the user knows the preserved deposit may still
+// settle and continue their bid automatically.
+// =============================================================================
+
+describe('uncertain deposit-modal close surfaces toast.info (#1235 round-3 fix 2)', () => {
+	test('closing while the deposit is pending → deposit_outcome_uncertain + exactly one guidance toast.info', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		// Drive a deposit-funded session to invoice_created with the deposit
+		// still pending (payment outcome unevidenced either way).
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('invoice_created')
+
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+
+		// The lifecycle lands the honest uncertain state, the session stays
+		// preserved, and the guidance fired EXACTLY ONCE per close event.
+		expect(h.latest.current.bidFundingLifecycleState).toBe('deposit_outcome_uncertain')
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidData)
+		expect(h.latest.current.isDepositOpen).toBe(false)
+		expect(toastInfoMessages).toEqual(['Payment outcome unconfirmed — if it settles, your bid continues automatically'])
+		expect(toastInfoMessages).toHaveLength(1)
+
+		await h.unmount()
+	})
+
+	test('closing with NO deposit in flight fires no toast.info (clean cancel stays silent)', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'idle' }))
+		})
+		await act(async () => {
+			h.latest.current.handleDepositModalClose()
+		})
+
+		expect(h.latest.current.bidFundingLifecycleState).toBe('funding_canceled')
+		expect(toastInfoMessages).toHaveLength(0)
 
 		await h.unmount()
 	})
