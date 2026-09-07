@@ -22,10 +22,12 @@ import { loadUserData, saveUserData, type SaveUserDataOptions } from '../wallet/
 
 const BIDDER_RECORDS_KEY = 'auction_bidder_records_v1'
 
-// #1235 round-3 B1 — pre-lock recovery record store. Bounded like the
-// republish cache (25 entries): records are short-lived (removed once the
-// full bidder record supersedes them, on a provably-pre-mint lock failure,
-// or after a successful reclaim).
+// #1235 round-3 B1 — pre-lock recovery record store. Bounded at 25 entries
+// but (unlike the republish cache) NEVER evicts: records are short-lived
+// (removed once the full bidder record supersedes them, on a provably-
+// pre-mint lock failure, or after a successful reclaim), and at the bound a
+// persist of a NEW record fails closed instead of silently deleting a
+// still-pending leg's refund key (see persistPreLockRecoveryRecordMap).
 const PRE_LOCK_RECOVERY_RECORDS_KEY = 'auction_bid_pre_lock_recovery_v1'
 const PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES = 25
 
@@ -278,13 +280,22 @@ export const loadPreLockRecoveryRecords = (): PreLockRecoveryRecordMap =>
 	loadUserData<PreLockRecoveryRecordMap>(PRE_LOCK_RECOVERY_RECORDS_KEY, {})
 
 const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap): void => {
-	// Keep the map bounded — drop the oldest records first (same policy as the
-	// republish cache at 25 entries).
-	const entries = Object.entries(map).sort(([, a], [, b]) => a.createdAt - b.createdAt)
-	while (entries.length > PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES) {
-		const oldest = entries.shift()
-		if (!oldest) break
-		delete map[oldest[0]]
+	// #1235 round-3 fix 4 (felixfelix #5) — FAIL CLOSED at the bound, never
+	// evict. The old oldest-first eviction silently deleted the refund key of
+	// a still-pending leg the moment a 26th record arrived. Each recovery
+	// record is the ONLY durable copy of its leg's refund private key from
+	// before the mint call — deleting one is never safe. A NEW key pushing
+	// the map past the bound throws BEFORE saveUserData; the publish layer
+	// maps the throw to AuctionBidPreLockRecordWriteFailedError and aborts
+	// with zero mint interaction (safe re-submit). Superseding an EXISTING
+	// key keeps the entry count unchanged, so in-place updates still succeed
+	// at the bound (the publish flow's supersede path relies on that).
+	if (Object.keys(map).length > PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES) {
+		throw new Error(
+			`Pre-lock recovery record store is full (${PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES} entries) — ` +
+				'refusing to persist a NEW recovery record instead of evicting an existing one. ' +
+				"Each record is the only durable copy of a pending leg's refund key. Nothing was locked; re-submitting the bid once the store has room is safe.",
+		)
 	}
 	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map, { strict: true })
 }
