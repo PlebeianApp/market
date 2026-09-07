@@ -116,6 +116,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: Partial<ParsedBidEvent
 		childPubkey,
 		lockSecrets,
 		proofYs,
+		dleqProofs: overrides.dleqProofs,
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
@@ -504,5 +505,60 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
 		expect(err).not.toBeNull()
 		expect(err).toMatch(/omitted/)
+	})
+})
+
+// =============================================================================
+// M5 — cross-bid duplicate-proof detection extended to DLEQ mint signatures C
+// =============================================================================
+
+describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
+	test('a bid reusing another bid\'s dleq_proof C is marked invalid (fabricated collateral)', () => {
+		const auction = buildAuction()
+		const sharedDleq = { id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }
+		const bid1 = buildBid(auction, { dleqProofs: [sharedDleq] })
+		const bid2 = buildBid(auction, { dleqProofs: [sharedDleq] }) // distinct lock_secret (nonce-N), same C
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+		})
+
+		// Earliest observed bid keeps the C; the reuser is invalid.
+		expect(result.validBids.map((b) => b.id)).toEqual([bid1.id])
+		expect(result.invalidBids.map((b) => b.id)).toContain(bid2.id)
+	})
+
+	test('two bids with distinct dleq_proof C values both stay valid', () => {
+		const auction = buildAuction()
+		const bid1 = buildBid(auction, { dleqProofs: [{ id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }] })
+		const bid2 = buildBid(auction, {
+			amount: 6_000,
+			dleqProofs: [{ id: '00deadbeef', amount: 100, C: '02' + '7'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+		})
+
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.validBids).toHaveLength(2)
 	})
 })
