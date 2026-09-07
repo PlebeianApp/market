@@ -533,29 +533,49 @@ export const fetchAuctionVerdicts = async (
 
 /**
  * Fetch verdicts with a bounded retry window for transient relay
- * propagation lag. Retries every 300 ms for up to 2500 ms — designed
- * for publish-path quorum gates where a missing verdict is deterministic
- * failure, not flake. After the window the caller MUST fail closed;
- * this helper only retries on empty results, never on partial matches.
+ * propagation lag. Retries every 300 ms for up to 10 000 ms — the
+ * window is longer than the per-fetch timeout (8 s) so at least one
+ * full retry can fire.
+ *
+ * When `auditorPubkeys` is provided the helper also retries on partial
+ * results (not all auditors have returned a verdict yet), only returning
+ * the best-known set when the window expires. Without `auditorPubkeys`
+ * (display path) the first non-empty result is returned immediately.
+ *
+ * After the window the caller MUST fail closed; this helper only
+ * accumulates the best-known result, never a terminal decision.
  */
 export const fetchAuctionVerdictsWithRetry = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
 	auditorPubkeys?: string[],
-	retryWindowMs: number = 2500,
+	retryWindowMs: number = 10000,
 	retryStepMs: number = 300,
 ): Promise<NDKEvent[]> => {
 	const deadline = Date.now() + retryWindowMs
-	let lastResult: NDKEvent[] = []
+	const auditorSet = auditorPubkeys && auditorPubkeys.length > 0 ? new Set(auditorPubkeys) : null
+	let bestResult: NDKEvent[] = []
 
 	while (Date.now() < deadline) {
-		lastResult = await fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, auditorPubkeys)
-		if (lastResult.length > 0) return lastResult
+		const result = await fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, auditorPubkeys)
+		// Track the largest result set we've seen (best-effort).
+		if (result.length > bestResult.length) bestResult = result
+
+		if (auditorSet) {
+			// Auditor-scoped: keep retrying until all auditors have a verdict.
+			const seenAuthors = new Set(result.map((e) => e.pubkey))
+			const allSeen = Array.from(auditorSet).every((a) => seenAuthors.has(a))
+			if (allSeen) return result
+		} else {
+			// Display path: first non-empty result is good enough.
+			if (result.length > 0) return result
+		}
+
 		await new Promise((resolve) => setTimeout(resolve, retryStepMs))
 	}
 
-	return lastResult
+	return bestResult
 }
 
 export const auctionsQueryOptions = (limit: number = 200) =>
