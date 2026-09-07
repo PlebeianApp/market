@@ -394,6 +394,18 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
   (`replacement_chain_invalid`).
 - `note`: short human text.
 
+### Required tags (post-rollout — ADR-0011)
+
+- `dleq_proof`: **repeated tag** — JSON-serialized NUT-12 DLEQ proof, one per
+  locked proof, parallel to `lock_secret`/`proof_y`. Each value carries
+  `{id, amount, C, e, s, r}` (keyset id, amount in sats, mint signature `C`,
+  DLEQ challenge/response `e`/`s`, blinding factor `r`). OPTIONAL for
+  pre-rollout (grandfathered) auctions; REQUIRED when
+  `auction.start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` (see §11.1). Bids
+  with missing or malformed `dleq_proof` tags post-rollout are classified
+  `dleq_invalid` by the validation pipeline (§7.1). See
+  `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
+
 ### Forbidden tags
 
 - `derivation_path`: MUST NOT appear on a bid event. The path is the
