@@ -125,9 +125,10 @@ function latestNip17DmRelayListEvent(events: Nip17DmRelayListEvent[], pubkey: st
 function compareRelayListEventsNewestFirst(a: Nip17DmRelayListEvent, b: Nip17DmRelayListEvent): number {
 	if (a.created_at !== b.created_at) return b.created_at - a.created_at
 
-	const aId = a.id ?? ''
-	const bId = b.id ?? ''
-	return bId.localeCompare(aId)
+	if (a.id === undefined) return b.id === undefined ? 0 : 1
+	if (b.id === undefined) return -1
+
+	return a.id.localeCompare(b.id)
 }
 
 function normalizeRelayUrl(value: string | undefined): string | undefined {
