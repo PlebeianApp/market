@@ -40,6 +40,7 @@ import {
 	type PathReleaseReason,
 	type Nut7ProofState,
 } from '@/lib/auction/constants'
+import { assertAuctionMintsSupportDleq } from '@/lib/auction/validation'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
 import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
@@ -340,7 +341,12 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 }
 
 export const publishAuction = async (formData: AuctionFormData, auctionId?: string): Promise<string> => {
-	validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
+	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
+
+	// ADR-0011 Decision 6 — reject post-rollout auctions whose allowlisted
+	// mints do not advertise NUT-12 DLEQ support (Decision 4). Runs before any
+	// event is built or signed so a non-DLEQ auction is never published.
+	await assertAuctionMintsSupportDleq(validated.startAt, validated.trustedMints)
 
 	const template = await createAuctionEvent(formData, auctionId)
 	const event = await signNostrEvent(template)
