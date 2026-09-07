@@ -197,6 +197,7 @@ export const VALIDATOR_REASONS = [
 	'unsupported_mint',
 	'bad_lock',
 	'bad_proof_y',
+	'dleq_invalid',
 	'proof_spent',
 	'proof_missing',
 	// signature / structure

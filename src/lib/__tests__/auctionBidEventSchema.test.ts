@@ -57,3 +57,139 @@ describe('parseBidEvent amount parsing', () => {
 		}
 	})
 })
+
+// =============================================================================
+// DLEQ proof (ADR-0011) parsing tests
+// =============================================================================
+
+const DLEQ_PROOF = {
+	id: '00deadbeef',
+	amount: 100,
+	C: PROOF_Y, // compressed secp256k1 pubkey hex (66 chars, 02/03 prefix)
+	e: 'aa',
+	s: 'bb',
+	r: 'cc',
+}
+
+const dleqTag = (proof: unknown = DLEQ_PROOF): string[] => ['dleq_proof', JSON.stringify(proof)]
+
+describe('parseBidEvent dleq_proof parsing (ADR-0011)', () => {
+	test('parses a single dleq_proof tag into dleqProofs', () => {
+		const base = buildBidEvent('100')
+		const event: NostrEventLike = { ...base, tags: [...base.tags, dleqTag()] }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(true)
+		expect(result.ok && result.value.dleqProofs).toEqual([DLEQ_PROOF])
+	})
+
+	test('parses multiple dleq_proof tags in order (parallel to lock_secret/proof_y)', () => {
+		const base = buildBidEvent('300')
+		const tags = [
+			...base.tags.filter((t) => t[0] !== 'lock_secret' && t[0] !== 'proof_y' && t[0] !== 'amount'),
+			['amount', '300', 'SAT'],
+			['lock_secret', 'lock-secret-1'],
+			['proof_y', PROOF_Y],
+			['lock_secret', 'lock-secret-2'],
+			['proof_y', '02' + '1'.repeat(64)],
+			['lock_secret', 'lock-secret-3'],
+			['proof_y', '02' + '2'.repeat(64)],
+			dleqTag({ id: '00deadbeef', amount: 100, C: PROOF_Y, e: 'aa', s: 'bb', r: 'cc' }),
+			dleqTag({ id: '00deadbeef', amount: 100, C: '02' + '1'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }),
+			dleqTag({ id: '00deadbeef', amount: 100, C: '02' + '2'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }),
+		]
+		const event: NostrEventLike = { ...base, tags }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(true)
+		expect(result.ok && result.value.dleqProofs).toHaveLength(3)
+		expect(result.ok && (result.value.dleqProofs ?? []).map((p) => p.amount)).toEqual([100, 100, 100])
+	})
+
+	test('accepts a legacy pre-rollout bid with no dleq_proof tags (grandfathered)', () => {
+		const result = parseBidEvent(buildBidEvent('100'))
+
+		expect(result.ok).toBe(true)
+		expect(result.ok && result.value.dleqProofs).toEqual([])
+	})
+
+	test('rejects malformed dleq_proof JSON', () => {
+		const base = buildBidEvent('100')
+		const event: NostrEventLike = { ...base, tags: [...base.tags, ['dleq_proof', 'not-json']] }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(false)
+	})
+
+	test('rejects dleq_proof with a non-compressed C (bad prefix)', () => {
+		const base = buildBidEvent('100')
+		const event: NostrEventLike = {
+			...base,
+			tags: [...base.tags, dleqTag({ ...DLEQ_PROOF, C: '04' + 'a'.repeat(64) })],
+		}
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(false)
+	})
+
+	test('rejects dleq_proof with non-hex e value', () => {
+		const base = buildBidEvent('100')
+		const event: NostrEventLike = { ...base, tags: [...base.tags, dleqTag({ ...DLEQ_PROOF, e: 'zz' })] }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(false)
+	})
+
+	test('rejects dleq_proof with a zero or negative amount', () => {
+		for (const amount of [0, -1, 1.5]) {
+			const base = buildBidEvent('100')
+			const event: NostrEventLike = { ...base, tags: [...base.tags, dleqTag({ ...DLEQ_PROOF, amount })] }
+			expect(parseBidEvent(event).ok).toBe(false)
+		}
+	})
+
+	test('rejects dleq_proof with a non-hex keyset id', () => {
+		const base = buildBidEvent('100')
+		const event: NostrEventLike = { ...base, tags: [...base.tags, dleqTag({ ...DLEQ_PROOF, id: 'not-hex!!' })] }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(false)
+	})
+
+	test('triple-parallel refine: rejects when dleq_proof count != lock_secret count', () => {
+		// Two lock_secret/proof_y pairs but only ONE dleq_proof → parallel-array violation.
+		const base = buildBidEvent('200')
+		const tags = [
+			...base.tags.filter((t) => t[0] !== 'lock_secret' && t[0] !== 'proof_y' && t[0] !== 'amount'),
+			['amount', '200', 'SAT'],
+			['lock_secret', 'lock-secret-1'],
+			['proof_y', PROOF_Y],
+			['lock_secret', 'lock-secret-2'],
+			['proof_y', '02' + '1'.repeat(64)],
+			dleqTag(),
+		]
+		const event: NostrEventLike = { ...base, tags }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(false)
+	})
+
+	test('triple-parallel refine: accepts matching lock_secret/proof_y/dleq_proof counts', () => {
+		const base = buildBidEvent('200')
+		const tags = [
+			...base.tags.filter((t) => t[0] !== 'lock_secret' && t[0] !== 'proof_y' && t[0] !== 'amount'),
+			['amount', '200', 'SAT'],
+			['lock_secret', 'lock-secret-1'],
+			['proof_y', PROOF_Y],
+			['lock_secret', 'lock-secret-2'],
+			['proof_y', '02' + '1'.repeat(64)],
+			dleqTag({ id: '00deadbeef', amount: 100, C: PROOF_Y, e: 'aa', s: 'bb', r: 'cc' }),
+			dleqTag({ id: '00deadbeef', amount: 100, C: '02' + '1'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }),
+		]
+		const event: NostrEventLike = { ...base, tags }
+		const result = parseBidEvent(event)
+
+		expect(result.ok).toBe(true)
+		expect(result.ok && result.value.dleqProofs).toHaveLength(2)
+	})
+})

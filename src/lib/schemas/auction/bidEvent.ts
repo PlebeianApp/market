@@ -29,6 +29,28 @@ import { addressableCoordinate, compressedPubkeyHex, nostrEventIdHex, nostrPubke
 import { readMultiTag, readSingleTag } from './tagAccess'
 
 // ----------------------------------------------------------------------------
+// DLEQ proof (NUT-12) — one `dleq_proof` tag per locked proof (ADR-0011)
+// ----------------------------------------------------------------------------
+
+/** Hex scalar (DLEQ challenge/response/blinding factor, keyset id). */
+const hexScalar = z.string().regex(/^[0-9a-fA-F]+$/, 'must be a non-empty hex string')
+
+/**
+ * One serialized NUT-12 DLEQ proof, mirroring {@link DleqProof} from
+ * `src/lib/cashu/dleq.ts`: the proof's keyset id, amount, mint signature
+ * `C` (compressed secp256k1 hex), the DLEQ challenge/response `e`/`s`, and
+ * the holder's blinding factor `r`.
+ */
+export const dleqProofSchema = z.object({
+	id: hexScalar,
+	amount: positiveInt,
+	C: compressedPubkeyHex,
+	e: hexScalar,
+	s: hexScalar,
+	r: hexScalar,
+})
+
+// ----------------------------------------------------------------------------
 // Intermediate Zod schema
 // ----------------------------------------------------------------------------
 
@@ -56,6 +78,10 @@ export const BidEventSchema = z
 		// bid against 64+32+4 in the wallet yields 3 locked proofs).
 		lockSecrets: z.array(z.string().min(1)).min(1, 'at least one lock_secret tag required'),
 		proofYs: z.array(compressedPubkeyHex).min(1, 'at least one proof_y tag required'),
+		// Optional DLEQ-proof tags. Empty for grandfathered pre-rollout bids;
+		// required (one per proof) for post-rollout bids — presence is enforced
+		// in the validation pipeline (ADR-0011 Decision 6/7), not here.
+		dleqProofs: z.array(dleqProofSchema).default([] as Array<z.infer<typeof dleqProofSchema>>),
 		createdForEndAt: unixSeconds,
 		bidNonce: z.string().min(1, 'bid_nonce required'),
 		keyScheme: z.literal(AUCTION_KEY_SCHEME, { message: `key_scheme must equal "${AUCTION_KEY_SCHEME}"` }),
@@ -67,6 +93,13 @@ export const BidEventSchema = z
 		message: 'lock_secret and proof_y tags must be 1-to-1 paired (parallel arrays)',
 		path: ['proofYs'],
 	})
+	.refine(
+		(value) => value.dleqProofs.length === 0 || value.dleqProofs.length === value.lockSecrets.length,
+		{
+			message: 'dleq_proof tags must be 1-to-1 paired with lock_secret/proof_y (parallel arrays)',
+			path: ['dleqProofs'],
+		},
+	)
 
 export type BidEventInput = z.infer<typeof BidEventSchema>
 
@@ -95,6 +128,17 @@ export const parseBidEvent = (event: NostrEventLike): ParseBidEventResult => {
 		}
 	}
 
+	// Parse dleq_proof tags: one JSON-encoded proof per tag (ADR-0011
+	// Decision 1). Malformed JSON fails closed at parse rather than silently
+	// dropping the collateral (Decision 4); a well-formed-but-wrong-shape
+	// proof is rejected by `dleqProofSchema` below.
+	let dleqProofs: unknown[]
+	try {
+		dleqProofs = readMultiTag(event, 'dleq_proof').map((raw) => JSON.parse(raw) as unknown)
+	} catch {
+		return { ok: false, error: { code: 'malformed_dleq_proof', message: 'dleq_proof tag must be valid JSON' } }
+	}
+
 	const intermediate = {
 		id: event.id,
 		bidderPubkey: event.pubkey,
@@ -111,6 +155,7 @@ export const parseBidEvent = (event: NostrEventLike): ParseBidEventResult => {
 		childPubkey: readSingleTag(event, 'child_pubkey') ?? '',
 		lockSecrets: readMultiTag(event, 'lock_secret'),
 		proofYs: readMultiTag(event, 'proof_y'),
+		dleqProofs,
 		createdForEndAt: parseIntegerOrZero(readSingleTag(event, 'created_for_end_at')),
 		bidNonce: readSingleTag(event, 'bid_nonce') ?? '',
 		keyScheme: readSingleTag(event, 'key_scheme') ?? '',
