@@ -1,0 +1,188 @@
+import { describe, expect, test } from 'bun:test'
+import { verifyProofDleq, verifyBidDleq, getMintKeyset, type DleqVerifyResult } from '../cashu/dleq'
+import type { MintKeys } from '@cashu/cashu-ts'
+
+// ---------- Fixture: minimal keyset with valid secp256k1 public keys ----------
+
+/**
+ * Valid secp256k1 compressed public keys used as mock mint keys.
+ * These are real curve points (G, 2*G) — `hasValidDleq` needs valid
+ * points to compute the reblind verification. Garbage e/s/r will
+ * NOT verify against any key, which is exactly what we need for
+ * negative-path tests.
+ */
+const GENERATOR_HEX = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const TWO_G_HEX = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+
+const makeKeyset = (amounts: number[]): MintKeys => {
+	const keys: Record<number, string> = {}
+	for (const amt of amounts) {
+		keys[amt] = amt === 1 ? GENERATOR_HEX : TWO_G_HEX
+	}
+	return { id: '00deadbeef', unit: 'sat', keys }
+}
+
+const keyset = makeKeyset([1, 2, 4, 8])
+
+/**
+ * Garbage DLEQ — will NEVER pass `hasValidDleq`.
+ * `hasValidDleq` calls `verifyDLEQProof_reblind` which does real
+ * cryptographic verification; garbage e/s/r always fails.
+ */
+const garbageDleq = { e: '00', s: '00', r: '00' }
+
+// ---------- verifyProofDleq -------------------------------------------------
+
+describe('verifyProofDleq', () => {
+	test('returns false when r is empty string (no blinding factor)', () => {
+		const result = verifyProofDleq(
+			{ id: '00deadbeef', amount: 1, secret: 'test-secret', C: GENERATOR_HEX, e: 'aa', s: 'bb', r: '' },
+			keyset,
+		)
+		expect(result).toBe(false)
+	})
+
+	test('returns false when amount key is absent from keyset', () => {
+		// keyset has no key for amount 16 → hasValidDleq throws
+		const result = verifyProofDleq(
+			{ id: '00deadbeef', amount: 16, secret: 'test-secret', C: GENERATOR_HEX, e: 'ff', s: 'ff', r: 'ff' },
+			keyset,
+		)
+		expect(result).toBe(false)
+	})
+
+	test('returns false with garbage dleq data (crypto verification fails)', () => {
+		// Amount 1 exists in keyset, but e/s/r are garbage
+		const result = verifyProofDleq({ id: '00deadbeef', amount: 1, secret: 'test-secret', C: GENERATOR_HEX, ...garbageDleq }, keyset)
+		expect(result).toBe(false)
+	})
+
+	test('does not throw on any input (non-throwing contract)', () => {
+		expect(() => {
+			verifyProofDleq({ id: '', amount: 0, secret: '', C: '', e: '', s: '', r: '' }, keyset)
+		}).not.toThrow()
+
+		expect(() => {
+			verifyProofDleq({ id: '', amount: 1, secret: '', C: '', e: 'aa', s: 'bb', r: 'cc' }, { id: '', unit: 'sat', keys: {} })
+		}).not.toThrow()
+	})
+})
+
+// ---------- verifyBidDleq ---------------------------------------------------
+
+describe('verifyBidDleq', () => {
+	test('allProofsValid=false with garbage proofs (crypto verification fails)', () => {
+		// Garbage DLEQ fails hasValidDleq → both proofs fail
+		const result: DleqVerifyResult = verifyBidDleq(
+			{
+				legDelta: 3,
+				proofs: [
+					{ id: '00deadbeef', amount: 1, secret: 's1', C: GENERATOR_HEX, ...garbageDleq },
+					{ id: '00deadbeef', amount: 2, secret: 's2', C: TWO_G_HEX, ...garbageDleq },
+				],
+			},
+			keyset,
+		)
+		expect(result.ok).toBe(false)
+		// Garbage DLEQ always fails crypto verification
+		expect(result.allProofsValid).toBe(false)
+		expect(result.failedProofIndex).toBe(0) // first proof fails first
+		// Sum check is independent: 1+2=3 === legDelta=3
+		expect(result.matchesAmount).toBe(true)
+	})
+
+	test('matchesAmount=false when sum != legDelta', () => {
+		const result = verifyBidDleq(
+			{
+				legDelta: 10,
+				proofs: [{ id: '00deadbeef', amount: 1, secret: 's1', C: GENERATOR_HEX, ...garbageDleq }],
+			},
+			keyset,
+		)
+		expect(result.matchesAmount).toBe(false)
+		expect(result.ok).toBe(false)
+	})
+
+	test('failedProofIndex points to the first failing proof', () => {
+		// First proof (index 0, amount 4) has garbage → fails
+		// Second proof (index 1, amount 16) is absent from keyset → also would fail,
+		// but we break on first failure.
+		const result = verifyBidDleq(
+			{
+				legDelta: 20,
+				proofs: [
+					{ id: '00deadbeef', amount: 4, secret: 's1', C: GENERATOR_HEX, ...garbageDleq },
+					{ id: '00deadbeef', amount: 16, secret: 's2', C: TWO_G_HEX, e: 'ff', s: 'ff', r: 'ff' },
+				],
+			},
+			keyset,
+		)
+		expect(result.allProofsValid).toBe(false)
+		expect(result.failedProofIndex).toBe(0) // first proof fails on garbage DLEQ
+		expect(result.ok).toBe(false)
+	})
+
+	test('missing amount key produces failedProofIndex correctly', () => {
+		// Only this proof, amount 16 absent from keyset
+		const result = verifyBidDleq(
+			{
+				legDelta: 16,
+				proofs: [{ id: '00deadbeef', amount: 16, secret: 's16', C: TWO_G_HEX, e: 'ff', s: 'ff', r: 'ff' }],
+			},
+			keyset,
+		)
+		expect(result.allProofsValid).toBe(false)
+		expect(result.failedProofIndex).toBe(0)
+		expect(result.ok).toBe(false)
+	})
+
+	test('empty proofs: sum 0, legDelta 0 → ok=true (vacuous truth)', () => {
+		// Zero proofs, sum=0 === legDelta=0, and vacuously all proofs pass
+		const result = verifyBidDleq({ legDelta: 0, proofs: [] }, keyset)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+		expect(result.ok).toBe(true)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	test('empty proofs with non-zero legDelta has matchesAmount=false', () => {
+		const result = verifyBidDleq({ legDelta: 5, proofs: [] }, keyset)
+		expect(result.matchesAmount).toBe(false)
+		expect(result.allProofsValid).toBe(true) // vacuous
+		expect(result.ok).toBe(false)
+	})
+
+	test('failedProofIndex is undefined when no proofs to check (empty array)', () => {
+		const result = verifyBidDleq({ legDelta: 0, proofs: [] }, keyset)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+})
+
+// ---------- getMintKeyset ---------------------------------------------------
+
+describe('getMintKeyset', () => {
+	test('returns the matching keyset via a customRequest transport (no network)', async () => {
+		// Inject a mock transport so `CashuMint.getKeys` never touches the
+		// network. `customRequest` receives { endpoint, ... } and returns
+		// the raw /v1/keys payload.
+		const mockKeyset: MintKeys = { id: '00deadbeef', unit: 'sat', keys: { 1: GENERATOR_HEX } }
+		const customRequest = async ({ endpoint }: { endpoint: string }) => {
+			// Signal we got the expected keyset-scoped endpoint.
+			expect(endpoint).toContain('/v1/keys')
+			return { keysets: [mockKeyset] }
+		}
+
+		const result = await getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })
+		expect(result.id).toBe('00deadbeef')
+		expect(result.keys).toEqual({ 1: GENERATOR_HEX })
+	})
+
+	test('propagates a transport failure as a rejected promise (non-throwing contract is caller-side)', async () => {
+		const customRequest = async () => {
+			throw new Error('mint unreachable')
+		}
+		// getMintKeyset should propagate the error (the caller decides policy);
+		// the pure verification helpers are the non-throwing ones.
+		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow('mint unreachable')
+	})
+})
