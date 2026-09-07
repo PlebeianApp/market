@@ -1820,9 +1820,11 @@ sell). See §14 for the full threat analysis.
 > **Mitigation:** Per-auction rate limits, validator policy gates
 > (relatr score, account age, NIP-05), and the `vadium_ratio_bps`
 > parameter (which can require >100% deposit) partially deter this
-> attack. A future protocol enhancement could close this gap by
-> enabling offline signature validation, but the specific approach is
-> not yet settled (see ADR-0004 known limitations).
+> attack. ADR-0011 closes this gap by adopting NUT-12 DLEQ proof
+> publication + offline verification — the verification module lives at
+> `src/lib/cashu/dleq.ts` (`verifyProofDleq` / `verifyBidDleq` /
+> `getMintKeyset`). Full details in
+> `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
 
 ## 9.2 Fake cashu / invalid proofs
 
