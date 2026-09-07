@@ -1077,6 +1077,10 @@ computation. The bidder MUST:
    `proof_y` (§4.2) so validators can audit.
 6. Persist `(path, fullProof)` locally — encrypted backup
    RECOMMENDED.
+7. The client bid-lock path (`lockAuctionBidFunds`) is **DLEQ-only
+   (fail-closed)**: the mint MUST return NUT-12 DLEQ proofs; if it
+   cannot, the lock surfaces an error instead of silently falling
+   back to non-DLEQ collateral (ADR-0011).
 
 ### Validator, while the bid is live — amended per ADR-0004
 
