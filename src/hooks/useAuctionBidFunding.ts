@@ -479,9 +479,31 @@ export function useAuctionBidFunding({
 	// bumped at the top of every `startFundingForBid` call so async
 	// continuations from older sessions can detect (and refuse) writing.
 	const fundingSessionTokenRef = useRef(0)
+	// #1235 round-3.5 (felixfelix review #3): a deposit 'success' can arrive
+	// while a submission for the SAME pending bid is already in flight (a
+	// preserved uncertain deposit settling late via the deposit's own poll),
+	// or after the lock boundary was already crossed for it — starting
+	// another lock pipeline would double-commit the delta at the mint. The
+	// in-flight mutex blocks the concurrent window; the consumed flag (set
+	// exactly when the mint boundary is crossed, cleared only by a NEW
+	// funding session) blocks the already-crossed window. Both surface an
+	// honest toast; the newly minted funds stay in the wallet.
+	const bidSubmissionInFlightRef = useRef(false)
+	const bidLockConsumedRef = useRef(false)
 
 	const submitPreparedBid = useCallback(
 		async (bidData: AuctionBidFormData) => {
+			// #1235 round-3.5 (felixfelix review #3): refuse a CONCURRENT
+			// submission for the same pending bid — a second deposit settling
+			// while one pipeline is in flight must not start a second lock. The
+			// settled deposit's proofs stay in the wallet.
+			if (bidSubmissionInFlightRef.current) {
+				toast.error(
+					'A bid submission is already in progress for this funding session — the newly settled funds were added to your wallet. No second bid was submitted.',
+				)
+				return false
+			}
+			bidSubmissionInFlightRef.current = true
 			setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_publish_attempted'))
 			// #1235 follow-ups 1+2: capture the funding-session token BEFORE the
 			// first await — every write below belongs to the session that started
@@ -491,6 +513,10 @@ export function useAuctionBidFunding({
 			try {
 				const bidEventId = await publishBid(bidData)
 				if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return false
+				// #1235 round-3.5: the mint boundary is crossed and the outcome is
+				// known-good — no further submission may run for this pending bid
+				// this session.
+				bidLockConsumedRef.current = true
 				setPublishedBidEventId(bidEventId)
 				setBidFundingLifecycleState((currentState) => resolveAuctionBidFundingTransition(currentState, 'bid_published'))
 				setPendingBidSubmission(null)
@@ -517,14 +543,21 @@ export function useAuctionBidFunding({
 				// carrying the lock token id — record it so retryBidPublish takes the
 				// RECLAIM-ONLY path instead of the full re-submit (double-lock).
 				if (error instanceof AuctionBidPublishFailedError) {
+					// #1235 round-3.5: the mint boundary was crossed (locked, publish
+					// failed) — mark the lock consumed for this session.
+					bidLockConsumedRef.current = true
 					setPublishedBidEventId(error.bidEventId)
 				} else if (error instanceof AuctionBidLockedButUnpublishedError) {
+					bidLockConsumedRef.current = true
 					setLockedUnpublishedTokenId(error.lockTokenId)
 				} else if (error instanceof AuctionBidLockOutcomeUncertainError) {
 					// #1235 round-3 B1 — the lock outcome is uncertain: a recovery
 					// record was durably persisted BEFORE the mint call; record its id
 					// so retryBidPublish refuses the retry (no second lock) with the
 					// honest reclaim guidance.
+					// #1235 round-3.5: the mint boundary MAY have been crossed — mark
+					// the lock consumed either way (fail closed).
+					bidLockConsumedRef.current = true
 					setLockOutcomeUncertainRecoveryRecordId(error.recoveryRecordId)
 				}
 				setBidFundingLifecycleState((currentState) =>
@@ -533,6 +566,8 @@ export function useAuctionBidFunding({
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				toast.error(`Funding completed, but bid publishing failed: ${errorMessage}`)
 				return false
+			} finally {
+				bidSubmissionInFlightRef.current = false
 			}
 		},
 		[onBidSuccess, publishBid],
@@ -562,6 +597,11 @@ export function useAuctionBidFunding({
 			setLockOutcomeUncertainRecoveryRecordId((previousSessionRecoveryRecordId) =>
 				nextLockOutcomeUncertainOnSessionStart(previousSessionRecoveryRecordId),
 			)
+			// #1235 round-3.5: a NEW session starts with no consumed lock — the
+			// previous session's uncertain/locked leg stays recoverable via its
+			// persisted record + the wallet (session-scoped, same rule as the
+			// trackers above). The fresh pending bid may lock anew.
+			bidLockConsumedRef.current = false
 			if (hasInsufficientBidFunds) {
 				if (!depositMint) {
 					// #1235 round-3 B3 honesty fix: nothing was ever created — no
@@ -599,6 +639,25 @@ export function useAuctionBidFunding({
 	const handleFundingSuccess = useCallback(() => {
 		if (!pendingBidSubmission) return
 
+		// #1235 round-3.5 (felixfelix review #3): a deposit success can arrive
+		// after this bid's lock boundary was already crossed or while this
+		// bid's submission pipeline is still in flight (a preserved uncertain
+		// deposit settling late once a re-bid's pipeline is running) —
+		// starting another submission would double-lock the delta at the mint.
+		// The minted funds stay in the wallet; the in-flight or completed
+		// submission keeps its own retry/publish surface.
+		if (bidSubmissionInFlightRef.current || bidLockConsumedRef.current) {
+			toast.error(
+				'This payment settled after your bid submission was already in progress — the minted funds were added to your wallet. No second bid was submitted.',
+			)
+			return
+		}
+		// #1235 round-3.5: capture the session token at continuation entry —
+		// a NEW funding session started while the best-effort refresh below is
+		// in flight must not inherit this continuation's post-refresh writes
+		// or its submitPreparedBid launch.
+		const sessionTokenAtStart = fundingSessionTokenRef.current
+
 		// Close the deposit modal immediately so the bid progress dialog
 		// (which opens on the ecash_minted state transition below) is
 		// visible without being obscured by the "Deposit Successful!"
@@ -607,6 +666,22 @@ export function useAuctionBidFunding({
 		setIsDepositOpen(false)
 
 		void (async () => {
+			try {
+				await nip60Actions.refresh()
+			} catch {
+				// Best-effort refresh; we still evaluate from current wallet state below.
+			}
+
+			// #1235 round-3.5: stale continuation — a NEW funding session started
+			// while the refresh was in flight; its lifecycle and pending
+			// submission own the flow now. Drop this continuation silently (the
+			// new session renders its own UI). This gate also covers the walk
+			// below: an ungated walk could advance the lifecycle past the point
+			// where the new session's own reset (startFundingForBid) can still
+			// reach it (e.g. ecash_minted → funding_session_created is not an
+			// allowed edge), stranding the new session behind stale progress.
+			if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
+
 			// Advance through the intermediate funding states to ecash_minted.
 			// For QR-scan deposits, payment_acknowledged and minting_started are
 			// not separately observable (only the final mint 'success' event), so
@@ -617,12 +692,6 @@ export function useAuctionBidFunding({
 			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'payment_acknowledged'))
 			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'minting_started'))
 			setBidFundingLifecycleState((s) => resolveAuctionBidFundingTransition(s, 'ecash_minted'))
-
-			try {
-				await nip60Actions.refresh()
-			} catch {
-				// Best-effort refresh; we still evaluate from current wallet state below.
-			}
 
 			const fundingMintCandidates = pendingBidSubmission.mintCandidates
 			if (!fundingMintCandidates.length) {
@@ -654,6 +723,11 @@ export function useAuctionBidFunding({
 				onPendingRulesAck?.()
 				return
 			}
+
+			// #1235 round-3.5: re-check before the irreversible launch — the
+			// fundableMint evaluation above is synchronous today, but the submit
+			// contract must not depend on that staying true.
+			if (!isSessionCurrent(sessionTokenAtStart, fundingSessionTokenRef.current)) return
 
 			await submitPreparedBid(preparedBid)
 		})()

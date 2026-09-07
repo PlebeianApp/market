@@ -1003,3 +1003,130 @@ describe('late success after uncertain close (#1235 round-3 B3)', () => {
 		await h.unmount()
 	})
 })
+
+// =============================================================================
+// round-3.5 duplicate-success guards (#1235 — felixfelix review #3/#4 window)
+// A deposit 'success' can arrive while a submission for the SAME pending bid
+// is in flight (a preserved uncertain deposit settling late via the deposit's
+// own poll), or after the lock boundary was already crossed. Neither may
+// start a second lock pipeline.
+// =============================================================================
+
+describe('duplicate deposit-success guards (#1235 round-3.5)', () => {
+	test('a second deposit success while a submission is in flight → refused, no second lock', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+		})
+
+		// First success → the submission pipeline is in flight (deferred publish).
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.latest.current.bidFundingLifecycleState).toBe('bid_publish_attempted')
+		expect(h.calls.publishBid).toBe(1)
+
+		// Second success (a preserved sibling deposit settling late) while the
+		// first pipeline is in flight → refused at the hook entry.
+		await act(async () => {
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.calls.publishBid).toBe(1)
+		expect(toastErrorMessages.some((message) => message.includes('No second bid was submitted'))).toBe(true)
+
+		// The in-flight submission completes normally.
+		await settleInsideAct(() => publish.resolve(LEG_A_EVENT_ID))
+		expect(h.latest.current.bidFundingLifecycleState).toBe('bid_published')
+		expect(h.calls.onBidSuccess).toBe(1)
+
+		await h.unmount()
+	})
+
+	test('a deposit success after the lock boundary was crossed → refused, no second lock', async () => {
+		const h = await mountFundingHook()
+		const bidData = buildBidData(1_000)
+
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidData)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+		})
+
+		// First success → lock crossed, publish failed (the locked-unpublished tier).
+		const publish = deferred<string>()
+		h.setPublishBid(() => publish.promise)
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		await settleInsideAct(() => publish.reject(new AuctionBidPublishFailedError(LEG_A_EVENT_ID, new Error('relay down'))))
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+
+		// A second deposit settles after the lock boundary was crossed → the
+		// consumed flag refuses the submission (no second lock for the same
+		// pending bid); the minted funds stay in the wallet.
+		const publishCallsBefore = h.calls.publishBid
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(h.calls.publishBid).toBe(publishCallsBefore)
+		expect(h.latest.current.bidFundingLifecycleState).toBe('mint_succeeded_bid_publish_failed_reclaimable')
+		expect(toastErrorMessages.some((message) => message.includes('No second bid was submitted'))).toBe(true)
+
+		await h.unmount()
+	})
+
+	test('stale continuation: a new funding session started during the refresh window drops the old continuation', async () => {
+		const h = await mountFundingHook()
+		const bidDataA = buildBidData(1_000)
+		const bidDataB = buildBidData(2_500)
+
+		await act(async () => {
+			startDepositFunding(h.latest.current, bidDataA)
+			h.latest.current.handleInvoiceCreated()
+			nip60Store.setState((s) => ({ ...s, depositStatus: 'pending' }))
+		})
+
+		// The deposit settles → the continuation starts (synchronous up to the
+		// refresh await). While it is suspended, the user starts a NEW funding
+		// session (session-token bump + lifecycle reset + new pending bid).
+		await act(async () => {
+			nip60Store.setState((s) => ({ ...s, mintBalances: { [MINT_URL]: 100_000 }, depositStatus: 'success' }))
+			h.latest.current.handleFundingSuccess()
+			startDepositFunding(h.latest.current, bidDataB)
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+
+		// The stale continuation must not walk session 2's lifecycle, must not
+		// submit session 1's bid into it, and must not close session 2's
+		// deposit modal. Two timings exist and both must hold the invariant:
+		// (production) real refresh suspends → the post-refresh gate drops the
+		// continuation before the walk/submit (state stays at session 2's
+		// fail-closed reset result, publishBid never called); (co-run with the
+		// retry suite's import-time nip60 mock) refresh is absent → the
+		// continuation completes synchronously while the session is still
+		// current, and the LATER bump invalidates its completion via the
+		// stale-catch guard. In both, the invariants are: at most ONE
+		// submission for the pending bid, session 2's pendingBidSubmission and
+		// deposit modal intact, and no success fired for the stale leg.
+		expect(h.calls.publishBid).toBeLessThanOrEqual(1)
+		expect(h.latest.current.pendingBidSubmission).toEqual(bidDataB)
+		expect(h.latest.current.isDepositOpen).toBe(true)
+		expect(h.latest.current.bidFundingLifecycleState).not.toBe('bid_published')
+		expect(h.calls.onBidSuccess).toBe(0)
+
+		await h.unmount()
+	})
+})
