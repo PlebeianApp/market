@@ -30,6 +30,7 @@ import {
 } from './constants'
 import type { AuctionFallbackChainEntry, MinBidCurve, ValidatorPolicyDocument, BidderAggregateReputationDocument } from './events'
 import type { Nut7ProofState } from './constants'
+import type { DleqProof } from '../cashu/dleq'
 
 // =========================================================================
 // kind 30408 — Auction event tags
@@ -145,6 +146,14 @@ export interface BidEventTagsInput {
 	lockSecrets: string[]
 	/** Parallel to {@link lockSecrets}: `Y = hash_to_curve(secret)` for each proof. */
 	proofYs: string[]
+	/**
+	 * NUT-12 DLEQ proofs — one per locked proof, parallel to {@link
+	 * lockSecrets} and {@link proofYs}. When present, MUST be the same
+	 * length as {@link lockSecrets} (enforced below). Absent for
+	 * grandfathered pre-rollout bids that predate ADR-0011 collateral
+	 * publication.
+	 */
+	dleqProofs?: DleqProof[]
 	createdForEndAt: number
 	bidNonce: string
 	prevBidId?: string
@@ -159,6 +168,11 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 	if (!input.lockSecrets.length) throw new Error('buildBidEventTags: at least one lockSecret required')
 	if (input.lockSecrets.length !== input.proofYs.length) {
 		throw new Error(`buildBidEventTags: lockSecrets (${input.lockSecrets.length}) and proofYs (${input.proofYs.length}) must be 1-to-1`)
+	}
+	if (input.dleqProofs && input.dleqProofs.length !== input.lockSecrets.length) {
+		throw new Error(
+			`buildBidEventTags: dleqProofs (${input.dleqProofs.length}) and lockSecrets (${input.lockSecrets.length}) must be 1-to-1`,
+		)
 	}
 
 	const tags: string[][] = [
@@ -178,6 +192,14 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 	for (let i = 0; i < input.lockSecrets.length; i++) {
 		tags.push(['lock_secret', input.lockSecrets[i]])
 		tags.push(['proof_y', input.proofYs[i]])
+	}
+
+	// NUT-12 DLEQ proofs — one `dleq_proof` tag per locked proof, parallel
+	// to lock_secret/proof_y. JSON-serialized {id, amount, C, e, s, r}.
+	if (input.dleqProofs) {
+		for (const proof of input.dleqProofs) {
+			tags.push(['dleq_proof', JSON.stringify({ id: proof.id, amount: proof.amount, C: proof.C, e: proof.e, s: proof.s, r: proof.r })])
+		}
 	}
 
 	tags.push(['created_for_end_at', String(input.createdForEndAt)])
