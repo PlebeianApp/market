@@ -64,6 +64,46 @@ export interface GetMintKeysetOptions {
 	customRequest?: CashuCustomRequest
 }
 
+// ---------- buildDleqProofs -------------------------------------------------
+
+/**
+ * Build the `DleqProof[]` array for a bid's `dleq_proof` tags from the
+ * locked proofs returned by `lockAuctionBidFunds`.
+ *
+ * Each locked proof must carry a NUT-12 DLEQ proof (with the blinding
+ * factor `r`) — post-rollout, a proof without DLEQ is unverifiable at
+ * bid time (ADR-0011 Decision 1/5). This helper is **fail-closed**: it
+ * throws on the first proof that lacks `dleq` (or a usable `r`) rather
+ * than silently emitting a partial/empty array, so the publisher can
+ * never publish a bid whose collateral cannot be verified.
+ *
+ * The returned array is parallel to the caller's `lockSecrets`/`proofYs`
+ * arrays (same order, same length), matching the 1-to-1 invariant
+ * enforced by `buildBidEventTags`.
+ *
+ * @param proofs — the locked proofs (each carrying `secret`, `C`, and `dleq`).
+ * @returns one {@link DleqProof} per locked proof, in order.
+ * @throws when any proof lacks `dleq` or a non-empty `r`.
+ */
+export const buildDleqProofs = (proofs: Proof[]): DleqProof[] => {
+	return proofs.map((proof, index) => {
+		const dleq = proof.dleq
+		if (!dleq || !dleq.r || dleq.r.length === 0) {
+			throw new Error(
+				`buildDleqProofs: locked proof at index ${index} lacks a NUT-12 DLEQ proof (or blinding factor r) — refusing to publish unverifiable collateral (ADR-0011)`,
+			)
+		}
+		return {
+			id: proof.id,
+			amount: proof.amount,
+			C: proof.C,
+			e: dleq.e,
+			s: dleq.s,
+			r: dleq.r,
+		}
+	})
+}
+
 // ---------- verifyProofDleq -------------------------------------------------
 
 /**
