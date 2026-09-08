@@ -17,8 +17,11 @@
  * under its `crypto/*` subpaths — the *same* library `hasValidDleq` uses — so
  * this fixture is byte-compatible with the verifier by construction.
  *
- * Everything here is **deterministic** (fixed scalars) so tests are
- * reproducible, and **offline** (no mint, no network).
+ * Everything here is **mostly deterministic** (fixed mint key scalars,
+ * fixed blinding factor => C, r, id, amount, secret are stable across
+ * calls). The DLEQ challenge/response e/s carry a fresh random nonce
+ * each call (exactly as a real mint produces), which is documented and
+ * tested accordingly.
  */
 
 import { createDLEQProof } from '@cashu/cashu-ts/crypto/mint/NUT12'
@@ -82,8 +85,8 @@ const BLINDING_FACTOR = 1337
 export const DEFAULT_FIXTURE_SECRET = 'dleq-fixture-secret'
 /** Standard Cashu denominations covered by the default keyset. */
 export const DEFAULT_FIXTURE_AMOUNTS: number[] = [1, 2, 4, 8, 16, 32, 64, 128]
-/** Keyset id for the default keyset. */
-export const FIXTURE_KEYSET_ID = '00deadbeef'
+/** Keyset id for the default keyset (16 hex chars, realistic NUT length). */
+export const FIXTURE_KEYSET_ID = '00deadbeef000001'
 
 // ---------- Tiny byte/hex helpers -------------------------------------------
 
@@ -208,13 +211,19 @@ export const corruptField = (proof: DleqProofWithSecret, field: CorruptibleField
 			// A different (but well-formed) blinding factor.
 			return { ...proof, r: bytesToHex(numberToBytes32(BLINDING_FACTOR + 1)) }
 		case 'amount':
-			// Flip to a neighbouring denomination (distinct key → fails).
+			// Flip to a neighbouring denomination. When `amount+1` is in the
+			// keyset, the distinct per-amount key makes verification fail
+			// (wrong pubkey). When it is NOT in the keyset (e.g. amount=2→3,
+			// or amount=128→129), `hasValidDleq` *throws* ("undefined key for
+			// amount") — which the production wrapper `verifyProofDleq`
+			// catches and returns false for (fail-closed). Callers should
+			// normalise via try/catch if calling `hasValidDleq` directly.
 			return { ...proof, amount: proof.amount + 1 }
 		case 'secret':
 			// Corrupt the wallet secret → different Y.
 			return { ...proof, secret: proof.secret + '-corrupt' }
 		case 'id':
 			// Non-matching keyset id (structural/schema-level, not crypto).
-			return { ...proof, id: '00ffffffffffffffff' }
+			return { ...proof, id: '00fffffff0000001' }
 	}
 }
