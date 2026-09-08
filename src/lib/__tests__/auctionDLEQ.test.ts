@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { verifyProofDleq, verifyBidDleq, getMintKeyset, buildDleqProofs, type DleqVerifyResult } from '../cashu/dleq'
 import type { MintKeys, Proof } from '@cashu/cashu-ts'
-import { makeHonestDleqProof, makeDleqKeyset } from '../cashu/dleqFixture'
+import { makeHonestDleqProof, makeHonestDleqFixture, makeDleqKeyset } from '../cashu/dleqFixture'
 
 // ---------- Fixture: minimal keyset with valid secp256k1 public keys ----------
 
@@ -66,6 +66,24 @@ describe('verifyProofDleq', () => {
 		expect(() => {
 			verifyProofDleq({ id: '', amount: 1, secret: '', C: '', e: 'aa', s: 'bb', r: 'cc' }, { id: '', unit: 'sat', keys: {} })
 		}).not.toThrow()
+	})
+
+	// ── happy path (A3 fixture) ───────────────────────────────────────
+
+	test('returns true for an honest DLEQ proof (A3 fixture, offline)', () => {
+		const { keyset: fixtureKeyset, proof } = makeHonestDleqFixture(1)
+		const result = verifyProofDleq(proof, fixtureKeyset)
+		expect(result).toBe(true)
+	})
+
+	test('returns true for honest proofs across several denominations', () => {
+		// Construct ONE keyset and derive every proof against it, so the
+		// test does not depend on cross-call keyset determinism.
+		const fixtureKeyset = makeDleqKeyset()
+		for (const amount of [1, 2, 4, 8, 16, 32, 64, 128]) {
+			const { proof } = makeHonestDleqFixture(amount)
+			expect(verifyProofDleq(proof, fixtureKeyset)).toBe(true)
+		}
 	})
 })
 
@@ -199,6 +217,40 @@ describe('verifyBidDleq', () => {
 		expect(result.matchesAmount).toBe(false) // 6 !== 10
 		expect(result.failedProofIndex).toBeUndefined() // sum-mismatch is not a per-proof failure
 		expect(result.ok).toBe(false)
+	})
+
+	// ── happy path (A3 fixture) ───────────────────────────────────────
+
+	test('ok=true for a single honest proof matching legDelta (happy path)', () => {
+		const { keyset: fixtureKeyset, proof: p1 } = makeHonestDleqFixture(1)
+		const result: DleqVerifyResult = verifyBidDleq({ legDelta: 1, proofs: [p1] }, fixtureKeyset)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+		expect(result.ok).toBe(true)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	test('ok=true for multiple honest proofs summing to legDelta (happy path, multi-proof)', () => {
+		const { keyset: fixtureKeyset, proof: p1 } = makeHonestDleqFixture(1)
+		const { proof: p2 } = makeHonestDleqFixture(2)
+		const { proof: p4 } = makeHonestDleqFixture(4)
+		const result: DleqVerifyResult = verifyBidDleq({ legDelta: 7, proofs: [p1, p2, p4] }, fixtureKeyset)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+		expect(result.ok).toBe(true)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	test('allProofsValid=true but matchesAmount=false when honest proofs but sum ≠ legDelta', () => {
+		const { keyset: fixtureKeyset, proof: p1 } = makeHonestDleqFixture(1)
+		const { proof: p2 } = makeHonestDleqFixture(2)
+		// DLEQ proofs are honest (all verifiable), but declared legDelta is wrong
+		const result: DleqVerifyResult = verifyBidDleq({ legDelta: 10, proofs: [p1, p2] }, fixtureKeyset)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(false)
+		expect(result.ok).toBe(false)
+		// No proof failed crypto verification, so no failure index is set.
+		expect(result.failedProofIndex).toBeUndefined()
 	})
 })
 

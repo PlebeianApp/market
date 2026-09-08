@@ -2442,3 +2442,10 @@ proof verifies AND `sum(proofs[].amount) === legDelta`. The sum-check is
 covered by unit tests in `src/lib/__tests__/auctionDLEQ.test.ts` using the
 honest A3 fixture for both the single-leg bid (one proof) and the rebid-leg
 (multiple proofs) cases, asserting `ok` flips with the amount sum.
+
+The happy-path verification coverage lives in
+`src/lib/__tests__/auctionDLEQ.test.ts`: `verifyProofDleq` returns `true`
+for an honest fixture proof (single and across denominations), and
+`verifyBidDleq` returns `ok=true` when honest proofs sum to the declared
+`legDelta` (single- and multi-proof), while an honest-but-mismatched sum
+yields `allProofsValid=true` / `matchesAmount=false` / `ok=false`.
