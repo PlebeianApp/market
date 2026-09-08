@@ -1013,6 +1013,13 @@ of each proof are published in the kind-1023 bid event so validators
 can audit; the bidder MUST persist the full proofs (including `C`)
 locally so they can refund if the auction griefs.
 
+**Mint NUT-12 capability.** ADR-0011 (Decisions 4 & 5) requires NUT-12
+DLEQ-capable mints for post-rollout auctions. The `mintSupportsDleq`
+helper in `src/lib/cashu/mintCapability.ts` probes a mint's `/v1/info`
+endpoint via `CashuMint.getInfo()` (`nuts["12"].supported`) and returns `false`
+on any error (fail-closed), so a mint whose DLEQ capability cannot be
+confirmed is treated as non-DLEQ.
+
 ## 5.5 Bidder-held HD path model
 
 The bidder generates a fresh derivation path per bid and never
