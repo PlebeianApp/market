@@ -45,7 +45,14 @@ jobs:
       - name: Install Cashu (nutshell) mint
         # Required by the ADR-0011 integration suite (auctionDLEQ.mint.integration.test.ts),
         # which spawns a local real mint via e2e/start-local-mint.sh. Mirrors e2e.yml.
-        run: pip install cashu 'marshmallow<4.0.0' 'limits<5.0.0'
+        #
+        # Pinned to 0.19.2: nutshell >= 0.20.0 emits version-01 ("01…") keyset IDs
+        # using a derivation format (amount:pubkey pairs, pipe-delimited metadata)
+        # that @cashu/cashu-ts 2.9.0's verifyKeysetId does not recognize, so
+        # CashuWallet.mintProofs() aborts with "Couldn't verify keyset ID <hex>".
+        # 0.19.2 still advertises NUT-12 DLEQ (nuts["12"].supported) and emits
+        # version-00 keysets that cashu-ts 2.9.0 verifies correctly.
+        run: pip install 'cashu==0.19.2' 'marshmallow<4.0.0' 'limits<5.0.0'
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
