@@ -2433,3 +2433,12 @@ offline A3 fixture. It:
 
 Run via `bun run test:integration`; the suite spawns and tears down its own
 mint (isolated data dir), so no external services are required.
+
+### 15.9 DLEQ bid sum-check (verifyBidDleq)
+
+`verifyBidDleq` (in `src/lib/cashu/dleq.ts`) batch-verifies a bid's DLEQ
+proofs and enforces the amount invariant: `ok` is `true` only when every
+proof verifies AND `sum(proofs[].amount) === legDelta`. The sum-check is
+covered by unit tests in `src/lib/__tests__/auctionDLEQ.test.ts` using the
+honest A3 fixture for both the single-leg bid (one proof) and the rebid-leg
+(multiple proofs) cases, asserting `ok` flips with the amount sum.
