@@ -791,19 +791,26 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// active deposit invoice in the store after the retry click (same
 			// quote reconciled — no fresh NUT-04 quote), (2) the SAME deposit
 			// settles and the flow reaches bid publication (success text), and
-			// (3) after success the store shows the terminal success state with
-			// the deposit invoice cleared — no NEW quote/deposit was created
-			// anywhere in the reconciliation (a second funding session would
-			// have left a fresh pending deposit + invoice behind instead).
+			// (3) after success the funding session is torn down — the bid
+			// variant closes the deposit modal immediately
+			// (handleFundingSuccess) and the modal's open→closed effect fully
+			// clears the terminal deposit session (cancelDeposit without
+			// preserveRecovery), so the store deterministically returns to
+			// 'idle' with the invoice cleared. A second funding session would
+			// have left a fresh pending deposit + invoice behind instead.
 			await buyerPage.unroute('**/v1/mint/bolt11')
 			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
 
 			// Invoice-identity invariant, part 2 (read via the __nip60 dev bridge,
-			// after success): the SAME deposit settled to terminal success and no
-			// new deposit/invoice exists.
+			// after success): the SAME deposit settled and the session was then
+			// torn down — the store returns to its cleared post-session state
+			// ('idle', invoice null), which also proves no NEW quote/deposit was
+			// created by the reconciliation. The terminal 'success' state itself
+			// is transient by design (the modal closes immediately on success),
+			// so it is not observable here.
+			await expect.poll(async () => (await getDepositStatus(buyerPage))?.depositStatus, { timeout: 15_000 }).toBe('idle')
 			const finalDepositStatus = await getDepositStatus(buyerPage)
 			expect(finalDepositStatus).not.toBeNull()
-			expect(finalDepositStatus.depositStatus).toBe('success')
 			expect(finalDepositStatus.depositInvoice).toBeNull()
 
 			await buyerPage.screenshot({
