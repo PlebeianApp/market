@@ -2394,7 +2394,15 @@ childPubkey` on the bidder side before locking funds (§5.6).
   `src/lib/auctionSettlementP2pk.ts`) before the seller attempts
   redemption.
 
-### 15.7 DLEQ real-mint integration test
+### 15.7 Offline DLEQ test fixture
+
+`src/lib/cashu/dleqFixture.ts` provides an in-process, deterministic NUT-12
+DLEQ proof fixture for tests. It constructs a keyset and a valid DLEQ proof
+offline so that `hasValidDleq(proof, keyset)` returns `true` (honest case)
+and exposes per-field corruption helpers for negative-path verification
+tests. No mint, no network. See `src/lib/__tests__/dleqFixture.test.ts`.
+
+### 15.8 DLEQ real-mint integration test
 
 `src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` exercises the
 NUT-12 DLEQ round-trip against a **real local Cashu mint** (nutshell,
