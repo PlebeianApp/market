@@ -222,10 +222,7 @@ describe('buildDleqProofs', () => {
 	})
 
 	test('throws when any locked proof lacks dleq (post-rollout fail-closed)', () => {
-		const proofs: Proof[] = [
-			makeProof({ amount: 1, dleq: { e: 'aa', s: 'bb', r: 'cc' } }),
-			makeProof({ amount: 2, dleq: undefined }),
-		]
+		const proofs: Proof[] = [makeProof({ amount: 1, dleq: { e: 'aa', s: 'bb', r: 'cc' } }), makeProof({ amount: 2, dleq: undefined })]
 		expect(() => buildDleqProofs(proofs)).toThrow(/dleq/i)
 	})
 
