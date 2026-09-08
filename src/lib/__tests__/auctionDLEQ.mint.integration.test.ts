@@ -10,10 +10,10 @@ import { buildDleqProofs, getMintKeyset, verifyBidDleq, type DleqProof, type Dle
  * I3 — DLEQ via a real local mint (not the offline A3 fixture).
  *
  * This suite starts a real nutshell Cashu mint (FakeWallet backend) on
- * 127.0.0.1:3338, asserts it advertises NUT-12 DLEQ support, mints a real
- * proof carrying a DLEQ proof, serializes it to the `dleq_proof` bid-tag
- * shape via `buildDleqProofs`, and runs `verifyBidDleq` end-to-end — plus
- * the two negative cases (wrong amount sum, forged signature `C`).
+ * 127.0.0.1:3338, FIRST asserts it advertises NUT-12 DLEQ support, mints a
+ * real proof carrying a DLEQ proof, serializes it to the `dleq_proof`
+ * bid-tag shape via `buildDleqProofs`, and runs `verifyBidDleq` end-to-end
+ * — plus the two negative cases (wrong amount sum, forged signature `C`).
  *
  * Run via: `bun run test:integration`
  * (the mint is spawned and torn down by this suite; no external services).
@@ -36,10 +36,19 @@ const MINT_DIR = mkdtempSync(path.join(tmpdir(), 'cashu-mint-i3-'))
 let mintProc: ChildProcess | undefined
 let shared: { proofs: Proof[]; dleqProofs: DleqProof[]; keyset: MintKeys } | undefined
 
-/** Wait for the mint's `/v1/info` to respond (bounded, fail loudly). */
+/**
+ * Wait for the mint's `/v1/info` to respond (bounded, fail loudly).
+ *
+ * Also fails fast if the spawned child exits early (e.g. the mint script
+ * could not bind its port because another process already owns :3338) so
+ * the suite never silently runs against a foreign process.
+ */
 const waitForMint = async (timeoutMs = 30_000): Promise<void> => {
 	const deadline = Date.now() + timeoutMs
 	while (Date.now() < deadline) {
+		if (mintProc?.exitCode !== null && mintProc?.exitCode !== undefined) {
+			throw new Error(`local mint process exited early with code ${mintProc.exitCode} — see CASHU_MINT_DIR=${MINT_DIR}`)
+		}
 		try {
 			const res = await fetch(`${MINT_URL}/v1/info`)
 			if (res.ok) return
@@ -51,7 +60,16 @@ const waitForMint = async (timeoutMs = 30_000): Promise<void> => {
 	throw new Error(`local mint at ${MINT_URL} did not become ready within ${timeoutMs}ms`)
 }
 
-/** Mint one proof (carrying DLEQ), serialize it, and fetch the keyset. */
+/**
+ * Mint one proof (carrying DLEQ), serialize it, and fetch the keyset.
+ *
+ * NUT-12 DLEQ proofs are returned by the mint in the blind-signature
+ * response (the mint decides based on its own NUT-12 support); the
+ * cashu-ts mint path has no client-side `includeDleq` switch — that option
+ * exists only on the *send/swap* path (`SendOptions`). The proof carrying
+ * `dleq` is asserted by the caller (`expect(p.dleq).toBeDefined()`), which
+ * is the real guarantee that the minted collateral is DLEQ-verifiable.
+ */
 const mintDleqProofs = async (amount: number): Promise<{ proofs: Proof[]; dleqProofs: DleqProof[]; keyset: MintKeys }> => {
 	const mint = new CashuMint(MINT_URL)
 	const wallet = new CashuWallet(mint)
@@ -80,11 +98,17 @@ beforeAll(async () => {
 	})
 	await waitForMint()
 
+	// FIRST gate: the mint MUST advertise NUT-12 DLEQ support before we mint
+	// anything — a mint without NUT-12 would make the whole collateral
+	// unverifiable, so we assert it up front rather than after the fact.
+	const info = await new CashuMint(MINT_URL).getInfo()
+	expect(info?.nuts?.['12']?.supported).toBe(true)
+
 	// Shared honest fixture: one real minted proof + serialized dleq_proof + keyset.
 	shared = await mintDleqProofs(MINT_AMOUNT)
 }, 60_000)
 
-afterAll(() => {
+afterAll(async () => {
 	if (mintProc?.pid) {
 		// Kill the whole process group (the script `exec`s the mint, so the
 		// direct child IS the mint process; detached gives it its own group).
@@ -93,6 +117,9 @@ afterAll(() => {
 		} catch {
 			/* already gone */
 		}
+		// Give the mint a moment to flush and exit on SIGTERM before the
+		// hard SIGKILL fallback (deterministic teardown, no orphan writes).
+		await Bun.sleep(300)
 		try {
 			process.kill(-mintProc.pid, 'SIGKILL')
 		} catch {
@@ -103,12 +130,6 @@ afterAll(() => {
 })
 
 describe('DLEQ via a real local mint (NUT-12)', () => {
-	test('local mint advertises NUT-12 DLEQ support (GET /v1/info → nuts.12.supported === true)', async () => {
-		const mint = new CashuMint(MINT_URL)
-		const info = await mint.getInfo()
-		expect(info?.nuts?.['12']?.supported).toBe(true)
-	}, 30_000)
-
 	test('minted proof carries a DLEQ proof and serializes to dleq_proof', () => {
 		const { proofs, dleqProofs } = shared!
 		for (const p of proofs) expect(p.dleq).toBeDefined()

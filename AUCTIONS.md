@@ -2401,8 +2401,10 @@ NUT-12 DLEQ round-trip against a **real local Cashu mint** (nutshell,
 FakeWallet backend, `e2e/start-local-mint.sh` on `:3338`) rather than the
 offline A3 fixture. It:
 
-1. spawns the mint and first asserts `GET /v1/info` →
-   `nuts["12"].supported === true`,
+1. spawns the mint, waits for it, and then — as the **first** assertion,
+   before minting anything — checks `GET /v1/info` →
+   `nuts["12"].supported === true` (a mint without NUT-12 would make the
+   collateral unverifiable),
 2. mints a real proof carrying a NUT-12 DLEQ proof, serializes it to the
    `dleq_proof` bid-tag shape via `buildDleqProofs`, and runs
    `verifyBidDleq` end-to-end (`ok: true`), and
