@@ -399,37 +399,16 @@ no DOM, no side effects) and reusable.
 
 ### Locked amount not verifiable at bid time
 
-The kind-1023 bid event publishes `lock_secret` (P2PK lock script) and
-`proof_y` (for NUT-7 state checks), but not the proof's `C` (mint
-signature), `amount`, or keyset `id`. NUT-7 verifies spend state only —
-it does not return the proof's amount.
+> **Resolved by [ADR-0011](ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md).**
+> The kind-1023 bid event now publishes one `dleq_proof` tag per locked
+> proof (carrying the keyset `id`, `amount`, mint signature `C`, and the
+> NUT-12 `e`/`s`/`r` values), enabling offline reblind verification of the
+> locked proof's amount against the mint's public keys at bid time. Combined
+> with the existing NUT-7 `unspent` check, this closes the gap where a
+> bidder could lock a small amount and claim a larger bid. See ADR-0011 for
+> the accepted specification and rollout plan.
 
-This means a bidder can lock a small amount at the mint and publish a
-bid claiming a larger cumulative `amount`. The mismatch is only caught
-at settlement when the kind-1025 reveals the full `cashu_token`. During
-the auction, the fake bid affects winner selection and floor computation.
-
-This is a griefing vector, not a theft vector. Mitigations include
-validator policy gates, rate limits, and `vadium_ratio_bps`.
-
-A future protocol enhancement could close this gap by publishing `C` and
-enabling offline signature validation (e.g. NUT-12 DLEQ proofs). The proof's
-`C` is safe to publish — P2PK-locked proofs cannot be spent without the
-seller's private key, regardless of whether `C` is public (the spec already
-publishes full proofs including `C` in the kind-1025 path release). However,
-the specific approach is not yet settled:
-
-- NUT-12 DLEQ proofs require the blinding factor `r` for third-party
-  verification, which has a privacy trade-off (the mint can correlate
-  swaps to proofs).
-- Requiring NUT-12 changes mint compatibility — not all mints support it,
-  and the current wallet code falls back to non-DLEQ proofs for
-  reliability.
-- The invariant to enforce (verifiable bid amounts) and whether requiring
-  NUT-12 is acceptable for auctions needs team discussion before a
-  solution is specified.
-
-Documented in AUCTIONS.md §9.1.1 as a known gap.
+Previously documented in AUCTIONS.md §9.1.1 as a known gap.
 
 ## Amendments to other documents
 
