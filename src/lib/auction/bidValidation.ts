@@ -1,7 +1,9 @@
 import type { Nut7ProofState, ValidatorClaim } from './constants'
-import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
+import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS, requiresDleqForAuction } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from './events'
 import { validateBid } from './validation'
+import { verifyBidDleq, type DleqProof } from '../cashu/dleq'
+import type { MintKeys } from '@cashu/cashu-ts'
 
 export type BidClassification = 'valid' | 'pending' | 'invalid'
 
@@ -110,6 +112,16 @@ export interface ComputeValidatedBidsInput {
 	 * cross-checks. Pass the ids from `winning_bid` + `payout` tags.
 	 */
 	settledBidIds?: Set<string>
+	/**
+	 * Pre-fetched mint keysets for DLEQ cryptographic verification (ADR-0011
+	 * C1). Keyed by `${mintUrl}:${keysetId}` so the verification logic can
+	 * look up the `MintKeys` for each bid's `dleqProofs` without async network
+	 * calls inside this synchronous pure function. When absent for a post-
+	 * rollout bid, DLEQ verification is skipped (like NUT-7 — the evidence
+	 * hasn't been gathered yet and the bid stays quorum-valid). When present
+	 * and DLEQ verification fails, the bid is invalidated (`dleq_invalid`).
+	 */
+	dleqKeysets?: Map<string, MintKeys>
 }
 
 /** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). Re-exported from constants so the client quorum screen and the validator publisher agree. */
@@ -450,7 +462,50 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		})
 
 		if (verdict.claim === 'valid_bid_placed') {
-			// Structural checks passed. Now apply NUT-7 evidence separately.
+			// Structural checks passed. Apply DLEQ crypto verification
+			// (ADR-0011 C1) BEFORE NUT-7: a bid must pass both DLEQ and NUT-7
+			// to be fully valid. DLEQ follows the same client-side ownership
+			// model as NUT-7 (Decision 6) — when evidence is unavailable the
+			// bid stays quorum-valid; when evidence IS available and DLEQ
+			// fails, the bid is invalidated (Decision 4: dleq_invalid).
+			if (requiresDleqForAuction(auction.startAt)) {
+				const dleqProofs = c.bid.dleqProofs
+				if (dleqProofs && dleqProofs.length > 0) {
+					const dleqKeysetMap = input.dleqKeysets
+					if (dleqKeysetMap) {
+						const keysetId = dleqProofs[0].id
+						const key = `${c.bid.mint}:${keysetId}`
+						const keyset = dleqKeysetMap.get(key)
+						if (keyset) {
+							const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
+								...dp,
+								secret: c.bid.lockSecrets[i] ?? '',
+							}))
+							// verifyBidDleq is non-throwing (dleq.ts wraps hasValidDleq
+							// in try/catch), so malformed/attacker-controlled hex returns
+							// { ok: false } rather than crashing the pipeline.
+							const dleqResult = verifyBidDleq({ legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets }, keyset)
+							if (!dleqResult.ok) {
+								// Record the reason on the classified entry so
+								// downstream consumers can distinguish DLEQ
+								// failure from NUT-7 `spent` (reason=dleq_invalid,
+								// ADR-0011 Decision 4).
+								c.classification = 'invalid'
+								c.invalidReason = 'dleq_invalid'
+								finalInvalid.push(c.bid)
+								continue
+							}
+						}
+						// keyset lookup miss → evidence not yet gathered; bid
+						// stays quorum-valid (mirrors NUT-7 pattern).
+					}
+					// dleqKeysets map absent → evidence not yet gathered.
+				}
+				// No dleqProofs on a post-rollout bid → already caught by
+				// validateBid Step 3.5 (dleq_invalid structural check).
+			}
+
+			// Now apply NUT-7 evidence separately.
 			// - `spent` pre-settlement = double-spend fraud → invalid.
 			// - `spent` post-settlement (recorded in the settlement) = expected
 			//   terminal redemption → valid (see spendExcusable below).
