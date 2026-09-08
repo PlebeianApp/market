@@ -93,13 +93,10 @@ export const BidEventSchema = z
 		message: 'lock_secret and proof_y tags must be 1-to-1 paired (parallel arrays)',
 		path: ['proofYs'],
 	})
-	.refine(
-		(value) => value.dleqProofs.length === 0 || value.dleqProofs.length === value.lockSecrets.length,
-		{
-			message: 'dleq_proof tags must be 1-to-1 paired with lock_secret/proof_y (parallel arrays)',
-			path: ['dleqProofs'],
-		},
-	)
+	.refine((value) => value.dleqProofs.length === 0 || value.dleqProofs.length === value.lockSecrets.length, {
+		message: 'dleq_proof tags must be 1-to-1 paired with lock_secret/proof_y (parallel arrays)',
+		path: ['dleqProofs'],
+	})
 
 export type BidEventInput = z.infer<typeof BidEventSchema>
 
