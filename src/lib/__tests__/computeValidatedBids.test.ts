@@ -518,6 +518,12 @@ describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
 		const sharedDleq = { id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }
 		const bid1 = buildBid(auction, { dleqProofs: [sharedDleq] })
 		const bid2 = buildBid(auction, { dleqProofs: [sharedDleq] }) // distinct lock_secret (nonce-N), same C
+		// Prove the fixture's two bids differ on secret/Y and share ONLY the
+		// DLEQ `C`, so the C-dedup is the sole discriminator (not the legacy
+		// secret/Y dedup) and this test cannot pass vacuously.
+		expect(bid1.lockSecrets).not.toEqual(bid2.lockSecrets)
+		expect(bid1.proofYs).not.toEqual(bid2.proofYs)
+		expect(bid1.dleqProofs?.[0]?.C).toBe(bid2.dleqProofs?.[0]?.C)
 		const verdicts = [
 			buildVerdict(bid1, { validatorPubkey: V1 }),
 			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
