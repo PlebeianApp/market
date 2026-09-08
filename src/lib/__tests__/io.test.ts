@@ -63,7 +63,7 @@ const mockNdkActions = {
 }
 const mockGetWriteRelays = mock(() => mockNdkStore.state.writeRelayUrls)
 
-mock.module('@/lib/nostr/ndk-store-seam', () => ({
+mock.module('@/lib/stores/ndk', () => ({
 	getWriteRelays: mockGetWriteRelays,
 	ndkActions: mockNdkActions,
 	ndkStore: mockNdkStore,
@@ -90,7 +90,7 @@ let poolPublishController = async (_urls: string[], _event: unknown): Promise<un
 // every relay's EOSE instead of applesauce 6.2's first-relay-EOSE default.
 const completeOnAllEoseOperator = { marker: 'completeOnAllEose' }
 
-mock.module('@/lib/nostr/applesauce-relay-seam', () => ({
+mock.module('applesauce-relay', () => ({
 	RelayPool: class MockRelayPool {
 		request = (urls: string[], filters: unknown, opts?: unknown) => ({
 			subscribe: (h: ReqHandlers) => poolRequestController(h, urls, filters, opts),

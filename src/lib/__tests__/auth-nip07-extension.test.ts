@@ -18,7 +18,7 @@ const mockCartActions = {
 	reconcileRemoteCartForUser: mock(() => {}),
 	clear: mock(() => {}),
 }
-mock.module('@/lib/nostr/ndk-store-seam', () => ({ ndkActions: mockNdkActions }))
+mock.module('@/lib/stores/ndk', () => ({ ndkActions: mockNdkActions }))
 mock.module('@/lib/stores/cart', () => ({ cartActions: mockCartActions }))
 mock.module('@/queries/products', () => ({ fetchProductsByPubkey: mock(() => Promise.resolve([])) }))
 mock.module('@/components/dialogs/TermsConditionsDialog', () => ({

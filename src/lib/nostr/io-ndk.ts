@@ -8,7 +8,7 @@
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
-import { ndkActions, ndkStore } from '@/lib/nostr/ndk-store-seam'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
 
 /** Convert an NDKEvent into a raw nostr-tools event. */

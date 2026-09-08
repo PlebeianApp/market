@@ -12,7 +12,7 @@ import {
 	ProductVisibilityTagSchema,
 	ProductWeightTagSchema,
 } from '@/lib/schemas/productListing'
-import { ndkActions } from '@/lib/nostr/ndk-store-seam'
+import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'

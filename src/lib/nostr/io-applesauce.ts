@@ -11,10 +11,10 @@
  * delegated to it with a fail-closed pubkey-equality assertion; when no
  * capability is attached it still throws (there is nothing to sign with).
  */
-import { RelayGroup, RelayPool } from './applesauce-relay-seam'
+import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
-import { getWriteRelays, ndkStore } from '@/lib/nostr/ndk-store-seam'
+import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
 import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
 import { getSignerCapability } from './signer-registry'
 

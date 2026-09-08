@@ -18,7 +18,7 @@
  */
 import type { NDKSigner, NDKEncryptionScheme } from '@/lib/nostr/ndk-events'
 import { NDKUser } from '@/lib/nostr/ndk-events'
-import { ndkActions } from '@/lib/nostr/ndk-store-seam'
+import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
 import type { NostrEvent } from 'nostr-tools/pure'
 import { hasNip04, hasNip44, type SignerCapability } from './signer-capability'

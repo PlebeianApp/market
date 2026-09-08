@@ -15,7 +15,7 @@ import { getEventHash, verifyEvent } from 'nostr-tools'
 const mockNdkActions = {
 	getNDK: mock(() => null),
 }
-mock.module('@/lib/nostr/ndk-store-seam', () => ({
+mock.module('@/lib/stores/ndk', () => ({
 	ndkActions: mockNdkActions,
 	ndkStore: { state: {} },
 	getWriteRelays: () => [],

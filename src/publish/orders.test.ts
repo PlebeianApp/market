@@ -155,7 +155,7 @@ mock.module('@/queries/profiles', () => ({
 	})),
 }))
 
-mock.module('@/lib/nostr/ndk-store-seam', () => ({
+mock.module('@/lib/stores/ndk', () => ({
 	ndkActions: {
 		getNDK: () => ({
 			activeUser: currentBuyer
