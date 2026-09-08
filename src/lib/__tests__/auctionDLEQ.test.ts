@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { verifyProofDleq, verifyBidDleq, getMintKeyset, buildDleqProofs, type DleqVerifyResult } from '../cashu/dleq'
 import type { MintKeys, Proof } from '@cashu/cashu-ts'
+import { makeHonestDleqProof, makeDleqKeyset } from '../cashu/dleqFixture'
 
 // ---------- Fixture: minimal keyset with valid secp256k1 public keys ----------
 
@@ -155,6 +156,49 @@ describe('verifyBidDleq', () => {
 	test('failedProofIndex is undefined when no proofs to check (empty array)', () => {
 		const result = verifyBidDleq({ legDelta: 0, proofs: [] }, keyset)
 		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	// ── E1: sum-check with honest A3 fixture ────────────────────────────
+
+	test('single-leg bid: ok=true when sum(proofs.amount) === legDelta (honest proofs, A3 fixture)', () => {
+		const dleqKeyset = makeDleqKeyset()
+		const proof = makeHonestDleqProof(8)
+		const result = verifyBidDleq({ legDelta: 8, proofs: [proof] }, dleqKeyset)
+		expect(result.ok).toBe(true)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	test('single-leg bid: ok=false when sum(proofs.amount) !== legDelta (honest proofs, A3 fixture)', () => {
+		const dleqKeyset = makeDleqKeyset()
+		const proof = makeHonestDleqProof(8)
+		const result = verifyBidDleq({ legDelta: 4, proofs: [proof] }, dleqKeyset)
+		expect(result.allProofsValid).toBe(true) // proof is honest
+		expect(result.matchesAmount).toBe(false) // 8 !== 4
+		expect(result.failedProofIndex).toBeUndefined() // sum-mismatch is not a per-proof failure
+		expect(result.ok).toBe(false)
+	})
+
+	test('rebid-leg: ok=true when sum(proofs.amount) === legDelta (multiple honest proofs, A3 fixture)', () => {
+		const dleqKeyset = makeDleqKeyset()
+		const proof1 = makeHonestDleqProof(2)
+		const proof2 = makeHonestDleqProof(4)
+		const result = verifyBidDleq({ legDelta: 6, proofs: [proof1, proof2] }, dleqKeyset)
+		expect(result.ok).toBe(true)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+	})
+
+	test('rebid-leg: ok=false when sum(proofs.amount) !== legDelta (multiple honest proofs, A3 fixture)', () => {
+		const dleqKeyset = makeDleqKeyset()
+		const proof1 = makeHonestDleqProof(2)
+		const proof2 = makeHonestDleqProof(4)
+		const result = verifyBidDleq({ legDelta: 10, proofs: [proof1, proof2] }, dleqKeyset)
+		expect(result.allProofsValid).toBe(true) // both proofs honest
+		expect(result.matchesAmount).toBe(false) // 6 !== 10
+		expect(result.failedProofIndex).toBeUndefined() // sum-mismatch is not a per-proof failure
+		expect(result.ok).toBe(false)
 	})
 })
 
