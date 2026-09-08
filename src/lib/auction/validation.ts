@@ -40,6 +40,7 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
+import type { DleqProof } from '../cashu/dleq'
 import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -363,6 +364,51 @@ export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: nu
 }
 
 // ============================================================================
+// DLEQ proof structural validation (ADR-0011 B4)
+// ============================================================================
+
+const HEX_RE = /^[0-9a-fA-F]+$/
+const COMPRESSED_PK_RE = /^(02|03)[0-9a-fA-F]{64}$/
+
+/**
+ * Validate the structure of a single NUT-12 DLEQ proof entry (ADR-0011 B4).
+ *
+ * Returns a human-readable failure detail string when the proof is malformed,
+ * or `undefined` when it is structurally well-formed. This is a STRUCTURAL
+ * check only — it does not (and cannot, without a keyset) verify the DLEQ
+ * cryptographically; that is {@link verifyBidDleq}'s job. But a proof that
+ * fails this check can never pass crypto verification anyway (a missing
+ * keyset id, negative amount, wrong-length `C`, or absent blinding factor
+ * `r` all break NUT-12), so rejecting it here both gives an earlier, clearer
+ * verdict and is defense-in-depth against hand-built `ParsedBidEvent`s.
+ *
+ * `index` is the 0-based proof position, used only for the error message.
+ */
+const validateDleqProofStructure = (proof: DleqProof, index: number): string | undefined => {
+	const n = index + 1
+
+	if (typeof proof.id !== 'string' || proof.id.length === 0 || !HEX_RE.test(proof.id)) {
+		return `proof ${n}: dleq_proof id must be a non-empty hex keyset id (got ${JSON.stringify(proof.id)})`
+	}
+	if (typeof proof.amount !== 'number' || !Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+		return `proof ${n}: dleq_proof amount must be a positive safe integer (got ${JSON.stringify(proof.amount)})`
+	}
+	if (typeof proof.C !== 'string' || !COMPRESSED_PK_RE.test(proof.C)) {
+		return `proof ${n}: dleq_proof C must be a 66-char compressed secp256k1 pubkey (02/03 prefix, got ${JSON.stringify(proof.C)})`
+	}
+	if (typeof proof.e !== 'string' || proof.e.length === 0 || !HEX_RE.test(proof.e)) {
+		return `proof ${n}: dleq_proof e (challenge) must be a non-empty hex string (got ${JSON.stringify(proof.e)})`
+	}
+	if (typeof proof.s !== 'string' || proof.s.length === 0 || !HEX_RE.test(proof.s)) {
+		return `proof ${n}: dleq_proof s (response) must be a non-empty hex string (got ${JSON.stringify(proof.s)})`
+	}
+	if (typeof proof.r !== 'string' || proof.r.length === 0 || !HEX_RE.test(proof.r)) {
+		return `proof ${n}: dleq_proof r (blinding factor) must be a non-empty hex string (got ${JSON.stringify(proof.r)})`
+	}
+	return undefined
+}
+
+// ============================================================================
 // validateBid — the §7.1 pipeline
 // ============================================================================
 
@@ -444,6 +490,23 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 				claim: 'bid_invalid',
 				reason: 'dleq_invalid',
 				detail: `post-rollout auction (start_at=${auction.startAt} >= ${APP_AUCTION_DLEQ_ROLLOUT_START_AT}) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
+			}
+		}
+		// B4 (ADR-0011): structural field validation of every dleq_proof entry.
+		// Each proof must carry the complete NUT-12 DLEQ tuple — keyset id,
+		// amount, unblinded signature `C`, challenge `e`, response `s`, and the
+		// blinding factor `r`. A malformed or field-omitted proof fails closed
+		// (`dleq_invalid`) the same way a missing proof would: the bidder's
+		// `dleq_proof` tag is untrusted input, and a structurally-broken proof
+		// cannot be verified cryptographically downstream. This is
+		// defense-in-depth for hand-built `ParsedBidEvent`s (the Zod schema
+		// already rejects most malformed tags at parse time), and it pins the
+		// `r`-is-required contract that `verifyProofDleq` also enforces
+		// fail-closed (NUT-12 needs the blinding factor to reblind offline).
+		for (let i = 0; i < dleqProofs.length; i++) {
+			const structuralError = validateDleqProofStructure(dleqProofs[i], i)
+			if (structuralError) {
+				return { claim: 'bid_invalid', reason: 'dleq_invalid', detail: structuralError }
 			}
 		}
 	}
