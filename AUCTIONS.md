@@ -1443,6 +1443,15 @@ Operational notes:
   yet available, the bid stays quorum-valid (mirrors the NUT-7
   evidence-deferred pattern — Decision 6). Pre-rollout auctions are
   grandfathered and skip DLEQ verification (Decision 7).
+- **ADR-0011 B4 — Structural DLEQ field validation:** the validator
+  pipeline (Step 3.5 in `validateBid`) now also performs structural
+  field validation on every `dleq_proof` entry for post-rollout
+  auctions: the keyset `id`, `C` (compressed pubkey), `e`, `s`, and
+  `r` must all be non-empty hex strings, and `amount` must be a
+  positive safe integer. A structurally malformed proof is rejected
+  as `dleq_invalid` — fail-closed defense-in-depth (the Zod schema
+  already catches most of these at parse time, but hand-built
+  `ParsedBidEvent`s that bypass the parser get the same rejection).
 - If the mint is unreachable, the client MAY treat the bid as
   `bid_pending_review` and retry; it MUST NOT treat the bid as fully
   valid until at least one successful `unspent` reading.
