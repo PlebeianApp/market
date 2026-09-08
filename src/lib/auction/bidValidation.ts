@@ -118,8 +118,13 @@ export interface ComputeValidatedBidsInput {
 	 * look up the `MintKeys` for each bid's `dleqProofs` without async network
 	 * calls inside this synchronous pure function. When absent for a post-
 	 * rollout bid, DLEQ verification is skipped (like NUT-7 — the evidence
-	 * hasn't been gathered yet and the bid stays quorum-valid). When present
-	 * and DLEQ verification fails, the bid is invalidated (`dleq_invalid`).
+	 * hasn't been gathered yet and the bid stays quorum-valid, Decision 6).
+	 * When present and DLEQ verification fails, or when the bid's referenced
+	 * keyset id is not in the map, the bid is invalidated (`dleq_invalid` —
+	 * fail-closed, since `dleqProofs[].id` is bidder-controlled). Callers that
+	 * pass this map MUST cover every keyset id any accepted bid may reference
+	 * (including rotated keysets) and MUST normalize mint URLs identically to
+	 * bid parsing so the `${mintUrl}:${keysetId}` key matches exactly.
 	 */
 	dleqKeysets?: Map<string, MintKeys>
 }
