@@ -2393,3 +2393,23 @@ childPubkey` on the bidder side before locking funds (§5.6).
 - ALWAYS run settlement preflight (`preflightAuctionSettlementP2pk`,
   `src/lib/auctionSettlementP2pk.ts`) before the seller attempts
   redemption.
+
+### 15.7 DLEQ real-mint integration test
+
+`src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` exercises the
+NUT-12 DLEQ round-trip against a **real local Cashu mint** (nutshell,
+FakeWallet backend, `e2e/start-local-mint.sh` on `:3338`) rather than the
+offline A3 fixture. It:
+
+1. spawns the mint and first asserts `GET /v1/info` →
+   `nuts["12"].supported === true`,
+2. mints a real proof carrying a NUT-12 DLEQ proof, serializes it to the
+   `dleq_proof` bid-tag shape via `buildDleqProofs`, and runs
+   `verifyBidDleq` end-to-end (`ok: true`), and
+3. covers the two negative cases end-to-end: a wrong amount sum
+   (`legDelta !== sum(proofs[].amount)` → `matchesAmount: false`) and a
+   forged signature `C` (→ `allProofsValid: false`,
+   `failedProofIndex` set).
+
+Run via `bun run test:integration`; the suite spawns and tears down its own
+mint (isolated data dir), so no external services are required.
