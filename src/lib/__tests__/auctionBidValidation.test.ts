@@ -839,3 +839,206 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 		}
 	})
 })
+
+// =============================================================================
+// Tests — NUT-12 DLEQ proof structural field validation (ADR-0011 B4)
+// =============================================================================
+
+describe('validateBid — DLEQ proof structural fields (ADR-0011 B4)', () => {
+	const POST = APP_AUCTION_DLEQ_ROLLOUT_START_AT
+
+	const makeDleqProof = (overrides: Partial<DleqProof> = {}): DleqProof => ({
+		id: '00deadbeef',
+		amount: 100,
+		C: COMPRESSED_PK,
+		e: 'aa',
+		s: 'bb',
+		r: 'cc',
+		...overrides,
+	})
+
+	const buildPostRolloutAuction = (): ParsedAuctionEvent =>
+		buildAuction({
+			startAt: POST,
+			endAt: POST + 1_000,
+			maxEndAt: POST + 2_000,
+		})
+
+	test('dleq_invalid when dleq_proof is missing the required id field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), id: '' } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*id/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof is missing the required amount field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), amount: 0 } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*amount/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof amount is not a positive safe integer', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), amount: -1 } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*amount/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof amount is not an integer (float)', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), amount: 100.5 } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*amount/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof is missing the required C (mint signature) field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), C: '' } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*C/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof C is not a 66-char compressed pubkey hex', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), C: '02' + 'f'.repeat(63) } as DleqProof // 65 chars
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*C.*66/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof is missing the required e (challenge) field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), e: '' } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*e/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof is missing the required s (response) field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), s: '' } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*s/)
+		}
+	})
+
+	test('dleq_invalid when dleq_proof is missing the required r (blinding factor) field', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), r: '' } as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*r/)
+		}
+	})
+
+	test('valid_bid_placed when all dleq_proof entries are structurally well-formed', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: POST + 500,
+			dleqProofs: [makeDleqProof()],
+		})
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+	})
+
+	test('dleq_invalid null C field rejected as missing', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), C: undefined } as unknown as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+		}
+	})
+
+	test('dleq_invalid null r field rejected as missing (fail-closed)', () => {
+		const auction = buildPostRolloutAuction()
+		const badProof = { ...makeDleqProof(), r: undefined } as unknown as DleqProof
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [badProof] })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+		}
+	})
+
+	test('dleq_invalid when second proof in a multi-proof bid is structurally malformed', () => {
+		const auction = buildPostRolloutAuction()
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const bid = buildBid(auction, {
+			createdAt: POST + 500,
+			lockSecrets: [
+				buildLockSecret({
+					childPubkey: COMPRESSED_PK,
+					locktime,
+					refundPubkey: REFUND_PK,
+				}),
+				JSON.stringify([
+					'P2PK',
+					{
+						nonce: 'distinct-nonce-2',
+						data: COMPRESSED_PK,
+						tags: [
+							['sigflag', 'SIG_INPUTS'],
+							['locktime', String(locktime)],
+							['refund', REFUND_PK],
+							['n_sigs_refund', '1'],
+						],
+					},
+				]),
+			],
+			dleqProofs: [
+				makeDleqProof({ C: COMPRESSED_PK }),
+				makeDleqProof({ C: '', e: '', s: '', r: '' }),
+			],
+		})
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 2/)
+		}
+	})
+})
