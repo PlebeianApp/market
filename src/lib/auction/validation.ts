@@ -432,6 +432,11 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// publish one DLEQ proof per locked proof. Missing or mismatched DLEQ
 	// collateral fails closed (`dleq_invalid`) rather than grandfathering the
 	// economic-verification gap. Pre-rollout auctions are grandfathered.
+	// NOTE: a partial-count mismatch (0 < dleqProofs.length < lockSecrets.length)
+	// is rejected earlier at parse time by the schema's triple-parallel refine,
+	// so through the real parse→validate path this branch fires primarily for
+	// the fully-absent (0 proofs) case; the count check remains here as
+	// defense-in-depth for hand-built `ParsedBidEvent`s.
 	if (requiresDleqForAuction(auction.startAt)) {
 		const dleqProofs = bid.dleqProofs ?? []
 		if (dleqProofs.length !== bid.lockSecrets.length) {
