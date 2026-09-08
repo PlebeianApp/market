@@ -234,3 +234,16 @@ Negative / tradeoffs:
 - Upstream epic: `PlebeianApp/market#1005`
 - Martin Fowler, "StranglerFig":
   https://martinfowler.com/bliki/StranglerFigApplication.html
+
+## Amendment (2026-09): Signer migration to applesauce-signers
+
+Waves A3 (NIP-07 + nsec) and A3b (NIP-46) of this ADR — the deferred signer seat — are specified and implemented by this migration. Decisions:
+
+- Adopt `applesauce-signers` ≥ 6.2 for signing, alongside the applesauce relay I/O already behind the io seam. `NostrConnectSigner` (NIP-46), `ExtensionSigner` (NIP-07), `PrivateKeySigner` (nsec), and `PasswordSigner` (NIP-49, ncryptsec encrypted at rest with `unlock`/`lock`) replace their NDK equivalents. No NDK-internal workaround is ported; NDK still drops entirely and Wave D stays gated on A3b. `nostr-tools` remains the shared event/nip19/nip44 layer.
+- All `applesauce-signers` imports live behind a signer registry inside `src/lib/nostr/`; stores and UI components never import it directly. The signer seat is a second, equally narrow exception to the AGENTS.md `applesauce-*` import rule (relay I/O being the first), and the rule text is amended at A3/A3b to name it.
+- One app-owned signer capability seam (`getPublicKey`, `signEvent`, optional `nip44.encrypt`/`decrypt`) covers NIP-07, NIP-46, and local signers. NIP-59 checks capability and fails closed; no path falls back to local NIP-44 behind a user who never exposed a key.
+- NIP-46 trust/identity invariants are locked: the connect secret is validated before an unknown remote signer is bound (a bare `ack` never binds); the remote-signer pubkey stays separate from the authenticated user pubkey; a returned signed event must satisfy `event.pubkey === authenticatedUserPubkey` with a valid signature; each failure path has negative tests.
+- NIP-46 session persistence requires encryption at rest for the client secret/nbunksec. Plaintext retention is only a named maintainer risk-acceptance recorded against the open unencrypted-session-key finding (see Related), never a silent default. Existing plaintext sessions are migrated to encrypted storage or trigger an intentional forced re-login.
+- Migration contract: characterize current `master` behavior as e2e tests first, then swap per wave preserving those executable invariants; coverage must not regress below the baseline, and the e2e NIP-46 mock uses distinct remote-signer/user keypairs. Baseline is current `master`, not PR #1199, which Wave A3b supersedes because its only value is as a source of regression cases.
+
+Related: unencrypted NIP-46 session key — open security finding H8.
