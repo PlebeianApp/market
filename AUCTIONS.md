@@ -405,6 +405,9 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
   with missing or malformed `dleq_proof` tags post-rollout are classified
   `dleq_invalid` by the validation pipeline (§7.1). See
   `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
+  (Missing `dleq_proof` tags are classified `dleq_invalid` by the validation
+  pipeline; **malformed** `dleq_proof` JSON is instead rejected at parse time
+  with a `malformed_dleq_proof` error — see §4.2 parser.)
 
 ### Forbidden tags
 

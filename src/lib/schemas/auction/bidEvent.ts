@@ -32,8 +32,8 @@ import { readMultiTag, readSingleTag } from './tagAccess'
 // DLEQ proof (NUT-12) — one `dleq_proof` tag per locked proof (ADR-0011)
 // ----------------------------------------------------------------------------
 
-/** Hex scalar (DLEQ challenge/response/blinding factor, keyset id). */
-const hexScalar = z.string().regex(/^[0-9a-fA-F]+$/, 'must be a non-empty hex string')
+/** Hex scalar (DLEQ challenge/response/blinding factor, keyset id). Even-length (byte-aligned). */
+const hexScalar = z.string().regex(/^(?:[0-9a-fA-F]{2})+$/, 'must be an even-length (byte-aligned) hex string')
 
 /**
  * One serialized NUT-12 DLEQ proof, mirroring {@link DleqProof} from

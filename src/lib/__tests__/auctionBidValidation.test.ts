@@ -826,4 +826,16 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 			expect(verdict.reason).toBe('dleq_invalid')
 		}
 	})
+
+	test('dleq_invalid (Step 3.5) reported before amount/floor (Step 5) failures', () => {
+		const auction = buildPostRolloutAuction()
+		// amount=1 is below the floor → would be `under_increment`, but the
+		// missing DLEQ collateral is checked earlier (Step 3.5 < Step 5).
+		const bid = buildBid(auction, { createdAt: POST + 500, amount: 1 })
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+		}
+	})
 })
