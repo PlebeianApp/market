@@ -1422,7 +1422,10 @@ flowchart TD
     OK --> CLIENT{Client: NUT-7 state == unspent?<br/>(via checkProofStateBatch)}
     CLIENT -->|spent| CR1[Client: treat as invalid<br/>proof_spent / fraudulent_bid]
     CLIENT -->|pending/unknown| CR2[Client: bid_pending_review<br/>no settlement CTAs]
-    CLIENT -->|unspent| COK[Client: bid fully valid<br/>settlement CTAs enabled]
+    CLIENT -->|unspent| COK[Client: NUT-7 ok]
+    COK --> DLEQ{Client: DLEQ verified?<br/>(via verifyBidDleq, ADR-0011 C1)}
+    DLEQ -->|dleq_invalid| DR1[Client: treat as invalid<br/>dleq_invalid → bid_invalid]
+    DLEQ -->|ok / not yet checked| DOK[Client: bid fully valid<br/>settlement CTAs enabled]
 ```
 
 Operational notes:
@@ -1432,6 +1435,14 @@ Operational notes:
 - The client runs NUT-7 independently after confirming quorum of
   `valid_bid_placed` verdicts, using `checkProofStateBatch` with the
   bid's `proof_y` values.
+- **ADR-0011 C1 — DLEQ crypto verification:** the client also runs
+  `verifyBidDleq` against a pre-fetched mint keyset (`dleqKeysets`
+  parameter in `computeValidatedBids`). A post-rollout bid whose
+  DLEQ proofs fail cryptographic verification is classified
+  `bid_invalid` with `reason=dleq_invalid`. When the keyset is not
+  yet available, the bid stays quorum-valid (mirrors the NUT-7
+  evidence-deferred pattern — Decision 6). Pre-rollout auctions are
+  grandfathered and skip DLEQ verification (Decision 7).
 - If the mint is unreachable, the client MAY treat the bid as
   `bid_pending_review` and retry; it MUST NOT treat the bid as fully
   valid until at least one successful `unspent` reading.
