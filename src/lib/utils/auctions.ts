@@ -1,5 +1,5 @@
 import { getAuctionCategories, getAuctionBiddingCutoffAt, getAuctionStartingBid, getAuctionTitle } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useMemo } from 'react'
 
 export type AuctionSortOption = 'newest' | 'oldest' | 'ending-soon' | 'highest-starting-bid' | 'title-a-z' | 'title-z-a'

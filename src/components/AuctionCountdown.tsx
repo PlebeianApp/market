@@ -7,7 +7,7 @@ import {
 } from '@/lib/auctionCountdownLabels'
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from './shared/ProgressBar'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getAuctionBiddingCutoffAt, getAuctionStartAt } from '@/queries/auctions'
 
 type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'finalBids' | 'ended' | 'scheduled'

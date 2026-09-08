@@ -21,7 +21,7 @@ import {
 } from '@/queries/auctions'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect, useCallback, useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'

@@ -21,7 +21,7 @@ import {
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions } from '@/queries/featured'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
