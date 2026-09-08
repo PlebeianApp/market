@@ -16,6 +16,7 @@ import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
 import { buildAuctionClaimPublicMarkerTags, createPrivateAuctionClaimMessageWithSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import {
@@ -32,6 +33,7 @@ import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
 	AUCTION_PATH_RELEASE_KIND,
+	requiresDleqForAuction,
 	type PathReleaseReason,
 	type Nut7ProofState,
 } from '@/lib/auction/constants'
@@ -656,6 +658,15 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
 		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
 
+		// ADR-0011 Decision 1/7 — post-rollout bids MUST publish `dleq_proof`
+		// tags (one per locked proof, parallel to lock_secret/proof_y). Build
+		// them from the locked proofs' DLEQ metadata; `buildDleqProofs` is
+		// fail-closed and throws if any locked proof lacks a DLEQ proof (or its
+		// blinding factor `r`), so a post-rollout bid can never be published
+		// with unverifiable collateral. Pre-rollout (grandfathered) auctions
+		// omit the field entirely, preserving the legacy non-DLEQ path.
+		const dleqProofs = requiresDleqForAuction(formData.auctionStartAt) ? buildDleqProofs(proofs) : undefined
+
 		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
 		// (what the validator uses for the min-increment check); the lock
 		// itself is only the delta. `prev_bid` chains the leg to the
@@ -679,6 +690,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			childPubkey,
 			lockSecrets,
 			proofYs,
+			dleqProofs,
 			createdForEndAt: formData.auctionEffectiveEndAt,
 			bidNonce,
 			prevBidId: prevLeg?.bidEventId,

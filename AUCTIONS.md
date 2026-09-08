@@ -1862,7 +1862,12 @@ sell). See §14 for the full threat analysis.
 > attack. ADR-0011 closes this gap by adopting NUT-12 DLEQ proof
 > publication + offline verification — the verification module lives at
 > `src/lib/cashu/dleq.ts` (`verifyProofDleq` / `verifyBidDleq` /
-> `getMintKeyset`). Full details in
+> `getMintKeyset` / `buildDleqProofs`). `buildDleqProofs` maps the locked
+> proofs returned by `lockAuctionBidFunds` into the `DleqProof[]` array
+> fed to `buildBidEventTags`, and is fail-closed: it throws if any locked
+> proof lacks a DLEQ proof (or its blinding factor `r`), so a
+> post-rollout bid can never be published with unverifiable collateral.
+> Full details in
 > `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
 
 ## 9.2 Fake cashu / invalid proofs
