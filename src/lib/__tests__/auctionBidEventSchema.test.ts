@@ -104,11 +104,7 @@ describe('parseBidEvent dleq_proof parsing (ADR-0011)', () => {
 		expect(result.ok).toBe(true)
 		expect(result.ok && result.value.dleqProofs).toHaveLength(3)
 		// Assert the C values to prove ORDER is preserved (identical amounts would not).
-		expect(result.ok && (result.value.dleqProofs ?? []).map((p) => p.C)).toEqual([
-			PROOF_Y,
-			'02' + '1'.repeat(64),
-			'02' + '2'.repeat(64),
-		])
+		expect(result.ok && (result.value.dleqProofs ?? []).map((p) => p.C)).toEqual([PROOF_Y, '02' + '1'.repeat(64), '02' + '2'.repeat(64)])
 	})
 
 	test('accepts a legacy pre-rollout bid with no dleq_proof tags (grandfathered)', () => {
