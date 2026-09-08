@@ -476,30 +476,39 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 						const keysetId = dleqProofs[0].id
 						const key = `${c.bid.mint}:${keysetId}`
 						const keyset = dleqKeysetMap.get(key)
-						if (keyset) {
-							const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
-								...dp,
-								secret: c.bid.lockSecrets[i] ?? '',
-							}))
-							// verifyBidDleq is non-throwing (dleq.ts wraps hasValidDleq
-							// in try/catch), so malformed/attacker-controlled hex returns
-							// { ok: false } rather than crashing the pipeline.
-							const dleqResult = verifyBidDleq({ legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets }, keyset)
-							if (!dleqResult.ok) {
-								// Record the reason on the classified entry so
-								// downstream consumers can distinguish DLEQ
-								// failure from NUT-7 `spent` (reason=dleq_invalid,
-								// ADR-0011 Decision 4).
-								c.classification = 'invalid'
-								c.invalidReason = 'dleq_invalid'
-								finalInvalid.push(c.bid)
-								continue
-							}
+						// Fail-closed: `dleqProofs[].id` is bidder-controlled (it
+						// comes from the bid's own `dleq_proof` tags), so a lookup
+						// MISS on a populated keyset map must NOT silently skip
+						// verification — a malicious bidder could set
+						// `dleqProofs[0].id` to any id the client didn't fetch and
+						// defeat the DLEQ check. When keysets were gathered but this
+						// bid's keyset is absent, we cannot verify → dleq_invalid.
+						if (!keyset) {
+							c.classification = 'invalid'
+							c.invalidReason = 'dleq_invalid'
+							finalInvalid.push(c.bid)
+							continue
 						}
-						// keyset lookup miss → evidence not yet gathered; bid
-						// stays quorum-valid (mirrors NUT-7 pattern).
+						const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
+							...dp,
+							secret: c.bid.lockSecrets[i] ?? '',
+						}))
+						// verifyBidDleq is non-throwing (dleq.ts wraps hasValidDleq
+						// in try/catch), so malformed/attacker-controlled hex returns
+						// { ok: false } rather than crashing the pipeline.
+						const dleqResult = verifyBidDleq({ legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets }, keyset)
+						if (!dleqResult.ok) {
+							// Record the reason on the classified entry so
+							// downstream consumers can distinguish DLEQ
+							// failure from NUT-7 `spent` (reason=dleq_invalid,
+							// ADR-0011 Decision 4).
+							c.classification = 'invalid'
+							c.invalidReason = 'dleq_invalid'
+							finalInvalid.push(c.bid)
+							continue
+						}
 					}
-					// dleqKeysets map absent → evidence not yet gathered.
+					// dleqKeysets map absent → evidence not yet gathered (Decision 6).
 				}
 				// No dleqProofs on a post-rollout bid → already caught by
 				// validateBid Step 3.5 (dleq_invalid structural check).
