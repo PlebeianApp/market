@@ -384,9 +384,26 @@ const COMPRESSED_PK_RE = /^(02|03)[0-9a-fA-F]{64}$/
  *
  * `index` is the 0-based proof position, used only for the error message.
  */
-const validateDleqProofStructure = (proof: DleqProof, index: number): string | undefined => {
+const validateDleqProofStructure = (proof: DleqProof | null | undefined, index: number): string | undefined => {
 	const n = index + 1
 
+	// Defense-in-depth: `dleqProofs` is typed `DleqProof[]`, but a hand-built
+	// `ParsedBidEvent` (the exact path this check exists to guard) could
+	// inject a null/undefined array entry. A dereference would throw a
+	// TypeError and abort the whole pipeline instead of returning a
+	// fail-closed `bid_invalid` verdict. Guard the entry itself first.
+	if (proof === null || proof === undefined || typeof proof !== 'object') {
+		return `proof ${n}: dleq_proof must be an object (got ${JSON.stringify(proof)})`
+	}
+
+	// NOTE: the id / e / s / r checks below are deliberately LENGTH-AGNOSTIC
+	// (any non-empty hex passes). Cashu v1 keyset ids are 16 hex chars and
+	// NUT-12 scalars are 64 hex chars, but enforcing those exact lengths
+	// here would duplicate what the cryptographic verification
+	// (`verifyBidDleq` → `hasValidDleq`) already does strictly. This layer
+	// stays a cheap syntactic gate; scalar/keyset length and validity are
+	// the crypto layer's job, where a bad scalar yields `ok: false`, never a
+	// silent pass.
 	if (typeof proof.id !== 'string' || proof.id.length === 0 || !HEX_RE.test(proof.id)) {
 		return `proof ${n}: dleq_proof id must be a non-empty hex keyset id (got ${JSON.stringify(proof.id)})`
 	}

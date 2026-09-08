@@ -1029,16 +1029,41 @@ describe('validateBid — DLEQ proof structural fields (ADR-0011 B4)', () => {
 					},
 				]),
 			],
-			dleqProofs: [
-				makeDleqProof({ C: COMPRESSED_PK }),
-				makeDleqProof({ C: '', e: '', s: '', r: '' }),
-			],
+			dleqProofs: [makeDleqProof({ C: COMPRESSED_PK }), makeDleqProof({ C: '', e: '', s: '', r: '' })],
 		})
 		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
 		if (verdict.claim === 'bid_invalid') {
 			expect(verdict.reason).toBe('dleq_invalid')
 			expect(verdict.detail).toMatch(/proof 2/)
+		}
+	})
+
+	test('dleq_invalid (fail-closed, no throw) when a dleq_proof entry is null', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: POST + 500,
+			dleqProofs: [null as unknown as DleqProof],
+		})
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*object/)
+		}
+	})
+
+	test('dleq_invalid (fail-closed, no throw) when a dleq_proof entry is undefined', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: POST + 500,
+			dleqProofs: [undefined as unknown as DleqProof],
+		})
+		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+			expect(verdict.detail).toMatch(/proof 1.*object/)
 		}
 	})
 })
