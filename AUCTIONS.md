@@ -2016,7 +2016,10 @@ The protocol logic is split across small, focused modules under
 - `src/lib/auction/` — protocol core:
   - `constants.ts` — protocol constants (event kinds, tag names, preset values).
   - `events.ts` — typed auction event shapes (listing, bid, settlement, verdict).
-  - `tagBuilders.ts` — tag-array constructors for each event kind.
+  - `tagBuilders.ts` — tag-array constructors for each event kind
+    (`buildBidEventTags` emits one `dleq_proof` tag per locked proof,
+    JSON-serialized `{id, amount, C, e, s, r}`, parallel to
+    `lock_secret`/`proof_y`).
   - `validation.ts` — pure validation pipeline for bid / auditor rules
     (side-effect-free functions).
   - `bidderRecords.ts` — bidder-side local record shapes (path, proofs,
