@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { CashuMint, CashuWallet, type MintKeys, type Proof } from '@cashu/cashu-ts'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { buildDleqProofs, getMintKeyset, verifyBidDleq, type DleqProof, type DleqVerifyResult } from '../cashu/dleq'
@@ -33,6 +33,9 @@ const PROJECT_ROOT = path.resolve(import.meta.dir, '../../..')
 /** Fresh, isolated mint data dir per run — avoids stale-DB/schema collisions. */
 const MINT_DIR = mkdtempSync(path.join(tmpdir(), 'cashu-mint-i3-'))
 
+/** The mint's own log, captured so a startup failure is diagnosable. */
+const MINT_LOG = path.join(MINT_DIR, 'mint.log')
+
 let mintProc: ChildProcess | undefined
 let shared: { proofs: Proof[]; dleqProofs: DleqProof[]; keyset: MintKeys } | undefined
 
@@ -43,7 +46,7 @@ let shared: { proofs: Proof[]; dleqProofs: DleqProof[]; keyset: MintKeys } | und
  * could not bind its port because another process already owns :3338) so
  * the suite never silently runs against a foreign process.
  */
-const waitForMint = async (timeoutMs = 30_000): Promise<void> => {
+const waitForMint = async (timeoutMs = 90_000): Promise<void> => {
 	const deadline = Date.now() + timeoutMs
 	while (Date.now() < deadline) {
 		if (mintProc?.exitCode !== null && mintProc?.exitCode !== undefined) {
@@ -57,7 +60,8 @@ const waitForMint = async (timeoutMs = 30_000): Promise<void> => {
 		}
 		await Bun.sleep(250)
 	}
-	throw new Error(`local mint at ${MINT_URL} did not become ready within ${timeoutMs}ms`)
+	const logTail = readFileSync(MINT_LOG, 'utf8').split('\n').slice(-20).join('\n')
+	throw new Error(`local mint at ${MINT_URL} did not become ready within ${timeoutMs}ms\n--- mint log tail ---\n${logTail}`)
 }
 
 /**
@@ -90,12 +94,17 @@ const withSecrets = (proofs: Proof[], dleqProofs: DleqProof[]): Array<DleqProof 
 	dleqProofs.map((dp, i) => ({ ...dp, secret: proofs[i].secret }))
 
 beforeAll(async () => {
+	// Capture the mint's stdout+stderr to MINT_LOG so a startup failure is
+	// diagnosable (the default `stdio: 'ignore'` gives no trace).
+	const mintLogFd = openSync(MINT_LOG, 'w')
 	mintProc = spawn('bash', ['e2e/start-local-mint.sh'], {
 		cwd: PROJECT_ROOT,
 		env: { ...process.env, CASHU_MINT_DIR: MINT_DIR },
 		detached: true,
-		stdio: 'ignore',
+		stdio: ['ignore', mintLogFd, mintLogFd],
 	})
+	closeSync(mintLogFd) // parent's copy — the child inherited its own
+
 	await waitForMint()
 
 	// FIRST gate: the mint MUST advertise NUT-12 DLEQ support before we mint
@@ -106,7 +115,7 @@ beforeAll(async () => {
 
 	// Shared honest fixture: one real minted proof + serialized dleq_proof + keyset.
 	shared = await mintDleqProofs(MINT_AMOUNT)
-}, 60_000)
+}, 120_000)
 
 afterAll(async () => {
 	if (mintProc?.pid) {
