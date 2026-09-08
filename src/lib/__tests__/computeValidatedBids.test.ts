@@ -689,7 +689,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(result.invalidBids).toHaveLength(0)
 	})
 
-	test('post-rollout bid whose keyset is not in dleqKeysets is treated as not-yet-verified (valid, like missing NUT-7)', () => {
+	test('post-rollout bid whose keyset is not in dleqKeysets is invalid (fail-closed: bidder-controlled id must not skip DLEQ verification)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
 			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
@@ -699,6 +699,10 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
 			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
 		]
+		// The bid declares keyset `00deadbeef` but the fetched map only holds
+		// `other.mint` keysets — the lookup must MISS and fail closed rather
+		// than skipping DLEQ verification (a malicious bidder could otherwise
+		// point dleqProofs[0].id at an unfetched id and bypass the check).
 		const otherKeysets = new Map([['https://other.mint:00deadbeef', dleqKeyset1]])
 
 		const result = computeValidatedBids({
@@ -709,9 +713,12 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 			dleqKeysets: otherKeysets,
 		})
 
-		expect(result.canonicalWinner?.id).toBe(bid.id)
-		expect(result.validBids).toHaveLength(1)
-		expect(result.invalidBids).toHaveLength(0)
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(1)
+		const invalidClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(invalidClassified?.classification).toBe('invalid')
+		expect(invalidClassified?.invalidReason).toBe('dleq_invalid')
 	})
 
 	test('post-rollout bid with no dleqProofs is invalid via structural check (validateBid Step 3.5)', () => {
