@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { verifyProofDleq, verifyBidDleq, getMintKeyset, type DleqVerifyResult } from '../cashu/dleq'
-import type { MintKeys } from '@cashu/cashu-ts'
+import { verifyProofDleq, verifyBidDleq, getMintKeyset, buildDleqProofs, type DleqVerifyResult } from '../cashu/dleq'
+import type { MintKeys, Proof } from '@cashu/cashu-ts'
 
 // ---------- Fixture: minimal keyset with valid secp256k1 public keys ----------
 
@@ -184,5 +184,57 @@ describe('getMintKeyset', () => {
 		// getMintKeyset should propagate the error (the caller decides policy);
 		// the pure verification helpers are the non-throwing ones.
 		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow('mint unreachable')
+	})
+})
+
+// ---------- buildDleqProofs -------------------------------------------------
+
+describe('buildDleqProofs', () => {
+	const makeProof = (overrides: Partial<Proof> = {}): Proof => ({
+		id: '00deadbeef',
+		amount: 1,
+		secret: 'test-secret',
+		C: GENERATOR_HEX,
+		dleq: { e: 'aa', s: 'bb', r: 'cc' },
+		...overrides,
+	})
+
+	test('maps locked proofs to DleqProof entries (id, amount, C, e, s, r)', () => {
+		const proofs: Proof[] = [
+			makeProof({ amount: 1, C: GENERATOR_HEX, dleq: { e: 'aa', s: 'bb', r: 'cc' } }),
+			makeProof({ amount: 2, C: TWO_G_HEX, dleq: { e: 'dd', s: 'ee', r: 'ff' } }),
+		]
+		const result = buildDleqProofs(proofs)
+		expect(result).toEqual([
+			{ id: '00deadbeef', amount: 1, C: GENERATOR_HEX, e: 'aa', s: 'bb', r: 'cc' },
+			{ id: '00deadbeef', amount: 2, C: TWO_G_HEX, e: 'dd', s: 'ee', r: 'ff' },
+		])
+	})
+
+	test('preserves proof order (parallel to lockSecrets/proofYs)', () => {
+		const proofs: Proof[] = [
+			makeProof({ amount: 4, dleq: { e: 'e1', s: 's1', r: 'r1' } }),
+			makeProof({ amount: 8, dleq: { e: 'e2', s: 's2', r: 'r2' } }),
+			makeProof({ amount: 16, dleq: { e: 'e3', s: 's3', r: 'r3' } }),
+		]
+		const result = buildDleqProofs(proofs)
+		expect(result.map((p) => p.amount)).toEqual([4, 8, 16])
+	})
+
+	test('throws when any locked proof lacks dleq (post-rollout fail-closed)', () => {
+		const proofs: Proof[] = [
+			makeProof({ amount: 1, dleq: { e: 'aa', s: 'bb', r: 'cc' } }),
+			makeProof({ amount: 2, dleq: undefined }),
+		]
+		expect(() => buildDleqProofs(proofs)).toThrow(/dleq/i)
+	})
+
+	test('throws when dleq.r is missing (blinding factor required for reblind verify)', () => {
+		const proofs: Proof[] = [makeProof({ amount: 1, dleq: { e: 'aa', s: 'bb', r: undefined } })]
+		expect(() => buildDleqProofs(proofs)).toThrow(/dleq/i)
+	})
+
+	test('returns empty array for empty proofs', () => {
+		expect(buildDleqProofs([])).toEqual([])
 	})
 })
