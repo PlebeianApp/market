@@ -155,6 +155,13 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
 - Gate this work with integration tests. It is not expected to change
   marketplace e2e flakiness directly.
 
+- `src/server/ogMeta.ts` (Open Graph product previews) performs server-runtime
+  relay I/O via raw `nostr-tools` and is the documented Wave-E seam exception
+  (see its header comment). It bounds aggregate work with a process-wide
+  concurrency cap (`OG_MAX_CONCURRENT_LOOKUPS`) and coalesces concurrent
+  lookups for the same product id onto a single in-flight relay query, so
+  rotating random ids cannot drive unbounded concurrent server-side work.
+
 Root-cause flakiness work is concentrated in Wave A, Wave C publish files,
 and Wave D. Wave 0, Wave B, the dashboard type-only work, and Wave E are
 enablers or cleanup unless later code review shows otherwise.

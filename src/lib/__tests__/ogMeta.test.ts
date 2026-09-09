@@ -18,14 +18,23 @@ import type { Relay } from 'nostr-tools'
 const closeMock = mock(() => {})
 let resolveConnect: ((relay: unknown) => void) | null = null
 let rejectConnect: ((reason: unknown) => void) | null = null
+// Concurrency bookkeeping: every Relay.connect call is counted and its
+// deferred is recorded so tests can drive N concurrent lookups and assert
+// how many actually reached the relay (the concurrency-cap regression).
+let connectCount = 0
+const connectDeferreds: Array<{ resolve: (relay: unknown) => void; reject: (reason: unknown) => void }> = []
 
 mock.module('nostr-tools', () => ({
 	Relay: {
-		connect: () =>
-			new Promise((resolve, reject) => {
+		connect: () => {
+			connectCount++
+			return new Promise((resolve, reject) => {
+				const deferred = { resolve, reject }
+				connectDeferreds.push(deferred)
 				resolveConnect = resolve
 				rejectConnect = reject
-			}),
+			})
+		},
 	},
 }))
 mock.module('nostr-tools/pure', () => ({
@@ -44,6 +53,8 @@ afterEach(() => {
 	closeMock.mockClear()
 	resolveConnect = null
 	rejectConnect = null
+	connectCount = 0
+	connectDeferreds.length = 0
 })
 
 describe('getProductOgMeta', () => {
@@ -159,5 +170,71 @@ describe('connect-timeout race (socket-leak regression)', () => {
 		// no fake timer is left pending afterwards.
 		expect(closeMock).toHaveBeenCalledTimes(1)
 		expect(jest.getTimerCount()).toBe(0)
+	})
+})
+
+describe('concurrency cap + same-ID coalescing (aggregate work bound)', () => {
+	// The process-wide cap (OG_MAX_CONCURRENT_LOOKUPS) is 4. Firing 5
+	// concurrent distinct-id lookups must reach the relay at most 4 times;
+	// the saturated 5th must fall back to the plain shell (null) immediately
+	// instead of queueing unbounded server-side work.
+	const PAST_DEADLINE_MS = 10_000
+
+	// Fresh hex ids not used by any other test in this file (the module-level
+	// cache persists across tests, so reusing an id would short-circuit on
+	// cache and never reach the relay).
+	const CAP_IDS = ['1'.repeat(64), '2'.repeat(64), '3'.repeat(64), '4'.repeat(64), '5'.repeat(64)]
+	const COALESCE_ID = '6'.repeat(64)
+
+	test('caps concurrent distinct-id lookups and falls back to plain shell when saturated', async () => {
+		jest.useFakeTimers()
+
+		const lookups = CAP_IDS.map((id) => getProductOgMeta('wss://relay.example.com', id))
+
+		// Only the cap (4) lookups reach the relay; the 5th is saturated.
+		expect(connectCount).toBe(4)
+
+		// The saturated lookup resolves immediately to null (plain-shell
+		// fallback) — it must not wait for a slot or open a relay query.
+		await expect(lookups[4]).resolves.toBeNull()
+
+		// Complete the 4 in-flight lookups: resolve their connects, then let
+		// the request deadline fire (the mock subscribe never settles).
+		for (let i = 0; i < 4; i++) {
+			connectDeferreds[i].resolve({ close: closeMock, subscribe: () => ({ close: () => {} }) })
+		}
+		await flushMicrotasks()
+		jest.advanceTimersByTime(PAST_DEADLINE_MS)
+
+		for (let i = 0; i < 4; i++) {
+			await expect(lookups[i]).resolves.toBeNull()
+		}
+
+		// After completion the cap is released: a fresh lookup reaches the relay.
+		expect(connectCount).toBe(4)
+		const fresh = getProductOgMeta('wss://relay.example.com', '7'.repeat(64))
+		expect(connectCount).toBe(5)
+		connectDeferreds[4].resolve({ close: closeMock, subscribe: () => ({ close: () => {} }) })
+		await flushMicrotasks()
+		jest.advanceTimersByTime(PAST_DEADLINE_MS)
+		await expect(fresh).resolves.toBeNull()
+	})
+
+	test('coalesces concurrent lookups for the same id onto a single relay query', async () => {
+		jest.useFakeTimers()
+
+		const p1 = getProductOgMeta('wss://relay.example.com', COALESCE_ID)
+		const p2 = getProductOgMeta('wss://relay.example.com', COALESCE_ID)
+
+		// Two concurrent same-id lookups share one relay query.
+		expect(connectCount).toBe(1)
+
+		// Both resolve to the same result once the shared query completes.
+		connectDeferreds[0].resolve({ close: closeMock, subscribe: () => ({ close: () => {} }) })
+		await flushMicrotasks()
+		jest.advanceTimersByTime(PAST_DEADLINE_MS)
+
+		await expect(p1).resolves.toBeNull()
+		await expect(p2).resolves.toBeNull()
 	})
 })
