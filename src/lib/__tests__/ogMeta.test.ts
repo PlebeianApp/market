@@ -23,6 +23,10 @@ let rejectConnect: ((reason: unknown) => void) | null = null
 // how many actually reached the relay (the concurrency-cap regression).
 let connectCount = 0
 const connectDeferreds: Array<{ resolve: (relay: unknown) => void; reject: (reason: unknown) => void }> = []
+// Relay-read containment bookkeeping: the latest subscribe opts are captured
+// so a test can drive `onevent`/`oneose` and assert a wrong-kind / wrong-id
+// event is discarded (the untrusted-relay-data trust-boundary regression).
+let lastSubscribeOpts: { onevent?: (e: unknown) => void; oneose?: () => void } | null = null
 
 mock.module('nostr-tools', () => ({
 	Relay: {
@@ -55,6 +59,7 @@ afterEach(() => {
 	rejectConnect = null
 	connectCount = 0
 	connectDeferreds.length = 0
+	lastSubscribeOpts = null
 })
 
 describe('getProductOgMeta', () => {
@@ -236,5 +241,107 @@ describe('concurrency cap + same-ID coalescing (aggregate work bound)', () => {
 
 		await expect(p1).resolves.toBeNull()
 		await expect(p2).resolves.toBeNull()
+	})
+})
+
+describe('relay-read containment (untrusted relay data)', () => {
+	// Per the module contract, a product lookup must only accept the exact
+	// event it asked for. A misbehaving/compromised relay answering the REQ
+	// with a *different* valid-signed event — another product's event, or a
+	// wrong-kind note — must be discarded, not rendered as this product's og
+	// tags. The mock's verifyEvent is a tautology (always true), so this test
+	// isolates the kind/id containment which must hold independent of
+	// signature verification.
+	const PRODUCT_KIND = 30_402
+
+	// Build a relay whose subscribe captures the opts so the test can drive
+	// `onevent` with a crafted verified-looking event.
+	function capturingRelay() {
+		return {
+			close: closeMock,
+			subscribe: (_filters: unknown, opts: { onevent?: (e: unknown) => void; oneose?: () => void }) => {
+				lastSubscribeOpts = opts
+				return { close: () => {} }
+			},
+		} as unknown as Relay
+	}
+
+	// Resolve the connect for the first pending lookup, then drive onevent.
+	// The subscribe callback runs on a microtask after the connect resolves,
+	// so flush before emitting.
+	async function connectAndEmit(event: unknown) {
+		connectDeferreds[0].resolve(capturingRelay())
+		await flushMicrotasks()
+		lastSubscribeOpts?.onevent?.(event)
+	}
+
+	const WRONG_KIND_ID = 'b'.repeat(64)
+	const WRONG_ID_ID = 'a'.repeat(64)
+	const GOOD_ID = '9'.repeat(64)
+
+	// Capture the best-effort failure log so tests can assert WHICH terminal
+	// path settled the lookup (deadline vs. accepted event).
+	function captureWarn() {
+		const originalWarn = console.warn
+		const warns: string[] = []
+		console.warn = (...args: unknown[]) => {
+			warns.push(args.map(String).join(' '))
+		}
+		return { warns, restore: () => (console.warn = originalWarn) }
+	}
+
+	test('discards a valid-signed event whose kind is not a product (no meta leak)', async () => {
+		jest.useFakeTimers()
+		const { warns, restore } = captureWarn()
+
+		const lookup = getProductOgMeta('wss://relay.example.com', WRONG_KIND_ID)
+		// A kind-1 note with a matching id would render if kind were unchecked.
+		await connectAndEmit({ id: WRONG_KIND_ID, kind: 1, content: 'spam' })
+		await flushMicrotasks()
+
+		// The wrong-kind event must NOT settle the lookup: it is discarded, so
+		// the request deadline is what resolves it (proven by the timeout log).
+		jest.advanceTimersByTime(10_000)
+		await expect(lookup).resolves.toBeNull()
+		restore()
+		expect(warns.join('\n')).toContain('og: relay request timeout')
+	})
+
+	test('discards a valid-signed event whose id does not match the requested product', async () => {
+		jest.useFakeTimers()
+		const { warns, restore } = captureWarn()
+
+		const lookup = getProductOgMeta('wss://relay.example.com', WRONG_ID_ID)
+		// A product-kind event with a different id would render as this
+		// product's meta if id were unchecked.
+		await connectAndEmit({ id: 'c'.repeat(64), kind: PRODUCT_KIND, content: 'other product' })
+		await flushMicrotasks()
+
+		jest.advanceTimersByTime(10_000)
+		await expect(lookup).resolves.toBeNull()
+		restore()
+		expect(warns.join('\n')).toContain('og: relay request timeout')
+	})
+
+	test('accepts a product-kind event whose id matches the requested product', async () => {
+		jest.useFakeTimers()
+		const { warns, restore } = captureWarn()
+
+		const lookup = getProductOgMeta('wss://relay.example.com', GOOD_ID)
+		// A matching product event settles the lookup (verifyEvent mock returns
+		// true, so it proceeds to buildOgProductMeta).
+		await connectAndEmit({ id: GOOD_ID, kind: PRODUCT_KIND, content: '{}', tags: [], pubkey: 'e'.repeat(64), created_at: 1 })
+		await flushMicrotasks()
+
+		jest.advanceTimersByTime(10_000)
+		const meta = await lookup
+		restore()
+
+		// The event settled the lookup: no request-timeout log fired, and the
+		// relay was closed exactly once by the normal cleanup. The accepted
+		// event produced product meta (title derived from the bare event).
+		expect(warns.join('\n')).not.toContain('og: relay request timeout')
+		expect(closeMock).toHaveBeenCalledTimes(1)
+		expect(meta).not.toBeNull()
 	})
 })

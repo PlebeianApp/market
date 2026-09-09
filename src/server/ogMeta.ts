@@ -209,7 +209,15 @@ function requestProductEvent(relay: Relay, productId: string): Promise<unknown |
 			],
 			{
 				onevent: (event) => {
-					if (!verifyEvent(event)) return // untrusted relay data: discard
+					// Untrusted relay data: discard anything that is not the
+					// exact product event we asked for. verifyEvent() proves
+					// the event is a valid signed Nostr event, but a
+					// misbehaving/compromised relay could answer the REQ with
+					// a *different* valid-signed event (another product, or a
+					// wrong-kind note) — that must never be rendered as this
+					// product's og tags.
+					if (!verifyEvent(event)) return
+					if (event.id !== productId || event.kind !== PRODUCT_KIND) return
 					settle(event)
 				},
 				oneose: () => settle(null),
