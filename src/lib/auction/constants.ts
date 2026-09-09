@@ -190,6 +190,17 @@ export const VALIDATOR_REASONS = [
 	'post_end',
 	'late_arrival',
 	'timestamp_skew',
+	// relay/admission abuse controls
+	'event_too_large',
+	'too_many_tags',
+	'bid_payload_too_large',
+	'too_many_lock_secrets',
+	'invalid_bid_nonce',
+	'duplicate_bid_nonce',
+	'rate_limited',
+	'too_many_active_bids',
+	'too_many_invalid_attempts',
+	'validator_policy_rejected',
 	// amount — ADR-0012 Phase 1: the absolute floor is the ONLY
 	// amount-based validity check. `under_increment` and `under_curve`
 	// are retired: the minimum increment and the anti-snipe curve are

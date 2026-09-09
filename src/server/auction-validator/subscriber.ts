@@ -35,6 +35,7 @@ import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type Val
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
+import { checkBidEnvelope, checkBidSpamPolicy, DEFAULT_BID_SPAM_POLICY, recordAcceptedBid, type BidSpamPolicy } from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -56,6 +57,8 @@ export interface ValidatorSubscriberDeps {
 	 * no seed and falls back to `now()` (correct first observation).
 	 */
 	seedObservedAt?: Map<string, number>
+	/** Validator admission limits. Defaults are intentionally permissive. */
+	spamPolicy?: Partial<BidSpamPolicy>
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -160,6 +163,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (!verifyIncomingEvent(raw, 'bid')) {
 			return
 		}
+		const envelopeDecision = checkBidEnvelope(raw, deps.spamPolicy)
+		if (!envelopeDecision.ok) {
+			logger.warn(`[validator] dropping bid ${raw.id.slice(0, 8)}: ${envelopeDecision.reason}`)
+			return
+		}
 
 		const parsed = parseBidEvent(raw)
 		if (!parsed.ok) {
@@ -182,13 +190,37 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
 			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
+			const maxPending = deps.spamPolicy?.maxPendingBidsPerAuction ?? DEFAULT_BID_SPAM_POLICY.maxPendingBidsPerAuction
+			if (existing.length >= maxPending) {
+				logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: pending auction buffer is full`)
+				return
+			}
 			existing.push({ raw, observedAt: firstObservedAt })
 			pendingBids.set(bid.auctionRootEventId, existing)
 			return
 		}
 
+		const auctionState = deps.state.auctions.get(bid.auctionRootEventId)
+		if (!auctionState) return
+		const activeBidCount = Array.from(auctionState.bids.values()).filter(
+			(existingBid) => existingBid.bid.bidderPubkey.toLowerCase() === bid.bidderPubkey.toLowerCase(),
+		).length
+		const spamDecision = checkBidSpamPolicy({
+			auction: auctionState.auction,
+			bid,
+			now: firstObservedAt,
+			state: deps.state.spam,
+			policy: deps.spamPolicy,
+			activeBidCount,
+		})
+		if (!spamDecision.ok) {
+			logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: ${spamDecision.reason}`)
+			return
+		}
+
 		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
+		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: deps.spamPolicy })
 
 		// Run derive + publish.
 		try {
