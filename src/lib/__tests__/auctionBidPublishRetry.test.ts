@@ -28,6 +28,7 @@ import {
 	loadPreLockRecoveryRecords,
 	type BidderBidRecord,
 } from '../auction/bidderRecords'
+import { APP_AUCTION_DLEQ_ROLLOUT_START_AT } from '../auction/constants'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.
@@ -112,7 +113,14 @@ const buildFormData = (amount: number) => {
 		auctionEventId: '1'.repeat(64),
 		auctionCoordinates: `30408:${SELLER_PK}:auction-1`,
 		amount,
-		auctionStartAt: now - 1_000,
+		// Grandfathered pre-rollout start (ADR-0011 Decision 7): these tests
+		// exercise #1235 retry/idempotency logic, not DLEQ collateral
+		// verification. A post-rollout start would route them through the
+		// DLEQ-required path and fail on the dummyProof fixtures lacking
+		// NUT-12 metadata. Pin start_at just below the rollout boundary so
+		// they stay on the pre-rollout (non-DLEQ) path regardless of when
+		// they run.
+		auctionStartAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT - 1,
 		auctionEffectiveEndAt: now + 3_600,
 		auctionLocktimeAt: now + 7_200,
 		settlementGraceSeconds: 300,
