@@ -1421,6 +1421,37 @@ Operational notes:
   `valid_bid_placed` verdicts before treating the bid as a real
   bid for tie-breaking and floor computation.
 
+## 7.2 App mute lists and auctions (normative)
+
+The marketplace app maintains an app-level mute list — a NIP-51
+kind 10000 event published by the app pubkey — as its client-side
+content-moderation and ToS-enforcement mechanism. It governs the
+app's own content surfaces: hiding listings, products, and
+collections from muted sellers. It is app-internal; this spec does
+not standardize the mute list itself and names it only to bound its
+effect.
+
+Its boundary with the auction mechanism is strict:
+
+- The mute list MUST NOT affect bids or any outcome-relevant auction
+  event. A compliant client MUST NOT drop a kind 1023 bid, kind 30440
+  verdict, kind 1024 settlement, or kind 1025 path release because
+  its author is muted, and bid validity MUST NOT consider mute lists
+  in any component — client or validator.
+- Muting a participant never removes them from the auction mechanism:
+  a muted bidder's bids remain surfaced and rankable; validators,
+  auditors, and mints are not subject to mute-list hiding.
+- The only ban list that MAY affect a bid's validity is a validator's
+  own published kind 30441 policy (§4.4.2), applied per §5.6 step 3 /
+  §7.5 step 3 and gated by `auditor_quorum` (`on_blacklist`, §4.4.3).
+  "Blacklist" in this spec always means that mechanism.
+- The client surfaces faithfully the bid data it obtains: ranking,
+  current-price, minimum-bid, and winner-display computations MUST
+  run on the bids the client actually discovers, with no further
+  reduction by mute lists. What a client has discovered is always
+  subject to relay availability; this rule requires only that the
+  mute list not reduce it further.
+
 ## 7.5 Validator audit protocol (normative)
 
 There is no oracle protocol in this scheme. Validators are passive

@@ -39,7 +39,7 @@ This protocol mandates that no bid is considered valid unless it passes all stru
 ## Consequences
 
 - Modular Validation Architecture: The codebase will implement granular helper functions (e.g., validateBidStructure, verifyDerivationPath) rather than monolithic validators, allowing independent testing and reuse.
-- Deterministic Outcome: All participants (bidders, sellers, validators, observers) will reach the same conclusion regarding the validity of a bid or settlement, reducing disputes.
+- Deterministic Outcome: All participants (bidders, sellers, validators, observers) will reach the same conclusion regarding the validity of a bid or settlement, reducing disputes. App-level client moderation (the NIP-51 mute list, bounded by AUCTIONS.md §7.2) is not an input to bid validity or outcome determination, and compliant clients MUST NOT let it remove bids or outcome-relevant events from the data they surface and rank.
 - Enhanced Security: Cryptographic fraud (e.g., fake paths, spent-behind-lock) will be detected immediately upon event ingestion, preventing wasted redemption attempts.
 - Clear Failure Modes: Every validation failure will map to a specific error code (e.g., proof_spent, derivation_mismatch), enabling precise UI feedback and automated retry logic.
 - Documentation Obligation: Any future modification to the auction protocol (e.g., new settlement policies, curve shapes) must update this validation specification and the corresponding atomic checklists before implementation.
