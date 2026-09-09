@@ -1,4 +1,4 @@
-import { NDK, NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
+import NDK, { NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { markCollectionAsDeleted } from '@/queries/collections'
