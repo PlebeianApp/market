@@ -135,11 +135,6 @@ export const applesauceIo: NostrIo = {
 				if (message.type === 'EOSE') {
 					opts?.onEose?.()
 					settled.add(message.from)
-					// Forward EOSE to the caller before any closeOnEose teardown so
-					// live-sub hooks can treat it as their "initial fetch finished"
-					// signal even when the group closes right after (NDK parity:
-					// per-relay emissions, call sites keep them idempotent).
-					opts?.onEose?.()
 					stopIfCloseOnEose()
 					return
 				}

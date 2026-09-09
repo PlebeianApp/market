@@ -2,10 +2,13 @@ import NDK, {
 	NDKCashuMintList,
 	NDKEvent,
 	NDKKind,
+	NDKRelaySet,
 	NDKUser,
 	profileFromEvent,
+	type NDKEncryptionScheme,
 	type NDKFilter,
 	type NDKSigner,
+	type NDKTag,
 	type NDKUserProfile,
 	type NDKZapMethod,
 	type NDKZapMethodInfo,
@@ -15,8 +18,8 @@ import { nip19, verifyEvent, type Event } from 'nostr-tools'
 
 import type { FetchOptions, NostrFilter, NostrIo } from './io'
 
-export { NDKEvent, NDKKind, NDKUser }
-export type { NDKFilter, NDKSigner, NDKUserProfile, NDKZapMethod, NDKZapMethodInfo }
+export { NDK as default, NDKEvent, NDKKind, NDKRelaySet, NDKUser }
+export type { NDKEncryptionScheme, NDKFilter, NDKSigner, NDKTag, NDKUserProfile, NDKZapMethod, NDKZapMethodInfo }
 
 const NIP33_A_REGEX = /^(\d+):([0-9A-Fa-f]+)(?::(.*))?$/
 const BECH32_REGEX = /^n(event|ote|profile|pub|addr)1[\d\w]+$/
