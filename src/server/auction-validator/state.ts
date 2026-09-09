@@ -23,6 +23,7 @@
 import type { Nut7ProofState, ValidatorClaim, ValidatorReason } from '../../lib/auction/constants'
 import { auctionImmutableFieldsMatch } from '../../lib/auction/immutability'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../../lib/auction/events'
+import { createBidSpamState, type BidSpamState } from './spamPolicy'
 
 // ============================================================================
 // Per-bid state
@@ -215,6 +216,9 @@ export interface ValidatorState {
 	 * sellers sharing a `d` tag never collide here.
 	 */
 	auctionsByCoordinate: Map<string, string>
+
+	/** Admission state shared across relay subscriptions. */
+	spam: BidSpamState
 }
 
 // ============================================================================
@@ -225,6 +229,7 @@ export const createValidatorState = (validatorPubkey: string): ValidatorState =>
 	validatorPubkey,
 	auctions: new Map(),
 	auctionsByCoordinate: new Map(),
+	spam: createBidSpamState(),
 })
 
 export interface UpsertAuctionResult {
