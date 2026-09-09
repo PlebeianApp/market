@@ -1,4 +1,4 @@
-import { NDKUser, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKUser, type NDKSigner } from '@/lib/nostr/ndk-events'
 import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
 
