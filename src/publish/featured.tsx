@@ -1,8 +1,9 @@
 import { submitAppSettings } from '@/lib/appSettings'
-import { fetchLatestAppEvent, ndkActions } from '@/lib/stores/ndk'
+import { fetchLatestAppEvent } from '@/lib/stores/ndk'
+import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { FEATURED_ITEMS_CONFIG, validateCoordinates, validatePubkey } from '@/lib/schemas/featured'
-import NDK, { NDKEvent, NDKKind, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import { NDK, NDKEvent, NDKKind, type NDKSigner, type NDKTag } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 

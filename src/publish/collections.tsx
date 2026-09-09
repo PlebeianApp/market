@@ -1,9 +1,9 @@
-import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDK, NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { markCollectionAsDeleted } from '@/queries/collections'
 import { toast } from 'sonner'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { createClientTag } from './nip89'
 

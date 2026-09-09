@@ -1,6 +1,6 @@
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import { CART_PERSISTENCE_D_TAG, CART_PERSISTENCE_KIND, type PersistedCartContent } from '@/lib/schemas/cartPersistence'
-import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDK, NDKEvent, type NDKSigner } from '@/lib/nostr/ndk-events'
 
 export async function publishCartSnapshot(snapshot: PersistedCartContent, signer: NDKSigner, ndk: NDK): Promise<string> {
 	const event = new NDKEvent(ndk)
