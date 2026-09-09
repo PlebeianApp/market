@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
-import { AUCTION_PATH_RELEASE_KIND, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
+import { AUCTION_PATH_RELEASE_KIND, DEFAULT_AUDITOR_QUORUM, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
 	decryptPrivateAuctionClaimMessageWithSigner,
 	getAuctionClaimPublicMarkerFields,
@@ -32,6 +32,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -504,13 +505,33 @@ export function isAuctionPathReleaseForCoordinate(event: NDKEvent, auctionCoordi
  * parameterised-replaceable per (validator, bidder, auction, bid)
  * — per-bid addressability, ADR-0003 §4.4.1 amendment — so the relay
  * returns at most one verdict per bid per validator.
+ *
+ * Trust boundary ("signed ≠ authorized", review #1235 Should-fix 3):
+ * this surface feeds UI that renders 'Bid Rejected' / 'Bid successfully
+ * placed!', so authorization and signature validity are each enforced
+ * here *and* kept in `computeVerdictQuorum` (belt and braces):
+ *
+ * - `validatorPubkeys` is the auction event's `auditors` tags (the same
+ *   source `computeVerdictQuorum` counts, via `getAuctionAuditors`). When
+ *   provided it is sent as the relay `authors` filter (ADR-0015
+ *   production-safe filtering) and re-checked client-side, because
+ *   relays may ignore or over-serve filters. An empty list means no
+ *   auditor is configured, so nothing is authorized — fail closed.
+ * - Every event is explicitly Schnorr-verified at this parse boundary
+ *   via the nostr-tools seam (ADR-0002) before it is returned; NDK's
+ *   own verification is sampling-based and must not be relied on.
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
 	limit: number = 500,
 	auctionCoordinates?: string,
+	validatorPubkeys?: string[],
 ): Promise<NDKEvent[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
+	// Stable (sorted, de-duplicated) author set — same order in the filter and the query key.
+	const auditorPubkeys = validatorPubkeys ? toStableUniqueStrings(validatorPubkeys) : undefined
+	// Fail closed: an auction with no configured auditors has no authorized verdicts.
+	if (auditorPubkeys && auditorPubkeys.length === 0) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
@@ -518,11 +539,35 @@ export const fetchAuctionVerdicts = async (
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
 		limit,
 	}
+	if (auditorPubkeys) filter.authors = auditorPubkeys
 	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
 	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return (
+		filterBlacklistedEvents(Array.from(events))
+			// Signature verification at the parse boundary: drop unverified events
+			// before any component can render a verdict from them.
+			.filter(isVerifiedVerdictEvent)
+			// Client-side author check: a relay may ignore or over-serve the
+			// `authors` filter, so authorization is enforced again here.
+			.filter((event) => !auditorPubkeys || auditorPubkeys.includes(event.pubkey))
+			.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	)
+}
+
+/**
+ * Explicit signature check for kind-30440 verdicts. Tolerates both real
+ * `NDKEvent`s (via `rawEvent()`) and duck-typed event objects so the parse
+ * boundary never trusts an event it cannot verify.
+ */
+const isVerifiedVerdictEvent = (event: NDKEvent): boolean => {
+	try {
+		const raw = typeof event.rawEvent === 'function' ? event.rawEvent() : event
+		return verifyNostrEventSignature(raw as Parameters<typeof verifyNostrEventSignature>[0])
+	} catch {
+		return false
+	}
 }
 
 export const auctionsQueryOptions = (limit: number = 200) =>
@@ -651,10 +696,21 @@ export const auctionPathReleasesQueryOptions = (auctionEventId: string, limit: n
 		refetchInterval: 5000,
 	})
 
-export const auctionVerdictsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const auctionVerdictsQueryOptions = (
+	auctionEventId: string,
+	limit: number = 500,
+	auctionCoordinates?: string,
+	validatorPubkeys?: string[],
+) =>
 	queryOptions({
-		queryKey: [...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
-		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates),
+		// The auditor set is part of the key: two views of the same auction with
+		// different configured auditors must never share cached verdicts.
+		queryKey: [
+			...auctionKeys.verdicts(auctionEventId || auctionCoordinates || ''),
+			auctionCoordinates || '',
+			validatorPubkeys ? toStableUniqueStrings(validatorPubkeys) : [],
+		],
+		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, validatorPubkeys),
 		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 5000,
 		refetchInterval: 5000,
@@ -766,6 +822,13 @@ export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tag
  */
 export const getAuctionAuditors = (event: NDKEvent | null): string[] =>
 	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
+
+/** Number of distinct auditor verdicts required for a bid to be confirmed (§4.1). */
+export const getAuctionAuditorQuorum = (event: NDKEvent | null): number => {
+	const raw = event?.tags.find((tag) => tag[0] === 'auditor_quorum' && !!tag[1])?.[1]
+	const parsed = raw ? parseInt(raw, 10) : NaN
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AUDITOR_QUORUM
+}
 
 /**
  * Legacy single-pubkey accessor preserved for callers still phrased
@@ -991,9 +1054,9 @@ export const useAuctionPathReleases = (auctionEventId: string, limit: number = 2
 		...auctionPathReleasesQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
 
-export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
+export const useAuctionVerdicts = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string, validatorPubkeys?: string[]) =>
 	useQuery({
-		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates),
+		...auctionVerdictsQueryOptions(auctionEventId, limit, auctionCoordinates, validatorPubkeys),
 	})
 
 // ---------------------------------------------------------------------------
