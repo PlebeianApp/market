@@ -1,5 +1,6 @@
 import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
+import { parseInstanceConfigEnvironment, resolveInstanceConfig, type InstanceConfig } from '../lib/instance-config'
 import { hexToBytes } from 'nostr-tools/utils'
 
 function isValidHexPubkey(value: string): boolean {
@@ -22,6 +23,7 @@ export const PORT = Number(process.env.PORT || 3000)
 
 let APP_PUBLIC_KEY: string | undefined
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
+let instanceConfig: InstanceConfig | undefined
 let eventHandlerReady = false
 
 export function getAppPublicKeyOrThrow(): string {
@@ -67,8 +69,16 @@ export function getAppSettings() {
 	return appSettings
 }
 
+export function getInstanceConfig(): InstanceConfig {
+	if (!instanceConfig) {
+		instanceConfig = resolveInstanceConfig(appSettings, parseInstanceConfigEnvironment(process.env))
+	}
+	return instanceConfig
+}
+
 export function setAppSettings(value: Awaited<ReturnType<typeof fetchAppSettings>>): void {
 	appSettings = value
+	instanceConfig = resolveInstanceConfig(value, parseInstanceConfigEnvironment(process.env))
 }
 
 export function isEventHandlerReady(): boolean {
