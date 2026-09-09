@@ -6,6 +6,30 @@ import { RELAY_URL, TEST_PORT } from '../test-config'
 import { devUser1 } from '@/lib/fixtures'
 import { seedProduct } from '../scenarios'
 import type { VerifiedEvent } from 'nostr-tools'
+import type { Page } from '@playwright/test'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Path to a local image fixture used to intercept external CDN requests in CI.
+// Per e2e/AGENTS.md + ADR-0005, all external services (CDNs) must be mocked or
+// intercepted — the browser must never issue a live request to
+// cdn.satellite.earth from a test.
+const __filename = fileURLToPath(import.meta.url)
+const LOCAL_IMAGE_PATH = path.join(path.dirname(__filename), '..', 'fixtures', 'test-product-image.png')
+
+/**
+ * Intercepts requests to cdn.satellite.earth and serves a local fixture image.
+ * The src attribute remains the original CDN URL, so src assertions still work.
+ */
+async function interceptCdnImages(page: Page) {
+	await page.route('**/cdn.satellite.earth/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/png',
+			path: LOCAL_IMAGE_PATH,
+		})
+	})
+}
 
 /**
  * E2E tests for server-rendered Open Graph (og:) meta tags on product pages.
@@ -30,6 +54,12 @@ test.use({ scenario: 'base' })
 // path produces a viewable video on success (overrides the config default of
 // retain-on-failure). See Gate 2 in docs/PR_REVIEW_CHECKLIST.md.
 test.use({ video: 'on' })
+
+// Per e2e/AGENTS.md + ADR-0005, intercept external CDN image requests so the
+// browser never issues a live request to cdn.satellite.earth from a test.
+test.beforeEach(async ({ unauthenticatedPage }) => {
+	await interceptCdnImages(unauthenticatedPage)
+})
 
 // --- Shared state seeded once before all tests ---
 
