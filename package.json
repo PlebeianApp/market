@@ -59,6 +59,7 @@
 		"@yudiel/react-qr-scanner": "^2.6.0",
 		"applesauce-core": "^6.2.0",
 		"applesauce-relay": "^6.2.0",
+		"applesauce-signers": "6.2.2",
 		"bitcoinjs-lib": "^7.0.1",
 		"bs58check": "^4.0.0",
 		"bun-plugin-tailwind": "^0.1.2",
