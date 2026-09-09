@@ -153,7 +153,7 @@ describe('auth storage bootstrap', () => {
 			await authActions.getAuthFromLocalStorageAndLogin()
 
 			expect(loginWithNip46).toHaveBeenCalledTimes(1)
-			expect((loginWithNip46.mock.calls[0] as any)?.[2]).toEqual({ expectedUserPubkey: null })
+			expect((loginWithNip46.mock.calls[0] as any)?.[2]).toEqual({ expectedUserPubkey: undefined })
 			expect(loginWithExtension).not.toHaveBeenCalled()
 			expect(localStorage.getItem('nostr_local_signer_key')).toBe('1'.repeat(64))
 			expect(localStorage.getItem('nostr_connect_url')).toBe('bunker://stale-signer?secret=stale')

@@ -262,7 +262,7 @@ export const authActions = {
 
 			if (privateKeySigner && bunkerUrl) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner), {
-					expectedUserPubkey,
+					expectedUserPubkey: expectedUserPubkey ?? undefined,
 				})
 				authActions.checkAndShowTermsDialog()
 				return
