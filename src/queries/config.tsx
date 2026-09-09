@@ -1,26 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { configKeys } from './queryKeyFactory'
-import type { AppSettings } from '../lib/schemas/app'
+import type { PublicAppConfig } from '@/lib/instance-config'
 import { configActions } from '@/lib/stores/config'
 
-interface Config {
-	appRelay: string
-	nip46Relay: string
-	appSettings: AppSettings | null
-	appPublicKey: string
-	cvmServerPubkey?: string
-	needsSetup: boolean
-	serverReady: boolean
-}
+let cachedConfig: PublicAppConfig | null = null
 
-let cachedConfig: Config | null = null
-
-const fetchConfig = async (): Promise<Config> => {
+const fetchConfig = async (): Promise<PublicAppConfig> => {
 	const response = await fetch('/api/config')
 	if (!response.ok) {
 		throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 	}
-	const config: Config = await response.json()
+	const config: PublicAppConfig = await response.json()
 	console.log('Fetched config:', config)
 	cachedConfig = config
 	configActions.setConfig(config)
