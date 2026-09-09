@@ -2,7 +2,7 @@ import { ndkStore } from '@/lib/stores/ndk'
 import { zapKeys } from './queryKeyFactory'
 import { useQuery } from '@tanstack/react-query'
 import { applesauceIo } from '@/lib/nostr/io'
-import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { fetchLatestNdkEvent, fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { ZAP_RELAYS } from '@/lib/constants'
 import { decode } from 'light-bolt11-decoder'
 
@@ -44,9 +44,7 @@ const getUserLud16 = async (userPubkey: string): Promise<string | null> => {
 	// guard — when external zap relays are disabled it is null and this read
 	// throws exactly as before.
 	const relayUrls = Array.from(new Set([...ZAP_RELAYS, ...ndkStore.state.explicitRelayUrls]))
-	const profileEvents = await fetchNdkEventSet(applesauceIo, ndk, { kinds: [0], authors: [userPubkey], limit: 1 }, { relayUrls })
-
-	const profile = Array.from(profileEvents)[0]
+	const profile = await fetchLatestNdkEvent(applesauceIo, ndk, { kinds: [0], authors: [userPubkey], limit: 1 }, { relayUrls })
 	if (!profile) return null
 
 	try {
