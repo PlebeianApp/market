@@ -18,9 +18,18 @@
  */
 
 import type { Proof } from '@cashu/cashu-ts'
-import { loadUserData, saveUserData } from '../wallet/storage'
+import { loadUserData, saveUserData, type SaveUserDataOptions } from '../wallet/storage'
 
 const BIDDER_RECORDS_KEY = 'auction_bidder_records_v1'
+
+// #1235 round-3 B1 — pre-lock recovery record store. Bounded at 25 entries
+// but (unlike the republish cache) NEVER evicts: records are short-lived
+// (removed once the full bidder record supersedes them, on a provably-
+// pre-mint lock failure, or after a successful reclaim), and at the bound a
+// persist of a NEW record fails closed instead of silently deleting a
+// still-pending leg's refund key (see persistPreLockRecoveryRecordMap).
+const PRE_LOCK_RECOVERY_RECORDS_KEY = 'auction_bid_pre_lock_recovery_v1'
+const PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES = 25
 
 export type BidderRecordStatus = 'live' | 'settled' | 'refunded' | 'griefed' | 'cancelled'
 
@@ -102,9 +111,22 @@ export interface BidderBidRecord {
 
 export const loadBidderRecords = (): BidderBidRecord[] => loadUserData<BidderBidRecord[]>(BIDDER_RECORDS_KEY, [])
 
-export const saveBidderRecords = (records: BidderBidRecord[]): void => saveUserData(BIDDER_RECORDS_KEY, records)
+export const saveBidderRecords = (records: BidderBidRecord[], options?: SaveUserDataOptions): void =>
+	saveUserData(BIDDER_RECORDS_KEY, records, options)
 
-/** Insert or overwrite by `bidEventId`. */
+/**
+ * Insert or overwrite by `bidEventId`.
+ *
+ * #1235 follow-up (fail-closed bidder records): STRICT persistence. This
+ * record is the ONLY durable copy of the locked leg's refund private key
+ * and full locked proofs — a silent storage failure (quota, disabled
+ * storage, no user scope) would strand the locked leg with no recoverable
+ * refund key while the publish pipeline otherwise continued (and could
+ * even succeed). The strict write rethrows so the bid publish flow fails
+ * CLOSED instead of publishing a locked leg without a durable recovery
+ * record. Other record writes (status updates, removals) keep the
+ * historical swallow-by-default behavior.
+ */
 export const upsertBidderRecord = (record: BidderBidRecord): void => {
 	const records = loadBidderRecords()
 	const existing = records.findIndex((r) => r.bidEventId === record.bidEventId)
@@ -113,7 +135,7 @@ export const upsertBidderRecord = (record: BidderBidRecord): void => {
 	} else {
 		records.push(record)
 	}
-	saveBidderRecords(records)
+	saveBidderRecords(records, { strict: true })
 }
 
 export const findBidderRecord = (bidEventId: string): BidderBidRecord | undefined => {
@@ -192,4 +214,131 @@ export const updateBidderRecordStatus = (bidEventId: string, status: BidderRecor
 export const removeBidderRecord = (bidEventId: string): void => {
 	const records = loadBidderRecords().filter((r) => r.bidEventId !== bidEventId)
 	saveBidderRecords(records)
+}
+
+// ---------- #1235 round-3 B1: pre-lock recovery records -------------------
+
+/**
+ * Recovery material for an auction bid leg, persisted BEFORE the mint lock
+ * call that could consume it (#1235 round-3 B1).
+ *
+ * Once `lockAuctionBidFunds` may have sent a swap/lock request to the mint,
+ * failure handling must assume the mint mutated state (inputs consumed,
+ * P2PK-locked proofs issued). The ONLY durable copy of the leg's refund
+ * private key must already be on disk at that point — without it the locked
+ * leg is not even timelock-reclaimable (the refund branch requires the refund
+ * privkey). This record is that durable copy: it is written with
+ * CONFIRMED-WRITE semantics (strict save + read-back equality — see
+ * {@link persistPreLockRecoveryRecord}) before the lock call, and removed
+ * once the full {@link BidderBidRecord} supersedes it (the leg became
+ * publishable), on a provably-pre-mint lock failure, or after a successful
+ * reclaim.
+ *
+ * NOTE (deliberately scoped): the record contains NO proof set — the locked
+ * proofs themselves live in the wallet's pending-token store once the lock
+ * returns. This is application data the auction domain must own (refund-key
+ * material, identifiers, derivation paths, lock metadata), not a second
+ * spendable-proof authority.
+ */
+export interface AuctionBidPreLockRecoveryRecord {
+	/** Locally generated record id (uuid) — carried by AuctionBidLockOutcomeUncertainError. */
+	id: string
+	/** When the record was written (unix ms). */
+	createdAt: number
+	/** Root auction event id (kind-30408). */
+	auctionEventId: string
+	/** Auction coordinate `30408:<seller>:<d>` — named `auctionCoordinates` (the form-data name), NOT the bidder record's `auctionCoordinate`. */
+	auctionCoordinates: string
+	/** Seller's Nostr pubkey. */
+	sellerPubkey: string
+	/** Seller's auction HD xpub. */
+	p2pkXpub: string
+	/** Bidder-chosen derivation path for this leg. */
+	derivationPath: string
+	/** `derive(p2pk_xpub, derivationPath)` — the lock pubkey. */
+	childPubkey: string
+	/** Bidder's refund pubkey (compressed secp256k1 hex); the map key. */
+	refundPubkey: string
+	/** Bidder's refund private key (hex) — the recovery authority this record protects. */
+	refundPrivateKey: string
+	/** Best-effort pre-lock mint hint (first declared candidate) — diagnostic only. */
+	mintUrl: string
+	/** Sats this leg intends to lock (the delta). */
+	legLockAmount: number
+	/** Cumulative bid value this leg commits to. */
+	cumulativeAmount: number
+	/** Cashu locktime in unix seconds. */
+	locktime: number
+	/** Previous leg's bid event id when this is a rebid chain leg. */
+	prevBidEventId: string | null
+}
+
+/** Pre-lock recovery records, keyed by refund pubkey. */
+type PreLockRecoveryRecordMap = Record<string, AuctionBidPreLockRecoveryRecord>
+
+export const loadPreLockRecoveryRecords = (): PreLockRecoveryRecordMap =>
+	loadUserData<PreLockRecoveryRecordMap>(PRE_LOCK_RECOVERY_RECORDS_KEY, {})
+
+const persistPreLockRecoveryRecordMap = (map: PreLockRecoveryRecordMap): void => {
+	// #1235 round-3 fix 4 (felixfelix #5) — FAIL CLOSED at the bound, never
+	// evict. The old oldest-first eviction silently deleted the refund key of
+	// a still-pending leg the moment a 26th record arrived. Each recovery
+	// record is the ONLY durable copy of its leg's refund private key from
+	// before the mint call — deleting one is never safe. A NEW key pushing
+	// the map past the bound throws BEFORE saveUserData; the publish layer
+	// maps the throw to AuctionBidPreLockRecordWriteFailedError and aborts
+	// with zero mint interaction (safe re-submit). Superseding an EXISTING
+	// key keeps the entry count unchanged, so in-place updates still succeed
+	// at the bound (the publish flow's supersede path relies on that).
+	if (Object.keys(map).length > PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES) {
+		throw new Error(
+			`Pre-lock recovery record store is full (${PRE_LOCK_RECOVERY_RECORDS_MAX_ENTRIES} entries) — ` +
+				'refusing to persist a NEW recovery record instead of evicting an existing one. ' +
+				"Each record is the only durable copy of a pending leg's refund key. Nothing was locked; re-submitting the bid once the store has room is safe.",
+		)
+	}
+	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map, { strict: true })
+}
+
+/**
+ * Persist a pre-lock recovery record with CONFIRMED-WRITE semantics
+ * (#1235 round-3 B1).
+ *
+ * The write is only "confirmed" when BOTH the strict save succeeded AND a
+ * read-back of the user-scoped store returns a record that deep-equals the
+ * one we intended to write. Any throw or mismatch propagates — callers must
+ * treat the record as NOT durably present and must NOT proceed to the mint
+ * call that could consume the recovery material.
+ */
+export const persistPreLockRecoveryRecord = (record: AuctionBidPreLockRecoveryRecord): void => {
+	const map = { ...loadPreLockRecoveryRecords() }
+	// Map keys are normalized to lowercase hex so the case-insensitive lookup
+	// in findPreLockRecoveryRecordByRefundPubkey always hits.
+	map[record.refundPubkey.trim().toLowerCase()] = record
+	persistPreLockRecoveryRecordMap(map)
+
+	const readBack = loadPreLockRecoveryRecords()[record.refundPubkey]
+	if (!readBack || JSON.stringify(readBack) !== JSON.stringify(record)) {
+		throw new Error(
+			`Failed to confirm the pre-lock recovery record write for refund pubkey ${record.refundPubkey} ` +
+				'(read-back mismatch — the record is not durably present).',
+		)
+	}
+}
+
+export const removePreLockRecoveryRecord = (refundPubkey: string): void => {
+	const map = { ...loadPreLockRecoveryRecords() }
+	if (!(refundPubkey in map)) return
+	delete map[refundPubkey]
+	// Removal is best-effort (the default swallow semantics): a failed removal
+	// leaves a stale recovery record behind — harmless for money safety (it is
+	// superseded by the full bidder record or by a provably-pre-mint failure)
+	// and still a valid refund authority if it ever gets used.
+	saveUserData(PRE_LOCK_RECOVERY_RECORDS_KEY, map)
+}
+
+export const findPreLockRecoveryRecordByRefundPubkey = (refundPubkey: string): AuctionBidPreLockRecoveryRecord | undefined => {
+	const needle = refundPubkey.trim().toLowerCase()
+	if (!needle) return undefined
+	return loadPreLockRecoveryRecords()[needle]
 }

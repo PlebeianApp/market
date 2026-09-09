@@ -201,10 +201,15 @@ describe('bidderRecords storage', () => {
 		expect(findBidderRecord('b'.repeat(64))).toBeDefined()
 	})
 
-	test('no records when no user is signed in', () => {
+	test('no records when no user is signed in — the STRICT upsert fails closed instead of silently skipping', () => {
 		clearAuthUser()
 		const record = buildRecord()
-		upsertBidderRecord(record) // no-op without a user
+		// #1235 follow-up 3: upsertBidderRecord is the bid flow's durable
+		// recovery-record write. With no user scope there is nowhere to
+		// persist the refund private key — silently skipping would let a
+		// locked leg publish with no recoverable refund key. The write now
+		// throws so the publish pipeline aborts (fail closed).
+		expect(() => upsertBidderRecord(record)).toThrow('no authenticated user scope')
 		expect(loadBidderRecords()).toEqual([])
 		// Restore for subsequent tests.
 		setAuthUser()

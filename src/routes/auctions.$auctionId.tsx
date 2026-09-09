@@ -38,6 +38,7 @@ import {
 	getAuctionCurrency,
 	getAuctionId,
 	getAuctionPathIssuer,
+	getAuctionAuditors,
 	getAuctionImages,
 	getAuctionKeyScheme,
 	getAuctionMaxEndAt,
@@ -497,7 +498,11 @@ function AuctionDetailRoute() {
 		[bids],
 	)
 
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
+	// configured auditors (relay authors filter) — null-safe; an unloaded or
+	// auditor-less auction fails closed (no verdicts authorized).
+	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const parsedVerdicts = useMemo(() => {
 		return (verdictsQuery.data ?? [])
 			.map((e) =>

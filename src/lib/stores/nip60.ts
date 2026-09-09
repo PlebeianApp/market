@@ -1,6 +1,7 @@
 import {
 	getMintHostname,
 	getProofsForMint,
+	getSpendableProofsForMint,
 	loadUserData,
 	saveUserData,
 	type AuctionBidPendingTokenContext,
@@ -32,8 +33,14 @@ import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, t
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
+import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
-import { findBidderRecordByRefundPubkey } from '@/lib/auction/bidderRecords'
+import {
+	findBidderRecordByRefundPubkey,
+	findPreLockRecoveryRecordByRefundPubkey,
+	removePreLockRecoveryRecord,
+} from '@/lib/auction/bidderRecords'
+import type { SaveUserDataOptions } from '@/lib/wallet/storage'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -43,6 +50,33 @@ export type PendingNip60Token = PendingToken
 
 export interface Nip60LightningPaymentResult {
 	preimage?: string
+}
+
+export interface Nip60DepositOptions {
+	includeFeePadding?: boolean
+}
+
+export type Nip60DepositStatus = 'idle' | 'pending' | 'awaiting_confirmation_retry' | 'success' | 'error'
+
+/**
+ * #10: Deposit quote estimate. `usedFallbackEstimate` and `feeSource` are
+ * derived from the per-component `mintFeeSource`/`lightningFeeSource` fields
+ * (see buildDepositQuoteEstimate). They are kept as convenience accessors so
+ * callers can check "did we fall back?" without OR-ing two fields, and so
+ * tests can assert on a single `feeSource` value. The per-component fields
+ * remain the source of truth for which specific fee used a fallback.
+ */
+export interface Nip60DepositQuoteEstimate {
+	requiredBidFundingAmount: number
+	totalDepositAmount: number
+	mintFeePaddingAmount: number
+	lightningFeePaddingAmount: number
+	/** Convenience: true when either mintFeeSource or lightningFeeSource is 'fallback'. */
+	usedFallbackEstimate: boolean
+	/** Convenience: 'fallback' if usedFallbackEstimate, else 'quote'. */
+	feeSource: 'quote' | 'fallback'
+	mintFeeSource: 'quote' | 'fallback'
+	lightningFeeSource: 'quote' | 'fallback'
 }
 
 export interface Nip60NutzapResult {
@@ -140,7 +174,7 @@ export interface Nip60State {
 	// Active deposit tracking
 	activeDeposit: NDKCashuDeposit | null
 	depositInvoice: string | null
-	depositStatus: 'idle' | 'pending' | 'success' | 'error'
+	depositStatus: Nip60DepositStatus
 	// Pending tokens tracking (tokens generated but not yet claimed by recipient)
 	pendingTokens: PendingNip60Token[]
 }
@@ -160,10 +194,22 @@ const initialState: Nip60State = {
 	pendingTokens: [],
 }
 
+// Default to the public testnet mint. Set APP_DEV_TEST_MINT_URL to override
+// (e.g. http://localhost:3338 for local e2e tests with a local nutshell mint).
+// APP_DEV_TEST_MINT_URL is set on the server, but it may not reach the browser
+// bundle (bun reliably inlines NODE_ENV, not arbitrary custom vars), so the local
+// e2e mint (localhost:3338 / 127.0.0.1:3338) is also listed explicitly below so
+// mintTestEcash hits the local nutshell mint instead of external testnet mints.
 const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
 export const NIP60_DEV_TEST_MINTS = Array.from(
 	new Set(
-		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+		[
+			DEV_TEST_MINT_URL,
+			'http://localhost:3338',
+			'http://127.0.0.1:3338',
+			'https://testnut.cashu.space',
+			'https://nofees.testnut.cashu.space',
+		]
 			.map((mint) => mint.trim().replace(/\/$/, ''))
 			.filter(Boolean),
 	),
@@ -172,6 +218,13 @@ const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[nu
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
 const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
+export const NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS = 15_000
+const AUCTION_DEPOSIT_PADDING_RATE = 0.005
+const AUCTION_DEPOSIT_MIN_PADDING_SATS = 5
+const AUCTION_DEPOSIT_MAX_PADDING_SATS = 100
+const AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS = 25
+const AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE = 0.1
+const AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS = 2000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
@@ -210,6 +263,72 @@ const AUCTION_RECLAIM_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200]
  */
 const AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS = ['witness is missing', 'signature is not valid', 'spending conditions not met']
 let auctionAutoReclaimLastSweepMs = 0
+
+/**
+ * Returns the bounded safety buffer for an auction funding deposit.
+ *
+ * The buffer is 0.5% of the requested deposit, rounded up, with a 5 sat
+ * minimum and 100 sat maximum. It is used only when the mint quote does not
+ * provide a fee component; it is not a fee reported by the mint.
+ */
+export const getAuctionDepositFeePadding = (depositAmount: number): number =>
+	Math.min(
+		Math.max(Math.ceil(depositAmount * AUCTION_DEPOSIT_PADDING_RATE), AUCTION_DEPOSIT_MIN_PADDING_SATS),
+		AUCTION_DEPOSIT_MAX_PADDING_SATS,
+	)
+
+export const getAuctionDepositMaxMintQuoteFeeSats = (requestedAmount: number): number => {
+	const relativeCap = Math.ceil(requestedAmount * AUCTION_MINT_QUOTE_FEE_RELATIVE_CAP_RATE)
+	return Math.min(AUCTION_MINT_QUOTE_FEE_ABSOLUTE_CAP_SATS, Math.max(AUCTION_MINT_QUOTE_FEE_MIN_CAP_SATS, relativeCap))
+}
+
+const extractInvoiceAmountSats = (invoice: string): number | null => {
+	const normalizedInvoice = invoice.trim().replace(/^lightning:/i, '')
+	if (!normalizedInvoice) return null
+
+	try {
+		const decoded = decodeBolt11(normalizedInvoice)
+		const amountMillisatsRaw = decoded.sections.find((section) => section.name === 'amount')?.value
+		if (amountMillisatsRaw == null) return null
+
+		const amountMillisats =
+			typeof amountMillisatsRaw === 'number'
+				? amountMillisatsRaw
+				: Number.parseInt(typeof amountMillisatsRaw === 'string' ? amountMillisatsRaw : String(amountMillisatsRaw), 10)
+
+		if (!Number.isFinite(amountMillisats) || amountMillisats <= 0) return null
+		return Math.ceil(amountMillisats / 1000)
+	} catch {
+		return null
+	}
+}
+
+export const validateAuctionDepositInvoiceQuote = (params: {
+	requestedAmount: number
+	depositAmount: number
+	invoiceAmountSats: number
+	mintUrl: string
+}): void => {
+	const { requestedAmount, depositAmount, invoiceAmountSats, mintUrl } = params
+	if (!Number.isFinite(invoiceAmountSats) || invoiceAmountSats <= 0) {
+		throw new Error('Mint returned an invalid Lightning invoice amount. Please retry with a different mint.')
+	}
+
+	if (invoiceAmountSats < depositAmount) {
+		throw new Error(
+			`Mint ${getMintHostname(mintUrl)} returned an invoice below the requested deposit amount. Please retry with a different mint.`,
+		)
+	}
+
+	const quoteFeeSats = invoiceAmountSats - depositAmount
+	const maxAllowedQuoteFeeSats = getAuctionDepositMaxMintQuoteFeeSats(requestedAmount)
+	if (quoteFeeSats > maxAllowedQuoteFeeSats) {
+		throw new Error(
+			`Mint ${getMintHostname(mintUrl)} returned an unusually high Lightning fee quote (${quoteFeeSats} sats on a ${requestedAmount} sat deposit). ` +
+				`Maximum allowed is ${maxAllowedQuoteFeeSats} sats. Please choose another mint.`,
+		)
+	}
+}
 
 /**
  * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
@@ -293,6 +412,33 @@ const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
 
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+const computePaddedDepositAmount = (
+	requiredBidFundingAmount: number,
+	mintFeePaddingAmount: number,
+	lightningFeePaddingAmount: number,
+): number => requiredBidFundingAmount + mintFeePaddingAmount + lightningFeePaddingAmount
+
+const buildDepositQuoteEstimate = (params: {
+	requiredBidFundingAmount: number
+	mintFeePaddingAmount: number
+	lightningFeePaddingAmount: number
+	mintFeeSource: 'quote' | 'fallback'
+	lightningFeeSource: 'quote' | 'fallback'
+}): Nip60DepositQuoteEstimate => {
+	const { requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount, mintFeeSource, lightningFeeSource } = params
+	const usedFallbackEstimate = mintFeeSource === 'fallback' || lightningFeeSource === 'fallback'
+	return {
+		requiredBidFundingAmount,
+		totalDepositAmount: computePaddedDepositAmount(requiredBidFundingAmount, mintFeePaddingAmount, lightningFeePaddingAmount),
+		mintFeePaddingAmount,
+		lightningFeePaddingAmount,
+		usedFallbackEstimate,
+		feeSource: usedFallbackEstimate ? 'fallback' : 'quote',
+		mintFeeSource,
+		lightningFeeSource,
+	}
+}
 
 const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk']): void => {
 	if (!ndk) return
@@ -496,7 +642,11 @@ const sha256Hex = async (value: string): Promise<string> => {
 
 const isLocalDevHost = (): boolean => {
 	if (typeof window === 'undefined') return false
-	const host = window.location.hostname
+	// Total predicate: never throw when `location` is absent (some test
+	// environments define a `window` global without one) — a dev-mode check
+	// must not be able to take down the caller's flow.
+	const host = window.location?.hostname
+	if (!host) return false
 	return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
 }
 
@@ -519,7 +669,7 @@ export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
 
 const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
-const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
+const savePendingTokens = (tokens: PendingToken[], options?: SaveUserDataOptions): void => saveUserData(PENDING_TOKENS_KEY, tokens, options)
 
 const updatePendingTokenRecord = (tokenId: string, updater: (token: PendingNip60Token) => PendingNip60Token): PendingNip60Token | null => {
 	let updatedToken: PendingNip60Token | null = null
@@ -561,6 +711,41 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: str
 	} finally {
 		if (timer) clearTimeout(timer)
 	}
+}
+
+const DEPOSIT_CONFIRMATION_TIMEOUT_LABEL = 'wallet acknowledgment and mint confirmation'
+
+const getDepositConfirmationTimeoutMessage = (timeoutMs: number): string =>
+	`${DEPOSIT_CONFIRMATION_TIMEOUT_LABEL} timeout after ${timeoutMs}ms`
+
+export const waitForDepositConfirmation = async (
+	deposit: Pick<NDKCashuDeposit, 'on'>,
+	timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS,
+): Promise<void> =>
+	withTimeout(
+		new Promise<void>((resolve, reject) => {
+			deposit.on('success', () => resolve())
+			deposit.on('error', (error) => reject(new Error(typeof error === 'string' ? error : String(error))))
+		}),
+		timeoutMs,
+		DEPOSIT_CONFIRMATION_TIMEOUT_LABEL,
+	)
+
+const isDepositConfirmationTimeoutError = (error: unknown, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): boolean =>
+	error instanceof Error && error.message === getDepositConfirmationTimeoutMessage(timeoutMs)
+
+const monitorDepositConfirmation = (deposit: NDKCashuDeposit, timeoutMs = NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS): void => {
+	void waitForDepositConfirmation(deposit, timeoutMs).catch((error) => {
+		const state = nip60Store.state
+		if (state.activeDeposit !== deposit || state.depositStatus !== 'pending') return
+		if (!isDepositConfirmationTimeoutError(error, timeoutMs)) return
+
+		nip60Store.setState((current) => ({
+			...current,
+			depositStatus: 'awaiting_confirmation_retry',
+			error: 'Payment confirmation timed out. Retry confirmation to check the mint again.',
+		}))
+	})
 }
 
 function extractPreimageCandidate(result: unknown): string | undefined {
@@ -785,6 +970,75 @@ const lockAuctionBidProofs = async (
 	})
 }
 
+/**
+ * #1235 round-3 B1 — the mint boundary is irreversible.
+ *
+ * Thrown by `lockAuctionBidFunds` for any failure that occurs once the lock
+ * flow may have sent a swap/lock request to the mint: the mint may have
+ * consumed the bidder's input proofs and/or issued P2PK-locked proofs. The
+ * outcome is UNCERTAIN — callers must NOT retry the lock in-session (a retry
+ * could double-consume inputs) and must NOT claim the leg is either locked
+ * or untouched. Recovery material (the pre-lock recovery record holding the
+ * refund private key) is persisted by the publish layer BEFORE the call that
+ * can throw this class; the wallet's pending-token record, when the swap
+ * response was processed, makes the leg reclaimable after the refund
+ * timelock opens.
+ *
+ * Conservative by design: errors from wallet creation or DLEQ-filter
+ * insufficiency INSIDE the swap phase are also classified mutation-possible
+ * (fail closed — a classification refinement inside the lock is deliberately
+ * not taken; see the round-3 plan's risk notes). Pre-lock validation errors
+ * (amount / wallet readiness / balance / proof selection) are thrown raw
+ * BEFORE any request could have been sent and are provably pre-mint.
+ */
+export class AuctionBidLockMutationPossibleError extends Error {
+	/** Mint the swap/lock request may have been sent to. */
+	public readonly mintUrl: string
+	/** Amount (sats) the leg attempted to lock. */
+	public readonly amount: number
+	/** P2PK pubkey the proofs were to be locked to. */
+	public readonly lockPubkey: string
+	/** Refund pubkey for the lock's refund branch. */
+	public readonly refundPubkey: string
+	/** Cashu locktime (unix seconds) the leg attempted. */
+	public readonly locktime: number
+	/**
+	 * #1235 round-3 fix 5 (felixfelix #11) — whether the wallet's STRICT
+	 * pending-token save had already succeeded when the failure escaped.
+	 * When false the leg is record-only: the wallet holds no durable
+	 * observation of the mint-issued proofs, so an in-app reclaim is NOT
+	 * promised. Honest default: false.
+	 */
+	public readonly pendingTokenPersisted: boolean
+	/** The underlying failure. */
+	public override readonly cause: unknown
+
+	constructor(params: {
+		mintUrl: string
+		amount: number
+		lockPubkey: string
+		refundPubkey: string
+		locktime: number
+		cause: unknown
+		pendingTokenPersisted?: boolean
+	}) {
+		const causeMessage = params.cause instanceof Error ? params.cause.message : String(params.cause)
+		super(
+			`Auction bid lock outcome is uncertain: a swap/lock request may already have been sent to ${params.mintUrl} ` +
+				`for ${params.amount} sats (${causeMessage}). The mint may or may not have issued locked proofs — do NOT retry the lock; ` +
+				'reclaim may be possible after the refund timelock opens.',
+		)
+		this.name = 'AuctionBidLockMutationPossibleError'
+		this.mintUrl = params.mintUrl
+		this.amount = params.amount
+		this.lockPubkey = params.lockPubkey
+		this.refundPubkey = params.refundPubkey
+		this.locktime = params.locktime
+		this.pendingTokenPersisted = params.pendingTokenPersisted ?? false
+		this.cause = params.cause
+	}
+}
+
 const assertAuctionBidProofsLockedToP2pk = (proofs: Proof[], expectedLockPubkey: string): void => {
 	for (const proof of proofs) {
 		let proofLockPubkey: string
@@ -814,18 +1068,18 @@ function getAllMints(wallet: NDKCashuWallet): string[] {
  * wallet.state.dump() provides the source of truth for proofs and balances.
  */
 function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; mintBalances: Record<string, number> } {
-	const dump = wallet.state.dump()
-	const mintBalances = { ...dump.balances }
+	const mintBalances: Record<string, number> = {}
+	let totalBalance = 0
 
-	// Ensure all configured mints are present (even with 0 balance)
-	for (const mint of wallet.mints ?? []) {
-		if (!(mint in mintBalances)) {
-			mintBalances[mint] = 0
-		}
+	for (const mint of getAllMints(wallet)) {
+		const spendableProofs = getSpendableProofsForMint(wallet, mint)
+		const balance = spendableProofs.reduce((sum, proof) => sum + proof.amount, 0)
+		mintBalances[mint] = balance
+		totalBalance += balance
 	}
 
 	return {
-		totalBalance: dump.totalBalance,
+		totalBalance,
 		mintBalances,
 	}
 }
@@ -1018,6 +1272,36 @@ export const nip60Actions = {
 						mints: nip60Store.state.mints,
 						mintBalances: nip60Store.state.mintBalances,
 					}),
+					getDepositStatus: () => ({
+						depositStatus: nip60Store.state.depositStatus,
+						depositInvoice: nip60Store.state.depositInvoice,
+						error: nip60Store.state.error,
+					}),
+					/**
+					 * Dev-only: simulate a Lightning invoice payment by emitting
+					 * the 'success' event on the active NDKCashuDeposit. This
+					 * triggers the same store transition as a real mint
+					 * confirmation, making it possible to e2e-test the funding
+					 * → mint → bid-publish flow without a Lightning node.
+					 */
+					simulateDepositSuccess: () => {
+						const deposit = nip60Store.state.activeDeposit
+						if (deposit) {
+							// Dev-only fake: the real 'success' event carries the minted
+							// NDKCashuToken, but this simulation never minted one. Store
+							// listeners ignore the payload, so the null payload is cast to
+							// the emitter's expected event type instead of relying on
+							// emit()'s unsound acceptance of null (review #1235, blocker 3).
+							deposit.emit('success', null as never)
+						}
+					},
+					/**
+					 * Dev-only: explicitly register a mint URL in the wallet.
+					 * Exposed via the __nip60 bridge so e2e tests can call
+					 * nip60Actions.addMint() after fundWallet to ensure the
+					 * mint appears in the store before the deposit modal opens.
+					 */
+					addMint: nip60Actions.addMint,
 				}
 			}
 		} catch (err) {
@@ -1403,11 +1687,21 @@ export const nip60Actions = {
 	 * @param amount Amount in sats to deposit
 	 * @param mint Optional mint URL (uses default if not specified)
 	 */
-	startDeposit: async (amount: number, mint?: string): Promise<string | null> => {
+	startDeposit: async (amount: number, mint?: string, options?: Nip60DepositOptions): Promise<string | null> => {
 		const wallet = nip60Store.state.wallet
 		const state = nip60Store.state
 		if (!wallet) {
 			console.warn('[nip60] Cannot deposit without wallet')
+			return null
+		}
+
+		const requestedAmount = Math.ceil(amount)
+		if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'error',
+				error: 'Deposit amount must be a positive integer.',
+			}))
 			return null
 		}
 
@@ -1436,8 +1730,40 @@ export const nip60Actions = {
 
 			await primeDevTestMintDepositWalletCache(wallet, targetMint)
 
-			const deposit = wallet.deposit(amount, targetMint)
-			const invoice = await deposit.start()
+			let depositAmount = requestedAmount
+			if (options?.includeFeePadding) {
+				// #4: Fallback-only fee design — we do NOT call the mint quote API
+				// here to estimate fees. Instead, we add a conservative static padding
+				// (0.5%, min 5 sats, max 100 sats) via getAuctionDepositFeePadding().
+				// This avoids creating an abandoned mint quote (and consuming mint
+				// rate-limit budget) just for estimation. The actual Lightning fee
+				// is whatever the mint embeds in the invoice returned by
+				// deposit.start(); validateAuctionDepositInvoiceQuote() then checks
+				// that the invoice fee is within acceptable caps before we show it.
+				// estimateDepositQuote() exposes the same fallback logic for callers
+				// that need a pre-flight estimate without side effects.
+				depositAmount = requestedAmount + getAuctionDepositFeePadding(requestedAmount)
+			}
+
+			const deposit = wallet.deposit(depositAmount, targetMint)
+			// #3: Wrap deposit.start() in a 15s timeout so a hung mint quote
+			// request doesn't leave the user staring at a spinner indefinitely.
+			// The ADR §3b timeout also covers the post-payment confirmation phase
+			// via monitorDepositConfirmation() below.
+			const invoice = await withTimeout(deposit.start(), NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS, 'deposit invoice creation')
+
+			if (invoice) {
+				const invoiceAmountSats = extractInvoiceAmountSats(invoice)
+				if (invoiceAmountSats == null) {
+					throw new Error('Mint returned an invoice without a parseable amount. Please retry with a different mint.')
+				}
+				validateAuctionDepositInvoiceQuote({
+					requestedAmount,
+					depositAmount,
+					invoiceAmountSats,
+					mintUrl: targetMint,
+				})
+			}
 
 			nip60Store.setState((s) => ({
 				...s,
@@ -1445,8 +1771,12 @@ export const nip60Actions = {
 				depositInvoice: invoice ?? null,
 			}))
 
-			// Listen for deposit completion
+			// Listen for deposit completion. Both listeners are identity-guarded
+			// (`activeDeposit === deposit`, the same guard monitorDepositConfirmation
+			// applies below): a stale listener from an earlier deposit session must
+			// never overwrite a newer session's status (review #1235, blocker 3).
 			deposit.on('success', (token) => {
+				if (nip60Store.state.activeDeposit !== deposit) return
 				nip60Store.setState((s) => ({
 					...s,
 					depositStatus: 'success',
@@ -1458,6 +1788,7 @@ export const nip60Actions = {
 			})
 
 			deposit.on('error', (err: Error | string) => {
+				if (nip60Store.state.activeDeposit !== deposit) return
 				console.error('[nip60] Deposit error:', err)
 				nip60Store.setState((s) => ({
 					...s,
@@ -1467,6 +1798,8 @@ export const nip60Actions = {
 					depositInvoice: null,
 				}))
 			})
+
+			monitorDepositConfirmation(deposit)
 
 			return invoice ?? null
 		} catch (err) {
@@ -1482,17 +1815,107 @@ export const nip60Actions = {
 		}
 	},
 
-	/**
-	 * Cancel an active deposit
-	 */
-	cancelDeposit: (): void => {
-		nip60Store.setState((s) => ({
-			...s,
-			activeDeposit: null,
-			depositInvoice: null,
-			depositStatus: 'idle',
+	retryDepositConfirmation: (): void => {
+		const { activeDeposit, depositStatus } = nip60Store.state
+		if (!activeDeposit || depositStatus !== 'awaiting_confirmation_retry') return
+
+		nip60Store.setState((state) => ({
+			...state,
+			depositStatus: 'pending',
 			error: null,
 		}))
+
+		monitorDepositConfirmation(activeDeposit)
+		void activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
+			console.error('[nip60] Deposit confirmation retry failed:', error)
+		})
+	},
+
+	/**
+	 * Manual "check now" for a "Confirm" button — unlike `retryDepositConfirmation`,
+	 * this isn't gated behind the `awaiting_confirmation_retry` timeout state, so it
+	 * works while a deposit is still `pending`. Reuses the success/error listeners
+	 * `startDeposit` already attached to `activeDeposit`, so a payment found here
+	 * still transitions `depositStatus` normally.
+	 */
+	checkDepositNow: async (): Promise<void> => {
+		const { activeDeposit, depositStatus } = nip60Store.state
+		if (!activeDeposit || (depositStatus !== 'pending' && depositStatus !== 'awaiting_confirmation_retry')) return
+
+		if (depositStatus === 'awaiting_confirmation_retry') {
+			nip60Actions.retryDepositConfirmation()
+			return
+		}
+
+		try {
+			await activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
+		} catch (error) {
+			console.error('[nip60] Manual deposit check failed:', error)
+		}
+	},
+
+	estimateDepositQuote: async (amount: number, mintUrl: string): Promise<Nip60DepositQuoteEstimate> => {
+		const requiredBidFundingAmount = Math.ceil(amount)
+		const targetMint = normalizeMintUrl(mintUrl)
+		if (!Number.isFinite(requiredBidFundingAmount) || requiredBidFundingAmount <= 0) {
+			throw new Error('Deposit quote amount must be a positive integer')
+		}
+		if (!targetMint) {
+			throw new Error('Mint URL is required for deposit quote estimation')
+		}
+
+		const fallbackPaddingAmount = getAuctionDepositFeePadding(requiredBidFundingAmount)
+
+		// Conservative fallback estimate: apply the same bounded safety buffer to
+		// BOTH the Lightning routing fee and the mint's own minting fee. The real
+		// fees are validated (and the mint fee capped) by
+		// validateAuctionDepositInvoiceQuote when the actual invoice arrives; here
+		// we never call mint quote APIs (which would consume rate-limit budget for
+		// a pre-flight estimate), so we use the same static buffer for both
+		// components. Over-estimating is the safe direction for a pre-flight total.
+		return buildDepositQuoteEstimate({
+			requiredBidFundingAmount,
+			mintFeePaddingAmount: fallbackPaddingAmount,
+			lightningFeePaddingAmount: fallbackPaddingAmount,
+			mintFeeSource: 'fallback',
+			lightningFeeSource: 'fallback',
+		})
+	},
+
+	/**
+	 * Cancel an active deposit.
+	 *
+	 * Default (no options / `preserveRecovery` unset): full clear of the
+	 * deposit session — quote identity, invoice, and UI status are all reset
+	 * (unchanged historical behavior).
+	 *
+	 * `{ preserveRecovery: true }`: the deposit UI is being closed while the
+	 * payment outcome is paid-or-uncertain (`depositStatus` 'pending' or
+	 * 'awaiting_confirmation_retry'). Release the UI but KEEP the deposit /
+	 * quote identity (`activeDeposit` + `depositInvoice`) so
+	 * `retryDepositConfirmation()` and `checkDepositNow()` can still
+	 * reconcile the SAME Lightning payment without a fresh funding session
+	 * (review #1235, blocker 3); only the transient error display is reset.
+	 * Terminal (`success`/`error`) and `idle` states have no recoverable
+	 * quote to preserve, so they fall through to the full clear.
+	 */
+	cancelDeposit: (options?: { preserveRecovery?: boolean }): void => {
+		const preserveRecovery = options?.preserveRecovery ?? false
+		nip60Store.setState((s) => {
+			const recoverable = s.depositStatus === 'pending' || s.depositStatus === 'awaiting_confirmation_retry'
+			if (preserveRecovery && s.activeDeposit && recoverable) {
+				// Keep activeDeposit / depositInvoice / depositStatus — the
+				// reconciliation handle for the SAME Lightning payment.
+				return { ...s, error: null }
+			}
+			return {
+				...s,
+				activeDeposit: null,
+				depositInvoice: null,
+				depositStatus: 'idle',
+				error: null,
+			}
+		})
 	},
 
 	/**
@@ -1687,7 +2110,7 @@ export const nip60Actions = {
 			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
 		}
 
-		const mintProofs = getProofsForMint(wallet, targetMint)
+		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
 		if (mintProofs.length === 0) {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
 		}
@@ -1696,6 +2119,14 @@ export const nip60Actions = {
 		if (selectedTotal < amount) {
 			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
 		}
+
+		// #1235 round-3 fix 5 (felixfelix #11) — whether the wallet durably
+		// observed the mint-issued proofs (the STRICT pending-token save below
+		// succeeded) before any later failure escaped. Read by the catch below
+		// and threaded onto AuctionBidLockMutationPossibleError: without the
+		// pending token the leg is record-only and an in-app reclaim must not
+		// be promised.
+		let pendingTokenPersisted = false
 
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
@@ -1744,7 +2175,7 @@ export const nip60Actions = {
 						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
 					}
 
-					const refreshedProofs = getProofsForMint(wallet, targetMint)
+					const refreshedProofs = getSpendableProofsForMint(wallet, targetMint)
 					const retryAfterConsolidate = await lockAuctionBidProofs(cashuWallet, amount, refreshedProofs, buildLockOptions(false))
 					lockedProofs = retryAfterConsolidate.send
 					changeProofs = retryAfterConsolidate.keep
@@ -1754,7 +2185,6 @@ export const nip60Actions = {
 			if (!lockedProofs.length) {
 				throw new Error('Mint returned no locked proofs for bid')
 			}
-			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
 
 			const token = getEncodedToken({
 				mint: targetMint,
@@ -1789,8 +2219,23 @@ export const nip60Actions = {
 				...(pendingContext ? { context: pendingContext } : {}),
 			}
 			const pendingTokens = [...nip60Store.state.pendingTokens, pendingToken]
-			savePendingTokens(pendingTokens)
+			// #1235 round-3 B1 — STRICT + BEFORE the post-lock assert: the swap
+			// above already ran, so the mint may have issued locked proofs. The
+			// pending-token record is the wallet's durable observation of those
+			// proofs — it must be durably persisted (fail-closed: a storage
+			// failure here surfaces as mutation-possible) BEFORE the first
+			// fallible post-swap check (the P2PK-lock assert below) can throw.
+			// With the record on disk, a leg whose proofs turn out to be locked
+			// to the wrong key is still reclaim-eligible after the refund
+			// timelock instead of silently stranded.
+			savePendingTokens(pendingTokens, { strict: true })
+			// #1235 round-3 fix 5: the STRICT save succeeded — from here on, any
+			// escaping failure leaves a leg the wallet CAN observe (and reclaim
+			// after the refund timelock).
+			pendingTokenPersisted = true
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
+			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
 
 			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
 			// the balance UI doesn't briefly double-count the consumed
@@ -1857,7 +2302,28 @@ export const nip60Actions = {
 			}
 		} catch (err) {
 			console.error('[nip60] Failed to lock auction bid funds:', err)
-			throw err
+			// #1235 round-3 B1 — conservative mutation-possible wrap. Everything
+			// this catch can see escaped from the post-selection try above:
+			// wallet creation, the swap attempts, or the post-swap local work. A
+			// swap request may already have been sent — fail closed and classify
+			// the outcome as mutation-possible unless it already is. Pre-try
+			// validation errors (amount / wallet readiness / balance / proof
+			// selection) never reach this catch and stay raw (provably pre-mint).
+			if (err instanceof AuctionBidLockMutationPossibleError) throw err
+			throw new AuctionBidLockMutationPossibleError({
+				mintUrl: targetMint,
+				amount,
+				lockPubkey,
+				refundPubkey,
+				locktime,
+				cause: err,
+				// #1235 round-3 fix 5 (felixfelix #11): thread the durable-observation
+				// flag through — the post-lock copy above decides between honest
+				// reclaim guidance (persisted) and honest record-only guidance
+				// (never persisted). Honest default false (never claims a reclaim
+				// the wallet cannot perform).
+				pendingTokenPersisted,
+			})
 		}
 	},
 
@@ -1896,7 +2362,7 @@ export const nip60Actions = {
 		}
 
 		// Get proofs for this mint using shared utility
-		const mintProofs = getProofsForMint(wallet, targetMint)
+		const mintProofs = getSpendableProofsForMint(wallet, targetMint)
 
 		if (mintProofs.length === 0) {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
@@ -2171,9 +2637,6 @@ export const nip60Actions = {
 			auctionLocktimeAt: maxEndAt,
 			settlementGraceSeconds,
 			sellerPubkey: selected.pubkey,
-			// Legacy field kept for back-compat with the publish form.
-			// publishAuctionBid no longer uses it for path issuance.
-			pathIssuerPubkey: '',
 			p2pkXpub,
 			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
 		}
@@ -2350,16 +2813,23 @@ export const nip60Actions = {
 		//      intentionally NOT added to `wallet.privkeys` because that
 		//      map is for the wallet's general signing keys; mixing in
 		//      per-bid throwaway keys would bloat it across many bids.
-		//   2. The wallet's `privkeys` map. Legacy path; covers older
+		//   2. The pre-lock recovery record (#1235 round-3 B1). A leg whose
+		//      lock outcome was UNCERTAIN never got a full bidder record,
+		//      but its refund privkey was durably persisted before the
+		//      mint call — that record is exactly the recovery authority
+		//      for the pending token the swap may have left behind.
+		//   3. The wallet's `privkeys` map. Legacy path; covers older
 		//      bids placed before the BidderBidRecord scheme existed and
 		//      provides a safety net if the local record is missing but
 		//      the user happens to also hold the privkey in their wallet.
-		//   3. None → stop. Without the privkey the timelock refund
+		//   4. None → stop. Without the privkey the timelock refund
 		//      branch can't be signed; falling through would just spam
 		//      the mint with "witness missing" 4xx responses.
 		const bidderRecord = auctionContext ? findBidderRecordByRefundPubkey(auctionContext.refundPubkey) : null
+		const preLockRecoveryRecord = auctionContext ? findPreLockRecoveryRecordByRefundPubkey(auctionContext.refundPubkey) : null
 		const refundPrivkey =
-			bidderRecord?.refundPrivateKey ?? (auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null)
+			bidderRecord?.refundPrivateKey ??
+			(auctionContext ? (preLockRecoveryRecord?.refundPrivateKey ?? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey)) : null)
 
 		if (auctionContext && !refundPrivkey) {
 			const walletPrivkeyCount = wallet.privkeys.size
@@ -2413,6 +2883,13 @@ export const nip60Actions = {
 			)
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
+			// #1235 round-3 B1 — the leg is recovered: drop its pre-lock recovery
+			// record (GC). The record held the refund authority while the leg was
+			// in limbo; a successful reclaim makes it obsolete.
+			if (preLockRecoveryRecord) {
+				removePreLockRecoveryRecord(preLockRecoveryRecord.refundPubkey)
+			}
 
 			await nip60Actions.refresh()
 		} catch (err) {
