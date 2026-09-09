@@ -141,6 +141,39 @@ describe('cart store persistence orchestration', () => {
 		expect(cartStore.state.lastCartIntentUpdatedAt).toBe(300)
 	})
 
+	test('fetches seller shipping options when a d-tag contains colons', async () => {
+		const shippingRef = `30406:${sellerPubkey}:zone:europe:express`
+		cartTestUtils.setSyncDependencies({
+			getProductEvent: async () =>
+				({
+					pubkey: sellerPubkey,
+					tags: [['shipping_option', shippingRef, '2']],
+				}) as any,
+			getShippingEvent: async () =>
+				({
+					pubkey: sellerPubkey,
+					tags: [
+						['d', 'zone:europe:express'],
+						['title', 'European Express'],
+						['price', '8', 'USD'],
+						['service', 'express'],
+					],
+				}) as any,
+		})
+		cartStore.setState((state) => ({
+			...state,
+			productsBySeller: {
+				[sellerPubkey]: [{ id: 'product-1', sellerPubkey, amount: 1 } as any],
+			},
+		}))
+
+		await cartActions.fetchAndSetSellerShippingOptions()
+
+		expect(cartStore.state.sellerShippingOptions[sellerPubkey]).toEqual([
+			expect.objectContaining({ id: shippingRef, cost: 10, currency: 'USD' }),
+		])
+	})
+
 	test('user mutation schedules debounced publish', async () => {
 		const published: any[] = []
 		cartTestUtils.setSyncDependencies({

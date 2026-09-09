@@ -12,6 +12,44 @@ export type FiatPriceEditOutcome = {
 	fiatPrice: string
 } | null
 
+export type BitcoinPriceEditOutcome = {
+	price: string
+	fiatPrice: string
+} | null
+
+/**
+ * Applies a Bitcoin price edit to the form state.
+ *
+ * In fiat-fixed mode, the fiat value is the publication authority, so it is
+ * refreshed from the sats edit when possible and cleared when the conversion
+ * cannot be confirmed. In sats-fixed mode the fiat value is display-only.
+ */
+export function applyBitcoinPriceEdit(
+	rawValue: string,
+	bitcoinUnit: 'SATS' | 'BTC',
+	convert: (sats: number, currency: string) => number,
+	context: { currency: string; currencyMode: 'sats' | 'fiat'; isFiatCurrency: boolean; hasExchangeRates: boolean },
+	convertBtcToSats: (btc: number) => number,
+): BitcoinPriceEditOutcome {
+	if (rawValue === '') return { price: '', fiatPrice: '' }
+
+	const numValue = parseFloat(rawValue)
+	if (isNaN(numValue)) return null
+
+	const satsValue = bitcoinUnit === 'SATS' ? Math.round(numValue) : convertBtcToSats(numValue)
+	const price = satsValue.toString()
+	if (!context.isFiatCurrency || !context.hasExchangeRates || satsValue === 0) {
+		return { price, fiatPrice: '' }
+	}
+
+	const fiatValue = convert(satsValue, context.currency)
+	if (!Number.isFinite(fiatValue)) {
+		return { price, fiatPrice: '' }
+	}
+
+	return { price, fiatPrice: fiatValue.toFixed(2) }
+}
+
 /**
  * Applies a fiat price edit to the form state.
  *
@@ -62,6 +100,31 @@ export type SatsDerivationState = {
 	price: string
 	currency: string
 	hasExchangeRates: boolean
+}
+
+export type FiatDisplayConversionState = {
+	fiatDisplayValue: string
+	currency: string
+	hasExchangeRates: boolean
+}
+
+/**
+ * Returns whether a displayed fiat equivalent cannot be confirmed with the
+ * current exchange-rate data. This deliberately does not depend on currency
+ * mode: in sats-fixed mode, a visible fiat equivalent can be stale after
+ * exchange rates disappear.
+ */
+export function isFiatDisplayConversionUnavailable(
+	state: FiatDisplayConversionState,
+	convert: (amount: number, currency: string) => number,
+): boolean {
+	if (state.fiatDisplayValue === '') return false
+
+	const fiatValue = Number(state.fiatDisplayValue)
+	if (!Number.isFinite(fiatValue)) return true
+	if (!state.hasExchangeRates) return true
+
+	return !Number.isFinite(convert(fiatValue, state.currency))
 }
 
 /**
