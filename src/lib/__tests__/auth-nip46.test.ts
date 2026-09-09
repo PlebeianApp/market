@@ -392,6 +392,34 @@ describe('completeNip46LoginHandshake', () => {
 		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
 	})
 
+	test('does not treat the remote-signer pubkey as an expected user identity during timeout recovery', async () => {
+		// A fresh QR or bunker login with no persisted user pubkey: the signer's
+		// userPubkey is still populated from the bunker URL with the REMOTE SIGNER
+		// pubkey, not the actual user. get_public_key returns the real (different)
+		// user pubkey. The bunker key must not act as an expected-user candidate,
+		// or this legitimate login fails closed (BLOCK #1 maximotodev).
+		const signer = {
+			bunkerPubkey: remoteSignerPubkey,
+			blockUntilReady: mock(() => new Promise(() => {})),
+			getPublicKey: mock(async () => actualUserPubkey),
+			userPubkey: remoteSignerPubkey,
+			rpc: {
+				eventNames: mock(() => []),
+				removeAllListeners: mock(() => {}),
+			},
+		}
+		const ndk = {
+			getUser: ({ pubkey }: { pubkey: string }) => ({ pubkey }),
+		}
+
+		const loginResult = await completeNip46LoginHandshake(signer as any, undefined, 1, ndk as any)
+
+		expect(loginResult?.user.pubkey).toBe(actualUserPubkey)
+		expect(loginResult?.signer).toBe(signer as any)
+		expect(signer.getPublicKey).toHaveBeenCalledTimes(1)
+		expect(signer.bunkerPubkey).toBe(remoteSignerPubkey)
+	})
+
 	test('rejects a completed handshake that differs from the persisted expected user', async () => {
 		const responseEvents = ['response-existing']
 		const removeAllListeners = mock(() => {})

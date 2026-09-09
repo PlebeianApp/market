@@ -112,8 +112,12 @@ async function recoverNip46UserPubkey(
 	expectedUserPubkey: string | undefined,
 	timeoutMs: number,
 ): Promise<string | null> {
+	// Only the explicitly-provided expectedUserPubkey (persisted from a prior
+	// login) is a valid expected user identity. The remote-signer/bunker pubkey
+	// (signer.userPubkey) is a NIP-46 communication endpoint and must never be
+	// treated as an expected or fallback user pubkey (maximotodev BLOCK #1).
 	const configuredUserPubkey = signer.userPubkey
-	const expectedPubkeys = new Set([expectedUserPubkey, configuredUserPubkey].filter((value): value is string => Boolean(value)))
+	const expectedPubkeys = new Set([expectedUserPubkey].filter((value): value is string => Boolean(value)))
 	const knownResponseEvents = new Set(getNip46ResponseEventNames(signer))
 	const recoveryTimeoutMs = Math.max(1, timeoutMs)
 	const timeoutError = new Error('NIP-46 get_public_key recovery timed out')
@@ -143,6 +147,9 @@ async function recoverNip46UserPubkey(
 		signer.userPubkey = userPubkey
 		return userPubkey
 	} catch (error) {
+		// Restore the pubkey NDK populated from the bunker URL. It is a NIP-46
+		// communication endpoint, not a user identity; we leave the signer in
+		// the state recovery found it after a failed recovery.
 		signer.userPubkey = configuredUserPubkey
 		console.warn('[NIP46] get_public_key recovery failed', error)
 		return null
