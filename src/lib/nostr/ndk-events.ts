@@ -66,6 +66,44 @@ export function rehydrateVerifiedNdkEvent(ndk: NdkEventContext, event: Event): N
 	}
 }
 
+/**
+ * NDK-equivalent deduplication key for an event, mirroring
+ * `NDKEvent.deduplicationKey()` (verified against the pinned NDK package
+ * source): kinds 0, 3, and 10k–20k collapse to `kind:pubkey`; parameterized
+ * replaceable kinds (30k–40k) collapse to `kind:pubkey:d`; every other kind
+ * keys on the event id. This is the coordinate-level identity the seam must
+ * dedupe on so conflicting `created_at` versions of the *same* addressable
+ * event collected from different relays collapse to one, exactly as NDK's
+ * `fetchEvents` did — never relay-arrival order.
+ */
+function deduplicationKey(event: NDKEvent): string {
+	const kind = event.kind
+	if (kind === 0 || kind === 3 || (kind >= 1e4 && kind < 2e4)) {
+		return `${kind}:${event.pubkey}`
+	}
+	if (kind >= 3e4 && kind < 4e4) {
+		const dTag = event.tags.find((t) => t[0] === 'd')?.[1] ?? ''
+		return `${kind}:${event.pubkey}:${dTag}`
+	}
+	return event.id
+}
+
+/**
+ * Deterministic latest-wins comparator (NIP-01): higher `created_at` wins;
+ * on an equal `created_at` tie the lexicographically lowest event id wins
+ * (direct string comparison, not locale collation). Returns a negative number
+ * when `a` should sort before `b` (i.e. `a` is the winner). Centralized here
+ * so every latest helper and the set dedup share one ordering rule.
+ */
+function compareLatest(a: NDKEvent, b: NDKEvent): number {
+	const aTime = a.created_at ?? 0
+	const bTime = b.created_at ?? 0
+	if (aTime !== bTime) return bTime - aTime
+	if (a.id < b.id) return -1
+	if (a.id > b.id) return 1
+	return 0
+}
+
 export async function fetchNdkEventSet(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
 	ndk: NdkEventContext,
@@ -73,12 +111,19 @@ export async function fetchNdkEventSet(
 	opts?: FetchOptions,
 ): Promise<Set<NDKEvent>> {
 	const rawEvents = await nostrIo.fetchEvents(filter as NostrFilter | NostrFilter[], opts)
-	const eventsById = new Map<string, NDKEvent>()
+	const eventsByKey = new Map<string, NDKEvent>()
 	for (const event of rawEvents) {
 		const ndkEvent = rehydrateVerifiedNdkEvent(ndk, event)
-		if (ndkEvent && !eventsById.has(ndkEvent.id)) eventsById.set(ndkEvent.id, ndkEvent)
+		if (!ndkEvent) continue
+		const key = deduplicationKey(ndkEvent)
+		const existing = eventsByKey.get(key)
+		// Keep the latest-wins copy on coordinate conflict (NDK dedup parity);
+		// on a created_at tie the lexicographically lowest id wins.
+		if (!existing || compareLatest(ndkEvent, existing) < 0) {
+			eventsByKey.set(key, ndkEvent)
+		}
 	}
-	return new Set(eventsById.values())
+	return new Set(eventsByKey.values())
 }
 
 /**
@@ -87,9 +132,10 @@ export async function fetchNdkEventSet(
  * Deterministic latest-wins (NDK dedup-key parity): replaceable and
  * parameterized events can arrive as multiple conflicting `created_at`
  * versions — one per relay, each that relay's current "latest" — and NDK's
- * deduplication kept the newest copy on conflict. Sort candidates by
- * `created_at` desc instead of keeping the first arrival. For immutable
- * events every copy has identical content, so the sort is a no-op.
+ * deduplication kept the newest copy on conflict. `fetchNdkEventSet` already
+ * collapses coordinate conflicts to one latest; this picks the single winner
+ * with the same `created_at DESC, id ASC` ordering. For immutable events every
+ * copy has identical content, so the sort is a no-op.
  */
 export async function fetchNdkEvent(
 	nostrIo: Pick<NostrIo, 'fetchEvents'>,
@@ -99,7 +145,7 @@ export async function fetchNdkEvent(
 ): Promise<NDKEvent | null> {
 	const events = await fetchNdkEventSet(nostrIo, ndk, filter, opts)
 	if (events.size === 0) return null
-	return Array.from(events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	return Array.from(events).sort(compareLatest)[0]
 }
 
 /**
@@ -117,7 +163,7 @@ export async function fetchLatestNdkEvent(
 	if (!ndk) return null
 	const events = Array.from(await fetchNdkEventSet(nostrIo, ndk, filter, opts))
 	if (events.length === 0) return null
-	return events.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	return events.sort(compareLatest)[0]
 }
 
 export function mergeNdkEventSetsById(...eventSets: Set<NDKEvent>[]): Set<NDKEvent> {
