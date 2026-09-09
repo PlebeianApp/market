@@ -2,7 +2,7 @@ import { submitAppSettings } from '@/lib/appSettings'
 import { ndkActions } from '@/lib/nostr/ndk-store-seam'
 import { fetchBlacklistSettings } from '@/queries/blacklist'
 import { configKeys } from '@/queries/queryKeyFactory'
-import { NDK, NDKEvent, type NDKSigner, type NDKTag } from '@/lib/nostr/ndk-events'
+import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@/lib/nostr/ndk-events'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
