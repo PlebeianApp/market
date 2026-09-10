@@ -47,6 +47,11 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 // ============================================================================
 
 const KEYSET_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — keysets rotate rarely
+// A transient mint failure (network blip, timeout, 5xx) must NOT be cached for
+// the full success TTL, or settlement stays degraded long after the mint
+// recovers. Cache failures for only a few seconds so the next call re-queries
+// the mint and picks up the real keyset as soon as it is back.
+const KEYSET_CACHE_FAILURE_TTL_MS = 5 * 1000 // 5 seconds — short negative-cache window
 const KEYSET_FETCH_TIMEOUT_MS = 2000 // bound the mint HTTP call so a slow mint cannot hang the UI
 const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number }>()
 
@@ -89,8 +94,14 @@ async function requestWithTimeout<T>({ endpoint, requestBody, headers, ...signal
 
 export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	const cached = keysetCache.get(mintUrl)
-	if (cached && Date.now() - cached.cachedAt < KEYSET_CACHE_TTL_MS) {
-		return cached.keysets
+	if (cached) {
+		// A cached empty keyset is a negative-cache entry (a transient failure)
+		// and expires after the short failure TTL; a real keyset uses the long
+		// success TTL. This lets settlement recover as soon as the mint is back.
+		const ttl = cached.keysets.length === 0 ? KEYSET_CACHE_FAILURE_TTL_MS : KEYSET_CACHE_TTL_MS
+		if (Date.now() - cached.cachedAt < ttl) {
+			return cached.keysets
+		}
 	}
 	let keysets: MintKeyset[]
 	try {
