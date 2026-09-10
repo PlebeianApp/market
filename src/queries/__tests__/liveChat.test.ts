@@ -59,7 +59,13 @@ function signActivity(
 }
 
 function forgeSignature(event: NostrEvent): NostrEvent {
-	return { ...event, sig: '0'.repeat(128) }
+	// Spread copies the nostr-tools `verifiedSymbol` marker (a symbol-keyed
+	// property set by finalizeEvent), which makes verifyEvent short-circuit to
+	// true without checking the signature. Strip it so the forged sig is
+	// actually verified and rejected.
+	const forged = { ...event, sig: '0'.repeat(128) } as NostrEvent & { [k: symbol]: unknown }
+	delete (forged as Record<symbol, unknown>)[Object.getOwnPropertySymbols(event)[0]]
+	return forged
 }
 
 function auctionEvent(pubkey: string = SELLER_PUBKEY, dTag: string = 'auction-1') {

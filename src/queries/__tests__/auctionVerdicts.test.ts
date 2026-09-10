@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools'
 import { VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
-import type { NostrEvent, NostrFilter } from '@/lib/nostr/io'
+import { applesauceIo, type NostrEvent, type NostrFilter } from '@/lib/nostr/io'
 
 type RelayEvent = NostrEvent
 
@@ -57,12 +57,20 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 	ndkActions: {
 		getNDK: () => ({}),
-		fetchEventsWithTimeout: mock(async (filter: NostrFilter) => {
-			fetchedFilters.push(filter)
-			return relayEvents
-		}),
 	},
 }))
+
+// fetchAuctionVerdicts reads through fetchNdkEventSet(applesauceIo, ...), so the
+// fetch seam to stub is applesauceIo.fetchEvents — NOT ndkActions.fetchEventsWithTimeout
+// (which the source no longer calls). Capture the real impl to restore in afterEach.
+const realFetchEvents = applesauceIo.fetchEvents
+
+function stubFetch() {
+	applesauceIo.fetchEvents = mock(async (filter: NostrFilter | NostrFilter[]) => {
+		fetchedFilters.push(filter as NostrFilter)
+		return [...relayEvents]
+	}) as typeof applesauceIo.fetchEvents
+}
 
 const { fetchAuctionVerdicts } = await import('@/queries/auctions')
 
@@ -76,17 +84,17 @@ const validatorPubkey = getPublicKey(validatorSecretKey)
 const rogueSecretKey = generateSecretKey()
 const roguePubkey = getPublicKey(rogueSecretKey)
 
-function verdictEvent(signerSecretKey: Uint8Array, createdAt: number, content = ''): NostrEvent {
+function verdictEvent(signerSecretKey: Uint8Array, createdAt: number, content = '', bidEventId = 'c'.repeat(64)): NostrEvent {
 	return finalizeEvent(
 		{
 			kind: VALIDATOR_VERDICT_KIND as unknown as number,
 			created_at: createdAt,
 			content,
 			tags: [
-				['d', `${'b'.repeat(64)}:${AUCTION_ROOT_EVENT_ID}:${'c'.repeat(64)}`],
+				['d', `${'b'.repeat(64)}:${AUCTION_ROOT_EVENT_ID}:${bidEventId}`],
 				['p', 'b'.repeat(64)],
 				['e', AUCTION_ROOT_EVENT_ID],
-				['bid', 'c'.repeat(64)],
+				['bid', bidEventId],
 				['a', AUCTION_COORDINATE],
 				['claim', 'valid_bid_placed'],
 				['observed_at', String(createdAt)],
@@ -101,6 +109,11 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 		fetchedFilters = []
 		relayEvents = new Set()
 		verifyEventResult = null
+		stubFetch()
+	})
+
+	afterEach(() => {
+		applesauceIo.fetchEvents = realFetchEvents
 	})
 
 	test('backwards compatible: no auditors passed means no authors filter', async () => {
@@ -136,15 +149,19 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	})
 
 	test('drops unverified events at the parse boundary before they can be rendered', async () => {
-		const signed = verdictEvent(validatorSecretKey, 10)
+		const signed = verdictEvent(validatorSecretKey, 10, '', '1'.repeat(64))
 		// A tampered event keeps its (now stale) id/sig but altered content,
 		// and an unsigned event carries no signature — both must be dropped.
-		const tampered = { ...signed, content: 'forged' } as NostrEvent
-		const unsigned = { ...signed, sig: '' } as NostrEvent
+		// Each carries a distinct bid id so they are distinct addressable
+		// verdicts (dedup does not collapse them before the verify filter).
+		const tampered = { ...verdictEvent(validatorSecretKey, 10, '', '2'.repeat(64)), content: 'forged' } as NostrEvent
+		const unsigned = { ...verdictEvent(validatorSecretKey, 10, '', '3'.repeat(64)), sig: '' } as NostrEvent
 		relayEvents = new Set([signed, tampered, unsigned])
 
 		// Control the seam so only the genuine signed event passes verification.
-		verifyEventResult = (event) => event === signed
+		// Compare by id: fetchNdkEventSet rehydrates raw events into NDKEvent
+		// wrappers, so the raw event reference differs from the fixture.
+		verifyEventResult = (event) => event.id === signed.id
 
 		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE)
 
@@ -167,8 +184,8 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	})
 
 	test('keeps a properly signed, authorized verdict and returns it newest-first', async () => {
-		const older = verdictEvent(validatorSecretKey, 10)
-		const newer = verdictEvent(validatorSecretKey, 20)
+		const older = verdictEvent(validatorSecretKey, 10, '', '1'.repeat(64))
+		const newer = verdictEvent(validatorSecretKey, 20, '', '2'.repeat(64))
 		relayEvents = new Set([older, newer])
 
 		verifyEventResult = () => true
