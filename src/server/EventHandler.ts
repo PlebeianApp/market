@@ -6,6 +6,7 @@ import { BootstrapManagerImpl } from './BootstrapManager'
 import { BlacklistManagerImpl } from './BlacklistManager'
 import { VanityManagerImpl } from './VanityManager'
 import { Nip05ManagerImpl } from './Nip05Manager'
+import { StorefrontIdentityManager } from './StorefrontIdentityManager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
@@ -24,6 +25,7 @@ export class EventHandler {
 	private blacklistManager: BlacklistManagerImpl
 	private vanityManager: VanityManagerImpl
 	private nip05Manager: Nip05ManagerImpl
+	private storefrontManager: StorefrontIdentityManager
 	private eventValidator: EventValidator
 	private eventSigner: EventSigner
 	private ndkService: NDKService
@@ -46,6 +48,7 @@ export class EventHandler {
 		this.blacklistManager = null as any
 		this.vanityManager = null as any
 		this.nip05Manager = null as any
+		this.storefrontManager = null as any
 	}
 
 	public static getInstance(): EventHandler {
@@ -75,9 +78,10 @@ export class EventHandler {
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
 		this.vanityManager = new VanityManagerImpl(this.eventSigner)
 		this.nip05Manager = new Nip05ManagerImpl(this.eventSigner)
+		this.storefrontManager = new StorefrontIdentityManager(this.eventSigner)
 
 		// Register all zap purchase managers
-		this.purchaseManagers = [this.vanityManager, this.nip05Manager]
+		this.purchaseManagers = [this.vanityManager, this.nip05Manager, this.storefrontManager]
 
 		// Initialize NDK service and load existing data with timeout
 		try {
@@ -124,6 +128,8 @@ export class EventHandler {
 				// Initialize NIP-05
 				this.nip05Manager.setNDK(this.ndk)
 				await this.nip05Manager.loadExistingNip05Registry(this.eventSigner.getAppPubkey())
+				this.storefrontManager.setNDK(this.ndk)
+				await this.storefrontManager.loadExistingStorefrontRegistry(this.eventSigner.getAppPubkey())
 
 				// Subscribe to zap receipts for all purchase managers (app relay)
 				this.subscribeToZapPurchases(this.ndk, 'App relay')
@@ -340,6 +346,10 @@ export class EventHandler {
 	 */
 	public getNip05Manager(): Nip05ManagerImpl {
 		return this.nip05Manager
+	}
+
+	public getStorefrontManager(): StorefrontIdentityManager {
+		return this.storefrontManager
 	}
 
 	public getStats() {
