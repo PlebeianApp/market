@@ -263,7 +263,8 @@ describe('path release pipeline: bidder record → publish → parse → validat
 			auditorQuorum: 1,
 			maxSkewSec: 30,
 			fallbackDelaySec: 25,
-			vadiumRatioBps: 0,
+						vadiumRatioBps: 0,
+			dleqRequired: false,
 			schema: '',
 		} as ParsedAuctionEvent
 
