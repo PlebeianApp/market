@@ -283,3 +283,35 @@ export const APP_AUCTION_DLEQ_ROLLOUT_START_AT: number = resolveDleqRolloutStart
 export function requiresDleqForAuction(startAt: number): boolean {
 	return startAt >= APP_AUCTION_DLEQ_ROLLOUT_START_AT
 }
+
+// ---------- Canonical DLEQ activation (ADR-0011, Decision 8) ---------------
+
+/** Tag name carrying the canonical DLEQ requirement on the signed auction event. */
+export const DLEQ_REQUIRED_TAG = 'dleq_required'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ required". */
+export const DLEQ_REQUIRED_TRUE = '1'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ not required". */
+export const DLEQ_REQUIRED_FALSE = '0'
+
+/**
+ * Resolve the canonical DLEQ requirement for an auction from its signed
+ * `dleq_required` tag. This is the single shared activation predicate every
+ * path consumes (ADR-0011, Decision 8).
+ *
+ * The signed tag is protocol truth: two clients reading the same signed event
+ * derive the same requirement regardless of their deploy-time boundary config,
+ * and a seller cannot backdate `start_at` to change it. Only when the tag is
+ * absent (a legacy event published before the tag existed) do we fall back to
+ * the boundary comparison so already-published auctions are not broken.
+ *
+ * @param dleqRequiredRaw raw value of the `dleq_required` tag, or `undefined`
+ *   when the tag is absent.
+ * @param startAt auction `start_at` (epoch seconds), used only for the legacy
+ *   fallback when the tag is absent.
+ */
+export function resolveDleqRequired(dleqRequiredRaw: string | undefined, startAt: number): boolean {
+	if (dleqRequiredRaw === undefined) return requiresDleqForAuction(startAt)
+	return dleqRequiredRaw === DLEQ_REQUIRED_TRUE
+}

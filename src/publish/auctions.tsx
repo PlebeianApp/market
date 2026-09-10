@@ -166,6 +166,18 @@ export interface AuctionBidFormData {
 	 * bidder actually had any sats there.
 	 */
 	mintCandidates: string[]
+	/**
+	 * ADR-0011 Blocker 3/4: the auction's CANONICAL DLEQ requirement, read
+	 * from the signed `dleq_required` tag on the kind-30408 auction event
+	 * (`parseAuctionEvent(...).value.dleqRequired`). This is the protocol
+	 * truth the bidder must honor: when true the bid locks with a DLEQ
+	 * requirement on the locked outputs and publishes `dleq_proof` tags.
+	 *
+	 * Left optional for legacy callers that predate the tag; when absent the
+	 * publish path falls back to the `start_at` rollout boundary
+	 * (`requiresDleqForAuction`) as an explicit compatibility rule.
+	 */
+	dleqRequired?: boolean
 }
 
 // `AuctionPathGrantResponse`, `openAuctionPathOracleClient`,
@@ -500,6 +512,13 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (now >= formData.auctionEffectiveEndAt) throw new Error('Auction already ended')
 	if (now >= formData.auctionLocktimeAt) throw new Error('Auction has reached its hard bidding cutoff')
 
+	// ADR-0011 Blocker 3/4 — the DLEQ requirement is the auction's CANONICAL
+	// signed `dleq_required` tag, NOT a deployment-controlled `start_at`
+	// boundary. `formData.dleqRequired` is set by the bidder UI from the
+	// parsed auction event. Only legacy callers that predate the tag fall back
+	// to the boundary as an explicit compatibility rule.
+	const dleqRequired = formData.dleqRequired ?? requiresDleqForAuction(formData.auctionStartAt)
+
 	const bidderUser = await signer.user()
 	const bidderPubkey = bidderUser.pubkey
 
@@ -616,6 +635,11 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			locktime,
 			refundPubkey,
 			lockPubkey: childPubkey,
+			// ADR-0011 Blocker 3 — thread the auction's canonical DLEQ
+			// requirement into the lock boundary so a legacy non-DLEQ balance
+			// can still bid on a grandfathered auction, while a DLEQ-required
+			// auction validates the freshly issued P2PK outputs carry DLEQ.
+			dleqRequired,
 			auctionEventId: formData.auctionEventId,
 			auctionCoordinates: formData.auctionCoordinates,
 			sellerPubkey: formData.sellerPubkey,
