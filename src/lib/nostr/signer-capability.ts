@@ -1,7 +1,7 @@
 /**
  * Signer capability seam — the app-owned abstraction every login lane
  * implements, independent of the concrete signer library (NDK today,
- * `applesauce-signers` going forward; see ADR-0008).
+ * `applesauce-signers` going forward; see ADR-0002).
  *
  * A capability is deliberately narrower than NDK's `NDKSigner`: it exposes
  * only the two things the app structurally depends on — resolving the

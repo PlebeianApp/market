@@ -1,6 +1,6 @@
 /**
  * Session vault — encrypted-at-rest persistence for the NIP-46 session
- * (ADR-0008 Wave A3b / task B-3, fixes #996 finding H8).
+ * (ADR-0002 Wave A3b / task B-3, fixes #996 finding H8).
  *
  * `NostrConnectSigner.getNbunksec()` is bech32 over PLAINTEXT JSON carrying
  * the client private key and bunker secret — the package provides NO
@@ -9,7 +9,7 @@
  * encrypt(nbunksec, random iv), store {salt, iv, ct}"). That envelope lives
  * here.
  *
- * ADR-0008 invariant 4 (persisted-session migration policy): the legacy
+ * ADR-0002 invariant 4 (persisted-session migration policy): the legacy
  * plaintext pair (`nostr_local_signer_key` + `nostr_connect_url`, written by
  * `auth.ts` pre-B-3) is read ONCE. Completing the unlock-prompt migration
  * wraps the session and DELETES the legacy keys; refusal/skip discards it
@@ -246,7 +246,7 @@ export async function migrateLegacySessionToVault(passphrase: string, options: W
 /**
  * Legacy migration, refusal path: the user declined the unlock-prompt
  * migration, so the session is gone — delete the plaintext pair and write NO
- * vault (ADR-0008: "an intentional, user-visible forced re-login", never
+ * vault (ADR-0002: "an intentional, user-visible forced re-login", never
  * silent plaintext retention).
  */
 export function discardLegacySession(): void {

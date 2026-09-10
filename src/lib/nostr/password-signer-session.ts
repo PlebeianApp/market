@@ -1,5 +1,5 @@
 /**
- * PasswordSigner session builder (ADR-0008 B-3, signers-api-audit gap 4).
+ * PasswordSigner session builder (ADR-0002 B-3, signers-api-audit gap 4).
  *
  * `PasswordSigner` (NIP-49 ncryptsec) DEADLOCKS when any of
  * `getPublicKey` / `signEvent` / `nip04*` / `nip44*` is called while
@@ -12,7 +12,7 @@
  * `lock()` runs on logout.
  *
  * This is the sanctioned `applesauce-signers` import home for the NIP-49
- * lane (the signer registry, ADR-0008).
+ * lane (the signer registry, ADR-0002).
  */
 import { PasswordSigner } from 'applesauce-signers'
 import type { EventTemplate } from 'nostr-tools/pure'
