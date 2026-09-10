@@ -99,11 +99,11 @@ function AuctionsRoute() {
 
 	// Your Auctions — auctions created by the current user (live subscription)
 	const userPubkey = currentUser?.pubkey
-	const { auctions: myAuctions, isStreaming: myAuctionsStreaming } = useAuctionsByPubkeyStream(userPubkey || '', 50)
+	const { auctions: myAuctions } = useAuctionsByPubkeyStream(userPubkey || '', 50)
 	const myAuctionsFiltered = filterNSFWAuctions(myAuctions, showNSFWContent)
 
 	// Previously Bid — auctions the user has bid on (live subscription)
-	const { bids: myBids, isStreaming: myBidsStreaming } = useAuctionBidsByBidderStream(userPubkey || '', 500)
+	const { bids: myBids } = useAuctionBidsByBidderStream(userPubkey || '', 500)
 	const myBidAuctionIds = useMemo(() => {
 		const ids = new Set<string>()
 		for (const bid of myBids) {
@@ -119,6 +119,12 @@ function AuctionsRoute() {
 			return id && myBidAuctionIds.has(id) && !(userPubkey && a.pubkey === userPubkey)
 		})
 	}, [auctions, myBidAuctionIds, userPubkey])
+
+	// Apply the filter bar state (filters + URL tag) to the authenticated section
+	// grids too, so all three grids are governed by the same filters. Called
+	// unconditionally at the top level of the route (Rules of Hooks).
+	const myAuctionsVisible = useFilteredAuctions({ auctions: myAuctionsFiltered, filters, tag })
+	const previouslyBidVisible = useFilteredAuctions({ auctions: previouslyBidAuctions, filters, tag })
 
 	const { data: config } = useConfigQuery()
 	const { data: featuredAuctionsData } = useFeaturedAuctions(config?.appPublicKey || '')
@@ -315,28 +321,6 @@ function AuctionsRoute() {
 				</div>
 			)}
 
-			{isAuthenticated && userPubkey && (myAuctionsFiltered.length > 0 || myAuctionsStreaming) && (
-				<div className="px-8 py-4">
-					<AuctionSectionGrid
-						title="Your Auctions"
-						auctions={myAuctionsFiltered}
-						loading={myAuctionsStreaming}
-						bidsByAuctionId={bidsByAuctionId}
-					/>
-				</div>
-			)}
-
-			{isAuthenticated && userPubkey && (previouslyBidAuctions.length > 0 || myBidsStreaming) && (
-				<div className="px-8 py-4">
-					<AuctionSectionGrid
-						title="You Previously Bid"
-						auctions={previouslyBidAuctions}
-						loading={myBidsStreaming}
-						bidsByAuctionId={bidsByAuctionId}
-					/>
-				</div>
-			)}
-
 			<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
 				<div className="px-4 py-3 flex items-center justify-between gap-4">
 					<div className="hide-scrollbar overflow-x-auto flex-1">
@@ -372,6 +356,18 @@ function AuctionsRoute() {
 					<AuctionFilters filters={filters} onFiltersChange={setFilters} />
 				</div>
 			</div>
+
+			{isAuthenticated && userPubkey && myAuctionsVisible.length > 0 && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid title="Your Auctions" auctions={myAuctionsVisible} bidsByAuctionId={bidsByAuctionId} />
+				</div>
+			)}
+
+			{isAuthenticated && userPubkey && previouslyBidVisible.length > 0 && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid title="You Previously Bid" auctions={previouslyBidVisible} bidsByAuctionId={bidsByAuctionId} />
+				</div>
+			)}
 
 			<div className="px-8 py-4">
 				{auctionsQuery.isError && auctions.length === 0 ? (
