@@ -21,6 +21,7 @@ import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvent
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
+import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { auctionKeys } from '@/queries/queryKeyFactory'
@@ -278,6 +279,22 @@ function DashboardAuctionDetailRoute() {
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const verdictsData = verdictsQuery.data ?? []
 
+	// Parse bids once so both the DLEQ keyset acquisition and the settlement
+	// validation use the same parsed set.
+	const parsedBids = useMemo(
+		() =>
+			bids
+				.map((b) => parseBidEvent(b.rawEvent()))
+				.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+				.map((r) => r.value),
+		[bids],
+	)
+	// ADR-0011 Blocker 1: gather the mint keysets needed to DLEQ-verify the
+	// bids (bounded to the auction's trusted mints). Without this, DLEQ-required
+	// bids are correctly treated as pending (non-authoritative) — but then the
+	// seller could never settle, so the ingestion path must actually feed evidence.
+	const dleqKeysets = useDleqKeysetPolling(parsedBids, trustedMints)
+
 	// B4: Validate settlements before using them. The previous code read
 	// `settlements[0]` (newest by created_at) with NO validation, allowing
 	// a malicious settlement to surface claim-order/shipping UI. We now:
@@ -294,11 +311,9 @@ function DashboardAuctionDetailRoute() {
 		if (!parsedAuctionResult.ok) return null
 		const parsedAuction = parsedAuctionResult.value
 
-		// Parse bids (NostrEventLike → raw shape → ParsedBidEvent).
-		const parsedBids = bids
-			.map((b) => parseBidEvent(toRawEvent(b)))
-			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
-			.map((r) => r.value)
+		// Bids are parsed once at the route level (shared with the DLEQ
+		// keyset acquisition hook) — reuse them here.
+		const bidList = parsedBids
 
 		// Parse verdicts.
 		const parsedVerdicts = verdictsData
@@ -323,11 +338,12 @@ function DashboardAuctionDetailRoute() {
 		// Compute validated bids using quorum evidence.
 		const validatedBidSet = computeValidatedBids({
 			auction: parsedAuction,
-			bids: parsedBids,
+			bids: bidList,
 			verdicts: parsedVerdicts,
 			nut7States,
 			postSettlement: hasSettledSettlement,
 			settledBidIds,
+			dleqKeysets,
 		})
 		const validatedBidderPubkeys = new Set(validatedBidSet.validBids.map((b) => b.bidderPubkey.toLowerCase()))
 		const hasReserveMeetingBid = validatedBidSet.validBids.some((b) => b.amount >= parsedAuction.reserve)
@@ -373,7 +389,7 @@ function DashboardAuctionDetailRoute() {
 		})
 
 		return validSettlements[0]?.ndkEvent ?? null
-	}, [auction, settlements, bids, verdictsData, nut7States])
+	}, [auction, settlements, parsedBids, verdictsData, nut7States, dleqKeysets])
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {
