@@ -119,6 +119,18 @@ test.describe('Order Details - Seller View - Products', () => {
 })
 
 test.describe('Order Details - Seller View - Auctions', () => {
+	test('sales table shows Auction type chip and auction item title', async ({ merchantPage: page }) => {
+		await seedOrder('auction', 'confirmed')
+
+		await page.goto('/dashboard/orders')
+
+		// The seeded auction order surfaces a Product-vs-Auction type chip and
+		// the auction title (kind-30408 'title' tag) in the sales table. The
+		// scenario also seeds product orders, so 'Product' chips coexist.
+		await expect(page.getByTestId('order-type').filter({ hasText: 'Auction' }).first()).toBeVisible()
+		await expect(page.locator('[data-testid="order-item-title"]').filter({ hasText: 'Test Auction' }).first()).toBeVisible()
+	})
+
 	test('views confirmed auction order and marks as processed', async ({ merchantPage: page }) => {
 		const { orderId } = await seedOrder('auction', 'confirmed')
 
