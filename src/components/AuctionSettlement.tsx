@@ -18,6 +18,7 @@ import {
 	type SettlementIconKey,
 } from '@/lib/auction/settlementDescriptor'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
+import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type {
 	ParsedAuctionEvent,
@@ -204,6 +205,10 @@ export function AuctionSettlement({
 	}
 
 	const nut7States = useNut7Polling(bids, auction.mints)
+	// ADR-0011 Blocker 1: gather DLEQ keysets (bounded to the auction's
+	// allowlisted mints) so `computeValidatedBids` inside the descriptor can
+	// actually verify DLEQ-required bids instead of leaving them all pending.
+	const dleqKeysets = useDleqKeysetPolling(bids, auction.mints)
 
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
 		() => ({
@@ -211,6 +216,7 @@ export function AuctionSettlement({
 			bids,
 			verdicts,
 			nut7States,
+			dleqKeysets,
 			settlements,
 			pathReleases: pathReleasesForDescriptor,
 			claimOrders,
@@ -225,6 +231,7 @@ export function AuctionSettlement({
 			bids,
 			verdicts,
 			nut7States,
+			dleqKeysets,
 			settlements,
 			pathReleasesForDescriptor,
 			claimOrders,
