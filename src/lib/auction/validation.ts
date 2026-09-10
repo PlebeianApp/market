@@ -47,22 +47,83 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 // ============================================================================
 
 const KEYSET_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — keysets rotate rarely
-const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number }>()
+// A transient mint failure (network blip, timeout, 5xx) must NOT be cached for
+// the full success TTL, or settlement stays degraded long after the mint
+// recovers. Cache failures for only a few seconds so the next call re-queries
+// the mint and picks up the real keyset as soon as it is back.
+const KEYSET_CACHE_FAILURE_TTL_MS = 5 * 1000 // 5 seconds — short negative-cache window
+const KEYSET_FETCH_TIMEOUT_MS = 2000 // bound the mint HTTP call so a slow mint cannot hang the UI
+// A cache entry carries an explicit `isFailure` flag rather than inferring
+// failure from an empty keyset array: a mint can legitimately return an empty
+// keyset on success (e.g. a freshly initialized mint), and that must be cached
+// for the full success TTL, not the short failure TTL.
+const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number; isFailure: boolean }>()
+
+/**
+ * Export for test isolation. Unit tests clear the module-global cache between
+ * runs so a slow/dead mint in one test cannot poison the next.
+ */
+export function clearKeysetCache(): void {
+	keysetCache.clear()
+}
+
+type CashuRequestOptions = { endpoint: string; requestBody?: Record<string, unknown>; headers?: Record<string, string> } & Omit<
+	RequestInit,
+	'body' | 'headers'
+>
+
+/**
+ * Custom request function for {@link CashuMint.getKeySets} that injects a
+ * bounded timeout. cashu-ts' instance `getKeySets()` performs the fetch with
+ * no AbortSignal, so we use the static form and pass a request override that
+ * aborts after {@link KEYSET_FETCH_TIMEOUT_MS}. This mirrors cashu-ts' internal
+ * request semantics (JSON body stringify + Accept/Content-Type headers) and
+ * only adds the abort signal. A hanging mint (slow/reachable but never
+ * answering) then rejects to the negative-cache path instead of blocking the
+ * settlement UI indefinitely.
+ */
+async function requestWithTimeout<T>({ endpoint, requestBody, headers, ...signalInit }: CashuRequestOptions): Promise<T> {
+	const body = requestBody ? JSON.stringify(requestBody) : undefined
+	const reqHeaders = {
+		Accept: 'application/json, text/plain, */*',
+		...(body ? { 'Content-Type': 'application/json' } : undefined),
+		...headers,
+	}
+	const res = await fetch(endpoint, { body, headers: reqHeaders, ...signalInit, signal: AbortSignal.timeout(KEYSET_FETCH_TIMEOUT_MS) })
+	if (!res.ok) {
+		throw new Error(`keysets request failed: ${res.status} ${res.statusText}`)
+	}
+	return (await res.json()) as T
+}
 
 export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	const cached = keysetCache.get(mintUrl)
-	if (cached && Date.now() - cached.cachedAt < KEYSET_CACHE_TTL_MS) {
-		return cached.keysets
+	if (cached) {
+		// A failed request is a negative-cache entry and expires after the short
+		// failure TTL; a successful response (even an empty keyset) uses the long
+		// success TTL. This lets settlement recover as soon as the mint is back
+		// without misclassifying a legitimately-empty successful keyset.
+		const ttl = cached.isFailure ? KEYSET_CACHE_FAILURE_TTL_MS : KEYSET_CACHE_TTL_MS
+		if (Date.now() - cached.cachedAt < ttl) {
+			return cached.keysets
+		}
 	}
+	let keysets: MintKeyset[]
 	try {
-		const mint = new CashuMint(mintUrl)
-		const response = await mint.getKeySets()
-		const keysets = response.keysets
-		keysetCache.set(mintUrl, { keysets, cachedAt: Date.now() })
-		return keysets
-	} catch {
+		const response = await CashuMint.getKeySets(mintUrl, requestWithTimeout)
+		keysets = response.keysets
+	} catch (err) {
+		// Never silently swallow — operators must be able to distinguish a dead
+		// mint from an invalid settlement. Empty keysets route the descriptor to
+		// its pending/invalid degradation path.
+		console.warn(`[validation] fetchMintKeysets failed for ${mintUrl}: ${err instanceof Error ? err.message : String(err)}`)
+		// Negative cache: remember the failure briefly so a dead mint is not
+		// re-hammered on every settlement UI render.
+		keysetCache.set(mintUrl, { keysets: [], cachedAt: Date.now(), isFailure: true })
 		return []
 	}
+	keysetCache.set(mintUrl, { keysets, cachedAt: Date.now(), isFailure: false })
+	return keysets
 }
 
 /**
