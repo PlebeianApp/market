@@ -185,7 +185,7 @@ test.describe('NWC Wallet Management', () => {
 		await expect(buyerPage.getByText(/stored locally/i)).toBeVisible({ timeout: 5_000 })
 	})
 
-	test('can delete an NWC wallet', async ({ buyerPage }) => {
+	test('can delete an NWC wallet after explicit confirmation', async ({ buyerPage }) => {
 		// Navigate to the making-payments page first, then inject wallet via localStorage.
 		// This avoids the "Execution context destroyed" race condition from evaluate()
 		// running while the SPA router is still hydrating on the home page.
@@ -218,10 +218,33 @@ test.describe('NWC Wallet Management', () => {
 		// The pre-seeded wallet should be visible
 		await expect(buyerPage.getByText('Test Wallet To Delete')).toBeVisible({ timeout: 10_000 })
 
-		// Click the delete button (trash icon with aria-label="Delete wallet")
+		// Click the delete button (trash icon with aria-label="Delete wallet").
+		// This must NOT delete immediately — it opens a confirmation dialog.
 		await buyerPage
 			.getByRole('button', { name: /delete wallet/i })
 			.first()
+			.click()
+
+		const confirmDialog = buyerPage.getByRole('alertdialog')
+		await expect(confirmDialog).toBeVisible({ timeout: 5_000 })
+
+		// The dialog names the wallet and states the fund-loss risk
+		await expect(confirmDialog.getByText('Test Wallet To Delete')).toBeVisible()
+		await expect(confirmDialog.getByText(/may make those funds unrecoverable/i)).toBeVisible()
+
+		// Cancelling leaves the wallet in place
+		await confirmDialog.getByRole('button', { name: /cancel/i }).click()
+		await expect(confirmDialog).not.toBeVisible({ timeout: 5_000 })
+		await expect(buyerPage.getByText('Test Wallet To Delete')).toBeVisible()
+
+		// Only the explicit confirmation removes the wallet
+		await buyerPage
+			.getByRole('button', { name: /delete wallet/i })
+			.first()
+			.click()
+		await buyerPage
+			.getByRole('alertdialog')
+			.getByRole('button', { name: /^delete wallet$/i })
 			.click()
 
 		// The wallet should be removed

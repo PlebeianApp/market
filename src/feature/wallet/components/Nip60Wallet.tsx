@@ -31,6 +31,16 @@ import { WithdrawLightningModal } from './WithdrawLightningModal'
 import { SendEcashModal } from './SendEcashModal'
 import { ReceiveEcashModal } from './ReceiveEcashModal'
 import { Button } from '@/components/ui/button'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -62,6 +72,7 @@ export function Nip60Wallet() {
 	const [viewingToken, setViewingToken] = useState<UnifiedPendingToken | null>(null)
 	const [isReclaiming, setIsReclaiming] = useState<string | null>(null)
 	const [copied, setCopied] = useState(false)
+	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<UnifiedPendingToken | null>(null)
 
 	// Combine pending tokens from both stores
 	const activePendingTokens: UnifiedPendingToken[] = useMemo(
@@ -181,6 +192,19 @@ export function Nip60Wallet() {
 			nip60Actions.removePendingToken(token.id)
 		}
 		toast.success('Token removed from history')
+	}
+
+	const handleConfirmRemovePendingToken = () => {
+		if (!tokenPendingRemoval) return
+		handleRemovePendingToken(tokenPendingRemoval)
+		setTokenPendingRemoval(null)
+	}
+
+	const handleClaimFirst = async () => {
+		if (!tokenPendingRemoval) return
+		const token = tokenPendingRemoval
+		setTokenPendingRemoval(null)
+		await handleReclaim(token)
 	}
 
 	// Button appearance class definitions
@@ -480,7 +504,7 @@ export function Nip60Wallet() {
 									<Button
 										className={cn(classNameDestructive, 'w-7 h-7')}
 										size="icon"
-										onClick={() => handleRemovePendingToken(token)}
+										onClick={() => setTokenPendingRemoval(token)}
 										title="Remove from list"
 									>
 										<Trash2 className="w-3.5 h-3.5" />
@@ -555,6 +579,34 @@ export function Nip60Wallet() {
 					)}
 				</DialogContent>
 			</Dialog>
+
+			{/* Remove Pending Token Confirmation */}
+			<AlertDialog open={tokenPendingRemoval !== null} onOpenChange={(isOpen) => !isOpen && setTokenPendingRemoval(null)}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Remove token from list?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This token is a bearer instrument worth {tokenPendingRemoval?.amount.toLocaleString()} sats. Removing it from the list does
+							not reclaim the funds — if the token has not been claimed yet, removing it may make those funds unreachable. Consider claiming
+							it first.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" onClick={handleConfirmRemovePendingToken}>
+							Remove anyway
+						</AlertDialogAction>
+						<Button variant="outline" onClick={handleClaimFirst} disabled={isReclaiming === tokenPendingRemoval?.id}>
+							{isReclaiming === tokenPendingRemoval?.id ? (
+								<Loader2 className="mr-2 w-4 h-4 animate-spin" />
+							) : (
+								<RotateCcw className="mr-2 w-4 h-4" />
+							)}
+							Claim first
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	)
 }
