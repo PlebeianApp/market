@@ -1,5 +1,5 @@
 import type { Nut7ProofState, ValidatorClaim } from './constants'
-import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS, requiresDleqForAuction } from './constants'
+import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from './events'
 import { validateBid } from './validation'
 import { verifyBidDleq, type DleqProof } from '../cashu/dleq'
@@ -473,7 +473,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			// model as NUT-7 (Decision 6) — when evidence is unavailable the
 			// bid stays quorum-valid; when evidence IS available and DLEQ
 			// fails, the bid is invalidated (Decision 4: dleq_invalid).
-			if (requiresDleqForAuction(auction.startAt)) {
+			if (auction.dleqRequired) {
 				const dleqProofs = c.bid.dleqProofs
 				if (dleqProofs && dleqProofs.length > 0) {
 					const dleqKeysetMap = input.dleqKeysets

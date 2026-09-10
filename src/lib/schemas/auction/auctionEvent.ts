@@ -30,6 +30,7 @@ import {
 	DEFAULT_MAX_SKEW_SECONDS,
 	FALLBACK_DELAY_DENOMINATOR,
 	FALLBACK_DELAY_NUMERATOR,
+	requiresDleqForAuction,
 } from '../../auction/constants'
 import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '../../auction/events'
 import type { NostrEventLike } from '../../nostr/eventLike'
@@ -96,6 +97,12 @@ export const AuctionEventSchema = z
 		fallbackDelaySec: nonNegativeInt,
 		vadiumRatioBps: nonNegativeInt,
 		schema: z.string().default('auction_v1'),
+		/**
+		 * Canonical DLEQ activation (ADR-0011 Blocker 4). The signed
+		 * `dleq_required` tag is the protocol truth; a client-side boundary
+		 * comparison is only a fallback for legacy events that predate the tag.
+		 */
+		dleqRequired: z.boolean().default(false),
 	})
 	.refine((value) => value.endAt >= value.startAt, { message: 'end_at must be ≥ start_at', path: ['endAt'] })
 	.refine((value) => value.maxEndAt >= value.endAt, { message: 'max_end_at must be ≥ end_at', path: ['maxEndAt'] })
@@ -165,6 +172,13 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	const p2pkXpub = readSingleTag(event, 'p2pk_xpub') ?? ''
 	const schema = readSingleTag(event, 'schema') ?? 'auction_v1'
 
+	// Canonical DLEQ activation (ADR-0011 Blocker 4). The signed
+	// `dleq_required` tag is the protocol truth. When absent (legacy event
+	// published before the tag existed), fall back to the boundary comparison
+	// so already-published auctions are not broken.
+	const dleqRequiredRaw = readSingleTag(event, 'dleq_required')
+	const dleqRequired = dleqRequiredRaw === undefined ? requiresDleqForAuction(startAt) : dleqRequiredRaw === '1'
+
 	const parsed = AuctionEventSchema.safeParse({
 		dTag,
 		sellerPubkey,
@@ -193,6 +207,7 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 		fallbackDelaySec,
 		vadiumRatioBps,
 		schema,
+		dleqRequired,
 	})
 
 	if (!parsed.success) return { ok: false, error: parsed.error }

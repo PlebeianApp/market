@@ -30,7 +30,6 @@ import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
 	BID_FLOOR_TIME_GRACE_SECONDS,
-	APP_AUCTION_DLEQ_ROLLOUT_START_AT,
 	requiresDleqForAuction,
 	type PathReleaseReason,
 	type Nut7ProofState,
@@ -576,13 +575,13 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// so through the real parse→validate path this branch fires primarily for
 	// the fully-absent (0 proofs) case; the count check remains here as
 	// defense-in-depth for hand-built `ParsedBidEvent`s.
-	if (requiresDleqForAuction(auction.startAt)) {
+	if (auction.dleqRequired) {
 		const dleqProofs = bid.dleqProofs ?? []
 		if (dleqProofs.length !== bid.lockSecrets.length) {
 			return {
 				claim: 'bid_invalid',
 				reason: 'dleq_invalid',
-				detail: `post-rollout auction (start_at=${auction.startAt} >= ${APP_AUCTION_DLEQ_ROLLOUT_START_AT}) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
+				detail: `DLEQ-required auction (dleq_required=1) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
 			}
 		}
 		// B4 (ADR-0011): structural field validation of every dleq_proof entry.
