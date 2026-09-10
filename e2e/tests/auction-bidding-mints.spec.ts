@@ -21,6 +21,7 @@ import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { devUser1, devUser2, XPUB } from '../../src/lib/fixtures'
+import { APP_AUCTION_DLEQ_ROLLOUT_START_AT } from '../../src/lib/auction/constants'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -64,9 +65,16 @@ test.beforeEach(async ({ buyerPage }) => {
 async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
 	const skBytes = hexToBytes(devUser1.sk)
 	const now = Math.floor(Date.now() / 1000)
-	const startAt = now - 60
-	const endAt = now + 3600
-	const maxEndAt = now + 7200
+	// Grandfathered pre-rollout start (ADR-0011 Decision 7): these tests
+	// exercise mint-selection / bid-funding flows, not DLEQ collateral
+	// verification. A post-rollout start (now - 60 once the rollout boundary
+	// passes) would route them through the DLEQ-required path and fail on
+	// fixtures lacking NUT-12 DLEQ proofs. Pin start_at just below the
+	// rollout boundary so they stay on the pre-rollout (non-DLEQ) path
+	// regardless of when they run.
+	const startAt = APP_AUCTION_DLEQ_ROLLOUT_START_AT - 1
+	const endAt = startAt + 3600
+	const maxEndAt = startAt + 7200
 
 	const event = finalizeEvent(
 		{
