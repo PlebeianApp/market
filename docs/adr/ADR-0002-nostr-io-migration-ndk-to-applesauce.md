@@ -162,6 +162,15 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
   lookups for the same product id onto a single in-flight relay query, so
   rotating random ids cannot drive unbounded concurrent server-side work.
 
+- The OG Meta Tags e2e family runs in the per-PR `e2e-grep` gate
+  (`.github/workflows/e2e.yml`). `e2e/playwright.config.ts` sets no
+  `outputDir`, so Playwright's default output dir resolves to the repo-root
+  `test-results/` (nearest `package.json` walking up from the config dir).
+  Both the `e2e-grep` and `e2e-full` jobs must upload `test-results/` — never
+  `e2e/test-results/`, which never exists and silently captures no failure
+  artifacts. A unit guard
+  (`src/lib/__tests__/e2e-workflow-artifact-path.test.ts`) enforces this.
+
 Root-cause flakiness work is concentrated in Wave A, Wave C publish files,
 and Wave D. Wave 0, Wave B, the dashboard type-only work, and Wave E are
 enablers or cleanup unless later code review shows otherwise.
