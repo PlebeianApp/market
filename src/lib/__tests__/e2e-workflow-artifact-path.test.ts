@@ -10,9 +10,12 @@
  * dir (`e2e/`), i.e. the repo root. So both the `e2e-grep` and `e2e-full`
  * jobs must upload `test-results/` (repo root), never `e2e/test-results/`.
  *
- * This guard reads the workflow YAML and asserts the two upload steps agree
- * on the path, so a future edit cannot silently break failure-artifact
- * capture for the per-PR gate.
+ * This guard reads the workflow YAML and asserts the two `test-results`
+ * upload steps agree on the path, so a future edit cannot silently break
+ * failure-artifact capture for the per-PR gate. It also asserts the
+ * config still sets no `outputDir` (the root-cause precondition), so a
+ * later `outputDir` override that would move artifacts away from the repo
+ * root is caught.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -20,6 +23,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
 const WORKFLOW_PATH = join(import.meta.dir, '..', '..', '..', '.github', 'workflows', 'e2e.yml')
+const PLAYWRIGHT_CONFIG_PATH = join(import.meta.dir, '..', '..', '..', 'e2e', 'playwright.config.ts')
 
 /** Extract the `path:` value of every `actions/upload-artifact@v4` step. */
 async function uploadPaths(): Promise<{ name: string; path: string }[]> {
@@ -28,7 +32,7 @@ async function uploadPaths(): Promise<{ name: string; path: string }[]> {
 	const uploads: { name: string; path: string }[] = []
 	for (let i = 0; i < lines.length; i++) {
 		if (lines[i].includes('actions/upload-artifact@v4')) {
-			// The step's `name:` and `path:` are the next `name:`/`path:` keys.
+			// The step's upload `name:` and `path:` live under `with:`.
 			let stepName = ''
 			let path = ''
 			for (let j = i + 1; j < lines.length; j++) {
@@ -56,10 +60,20 @@ describe('e2e.yml artifact upload paths', () => {
 		expect(grepUpload!.path).toBe('test-results/')
 	})
 
-	test('e2e-grep and e2e-full upload the same path (no drift between jobs)', async () => {
+	test('e2e-grep and e2e-full test-results uploads use the same repo-root path (no drift)', async () => {
 		const uploads = await uploadPaths()
-		expect(uploads.length).toBeGreaterThanOrEqual(2)
-		const paths = uploads.map((u) => u.path)
+		// Scope to the test-results artifacts only (the e2e-grep job names its
+		// artifact 'test-results' and e2e-full names its 'test-results-full').
+		// Unrelated future uploads (e.g. playwright-report) must not fail this guard.
+		const testResults = uploads.filter((u) => u.name.startsWith('test-results'))
+		expect(testResults.length).toBeGreaterThanOrEqual(2)
+		const paths = testResults.map((u) => u.path)
 		expect(new Set(paths).size).toBe(1)
+		expect(paths[0]).toBe('test-results/')
+	})
+
+	test('e2e/playwright.config.ts still sets no outputDir (root cause of the repo-root default)', async () => {
+		const config = await readFile(PLAYWRIGHT_CONFIG_PATH, 'utf8')
+		expect(config).not.toMatch(/outputDir\s*:/)
 	})
 })
