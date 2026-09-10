@@ -30,7 +30,8 @@ import {
 	DEFAULT_MAX_SKEW_SECONDS,
 	FALLBACK_DELAY_DENOMINATOR,
 	FALLBACK_DELAY_NUMERATOR,
-	requiresDleqForAuction,
+	DLEQ_REQUIRED_TAG,
+	resolveDleqRequired,
 } from '../../auction/constants'
 import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '../../auction/events'
 import type { NostrEventLike } from '../../nostr/eventLike'
@@ -176,8 +177,8 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	// `dleq_required` tag is the protocol truth. When absent (legacy event
 	// published before the tag existed), fall back to the boundary comparison
 	// so already-published auctions are not broken.
-	const dleqRequiredRaw = readSingleTag(event, 'dleq_required')
-	const dleqRequired = dleqRequiredRaw === undefined ? requiresDleqForAuction(startAt) : dleqRequiredRaw === '1'
+	const dleqRequiredRaw = readSingleTag(event, DLEQ_REQUIRED_TAG)
+	const dleqRequired = resolveDleqRequired(dleqRequiredRaw, startAt)
 
 	const parsed = AuctionEventSchema.safeParse({
 		dTag,
