@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getAuctionCoordinatesFromOrder, isAuctionOrder } from '@/queries/orders'
+import { describeOrderSettlementStatus } from '@/components/orders/orderSettlementStatusView'
+import type { SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
 
 // Mock NDKEvent for testing
 const createMockOrderEvent = (tags: string[][]): NDKEvent => {
@@ -151,5 +153,67 @@ describe('auctionOrders utilities', () => {
 
 			expect(isAuctionOrder(orderWithRelatedEvents)).toBe(true)
 		})
+	})
+})
+
+const makeDescriptor = (overrides: Partial<SettlementDescriptor> = {}): SettlementDescriptor => ({
+	role: 'non-participant',
+	phase: 'settled',
+	title: 'Auction Settled',
+	message: 'This auction has been settled.',
+	tone: 'completed',
+	icon: 'check',
+	cta: null,
+	bidAmount: 0,
+	verifiedBadge: 'settlement',
+	...overrides,
+})
+
+describe('orderSettlementStatusView', () => {
+	test('null descriptor (auction not ended) maps to Awaiting Settlement', () => {
+		expect(describeOrderSettlementStatus(null)).toBe('Awaiting Settlement')
+	})
+
+	test('verifying badge maps to Validating… regardless of phase', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'verifying' }))).toBe('Validating…')
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settled', verifiedBadge: 'verifying' }))).toBe('Validating…')
+	})
+
+	test('settled phase maps to Settled', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settled' }))).toBe('Settled')
+	})
+
+	test('reserve-not-met phase maps to Reserve Not Met', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'reserve-not-met', verifiedBadge: 'none' }))).toBe('Reserve Not Met')
+	})
+
+	test('cancelled phase maps to Cancelled', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'cancelled', verifiedBadge: 'none' }))).toBe('Cancelled')
+	})
+
+	test('closed phase maps to Settlement Event Observed', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'closed', verifiedBadge: 'none' }))).toBe('Settlement Event Observed')
+	})
+
+	test('pre-settlement phase with settlement evidence maps to Settlement Event Observed', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'settlement' }))).toBe(
+			'Settlement Event Observed',
+		)
+		expect(
+			describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'settlement-pending-redemption' })),
+		).toBe('Settlement Event Observed')
+	})
+
+	test('pre-settlement phase with path-release badge maps to Path Release Observed', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'path-release' }))).toBe(
+			'Path Release Observed',
+		)
+	})
+
+	test('pre-settlement phase with no evidence maps to Awaiting Settlement', () => {
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'none' }))).toBe(
+			'Awaiting Settlement',
+		)
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'bidding-open', verifiedBadge: 'none' }))).toBe('Awaiting Settlement')
 	})
 })
