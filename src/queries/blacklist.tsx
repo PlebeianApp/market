@@ -1,4 +1,4 @@
-import { fetchLatestAppEvent, getAppRelaySet, ndkActions } from '@/lib/stores/ndk'
+import { fetchLatestAppEvent, getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
@@ -66,10 +66,11 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 export const useBlacklistSettings = (appPubkey?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	const mainRelay = getMainRelay()
 
 	// Set up a live subscription to monitor blacklist changes
 	useEffect(() => {
-		if (!appPubkey || !ndk) return
+		if (!appPubkey || !ndk || !mainRelay) return
 
 		const blacklistFilter = {
 			kinds: [10000], // NIP-51 mute list
@@ -81,7 +82,7 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 
 		const subscription = ndk.subscribe(blacklistFilter, {
 			closeOnEose: false, // Keep subscription open
-			relaySet: getAppRelaySet(),
+			relayUrls: [mainRelay],
 			exclusiveRelay: true, // Reject stale copies from other relays in the pool
 		})
 
@@ -104,7 +105,7 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		return () => {
 			subscription.stop()
 		}
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, ndk, mainRelay, queryClient])
 
 	return useQuery({
 		queryKey: configKeys.blacklist(appPubkey || ''),
