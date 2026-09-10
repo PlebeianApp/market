@@ -81,6 +81,13 @@ kind-1025 path release already publishes full proofs at settlement.
 7. **Migration by `start_at`.** Auctions with `start_at >= DLEQ_ROLLOUT_START_AT` require
    the DLEQ path; live auctions (already open) are grandfathered under the legacy
    non-DLEQ path so they are not broken mid-flight.
+8. **Canonical activation (Amendment).** The DLEQ requirement is recorded on the signed
+   auction event as a `dleq_required` tag (`"1"`/`"0"`), emitted at publish time from the
+   same boundary decision the publish gate enforces. This makes activation canonical
+   protocol truth: two clients reading the same signed event derive the same requirement
+   regardless of their deploy-time boundary config, and a seller cannot backdate
+   `start_at` to change it. The client-side boundary comparison remains only as a
+   fallback for legacy events published before the tag existed.
 
 ### Tag serialization (resolved per AUCTIONS.md §4.2)
 
