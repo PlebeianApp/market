@@ -477,7 +477,18 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 				const dleqProofs = c.bid.dleqProofs
 				if (dleqProofs && dleqProofs.length > 0) {
 					const dleqKeysetMap = input.dleqKeysets
-					if (dleqKeysetMap) {
+					// Unavailable DLEQ evidence is NON-AUTHORITATIVE (Blocker 1):
+					// a bid we cannot crypto-verify must never be treated as
+					// valid. When the caller has not gathered keysets, the bid
+					// is PENDING (like an unconfirmed NUT-7 poll), not valid —
+					// otherwise structurally-valid garbage DLEQ stays
+					// authoritative merely because the map was omitted.
+					if (!dleqKeysetMap) {
+						c.classification = 'pending'
+						finalPending.push(c.bid)
+						continue
+					}
+					{
 						const keysetId = dleqProofs[0].id
 						const key = `${c.bid.mint}:${keysetId}`
 						const keyset = dleqKeysetMap.get(key)
@@ -513,7 +524,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 							continue
 						}
 					}
-					// dleqKeysets map absent → evidence not yet gathered (Decision 6).
 				}
 				// No dleqProofs on a post-rollout bid → already caught by
 				// validateBid Step 3.5 (dleq_invalid structural check).

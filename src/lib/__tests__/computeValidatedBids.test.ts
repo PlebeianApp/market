@@ -668,7 +668,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(result.validBids).toHaveLength(1)
 	})
 
-	test('post-rollout bid without dleqKeysets stays valid (DLEQ evidence not yet gathered, mirrors NUT-7 pattern)', () => {
+	test('post-rollout bid without dleqKeysets is PENDING (DLEQ evidence not yet gathered, non-authoritative)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
 			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
@@ -686,9 +686,15 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 			nut7States: unspent([bid]),
 		})
 
-		expect(result.canonicalWinner?.id).toBe(bid.id)
-		expect(result.validBids).toHaveLength(1)
+		// Unavailable DLEQ evidence is non-authoritative: the bid must NOT be
+		// treated as valid (it cannot be crypto-verified), but it is also not
+		// condemned — it is pending until the keyset is gathered.
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.validBids).toHaveLength(0)
 		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
 	})
 
 	test('post-rollout bid whose keyset is not in dleqKeysets is invalid (fail-closed: bidder-controlled id must not skip DLEQ verification)', () => {

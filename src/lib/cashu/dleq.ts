@@ -205,3 +205,89 @@ export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: Ge
 	const response = await mint.getKeys(keysetId)
 	return response.keysets[0]
 }
+
+// ---------- fetchDleqKeysetsForBids -----------------------------------------
+
+/**
+ * Fetcher signature used by {@link fetchDleqKeysetsForBids}. Injectable so
+ * callers can enforce outbound destination policy (`customRequest`) and
+ * tests can substitute a fake transport.
+ */
+export type DleqKeysetFetcher = (mintUrl: string, keysetId: string) => Promise<MintKeys>
+
+/**
+ * Minimal shape of a parsed bid needed to gather its DLEQ keysets.
+ *
+ * Kept structural (rather than importing `ParsedBidEvent`) so this cashu-level
+ * helper has no dependency on the auction event layer.
+ */
+export interface DleqKeysetBidLike {
+	mint: string
+	dleqProofs?: Array<{ id: string }>
+}
+
+/**
+ * Gather the mint keysets needed to DLEQ-verify a set of bids (ADR-0011
+ * Blocker 1).
+ *
+ * This is the bounded/allowlisted acquisition step the ingestion and
+ * settlement paths MUST run before calling `computeValidatedBids`. Without
+ * it, DLEQ verification is skipped and unavailable evidence is treated as
+ * valid — the exact gap the review flagged.
+ *
+ * Bounds:
+ *   - Only bids whose `mint` is in `trustedMints` (the auction's allowlist)
+ *     are considered. A bid referencing an attacker-supplied mint URL is
+ *     NEVER contacted — this prevents turning every viewer into a polling
+ *     beacon for an attacker-controlled mint (ADR-0004 §5.6).
+ *   - Each distinct `(mint, keysetId)` pair is fetched at most once.
+ *   - A failed fetch leaves that entry ABSENT from the returned map, so the
+ *     downstream verification sees "evidence unavailable" and classifies the
+ *     bid `pending` rather than valid.
+ *
+ * @param bids - Parsed bids (any without `dleqProofs` are skipped).
+ * @param trustedMints - The auction's trusted mint URL allowlist.
+ * @param fetcher - Keyset fetcher (defaults to {@link getMintKeyset}).
+ * @returns Map keyed by `${mintUrl}:${keysetId}`.
+ */
+export const fetchDleqKeysetsForBids = async (
+	bids: readonly DleqKeysetBidLike[],
+	trustedMints: readonly string[],
+	fetcher: DleqKeysetFetcher = getMintKeyset,
+): Promise<Map<string, MintKeys>> => {
+	const allowedMints = new Set(trustedMints.map((m) => normalizeMintUrlForKey(m)))
+	const map = new Map<string, MintKeys>()
+	const seen = new Set<string>()
+
+	for (const bid of bids) {
+		if (!bid.dleqProofs || bid.dleqProofs.length === 0) continue
+		if (!allowedMints.has(normalizeMintUrlForKey(bid.mint))) continue
+		for (const proof of bid.dleqProofs) {
+			const keysetId = proof?.id
+			if (!keysetId) continue
+			const key = `${bid.mint}:${keysetId}`
+			if (seen.has(key)) continue
+			seen.add(key)
+			try {
+				const keyset = await fetcher(bid.mint, keysetId)
+				if (keyset) map.set(key, keyset)
+			} catch {
+				// Evidence unavailable for this keyset — leave it absent so a
+				// DLEQ-required bid stays pending (fail-safe, not fail-open).
+			}
+		}
+	}
+
+	return map
+}
+
+/**
+ * Normalize a mint URL for key comparison. Mirrors `normalizeMintUrl` from
+ * `src/lib/wallet.ts` (trim + strip a single trailing slash) without importing
+ * that module (which pulls in wallet/NDK state). The map key must match the
+ * `${mint}:${keysetId}` key `computeValidatedBids` builds from `bid.mint`.
+ */
+const normalizeMintUrlForKey = (url: string): string => {
+	const trimmed = url.trim()
+	return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed
+}

@@ -16,7 +16,7 @@ import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
-import { buildDleqProofs } from '@/lib/cashu/dleq'
+import { buildDleqProofs, fetchDleqKeysetsForBids } from '@/lib/cashu/dleq'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
 import { buildAuctionClaimPublicMarkerTags, createPrivateAuctionClaimMessageWithSigner } from '@/lib/auctions/privateAuctionClaimMessage'
 import {
@@ -1574,12 +1574,17 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			.map((r) => r.value)
 
 		const rnmNut7States = await fetchNut7StatesForBids(rnmParsedBids)
+		// ADR-0011 Blocker 1: the reserve_not_met path must also feed DLEQ
+		// evidence — otherwise DLEQ-required bids are all pending and the
+		// shortcut is never reached.
+		const rnmDleqKeysets = parsedAuction.dleqRequired ? await fetchDleqKeysetsForBids(rnmParsedBids, parsedAuction.mints) : undefined
 		const rnmValidated = computeValidatedBids({
 			auction: parsedAuction,
 			bids: rnmParsedBids,
 			verdicts: rnmParsedVerdicts,
 			nut7States: rnmNut7States,
 			postSettlement: false,
+			dleqKeysets: rnmDleqKeysets,
 		})
 
 		if (rnmValidated.canonicalWinner && rnmValidated.canonicalWinner.amount >= parsedAuction.reserve) {
@@ -1643,12 +1648,18 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		.map((r) => r.value)
 
 	const nut7States = await fetchNut7StatesForBids(parsedBids)
+	// ADR-0011 Blocker 1: the settlement path is a high-sensitivity publish
+	// action — it must independently gather the DLEQ keysets for DLEQ-required
+	// auctions. Without the evidence, `computeValidatedBids` treats every bid
+	// as pending and the seller cannot settle (fail-safe, not fail-open).
+	const settlementDleqKeysets = parsedAuction.dleqRequired ? await fetchDleqKeysetsForBids(parsedBids, parsedAuction.mints) : undefined
 	const validatedBids = computeValidatedBids({
 		auction: parsedAuction,
 		bids: parsedBids,
 		verdicts: parsedVerdicts,
 		nut7States,
 		postSettlement: false,
+		dleqKeysets: settlementDleqKeysets,
 	})
 
 	if (!validatedBids.canonicalWinner) {
