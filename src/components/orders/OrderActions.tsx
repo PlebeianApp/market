@@ -57,6 +57,14 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	// Buyer actions
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
 
+	// Auction orders are handled by the auction settlement flow (ADR-0003),
+	// not the product order lifecycle: there is no invoice to confirm and
+	// cancellation cannot release the bidder's locked proofs. Suppress the
+	// Cancel/Confirm buttons without touching canProcess/canShip/canReceive,
+	// so auction orders still progress through processing/shipping.
+	const showCancel = canCancel && !isAuction
+	const showConfirm = canConfirm && !isAuction
+
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
 		const orderEventId = order.order.id
 		if (!orderEventId) {
@@ -109,9 +117,9 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	return (
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
-			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
+			{(showCancel || showConfirm || canProcess || canShip || canReceive) && (
 				<div className="flex gap-3">
-					{canCancel && (
+					{showCancel && (
 						<Button
 							variant="outline"
 							onClick={() => setIsCancelOpen(true)}
@@ -122,7 +130,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 						</Button>
 					)}
 
-					{canConfirm && (
+					{showConfirm && (
 						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending} className="w-full sm:w-auto">
 							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
 						</Button>
@@ -157,7 +165,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 			)}
 
 			{/* Final State Indicators */}
-			{!canCancel && !canConfirm && !canProcess && !canShip && !canReceive && (
+			{!showCancel && !showConfirm && !canProcess && !canShip && !canReceive && (
 				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
 					{status === ORDER_STATUS.COMPLETED ? (
 						<>

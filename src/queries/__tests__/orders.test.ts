@@ -175,7 +175,9 @@ describe('orderSettlementStatusView', () => {
 	})
 
 	test('verifying badge maps to Validating… regardless of phase', () => {
-		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'verifying' }))).toBe('Validating…')
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settlement-window-open', verifiedBadge: 'verifying' }))).toBe(
+			'Validating…',
+		)
 		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'settled', verifiedBadge: 'verifying' }))).toBe('Validating…')
 	})
 
