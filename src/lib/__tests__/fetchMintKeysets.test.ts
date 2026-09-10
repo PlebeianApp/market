@@ -54,4 +54,53 @@ describe('fetchMintKeysets — negative-cache recovery', () => {
 		expect(recovered).toEqual(realKeysets)
 		expect(calls).toBe(2)
 	})
+
+	test('a legitimately-empty successful keyset response is cached with the success TTL, not the failure TTL', async () => {
+		let calls = 0
+		// The mint is healthy and returns an empty keyset array (e.g. a freshly
+		// initialized mint with no keysets yet). This is a SUCCESS, not a
+		// failure, so it must be cached for the full success TTL — not re-queried
+		// after the short failure TTL.
+		globalThis.fetch = (async () => {
+			calls += 1
+			return new Response(JSON.stringify({ keysets: [] }), { status: 200 })
+		}) as unknown as typeof globalThis.fetch
+
+		setSystemTime(new Date('2026-01-01T00:00:00Z'))
+		const first = await fetchMintKeysets(MINT_URL)
+		expect(first).toEqual([])
+		expect(calls).toBe(1)
+
+		// Well past the 5s failure TTL (but within the 5min success TTL), the
+		// empty result must still be served from cache — no re-query.
+		setSystemTime(new Date('2026-01-01T00:00:30Z'))
+		const cached = await fetchMintKeysets(MINT_URL)
+		expect(cached).toEqual([])
+		expect(calls).toBe(1)
+	})
+
+	test('a successful non-empty keyset is retained for the full success TTL', async () => {
+		let calls = 0
+		globalThis.fetch = (async () => {
+			calls += 1
+			return new Response(JSON.stringify({ keysets: realKeysets }), { status: 200 })
+		}) as unknown as typeof globalThis.fetch
+
+		setSystemTime(new Date('2026-01-01T00:00:00Z'))
+		const first = await fetchMintKeysets(MINT_URL)
+		expect(first).toEqual(realKeysets)
+		expect(calls).toBe(1)
+
+		// Within the 5-minute success TTL, the keyset is served from cache.
+		setSystemTime(new Date('2026-01-01T00:04:00Z'))
+		const cached = await fetchMintKeysets(MINT_URL)
+		expect(cached).toEqual(realKeysets)
+		expect(calls).toBe(1)
+
+		// After the success TTL elapses, the mint is re-queried.
+		setSystemTime(new Date('2026-01-01T00:06:00Z'))
+		const refreshed = await fetchMintKeysets(MINT_URL)
+		expect(refreshed).toEqual(realKeysets)
+		expect(calls).toBe(2)
+	})
 })
