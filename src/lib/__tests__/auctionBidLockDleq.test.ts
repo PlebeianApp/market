@@ -101,7 +101,13 @@ const lockedOutputProof = (amount: number, includeDleq: boolean): FakeProof => {
 	const secret = JSON.stringify(['P2PK', { nonce: `lock-${(Math.random() * 1e6) | 0}`, data: LOCK_PUBKEY, tags: [] }])
 	// Also derive the proof_y the P2PK secret would need — the assert only
 	// checks the pubkey, so a plain hex Y is fine for the count.
-	return { id: '00' + 'a'.repeat(14), amount, C: '02' + '7'.repeat(64), secret, dleq: includeDleq ? { e: 'aa', s: 'bb', r: 'cc' } : undefined }
+	return {
+		id: '00' + 'a'.repeat(14),
+		amount,
+		C: '02' + '7'.repeat(64),
+		secret,
+		dleq: includeDleq ? { e: 'aa', s: 'bb', r: 'cc' } : undefined,
+	}
 }
 
 const baseParams = {
@@ -161,9 +167,9 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			keep: [noDleqProof(3000)],
 		}
 
-		await expect(
-			nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true }),
-		).rejects.toThrow(/locked proof at index 0 lacks a NUT-12 DLEQ proof/i)
+		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).rejects.toThrow(
+			/locked proof at index 0 lacks a NUT-12 DLEQ proof/i,
+		)
 
 		// The swap was attempted (output validation happens after swap + after
 		// the pending-token persist).
@@ -187,9 +193,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
 		nextSwapResult = { send: [], keep: [] }
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).rejects.toThrow(
-			/outcome is uncertain/i,
-		)
+		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).rejects.toThrow(/outcome is uncertain/i)
 		expect(swapCalls).toBe(1)
 	})
 })

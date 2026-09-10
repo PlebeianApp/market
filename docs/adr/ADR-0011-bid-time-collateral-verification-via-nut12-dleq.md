@@ -78,7 +78,7 @@ kind-1025 path release already publishes full proofs at settlement.
    (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
    verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps
    the "validator is structural/opinion-only" architecture intact.
-6a. **Bounded keyset acquisition (Amendment).** Every ingestion and settlement path that
+   6a. **Bounded keyset acquisition (Amendment).** Every ingestion and settlement path that
    calls `computeValidatedBids` MUST acquire the mint keysets needed to DLEQ-verify
    bids (`fetchDleqKeysetsForBids`), bounded to the auction's `mint` allowlist. Missing
    DLEQ evidence is NON-AUTHORITATIVE: a DLEQ-required bid whose keyset cannot be

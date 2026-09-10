@@ -61,7 +61,7 @@ const buildAuction = (): ParsedAuctionEvent => ({
 	auditorQuorum: 1,
 	maxSkewSec: 60,
 	fallbackDelaySec: 1_800,
-		vadiumRatioBps: 10_000,
+	vadiumRatioBps: 10_000,
 	dleqRequired: false,
 	schema: 'auction_v1',
 })
