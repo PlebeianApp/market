@@ -414,6 +414,7 @@ test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
 			'meta[property="og:site_name"]',
 			'meta[property="og:image"]',
 			'meta[property="product:price:amount"]',
+			'meta[property="product:price:currency"]',
 			'meta[name="twitter:card"]',
 			'meta[name="twitter:title"]',
 			'meta[name="twitter:description"]',
@@ -439,5 +440,8 @@ test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
 		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
 		await expect(ogImage).toHaveCount(1)
 		await expect(unauthenticatedPage.locator('meta[name="twitter:card"]')).toHaveCount(1)
+		const ogCurrency = unauthenticatedPage.locator('meta[property="product:price:currency"]')
+		await expect(ogCurrency).toHaveCount(1)
+		await expect(ogCurrency).toHaveAttribute('content', 'SATS')
 	})
 })
