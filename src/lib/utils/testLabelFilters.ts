@@ -1,4 +1,4 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { TEST_LABEL_AUCTION_KIND, TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { getATagFromCoords } from './coords'

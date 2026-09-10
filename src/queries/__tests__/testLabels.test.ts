@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
 import {
 	A_TAG,
 	E_TAG,

@@ -12,7 +12,7 @@ import {
 import { ndkActions } from '@/lib/stores/ndk'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { invalidateTestLabelCache, setCachedTestLabel } from '@/queries/testLabels'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@/lib/nostr/ndk-events'
 
 /**
  * ADR-0009 — Publish test-label and un-label events.
