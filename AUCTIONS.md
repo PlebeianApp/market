@@ -207,6 +207,14 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
       apply the same computation locally to warn before publishing.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
+- `dleq_required`: `"1"` or `"0"` (ADR-0011). Canonical DLEQ activation for
+  this auction, recorded on the signed event at publish time. When `"1"`,
+  every bid must publish NUT-12 `dleq_proof` tags and the allowlisted mints
+  must advertise NUT-12 support. This is the protocol truth — two clients
+  reading the same event derive the same requirement regardless of their
+  deploy-time boundary config, and a seller cannot backdate `start_at` to
+  change it. Absent on legacy events predating the tag; compliant readers
+  fall back to the boundary comparison for those.
 - `auditor_quorum`: integer N. When present and ≥2, a bid is considered
   "valid" by a compliant client only if at least N of the listed
   `auditors` have emitted a `valid_bid_placed` reputation event for it.

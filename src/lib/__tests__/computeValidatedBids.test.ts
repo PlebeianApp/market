@@ -74,6 +74,7 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
+		dleqRequired: overrides.dleqRequired ?? false,
 		...overrides,
 	}
 }
@@ -596,6 +597,7 @@ const buildPostRolloutAuction = (overrides: Partial<ParsedAuctionEvent> = {}): P
 		startAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT,
 		endAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_000,
 		maxEndAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_100,
+		dleqRequired: true,
 	})
 
 describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () => {

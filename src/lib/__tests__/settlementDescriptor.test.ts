@@ -81,6 +81,7 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 		maxSkewSec: 30,
 		fallbackDelaySec: 25,
 		vadiumRatioBps: 0,
+		dleqRequired: false,
 		schema: '',
 		...overrides,
 	} as ParsedAuctionEvent

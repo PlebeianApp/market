@@ -87,6 +87,18 @@ export interface ParsedAuctionEvent {
 	// Bookkeeping
 	vadiumRatioBps: number
 	schema: string
+	/**
+	 * Canonical DLEQ activation (ADR-0011 Blocker 4). Read from the signed
+	 * `dleq_required` tag on the auction event — NOT derived from a
+	 * client-side boundary comparison. Two clients reading the same signed
+	 * event derive the same value regardless of their deploy-time boundary
+	 * config, and a seller cannot backdate `start_at` to change it.
+	 *
+	 * When the tag is absent (legacy auctions published before this field
+	 * existed), the parser falls back to the boundary comparison so
+	 * already-published auctions are not broken.
+	 */
+	dleqRequired: boolean
 }
 
 // =========================================================================

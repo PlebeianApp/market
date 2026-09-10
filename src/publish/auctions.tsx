@@ -322,6 +322,13 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
 		['schema', 'auction_v1'],
+		// Canonical DLEQ activation (ADR-0011 Blocker 4). The signed
+		// `dleq_required` tag is the protocol truth — two clients reading
+		// the same event derive the same requirement regardless of their
+		// deploy-time boundary config, and a seller cannot backdate
+		// `start_at` to change it. Emitted at publish time from the same
+		// boundary decision the publish gate enforces.
+		['dleq_required', requiresDleqForAuction(validated.startAt) ? '1' : '0'],
 		...imageTags,
 		...categoryTags,
 		...specTags,

@@ -53,6 +53,7 @@ interface AuctionOverrides {
 	maxSkewSec?: number
 	fallbackDelaySec?: number
 	minBidCurve?: MinBidCurve
+	dleqRequired?: boolean
 }
 
 const buildAuction = (overrides: AuctionOverrides = {}): ParsedAuctionEvent => {
@@ -88,6 +89,7 @@ const buildAuction = (overrides: AuctionOverrides = {}): ParsedAuctionEvent => {
 		fallbackDelaySec: overrides.fallbackDelaySec ?? 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
+		dleqRequired: overrides.dleqRequired ?? false,
 	}
 }
 
@@ -752,6 +754,7 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 			startAt: POST,
 			endAt: POST + 1_000,
 			maxEndAt: POST + 2_000,
+			dleqRequired: true,
 		})
 
 	// A lock secret with a caller-supplied nonce so we can build two DISTINCT
@@ -862,6 +865,7 @@ describe('validateBid — DLEQ proof structural fields (ADR-0011 B4)', () => {
 			startAt: POST,
 			endAt: POST + 1_000,
 			maxEndAt: POST + 2_000,
+			dleqRequired: true,
 		})
 
 	test('dleq_invalid when dleq_proof is missing the required id field', () => {
