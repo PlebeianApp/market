@@ -328,8 +328,11 @@ test.describe('Order Details - Buyer View - Auctions', () => {
 		// Verify no invoice cards yet (Seller hasn't sent them)
 		await expect(page.getByTestId('invoice-card')).not.toBeVisible()
 
-		// Verify "Cancel" button is visible
-		await expect(page.getByRole('button', { name: /cancel/i })).toBeVisible()
+		// Auction orders are handled by the auction settlement flow: the
+		// product-order Cancel/Confirm lifecycle buttons must be suppressed
+		// for auctions (review #1226 must-fix #2).
+		await expect(page.getByRole('button', { name: /cancel order/i })).not.toBeVisible()
+		await expect(page.getByRole('button', { name: /confirm payment received/i })).not.toBeVisible()
 	})
 
 	test('tracks shipped auction order and confirms receipt', async ({ buyerPage: page }) => {
