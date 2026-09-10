@@ -9,10 +9,9 @@ import {
 	LABEL_VALUE_TEST,
 	l_TAG,
 } from '@/lib/constants/testLabels'
-import { ndkActions } from '@/lib/stores/ndk'
+import { type EventTemplate, type NostrEvent, getUser, publish, sign } from '@/lib/nostr/io'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { invalidateTestLabelCache, setCachedTestLabel } from '@/queries/testLabels'
-import { NDKEvent } from '@/lib/nostr/ndk-events'
 
 /**
  * ADR-0009 — Publish test-label and un-label events.
@@ -53,34 +52,30 @@ export interface PublishTestLabelParams {
  * The `.content` is pre-filled with the labeler's contact reference.
  * Updates the label store optimistically; reverts on failure.
  */
-export async function publishTestLabel({ coordinate, contactRef, reason, content }: PublishTestLabelParams): Promise<NDKEvent> {
+export async function publishTestLabel({ coordinate, contactRef, reason, content }: PublishTestLabelParams): Promise<NostrEvent> {
 	if (!coordinate) throw new Error('A coordinate is required to publish a test label')
 
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-	const signer = ndkActions.getSigner()
-	if (!signer) throw new Error('No signer available')
-
-	const labeler = await signer.user()
+	const labeler = await getUser()
 	if (!labeler?.pubkey) throw new Error('Unable to determine the current labeler pubkey')
 
 	// Optimistic update — the item disappears from feeds immediately
 	testLabelActions.setLabel(coordinate, PENDING_LABEL_EVENT_ID, labeler.pubkey)
 
 	try {
-		const event = new NDKEvent(ndk)
-		event.kind = LABEL_EVENT_KIND
-		event.created_at = Math.floor(Date.now() / 1000)
-		event.tags = [
-			[L_TAG, LABEL_NAMESPACE],
-			[l_TAG, LABEL_VALUE_TEST, LABEL_NAMESPACE],
-			[A_TAG, coordinate],
-		]
-		event.content = content?.trim() ? content : buildTestLabelContent(reason, contactRef)
+		const template: EventTemplate = {
+			kind: LABEL_EVENT_KIND,
+			created_at: Math.floor(Date.now() / 1000),
+			tags: [
+				[L_TAG, LABEL_NAMESPACE],
+				[l_TAG, LABEL_VALUE_TEST, LABEL_NAMESPACE],
+				[A_TAG, coordinate],
+			],
+			content: content?.trim() ? content : buildTestLabelContent(reason, contactRef),
+		}
 
-		await event.sign(signer)
-		const publishedRelays = await ndkActions.publishEvent(event)
-		if (publishedRelays.size === 0) {
+		const event = await sign(template)
+		const result = await publish(event)
+		if (result.publishedRelays.size === 0) {
 			throw new Error('Test label was not published to any relays')
 		}
 
@@ -112,16 +107,11 @@ export interface PublishTestLabelDeletionParams {
  * The deletion references the label event's id in an `e` tag with a `k` tag
  * of 1985. Updates the store optimistically; reverts on failure.
  */
-export async function publishTestLabelDeletion({ coordinate, labelEventId, reason }: PublishTestLabelDeletionParams): Promise<NDKEvent> {
+export async function publishTestLabelDeletion({ coordinate, labelEventId, reason }: PublishTestLabelDeletionParams): Promise<NostrEvent> {
 	if (!coordinate || !labelEventId) throw new Error('A coordinate and label event id are required to un-label')
 	if (labelEventId === PENDING_LABEL_EVENT_ID) throw new Error('Label is still being published — try again shortly')
 
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-	const signer = ndkActions.getSigner()
-	if (!signer) throw new Error('No signer available')
-
-	const labeler = await signer.user()
+	const labeler = await getUser()
 	if (!labeler?.pubkey) throw new Error('Unable to determine the current labeler pubkey')
 
 	// NIP-09: only the label event's author may delete it. Validate the
@@ -136,18 +126,19 @@ export async function publishTestLabelDeletion({ coordinate, labelEventId, reaso
 	testLabelActions.removeLabel(coordinate)
 
 	try {
-		const event = new NDKEvent(ndk)
-		event.kind = LABEL_DELETION_KIND
-		event.created_at = Math.floor(Date.now() / 1000)
-		event.tags = [
-			[E_TAG, labelEventId],
-			[K_TAG, String(LABEL_EVENT_KIND)],
-		]
-		event.content = reason?.trim() || 'Unmarking test label.'
+		const template: EventTemplate = {
+			kind: LABEL_DELETION_KIND,
+			created_at: Math.floor(Date.now() / 1000),
+			tags: [
+				[E_TAG, labelEventId],
+				[K_TAG, String(LABEL_EVENT_KIND)],
+			],
+			content: reason?.trim() || 'Unmarking test label.',
+		}
 
-		await event.sign(signer)
-		const publishedRelays = await ndkActions.publishEvent(event)
-		if (publishedRelays.size === 0) {
+		const event = await sign(template)
+		const result = await publish(event)
+		if (result.publishedRelays.size === 0) {
 			throw new Error('Test label deletion was not published to any relays')
 		}
 

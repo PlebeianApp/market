@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
+import { type EventTemplate, type NostrEvent, ndkIo, setNostrIo } from '@/lib/nostr/io'
+import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
 import {
 	A_TAG,
 	E_TAG,
@@ -434,5 +436,95 @@ describe('fetchTestLabels chunk scheduling', () => {
 		// A sequential `for…await` loop keeps maxInFlight at 1 per kind.
 		expect(stats.get(LABEL_EVENT_KIND)).toEqual({ calls: 2, maxInFlight: 2 })
 		expect(stats.get(LABEL_DELETION_KIND)).toEqual({ calls: 2, maxInFlight: 2 })
+	})
+})
+
+// --- Publish path through the io seam (ADR-0002) ---
+
+describe('test-label publish via the io seam', () => {
+	// testLabelActions must reach the relay only through the seam. Swapping the
+	// active adapter (rather than mock.module) keeps the swap scoped to this
+	// describe and restored afterwards.
+	const seamGetUser = mock(async () => ({ pubkey: ADMIN_PUBKEY }))
+	const seamSign = mock(
+		async (template: EventTemplate): Promise<NostrEvent> => ({
+			...template,
+			id: 'signed-label-id',
+			pubkey: ADMIN_PUBKEY,
+			sig: 'sig',
+		}),
+	)
+	let seamPublishedRelays: ReadonlySet<string> = new Set(['wss://relay.example'])
+	const seamPublish = mock(async (_event: NostrEvent) => ({ publishedRelays: seamPublishedRelays }))
+	const seamStub = {
+		fetchEvents: mock(async () => []),
+		subscribe: mock(() => () => {}),
+		publish: seamPublish,
+		sign: seamSign,
+		getUser: seamGetUser,
+	}
+
+	beforeEach(() => {
+		setNostrIo(seamStub)
+		testLabelActions.clearLabels()
+		seamGetUser.mockClear()
+		seamSign.mockClear()
+		seamPublish.mockClear()
+		seamPublishedRelays = new Set(['wss://relay.example'])
+	})
+
+	afterAll(() => setNostrIo(ndkIo))
+
+	test('publishTestLabel signs a kind-1985 template and publishes it through the seam', async () => {
+		const event = await publishTestLabel({ coordinate: PRODUCT_COORD, contactRef: 'npub1contact' })
+
+		expect(seamSign).toHaveBeenCalledTimes(1)
+		const [template] = seamSign.mock.calls[0]
+		expect(template.kind).toBe(LABEL_EVENT_KIND)
+		expect(template.tags).toEqual([
+			[L_TAG, LABEL_NAMESPACE],
+			[l_TAG, LABEL_VALUE_TEST, LABEL_NAMESPACE],
+			[A_TAG, PRODUCT_COORD],
+		])
+		expect(seamPublish).toHaveBeenCalledTimes(1)
+		expect(seamPublish.mock.calls[0]?.[0]).toBe(event)
+		expect(event.id).toBe('signed-label-id')
+		// Store is reconciled with the signed event id, not the pending marker.
+		expect(testLabelActions.getLabelEventId(PRODUCT_COORD)).toBe('signed-label-id')
+	})
+
+	test('publishTestLabel fails closed and reverts the optimistic label when no relay ACKs', async () => {
+		seamPublishedRelays = new Set()
+
+		await expect(publishTestLabel({ coordinate: PRODUCT_COORD, contactRef: 'npub1contact' })).rejects.toThrow(
+			'Test label was not published to any relays',
+		)
+		expect(testLabelActions.isTestLabeled(PRODUCT_COORD)).toBe(false)
+	})
+
+	test('publishTestLabelDeletion signs a kind-5 template and publishes it through the seam', async () => {
+		testLabelActions.setLabel(PRODUCT_COORD, 'label-to-delete', ADMIN_PUBKEY)
+
+		const event = await publishTestLabelDeletion({ coordinate: PRODUCT_COORD, labelEventId: 'label-to-delete' })
+
+		const [template] = seamSign.mock.calls[0]
+		expect(template.kind).toBe(LABEL_DELETION_KIND)
+		expect(template.tags).toEqual([
+			[E_TAG, 'label-to-delete'],
+			[K_TAG, String(LABEL_EVENT_KIND)],
+		])
+		expect(seamPublish).toHaveBeenCalledTimes(1)
+		expect(seamPublish.mock.calls[0]?.[0]).toBe(event)
+		expect(testLabelActions.isTestLabeled(PRODUCT_COORD)).toBe(false)
+	})
+
+	test('publishTestLabelDeletion fails closed and restores the label when no relay ACKs', async () => {
+		testLabelActions.setLabel(PRODUCT_COORD, 'label-to-delete', ADMIN_PUBKEY)
+		seamPublishedRelays = new Set()
+
+		await expect(publishTestLabelDeletion({ coordinate: PRODUCT_COORD, labelEventId: 'label-to-delete' })).rejects.toThrow(
+			'Test label deletion was not published to any relays',
+		)
+		expect(testLabelActions.isTestLabeled(PRODUCT_COORD)).toBe(true)
 	})
 })
