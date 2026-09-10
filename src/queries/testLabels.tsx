@@ -187,37 +187,42 @@ export const reconcileActiveTestLabels = (
 // --- Relay fetching ---
 
 const fetchAuthorizedLabelEvents = async (coordinates: string[], adminPubkeys: string[], relaySet?: NDKRelaySet): Promise<NDKEvent[]> => {
-	const labelEvents: NDKEvent[] = []
 	const { ndkActions } = await import('@/lib/stores/ndk')
-	for (const chunk of chunkStrings(coordinates, TEST_LABEL_FETCH_CHUNK_SIZE)) {
-		// Batched relay query: one filter for the whole chunk of coordinates.
-		// `#L` narrows to our namespace at the relay; tags are re-validated
-		// client-side for relays that ignore unknown single-letter tag filters.
-		const filter: NDKFilter = {
-			kinds: [LABEL_EVENT_KIND],
-			'#a': chunk,
-			'#L': [LABEL_NAMESPACE],
-			...(adminPubkeys.length > 0 ? { authors: adminPubkeys } : {}),
-		}
-		const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: TEST_LABEL_FETCH_TIMEOUT_MS, relaySet })
-		labelEvents.push(...Array.from(events))
-	}
-	return labelEvents
+	// Chunk queries are independent, so run them concurrently instead of paying
+	// one relay round-trip per chunk serially. `Promise.all` + `flat` preserves
+	// the sequential loop's chunk order and per-chunk event order.
+	const chunkResults = await Promise.all(
+		chunkStrings(coordinates, TEST_LABEL_FETCH_CHUNK_SIZE).map(async (chunk) => {
+			// Batched relay query: one filter for the whole chunk of coordinates.
+			// `#L` narrows to our namespace at the relay; tags are re-validated
+			// client-side for relays that ignore unknown single-letter tag filters.
+			const filter: NDKFilter = {
+				kinds: [LABEL_EVENT_KIND],
+				'#a': chunk,
+				'#L': [LABEL_NAMESPACE],
+				...(adminPubkeys.length > 0 ? { authors: adminPubkeys } : {}),
+			}
+			const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: TEST_LABEL_FETCH_TIMEOUT_MS, relaySet })
+			return Array.from(events)
+		}),
+	)
+	return chunkResults.flat()
 }
 
 const fetchLabelDeletionEvents = async (labelEventIds: string[], adminPubkeys: string[], relaySet?: NDKRelaySet): Promise<NDKEvent[]> => {
-	const deletionEvents: NDKEvent[] = []
 	const { ndkActions } = await import('@/lib/stores/ndk')
-	for (const chunk of chunkStrings(labelEventIds, TEST_LABEL_FETCH_CHUNK_SIZE)) {
-		const filter: NDKFilter = {
-			kinds: [LABEL_DELETION_KIND],
-			'#e': chunk,
-			...(adminPubkeys.length > 0 ? { authors: adminPubkeys } : {}),
-		}
-		const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: TEST_LABEL_FETCH_TIMEOUT_MS, relaySet })
-		deletionEvents.push(...Array.from(events))
-	}
-	return deletionEvents
+	const chunkResults = await Promise.all(
+		chunkStrings(labelEventIds, TEST_LABEL_FETCH_CHUNK_SIZE).map(async (chunk) => {
+			const filter: NDKFilter = {
+				kinds: [LABEL_DELETION_KIND],
+				'#e': chunk,
+				...(adminPubkeys.length > 0 ? { authors: adminPubkeys } : {}),
+			}
+			const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: TEST_LABEL_FETCH_TIMEOUT_MS, relaySet })
+			return Array.from(events)
+		}),
+	)
+	return chunkResults.flat()
 }
 
 /**
@@ -301,8 +306,8 @@ export const fetchTestLabels = async (coordinates: string[]): Promise<Map<string
 
 /**
  * Drop the module-level label cache (all coordinates, or one).
- * Called after publishing label/deletion events so the next fetch reconciles
- * with the relay instead of serving a stale cache entry.
+ * Used to discard optimistic entries when a label/deletion publish fails, so
+ * the next fetch reconciles with the relay instead of serving a stale cache.
  */
 export const invalidateTestLabelCache = (coordinate?: string) => {
 	if (coordinate) {
@@ -379,10 +384,17 @@ export const useTestLabelForCoordinate = (coordinate: string | undefined) => {
 }
 
 /**
- * Invalidate the test-label caches (module cache + React Query) after a
- * label or deletion was published.
+ * Invalidate the React Query test-label cache after a label or deletion was
+ * published. Deliberately leaves the module-level cache populated by
+ * {@link setCachedTestLabel} intact: it holds the optimistic entry through
+ * relay propagation, and dropping it would let a refetch revert the optimistic
+ * update. The module cache is discarded only on publish failure (see
+ * `testLabelActions`).
+ *
+ * The optional `coordinate` argument is now unused — it is retained rather
+ * than removed from the helper signature in this fix.
  */
 export const invalidateTestLabelCaches = async (queryClient: QueryClient, coordinate?: string) => {
-	invalidateTestLabelCache(coordinate)
+	void coordinate
 	await queryClient.invalidateQueries({ queryKey: testLabelKeys.all })
 }

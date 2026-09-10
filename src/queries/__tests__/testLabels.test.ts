@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import {
 	A_TAG,
 	E_TAG,
@@ -15,6 +15,7 @@ import {
 import { testLabelActions, testLabelStore } from '@/lib/stores/testLabels'
 import {
 	excludeTestLabeledEvents,
+	fetchTestLabels,
 	getAuthorizedLabelerPubkeys,
 	isLabelDeletionForLabel,
 	isValidAuthorizedTestLabel,
@@ -386,5 +387,52 @@ describe('excludeTestLabeledEvents toggle', () => {
 		const result = await excludeTestLabeledEvents([makeProductEvent('my-product')])
 
 		expect(result).toHaveLength(0)
+	})
+})
+
+// --- Chunk fetch scheduling (RISK 2: parallel, not sequential) ---
+
+describe('fetchTestLabels chunk scheduling', () => {
+	test('fetches label and deletion chunks concurrently', async () => {
+		// 150 coordinates => 2 label chunks; their 150 distinct ids => 2 deletion chunks.
+		const coordinates = Array.from({ length: 150 }, (_, index) => `30402:${MERCHANT_PUBKEY}:chunk-${index}`)
+		const stats = new Map<number, { calls: number; maxInFlight: number }>()
+		let inFlight = 0
+
+		const fetchEventsWithTimeout = async (filter: NDKFilter) => {
+			const kind = Array.isArray(filter.kinds) ? filter.kinds[0] : undefined
+			const entry = stats.get(kind ?? -1) ?? { calls: 0, maxInFlight: 0 }
+			entry.calls += 1
+			inFlight += 1
+			entry.maxInFlight = Math.max(entry.maxInFlight, inFlight)
+			stats.set(kind ?? -1, entry)
+			// Hold the request open so overlapping chunks are observable.
+			await new Promise((resolve) => setTimeout(resolve, 10))
+			inFlight -= 1
+			if (kind === LABEL_EVENT_KIND) {
+				const chunk = (filter['#a'] as string[] | undefined) ?? []
+				return new Set(chunk.map((coordinate) => makeTestLabelEvent({ coordinate, id: `chunk-label-${coordinate}` })))
+			}
+			return new Set<NDKEvent>()
+		}
+
+		// Stand-ins for the modules fetchTestLabels imports dynamically. Bun's
+		// module-mock registry persists for the whole `test:unit` invocation, so
+		// keep this mock in the last test file of the suite (testLabels.test.ts
+		// sorts last among the unit files).
+		mock.module('@/queries/app-settings', () => ({
+			fetchAdminSettings: async () => ({ admins: [ADMIN_PUBKEY] }),
+		}))
+		mock.module('@/lib/stores/ndk', () => ({
+			ndkActions: { getNDK: () => ({}), fetchEventsWithTimeout },
+			getAppRelaySet: () => undefined,
+		}))
+
+		const result = await fetchTestLabels(coordinates)
+
+		expect(result.size).toBe(150)
+		// A sequential `for…await` loop keeps maxInFlight at 1 per kind.
+		expect(stats.get(LABEL_EVENT_KIND)).toEqual({ calls: 2, maxInFlight: 2 })
+		expect(stats.get(LABEL_DELETION_KIND)).toEqual({ calls: 2, maxInFlight: 2 })
 	})
 })

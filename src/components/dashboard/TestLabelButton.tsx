@@ -86,7 +86,7 @@ export function TestLabelButton({ kind, pubkey, dTag, itemLabel = 'Product', cla
 		setIsMarking(true)
 		try {
 			await publishTestLabel({ coordinate, contactRef, content: resolvedLabelContent })
-			await invalidateTestLabelCaches(queryClient, coordinate)
+			await invalidateTestLabelCaches(queryClient)
 			toast.success(`${itemLabel} marked as test — excluded from feeds.`)
 		} catch (error) {
 			console.error('Failed to publish test label:', error)
@@ -100,7 +100,7 @@ export function TestLabelButton({ kind, pubkey, dTag, itemLabel = 'Product', cla
 		setIsUnmarking(true)
 		try {
 			await publishTestLabelDeletion({ coordinate, labelEventId })
-			await invalidateTestLabelCaches(queryClient, coordinate)
+			await invalidateTestLabelCaches(queryClient)
 			toast.success(`Test label removed — ${itemNoun} is visible again.`)
 		} catch (error) {
 			console.error('Failed to publish test label deletion:', error)
