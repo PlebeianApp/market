@@ -26,8 +26,8 @@ import {
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo, type NostrEvent, type NostrFilter } from '@/lib/nostr/io'
+import { fetchNdkEvent, fetchNdkEventSet, rehydrateVerifiedNdkEvent, NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
@@ -156,7 +156,9 @@ const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: nu
 	const ndk = ndkActions.getNDK()
 	if (!ndk || !pubkey || !dTag) return []
 
-	const events = await ndkActions.fetchEventsWithTimeout(
+	const events = await fetchNdkEventSet(
+		applesauceIo,
+		ndk,
 		{
 			kinds: [AUCTION_KIND],
 			authors: [pubkey],
@@ -180,7 +182,7 @@ export const fetchAuctions = async (limit: number = 200) => {
 		limit,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 8000 })
 	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
@@ -200,7 +202,7 @@ export const fetchAuction = async (id: string) => {
 		limit: 1,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 8000 })
 	const event = Array.from(events)[0] ?? null
 	if (!event) return null
 	const dTag = getAuctionId(event)
@@ -222,7 +224,7 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 		limit,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 8000 })
 	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
@@ -235,8 +237,12 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
 
 	const versionEvents = await fetchAuctionVersionEvents(pubkey, dTag)
 	if (versionEvents.length === 0) {
-		const naddr = naddrFromAddress(30408, pubkey, dTag)
-		const event = await ndk.fetchEvent(naddr)
+		const event = await fetchNdkEvent(
+			applesauceIo,
+			ndk,
+			{ kinds: [AUCTION_KIND], authors: [pubkey], '#d': [dTag], limit: 1 },
+			{ timeoutMs: 10000 },
+		)
 		if (!event) return null
 		if (isAuctionDeleted(dTag, event.created_at)) return null
 		return resolveCanonicalAuctionEvent(ndk, [event])
@@ -263,7 +269,9 @@ export const fetchAuctionBidsForList = async (auctionRootEventIds: string[], lim
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(
+	const events = await fetchNdkEventSet(
+		applesauceIo,
+		ndk,
 		{
 			kinds: [AUCTION_BID_KIND],
 			'#e': ids,
@@ -317,7 +325,7 @@ export const fetchAuctionSettlementsForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	const settlements = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),
 	)
@@ -370,7 +378,7 @@ export const fetchAuctionPathReleasesForList = async (
 
 	if (filters.length === 0) return new Map()
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	const releases = filterBlacklistedEvents(dedupeEventsById(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	const byCoordinate = new Map<string, NDKEvent[]>()
@@ -415,7 +423,7 @@ export const fetchAuctionBids = async (auctionEventId: string, limit: number = 5
 		})
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
@@ -424,7 +432,9 @@ export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 5
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const events = await ndkActions.fetchEventsWithTimeout(
+	const events = await fetchNdkEventSet(
+		applesauceIo,
+		ndk,
 		{
 			kinds: [AUCTION_BID_KIND],
 			authors: [pubkey],
@@ -456,7 +466,7 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 		})
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
@@ -480,7 +490,7 @@ export const fetchAuctionPathReleases = async (
 
 	void auctionEventId
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events))
 		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
@@ -543,7 +553,7 @@ export const fetchAuctionVerdicts = async (
 	if (auctionEventId) (filter as { '#e'?: string[] })['#e'] = [auctionEventId]
 	if (auctionCoordinates) (filter as { '#a'?: string[] })['#a'] = [auctionCoordinates]
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 8000 })
 	return (
 		filterBlacklistedEvents(Array.from(events))
 			// Signature verification at the parse boundary: drop unverified events
@@ -994,20 +1004,6 @@ export function useStreamingAuctionBids(
 		setIsStreaming(true)
 
 		const filters = buildAuctionBidFilters(auctionRootEventId, auctionCoordinates, limit)
-		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
-
-		sub.on('event', (event: NDKEvent) => {
-			if (seenIds.current.has(event.id)) return
-			seenIds.current.add(event.id)
-			const [filtered] = filterBlacklistedEvents([event])
-			if (!filtered) return
-
-			if (!eoseReceived.current) {
-				pendingBids.current.push(filtered)
-			} else {
-				setBids((prev) => mergeAndSortBids(prev, [filtered]))
-			}
-		})
 
 		// Merge pending buffer into state without clearing existing bids — prevents
 		// a flash of empty state when the effect re-runs as auctionCoordinates resolves.
@@ -1017,11 +1013,31 @@ export function useStreamingAuctionBids(
 			setBids((prev) => mergeAndSortBids(prev, incoming))
 		}
 
-		sub.on('eose', () => {
-			eoseReceived.current = true
-			flushPending()
-			setIsStreaming(false)
-		})
+		const stop = applesauceIo.subscribe(
+			(filters.length === 1 ? filters[0] : filters) as NostrFilter | NostrFilter[],
+			(rawEvent: NostrEvent) => {
+				const newEvent = rehydrateVerifiedNdkEvent(ndk, rawEvent)
+				if (!newEvent) return
+				if (seenIds.current.has(newEvent.id)) return
+				seenIds.current.add(newEvent.id)
+				const [filtered] = filterBlacklistedEvents([newEvent])
+				if (!filtered) return
+
+				if (!eoseReceived.current) {
+					pendingBids.current.push(filtered)
+				} else {
+					setBids((prev) => mergeAndSortBids(prev, [filtered]))
+				}
+			},
+			{
+				closeOnEose: false,
+				onEose: () => {
+					eoseReceived.current = true
+					flushPending()
+					setIsStreaming(false)
+				},
+			},
+		)
 
 		const timeoutId = setTimeout(() => {
 			if (eoseReceived.current) return
@@ -1032,7 +1048,7 @@ export function useStreamingAuctionBids(
 
 		return () => {
 			clearTimeout(timeoutId)
-			sub.stop()
+			stop()
 		}
 	}, [auctionRootEventId, auctionCoordinates, limit])
 
@@ -1079,7 +1095,7 @@ export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promi
 		limit: 20,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 6000 })
 	return Array.from(events)
 		.filter((e) => {
 			const type = e.tags.find((t) => t[0] === 'type')?.[1]
@@ -1120,7 +1136,7 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 			...(until !== undefined ? { until } : {}),
 		}
 
-		const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
+		const events = Array.from(await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 6000 }))
 		if (events.length === 0) break
 
 		let oldestCreatedAt: number | undefined

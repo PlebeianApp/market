@@ -1,7 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from './queryKeyFactory'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { isAddressableKind } from 'nostr-tools/kinds'
 
 /**
@@ -137,7 +138,7 @@ const filterReactionsValid = async (reactions: Reaction[]): Promise<Reaction[]> 
 		'#e': reactionsUnique.map((reaction) => reaction.id),
 	}
 
-	const eventsDeletions = await ndk.fetchEvents(filterDeletions)
+	const eventsDeletions = await fetchNdkEventSet(applesauceIo, ndk, filterDeletions)
 
 	// Create O(1)-complexity reference table with all deleted reaction IDs
 	const idsReactionsDeleted = new Set<string>()
@@ -175,7 +176,7 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> 
 		filter['#e'] = [event.id]
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	const reactions = Array.from(events).map((e) => transformReactionEvent(e, event))
 
 	// Filter out deleted reactions

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
@@ -23,7 +23,7 @@ import {
 	getAuctionTitle,
 	useAuctionBids,
 } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
@@ -101,7 +101,7 @@ export function AuctionCard({
 
 	useEffect(() => {
 		const checkIfOwnAuction = async () => {
-			const user = await ndkActions.getUser()
+			const user = await applesauceIo.getUser()
 			if (!user?.pubkey) return
 			setIsOwnAuction(user.pubkey === auction.pubkey)
 		}

@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKFilter, type NDKEvent } from '@/lib/nostr/ndk-events'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { liveActivityKeys } from './queryKeyFactory'
@@ -54,7 +55,7 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 		limit: 10,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout([filter], { timeoutMs: 5000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 5000 })
 	if (events.size === 0) return null
 
 	// Deterministic sort: newest by created_at, then lexicographically lower
@@ -118,7 +119,7 @@ export const fetchLiveChatMessages = async (liveActivityCoord: string): Promise<
 		},
 	]
 
-	const events = await ndkActions.fetchEventsWithTimeout(filters, { timeoutMs: 5000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filters, { timeoutMs: 5000 })
 	return Array.from(events)
 		.map(parseLiveChatMessage)
 		.sort((a, b) => a.createdAt - b.createdAt)

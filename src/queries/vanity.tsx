@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchLatestNdkEvent, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -36,10 +37,14 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 		limit: 1,
 	}
 
-	const events = await ndk.fetchEvents(vanityFilter)
-	const eventArray = Array.from(events)
+	// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+	// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+	// Conflicting replaceable versions resolve deterministically to the newest
+	// created_at (fetchLatestNdkEvent — NDK dedup-key parity, relay-arrival
+	// order must not decide which copy wins).
+	const latestEvent = await fetchLatestNdkEvent(applesauceIo, ndk, vanityFilter)
 
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		console.log(`No vanity registry found for app pubkey: ${targetPubkey}`)
 		// Return empty registry
 		return {
@@ -48,9 +53,6 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 			event: null,
 		}
 	}
-
-	// Get the latest event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	// Extract vanity entries from 'vanity' tags
 	// Format: ["vanity", vanityName, pubkey, validUntil]
@@ -86,19 +88,19 @@ export const useVanitySettings = (appPubkey?: string) => {
 			'#d': ['vanity-urls'],
 		}
 
-		const subscription = ndk.subscribe(vanityFilter, {
-			closeOnEose: false,
-		})
-
-		// Event handler for vanity updates
-		subscription.on('event', (newEvent) => {
-			queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
-		})
+		// Live subscription goes through the applesauceIo seam (ADR-0002).
+		// Unpinned, like the previous NDK pool subscription.
+		const stop = applesauceIo.subscribe(
+			vanityFilter,
+			() => {
+				// Event handler for vanity updates
+				queryClient.invalidateQueries({ queryKey: configKeys.vanity(appPubkey) })
+			},
+			{ closeOnEose: false },
+		)
 
 		// Clean up subscription when unmounting
-		return () => {
-			subscription.stop()
-		}
+		return stop
 	}, [appPubkey, ndk, queryClient])
 
 	return useQuery({

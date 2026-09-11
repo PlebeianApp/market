@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { buildAuctionBidFilters, mergeAndSortBids } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 const AUCTION_BID_KIND = 1023
 

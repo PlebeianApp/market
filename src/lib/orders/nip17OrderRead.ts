@@ -1,4 +1,4 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NDKSigner } from '@/lib/nostr/ndk-events'
 import type { Event } from 'nostr-tools'
 import { unwrapNip59GiftWrapWithSigner } from '../nostr/nip59'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
