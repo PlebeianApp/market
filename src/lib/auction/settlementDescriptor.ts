@@ -21,6 +21,7 @@ export type SettlementPhase =
 	| 'settlement-window-expired'
 	| 'settled'
 	| 'reserve-not-met'
+	| 'griefed-no-fallback'
 	| 'cancelled'
 	| 'closed'
 
@@ -491,8 +492,13 @@ function classifyPhase(d: DerivedState): SettlementPhase {
 				return 'settled'
 			case 'reserve_not_met':
 				return 'reserve-not-met'
-			case 'cancelled':
+			// Grief is a distinct terminal outcome: the winning bidder never
+			// released the path and no fallback was exercised. ADR-0004 derives
+			// it from validator quorum, so it must not be collapsed into the
+			// seller-cancelled case on the order surfaces.
 			case 'griefed_no_fallback':
+				return 'griefed-no-fallback'
+			case 'cancelled':
 				return 'cancelled'
 			default:
 				return 'closed'
