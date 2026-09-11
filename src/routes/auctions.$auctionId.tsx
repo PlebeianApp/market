@@ -18,6 +18,7 @@ import { getAuctionSettlementGraceSeconds, nip60Actions } from '@/lib/stores/nip
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import {
@@ -485,14 +486,14 @@ function AuctionDetailRoute() {
 	// Parse raw NDK events into typed structs for the settlement descriptor.
 	const parsedAuctionForSettlement = useMemo(() => {
 		if (!auction) return null
-		const result = parseAuctionEvent(auction.rawEvent())
+		const result = parseAuctionEvent(toRawEvent(auction))
 		return result.ok ? result.value : null
 	}, [auction])
 
 	const parsedBidsForSettlement = useMemo(
 		() =>
 			bids
-				.map((b) => parseBidEvent(b.rawEvent()))
+				.map((b) => parseBidEvent(toRawEvent(b)))
 				.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok)
 				.map((r) => r.value),
 		[bids],
@@ -517,7 +518,7 @@ function AuctionDetailRoute() {
 	const parsedSettlementsForSettlement = useMemo(
 		() =>
 			(settlementsQuery.data ?? [])
-				.map((s) => parseSettlementEvent(s.rawEvent()))
+				.map((s) => parseSettlementEvent(toRawEvent(s)))
 				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
 				.map((r) => r.value),
 		[settlementsQuery.data],
@@ -526,13 +527,13 @@ function AuctionDetailRoute() {
 	const parsedPathReleasesForSettlement = useMemo(
 		() =>
 			(pathReleasesQuery.data ?? [])
-				.map((pr) => parsePathReleaseEvent(pr.rawEvent()))
+				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
 				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
 				.map((r) => r.value),
 		[pathReleasesQuery.data],
 	)
 
-	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => o.rawEvent()), [claimOrdersQuery.data])
+	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => toRawEvent(o)), [claimOrdersQuery.data])
 
 	const myTopBidEvent = useMemo(() => {
 		if (!activeUserPubkey) return null

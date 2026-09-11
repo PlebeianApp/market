@@ -48,6 +48,19 @@ export interface PublishOptions {
 }
 
 export interface NostrIo {
+	/**
+	 * Fetch events matching `filter` (a single filter, or several OR-ed filters).
+	 *
+	 * Contract — both adapters MUST honour these, and callers may rely on them:
+	 *   - the result is a flat collection of raw nostr-tools events;
+	 *   - **events are unique by `id`.** An event that matches more than one of
+	 *     the supplied filters is returned exactly once. (NDK's event set
+	 *     deduplicated by `deduplicationKey()`; the applesauce adapter must
+	 *     deduplicate by `id` to match.) Downstream semantic layers treat a
+	 *     repeated event as two distinct inputs — e.g. `computeValidatedBids`
+	 *     flags a duplicated bid as proof reuse — so uniqueness is load-bearing,
+	 *     not cosmetic.
+	 */
 	fetchEvents(filter: NostrFilter | NostrFilter[], opts?: FetchOptions): Promise<NostrEvent[]>
 	subscribe(filter: NostrFilter | NostrFilter[], onEvent: (event: NostrEvent) => void, opts?: SubscribeOptions): () => void
 	publish(event: NostrEvent, opts?: PublishOptions): Promise<void>

@@ -13,6 +13,7 @@ import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossible
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
@@ -1239,7 +1240,7 @@ export const publishBidderPathRelease = async (
 			])
 		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, 500, latestLeg.auctionCoordinate)
 		const parsedVerdicts = verdictEvents
-			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 			.filter((v) => v.bidEventId === input.bidEventId && v.claim === 'won_pending_settlement')
@@ -1247,7 +1248,7 @@ export const publishBidderPathRelease = async (
 		// Fetch the auction to get auditor list + quorum threshold.
 		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
 		if (auctionEvent) {
-			const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
+			const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
 			if (parsedAuctionResult.ok) {
 				const auction = parsedAuctionResult.value
 				const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
@@ -1481,7 +1482,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	}
 
 	// 1b. Parse the auction event for structured access to maxEndAt, reserve, etc.
-	const parsedAuctionResult = parseAuctionEvent(auctionEvent.rawEvent())
+	const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
 	if (!parsedAuctionResult.ok) {
 		throw new Error(`Auction event is malformed: ${'error' in parsedAuctionResult ? parsedAuctionResult.error.message : 'unknown'}`)
 	}
@@ -1540,11 +1541,11 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
 		])
 		const rnmParsedBids = rnmBids
-			.map((b) => parseBidEvent(b.rawEvent()))
+			.map((b) => parseBidEvent(toRawEvent(b)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
 			.map((r) => r.value)
 		const rnmParsedVerdicts = rnmVerdicts
-			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
@@ -1572,7 +1573,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// refs; deeper completeness validation happens on the read path.)
 		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, 100, auctionCoordinate)
 		const hasSettledSettlement = existingSettlements.some((s) => {
-			const parsed = parseSettlementEvent(s.rawEvent())
+			const parsed = parseSettlementEvent(toRawEvent(s))
 			if (!parsed.ok) return false
 			return isStructurallyValidSettledSettlement(parsed.value, parsedAuction)
 		})
@@ -1609,11 +1610,11 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	}
 
 	const parsedBids = bids
-		.map((b) => parseBidEvent(b.rawEvent()))
+		.map((b) => parseBidEvent(toRawEvent(b)))
 		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
 		.map((r) => r.value)
 	const parsedVerdicts = verdictEvents
-		.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+		.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 		.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 		.map((r) => r.value)
 

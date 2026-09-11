@@ -57,14 +57,19 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 	ndkActions: {
 		getNDK: () => ({}),
-		fetchEventsWithTimeout: mock(async (filter: NostrFilter) => {
-			fetchedFilters.push(filter)
-			return relayEvents
-		}),
+		fetchEventsWithTimeout: mock(async () => new Set<never>()),
 	},
 }))
 
 const { fetchAuctionVerdicts } = await import('@/queries/auctions')
+
+// The fetch path under test is the applesauce I/O seam (injected), so the
+// ndkActions mock above only satisfies the store import — applesauceIo falls
+// back to `explicitRelayUrls: []` and would resolve [] without network I/O.
+const injectedFetch = mock(async (filter: NostrFilter | NostrFilter[]) => {
+	fetchedFilters.push(filter as NostrFilter)
+	return [...relayEvents]
+})
 
 const AUCTION_ROOT_EVENT_ID = '1'.repeat(64)
 const AUCTION_COORDINATE = `30408:${'a'.repeat(64)}:auction-1`
@@ -104,7 +109,7 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	})
 
 	test('backwards compatible: no auditors passed means no authors filter', async () => {
-		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 42, AUCTION_COORDINATE)
+		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 42, AUCTION_COORDINATE, undefined, injectedFetch)
 
 		expect(fetchedFilters).toEqual([
 			{
@@ -118,7 +123,13 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	})
 
 	test('sends the configured auditors as the relay authors filter (de-duplicated, sorted)', async () => {
-		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey, roguePubkey, validatorPubkey])
+		await fetchAuctionVerdicts(
+			AUCTION_ROOT_EVENT_ID,
+			500,
+			AUCTION_COORDINATE,
+			[validatorPubkey, roguePubkey, validatorPubkey],
+			injectedFetch,
+		)
 
 		expect(fetchedFilters.length).toBe(1)
 		// The filter authors set is de-duplicated and sorted for a stable query key —
@@ -129,7 +140,7 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	test('fails closed: an empty auditor list authorizes nothing and never queries the relay', async () => {
 		relayEvents = new Set([verdictEvent(validatorSecretKey, 10)])
 
-		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [])
+		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [], injectedFetch)
 
 		expect(verdicts).toEqual([])
 		expect(fetchedFilters).toEqual([])
@@ -146,7 +157,7 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 		// Control the seam so only the genuine signed event passes verification.
 		verifyEventResult = (event) => event === signed
 
-		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE)
+		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, undefined, injectedFetch)
 
 		expect(verdicts.map((event) => event.id)).toEqual([signed.id])
 	})
@@ -161,7 +172,7 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 
 		verifyEventResult = () => true
 
-		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey])
+		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey], injectedFetch)
 
 		expect(verdicts.map((event) => event.pubkey)).toEqual([validatorPubkey])
 	})
@@ -173,7 +184,7 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 
 		verifyEventResult = () => true
 
-		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey])
+		const verdicts = await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 500, AUCTION_COORDINATE, [validatorPubkey], injectedFetch)
 
 		expect(verdicts.map((event) => event.id)).toEqual([newer.id, older.id])
 	})

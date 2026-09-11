@@ -23,7 +23,7 @@ import {
 	getAuctionTitle,
 	useAuctionBids,
 } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
@@ -46,7 +46,7 @@ export function AuctionCard({
 	auction,
 	bids: bidsProp,
 	...props
-}: { auction: NDKEvent; bids?: NDKEvent[] } & React.HTMLAttributes<HTMLDivElement>) {
+}: { auction: NostrEventLike; bids?: NostrEventLike[] } & React.HTMLAttributes<HTMLDivElement>) {
 	const { user: currentUser } = useStore(authStore)
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
