@@ -224,6 +224,23 @@ external Lightning node is involved.
 The dev server receives `APP_DEV_TEST_MINT_URL=http://localhost:3338`,
 pointing the app's test wallet at the local mint.
 
+**NUT-12 DLEQ requirement (ADR-0011):** the local nutshell mint must return a
+DLEQ proof on the freshly issued outputs of a P2PK `swap` — that is what the
+DLEQ-required auction lock path validates. CI pins `cashu==0.19.2` for exactly
+this (mirroring `ci-unit.yml`); nutshell >= 0.20.x also emits version-01 keyset
+ids that `@cashu/cashu-ts` 2.9.0 cannot verify, which breaks the deposit round
+trip. `src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` locks the
+DLEQ-on-swap property in CI.
+
+`e2e/tests/auction-bidding-mints.spec.ts` seeds its auctions with an explicit
+`dleq_required=1` tag (rather than relying on the deploy-time
+`APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary) so the payment-path scenarios
+keep exercising that path — lock the P2PK outputs, require a NUT-12 proof on
+each output, and publish one `dleq_proof` tag per `lock_secret` — and the
+happy-path test asserts the resulting `dleq_proof` tags. The suite also carries
+a grandfathered counterpart (seeded `dleq_required=0`) that funds and publishes
+a bid with NO `dleq_proof` tags, covering the legacy non-DLEQ cohort.
+
 **Deprecation of mock mint fixtures (ADR-0006):** this real mint
 supersedes the previous mock approach for mint flows. Inert mint URLs
 with `getEncodedToken`/pre-computed tokens (ADR-0005), the wallet/mint
