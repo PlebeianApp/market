@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 import { Media } from '@/components/Media'
 import { AvatarUser } from '@/components/AvatarUser'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -30,6 +31,7 @@ import {
 } from '@/queries/auctions'
 import { useComments } from '@/queries/comments'
 import { useLiveActivity, useLiveChatMessages } from '@/queries/liveChat'
+import { AUCTION_KIND } from '@/lib/auction/constants'
 import { getOrderId } from '@/queries/orders'
 import { useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -409,6 +411,14 @@ function AuctionListItem({
 							Open Auction
 						</Button>
 					</Link>
+					{/* ADR-0009: authorized labelers can mark / unmark this auction as a test listing */}
+					<TestLabelButton
+						kind={AUCTION_KIND}
+						pubkey={auction.pubkey}
+						dTag={getAuctionId(auction)}
+						itemLabel="Auction"
+						className="w-full lg:w-32"
+					/>
 				</div>
 
 				<div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-[28rem]">
