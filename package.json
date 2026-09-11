@@ -107,5 +107,8 @@
 	},
 	"overrides": {
 		"bun": "1.4.2"
+	},
+	"patchedDependencies": {
+		"rxjs@7.8.2": "patches/rxjs@7.8.2.patch"
 	}
 }

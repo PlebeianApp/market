@@ -274,3 +274,13 @@ Each invariant is protocol-faithful (NIP-46 / NIP-07 / NIP-59), derived from the
 - Migration contract: characterize current `master` behavior as executable tests first, then swap per wave preserving those invariants; coverage must not regress below the baseline, and the e2e NIP-46 mock uses distinct remote-signer/user keypairs. Coverage is anchored to the production seam, not to module-mocked seams: a wave's restore/unlock path must be exercised non-mocked (e.g. the real `rehydrateNostrConnectSession` → `NostrConnectSigner` connect RPC), because a suite that mocks the seam cannot observe an unwired transport. The Authentication e2e family runs on every PR.
 
 Related: unencrypted NIP-46 session key — open security finding `#996` H8.
+
+### Build-level patch: `rxjs` index re-exports under `bun dev`
+
+The Authentication e2e family is the first browser code path that reaches `applesauce-relay`'s `RelayPool` (the NIP-46 lane's transport), and it surfaced a bundler-level defect rather than a signer bug:
+
+- `bun`'s dev-server bundler (the server every local run and the `e2e-grep`/`e2e-full` jobs start) registers only the **first** named re-export per source path when it builds a module's export map.
+- `rxjs@7.8.2`'s `index.js` re-exports two names from each of three module paths: `TimeoutError` + `timeout` (`./internal/operators/timeout`), `empty` + `EMPTY` (`./internal/observable/empty`), and `never` + `NEVER` (`./internal/observable/never`).
+- The second name of each pair is therefore missing from the browser bundle's `rxjs` namespace, and `Relay.publish()` / `Relay.request()` build a `timeout(...)` operator synchronously — so every publish/request through the applesauce pool throws `import_rxjsN.timeout is not a function`. That broke the NIP-46 bunker connect path (Authentication) **and** the orders read path (`applesauceIo.fetchEvents` in `src/queries/orders.tsx` → Order Details), which is why both gated families were red on this branch. Bun's own runtime resolution is unaffected because it uses rxjs's CJS entry.
+
+The fix is a semantics-preserving patch of rxjs's two ESM index files, applied through bun's first-class `patchedDependencies` mechanism (`patches/rxjs@7.8.2.patch`): the duplicate-path statements are merged into one statement per path (`export { TimeoutError, timeout } from './internal/operators/timeout'`), which exports exactly the same names and restores all three. `bun install --frozen-lockfile` applies the patch, so CI gets the same bundle the local runs do. Remove the patch once the bundler registers every named re-export or rxjs ships merged statements; drift is loud, not silent, because a patch that no longer applies fails `bun install`.
