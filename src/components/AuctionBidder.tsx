@@ -29,6 +29,7 @@ import {
 	getAuctionAuditors,
 	getAuctionAuditorQuorum,
 	useAuctionVerdicts,
+	getAuctionDleqRequired,
 } from '@/queries/auctions'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
@@ -451,6 +452,12 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		sellerPubkey: auction.pubkey,
 		p2pkXpub: p2pkXpub || '',
 		mintCandidates: selectedMint ? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)] : trustedMints,
+		// ADR-0011 Decision 8 (review N1) — the auction's canonical DLEQ
+		// activation. The publish path derives BOTH the lock's output
+		// requirement and the published `dleq_proof` tags from this value, so
+		// the bid form must carry the signed decision rather than let the
+		// publish path re-derive it from the deploy-time `start_at` boundary.
+		dleqRequired: getAuctionDleqRequired(auction),
 	})
 
 	// #9: prepareBidSubmission returns null on any pre-funding validation
