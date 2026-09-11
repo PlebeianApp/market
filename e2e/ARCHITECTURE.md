@@ -383,6 +383,21 @@ weakening the test. Follow the same shape for any new multi-event fixture;
 `e2e/scenarios/auctionOrderFixture.test.ts` covers both the valid chain and the
 gate's rejections.
 
+The fixture is only half of the chain: a valid bid → path release → settlement
+proves the _auction_ is real, not that the _order_ on top of it is. `seedOrder('auction', …)`
+therefore publishes the order with the canonical claim marker
+(`buildAuctionClaimOrderTags()`, mirroring `buildAuctionClaimPublicMarkerTags()`)
+bound to the fixture's settlement event id, which is what gives the order
+fulfillment authority and its Auction type chip. Auction stage-local settlement
+events are NOT re-published per stage — the fixture is the single source of the
+auction chain. A claim marker naming an unresolved settlement grants no
+authority, and `auctionOrderFixture.test.ts` asserts both directions through
+`getAuctionClaimPublicMarkerFields()` and `getAuctionFulfillmentAuthority()`.
+
+The fixture test runs in the unit suite (`bun run test:unit` includes
+`e2e/scenarios/`), so the publish-time gate is enforced on every PR rather than
+only when the Playwright suite happens to execute.
+
 ---
 
 ## 3. Auth Layer

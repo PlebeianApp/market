@@ -1,9 +1,16 @@
 import { describe, expect, test } from 'bun:test'
+import { finalizeEvent, type VerifiedEvent } from 'nostr-tools/pure'
+import { hexToBytes } from '@noble/hashes/utils.js'
+import { devUser1, devUser2 } from '@/lib/fixtures'
+import { getSettlementDescriptor, getAuctionFulfillmentAuthority } from '@/lib/auction/settlementDescriptor'
+import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
+import { getAuctionOrderClassification, isAuctionOrder } from '@/queries/orders'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
-import { assertAuctionOrderFixtureValid, buildAuctionOrderFixture } from './index'
+import { assertAuctionOrderFixtureValid, buildAuctionClaimOrderTags, buildAuctionOrderFixture } from './index'
 
 /**
  * Cross-event validation for the auction order fixture.
@@ -110,5 +117,129 @@ describe('auction order fixture publish-time gate', () => {
 			},
 		}
 		expect(() => assertAuctionOrderFixtureValid(tampered)).toThrow(/below the reserve/)
+	})
+})
+
+/**
+ * The seeded order itself must be the canonical CLAIM order (R1/R4).
+ *
+ * A production-valid bid -> release -> settlement chain is necessary but not
+ * sufficient: the order surface only reaches fulfillment when the claim order
+ * binds to that settlement. These tests run the production descriptor over the
+ * exact events `seedOrder('auction', …)` publishes, so a fixture that leaves
+ * the order without a claim marker (no authority -> no Process button) fails
+ * here instead of only in the browser.
+ */
+describe('seeded auction order reaches validated fulfillment authority', () => {
+	const orderId = `claim-order-${now}`
+	const claimOrder = finalizeEvent(
+		{
+			kind: ORDER_PROCESS_KIND,
+			created_at: now,
+			content: 'Auction claim',
+			tags: buildAuctionClaimOrderTags(fixture, orderId),
+		},
+		hexToBytes(devUser2.sk),
+	)
+
+	const parsed = () => {
+		const auction = parseAuctionEvent(fixture.auctionEvent)
+		const bid = parseBidEvent(fixture.bidEvent)
+		const verdict = parseValidatorVerdictEvent(fixture.verdictEvent)
+		const release = parsePathReleaseEvent(fixture.pathReleaseEvent)
+		const settlement = parseSettlementEvent(fixture.settlementEvent)
+		if (!auction.ok || !bid.ok || !verdict.ok || !release.ok || !settlement.ok) {
+			throw new Error('fixture events must parse — see the production-valid suite above')
+		}
+		return {
+			auction: auction.value,
+			bids: [bid.value],
+			verdicts: [verdict.value],
+			settlements: [settlement.value],
+			pathReleases: [release.value],
+		}
+	}
+
+	type DescriptorInput = Parameters<typeof getAuctionFulfillmentAuthority>[0]
+	const inputWith = (claimOrders: VerifiedEvent[], currentUserPubkey: string): DescriptorInput =>
+		({
+			...parsed(),
+			claimOrders,
+			currentUserPubkey,
+			now,
+		}) as unknown as DescriptorInput
+
+	test('the seeded order carries the production claim marker bound to the seeded settlement', () => {
+		const marker = getAuctionClaimPublicMarkerFields({ pubkey: claimOrder.pubkey, tags: claimOrder.tags })
+		expect(marker).not.toBeNull()
+		expect(marker?.settlementEventId).toBe(fixture.settlementEvent.id)
+		expect(marker?.auctionEventId).toBe(fixture.auctionEvent.id)
+		expect(marker?.auctionCoordinates).toBe(fixture.itemTagValue)
+		expect(marker?.sellerPubkey).toBe(fixture.auctionEvent.pubkey)
+		expect(marker?.totalAmountSats).toBe(fixture.amount)
+		// The broad presentation detector sees an auction order, and the
+		// classification sees a marker — neither of which is authority on its own.
+		// The classification helpers consume relay-shaped events; the fixture
+		// builds nostr-tools events, so bridge the shape explicitly here rather
+		// than widening the production signature.
+		const asOrderEvent = (event: VerifiedEvent) => event as unknown as Parameters<typeof isAuctionOrder>[0]
+		expect(isAuctionOrder(asOrderEvent(claimOrder))).toBe(true)
+		const classification = getAuctionOrderClassification(asOrderEvent(claimOrder))
+		expect(classification.hasClaimMarker).toBe(true)
+	})
+
+	test('seller view: the non-marker order grants NO fulfillment authority', async () => {
+		const withoutMarker = finalizeEvent(
+			{
+				kind: ORDER_PROCESS_KIND,
+				created_at: now,
+				content: 'plain order',
+				tags: [
+					['p', devUser1.pk],
+					['subject', `Order #${orderId}`],
+					['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+					['order', orderId],
+					['amount', String(fixture.amount)],
+					['item', fixture.itemTagValue, '1'],
+					['a', fixture.itemTagValue],
+				],
+			},
+			hexToBytes(devUser2.sk),
+		)
+		const input = inputWith([withoutMarker], devUser1.pk)
+		// The chain itself is settled — it is the missing claim that withholds authority.
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	test('seller view: settlement + canonical claim is fulfillment-ready', async () => {
+		const input = inputWith([claimOrder], devUser1.pk)
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe(claimOrder.id)
+		expect(authority.settlementEventId).toBe(fixture.settlementEvent.id)
+	})
+
+	test('buyer view: settlement + canonical claim is fulfillment-ready', async () => {
+		const input = inputWith([claimOrder], devUser2.pk)
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(true)
+	})
+
+	test('a forged marker naming an unresolved settlement grants NO authority', async () => {
+		const forged = finalizeEvent(
+			{
+				kind: ORDER_PROCESS_KIND,
+				created_at: now,
+				content: 'forged claim',
+				tags: buildAuctionClaimOrderTags(fixture, orderId).map((tag) =>
+					tag[0] === 'e' && tag[3] === 'settlement' ? ['e', 'f'.repeat(64), '', 'settlement'] : tag,
+				),
+			},
+			hexToBytes(devUser2.sk),
+		)
+		const input = inputWith([forged], devUser1.pk)
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
 	})
 })
