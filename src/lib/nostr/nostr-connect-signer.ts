@@ -32,8 +32,17 @@ import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 import type { NipEncryptionCapability, SignerCapability } from './signer-capability'
 import { getPool } from './io-applesauce'
 
-/** Default deadline for a NIP-46 RPC (connect / sign / encrypt / decrypt). */
+/** Default deadline for a NIP-46 RPC (sign / encrypt / decrypt). */
 export const NIP46_RPC_TIMEOUT_MS = 30_000
+
+/**
+ * Default deadline for the `connect` / auth-challenge phase. The secretless
+ * bunker flow parks `connect` on a human-bound `auth_url` approval, so a 30s
+ * RPC deadline would race a human taking longer to approve and leak the
+ * subscription. This phase gets a much longer (5-minute) budget; per-RPC
+ * sign/encrypt timeouts stay at {@link NIP46_RPC_TIMEOUT_MS}.
+ */
+export const NIP46_CONNECT_TIMEOUT_MS = 5 * 60_000
 
 /** NIP-46 permissions the app requests at connect (get_public_key + sign + nip crypto). */
 export const NIP46_PERMISSIONS = ['get_public_key', 'sign_event', 'nip04_encrypt', 'nip04_decrypt', 'nip44_encrypt', 'nip44_decrypt']
@@ -187,6 +196,8 @@ export interface BunkerConnectOptions {
 	onAuth?: (url: string) => Promise<void>
 	pool?: NostrPool
 	rpcTimeoutMs?: number
+	/** Deadline for the connect/auth-challenge phase (defaults to {@link NIP46_CONNECT_TIMEOUT_MS}). */
+	connectTimeoutMs?: number
 	permissions?: string[]
 }
 
@@ -213,7 +224,10 @@ export async function connectBunkerSigner(bunkerUrl: string, options: BunkerConn
 		pool: strictBindPool(clientSigner, options.pool ?? defaultPool()),
 	})
 	const timeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
-	await withRpcTimeout('connect', signer.connect(bunkerSecret, options.permissions ?? NIP46_PERMISSIONS), timeoutMs)
+	const connectTimeoutMs = options.connectTimeoutMs ?? NIP46_CONNECT_TIMEOUT_MS
+	// The connect/auth-challenge phase gets its own (longer) deadline so a human
+	// approving a secretless `auth_url` is not raced by the 30s per-RPC budget.
+	await withRpcTimeout('connect', signer.connect(bunkerSecret, options.permissions ?? NIP46_PERMISSIONS), connectTimeoutMs)
 	return {
 		signer,
 		capability: createNostrConnectCapability(signer, timeoutMs),
