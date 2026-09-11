@@ -81,6 +81,7 @@ export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {
 		newsletter: 'https://plebeianmarket.substack.com/',
 		telegram: 'https://t.me/PlebeianMarket',
 		github: 'https://github.com/PlebeianApp/market',
+		nostr: 'https://njump.me/npub1market6g3zl4mxwx5ugw56hfg0f7dy7jnnw8t380788mvdyrnwuqgep7hd',
 	},
 }
 
@@ -109,6 +110,7 @@ export function parseInstanceConfigEnvironment(environment: Record<string, strin
 		newsletter: environment.INSTANCE_NEWSLETTER_URL,
 		telegram: environment.INSTANCE_TELEGRAM_URL,
 		github: environment.INSTANCE_GITHUB_URL,
+		nostr: environment.INSTANCE_NOSTR_URL,
 	}
 	const hasSocialLinks = Object.values(socialLinks).some(defined)
 
