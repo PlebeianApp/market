@@ -88,6 +88,20 @@ export const DEFAULT_FIXTURE_AMOUNTS: number[] = [1, 2, 4, 8, 16, 32, 64, 128]
 /** Keyset id for the default keyset (16 hex chars, realistic NUT length). */
 export const FIXTURE_KEYSET_ID = '00deadbeef000001'
 
+/**
+ * Options for deriving an alternate (e.g. rotated) fixture keyset/proof pair.
+ *
+ * Distinct `basePrivKey` values yield cryptographically distinct keysets, so a
+ * proof honest under one base does NOT verify under another. This is what
+ * multi-keyset tests (a bid whose proofs span two keysets) need.
+ */
+export interface DleqFixtureKeysetOptions {
+	/** Keyset id the keyset/proof advertises. Defaults to {@link FIXTURE_KEYSET_ID}. */
+	keysetId?: string
+	/** Base mint private-key scalar. Defaults to the fixed {@link BASE_MINT_PRIV}. */
+	basePrivKey?: number
+}
+
 // ---------- Tiny byte/hex helpers -------------------------------------------
 
 const bytesToHex = (bytes: Uint8Array): string => {
@@ -114,11 +128,12 @@ const compressedHex = (p: { toHex: (isCompressed?: boolean) => string }): string
 
 // ---------- Mint-side helpers -----------------------------------------------
 
-/** 32-byte mint private key for a given amount (distinct per amount). */
-const mintPrivateKeyBytes = (amount: number): Uint8Array => numberToBytes32(BASE_MINT_PRIV + amount)
+/** 32-byte mint private key for a given amount (distinct per amount/base). */
+const mintPrivateKeyBytes = (amount: number, basePrivKey: number = BASE_MINT_PRIV): Uint8Array => numberToBytes32(basePrivKey + amount)
 
 /** Compressed public key `A = a·G` for a given amount (the keyset entry). */
-const mintPublicKeyHex = (amount: number): string => bytesToHex(getPubKeyFromPrivKey(mintPrivateKeyBytes(amount)))
+const mintPublicKeyHex = (amount: number, basePrivKey: number = BASE_MINT_PRIV): string =>
+	bytesToHex(getPubKeyFromPrivKey(mintPrivateKeyBytes(amount, basePrivKey)))
 
 // ---------- Public factories ------------------------------------------------
 
@@ -129,10 +144,11 @@ const mintPublicKeyHex = (amount: number): string => bytesToHex(getPubKeyFromPri
  * private key), so an amount-corruption that targets a different — but still
  * present — denomination also flips the verifying key and fails.
  */
-export const makeDleqKeyset = (amounts: number[] = DEFAULT_FIXTURE_AMOUNTS): MintKeys => {
+export const makeDleqKeyset = (amounts: number[] = DEFAULT_FIXTURE_AMOUNTS, opts: DleqFixtureKeysetOptions = {}): MintKeys => {
+	const basePrivKey = opts.basePrivKey ?? BASE_MINT_PRIV
 	const keys: Record<number, string> = {}
-	for (const amount of amounts) keys[amount] = mintPublicKeyHex(amount)
-	return { id: FIXTURE_KEYSET_ID, unit: 'sat', keys }
+	for (const amount of amounts) keys[amount] = mintPublicKeyHex(amount, basePrivKey)
+	return { id: opts.keysetId ?? FIXTURE_KEYSET_ID, unit: 'sat', keys }
 }
 
 /**
@@ -143,8 +159,12 @@ export const makeDleqKeyset = (amounts: number[] = DEFAULT_FIXTURE_AMOUNTS): Min
  * point `Y`, blind it with `r`, sign with the per-amount mint key `a`, and
  * emit the DLEQ challenge/response over the blinded values.
  */
-export const makeHonestDleqProof = (amount = 1, secret: string = DEFAULT_FIXTURE_SECRET): DleqProofWithSecret => {
-	const aBytes = mintPrivateKeyBytes(amount)
+export const makeHonestDleqProof = (
+	amount = 1,
+	secret: string = DEFAULT_FIXTURE_SECRET,
+	opts: DleqFixtureKeysetOptions = {},
+): DleqProofWithSecret => {
+	const aBytes = mintPrivateKeyBytes(amount, opts.basePrivKey ?? BASE_MINT_PRIV)
 	const secretBytes = new TextEncoder().encode(secret)
 	const Y = hashToCurve(secretBytes)
 
@@ -160,7 +180,7 @@ export const makeHonestDleqProof = (amount = 1, secret: string = DEFAULT_FIXTURE
 	const { e, s } = createDLEQProof(B_, aBytes)
 
 	return {
-		id: FIXTURE_KEYSET_ID,
+		id: opts.keysetId ?? FIXTURE_KEYSET_ID,
 		amount,
 		C: compressedHex(C),
 		e: bytesToHex(e),

@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { verifyProofDleq, verifyBidDleq, getMintKeyset, buildDleqProofs, type DleqVerifyResult } from '../cashu/dleq'
+import {
+	verifyProofDleq,
+	verifyBidDleq,
+	verifyBidDleqWithKeysets,
+	getMintKeyset,
+	buildDleqProofs,
+	type DleqVerifyResult,
+} from '../cashu/dleq'
 import type { MintKeys, Proof } from '@cashu/cashu-ts'
 import { makeHonestDleqProof, makeHonestDleqFixture, makeDleqKeyset } from '../cashu/dleqFixture'
 
@@ -250,6 +257,68 @@ describe('verifyBidDleq', () => {
 		expect(result.matchesAmount).toBe(false)
 		expect(result.ok).toBe(false)
 		// No proof failed crypto verification, so no failure index is set.
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+})
+
+// ---------- verifyBidDleqWithKeysets (multi-keyset) -------------------------
+
+describe('verifyBidDleqWithKeysets (ADR-0011 C1, per-proof keyset)', () => {
+	const MINT = 'https://mint.example.com'
+	const KS_A_ID = '00aaaaaaaaaaaaaa'
+	const KS_B_ID = '00bbbbbbbbbbbbbb'
+
+	// Two cryptographically distinct keysets (different base mint scalars), so a
+	// proof honest under A does NOT verify under B — the whole point of
+	// per-proof keyset resolution. This models a mint keyset rotation where a
+	// bidder's rebid leg is funded by proofs minted against two keysets.
+	const keysetA = makeDleqKeyset([500], { keysetId: KS_A_ID, basePrivKey: 500 })
+	const keysetB = makeDleqKeyset([500], { keysetId: KS_B_ID, basePrivKey: 900 })
+	const keysets = new Map([
+		[`${MINT}:${KS_A_ID}`, keysetA],
+		[`${MINT}:${KS_B_ID}`, keysetB],
+	])
+
+	const proofA = () => makeHonestDleqProof(500, 'multi-keyset-secret-a', { keysetId: KS_A_ID, basePrivKey: 500 })
+	const proofB = () => makeHonestDleqProof(500, 'multi-keyset-secret-b', { keysetId: KS_B_ID, basePrivKey: 900 })
+
+	test('(a) ok=true when two proofs resolve their OWN distinct keysets (both present)', () => {
+		const result = verifyBidDleqWithKeysets({ mint: MINT, legDelta: 1_000, proofs: [proofA(), proofB()] }, keysets)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(true)
+		expect(result.ok).toBe(true)
+		expect(result.failedProofIndex).toBeUndefined()
+	})
+
+	test('(a2) each proof FAILS the other keyset (guards that resolution is per-proof, not [0]-only)', () => {
+		// This is what the pre-fix consumer did: verify every proof against the
+		// keyset named by dleqProofs[0].id. If both proofs verified under either
+		// keyset, the regression test below would be vacuous.
+		expect(verifyProofDleq(proofA(), keysetB)).toBe(false)
+		expect(verifyProofDleq(proofB(), keysetA)).toBe(false)
+	})
+
+	test('(b) fail-closed: a proof whose OWN keyset id is absent from the populated map yields ok=false', () => {
+		const proofUnknownKeyset = makeHonestDleqProof(500, 'multi-keyset-secret-b', {
+			keysetId: '00cccccccccccccc',
+			basePrivKey: 900,
+		})
+		const result = verifyBidDleqWithKeysets({ mint: MINT, legDelta: 1_000, proofs: [proofA(), proofUnknownKeyset] }, keysets)
+		expect(result.allProofsValid).toBe(false)
+		expect(result.failedProofIndex).toBe(1)
+		expect(result.ok).toBe(false)
+	})
+
+	test('(c) the sum check still applies (honest proofs, legDelta mismatch)', () => {
+		const result = verifyBidDleqWithKeysets({ mint: MINT, legDelta: 999, proofs: [proofA(), proofB()] }, keysets)
+		expect(result.allProofsValid).toBe(true)
+		expect(result.matchesAmount).toBe(false)
+		expect(result.ok).toBe(false)
+	})
+
+	test('empty proofs with legDelta 0 → vacuous ok=true', () => {
+		const result = verifyBidDleqWithKeysets({ mint: MINT, legDelta: 0, proofs: [] }, keysets)
+		expect(result.ok).toBe(true)
 		expect(result.failedProofIndex).toBeUndefined()
 	})
 })
