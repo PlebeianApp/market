@@ -117,8 +117,11 @@ export interface ComputeValidatedBidsInput {
 	 * C1). Keyed by `${mintUrl}:${keysetId}` so the verification logic can
 	 * look up the `MintKeys` for each bid's `dleqProofs` without async network
 	 * calls inside this synchronous pure function. When absent for a post-
-	 * rollout bid, DLEQ verification is skipped (like NUT-7 — the evidence
-	 * hasn't been gathered yet and the bid stays quorum-valid, Decision 6).
+	 * rollout bid, DLEQ verification cannot run: the bid is classified
+	 * `pending` — non-authoritative (never a `canonicalWinner` candidate),
+	 * never valid and never `dleq_invalid` (the evidence has not been gathered
+	 * yet, so nothing is being condemned). Same fail-safe direction as NUT-7's
+	 * evidence-deferred handling (Decision 6).
 	 * The same applies PER KEYSET inside a supplied map: an entry absent from
 	 * the map (a failed `fetchDleqKeysetsForBids` fetch — temporary
 	 * mint/network failure) leaves the evidence unavailable, so the bid is
