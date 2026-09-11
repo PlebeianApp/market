@@ -13,6 +13,7 @@
  *
  * - {@link verifyProofDleq}  — verify a single proof's DLEQ against a keyset.
  * - {@link verifyBidDleq}    — batch-verify a bid's DLEQ proofs + sum check.
+ * - {@link verifyBidDleqWithKeysets} — multi-keyset batch verify (per-proof keyset).
  * - {@link getMintKeyset}    — thin wrapper over `CashuMint.getKeys`.
  *
  * All verification functions are **non-throwing**: any internal error
@@ -52,6 +53,16 @@ export interface DleqVerifyResult {
 	allProofsValid: boolean
 	/** Index of the first failing proof (0-based), or undefined when all pass. */
 	failedProofIndex?: number
+}
+
+/** Input for {@link verifyBidDleqWithKeysets}. */
+export interface DleqKeysetVerifyInput {
+	/** Mint URL the bid's proofs are denominated in (map-key prefix). */
+	mint: string
+	/** The declared leg delta (amount change since the previous bid). */
+	legDelta: number
+	/** Ordered proofs, each carrying the wallet secret it was minted with. */
+	proofs: Array<DleqProof & { secret: string }>
 }
 
 /** Options for {@link getMintKeyset}. */
@@ -170,6 +181,47 @@ export const verifyBidDleq = (
 
 	for (let i = 0; i < bid.proofs.length; i++) {
 		if (!verifyProofDleq(bid.proofs[i], keyset)) {
+			allProofsValid = false
+			failedProofIndex = i
+			break // fail-fast: report the first failure
+		}
+	}
+
+	const proofSum = bid.proofs.reduce((sum, p) => sum + p.amount, 0)
+	const matchesAmount = proofSum === bid.legDelta
+
+	return {
+		ok: allProofsValid && matchesAmount,
+		matchesAmount,
+		allProofsValid,
+		...(failedProofIndex !== undefined ? { failedProofIndex } : {}),
+	}
+}
+
+// ---------- verifyBidDleqWithKeysets ----------------------------------------
+
+/**
+ * Verify a bid's DLEQ proofs when the proofs may span more than one
+ * keyset, resolving each proof against the keyset named by its OWN
+ * `id` (ADR-0011 C1, multi-keyset fix).
+ *
+ * `keysets` is keyed `${mintUrl}:${keysetId}` — the same contract
+ * `fetchDleqKeysetsForBids` produces. Every proof resolves its own
+ * keyset; a proof whose keyset is absent from a POPULATED map fails
+ * the check (fail-closed — `dleq_proof[].id` is bidder-controlled, so
+ * a lookup miss must never be treated as a pass).
+ *
+ * @returns A {@link DleqVerifyResult} with `ok` only when every proof
+ *   verifies against its own keyset AND the amounts sum to `legDelta`.
+ */
+export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Map<string, MintKeys>): DleqVerifyResult => {
+	let allProofsValid = true
+	let failedProofIndex: number | undefined
+
+	for (let i = 0; i < bid.proofs.length; i++) {
+		const proof = bid.proofs[i]
+		const keyset = keysets.get(`${bid.mint}:${proof.id}`)
+		if (!keyset || !verifyProofDleq(proof, keyset)) {
 			allProofsValid = false
 			failedProofIndex = i
 			break // fail-fast: report the first failure

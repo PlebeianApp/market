@@ -4,6 +4,7 @@ import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import { APP_AUCTION_DLEQ_ROLLOUT_START_AT, type Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { MintKeys } from '@cashu/cashu-ts'
 
 // =============================================================================
@@ -752,5 +753,53 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.invalidBids).toHaveLength(1)
 		expect(result.validBids).toHaveLength(0)
+	})
+
+	test('multi-keyset rebid leg: proofs spanning two keysets are NOT dleq_invalid (both keysets supplied)', () => {
+		const auction = buildPostRolloutAuction()
+		// A mint keyset rotation: this leg's proofs were minted against two
+		// cryptographically distinct keysets (distinct base keys), so proof[1]
+		// does NOT verify under proof[0]'s keyset. Pre-fix the consumer resolved
+		// only `dleqProofs[0].id` and verified every proof against that single
+		// keyset → false `dleq_invalid`. Post-fix each proof resolves its OWN
+		// keyset via the supplied `${mint}:${keysetId}` map.
+		const ksAId = '00aaaaaaaaaaaaaa'
+		const ksBId = '00bbbbbbbbbbbbbb'
+		const ksA = makeFixtureKeyset([500], { keysetId: ksAId, basePrivKey: 500 })
+		const ksB = makeFixtureKeyset([500], { keysetId: ksBId, basePrivKey: 900 })
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const secretA = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'multi-ks-nonce-a')
+		const secretB = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'multi-ks-nonce-b')
+		const proofA = makeHonestDleqProof(500, secretA, { keysetId: ksAId, basePrivKey: 500 })
+		const proofB = makeHonestDleqProof(500, secretB, { keysetId: ksBId, basePrivKey: 900 })
+		const bid = buildBid(auction, {
+			amount: 1_000,
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			lockSecrets: [secretA, secretB],
+			dleqProofs: [proofA, proofB],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const dleqKeysets = new Map([
+			[`https://mint.test:${ksAId}`, ksA],
+			[`https://mint.test:${ksBId}`, ksB],
+		])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets,
+		})
+
+		const classified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(classified?.classification).toBe('valid')
+		expect(classified?.invalidReason).toBeUndefined()
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.validBids).toHaveLength(1)
+		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 })
