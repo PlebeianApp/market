@@ -16,8 +16,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/preview-deploy.yml"
 PROVISION="${SCRIPT_DIR}/provision.sh"
 
-# The exact expression every appleboy step must pass as its `port:` input.
-PORT_LINE_RE='^[[:space:]]*port: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \|\| 22 \}\}[[:space:]]*$'
 
 CHECKS=0
 FAILURES=0
@@ -60,45 +58,43 @@ printf 'provision: %s\n\n' "${PROVISION}"
 check "workflow file exists" test -f "${WORKFLOW}"
 check "provision.sh exists" test -f "${PROVISION}"
 
-# ── 1. Workflow: every appleboy ssh/scp step gets a port: input ───────────
-APPLEBOY_COUNT="$(grep -cE 'uses: appleboy/(ssh|scp)-action@' "${WORKFLOW}")"
-PORT_COUNT="$(grep -cE "${PORT_LINE_RE}" "${WORKFLOW}")"
+# ── 1. Workflow: the optional port reaches every job's SSH preparation ────
+# The workflow no longer hands a `port:` input to appleboy actions — those are
+# gone entirely (Go/drone-ssh negotiates a different host key than OpenSSH; see
+# test_pinned_openssh.sh). The port now travels as the optional
+# PREVIEW_VPS_SSH_PORT secret into ssh-prepare.sh, which publishes
+# PREVIEW_SSH_PORT to $GITHUB_ENV for remote-ssh.sh / remote-scp.sh.
+PREPARE_PORT_LINE='^[[:space:]]+PREVIEW_VPS_SSH_PORT: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \}\}[[:space:]]*$'
+PREPARE_COUNT="$(grep -cE 'bash infra/preview-vps/ssh-prepare\.sh' "${WORKFLOW}")"
+PORT_ENV_COUNT="$(grep -cE "${PREPARE_PORT_LINE}" "${WORKFLOW}")"
 
-printf -- '-- appleboy ssh-action + scp-action uses: %s\n' "${APPLEBOY_COUNT}"
-printf -- '-- port inputs of the form "<optional secret> || 22": %s\n' "${PORT_COUNT}"
+printf -- '-- ssh-prepare.sh call sites: %s\n' "${PREPARE_COUNT}"
+printf -- '-- optional-port env lines: %s\n' "${PORT_ENV_COUNT}"
 
-check "workflow uses at least one appleboy ssh/scp action" test "${APPLEBOY_COUNT}" -gt 0
-check "port-input count equals appleboy action use count" test "${APPLEBOY_COUNT}" -eq "${PORT_COUNT}"
+check "the workflow prepares SSH at least once" test "${PREPARE_COUNT}" -ge 1
+check "the optional port secret is in scope at every SSH preparation site" \
+  test "${PORT_ENV_COUNT}" -ge "${PREPARE_COUNT}"
 
-# Every appleboy block must contain the port line before the next step
-# boundary (the next `uses:` or `- name:`).
-MISSING_BLOCKS="$(
-  awk '
-    /uses: appleboy\/(ssh|scp)-action@/ {
-      if (needport && !have) { print "line " start_line }
-      needport = 1; have = 0; start_line = NR; next
-    }
-    /^[[:space:]]*(- name:|uses: )/ {
-      if (needport && !have) { print "line " start_line }
-      needport = 0
-    }
-    /^[[:space:]]*port: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \|\| 22 \}\}[[:space:]]*$/ {
-      if (needport) have = 1
-    }
-    END { if (needport && !have) print "line " start_line }
-  ' "${WORKFLOW}"
-)"
-printf -- '-- appleboy steps missing a port input: %s\n' "${MISSING_BLOCKS:-none}"
-check "every appleboy ssh/scp step passes a port input" test -z "${MISSING_BLOCKS}"
+check_not "no appleboy ssh/scp action remains in the workflow" \
+  grep -qE 'uses: appleboy/(ssh|scp)-action@' "${WORKFLOW}"
 
 # Both jobs are covered: the deploy job AND the teardown job.
 DEPLOY_JOB_REMOTE="$(awk '/^  deploy:/{f=1} /^  teardown:/{f=0} f' "${WORKFLOW}" \
-  | grep -cE 'port: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \|\| 22 \}\}')"
+  | grep -cE "${PREPARE_PORT_LINE}")"
 TEARDOWN_JOB_REMOTE="$(awk '/^  teardown:/{f=1} f' "${WORKFLOW}" \
-  | grep -cE 'port: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \|\| 22 \}\}')"
-printf -- '-- port inputs by job — deploy: %s, teardown: %s\n' "${DEPLOY_JOB_REMOTE}" "${TEARDOWN_JOB_REMOTE}"
-check "deploy job remote steps pass a port input" test "${DEPLOY_JOB_REMOTE}" -ge 1
-check "teardown job remote steps pass a port input" test "${TEARDOWN_JOB_REMOTE}" -ge 1
+  | grep -cE "${PREPARE_PORT_LINE}")"
+printf -- '-- optional-port env by job — deploy: %s, teardown: %s\n' "${DEPLOY_JOB_REMOTE}" "${TEARDOWN_JOB_REMOTE}"
+check "deploy job's SSH preparation receives the optional port secret" \
+  test "${DEPLOY_JOB_REMOTE}" -ge 1
+check "teardown job's SSH preparation receives the optional port secret" \
+  test "${TEARDOWN_JOB_REMOTE}" -ge 1
+
+# Unset ⇒ 22 in both helpers, so leaving the secret unset keeps the historical
+# behaviour exactly (the deploy ran on port 22 before the port was configurable).
+check "remote-ssh.sh defaults the port to 22 when the secret is unset" \
+  grep -qF '${PREVIEW_SSH_PORT:-22}' "${SCRIPT_DIR}/remote-ssh.sh"
+check "remote-scp.sh defaults the port to 22 when the secret is unset" \
+  grep -qF '${PREVIEW_SSH_PORT:-22}' "${SCRIPT_DIR}/remote-scp.sh"
 
 # ── 2. Workflow: port secret plumbed into the provision step env ──────────
 check "Bootstrap VPS step env exports the optional port secret" \

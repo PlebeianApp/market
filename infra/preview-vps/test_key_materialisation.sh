@@ -25,6 +25,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/preview-deploy.yml"
+# The materialisation guard lives in the shared helper, which BOTH the deploy
+# and the teardown job call, so there is exactly one implementation of it.
+PREPARE="${SCRIPT_DIR}/ssh-prepare.sh"
 
 CHECKS=0
 FAILURES=0
@@ -53,20 +56,25 @@ check_not() {
 
 printf '== preview-deploy SSH key materialisation ==\n'
 printf 'workflow : %s\n' "$WORKFLOW"
+printf 'helper   : %s\n' "$PREPARE"
 
-# ── 1. Static: the workflow carries the guard and the validation ──────────
-check "workflow restores a missing trailing newline before chmod" \
-  grep -qF 'if [ -n "$(tail -c1 "$KEY_FILE")" ]' "$WORKFLOW"
+# ── 1. Static: the helper carries the guard and the validation ────────────
+check "the helper restores a missing trailing newline before chmod" \
+  grep -qF 'if [ -n "$(tail -c1 "$KEY_FILE")" ]' "$PREPARE"
 
-check "workflow validates the materialised key with ssh-keygen -y" \
-  grep -qF 'ssh-keygen -y -f "$KEY_FILE"' "$WORKFLOW"
+check "the helper validates the materialised key with ssh-keygen -y" \
+  grep -qF 'ssh-keygen -y -f "$KEY_FILE"' "$PREPARE"
 
-check "workflow still writes the key with printf (no echo added-newline surprises)" \
-  grep -qF "printf '%s' \"\$PREVIEW_VPS_SSH_KEY\" > \"\$KEY_FILE\"" "$WORKFLOW"
+check "the helper writes the key with printf (no echo added-newline surprises)" \
+  grep -qF "printf '%s' \"\$PREVIEW_VPS_SSH_KEY\" > \"\$KEY_FILE\"" "$PREPARE"
+
+# The guard is only useful if the workflow actually calls the helper.
+check "the workflow runs the helper that applies the guard" \
+  grep -qF 'bash infra/preview-vps/ssh-prepare.sh' "$WORKFLOW"
 
 # The original, actively-wrong rationale must not come back.
 check_not "the misleading 'avoid trailing newline' comment is gone" \
-  grep -qF 'avoid trailing newline which corrupts' "$WORKFLOW"
+  bash -c 'grep -qF "avoid trailing newline which corrupts" "$1" "$2"' _ "$WORKFLOW" "$PREPARE"
 
 # ── 2. Behavioural: prove the bug is real and the guard fixes it ──────────
 _tmp="$(mktemp -d)"

@@ -197,6 +197,8 @@ open as well is fine — this only affects reachability, not authentication.
 
 ### d) The host-key fingerprint is per-HOST, not per-PORT
 
+Pin the **ed25519** fingerprint — the workflow's OpenSSH helpers negotiate `ssh-ed25519` explicitly, and `provision.sh` scans with `-t ed25519`. See § g for why a Go-based SSH action cannot share this pin.
+
 `PREVIEW_VPS_HOST_FINGERPRINT` stays valid if the port changes, because a
 host key belongs to the host, not to the listening port:
 
@@ -282,6 +284,57 @@ trusting the upload:
 gh secret set PREVIEW_VPS_SSH_KEY --repo PlebeianApp/market < ~/.ssh/<key>
 # then a preview-deploy run must get past "Bootstrap VPS"
 ```
+
+### g) Every VPS connection must use OpenSSH — never a Go-based SSH action
+
+**Rule: no `appleboy/*` (or any other Go/drone-ssh) action may reach the preview
+VPS.** All VPS access goes through the OpenSSH helpers in `infra/preview-vps/`:
+
+| Helper                       | Role                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ssh-prepare.sh <workdir>`   | materialises the private key from `PREVIEW_VPS_SSH_KEY`, applies the trailing-newline guard (§ f), writes a private `known_hosts` pinned to the **ed25519** host key, verifies it against `PREVIEW_VPS_HOST_FINGERPRINT`, and publishes `PREVIEW_KEY_FILE` / `PREVIEW_KNOWN_HOSTS` / `PREVIEW_SSH_PORT` / `PREVIEW_SSH_TARGET` to `$GITHUB_ENV`. Called by **both** the deploy and the teardown job. |
+| `remote-ssh.sh <cmd…>`       | runs a command — or, with `bash -s`, a script fed on stdin — with the single pinned option set (`StrictHostKeyChecking=yes`, private `UserKnownHostsFile`, `HostKeyAlgorithms=ssh-ed25519`, `BatchMode=yes`).                                                                                                                                                                                        |
+| `remote-scp.sh <src…> <dst>` | copies files with the same pin. Note the UPPERCASE `-P` for the port; `scp`'s lowercase `-p` means "preserve mtime".                                                                                                                                                                                                                                                                                 |
+
+**Why.** `appleboy/ssh-action` is not OpenSSH — it is a Go program (drone-ssh on
+`golang.org/x/crypto/ssh`), and its **default** `HostKeyAlgorithms` negotiate a
+different host key than OpenSSH does against the same host. Measured on
+2026-09-11 against `23.182.128.51:22` with an unmodified Go ssh client (no
+algorithm preference set, host-key callback recording what was negotiated):
+
+```
+OpenSSH -> ssh-ed25519          SHA256:rjbvoYsKckQMv/L9Y4LQNCx86z95pqonoNGmXdUS41M
+Go      -> ecdsa-sha2-nistp256  SHA256:UTl0gzMwYlKNuORtrA8jxS7gmj9U1x8taGQh5vxaXQo
+```
+
+(These are public host-key fingerprints — every client is handed them. The host
+offers three host keys: ed25519, RSA 3072 and ECDSA P-256. Re-measure a host
+with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`.)
+
+`provision.sh` uses OpenSSH and pins the **ed25519** key, so
+`PREVIEW_VPS_HOST_FINGERPRINT` is _defined_ as the ed25519 fingerprint. A
+Go-based action negotiated ECDSA, compared it to that ed25519 pin, and failed —
+so **one secret could not satisfy both stacks**, and every appleboy step died
+with:
+
+```
+ssh: handshake failed: ssh: host key fingerprint mismatch
+```
+
+Because `provision.sh` ran _first_ (as a plain `run:` step) and succeeded, the
+failure surfaced two steps later, in unrelated-looking SSH steps, while the DNS
+record step had not yet run — leaving `pr<N>.test-market.orangesync.tech`
+unresolvable (`NXDOMAIN`) with no preview containers on the host at all.
+
+**Repointing the secret at the ECDSA fingerprint is NOT a fix**: `provision.sh`
+would then fail its own `ssh-keyscan -t ed25519` comparison, and its known_hosts
+would hold an ECDSA record while it forces `HostKeyAlgorithms=ssh-ed25519`.
+
+**Regression guard.** `infra/preview-vps/test_pinned_openssh.sh` fails if any
+`uses: appleboy/…` reappears, if the workflow calls `ssh`/`scp` directly instead
+of through the helpers, or if a helper stops pinning the host key. Run it (and
+`test_ssh_port.sh`, `test_key_materialisation.sh`) before touching this
+workflow.
 
 ### ⚠️ Legacy socat forwarder on port 2222 — do NOT use it
 
