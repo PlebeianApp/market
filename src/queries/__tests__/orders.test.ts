@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { getAuctionCoordinatesFromOrder, getAuctionOrderAuthority, isAuctionOrder } from '@/queries/orders'
+import { getAuctionCoordinatesFromOrder, getAuctionOrderClassification, isAuctionOrder } from '@/queries/orders'
 import { describeOrderSettlementStatus } from '@/components/orders/orderSettlementStatusView'
 import type { SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
 
@@ -256,31 +256,43 @@ const orderEventWith = (tags: string[][]): NDKEvent =>
 		content: '',
 	}) as unknown as NDKEvent
 
-describe('getAuctionOrderAuthority', () => {
-	test('plain auction coordinate is NOT authority without a canonical claim marker', () => {
-		const authority = getAuctionOrderAuthority(orderEventWith([['a', AUCTION_COORDS]]))
-		expect(authority.coordinates).toBe(AUCTION_COORDS)
-		expect(authority.claimMarkerFields).toBeNull()
-		expect(authority.hasCanonicalClaim).toBe(false)
+describe('getAuctionOrderClassification', () => {
+	test('exposes NO authority flag — classification is presentation/legacy-compatibility only', () => {
+		// Authority for settlement, payment, and fulfillment lives in
+		// getAuctionFulfillmentAuthority() (@/lib/auction/settlementDescriptor),
+		// which resolves AND validates the referenced settlement. A local
+		// authority-shaped flag derived from buyer-authored tags is exactly the
+		// boundary this test exists to prevent from coming back.
+		const classification = getAuctionOrderClassification(orderEventWith(claimMarkerTags()))
+		expect(Object.keys(classification).sort()).toEqual(['claimMarker', 'coordinates', 'hasClaimMarker'])
 	})
 
-	test('canonical claim marker grants authority', () => {
-		const authority = getAuctionOrderAuthority(orderEventWith(claimMarkerTags()))
-		expect(authority.hasCanonicalClaim).toBe(true)
-		expect(authority.claimMarkerFields?.orderId).toBe('order-1')
-		expect(authority.claimMarkerFields?.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+	test('plain auction coordinate: coordinates set, no claim marker', () => {
+		const classification = getAuctionOrderClassification(orderEventWith([['a', AUCTION_COORDS]]))
+		expect(classification.coordinates).toBe(AUCTION_COORDS)
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
 	})
 
-	test('a non-auction order has neither coordinates nor authority', () => {
-		const authority = getAuctionOrderAuthority(orderEventWith([['amount', '1000']]))
-		expect(authority.coordinates).toBeNull()
-		expect(authority.hasCanonicalClaim).toBe(false)
+	test('a structurally-parseable claim marker is surfaced, but is not authority', () => {
+		const classification = getAuctionOrderClassification(orderEventWith(claimMarkerTags()))
+		expect(classification.coordinates).toBe(AUCTION_COORDS)
+		expect(classification.hasClaimMarker).toBe(true)
+		expect(classification.claimMarker?.orderId).toBe('order-1')
+		expect(classification.claimMarker?.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
 	})
 
-	test('a claim marker naming a different seller than the coordinate grants no authority', () => {
+	test('a non-auction order has neither coordinates nor a claim marker', () => {
+		const classification = getAuctionOrderClassification(orderEventWith([['amount', '1000']]))
+		expect(classification.coordinates).toBeNull()
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
+	})
+
+	test('a claim marker naming a different seller than the coordinate is not parseable', () => {
 		const mismatched = claimMarkerTags().map((tag) => (tag[0] === 'p' ? ['p', 'e'.repeat(64)] : tag))
-		const authority = getAuctionOrderAuthority(orderEventWith(mismatched))
-		expect(authority.claimMarkerFields).toBeNull()
-		expect(authority.hasCanonicalClaim).toBe(false)
+		const classification = getAuctionOrderClassification(orderEventWith(mismatched))
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
 	})
 })
