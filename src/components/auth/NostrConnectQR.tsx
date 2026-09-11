@@ -211,7 +211,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			nip46NdkRef.current = ndk
 
 			try {
-				await ndk.connect()
+				// Bounded connect: `ndk.connect()` with no timeout only settles
+				// once EVERY relay in the pool reaches CONNECTED, so one slow or
+				// unreachable relay (the default `wss://relay.plebeian.market`
+				// pick, or a user-typed relay) leaves the NIP-46 listener
+				// unstarted and the scan never sees a `connect` request.
+				await ndk.connect(3_000)
 			} catch (error) {
 				console.error('Failed to connect to NIP-46 relay:', error)
 				setConnectionStatus('error')
