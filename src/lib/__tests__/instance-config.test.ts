@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_INSTANCE_CONFIG, parseInstanceConfigEnvironment, resolveInstanceConfig } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
+import { configActions, configStore } from '@/lib/stores/config'
+import { createHandlerInfoEventData, createClientTag } from '@/publish/nip89'
 
 const existingSettings = {
 	name: 'Existing Market',
@@ -129,5 +131,51 @@ describe('parseInstanceConfigEnvironment', () => {
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_ALLOW_REGISTER: 'yes' })).toThrow()
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_PUBLIC_RELAYS: 'https://relay.example.com' })).toThrow()
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_SITE_URL: 'ftp://market.example.com' })).toThrow()
+	})
+})
+
+describe('runtime-config-aware handler metadata', () => {
+	test('uses config overrides for host, relay, and handler ID when present', () => {
+		configActions.setConfig({
+			appRelay: 'wss://selfhost.example',
+			siteUrl: 'https://selfhost.example',
+			handlerId: 'custom-handler',
+			appSettings: null,
+			appPublicKey: 'a'.repeat(64),
+			stage: 'production',
+			needsSetup: false,
+			serverReady: true,
+			name: 'Self Host',
+			displayName: 'Self Host',
+			picture: 'https://selfhost.example/logo.png',
+			banner: 'https://selfhost.example/banner.png',
+			allowRegister: true,
+			defaultCurrency: 'USD',
+			showNostrLink: false,
+			publicRelays: ['wss://selfhost.example'],
+			trustedMints: ['https://mint.selfhost.example'],
+			bugRelay: 'wss://bugs.selfhost.example',
+			socialLinks: { github: 'https://github.com/selfhost' },
+		} as any)
+
+		const event = createHandlerInfoEventData('b'.repeat(64), { ok: true })
+		expect(event.tags).toContainEqual(['d', 'custom-handler'])
+		expect(event.tags).toContainEqual(['web', 'https://selfhost.example/product/<bech32>', 'naddr'])
+		expect(event.tags).toContainEqual(['web', 'https://selfhost.example/collection/<bech32>', 'naddr'])
+		const appPubkey = 'b'.repeat(64)
+		expect(createClientTag(appPubkey, 'custom-handler')).toEqual([
+			'client',
+			'Plebeian Market',
+			`31990:${appPubkey}:custom-handler`,
+			'wss://selfhost.example',
+		])
+	})
+
+	test('falls back to the shipped Plebeian defaults when config is absent', () => {
+		configStore.setState((state) => ({ ...state, config: {} }))
+
+		const event = createHandlerInfoEventData('c'.repeat(64), { ok: true })
+		expect(event.tags).toContainEqual(['d', DEFAULT_INSTANCE_CONFIG.handlerId])
+		expect(event.tags).toContainEqual(['web', `${DEFAULT_INSTANCE_CONFIG.siteUrl}/product/<bech32>`, 'naddr'])
 	})
 })

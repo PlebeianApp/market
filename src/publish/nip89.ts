@@ -1,3 +1,5 @@
+import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
+import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 
@@ -12,6 +14,23 @@ export const COLLECTION_KIND = 30405
 
 export const PLEBEIAN_MARKET_URL = 'https://plebeian.market'
 export const PLEBEIAN_MARKET_RELAY = 'wss://relay.plebeian.market'
+
+/**
+ * Resolve runtime metadata for a published handler event. The runtime config
+ * is authoritative when it is available; the shipped Plebeian URLs remain as
+ * the compatibility fallback so existing setups keep working without env vars.
+ */
+function resolveHandlerMetadata(handlerId?: string, relayUrl?: string, siteUrl?: string) {
+	const config = configStore.state.config
+	const effectiveSiteUrl = siteUrl || config.siteUrl || PLEBEIAN_MARKET_URL
+	const effectiveHandlerId = handlerId || config.handlerId || DEFAULT_INSTANCE_CONFIG.handlerId
+	const effectiveRelayUrl = relayUrl || config.appRelay || PLEBEIAN_MARKET_RELAY
+	return {
+		effectiveSiteUrl,
+		effectiveHandlerId,
+		effectiveRelayUrl,
+	}
+}
 
 /**
  * Creates a handler information event (kind 31990) for Plebeian Market
@@ -36,22 +55,21 @@ export const createHandlerInfoEvent = (
 		event.content = ''
 	}
 
-	// Generate a unique ID for this handler
-	const id = handlerId || crypto.randomUUID()
+	const { effectiveHandlerId, effectiveSiteUrl } = resolveHandlerMetadata(handlerId)
 
 	// Tags for the handler info event
 	event.tags = [
-		['d', id], // Handler identifier
+		['d', effectiveHandlerId], // Handler identifier
 		['k', PRODUCT_KIND.toString()], // Supports product listings (kind 30402)
 		['k', COLLECTION_KIND.toString()], // Supports collections (kind 30405)
 
 		// URL patterns for handling products (kind 30402)
 		// <bech32> will be replaced by clients with the actual NIP-19 encoded entity
-		['web', `${PLEBEIAN_MARKET_URL}/product/<bech32>`, 'naddr'],
-		['web', `${PLEBEIAN_MARKET_URL}/a/<bech32>`, 'naddr'], // Alternative pattern
+		['web', `${effectiveSiteUrl}/product/<bech32>`, 'naddr'],
+		['web', `${effectiveSiteUrl}/a/<bech32>`, 'naddr'], // Alternative pattern
 
 		// URL patterns for handling collections (kind 30405)
-		['web', `${PLEBEIAN_MARKET_URL}/collection/<bech32>`, 'naddr'],
+		['web', `${effectiveSiteUrl}/collection/<bech32>`, 'naddr'],
 	]
 
 	return event
@@ -73,20 +91,19 @@ export const createHandlerInfoEventData = (
 	content: string
 	pubkey: string
 } => {
-	const id = handlerId || crypto.randomUUID()
+	const { effectiveHandlerId, effectiveSiteUrl, effectiveRelayUrl } = resolveHandlerMetadata(handlerId, relayUrl)
 
 	const tags: string[][] = [
-		['d', id],
+		['d', effectiveHandlerId],
 		['k', PRODUCT_KIND.toString()],
 		['k', COLLECTION_KIND.toString()],
-		['web', `${PLEBEIAN_MARKET_URL}/product/<bech32>`, 'naddr'],
-		['web', `${PLEBEIAN_MARKET_URL}/a/<bech32>`, 'naddr'],
-		['web', `${PLEBEIAN_MARKET_URL}/collection/<bech32>`, 'naddr'],
+		['web', `${effectiveSiteUrl}/product/<bech32>`, 'naddr'],
+		['web', `${effectiveSiteUrl}/a/<bech32>`, 'naddr'],
+		['web', `${effectiveSiteUrl}/collection/<bech32>`, 'naddr'],
 	]
 
-	// Add relay if provided
-	if (relayUrl) {
-		tags.push(['r', relayUrl])
+	if (effectiveRelayUrl) {
+		tags.push(['r', effectiveRelayUrl])
 	}
 
 	return {
@@ -129,6 +146,8 @@ export const publishHandlerInfo = async (
  * @param handlerId - The handler identifier (d tag value) from the handler info event
  * @returns A client tag array
  */
-export const createClientTag = (appPubkey: string, handlerId: string): [string, string, string, string] => {
-	return ['client', 'Plebeian Market', `31990:${appPubkey}:${handlerId}`, PLEBEIAN_MARKET_RELAY]
+export const createClientTag = (appPubkey: string, handlerId: string, relayUrl?: string): [string, string, string, string] => {
+	const effectiveRelayUrl = relayUrl || configStore.state.config.appRelay || PLEBEIAN_MARKET_RELAY
+	const effectiveHandlerId = handlerId || configStore.state.config.handlerId || DEFAULT_INSTANCE_CONFIG.handlerId
+	return ['client', 'Plebeian Market', `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
 }

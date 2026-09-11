@@ -86,7 +86,7 @@ function AppMiscelleneousComponent() {
 					contactEmail: value.contactEmail || undefined,
 				}
 
-				const handlerId = 'plebeian-market-handler'
+				const handlerId = config.handlerId || 'plebeian-market-handler'
 				let handlerEvent = createHandlerInfoEventData(config.appSettings.ownerPk, updatedSettings, config.appRelay, handlerId)
 				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
 				await submitAppSettings(handlerEvent)
