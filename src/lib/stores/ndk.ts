@@ -413,6 +413,8 @@ export const ndkActions = {
 		const { explicitRelayUrls, writeRelayUrls, enableOutbox } = computeNdkConfig({
 			stage,
 			appRelay: configStore.state.config.appRelay,
+			publicRelays: configStore.state.config.publicRelays,
+			zapRelays: configStore.state.config.publicRelays, // Use same set for zaps; can be overridden per-instance
 			overrideRelays: relays,
 			localRelayOnly: isBunLocalRelayOnly(),
 		})
@@ -442,7 +444,9 @@ export const ndkActions = {
 		// and sends it to the browser — one decision point, no client/server
 		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
 		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
-		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls) }) : null
+		const zapNdk = externalZapRelaysEnabled
+			? new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls, configStore.state.config.publicRelays) })
+			: null
 
 		ndkStore.setState((s) => ({ ...s, ndk, zapNdk, explicitRelayUrls, writeRelayUrls }))
 
