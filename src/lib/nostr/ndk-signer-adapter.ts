@@ -114,7 +114,7 @@ export class NdkSignerAdapter implements NDKSigner {
 
 	/**
 	 * The capability seam has no serialized form; NDK's `toPayload` is not used
-	 * by the app (session persistence is handled elsewhere, ADR-0008 Wave B).
+	 * by the app (session persistence is handled elsewhere, ADR-0002 amendment Wave B).
 	 */
 	toPayload(): string {
 		return JSON.stringify({ type: 'signer-capability-adapter' })

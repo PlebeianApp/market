@@ -1,5 +1,5 @@
 /**
- * auth.ts NIP-07 negative tests (ADR-0008 A3-3).
+ * auth.ts NIP-07 negative tests (ADR-0002 amendment A3-3).
  *
  * When no Nostr extension is present, `loginWithExtension` must fail with a
  * clear error and leave NO partial auth state: `user` stays null,

@@ -98,7 +98,7 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 
 			// Connect using the bunker URL (the client key is generated and
 			// persisted by loginWithNip46). With a session passphrase the
-			// nbunksec session is persisted encrypted at rest (ADR-0008 B-3);
+			// nbunksec session is persisted encrypted at rest (ADR-0002 amendment B-3);
 			// without one it stays in-memory only.
 			await authActions.loginWithNip46(bunkerUrl, undefined, {
 				sessionPassphrase: sessionPassphrase || undefined,

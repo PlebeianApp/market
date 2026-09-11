@@ -8,7 +8,7 @@ import { Loader2, LogOut } from 'lucide-react'
 import { useState } from 'react'
 
 /**
- * Session unlock prompt (ADR-0008 B-3). Shown at boot when a legacy plaintext
+ * Session unlock prompt (ADR-0002 amendment B-3). Shown at boot when a legacy plaintext
  * NIP-46 session pair or an encrypted vault exists. Unlocking either wraps the
  * legacy pair into the vault (then deletes the plaintext) or unwraps the vault
  * and rehydrates the NostrConnectSigner. Refusal discards the persisted

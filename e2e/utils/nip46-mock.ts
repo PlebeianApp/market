@@ -225,7 +225,7 @@ export class Nip46Mock {
 	async respondToConnect(nostrconnectUrl: string): Promise<() => void> {
 		// Spec-compliant parsing via the library's parseNostrConnectURI — it
 		// THROWS on a missing `secret` (legacy `token`-only URIs fail closed,
-		// ADR-0008 B-4 / #807). Manual `?? get('token')` silently defaulted to
+		// ADR-0002 amendment B-4 / #807). Manual `?? get('token')` silently defaulted to
 		// empty and was the loophole; the token read-alias was removed.
 		let parsed: ReturnType<typeof parseNostrConnectURI>
 		try {

@@ -1,5 +1,5 @@
 /**
- * NostrConnect URI emit + inbound-secret helpers (ADR-0008 B-4, #807).
+ * NostrConnect URI emit + inbound-secret helpers (ADR-0002 amendment B-4, #807).
  *
  * The `nostrconnect://` spec carries the connection secret in the `secret`
  * query param. A legacy `token=`-only URI must fail closed. This module is
@@ -16,7 +16,7 @@ const CLIENT_PK = 'aa'.repeat(32)
 const RELAY = 'wss://relay.example.com'
 const SECRET = 'hunter2'
 
-describe('buildNostrConnectUri (ADR-0008 B-4 / #807)', () => {
+describe('buildNostrConnectUri (ADR-0002 amendment B-4 / #807)', () => {
 	test('emits the secret via the spec "secret" query param (not legacy "token")', () => {
 		const uri = buildNostrConnectUri({ clientPubkey: CLIENT_PK, relay: RELAY, secret: SECRET })
 
@@ -54,7 +54,7 @@ describe('buildNostrConnectUri (ADR-0008 B-4 / #807)', () => {
 	})
 })
 
-describe('isMatchingConnectSecret (ADR-0008 B-4 / #807)', () => {
+describe('isMatchingConnectSecret (ADR-0002 amendment B-4 / #807)', () => {
 	test('accepts a connect request whose params echo the expected "secret"', () => {
 		expect(isMatchingConnectSecret({ secret: SECRET }, SECRET)).toBe(true)
 	})

@@ -179,7 +179,7 @@ describe('Nip46Mock nostrconnect URI secret handling', () => {
 		expect(sends[0].params.secret).toBe('abc123')
 	})
 
-	test('REJECTS a legacy "token"-only URI (fail closed — ADR-0008 B-4 / #807)', async () => {
+	test('REJECTS a legacy "token"-only URI (fail closed — ADR-0002 amendment B-4 / #807)', async () => {
 		const mock = new Nip46Mock(REMOTE_SIGNER_SK, USER_SK)
 		const sends: any[] = []
 		stubTransport(mock, sends)
@@ -194,7 +194,7 @@ describe('Nip46Mock nostrconnect URI secret handling', () => {
 	})
 })
 
-describe('Nip46Mock channel-side oracle (ADR-0008 B-2fix item 2d)', () => {
+describe('Nip46Mock channel-side oracle (ADR-0002 amendment B-2fix item 2d)', () => {
 	test('kind-24133 transport events are signed by the CHANNEL key while RPC results derive from the USER key', async () => {
 		const mock = new Nip46Mock(REMOTE_SIGNER_SK, USER_SK)
 		const published: any[] = []

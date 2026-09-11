@@ -1,5 +1,5 @@
 /**
- * Auth store session-vault integration tests (ADR-0008 B-3, fixes #996 H8).
+ * Auth store session-vault integration tests (ADR-0002 amendment B-3, fixes #996 H8).
  *
  * Covers the auth.ts wiring around `src/lib/nostr/session-vault.ts`:
  *  - boot legacy gate: the plaintext pair triggers `needsSessionUnlock` and

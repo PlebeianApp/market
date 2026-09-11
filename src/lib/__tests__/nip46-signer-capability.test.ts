@@ -1,6 +1,6 @@
 /**
  * NIP-46 (bunker) lane → `createNostrConnectCapability` parity tests
- * (ADR-0008 B-2 / B-2fix).
+ * (ADR-0002 amendment B-2 / B-2fix).
  *
  * Restored from the pre-B-2 `nip46-signer-capability.test.ts` parity suite and
  * re-anchored to the CURRENT seam: `createNostrConnectCapability` in
@@ -80,7 +80,7 @@ function privateOrderDetails(buyerPubkey: string, sellerPubkey: string): Private
 	}
 }
 
-describe('NostrConnectSigner-backed capability NIP-59 parity (ADR-0008 B-2fix items 2a/2b)', () => {
+describe('NostrConnectSigner-backed capability NIP-59 parity (ADR-0002 amendment B-2fix items 2a/2b)', () => {
 	test('createEncryptedPrivateOrderMessageWithSigner produces a valid signed gift wrap (parity with local lane)', async () => {
 		const buyerKey = generateSecretKey()
 		const sellerKey = generateSecretKey()
@@ -130,7 +130,7 @@ describe('NostrConnectSigner-backed capability NIP-59 parity (ADR-0008 B-2fix it
 	})
 })
 
-describe('NostrConnectSigner-backed capability identity collapse (ADR-0008 B-2fix item 2c)', () => {
+describe('NostrConnectSigner-backed capability identity collapse (ADR-0002 amendment B-2fix item 2c)', () => {
 	test('get_public_key reporting the WRONG (channel) identity is rejected behaviorally at sign time (invariant 2)', async () => {
 		// Three-way key separation (B-1): the CHANNEL key (remoteSignerPk) signs
 		// the kind-24133 transport envelope and must NEVER be the authenticated

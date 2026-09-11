@@ -166,7 +166,7 @@ export const applesauceIo: NostrIo = {
 		}
 		const signed = await capability.signEvent(template)
 		const pubkey = await capability.getPublicKey()
-		// ADR-0008 signed-event identity invariant: in-signer verification alone
+		// ADR-0002 amendment signed-event identity invariant: in-signer verification alone
 		// does not prove WHICH key signed — assert the pubkey matches the
 		// authenticated user's, and fail closed otherwise.
 		if (signed.pubkey !== pubkey) {

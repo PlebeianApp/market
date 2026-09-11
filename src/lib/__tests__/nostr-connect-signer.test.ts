@@ -1,5 +1,5 @@
 /**
- * NIP-46 → applesauce `NostrConnectSigner` invariant-wrapper tests (ADR-0008 B-2).
+ * NIP-46 → applesauce `NostrConnectSigner` invariant-wrapper tests (ADR-0002 amendment B-2).
  *
  * The library provides NONE of the ADR invariants (signers-api-audit.md gaps),
  * so they live in app-side wrappers under `src/lib/nostr/nostr-connect-signer.ts`:
@@ -73,7 +73,7 @@ async function settle(): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, 5))
 }
 
-describe('nostr-connect strict binding (ADR-0008 gap 6, invariant 1)', () => {
+describe('nostr-connect strict binding (ADR-0002 amendment gap 6, invariant 1)', () => {
 	test('a bare "ack" never binds an unknown remote signer', async () => {
 		const { pool, incoming } = fakeTransport()
 		const client = createNostrConnectClient({

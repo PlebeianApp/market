@@ -106,7 +106,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		if (!localPubkey || !config) return null
 		if (isCustomRelay && !customRelay) return null
 
-		// #807 (ADR-0008 B-4): the nostrconnect URI must carry the secret via the
+		// #807 (ADR-0002 amendment B-4): the nostrconnect URI must carry the secret via the
 		// spec `secret` param — buildNostrConnectUri fails closed (throws) if a
 		// secret is ever missing / attempts a legacy `token`-only output.
 		return buildNostrConnectUri({
@@ -250,7 +250,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							processedRequestIds.add(request.id)
 						}
 
-						// #807 (ADR-0008 B-4): the connect request must echo the secret via the
+						// #807 (ADR-0002 amendment B-4): the connect request must echo the secret via the
 						// spec `secret` param. A legacy `token`-only request is a mismatch
 						// (fail closed) — isMatchingConnectSecret reads ONLY `secret`.
 						if (isMatchingConnectSecret(request.params, tempSecret)) {
