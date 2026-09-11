@@ -1,5 +1,5 @@
 import { getPublicKey } from 'nostr-tools/pure'
-import { fetchAppSettings } from '../lib/appSettings'
+import { APP_SETTINGS_D_TAG, fetchAppSettings } from '../lib/appSettings'
 import { getEventHandler } from './EventHandler'
 import { APP_PRIVATE_KEY, RELAY_URL, getAppSettings, setAppPublicKey, setAppSettings, setEventHandlerReady } from './runtime'
 
@@ -19,7 +19,14 @@ export async function initializeAppSettings(): Promise<void> {
 		const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 		const publicKey = getPublicKey(privateKeyBytes)
 		setAppPublicKey(publicKey)
-		const settings = await fetchAppSettings(RELAY_URL as string, publicKey)
+
+		// D-tag fallback chain: try custom handler ID first (if env-provided),
+		// then fall back to Plebeian default. This allows self-hosted instances
+		// to publish their own handler ID without breaking existing Plebeian deploys.
+		const customHandlerId = process.env.INSTANCE_HANDLER_ID
+		const handlerIds = customHandlerId ? [customHandlerId, APP_SETTINGS_D_TAG] : [APP_SETTINGS_D_TAG]
+
+		const settings = await fetchAppSettings(RELAY_URL as string, publicKey, handlerIds)
 		setAppSettings(settings)
 		if (settings) {
 			console.log('App settings loaded successfully')
