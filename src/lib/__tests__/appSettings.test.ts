@@ -37,7 +37,7 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 	test('returns the latest event matching the expected author, kind, and d tag', () => {
 		const events = [mockEvent({ created_at: 50 }), mockEvent({ created_at: 100 })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeDefined()
 		expect(result?.pubkey).toBe(APP_PUBKEY)
@@ -45,10 +45,33 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 		expect(result?.created_at).toBe(100)
 	})
 
+	test('fallback d-tag chain: tries custom handler first, then plebeian default', () => {
+		const customEvent = mockEvent({ tags: [['d', 'custom-handler']], created_at: 50 })
+		const defaultEvent = mockEvent({ tags: [['d', 'plebeian-market-handler']], created_at: 100 })
+
+		// With both present, prefers the one matching the first d-tag in the chain
+		const result = selectAuthoritativeAppSettingsEvent([customEvent, defaultEvent], APP_PUBKEY, [
+			'custom-handler',
+			'plebeian-market-handler',
+		])
+
+		expect(result?.tags).toContainEqual(['d', 'custom-handler'])
+		expect(result?.created_at).toBe(50)
+	})
+
+	test('fallback d-tag chain: uses plebeian default if custom not found', () => {
+		const defaultEvent = mockEvent({ tags: [['d', 'plebeian-market-handler']] })
+
+		const result = selectAuthoritativeAppSettingsEvent([defaultEvent], APP_PUBKEY, ['custom-handler', 'plebeian-market-handler'])
+
+		expect(result).toBeDefined()
+		expect(result?.tags).toContainEqual(['d', 'plebeian-market-handler'])
+	})
+
 	test('rejects an event from a different publisher (spoofed author)', () => {
 		const events = [mockEvent({ pubkey: SPOOF_PUBKEY, created_at: 999, content: '{"name":"evil"}' })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeUndefined()
 	})
@@ -56,7 +79,7 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 	test('rejects an event with the wrong kind', () => {
 		const events = [mockEvent({ kind: 30000 })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeUndefined()
 	})
@@ -64,7 +87,7 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 	test('rejects an event with a different d tag', () => {
 		const events = [mockEvent({ tags: [['d', 'some-other-handler']] })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeUndefined()
 	})
@@ -72,13 +95,13 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 	test('rejects an event with no d tag at all', () => {
 		const events = [mockEvent({ tags: [] })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeUndefined()
 	})
 
 	test('returns undefined for an empty event list', () => {
-		const result = selectAuthoritativeAppSettingsEvent([], APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent([], APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeUndefined()
 	})
@@ -89,7 +112,7 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 			mockEvent({ created_at: 50, content: '{"name":"real"}' }),
 		]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result).toBeDefined()
 		expect(result?.pubkey).toBe(APP_PUBKEY)
@@ -100,7 +123,7 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 	test('selects the newest among multiple valid events from the same publisher', () => {
 		const events = [mockEvent({ created_at: 10 }), mockEvent({ created_at: 200 }), mockEvent({ created_at: 100 })]
 
-		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
+		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY, ['plebeian-market-handler'])
 
 		expect(result?.created_at).toBe(200)
 	})
@@ -108,13 +131,13 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 
 describe('resolveFetchedAppSettings', () => {
 	test('returns null only when a completed query returned no candidate events', () => {
-		expect(resolveFetchedAppSettings([], APP_PUBKEY)).toBeNull()
+		expect(resolveFetchedAppSettings([], APP_PUBKEY, ['plebeian-market-handler'])).toBeNull()
 	})
 
 	test('returns validated settings from the authoritative event', () => {
 		const event = mockEvent({ content: JSON.stringify(VALID_SETTINGS) })
 
-		expect(resolveFetchedAppSettings([event], APP_PUBKEY)).toEqual(VALID_SETTINGS)
+		expect(resolveFetchedAppSettings([event], APP_PUBKEY, ['plebeian-market-handler'])).toEqual(VALID_SETTINGS)
 	})
 
 	test('fails closed when returned candidates contain no authoritative event', () => {
@@ -123,19 +146,21 @@ describe('resolveFetchedAppSettings', () => {
 			content: JSON.stringify(VALID_SETTINGS),
 		})
 
-		expect(() => resolveFetchedAppSettings([spoofed], APP_PUBKEY)).toThrow(/No authoritative app settings event/)
+		expect(() => resolveFetchedAppSettings([spoofed], APP_PUBKEY, ['plebeian-market-handler'])).toThrow(
+			/No authoritative app settings event/,
+		)
 	})
 
 	test('fails closed on malformed authoritative JSON', () => {
 		const event = mockEvent({ content: '{not-json' })
 
-		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY)).toThrow(/invalid JSON/)
+		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY, ['plebeian-market-handler'])).toThrow(/invalid JSON/)
 	})
 
 	test('fails closed when authoritative settings fail schema validation', () => {
 		const event = mockEvent({ content: JSON.stringify({ name: 'incomplete' }) })
 
-		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY)).toThrow(/schema validation/)
+		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY, ['plebeian-market-handler'])).toThrow(/schema validation/)
 	})
 })
 

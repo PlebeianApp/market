@@ -2,12 +2,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Spinner } from '@/components/ui/spinner'
 import { authStore } from '@/lib/stores/auth'
 import { useProfile } from '@/queries/profiles'
+import { useConfigQuery } from '@/queries/config'
 import { useStore } from '@tanstack/react-store'
 import { CheckCircle2Icon, InfoIcon } from 'lucide-react'
 
 export function ProfileWalletCheck() {
 	const authState = useStore(authStore)
 	const { data, isPending, fetchStatus } = useProfile(authState.user?.pubkey)
+	const { data: config } = useConfigQuery()
+	const instanceName = config?.displayName || config?.name || 'Marketplace'
 	const profile = data?.profile ?? null
 
 	if (isPending && fetchStatus === 'fetching') {
@@ -70,7 +73,7 @@ export function ProfileWalletCheck() {
 			<CardContent className="space-y-3">
 				<div className="text-sm text-amber-800 space-y-2">
 					<p>
-						Your Nostr profile doesn't have a Lightning address (lud16) configured. To receive payments on Plebeian Market, you'll need to
+						Your Nostr profile doesn't have a Lightning address (lud16) configured. To receive payments on {instanceName}, you'll need to
 						set up a Bitcoin wallet.
 					</p>
 					<p>
@@ -79,7 +82,7 @@ export function ProfileWalletCheck() {
 					</p>
 					<ul className="list-disc list-inside space-y-1 ml-2">
 						<li>Add it to your Nostr profile so it works everywhere</li>
-						<li>Add it here specifically for Plebeian Market</li>
+						<li>Add it here specifically for {instanceName}</li>
 					</ul>
 				</div>
 			</CardContent>

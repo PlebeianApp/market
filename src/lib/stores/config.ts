@@ -1,16 +1,9 @@
 import { Store } from '@tanstack/store'
+import type { PublicAppConfig } from '@/lib/instance-config'
 import type { Stage } from '@/lib/constants'
 
 interface ConfigState {
-	config: {
-		appRelay?: string
-		stage?: Stage
-		appSettings?: any
-		appPublicKey?: string
-		cvmServerPubkey?: string
-		needsSetup?: boolean
-		[key: string]: any
-	}
+	config: Partial<PublicAppConfig>
 	isLoaded: boolean
 }
 
@@ -22,7 +15,7 @@ const initialState: ConfigState = {
 export const configStore = new Store<ConfigState>(initialState)
 
 export const configActions = {
-	setConfig: (config: any) => {
+	setConfig: (config: PublicAppConfig) => {
 		configStore.setState((state) => ({
 			...state,
 			config,

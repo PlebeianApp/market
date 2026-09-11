@@ -8,7 +8,14 @@ import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1 } from '../src/lib/fixtures'
-import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-config'
+import {
+	RELAY_URL,
+	SELF_HOSTED_HANDLER_ID,
+	SELF_HOSTED_INSTANCE_NAME,
+	SELF_HOSTED_SITE_URL,
+	TEST_APP_PRIVATE_KEY,
+	TEST_APP_PUBLIC_KEY,
+} from './test-config'
 
 const skBytes = hexToBytes(TEST_APP_PRIVATE_KEY)
 
@@ -24,15 +31,55 @@ async function main() {
 		return event
 	}
 
-	// Publish Kind 31990 (App Handler Information)
+	// Publish the custom self-hosted event first. The dev server is configured
+	// with INSTANCE_HANDLER_ID, so this event should win over the legacy event.
 	await publish({
 		kind: 31990,
 		created_at: Math.floor(Date.now() / 1000),
 		content: JSON.stringify({
-			name: 'Test Market',
-			displayName: 'Test Market',
-			picture: 'https://placehold.co/200x200',
-			banner: 'https://placehold.co/800x200',
+			name: SELF_HOSTED_INSTANCE_NAME,
+			displayName: SELF_HOSTED_INSTANCE_NAME,
+			picture: 'https://example.invalid/self-hosted-logo.svg',
+			banner: 'https://example.invalid/self-hosted-banner.png',
+			ownerPk: TEST_APP_PUBLIC_KEY,
+			allowRegister: true,
+			defaultCurrency: 'USD',
+			handlerId: SELF_HOSTED_HANDLER_ID,
+			siteUrl: SELF_HOSTED_SITE_URL,
+			publicRelays: [RELAY_URL],
+			trustedMints: ['https://mint.example.invalid'],
+			bugRelay: RELAY_URL,
+			termsUrl: `${SELF_HOSTED_SITE_URL}/terms`,
+			socialLinks: {
+				twitter: 'https://social.example.invalid/self-hosted',
+				github: 'https://github.com/example/self-hosted-market',
+				nostr: 'https://njump.me/npub1selfhosted',
+			},
+			supportContact: 'support@self-hosted.example.invalid',
+		}),
+		tags: [
+			['d', SELF_HOSTED_HANDLER_ID],
+			['k', '30402'],
+			['k', '30405'],
+			['k', '30406'],
+			['web', `${SELF_HOSTED_SITE_URL}/product/<bech32>`, 'naddr'],
+			['web', `${SELF_HOSTED_SITE_URL}/a/<bech32>`, 'naddr'],
+			['web', `${SELF_HOSTED_SITE_URL}/collection/<bech32>`, 'naddr'],
+			['r', RELAY_URL],
+		],
+	})
+	console.log('  Published custom app settings (Kind 31990)')
+
+	// Keep the historical event present so the fallback chain is exercised by
+	// the same local relay and remains compatible with existing deployments.
+	await publish({
+		kind: 31990,
+		created_at: Math.floor(Date.now() / 1000) - 1,
+		content: JSON.stringify({
+			name: 'Legacy Test Market',
+			displayName: 'Legacy Test Market',
+			picture: 'https://example.invalid/legacy-logo.svg',
+			banner: 'https://example.invalid/legacy-banner.png',
 			ownerPk: TEST_APP_PUBLIC_KEY,
 			allowRegister: true,
 			defaultCurrency: 'USD',
@@ -44,7 +91,7 @@ async function main() {
 			['k', '30406'],
 		],
 	})
-	console.log('  Published app settings (Kind 31990)')
+	console.log('  Published legacy fallback app settings (Kind 31990)')
 
 	// Publish Kind 30000 (Admin List)
 	// Include devUser1 so the server recognises them as admin at startup.
