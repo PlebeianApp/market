@@ -122,7 +122,9 @@ test.describe('Order Details - Seller View - Auctions', () => {
 	test('sales table shows Auction type chip and auction item title', async ({ merchantPage: page }) => {
 		await seedOrder('auction', 'confirmed')
 
-		await page.goto('/dashboard/orders')
+		// The seller's sales table (with the new Type/Item columns) is rendered
+		// by the sales route, not the (nonexistent) /dashboard/orders index.
+		await page.goto('/dashboard/sales/sales')
 
 		// The seeded auction order surfaces a Product-vs-Auction type chip and
 		// the auction title (kind-30408 'title' tag) in the sales table. The
