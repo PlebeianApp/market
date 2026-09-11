@@ -216,8 +216,9 @@ export const attachPrivateOrderDetailsToOrders = (
  *
  * A parseable kind-30408 `a` tag is NOT authority for settlement, payment, or
  * fulfillment decisions. Those require the canonical claim marker
- * (`getAuctionClaimPublicMarkerFields`) plus the validated referenced
- * settlement — use `getAuctionOrderAuthority()` for those stronger semantics.
+ * (`getAuctionClaimPublicMarkerFields`) PLUS the validated referenced
+ * settlement — use `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`) for those stronger semantics.
  */
 export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelatedEvents): string | null => {
 	const orderEvent = 'order' in order ? order.order : order
@@ -248,44 +249,53 @@ export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelate
  * Auction orders contain an 'a' tag pointing to kind 30408 (auction event).
  *
  * Use this for layout/labelling decisions only. For settlement, payment, or
- * fulfillment authority use `getAuctionOrderAuthority()`.
+ * fulfillment authority use `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`).
  */
 export const isAuctionOrder = (order: NDKEvent | OrderWithRelatedEvents): boolean => {
 	return !!getAuctionCoordinatesFromOrder(order)
 }
 
 /**
- * Canonical action authority for an auction order.
+ * PRESENTATION-ONLY. Structural classification of an auction-associated order.
  *
- * The broad coordinate detector above is presentation-only. Stronger semantics —
- * settlement, payment, and fulfillment decisions — additionally require the
- * canonical auction-claim marker (`getAuctionClaimPublicMarkerFields`), which
- * binds the order to the auction coordinate, the auction root event, the
- * referenced settlement event, buyer, seller, and total amount. A caller that
- * needs authority must consult `hasCanonicalClaim`; a caller that only renders
- * may keep using `isAuctionOrder()`.
+ * This is deliberately NOT an authority accessor. It parses the order's own
+ * (buyer-authored) claim-marker tags, which are untrusted relay data: a
+ * parseable marker binds the order to a coordinate, auction root, settlement
+ * event id, buyer, seller, and amount, but it does NOT prove the referenced
+ * settlement exists, is valid, or names this buyer as the winner.
+ *
+ * Nothing here may authorize settlement, payment, or fulfillment. Those
+ * decisions must go through `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`), which resolves the referenced
+ * settlement out of the validated settlement set and requires a canonical
+ * claim order bound to it. Callers that only label or group rows keep using
+ * `isAuctionOrder()` / this classification.
  */
-export type AuctionOrderAuthority = {
+export type AuctionOrderClassification = {
 	/** Presentation-only coordinate, or null when the order is not auction-associated. */
 	coordinates: string | null
-	/** Canonical claim marker fields, or null when absent/invalid. */
-	claimMarkerFields: AuctionClaimPublicMarkerFields | null
-	/** True only when the order carries a valid canonical auction-claim marker. */
-	hasCanonicalClaim: boolean
+	/**
+	 * Structurally-parsed claim-marker fields, or null. Untrusted: this is the
+	 * buyer's own assertion about a settlement, not a validated settlement.
+	 */
+	claimMarker: AuctionClaimPublicMarkerFields | null
+	/** True when a structurally-parseable claim marker is present. NOT authority. */
+	hasClaimMarker: boolean
 }
 
-export const getAuctionOrderAuthority = (order: NDKEvent | OrderWithRelatedEvents): AuctionOrderAuthority => {
+export const getAuctionOrderClassification = (order: NDKEvent | OrderWithRelatedEvents): AuctionOrderClassification => {
 	const orderEvent = 'order' in order ? order.order : order
 	const coordinates = getAuctionCoordinatesFromOrder(order)
-	const claimMarkerFields =
+	const claimMarker =
 		orderEvent?.tags && orderEvent.pubkey && coordinates
 			? getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
 			: null
 
 	return {
 		coordinates,
-		claimMarkerFields,
-		hasCanonicalClaim: !!coordinates && !!claimMarkerFields,
+		claimMarker,
+		hasClaimMarker: !!coordinates && !!claimMarker,
 	}
 }
 
