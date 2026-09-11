@@ -20,9 +20,21 @@ interface OrderActionsProps {
 	order: OrderWithRelatedEvents
 	userPubkey: string
 	className?: string
+	/**
+	 * Validated auction fulfillment authority (ADR-0003 / ADR-0004), supplied by
+	 * callers that hold the validated settlement descriptor for this order
+	 * (`getAuctionFulfillmentAuthority()` in `@/lib/auction/settlementDescriptor`).
+	 *
+	 * It is true only when the order's referenced settlement resolves out of the
+	 * validated settlement set AND a canonical claim order binds to that
+	 * settlement. Callers that do not hold that context leave it `false`: a
+	 * buyer-authored claim marker is never authority on its own. Product orders
+	 * ignore it entirely.
+	 */
+	auctionFulfillmentReady?: boolean
 }
 
-export function OrderActions({ order, userPubkey, className = '' }: OrderActionsProps) {
+export function OrderActions({ order, userPubkey, className = '', auctionFulfillmentReady = false }: OrderActionsProps) {
 	const [cancelReason, setCancelReason] = useState('')
 	const [isCancelOpen, setIsCancelOpen] = useState(false)
 
@@ -35,6 +47,10 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
 
+	// Presentation-only: "does this order carry an auction coordinate?".
+	// It is NOT authority for settlement, payment, or fulfillment decisions —
+	// see `auctionFulfillmentReady` above and getAuctionFulfillmentAuthority()
+	// in @/lib/auction/settlementDescriptor.
 	const isAuction = isAuctionOrder(order)
 
 	const status = getOrderStatus(order)
@@ -51,17 +67,36 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 	// Seller actions
 	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
-	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
+	// Fulfillment transition (ADR-0003 / ADR-0004):
+	//   validated settlement → canonical claim → fulfillment-ready
+	//     → Process → Ship → Receive/Complete
+	//
+	// Product orders keep the generic lifecycle: a CONFIRMED status authorizes
+	// processing. Auction orders do NOT — the auction flow never publishes a
+	// generic payment confirmation, and no synthetic one may be manufactured to
+	// unblock processing. For an auction the authority is the validated
+	// settlement + canonical claim context (`auctionFulfillmentReady`), which
+	// arrives while the order is still PENDING; that is why Process is reachable
+	// at PENDING for auctions and why fulfillment is never stranded behind a
+	// status the auction flow does not publish.
+	const fulfillmentReady = isAuction ? auctionFulfillmentReady : status === ORDER_STATUS.CONFIRMED
+	const canProcess = isSeller && fulfillmentReady && (status === ORDER_STATUS.CONFIRMED || status === ORDER_STATUS.PENDING)
 	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
 
 	// Buyer actions
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
 
-	// Auction orders are handled by the auction settlement flow (ADR-0003),
-	// not the product order lifecycle: there is no invoice to confirm and
+	// Auction orders are handled by the auction settlement flow (ADR-0003), not
+	// the product order lifecycle: there is no invoice to confirm and
 	// cancellation cannot release the bidder's locked proofs. Suppress the
-	// Cancel/Confirm buttons without touching canProcess/canShip/canReceive,
-	// so auction orders still progress through processing/shipping.
+	// Cancel/Confirm buttons without touching canProcess/canShip/canReceive, so
+	// auction orders still progress through processing/shipping.
+	//
+	// Consequence, by design: an auction order that is only auction-associated
+	// (legacy/broad `a` tag, no validated settlement + canonical claim) exposes
+	// no order-surface action at all — Cancel/Confirm are suppressed here and
+	// Process requires `auctionFulfillmentReady`. Order surfaces deliberately do
+	// not invent a fallback path for pre-canonical-claim auction orders.
 	const showCancel = canCancel && !isAuction
 	const showConfirm = canConfirm && !isAuction
 
@@ -118,7 +153,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
 			{(showCancel || showConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex gap-3">
+				<div className="flex flex-wrap gap-2">
 					{showCancel && (
 						<Button
 							variant="outline"

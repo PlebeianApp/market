@@ -75,7 +75,12 @@ import {
 } from '@/queries/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import type { ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
-import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
+import {
+	getAuctionFulfillmentAuthority,
+	getSettlementDescriptor,
+	type GetSettlementDescriptorInput,
+	type SettlementDescriptor,
+} from '@/lib/auction/settlementDescriptor'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
@@ -146,6 +151,7 @@ const SETTLEMENT_STATE_STYLE: Record<OrderSettlementDisplayState, { badge: strin
 	'Settlement Event Observed': { badge: 'bg-purple-50 border-purple-200', text: 'text-purple-900' },
 	Settled: { badge: 'bg-green-50 border-green-200', text: 'text-green-900' },
 	'Reserve Not Met': { badge: 'bg-red-50 border-red-200', text: 'text-red-900' },
+	'Griefed (No Fallback)': { badge: 'bg-orange-50 border-orange-200', text: 'text-orange-900' },
 	Cancelled: { badge: 'bg-gray-50 border-gray-200', text: 'text-gray-900' },
 	'Validating…': { badge: 'bg-amber-50 border-amber-200', text: 'text-amber-900' },
 }
@@ -156,6 +162,7 @@ const SETTLEMENT_STATE_ICON: Record<OrderSettlementDisplayState, React.ReactNode
 	'Settlement Event Observed': <CheckCircle className="w-5 h-5 text-purple-600" />,
 	Settled: <CheckCircle className="w-5 h-5 text-green-600" />,
 	'Reserve Not Met': <AlertTriangle className="w-5 h-5 text-red-600" />,
+	'Griefed (No Fallback)': <AlertTriangle className="w-5 h-5 text-orange-600" />,
 	Cancelled: <Ban className="w-5 h-5 text-gray-600" />,
 	'Validating…': <AlertTriangle className="w-5 h-5 text-amber-600" />,
 }
@@ -563,6 +570,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		}
 	}, [descriptorInput])
 
+	// Fulfillment authority (ADR-0003 / ADR-0004) for the action buttons. It is
+	// derived from the SAME validated descriptor input the settlement card uses
+	// — the referenced settlement must resolve out of the validated settlement
+	// set and a canonical claim order must bind to it — never from the order's
+	// own buyer-authored claim marker.
+	const auctionFulfillmentAuthority = useMemo(
+		() => (descriptorInput ? getAuctionFulfillmentAuthority(descriptorInput) : null),
+		[descriptorInput],
+	)
+
 	// Without the auction event, or with a failed parse/descriptor run, we
 	// cannot claim any validated status — surface 'Validating…' instead of a
 	// potentially wrong one.
@@ -619,7 +636,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</div>
 
 						{/* ORDER ACTIONS - Now at the bottom with labels */}
-						<OrderActions order={order} userPubkey={user?.pubkey || ''} />
+						<OrderActions
+							order={order}
+							userPubkey={user?.pubkey || ''}
+							auctionFulfillmentReady={auctionFulfillmentAuthority?.fulfillmentReady ?? false}
+						/>
 					</CardContent>
 				</Card>
 

@@ -10,6 +10,7 @@ import {
 } from '@/lib/schemas/order'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import { getAuctionClaimPublicMarkerFields, type AuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
 import {
 	fetchNdkEventSet,
@@ -207,8 +208,17 @@ export const attachPrivateOrderDetailsToOrders = (
 }
 
 /**
- * Extract auction coordinates from an order if it is an auction order.
- * Returns null if the order is not an auction or if coordinates are malformed.
+ * PRESENTATION-ONLY. Broad auction-associated / legacy-compatibility detector.
+ *
+ * Extract auction coordinates from an order if it is associated with an
+ * auction. Returns null if the order is not auction-associated or if the
+ * coordinates are malformed.
+ *
+ * A parseable kind-30408 `a` tag is NOT authority for settlement, payment, or
+ * fulfillment decisions. Those require the canonical claim marker
+ * (`getAuctionClaimPublicMarkerFields`) PLUS the validated referenced
+ * settlement — use `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`) for those stronger semantics.
  */
 export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelatedEvents): string | null => {
 	const orderEvent = 'order' in order ? order.order : order
@@ -235,11 +245,58 @@ export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelate
 }
 
 /**
- * Check if an order is associated with an auction.
+ * PRESENTATION-ONLY. Check whether an order is associated with an auction.
  * Auction orders contain an 'a' tag pointing to kind 30408 (auction event).
+ *
+ * Use this for layout/labelling decisions only. For settlement, payment, or
+ * fulfillment authority use `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`).
  */
 export const isAuctionOrder = (order: NDKEvent | OrderWithRelatedEvents): boolean => {
 	return !!getAuctionCoordinatesFromOrder(order)
+}
+
+/**
+ * PRESENTATION-ONLY. Structural classification of an auction-associated order.
+ *
+ * This is deliberately NOT an authority accessor. It parses the order's own
+ * (buyer-authored) claim-marker tags, which are untrusted relay data: a
+ * parseable marker binds the order to a coordinate, auction root, settlement
+ * event id, buyer, seller, and amount, but it does NOT prove the referenced
+ * settlement exists, is valid, or names this buyer as the winner.
+ *
+ * Nothing here may authorize settlement, payment, or fulfillment. Those
+ * decisions must go through `getAuctionFulfillmentAuthority()`
+ * (`@/lib/auction/settlementDescriptor`), which resolves the referenced
+ * settlement out of the validated settlement set and requires a canonical
+ * claim order bound to it. Callers that only label or group rows keep using
+ * `isAuctionOrder()` / this classification.
+ */
+export type AuctionOrderClassification = {
+	/** Presentation-only coordinate, or null when the order is not auction-associated. */
+	coordinates: string | null
+	/**
+	 * Structurally-parsed claim-marker fields, or null. Untrusted: this is the
+	 * buyer's own assertion about a settlement, not a validated settlement.
+	 */
+	claimMarker: AuctionClaimPublicMarkerFields | null
+	/** True when a structurally-parseable claim marker is present. NOT authority. */
+	hasClaimMarker: boolean
+}
+
+export const getAuctionOrderClassification = (order: NDKEvent | OrderWithRelatedEvents): AuctionOrderClassification => {
+	const orderEvent = 'order' in order ? order.order : order
+	const coordinates = getAuctionCoordinatesFromOrder(order)
+	const claimMarker =
+		orderEvent?.tags && orderEvent.pubkey && coordinates
+			? getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
+			: null
+
+	return {
+		coordinates,
+		claimMarker,
+		hasClaimMarker: !!coordinates && !!claimMarker,
+	}
 }
 
 /**
