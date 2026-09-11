@@ -208,8 +208,8 @@ jobs:
       - name: Claim host-port offset (M6) then bring up services
         if: steps.secrets.outputs.previews_ready == 'true'
         run: |
-          # The remote script is piped to `bash -s` on the VPS over stdin. The
-          # ${{ ... }} expressions are substituted by GitHub BEFORE this shell
+          # The remote script is piped to `bash -s` on the VPS over stdin.
+          # Expression placeholders are substituted by GitHub BEFORE this shell
           # runs; every other $ is expanded by the remote shell. ssh propagates
           # the remote exit status, so a failure here still fails the step.
           bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
