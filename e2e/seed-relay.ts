@@ -62,6 +62,10 @@ async function main() {
 			['k', '30402'],
 			['k', '30405'],
 			['k', '30406'],
+			['web', `${SELF_HOSTED_SITE_URL}/product/<bech32>`, 'naddr'],
+			['web', `${SELF_HOSTED_SITE_URL}/a/<bech32>`, 'naddr'],
+			['web', `${SELF_HOSTED_SITE_URL}/collection/<bech32>`, 'naddr'],
+			['r', RELAY_URL],
 		],
 	})
 	console.log('  Published custom app settings (Kind 31990)')
