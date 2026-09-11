@@ -86,7 +86,15 @@ jobs:
           python-version: '3.12'
 
       - name: Install Cashu (nutshell) mint
-        run: pip install cashu 'marshmallow<4.0.0' 'limits<5.0.0'
+        # Pin the mint to the same known-good triple as ci-unit.yml
+        # (add876c9). nutshell >= 0.20.x emits version-01 keyset ids that
+        # @cashu/cashu-ts 2.9.0 cannot verify ("Couldn't verify keyset ID
+        # 01…"), which breaks the NUT-05 deposit round trip and the ADR-0011
+        # P2PK lock swap in the Direct Lightning funding scenarios — the
+        # failure previously (mis)attributed to missing DLEQ-on-swap.
+        # cashu==0.19.2 returns NUT-12 DLEQ proofs on mint AND swap, locked
+        # in by auctionDLEQ.mint.integration.test.ts (run in ci-unit).
+        run: pip install 'cashu==0.19.2' 'marshmallow<4.0.0' 'limits<5.0.0'
 
       - name: Start relay
         run: |

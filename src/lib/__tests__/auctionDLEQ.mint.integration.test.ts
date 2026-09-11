@@ -4,7 +4,14 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { buildDleqProofs, getMintKeyset, verifyBidDleq, type DleqProof, type DleqVerifyResult } from '../cashu/dleq'
+import {
+	buildDleqProofs,
+	getMintKeyset,
+	verifyBidDleq,
+	verifyBidDleqWithKeysets,
+	type DleqProof,
+	type DleqVerifyResult,
+} from '../cashu/dleq'
 
 /**
  * I3 — DLEQ via a real local mint (not the offline A3 fixture).
@@ -177,5 +184,46 @@ describe('DLEQ via a real local mint (NUT-12)', () => {
 		expect(result.failedProofIndex).toBe(0)
 		// Amount sum is untouched — only the signature is forged.
 		expect(result.matchesAmount).toBe(true)
+	})
+
+	// ADR-0011 Blocker 2: the security property lives on the NEWLY ISSUED
+	// P2PK swap outputs — this is the exact swap shape the bid lock path
+	// (`lockAuctionBidProofs` in src/lib/stores/nip60.ts) performs. The
+	// re-enabled Direct Lightning funding e2e scenarios depend on the local
+	// mint returning NUT-12 DLEQ proofs on this swap, and on the outputs
+	// surviving the lock path's fail-closed `buildDleqProofs` serialization
+	// and keyset verification. (Empirically, nutshell 0.19.2 does both;
+	// nutshell >= 0.20.x emits version-01 keyset ids that cashu-ts 2.9.0
+	// cannot even verify — which is why CI pins cashu==0.19.2.)
+	test('P2PK lock-path swap issues output proofs carrying verifiable DLEQ (Blocker 2)', async () => {
+		// Fresh proofs for this test — the swap consumes its inputs, and the
+		// shared fixture must stay untouched for the tests above.
+		const { proofs, keyset } = await mintDleqProofs(MINT_AMOUNT)
+
+		const wallet = new CashuWallet(new CashuMint(MINT_URL))
+		const lockPubkey = GENERATOR_HEX // any valid compressed secp256k1 point
+		const refundPubkey = GENERATOR_HEX
+		const result = await wallet.swap(32, proofs, {
+			p2pk: {
+				pubkey: lockPubkey,
+				locktime: Math.floor(Date.now() / 1000) + 3_600,
+				refundKeys: [refundPubkey],
+			},
+		})
+
+		expect(result.send.length).toBeGreaterThan(0)
+		// 1. Every freshly issued P2PK output carries a NUT-12 DLEQ proof.
+		for (const p of result.send) expect(p.dleq).toBeDefined()
+		for (const p of result.keep) expect(p.dleq).toBeDefined()
+		// 2. The lock path's fail-closed output serializer accepts them.
+		const dleqProofs: DleqProof[] = buildDleqProofs(result.send)
+		expect(dleqProofs).toHaveLength(result.send.length)
+		// 3. The serialized outputs verify against their own keyset and sum
+		//    to the locked leg amount (same call shape as computeValidatedBids).
+		const sendSum = result.send.reduce((sum, p) => sum + p.amount, 0)
+		const withSecrets = dleqProofs.map((dp, i) => ({ ...dp, secret: result.send[i].secret }))
+		const keysets = new Map([[`${MINT_URL}:${keyset.id}`, keyset]])
+		const verdict = verifyBidDleqWithKeysets({ mint: MINT_URL, legDelta: sendSum, proofs: withSecrets }, keysets)
+		expect(verdict).toEqual({ ok: true, matchesAmount: true, allProofsValid: true })
 	})
 })
