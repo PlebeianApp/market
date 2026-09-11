@@ -3,6 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { CURRENCIES } from '@/lib/constants'
 import { submitAppSettings } from '@/lib/appSettings'
 import { AppSettingsSchema } from '@/lib/schemas/app'
@@ -24,6 +25,26 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/
 	component: AppMiscelleneousComponent,
 })
 
+function parseList(value: string): string[] | undefined {
+	const items = value
+		.split(/[\n,]/)
+		.map((item) => item.trim())
+		.filter(Boolean)
+
+	return items.length > 0 ? items : undefined
+}
+
+function createSocialLinks(value: { twitterUrl: string; newsletterUrl: string; telegramUrl: string; githubUrl: string }) {
+	const socialLinks = {
+		twitter: value.twitterUrl || undefined,
+		newsletter: value.newsletterUrl || undefined,
+		telegram: value.telegramUrl || undefined,
+		github: value.githubUrl || undefined,
+	}
+
+	return Object.values(socialLinks).some(Boolean) ? socialLinks : undefined
+}
+
 function AppMiscelleneousComponent() {
 	useDashboardTitle('App Settings')
 	const { data: config } = useConfigQuery()
@@ -40,6 +61,17 @@ function AppMiscelleneousComponent() {
 			displayName: appSettings?.displayName ?? '',
 			picture: appSettings?.picture ?? '',
 			banner: appSettings?.banner ?? '',
+			handlerId: appSettings?.handlerId ?? config?.handlerId ?? '',
+			siteUrl: appSettings?.siteUrl ?? config?.siteUrl ?? '',
+			publicRelays: (appSettings?.publicRelays ?? config?.publicRelays ?? []).join('\n'),
+			trustedMints: (appSettings?.trustedMints ?? config?.trustedMints ?? []).join('\n'),
+			bugRelay: appSettings?.bugRelay ?? config?.bugRelay ?? '',
+			termsUrl: appSettings?.termsUrl ?? config?.termsUrl ?? '',
+			twitterUrl: appSettings?.socialLinks?.twitter ?? config?.socialLinks?.twitter ?? '',
+			newsletterUrl: appSettings?.socialLinks?.newsletter ?? config?.socialLinks?.newsletter ?? '',
+			telegramUrl: appSettings?.socialLinks?.telegram ?? config?.socialLinks?.telegram ?? '',
+			githubUrl: appSettings?.socialLinks?.github ?? config?.socialLinks?.github ?? '',
+			supportContact: appSettings?.supportContact ?? config?.supportContact ?? '',
 			contactEmail: appSettings?.contactEmail ?? '',
 			defaultCurrency: appSettings?.defaultCurrency ?? CURRENCIES[0],
 			allowRegister: appSettings?.allowRegister ?? true,
@@ -52,12 +84,19 @@ function AppMiscelleneousComponent() {
 				const toValidate = {
 					...value,
 					ownerPk: appSettings?.ownerPk ?? '',
+					publicRelays: parseList(value.publicRelays),
+					trustedMints: parseList(value.trustedMints),
+					socialLinks: createSocialLinks(value),
 					// Strip empty optional URL fields so Zod doesn't fail on ""
 					picture: value.picture || undefined,
 					banner: value.banner || undefined,
+					siteUrl: value.siteUrl || undefined,
+					bugRelay: value.bugRelay || undefined,
+					termsUrl: value.termsUrl || undefined,
 					blossom_server: value.blossom_server || undefined,
 					nip96_server: value.nip96_server || undefined,
 					contactEmail: value.contactEmail || undefined,
+					supportContact: value.supportContact || undefined,
 				}
 				const result = AppSettingsSchema.safeParse(toValidate)
 				if (!result.success) {
@@ -77,17 +116,31 @@ function AppMiscelleneousComponent() {
 			}
 
 			try {
+				const { twitterUrl, newsletterUrl, telegramUrl, githubUrl, publicRelays, trustedMints, ...settingsValue } = value
 				const updatedSettings = {
-					...value,
+					...settingsValue,
 					ownerPk: config.appSettings.ownerPk,
+					publicRelays: parseList(publicRelays),
+					trustedMints: parseList(trustedMints),
+					socialLinks: createSocialLinks(value),
 					// Strip empty strings to undefined for optional URL fields
+					siteUrl: value.siteUrl || undefined,
+					bugRelay: value.bugRelay || undefined,
+					termsUrl: value.termsUrl || undefined,
 					blossom_server: value.blossom_server || undefined,
 					nip96_server: value.nip96_server || undefined,
 					contactEmail: value.contactEmail || undefined,
+					supportContact: value.supportContact || undefined,
 				}
 
-				const handlerId = config.handlerId || 'plebeian-market-handler'
-				let handlerEvent = createHandlerInfoEventData(config.appSettings.ownerPk, updatedSettings, config.appRelay, handlerId)
+				const handlerId = value.handlerId || config.handlerId || 'plebeian-market-handler'
+				let handlerEvent = createHandlerInfoEventData(
+					config.appSettings.ownerPk,
+					updatedSettings,
+					config.appRelay,
+					handlerId,
+					value.siteUrl,
+				)
 				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
 				await submitAppSettings(handlerEvent)
 
@@ -357,6 +410,179 @@ function AppMiscelleneousComponent() {
 							</div>
 						)}
 					</form.Field>
+				</div>
+
+				{/* Instance Configuration Section */}
+				<div className="space-y-4 p-4 border rounded-lg">
+					<h3 className="font-semibold text-lg">Instance configuration</h3>
+					<p className="text-muted-foreground text-sm">
+						These values are published in the kind 31990 app-settings event and override the shipped Plebeian defaults.
+					</p>
+
+					<form.Field name="handlerId">
+						{(field) => (
+							<div>
+								<Label className="font-medium" htmlFor={field.name}>
+									Handler ID
+								</Label>
+								<Input
+									id={field.name}
+									className="mt-1 border-2"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									placeholder="my-market-handler"
+								/>
+								<p className="mt-1 text-muted-foreground text-xs">The NIP-89 d-tag used to discover this instance.</p>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="siteUrl">
+						{(field) => (
+							<div>
+								<Label className="font-medium" htmlFor={field.name}>
+									Site URL
+								</Label>
+								<Input
+									id={field.name}
+									className="mt-1 border-2"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									placeholder="https://market.example.com"
+									type="url"
+								/>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="publicRelays">
+						{(field) => (
+							<div>
+								<Label className="font-medium" htmlFor={field.name}>
+									Public relays
+								</Label>
+								<Textarea
+									id={field.name}
+									className="mt-1 border-2"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									placeholder="wss://relay.example.com"
+									rows={3}
+								/>
+								<p className="mt-1 text-muted-foreground text-xs">Enter one ws:// or wss:// relay per line.</p>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="trustedMints">
+						{(field) => (
+							<div>
+								<Label className="font-medium" htmlFor={field.name}>
+									Trusted Cashu mints
+								</Label>
+								<Textarea
+									id={field.name}
+									className="mt-1 border-2"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									placeholder="https://mint.example.com"
+									rows={3}
+								/>
+								<p className="mt-1 text-muted-foreground text-xs">Enter one HTTPS mint URL per line.</p>
+							</div>
+						)}
+					</form.Field>
+
+					<div className="gap-4 grid md:grid-cols-2">
+						<form.Field name="bugRelay">
+							{(field) => (
+								<div>
+									<Label className="font-medium" htmlFor={field.name}>
+										Bug report relay
+									</Label>
+									<Input
+										id={field.name}
+										className="mt-1 border-2"
+										value={field.state.value}
+										onChange={(e) => field.handleChange(e.target.value)}
+										onBlur={field.handleBlur}
+										placeholder="wss://bugs.example.com"
+										type="url"
+									/>
+								</div>
+							)}
+						</form.Field>
+
+						<form.Field name="termsUrl">
+							{(field) => (
+								<div>
+									<Label className="font-medium" htmlFor={field.name}>
+										Terms URL
+									</Label>
+									<Input
+										id={field.name}
+										className="mt-1 border-2"
+										value={field.state.value}
+										onChange={(e) => field.handleChange(e.target.value)}
+										onBlur={field.handleBlur}
+										placeholder="https://market.example.com/terms"
+										type="url"
+									/>
+								</div>
+							)}
+						</form.Field>
+					</div>
+
+					<form.Field name="supportContact">
+						{(field) => (
+							<div>
+								<Label className="font-medium" htmlFor={field.name}>
+									Support contact
+								</Label>
+								<Input
+									id={field.name}
+									className="mt-1 border-2"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									placeholder="support@market.example.com"
+									type="email"
+								/>
+							</div>
+						)}
+					</form.Field>
+
+					<div className="gap-4 grid md:grid-cols-2">
+						{[
+							['twitterUrl', 'Twitter URL', 'https://twitter.com/example'],
+							['newsletterUrl', 'Newsletter URL', 'https://example.substack.com/'],
+							['telegramUrl', 'Telegram URL', 'https://t.me/example'],
+							['githubUrl', 'GitHub URL', 'https://github.com/example/market'],
+						].map(([name, label, placeholder]) => (
+							<form.Field key={name} name={name as 'twitterUrl' | 'newsletterUrl' | 'telegramUrl' | 'githubUrl'}>
+								{(field) => (
+									<div>
+										<Label className="font-medium" htmlFor={field.name}>
+											{label}
+										</Label>
+										<Input
+											id={field.name}
+											className="mt-1 border-2"
+											value={field.state.value}
+											onChange={(e) => field.handleChange(e.target.value)}
+											onBlur={field.handleBlur}
+											placeholder={placeholder}
+											type="url"
+										/>
+									</div>
+								)}
+							</form.Field>
+						))}
+					</div>
 				</div>
 
 				{/* General Settings Section */}

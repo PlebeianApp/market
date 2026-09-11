@@ -84,6 +84,7 @@ export const createHandlerInfoEventData = (
 	appSettings: Record<string, unknown>,
 	relayUrl?: string,
 	handlerId?: string,
+	siteUrl?: string,
 ): {
 	kind: number
 	created_at: number
@@ -91,7 +92,7 @@ export const createHandlerInfoEventData = (
 	content: string
 	pubkey: string
 } => {
-	const { effectiveHandlerId, effectiveSiteUrl, effectiveRelayUrl } = resolveHandlerMetadata(handlerId, relayUrl)
+	const { effectiveHandlerId, effectiveSiteUrl, effectiveRelayUrl } = resolveHandlerMetadata(handlerId, relayUrl, siteUrl)
 
 	const tags: string[][] = [
 		['d', effectiveHandlerId],
