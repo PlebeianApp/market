@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { getAuctionCoordinatesFromOrder, isAuctionOrder } from '@/queries/orders'
+import { getAuctionCoordinatesFromOrder, getAuctionOrderAuthority, isAuctionOrder } from '@/queries/orders'
 import { describeOrderSettlementStatus } from '@/components/orders/orderSettlementStatusView'
 import type { SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
 
@@ -217,5 +217,70 @@ describe('orderSettlementStatusView', () => {
 			'Awaiting Settlement',
 		)
 		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'bidding-open', verifiedBadge: 'none' }))).toBe('Awaiting Settlement')
+	})
+
+	test('griefed-no-fallback phase maps to Griefed (No Fallback)', () => {
+		// Terminal grief is derived from validator quorum (ADR-0004) and must be
+		// representable without a path release — it is not a seller cancellation.
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'griefed-no-fallback', verifiedBadge: 'none' }))).toBe(
+			'Griefed (No Fallback)',
+		)
+	})
+})
+
+// Canonical auction-claim marker tags, shaped exactly as
+// getAuctionClaimPublicMarkerFields() expects to parse them.
+const SELLER_PK = 'b'.repeat(64)
+const BUYER_PK = 'a'.repeat(64)
+const AUCTION_EVENT_ID = 'c'.repeat(64)
+const SETTLEMENT_EVENT_ID = 'd'.repeat(64)
+const AUCTION_COORDS = `30408:${SELLER_PK}:e2e-auction-test`
+
+const claimMarkerTags = (): string[][] => [
+	['p', SELLER_PK],
+	['subject', 'auction-claim'],
+	['type', '1'],
+	['order', 'order-1'],
+	['amount', '1000'],
+	['a', AUCTION_COORDS],
+	['e', AUCTION_EVENT_ID],
+	['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
+]
+
+const orderEventWith = (tags: string[][]): NDKEvent =>
+	({
+		tags,
+		pubkey: BUYER_PK,
+		created_at: Math.floor(Date.now() / 1000),
+		kind: 16,
+		content: '',
+	}) as unknown as NDKEvent
+
+describe('getAuctionOrderAuthority', () => {
+	test('plain auction coordinate is NOT authority without a canonical claim marker', () => {
+		const authority = getAuctionOrderAuthority(orderEventWith([['a', AUCTION_COORDS]]))
+		expect(authority.coordinates).toBe(AUCTION_COORDS)
+		expect(authority.claimMarkerFields).toBeNull()
+		expect(authority.hasCanonicalClaim).toBe(false)
+	})
+
+	test('canonical claim marker grants authority', () => {
+		const authority = getAuctionOrderAuthority(orderEventWith(claimMarkerTags()))
+		expect(authority.hasCanonicalClaim).toBe(true)
+		expect(authority.claimMarkerFields?.orderId).toBe('order-1')
+		expect(authority.claimMarkerFields?.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+	})
+
+	test('a non-auction order has neither coordinates nor authority', () => {
+		const authority = getAuctionOrderAuthority(orderEventWith([['amount', '1000']]))
+		expect(authority.coordinates).toBeNull()
+		expect(authority.hasCanonicalClaim).toBe(false)
+	})
+
+	test('a claim marker naming a different seller than the coordinate grants no authority', () => {
+		const mismatched = claimMarkerTags().map((tag) => (tag[0] === 'p' ? ['p', 'e'.repeat(64)] : tag))
+		const authority = getAuctionOrderAuthority(orderEventWith(mismatched))
+		expect(authority.claimMarkerFields).toBeNull()
+		expect(authority.hasCanonicalClaim).toBe(false)
 	})
 })
