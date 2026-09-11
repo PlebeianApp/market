@@ -671,14 +671,28 @@ quorum rather than from the seller's own cancellation.
 
 ### Presentation-only classification vs. action authority
 
-- `getAuctionCoordinatesFromOrder()` / `isAuctionOrder()` are **presentation-only**
-  (auction-associated / legacy compatibility). A parseable kind-`30408` `a` tag
-  is not authority for settlement, payment, or fulfillment decisions.
-- Action authority comes from the canonical claim marker
-  (`getAuctionClaimPublicMarkerFields()`) together with the validated referenced
-  settlement, surfaced to callers as `getAuctionOrderAuthority()`. A caller that
-  only renders may use the presentation detector; a caller that decides must use
-  the authority.
+- `getAuctionCoordinatesFromOrder()`, `isAuctionOrder()`, and
+  `getAuctionOrderClassification()` are **presentation-only**
+  (auction-associated / legacy compatibility). The classification parses the
+  order's own claim-marker tags, but those tags are buyer-authored relay data:
+  they assert a settlement, they do not prove one. A parseable kind-`30408` `a`
+  tag — or a well-formed marker naming any 64-hex settlement event id — is
+  **not** authority for settlement, payment, or fulfillment decisions.
+- Action authority comes from `getAuctionFulfillmentAuthority()`
+  (`@/lib/auction/settlementDescriptor`). It returns
+  `{ fulfillmentReady, settlementEventId?, claimOrderId? }` and is derived from
+  the same validated descriptor input the settlement card uses. `fulfillmentReady`
+  is true only when **both** hold:
+  1. the referenced settlement resolves out of the validated settlement set
+     (correct seller/root/coordinate, canonical winning bid, valid path release,
+     complete payout chain), and
+  2. a claim order passes the 8-point `validateClaimOrder()` check against that
+     exact settlement (referenced settlement resolved, author === settlement
+     winner, amount === final amount, auction root/coordinate/seller match).
+     A forged marker naming a settlement that does not exist therefore grants no
+     authority — the settlement is resolved, never taken on faith.
+- A caller that only renders may use the presentation detector; a caller that
+  decides must use the validated authority.
 - Fulfillment transition for auction orders:
 
   ```
@@ -686,10 +700,18 @@ quorum rather than from the seller's own cancellation.
     → Process → Ship → Receive/Complete
   ```
 
-  An order carrying the canonical claim marker is already fulfillment-ready
-  while still `PENDING`. It must not be stranded waiting for a generic
-  `CONFIRMED` status that the auction flow never publishes, and no synthetic
-  payment-confirmation event may be manufactured to unblock it.
+  For an auction order, `Process` is authorized by the validated authority
+  above and is reachable while the order is still `PENDING`. A generic
+  `CONFIRMED` status is **not** authority for auction orders — the auction flow
+  never publishes a generic payment confirmation, and no synthetic
+  payment-confirmation event may be manufactured to unblock fulfillment.
+
+- Consequence, deliberately: an auction order that is only auction-associated
+  (legacy/broad `a` tag, no validated settlement and canonical claim) exposes no
+  order-surface action at all. `Cancel`/`Confirm` stay suppressed for auctions
+  (there is no invoice to confirm, and cancellation cannot release the bidder's
+  locked proofs), and `Process` waits for the validated authority instead of
+  inventing a fallback path.
 
 ## 4.4 Validator Reputation Events
 

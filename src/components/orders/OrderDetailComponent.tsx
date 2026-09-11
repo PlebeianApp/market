@@ -75,7 +75,12 @@ import {
 } from '@/queries/auctions'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
 import type { ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
-import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
+import {
+	getAuctionFulfillmentAuthority,
+	getSettlementDescriptor,
+	type GetSettlementDescriptorInput,
+	type SettlementDescriptor,
+} from '@/lib/auction/settlementDescriptor'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
@@ -565,6 +570,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		}
 	}, [descriptorInput])
 
+	// Fulfillment authority (ADR-0003 / ADR-0004) for the action buttons. It is
+	// derived from the SAME validated descriptor input the settlement card uses
+	// — the referenced settlement must resolve out of the validated settlement
+	// set and a canonical claim order must bind to it — never from the order's
+	// own buyer-authored claim marker.
+	const auctionFulfillmentAuthority = useMemo(
+		() => (descriptorInput ? getAuctionFulfillmentAuthority(descriptorInput) : null),
+		[descriptorInput],
+	)
+
 	// Without the auction event, or with a failed parse/descriptor run, we
 	// cannot claim any validated status — surface 'Validating…' instead of a
 	// potentially wrong one.
@@ -621,7 +636,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</div>
 
 						{/* ORDER ACTIONS - Now at the bottom with labels */}
-						<OrderActions order={order} userPubkey={user?.pubkey || ''} />
+						<OrderActions
+							order={order}
+							userPubkey={user?.pubkey || ''}
+							auctionFulfillmentReady={auctionFulfillmentAuthority?.fulfillmentReady ?? false}
+						/>
 					</CardContent>
 				</Card>
 
