@@ -111,13 +111,32 @@ jobs:
           PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
         run: |
-          if [ -n "$PREVIEW_VPS_HOST" ] && [ -n "$PREVIEW_VPS_USER" ] && [ -n "$PREVIEW_VPS_SSH_KEY" ] && [ -n "$PREVIEW_VPS_HOST_FINGERPRINT" ]; then
+          set -uo pipefail
+          # This list MUST stay equal to the set of `${VAR:?…}` requirements in
+          # infra/preview-vps/provision.sh. That script aborts on the first
+          # missing one, so a guard that checks fewer secrets than the deploy
+          # consumes reports "ready" and then dies at, e.g.,
+          # `provision.sh: line 39: PREVIEW_CLOUDFLARE_API_TOKEN is required` —
+          # a red check instead of the intended loud skip. Lockstep between the
+          # two lists is enforced by
+          # src/lib/__tests__/preview-deploy-workflow-guard.test.ts.
+          MISSING=""
+          for NAME in PREVIEW_VPS_HOST PREVIEW_VPS_USER PREVIEW_VPS_SSH_KEY PREVIEW_VPS_HOST_FINGERPRINT PREVIEW_CLOUDFLARE_API_TOKEN PREVIEW_CLOUDFLARE_ZONE_ID; do
+            if [ -z "${!NAME:-}" ]; then
+              MISSING="$MISSING $NAME"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
             echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=" >> "$GITHUB_OUTPUT"
             echo "Preview deploy secrets present — proceeding with deployment."
           else
             echo "previews_ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Preview deploy skipped::PREVIEW_VPS_* secrets are not configured (fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding). Skipping VPS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
+            echo "missing_secrets=$MISSING" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview deploy skipped::Missing preview secrets:$MISSING. Fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding. Skipping the VPS/DNS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
           fi
 
       - name: Bootstrap VPS (gateway + Caddy route + manager env)
@@ -375,6 +394,36 @@ jobs:
       pull-requests: write
 
     steps:
+      # Same lockstep requirement as the deploy job's guard: a repo with no
+      # preview secrets must tear down quietly (nothing was ever created)
+      # instead of failing the check on an empty PREVIEW_VPS_HOST.
+      - name: Check preview VPS secrets
+        id: secrets
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -uo pipefail
+          MISSING=""
+          for NAME in PREVIEW_VPS_HOST PREVIEW_VPS_USER PREVIEW_VPS_SSH_KEY PREVIEW_VPS_HOST_FINGERPRINT PREVIEW_CLOUDFLARE_API_TOKEN PREVIEW_CLOUDFLARE_ZONE_ID; do
+            if [ -z "${!NAME:-}" ]; then
+              MISSING="$MISSING $NAME"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=" >> "$GITHUB_OUTPUT"
+            echo "Preview secrets present — tearing down any VPS/DNS resources."
+          else
+            echo "previews_ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$MISSING" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview teardown skipped::Missing preview secrets:$MISSING. Nothing was ever provisioned for this repository, so there is nothing to tear down."
+          fi
+
       - name: Compute subdomain
         id: ports
         run: |
@@ -382,6 +431,7 @@ jobs:
           echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
 
       - name: Release port offset, stop containers, clean up VPS directory
+        if: steps.secrets.outputs.previews_ready == 'true'
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -403,6 +453,7 @@ jobs:
             rm -rf "$APP_DIR"
 
       - name: Delete Cloudflare DNS record
+        if: steps.secrets.outputs.previews_ready == 'true'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -426,6 +477,14 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job deliberately has no checkout (the head branch may already be
+          # gone by the time the PR closes, so a ref-dependent checkout can
+          # fail). `gh` therefore needs the repository named explicitly; without
+          # it `gh pr comment` aborted with
+          # `failed to run git: fatal: not a git repository` and the
+          # "Preview torn down" comment was never posted — observed on the
+          # closed predecessor PR #1257.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
           PR="${{ github.event.pull_request.number }}"
