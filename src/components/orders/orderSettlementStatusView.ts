@@ -13,6 +13,7 @@ export type OrderSettlementDisplayState =
 	| 'Settlement Event Observed'
 	| 'Settled'
 	| 'Reserve Not Met'
+	| 'Griefed (No Fallback)'
 	| 'Cancelled'
 	| 'Validating…'
 
@@ -40,6 +41,10 @@ export function describeOrderSettlementStatus(descriptor: SettlementDescriptor |
 	// A validated (or accepted-but-unredeemed) settlement event exists.
 	if (phase === 'settled') return 'Settled'
 	if (phase === 'reserve-not-met') return 'Reserve Not Met'
+	// Terminal grief: the winning bidder never released the path and the seller
+	// exercised no fallback. Representable without a path release — a path
+	// release is not payment proof, and its absence is not proof of payment.
+	if (phase === 'griefed-no-fallback') return 'Griefed (No Fallback)'
 	if (phase === 'cancelled') return 'Cancelled'
 
 	// Terminal `closed` phase still means a settlement event was observed.
