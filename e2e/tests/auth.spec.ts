@@ -594,6 +594,58 @@ test.describe('Authentication', () => {
 	})
 
 	test.describe('Persistence and Reload', () => {
+		test('vaulted bunker session: reload → unlock with passphrase → identity restored', async ({ browser }) => {
+			test.setTimeout(90_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser2.sk)
+			const secret = 'test-secret-' + Date.now()
+			const passphrase = 'vault-pass-123'
+
+			try {
+				// Start the signer loop BEFORE navigating (must be ready for the signer).
+				const cleanup = await mock.startSignerLoop(RELAY_URL)
+
+				await page.goto('/')
+				await page.waitForLoadState('domcontentloaded')
+				await openLoginDialog(page)
+
+				// Navigate to N-Connect → Bunker URL tab
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+
+				// Connect with a session passphrase so the nbunksec is vaulted at rest.
+				const bunkerUrl = `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}&secret=${secret}`
+				await page.locator('[data-testid="bunker-url-input"]').fill(bunkerUrl)
+				await page.locator('[data-testid="session-passphrase-input"]').fill(passphrase)
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				// Verify auth succeeds and the vault is persisted.
+				await expectAuthenticated(page)
+				const vault = await page.evaluate(() => localStorage.getItem('nostr_session_v1'))
+				expect(vault).toBeTruthy()
+
+				// Reload — the vaulted session must trigger the unlock prompt (no
+				// silent plaintext re-login, no auto-login).
+				await page.reload()
+				await page.waitForLoadState('domcontentloaded')
+				await expect(page.locator('[data-testid="session-unlock-dialog"]')).toBeVisible({ timeout: 15_000 })
+
+				// Unlock with the passphrase → identity restored through the REAL
+				// rehydrate seam (NostrConnectSigner.fromNbunksec + connect RPC).
+				await page.locator('[data-testid="session-passphrase-input"]').fill(passphrase)
+				await page.locator('[data-testid="session-unlock-button"]').click()
+				await expectAuthenticated(page)
+
+				// The vault survives the unlock (still encrypted at rest).
+				const vaultAfter = await page.evaluate(() => localStorage.getItem('nostr_session_v1'))
+				expect(vaultAfter).toBeTruthy()
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
 		test('auto-login with extension after reload', async ({ browser }) => {
 			const context = await browser.newContext()
 			await setupExtensionOnly(context, devUser1)

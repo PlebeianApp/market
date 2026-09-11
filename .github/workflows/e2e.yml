@@ -129,7 +129,7 @@ jobs:
         # failures still produce traces. Flaky families (Cart, Product Page
         # Interactions incl. the reaction test, ...) are not gated here; they
         # run in the scheduled/manual e2e-full job instead.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock' --repeat-each=2
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|Authentication' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
