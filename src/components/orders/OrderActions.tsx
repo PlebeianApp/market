@@ -118,7 +118,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
 			{(showCancel || showConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex gap-3">
+				<div className="flex flex-wrap gap-2">
 					{showCancel && (
 						<Button
 							variant="outline"
