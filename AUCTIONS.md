@@ -402,15 +402,20 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
   (`replacement_chain_invalid`).
 - `note`: short human text.
 
-### Required tags (post-rollout — ADR-0011)
+### Required tags (DLEQ-required auctions — ADR-0011)
 
 - `dleq_proof`: **repeated tag** — JSON-serialized NUT-12 DLEQ proof, one per
   locked proof, parallel to `lock_secret`/`proof_y`. Each value carries
   `{id, amount, C, e, s, r}` (keyset id, amount in sats, mint signature `C`,
   DLEQ challenge/response `e`/`s`, blinding factor `r`). OPTIONAL for
-  pre-rollout (grandfathered) auctions; REQUIRED when
-  `auction.start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` (see §11.1). Bids
-  with missing or malformed `dleq_proof` tags post-rollout are classified
+  grandfathered (non-required) auctions; REQUIRED when the auction's canonical
+  DLEQ activation resolves true — i.e. the signed `dleq_required` tag is `"1"`
+  (with the `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary
+  comparison applying only as the legacy fallback for events published before
+  the tag existed; see §11.1 and ADR-0011 Decision 8). The bidder publisher
+  derives this from the SAME canonical decision it threads into the lock, so
+  the lock path and the published tags can never disagree. Bids with missing
+  or malformed `dleq_proof` tags on a DLEQ-required auction are classified
   `dleq_invalid` by the validation pipeline (§7.1). See
   `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
   (Missing `dleq_proof` tags are classified `dleq_invalid` by the validation

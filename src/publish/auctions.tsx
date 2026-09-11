@@ -695,14 +695,21 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
 		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
 
-		// ADR-0011 Decision 1/7 — post-rollout bids MUST publish `dleq_proof`
-		// tags (one per locked proof, parallel to lock_secret/proof_y). Build
-		// them from the locked proofs' DLEQ metadata; `buildDleqProofs` is
-		// fail-closed and throws if any locked proof lacks a DLEQ proof (or its
-		// blinding factor `r`), so a post-rollout bid can never be published
-		// with unverifiable collateral. Pre-rollout (grandfathered) auctions
-		// omit the field entirely, preserving the legacy non-DLEQ path.
-		const dleqProofs = requiresDleqForAuction(formData.auctionStartAt) ? buildDleqProofs(proofs) : undefined
+		// ADR-0011 Decision 1/8 — bids on DLEQ-REQUIRED auctions MUST publish
+		// `dleq_proof` tags (one per locked proof, parallel to lock_secret/
+		// proof_y). Build them from the locked proofs' DLEQ metadata;
+		// `buildDleqProofs` is fail-closed and throws if any locked proof
+		// lacks a DLEQ proof (or its blinding factor `r`), so a DLEQ-required
+		// bid can never be published with unverifiable collateral.
+		// PR #1280 round 3: this MUST consume the SAME canonical signed
+		// `dleq_required` decision the lock above consumed (`dleqRequired`),
+		// NOT a fresh `start_at` boundary lookup — otherwise the lock and the
+		// published bid can disagree (a grandfathered auction would lock
+		// legacy non-DLEQ outputs and then throw here; a signed-required
+		// pre-boundary auction would lock DLEQ outputs but omit the tags).
+		// Grandfathered (non-required) auctions omit the field entirely,
+		// preserving the legacy non-DLEQ path.
+		const dleqProofs = dleqRequired ? buildDleqProofs(proofs) : undefined
 
 		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
 		// (what the validator uses for the min-increment check); the lock
