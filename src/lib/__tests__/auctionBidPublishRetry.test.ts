@@ -864,9 +864,7 @@ describe('publishAuctionBid dleq_proof tags follow the canonical signed dleq_req
 		expect(bidEventId).toHaveLength(64)
 		expect(publishedPayloads).toHaveLength(1)
 		// The lock and the published tags agreed on the SAME (legacy) decision.
-		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(
-			expect.objectContaining({ dleqRequired: false }),
-		)
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(expect.objectContaining({ dleqRequired: false }))
 		expect(dleqProofTagCount()).toBe(0)
 	})
 
@@ -882,9 +880,7 @@ describe('publishAuctionBid dleq_proof tags follow the canonical signed dleq_req
 		expect(bidEventId).toHaveLength(64)
 		expect(publishedPayloads).toHaveLength(1)
 		// One dleq_proof tag per locked proof, parallel to lock_secret/proof_y.
-		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(
-			expect.objectContaining({ dleqRequired: true }),
-		)
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(expect.objectContaining({ dleqRequired: true }))
 		const lockSecretCount = (publishedPayloads[0]?.tags ?? []).filter((t) => t[0] === 'lock_secret').length
 		expect(dleqProofTagCount()).toBe(lockSecretCount)
 		expect(dleqProofTagCount()).toBeGreaterThan(0)
