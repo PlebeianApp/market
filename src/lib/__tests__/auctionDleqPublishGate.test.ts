@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { APP_AUCTION_DLEQ_ROLLOUT_START_AT } from '../auction/constants'
 import { assertAuctionMintsSupportDleq, mintSupportsDleq } from '../auction/validation'
+import { mintSupportsDleq as canonicalMintSupportsDleq } from '../cashu/mintCapability'
 
 /**
  * DLEQ publish gate — ADR-0011 Decisions 4 (mint compatibility, fail-closed)
@@ -84,6 +85,36 @@ describe('DLEQ publish gate (ADR-0011 Decisions 4 & 6)', () => {
 				}),
 			}
 			await expect(mintSupportsDleq('https://down.example', { mintClient: mintClient as never })).resolves.toBe(false)
+		})
+
+		// The auction-layer surface must be the SAME function object as the
+		// canonical implementation in `../cashu/mintCapability` — otherwise a
+		// duplicate (without the bounded timeout) can silently return and hang
+		// the publish gate on a slow mint `/v1/info`.
+		it('is the same function object as the canonical mintCapability implementation', () => {
+			expect(mintSupportsDleq).toBe(canonicalMintSupportsDleq)
+		})
+
+		it('canonical probe still fails closed when a fake mint getInfo rejects', async () => {
+			const mintClient = {
+				getInfo: mock(async () => {
+					throw new Error('mint unreachable')
+				}),
+			}
+			await expect(canonicalMintSupportsDleq('https://down.example', { mintClient: mintClient as never })).resolves.toBe(false)
+		})
+
+		it('accepts the canonical options superset (timeoutMs) through the auction re-export', async () => {
+			// Proves the auction surface is the bounded canonical probe, not the
+			// old duplicate whose options were `{ mintClient? }` only: a hung
+			// `/v1/info` must resolve false via the per-request timeout.
+			const mintClient = {
+				getInfo: () =>
+					new Promise(() => {
+						// never resolves — simulate a hung mint
+					}),
+			}
+			await expect(mintSupportsDleq('https://hung.example', { mintClient: mintClient as never, timeoutMs: 20 })).resolves.toBe(false)
 		})
 	})
 })
