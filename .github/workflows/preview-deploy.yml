@@ -131,7 +131,23 @@ jobs:
             echo "::warning title=Preview deploy skipped::PREVIEW_VPS_* secrets are not configured (fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding). Skipping VPS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
           fi
 
-      - name: Bootstrap VPS (gateway + Caddy route + manager env)
+      # ── OpenSSH only ────────────────────────────────────────────────────────
+      # Every VPS connection in this workflow runs through the OpenSSH helpers in
+      # infra/preview-vps/ (ssh-prepare.sh, remote-ssh.sh, remote-scp.sh).
+      #
+      # GitHub's appleboy/* actions are Go programs (drone-ssh on
+      # golang.org/x/crypto/ssh) and their DEFAULT HostKeyAlgorithms negotiate a
+      # different host key than OpenSSH against this VPS. Measured 2026-09-11
+      # against 23.182.128.51:22 with an unmodified Go ssh client:
+      #   OpenSSH -> ssh-ed25519         SHA256:rjbvoYsKckQMv/L9Y4LQNCx86z95pqonoNGmXdUS41M
+      #   Go      -> ecdsa-sha2-nistp256 SHA256:UTl0gzMwYlKNuORtrA8jxS7gmj9U1x8taGQh5vxaXQo
+      # One PREVIEW_VPS_HOST_FINGERPRINT secret cannot satisfy two SSH stacks that
+      # disagree about which host key to negotiate, so every appleboy step failed
+      # with:
+      #   ssh: handshake failed: ssh: host key fingerprint mismatch
+      # Do not reintroduce a Go-based SSH action here without re-measuring the
+      # negotiated host key first. See docs/ops/preview-deploy.md section (g).
+      - name: Prepare SSH key + pinned host key
         if: steps.secrets.outputs.previews_ready == 'true'
         env:
           PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -139,134 +155,111 @@ jobs:
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
           PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
+        run: bash infra/preview-vps/ssh-prepare.sh "$RUNNER_TEMP/preview-ssh" >> "$GITHUB_ENV"
+
+      - name: Bootstrap VPS (gateway + Caddy route + manager env)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
           PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
         run: |
           set -euo pipefail
-          # Write the SSH key to a temp file for scp/ssh.
-          KEY_FILE=$(mktemp)
-          # Clean up the key file on exit (success OR failure — a bare rm at
-          # the end would be skipped under set -e if provisioning fails).
-          trap 'rm -f "$KEY_FILE"' EXIT
-          printf '%s' "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
-          # Convert literal \n escapes to real newlines: some secret entry
-          # paths store the key as a single escaped line.
-          sed -i 's/\\n/\n/g' "$KEY_FILE"
-          # A trailing newline on the LAST line is mandatory. OpenSSH rejects a
-          # private key whose final line is not newline-terminated with
-          # "Load key \"...\": error in libcrypto", then silently falls through
-          # to password auth and reports "Too many authentication failures" —
-          # two errors that both point away from the real cause. GitHub strips
-          # trailing newlines from secret values, so restore it here. This is
-          # why the materialisation does NOT use a bare `printf '%s'`:
-          #   ssh-keygen -y -f <443-byte key>  -> error in libcrypto
-          #   ssh-keygen -y -f <444-byte key>  -> ok
-          if [ -n "$(tail -c1 "$KEY_FILE")" ]; then
-            printf '\n' >> "$KEY_FILE"
-          fi
-          chmod 600 "$KEY_FILE"
-          # Fail loudly and specifically if the materialised key is unusable,
-          # rather than three steps later with an unrelated-sounding error.
-          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
-            echo "::error::PREVIEW_VPS_SSH_KEY did not materialise into a loadable OpenSSH private key. Expected an unencrypted private key (-----BEGIN OPENSSH PRIVATE KEY-----) with a trailing newline; got $(wc -c < "$KEY_FILE") bytes."
-            exit 1
-          fi
-          export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
-          # Run the idempotent provision script. It verifies the VPS host
-          # key against PREVIEW_VPS_HOST_FINGERPRINT before any key
-          # exchange, ships preview_manager.py + preview_gateway.py, writes
-          # manager.env (Cloudflare creds for DNS cleanup, chmod 600),
-          # installs the gateway + manager systemd units, and ensures
-          # Caddy has the on-demand-TLS ask endpoint, the JSON access log,
-          # and the *.test-market.orangesync.tech route → gateway router.
+          # The private key was materialised, its mandatory trailing newline
+          # restored, and the VPS host key pinned by the previous step
+          # (ssh-prepare.sh) — one implementation, shared with the teardown job.
+          # provision.sh reads the private key PATH from PREVIEW_VPS_SSH_KEY, so
+          # hand it the prepared file rather than the secret text.
+          #
+          # Run the idempotent provision script. It verifies the VPS host key
+          # against PREVIEW_VPS_HOST_FINGERPRINT before any key exchange, ships
+          # preview_manager.py + preview_gateway.py, writes manager.env
+          # (Cloudflare creds for DNS cleanup, chmod 600), installs the gateway
+          # + manager systemd units, and ensures Caddy has the on-demand-TLS ask
+          # endpoint, the JSON access log, and the
+          # *.test-market.orangesync.tech route → gateway router.
+          export PREVIEW_VPS_SSH_KEY="$PREVIEW_KEY_FILE"
           bash infra/preview-vps/provision.sh
-          # $KEY_FILE is removed by the EXIT trap above, including after
-          # successful completion.
 
       - name: Ensure remote preview directory exists
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
-        with:
-          host: ${{ secrets.PREVIEW_VPS_HOST }}
-          username: ${{ secrets.PREVIEW_VPS_USER }}
-          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
-          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
-          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
-          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
-          script: |
-            mkdir -p "$HOME/previews/pr-${{ github.event.pull_request.number }}"
+        run: |
+          set -euo pipefail
+          # Absolute path, because modern scp speaks SFTP and does NOT expand
+          # $HOME on the remote side — the scp step below cannot rely on it.
+          # Identical to the previous appleboy target.
+          bash infra/preview-vps/remote-ssh.sh \
+            mkdir -p "/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package"
 
       - name: Upload deploy package to VPS
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
-        with:
-          host: ${{ secrets.PREVIEW_VPS_HOST }}
-          username: ${{ secrets.PREVIEW_VPS_USER }}
-          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
-          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
-          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
-          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
-          source: 'deploy-package/*'
-          target: '/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package'
-          strip_components: 1
+        run: |
+          set -euo pipefail
+          # `deploy-package/*` expands locally to the entries INSIDE the package
+          # directory, which is what the previous appleboy/scp-action produced
+          # with `source: deploy-package/*` plus `strip_components: 1`.
+          bash infra/preview-vps/remote-scp.sh \
+            deploy-package/* \
+            "$PREVIEW_SSH_TARGET:/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package"
 
       - name: Claim host-port offset (M6) then bring up services
         if: steps.secrets.outputs.previews_ready == 'true'
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
-        with:
-          host: ${{ secrets.PREVIEW_VPS_HOST }}
-          username: ${{ secrets.PREVIEW_VPS_USER }}
-          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
-          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
-          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
-          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
-          script: |
-            set -euo pipefail
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            APP_PORT="${{ steps.ports.outputs.app_port }}"
-            RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
-            APP_DIR="$HOME/previews/pr-$PR_NUMBER"
-            cd "$APP_DIR"
+        run: |
+          # The remote script is piped to `bash -s` on the VPS over stdin. The
+          # ${{ ... }} expressions are substituted by GitHub BEFORE this shell
+          # runs; every other $ is expanded by the remote shell. ssh propagates
+          # the remote exit status, so a failure here still fails the step.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          APP_PORT="${{ steps.ports.outputs.app_port }}"
+          RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          cd "$APP_DIR"
 
-            # ── Port-offset claim (M6) ──
-            # PRs congruent mod 100 (e.g. 1257 and 1357) share the same host
-            # port offset. Claim the marker in ~/previews/ports/<offset> BEFORE
-            # compose up; if another PR's preview holds the offset, the claim
-            # fails loudly and this step aborts instead of two deploy jobs
-            # racing on the same host ports (one compose up silently fails).
-            if ! python3 "$HOME/preview-infra/preview_manager.py" --claim-port-offset "$PR_NUMBER" --preview-root "$HOME/previews"; then
-              echo "FATAL: Port-offset collision — another preview holds offset ${{ steps.ports.outputs.pr_offset }} (PR congruent mod 100). Close that PR or wait for its preview to be torn down." >&2
-              exit 1
-            fi
+          # ── Port-offset claim (M6) ──
+          # PRs congruent mod 100 (e.g. 1257 and 1357) share the same host
+          # port offset. Claim the marker in ~/previews/ports/<offset> BEFORE
+          # compose up; if another PR's preview holds the offset, the claim
+          # fails loudly and this step aborts instead of two deploy jobs
+          # racing on the same host ports (one compose up silently fails).
+          if ! python3 "$HOME/preview-infra/preview_manager.py" --claim-port-offset "$PR_NUMBER" --preview-root "$HOME/previews"; then
+            echo "FATAL: Port-offset collision — another preview holds offset ${{ steps.ports.outputs.pr_offset }} (PR congruent mod 100). Close that PR or wait for its preview to be torn down." >&2
+            exit 1
+          fi
 
-            cat > docker-compose.yml <<EOF
-            services:
-              market-app:
-                image: oven/bun:latest
-                working_dir: /app
-                volumes:
-                  - ./deploy-package:/app
-                command: sh -c "bun install --production && bun run start:production"
-                ports:
-                  - "${APP_PORT}:3000"
-                environment:
-                  - NODE_ENV=production
-                  - PORT=3000
-                  - APP_RELAY_URL=ws://nak-relay:10547
-                  - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
-                  - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
-                restart: unless-stopped
-                depends_on:
-                  - nak-relay
-              nak-relay:
-                image: ghcr.io/fiatjaf/nak:latest
-                command: serve --hostname 0.0.0.0
-                ports:
-                  - "${RELAY_PORT}:10547"
-                restart: unless-stopped
-            EOF
-            docker compose up -d --remove-orphans
-            docker compose ps
+          cat > docker-compose.yml <<EOF
+          services:
+            market-app:
+              image: oven/bun:latest
+              working_dir: /app
+              volumes:
+                - ./deploy-package:/app
+              command: sh -c "bun install --production && bun run start:production"
+              ports:
+                - "${APP_PORT}:3000"
+              environment:
+                - NODE_ENV=production
+                - PORT=3000
+                - APP_RELAY_URL=ws://nak-relay:10547
+                - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
+                - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
+              restart: unless-stopped
+              depends_on:
+                - nak-relay
+            nak-relay:
+              image: ghcr.io/fiatjaf/nak:latest
+              command: serve --hostname 0.0.0.0
+              ports:
+                - "${RELAY_PORT}:10547"
+              restart: unless-stopped
+          EOF
+          docker compose up -d --remove-orphans
+          docker compose ps
+          REMOTE_EOF
 
       # B1: The systemd timer on the VPS owns the preview lifecycle (idle
       # stop, recency ranking, closed-PR cleanup). CI must never run the
@@ -399,6 +392,10 @@ jobs:
             gh pr comment "$PR" --body "$BODY"
           fi
 
+      - name: Remove the materialised SSH key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/preview-ssh"
+
   teardown:
     name: Tear down preview
     if: github.event.action == 'closed'
@@ -415,30 +412,56 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
 
+      # The teardown job runs in its own runner, so it repeats the secrets guard
+      # and the SSH preparation. Before, this job had NO guard at all: on any PR
+      # whose secrets are unavailable (fork PRs) it still tried to reach the VPS
+      # and painted a red check on every PR close.
+      - name: Check preview VPS secrets
+        id: secrets
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+        run: |
+          if [ -n "$PREVIEW_VPS_HOST" ] && [ -n "$PREVIEW_VPS_USER" ] && [ -n "$PREVIEW_VPS_SSH_KEY" ] && [ -n "$PREVIEW_VPS_HOST_FINGERPRINT" ]; then
+            echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Preview VPS secrets present — tearing the preview down."
+          else
+            echo "previews_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview teardown skipped::PREVIEW_VPS_* secrets are not configured (fork PRs under the pull_request trigger never receive repository secrets), so there is no preview to tear down. See docs/ops/preview-deploy.md."
+          fi
+
+      - name: Prepare SSH key + pinned host key
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
+        run: bash infra/preview-vps/ssh-prepare.sh "$RUNNER_TEMP/preview-ssh" >> "$GITHUB_ENV"
+
       - name: Release port offset, stop containers, clean up VPS directory
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
-        with:
-          host: ${{ secrets.PREVIEW_VPS_HOST }}
-          username: ${{ secrets.PREVIEW_VPS_USER }}
-          key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
-          fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
-          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
-          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
-          script: |
-            set -uo pipefail
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-            APP_DIR="$HOME/previews/pr-$PR_NUMBER"
-            # Release the shared host-port offset marker (M6) so a future PR
-            # congruent mod 100 can claim it. Owner-checked: a marker held by
-            # a different PR is left alone (and logged) rather than deleted.
-            python3 "$HOME/preview-infra/preview_manager.py" --release-port-offset "$PR_NUMBER" --preview-root "$HOME/previews" || true
-            if [ -f "$APP_DIR/docker-compose.yml" ]; then
-              cd "$APP_DIR"
-              docker compose down --remove-orphans --volumes || true
-            fi
-            rm -rf "$APP_DIR"
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -uo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          # Release the shared host-port offset marker (M6) so a future PR
+          # congruent mod 100 can claim it. Owner-checked: a marker held by
+          # a different PR is left alone (and logged) rather than deleted.
+          python3 "$HOME/preview-infra/preview_manager.py" --release-port-offset "$PR_NUMBER" --preview-root "$HOME/previews" || true
+          if [ -f "$APP_DIR/docker-compose.yml" ]; then
+            cd "$APP_DIR"
+            docker compose down --remove-orphans --volumes || true
+          fi
+          rm -rf "$APP_DIR"
+          REMOTE_EOF
 
       - name: Delete Cloudflare DNS record
+        if: steps.secrets.outputs.previews_ready == 'true'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -481,3 +504,6 @@ jobs:
           else
             gh pr comment "$PR" --body "$BODY"
           fi
+      - name: Remove the materialised SSH key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/preview-ssh"
