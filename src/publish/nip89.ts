@@ -150,5 +150,6 @@ export const publishHandlerInfo = async (
 export const createClientTag = (appPubkey: string, handlerId: string, relayUrl?: string): [string, string, string, string] => {
 	const effectiveRelayUrl = relayUrl || configStore.state.config.appRelay || PLEBEIAN_MARKET_RELAY
 	const effectiveHandlerId = handlerId || configStore.state.config.handlerId || DEFAULT_INSTANCE_CONFIG.handlerId
-	return ['client', 'Plebeian Market', `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
+	const effectiveName = configStore.state.config.displayName || configStore.state.config.name || DEFAULT_INSTANCE_CONFIG.displayName
+	return ['client', effectiveName, `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
 }

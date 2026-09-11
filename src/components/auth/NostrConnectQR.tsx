@@ -110,10 +110,10 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		params.set(
 			'metadata',
 			JSON.stringify({
-				name: 'Plebeian.market',
-				description: 'Connect with Plebeian.market',
-				url: window.location.origin,
-				icons: [],
+				name: config.displayName || config.name,
+				description: `Connect with ${config.displayName || config.name}`,
+				url: config.siteUrl || window.location.origin,
+				icons: config.picture ? [config.picture] : [],
 			}),
 		)
 		params.set('token', tempSecret)

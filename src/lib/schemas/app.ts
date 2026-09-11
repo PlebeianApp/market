@@ -14,6 +14,7 @@ export const SocialLinksSchema = z.object({
 	newsletter: WebUrlSchema.optional(),
 	telegram: WebUrlSchema.optional(),
 	github: WebUrlSchema.optional(),
+	nostr: WebUrlSchema.optional(),
 })
 
 export const AppSettingsSchema = z.object({

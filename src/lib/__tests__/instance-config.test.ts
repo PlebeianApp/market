@@ -165,7 +165,7 @@ describe('runtime-config-aware handler metadata', () => {
 		const appPubkey = 'b'.repeat(64)
 		expect(createClientTag(appPubkey, 'custom-handler')).toEqual([
 			'client',
-			'Plebeian Market',
+			'Self Host',
 			`31990:${appPubkey}:custom-handler`,
 			'wss://selfhost.example',
 		])

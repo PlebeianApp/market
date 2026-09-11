@@ -4,6 +4,7 @@ import type { ProductFormState, ProductFormTab } from '@/lib/stores/product'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
 import { resolveProductWorkflow, type V4VSetupState } from '@/lib/workflow/productWorkflowResolver'
 import { useV4VConfiguration } from '@/queries/v4v'
+import { useConfigQuery } from '@/queries/config'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ProductFormContent } from './ProductFormContent'
@@ -31,6 +32,8 @@ export function NewProductContent({
 	const { user, isAuthenticated } = useStore(authStore)
 	const userPubkey = user?.pubkey ?? ''
 	const v4vQuery = useV4VConfiguration(userPubkey)
+	const { data: config } = useConfigQuery()
+	const instanceName = config?.displayName || config?.name || 'Marketplace'
 
 	const v4vState = useMemo<V4VSetupState>(() => {
 		if (editingProductId) return 'unknown'
@@ -130,7 +133,7 @@ export function NewProductContent({
 			<SheetContent side="right" className="p-6">
 				{/* This is for Accessibility but we don't need to show it */}
 				<SheetHeader className="hidden">
-					<SheetTitle>Welcome to Plebeian Market</SheetTitle>
+					<SheetTitle>Welcome to {instanceName}</SheetTitle>
 					<SheetDescription>Start selling your products in just a few minutes</SheetDescription>
 				</SheetHeader>
 				<ProductWelcomeScreen onGetStarted={() => setShowForm(true)} />
