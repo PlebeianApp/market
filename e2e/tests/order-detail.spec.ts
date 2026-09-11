@@ -139,14 +139,20 @@ test.describe('Order Details - Seller View - Auctions', () => {
 		await expect(page.locator('[data-testid="order-item-title"]:visible', { hasText: 'Test Auction' }).first()).toBeVisible()
 	})
 
-	test('views confirmed auction order and marks as processed', async ({ merchantPage: page }) => {
+	test('views pending auction claim order and marks as processed from the claim authority', async ({ merchantPage: page }) => {
+		// 'confirmed' is the highest pre-processing stage in the shared seed
+		// ladder, but the auction flow has no CONFIRMED state: it never
+		// publishes a generic payment confirmation (AUCTIONS.md 4.3.3), so a
+		// claim order stays PENDING until the seller processes it. If this seed
+		// ever renders "Confirmed", the fixture is manufacturing a status no
+		// auction client can produce.
 		const { orderId } = await seedOrder('auction', 'confirmed')
 
 		await page.goto(`/dashboard/orders/${orderId}`)
 
-		// ---- Stage 1: Confirmed ----
+		// ---- Stage 1: Pending (settled + canonical claim) ----
 		await expect(page.getByRole('paragraph').filter({ hasText: 'Auction Item' })).toBeVisible()
-		await expect(page.locator('div').filter({ hasText: /^Confirmed$/ })).toBeVisible()
+		await expect(page.locator('div').filter({ hasText: /^Pending$/ })).toBeVisible()
 
 		// Verify Settlement Status Card
 		// TODO: Needs CVM configuration for seeded bid to show up.
@@ -155,7 +161,9 @@ test.describe('Order Details - Seller View - Auctions', () => {
 		// Verify No Invoices
 		await expect(page.getByTestId('invoice-card')).not.toBeVisible()
 
-		// Seller Action: Process Order
+		// Seller Action: Process Order — authorized while the order is still
+		// PENDING by the validated settlement + canonical claim, not by a
+		// CONFIRMED status the auction flow never publishes.
 		await expect(page.getByRole('button', { name: /process order/i })).toBeVisible()
 		await page.getByRole('button', { name: /process order/i }).click()
 
