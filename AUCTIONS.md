@@ -642,6 +642,55 @@ bidder's release event exists but there's no guarantee the seller acted
 on it. Validators consult mint state (NUT-7: proof should be SPENT)
 before emitting `settled_promptly` reputation events.
 
+## 4.3.3 Derived settlement status and order-action authority
+
+Order surfaces do not read settlement state from raw relay events. Every status
+shown to a user is derived from the validated settlement descriptor
+(`getSettlementDescriptor`, ADR-0003/ADR-0004), which validates bids against
+verdict quorum, path releases against the bid lock, and settlement completeness
+before producing a descriptor. `describeOrderSettlementStatus()` maps that
+descriptor to the order-card display state:
+
+| Descriptor phase                                             | Display state             |
+| ------------------------------------------------------------ | ------------------------- |
+| `bidding-open`, or `settlement-window-open` with no evidence | Awaiting Settlement       |
+| `settlement-window-open` with the `path-release` badge       | Path Release Observed     |
+| `settlement-window-open` with a settlement badge             | Settlement Event Observed |
+| `settled`                                                    | Settled                   |
+| `reserve-not-met`                                            | Reserve Not Met           |
+| `griefed-no-fallback`                                        | Griefed (No Fallback)     |
+| `cancelled`                                                  | Cancelled                 |
+| `closed`                                                     | Settlement Event Observed |
+| any phase whose badge is `verifying`                         | Validating…               |
+
+`reserve-not-met`, `griefed-no-fallback`, and `cancelled` are terminal states
+that must be representable **without** a path release: a path release is not
+payment proof, and settlement is not wallet-balance proof. `griefed-no-fallback`
+stays distinct from `cancelled` because ADR-0004 derives grief from validator
+quorum rather than from the seller's own cancellation.
+
+### Presentation-only classification vs. action authority
+
+- `getAuctionCoordinatesFromOrder()` / `isAuctionOrder()` are **presentation-only**
+  (auction-associated / legacy compatibility). A parseable kind-`30408` `a` tag
+  is not authority for settlement, payment, or fulfillment decisions.
+- Action authority comes from the canonical claim marker
+  (`getAuctionClaimPublicMarkerFields()`) together with the validated referenced
+  settlement, surfaced to callers as `getAuctionOrderAuthority()`. A caller that
+  only renders may use the presentation detector; a caller that decides must use
+  the authority.
+- Fulfillment transition for auction orders:
+
+  ```
+  validated settlement → canonical claim → fulfillment-ready
+    → Process → Ship → Receive/Complete
+  ```
+
+  An order carrying the canonical claim marker is already fulfillment-ready
+  while still `PENDING`. It must not be stranded waiting for a generic
+  `CONFIRMED` status that the auction flow never publishes, and no synthetic
+  payment-confirmation event may be manufactured to unblock it.
+
 ## 4.4 Validator Reputation Events
 
 There is no canonical auction-state registry in the bidder-held-path

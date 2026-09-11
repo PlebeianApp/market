@@ -10,6 +10,7 @@ import {
 } from '@/lib/schemas/order'
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
+import { getAuctionClaimPublicMarkerFields, type AuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
 import {
 	fetchNdkEventSet,
@@ -207,8 +208,16 @@ export const attachPrivateOrderDetailsToOrders = (
 }
 
 /**
- * Extract auction coordinates from an order if it is an auction order.
- * Returns null if the order is not an auction or if coordinates are malformed.
+ * PRESENTATION-ONLY. Broad auction-associated / legacy-compatibility detector.
+ *
+ * Extract auction coordinates from an order if it is associated with an
+ * auction. Returns null if the order is not auction-associated or if the
+ * coordinates are malformed.
+ *
+ * A parseable kind-30408 `a` tag is NOT authority for settlement, payment, or
+ * fulfillment decisions. Those require the canonical claim marker
+ * (`getAuctionClaimPublicMarkerFields`) plus the validated referenced
+ * settlement — use `getAuctionOrderAuthority()` for those stronger semantics.
  */
 export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelatedEvents): string | null => {
 	const orderEvent = 'order' in order ? order.order : order
@@ -235,11 +244,49 @@ export const getAuctionCoordinatesFromOrder = (order: NDKEvent | OrderWithRelate
 }
 
 /**
- * Check if an order is associated with an auction.
+ * PRESENTATION-ONLY. Check whether an order is associated with an auction.
  * Auction orders contain an 'a' tag pointing to kind 30408 (auction event).
+ *
+ * Use this for layout/labelling decisions only. For settlement, payment, or
+ * fulfillment authority use `getAuctionOrderAuthority()`.
  */
 export const isAuctionOrder = (order: NDKEvent | OrderWithRelatedEvents): boolean => {
 	return !!getAuctionCoordinatesFromOrder(order)
+}
+
+/**
+ * Canonical action authority for an auction order.
+ *
+ * The broad coordinate detector above is presentation-only. Stronger semantics —
+ * settlement, payment, and fulfillment decisions — additionally require the
+ * canonical auction-claim marker (`getAuctionClaimPublicMarkerFields`), which
+ * binds the order to the auction coordinate, the auction root event, the
+ * referenced settlement event, buyer, seller, and total amount. A caller that
+ * needs authority must consult `hasCanonicalClaim`; a caller that only renders
+ * may keep using `isAuctionOrder()`.
+ */
+export type AuctionOrderAuthority = {
+	/** Presentation-only coordinate, or null when the order is not auction-associated. */
+	coordinates: string | null
+	/** Canonical claim marker fields, or null when absent/invalid. */
+	claimMarkerFields: AuctionClaimPublicMarkerFields | null
+	/** True only when the order carries a valid canonical auction-claim marker. */
+	hasCanonicalClaim: boolean
+}
+
+export const getAuctionOrderAuthority = (order: NDKEvent | OrderWithRelatedEvents): AuctionOrderAuthority => {
+	const orderEvent = 'order' in order ? order.order : order
+	const coordinates = getAuctionCoordinatesFromOrder(order)
+	const claimMarkerFields =
+		orderEvent?.tags && orderEvent.pubkey && coordinates
+			? getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
+			: null
+
+	return {
+		coordinates,
+		claimMarkerFields,
+		hasCanonicalClaim: !!coordinates && !!claimMarkerFields,
+	}
 }
 
 /**

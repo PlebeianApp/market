@@ -5,7 +5,7 @@ import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey, isAuctionOrder } from '@/queries/orders'
+import { getAuctionOrderAuthority, getBuyerPubkey, getOrderStatus, getSellerPubkey, isAuctionOrder } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
@@ -35,7 +35,16 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
 
+	// Presentation-only: "does this order carry an auction coordinate?".
+	// It is NOT authority for settlement, payment, or fulfillment decisions —
+	// see getAuctionOrderAuthority() in @/queries/orders.
 	const isAuction = isAuctionOrder(order)
+
+	// Canonical action authority for auction orders: the auction-claim marker
+	// (getAuctionClaimPublicMarkerFields) is the client-visible projection of
+	// "validated settlement → canonical claim". A parseable kind-30408 `a` tag
+	// alone is never sufficient authority.
+	const hasAuctionClaimAuthority = getAuctionOrderAuthority(order).hasCanonicalClaim
 
 	const status = getOrderStatus(order)
 
@@ -51,7 +60,15 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 	// Seller actions
 	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
-	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
+	// Fulfillment transition for auction orders (ADR-0003 / ADR-0004):
+	//   validated settlement → canonical claim → fulfillment-ready
+	//     → Process → Ship → Receive/Complete
+	// There is no generic payment-confirmation step for an auction, so an order
+	// carrying the canonical claim marker is already fulfillment-ready while it
+	// is still PENDING. It must not be stranded waiting for a generic CONFIRMED
+	// status the auction flow never publishes, and no synthetic payment event
+	// may be manufactured to unblock it.
+	const canProcess = isSeller && (status === ORDER_STATUS.CONFIRMED || (hasAuctionClaimAuthority && status === ORDER_STATUS.PENDING))
 	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
 
 	// Buyer actions
