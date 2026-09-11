@@ -40,6 +40,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, Parsed
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 import type { DleqProof } from '../cashu/dleq'
+import { mintSupportsDleq, type MintDleqSupportOptions } from '../cashu/mintCapability'
 import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -130,39 +131,10 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 
 // ---------- DLEQ mint support (ADR-0011, Decisions 4 & 6) -----------------
 
-/** Options for {@link mintSupportsDleq}. */
-export interface MintDleqSupportOptions {
-	/**
-	 * Pre-built CashuMint instance. When provided, no fresh client is
-	 * constructed — mirrors `CheckProofStateOptions.mintClient` in
-	 * `src/lib/cashu/nut7.ts` so callers (and tests) can inject a
-	 * policy-enforcing or fake transport.
-	 */
-	mintClient?: CashuMint
-}
-
-/**
- * Whether a mint advertises NUT-12 DLEQ support (ADR-0011, Decision 4).
- *
- * NUT-12 support is signalled by the mint's `/v1/info` endpoint: the `nuts`
- * map carries a `"12"` entry with `supported: true` when the mint produces
- * DLEQ proofs at issuance/swap. This is the same advertisement the reference
- * nutshell mint emits.
- *
- * Fail-closed by design: any network error, malformed response, or missing
- * `"12"` entry resolves to `false`, never to a permissive `true` — a mint we
- * couldn't confirm is treated as non-DLEQ so a post-rollout auction can never
- * slip through on an unverified mint.
- */
-export async function mintSupportsDleq(mintUrl: string, options: MintDleqSupportOptions = {}): Promise<boolean> {
-	try {
-		const mint = options.mintClient ?? new CashuMint(mintUrl)
-		const info = await mint.getInfo()
-		return info.nuts['12']?.supported === true
-	} catch {
-		return false
-	}
-}
+// Re-exported so the auction-layer import surface is unchanged; the single
+// canonical implementation (with bounded timeout + injectable transport)
+// lives in `src/lib/cashu/mintCapability.ts`.
+export { mintSupportsDleq, type MintDleqSupportOptions }
 
 /**
  * Enforce the DLEQ publish gate (ADR-0011, Decision 6: migration by `start_at`).
