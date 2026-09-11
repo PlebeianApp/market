@@ -3,6 +3,27 @@
 This runbook defines a safe, maintainer-approved approach for keeping the
 Plebeian Market relay host lean without accidentally deleting user data.
 
+## Investigation Snapshot — September 11, 2026
+
+Read-only staging checks found 29 GiB available on the 79 GiB root filesystem
+(62% used), with approximately 17 GiB in the search index, 4.1 GiB in raw events,
+and 2.2 GiB in the system journal. There was no immediate disk shortage in this
+snapshot. Historical disk growth was not measured.
+
+The relay reported version `d9947f799f32`. Systemd recorded 39 cumulative
+automatic restarts, with the current process running since September 8 at
+17:30:29 UTC. At 17:30:23 UTC the kernel explicitly killed `market-relay` for
+global memory exhaustion after approximately 3.4 GiB anonymous resident memory
+on a 3.8 GiB VPS. Earlier restarts had the same OOM evidence. These are memory
+failures; the snapshot does not establish which allocation path caused them.
+
+The deployed source uses Bleve's dynamic mapping and skips closing both
+backends because its close helper checks the wrong method signature. It also
+deletes the search directory on missing metadata without rebuilding old events.
+The storage-preservation fixes and compact mapping have local regression tests;
+actual staging savings and elimination of memory failures require an explicit
+rollout and observation under representative traffic.
+
 ## Immediate Ops Rule
 
 Until disk pressure is resolved:
@@ -186,6 +207,69 @@ Potential future pruning categories, only after maintainer agreement:
 
 Raw event deletion may erase relay history and should never happen as an
 implicit disk cleanup step.
+
+## Offline Compact Index Rebuild
+
+The relay now provides `--rebuild-search-to <new-directory>`. This is an
+explicit maintenance operation, never part of an ordinary deploy or startup.
+Install and verify the compatible relay binary first, preserving the existing
+index. The current dependency remains pinned and supports both index mappings.
+
+Before rebuilding:
+
+1. Agree a maintenance window. The relay must remain stopped while its BoltDB
+   file is read; do not bypass the database lock or copy a live BoltDB file with
+   ordinary filesystem tools.
+2. Verify a complete, consistent raw-event backup off the VPS. The market-event
+   export described above is not a complete raw-event backup.
+3. Allow space for the current index and its replacement at the same time, plus
+   at least 2 GiB free. The command checks the reserve between batches, but
+   compaction can allocate additional space. Small-fixture savings do not
+   establish the full-data size, memory requirement, or rebuild duration.
+4. Record service state, restart history, disk allocation, and representative
+   raw-event IDs/search queries. Historical `NRestarts` are not automatically
+   cleared by this procedure; the staging installer may refuse activation
+   until the previous failures have been investigated.
+
+The following example assumes the documented default paths and that neither
+`search-compact` nor `search-before-compact` already exists. Run the rebuild as
+the service user. These commands stop/start the service and write a new index:
+
+```bash
+sudo systemctl stop market-relay
+GOMEMLIMIT=1GiB /usr/local/bin/market-relay \
+  --rebuild-search-to /var/lib/market-relay/search-compact
+```
+
+The command reports the count after all raw events have been decoded, indexed,
+and the index has closed successfully. It never skips corrupt raw records.
+On failure, keep using the old index; do not activate output containing
+`.rebuild-incomplete`. Output from an interrupted/failed run is retained for
+inspection, and a retry must use another new directory.
+
+After a successful rebuild, while the relay is still stopped, a maintainer may
+activate the replacement by renaming directories on the same filesystem:
+
+```bash
+set -e
+test -d /var/lib/market-relay/search-compact
+test ! -e /var/lib/market-relay/search-compact/.rebuild-incomplete
+test ! -e /var/lib/market-relay/search-before-compact
+mv -T /var/lib/market-relay/search /var/lib/market-relay/search-before-compact
+mv -T /var/lib/market-relay/search-compact /var/lib/market-relay/search
+sudo systemctl start market-relay
+```
+
+Check local NIP-11, representative raw-event lookups and searches, restart/OOM
+history, memory, and disk growth before declaring the migration successful.
+Keep the previous index until full-data verification is complete. Deleting that
+backup is a separate approved cleanup step, not an automatic deploy action.
+
+Binary rollback can keep the compact index: its fields are compatible with the
+old backend. The retained old index is a snapshot of search state before the
+switch; after new events arrive, blindly restoring it would omit those events
+from search even though they remain in the raw store. Any index rollback after
+new writes requires reconciliation against the current raw store.
 
 ## Non-Goals
 

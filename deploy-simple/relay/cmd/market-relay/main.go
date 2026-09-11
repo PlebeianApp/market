@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"iter"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/policies"
 	"fiatjaf.com/nostr/nip11"
+	"github.com/PlebeianTech/market/deploy-simple/relay/internal/searchindex"
 )
 
 var version = "dev"
@@ -38,6 +41,7 @@ type config struct {
 	SearchIndexDir  string
 	RawEventStore   string
 	MaxQueryLimit   int
+	MinFreeBytes    uint64
 	SupportedNIPs   []int
 	ReadHeaderMs    time.Duration
 	ShutdownTimeout time.Duration
@@ -46,12 +50,25 @@ type config struct {
 type compositeStore struct {
 	raw    *eventstoreboltdb.BoltBackend
 	search *eventstorebleve.BleveBackend
+	config config
+	mu     sync.RWMutex
+	closed bool
 }
 
 func main() {
+	rebuildTo := flag.String("rebuild-search-to", "", "Build a compact search index in a new directory while the relay is stopped; preserve the existing index and raw events")
+	flag.Parse()
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *rebuildTo != "" {
+		count, err := searchindex.Rebuild(filepath.Join(cfg.RawEventStore, "events.db"), *rebuildTo, 2<<30)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("compact search index complete: %d events at %s; active index unchanged", count, *rebuildTo)
+		return
 	}
 
 	store, cleanup, err := openStore(cfg)
@@ -121,6 +138,10 @@ func main() {
 }
 
 func loadConfig() (config, error) {
+	minFreeBytes, err := strconv.ParseUint(envOr("RELAY_MIN_FREE_BYTES", "536870912"), 10, 64)
+	if err != nil {
+		return config{}, fmt.Errorf("invalid RELAY_MIN_FREE_BYTES: %w", err)
+	}
 	cfg := config{
 		Name:            envOr("RELAY_NAME", "Plebeian Market Relay"),
 		Description:     envOr("RELAY_DESCRIPTION", "Plebeian Market application relay"),
@@ -133,6 +154,7 @@ func loadConfig() (config, error) {
 		SearchIndexDir:  envOr("RELAY_SEARCH_INDEX_DIR", "/var/lib/market-relay/search"),
 		RawEventStore:   envOr("RELAY_RAW_DB_DIR", "/var/lib/market-relay/raw"),
 		MaxQueryLimit:   envOrInt("RELAY_MAX_QUERY_LIMIT", 500),
+		MinFreeBytes:    minFreeBytes,
 		SupportedNIPs:   envOrInts("RELAY_SUPPORTED_NIPS", []int{1, 11, 50}),
 		ReadHeaderMs:    time.Duration(envOrInt("RELAY_READ_HEADER_TIMEOUT_MS", 10000)) * time.Millisecond,
 		ShutdownTimeout: time.Duration(envOrInt("RELAY_SHUTDOWN_TIMEOUT_MS", 10000)) * time.Millisecond,
@@ -154,41 +176,26 @@ func openStore(cfg config) (eventstore.Store, func(), error) {
 	if err := rawStore.Init(); err != nil {
 		return nil, nil, fmt.Errorf("init BoltDB raw store: %w", err)
 	}
+	if err := searchindex.Prepare(cfg.SearchIndexDir, rawStore.DB); err != nil {
+		rawStore.Close()
+		return nil, nil, err
+	}
 
 	searchStore := &eventstorebleve.BleveBackend{
 		Path:          cfg.SearchIndexDir,
 		RawEventStore: rawStore,
 	}
 	if err := searchStore.Init(); err != nil {
-		if strings.Contains(err.Error(), "metadata missing") {
-			if removeErr := os.RemoveAll(cfg.SearchIndexDir); removeErr != nil {
-				return nil, nil, fmt.Errorf("reset invalid Bleve index %s: %w", cfg.SearchIndexDir, removeErr)
-			}
-			if retryErr := searchStore.Init(); retryErr != nil {
-				return nil, nil, fmt.Errorf("reinit Bleve search store after reset: %w", retryErr)
-			}
-		} else {
-			return nil, nil, fmt.Errorf("init Bleve search store: %w", err)
-		}
+		rawStore.Close()
+		return nil, nil, fmt.Errorf("open Bleve search store (existing data preserved; recovery requires an explicit rebuild): %w", err)
 	}
 
-	cleanup := func() {
-		closeMaybe(searchStore)
-		closeMaybe(rawStore)
-	}
-
-	return &compositeStore{
+	store := &compositeStore{
 		raw:    rawStore,
 		search: searchStore,
-	}, cleanup, nil
-}
-
-func closeMaybe(v any) {
-	if closer, ok := v.(interface{ Close() error }); ok {
-		if err := closer.Close(); err != nil {
-			log.Printf("close failed: %v", err)
-		}
+		config: cfg,
 	}
+	return store, store.Close, nil
 }
 
 func (s *compositeStore) Init() error {
@@ -196,18 +203,39 @@ func (s *compositeStore) Init() error {
 }
 
 func (s *compositeStore) Close() {
-	closeMaybe(s.search)
-	closeMaybe(s.raw)
+	// WebSocket handlers can outlive http.Server.Shutdown. Drain their active
+	// store operations and refuse new ones before closing either backend.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.closed = true
+	s.search.Close()
+	s.raw.Close()
 }
 
 func (s *compositeStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
-	if len(strings.TrimSpace(filter.Search)) >= 2 {
-		return s.search.QueryEvents(filter, maxLimit)
+	return func(yield func(nostr.Event) bool) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.closed {
+			return
+		}
+		if len(strings.TrimSpace(filter.Search)) >= 2 {
+			s.search.QueryEvents(filter, maxLimit)(yield)
+		} else {
+			s.raw.QueryEvents(filter, maxLimit)(yield)
+		}
 	}
-	return s.raw.QueryEvents(filter, maxLimit)
 }
 
 func (s *compositeStore) DeleteEvent(id nostr.ID) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return errors.New("relay store is closed")
+	}
 	if err := s.raw.DeleteEvent(id); err != nil {
 		return err
 	}
@@ -218,6 +246,14 @@ func (s *compositeStore) DeleteEvent(id nostr.ID) error {
 }
 
 func (s *compositeStore) SaveEvent(evt nostr.Event) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return errors.New("relay store is closed")
+	}
+	if err := s.checkWriteBudget(); err != nil {
+		return err
+	}
 	if err := s.raw.SaveEvent(evt); err != nil {
 		return err
 	}
@@ -228,6 +264,14 @@ func (s *compositeStore) SaveEvent(evt nostr.Event) error {
 }
 
 func (s *compositeStore) ReplaceEvent(evt nostr.Event) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return errors.New("relay store is closed")
+	}
+	if err := s.checkWriteBudget(); err != nil {
+		return err
+	}
 	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
 	if evt.Kind.IsAddressable() {
 		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
@@ -268,10 +312,24 @@ func (s *compositeStore) ReplaceEvent(evt nostr.Event) error {
 }
 
 func (s *compositeStore) CountEvents(filter nostr.Filter) (uint32, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return 0, errors.New("relay store is closed")
+	}
 	if len(strings.TrimSpace(filter.Search)) >= 2 {
 		return 0, errors.New("count with search filter is not supported")
 	}
 	return s.raw.CountEvents(filter)
+}
+
+func (s *compositeStore) checkWriteBudget() error {
+	for _, path := range []string{s.config.RawEventStore, s.config.SearchIndexDir} {
+		if err := searchindex.CheckFreeSpace(path, s.config.MinFreeBytes); err != nil {
+			return fmt.Errorf("error: relay storage reserve reached; retry later: %w", err)
+		}
+	}
+	return nil
 }
 
 func envOr(key, fallback string) string {

@@ -2,7 +2,12 @@ module github.com/PlebeianTech/market/deploy-simple/relay
 
 go 1.25.0
 
-require fiatjaf.com/nostr v0.0.0-20260314085316-2cec1c943486
+require (
+	fiatjaf.com/nostr v0.0.0-20260314085316-2cec1c943486
+	github.com/blevesearch/bleve/v2 v2.4.4
+	go.etcd.io/bbolt v1.4.2
+	golang.org/x/sys v0.35.0
+)
 
 require (
 	github.com/FastFilter/xorfilter v0.2.1 // indirect
@@ -11,7 +16,6 @@ require (
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.17.0 // indirect
-	github.com/blevesearch/bleve/v2 v2.4.4 // indirect
 	github.com/blevesearch/bleve_index_api v1.1.12 // indirect
 	github.com/blevesearch/geo v0.1.20 // indirect
 	github.com/blevesearch/go-faiss v1.0.24 // indirect
@@ -63,12 +67,10 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.59.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.etcd.io/bbolt v1.4.2 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
