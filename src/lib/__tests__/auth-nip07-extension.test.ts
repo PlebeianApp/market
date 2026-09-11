@@ -13,6 +13,7 @@ const mockNdkActions = {
 	getNDK: mock(() => ({})),
 	setSigner: mock(() => {}),
 	removeSigner: mock(() => {}),
+	runSignerOnboarding: mock(() => {}),
 }
 const mockCartActions = {
 	reconcileRemoteCartForUser: mock(() => {}),

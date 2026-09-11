@@ -208,6 +208,11 @@ export const authActions = {
 			setSignerCapability(capability)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -267,6 +272,11 @@ export const authActions = {
 			// absent, on top of the getAvailableNostrExtensions guard above).
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -330,6 +340,11 @@ export const authActions = {
 			setSignerTeardown(() => bundle.signer.logout())
 			await adapter.blockUntilReady()
 			ndkActions.setSigner(adapter)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(adapter)
 			const user = await adapter.user()
 
 			// Session persistence (ADR-0008 B-3 / #996 H8): with a passphrase the
@@ -416,6 +431,11 @@ export const authActions = {
 			setSignerTeardown(() => bundle.signer.logout())
 			await adapter.blockUntilReady()
 			ndkActions.setSigner(adapter)
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(adapter)
 			const user = await adapter.user()
 
 			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')

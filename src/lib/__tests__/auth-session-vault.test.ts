@@ -27,6 +27,7 @@ const mockNdkActions = {
 	getNDK: mock(() => ({ getUser: () => ({ pubkey: USER_PUBKEY }) })),
 	setSigner: mock(() => {}),
 	removeSigner: mock(() => {}),
+	runSignerOnboarding: mock(() => {}),
 }
 const mockCartActions = {
 	reconcileRemoteCartForUser: mock(() => {}),
