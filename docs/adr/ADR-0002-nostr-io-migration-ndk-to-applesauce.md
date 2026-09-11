@@ -169,7 +169,10 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
   Both the `e2e-grep` and `e2e-full` jobs must upload `test-results/` — never
   `e2e/test-results/`, which never exists and silently captures no failure
   artifacts. A unit guard
-  (`src/lib/__tests__/e2e-workflow-artifact-path.test.ts`) enforces this.
+  (`src/lib/__tests__/e2e-workflow-artifact-path.test.ts`) enforces this. A
+  second guard (`src/lib/__tests__/e2e-workflow-gate-membership.test.ts`)
+  asserts every `OG Meta Tags` describe title matches the gate pattern, so the
+  family cannot silently drop out of the per-PR gate when it is renamed.
 
 Root-cause flakiness work is concentrated in Wave A, Wave C publish files,
 and Wave D. Wave 0, Wave B, the dashboard type-only work, and Wave E are
