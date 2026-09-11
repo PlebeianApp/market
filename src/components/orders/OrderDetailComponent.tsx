@@ -5,10 +5,10 @@ import { getAuctionClaimPublicMarkerFields, type PrivateAuctionClaimPayload } fr
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
-import { getCoordsFromATag } from '@/lib/utils/coords'
+import { getCoordsFromATag, isValidATag } from '@/lib/utils/coords'
 import { getStatusMessaging, getStatusStyles } from '@/lib/utils/orderUtils'
-import { usePrivateAuctionClaimForOrder } from '@/queries/auctions'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { auctionByATagQueryOptions, usePrivateAuctionClaimForOrder } from '@/queries/auctions'
+import { getAuctionCoordinatesFromOrder, getOrderStatus, type OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
@@ -39,7 +39,7 @@ import {
 	ArrowRightLeft,
 	X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
@@ -62,7 +62,25 @@ import {
 	TrackingInfoDisplay,
 	V4VRecipientsCard,
 } from './detail'
+import { AuctionCard } from '@/components/AuctionCard'
 import { UserCard } from '@/components/UserCard'
+import {
+	useAuctionBids,
+	useAuctionSettlements,
+	useAuctionPathReleases,
+	useAuctionVerdicts,
+	useAuctionClaimOrders,
+	getAuctionAuditors,
+	getAuctionTitle,
+} from '@/queries/auctions'
+import { findBidderRecord } from '@/lib/auction/bidderRecords'
+import type { ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { describeOrderSettlementStatus, type OrderSettlementDisplayState } from './orderSettlementStatusView'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -115,6 +133,86 @@ function renderStatusIcon(iconName?: string | null, className?: string) {
 	return <IconComponent className={cn(ICON_SIZE_CLASSES, className)} />
 }
 
+// --- Auction Settlement Status Display (validated settlement descriptor) ---
+//
+// Every state shown here is derived from `getSettlementDescriptor()`
+// (ADR-0003/ADR-0004), which validates bids against verdict quorum, path
+// releases against the bid lock, and settlement completeness before
+// producing a descriptor. Raw `settlements[0]` / path-release boolean
+// pairs are never treated as settlement state — relay data is untrusted.
+const SETTLEMENT_STATE_STYLE: Record<OrderSettlementDisplayState, { badge: string; text: string }> = {
+	'Awaiting Settlement': { badge: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-900' },
+	'Path Release Observed': { badge: 'bg-blue-50 border-blue-200', text: 'text-blue-900' },
+	'Settlement Event Observed': { badge: 'bg-purple-50 border-purple-200', text: 'text-purple-900' },
+	Settled: { badge: 'bg-green-50 border-green-200', text: 'text-green-900' },
+	'Reserve Not Met': { badge: 'bg-red-50 border-red-200', text: 'text-red-900' },
+	Cancelled: { badge: 'bg-gray-50 border-gray-200', text: 'text-gray-900' },
+	'Validating…': { badge: 'bg-amber-50 border-amber-200', text: 'text-amber-900' },
+}
+
+const SETTLEMENT_STATE_ICON: Record<OrderSettlementDisplayState, React.ReactNode> = {
+	'Awaiting Settlement': <Clock className="w-5 h-5 text-yellow-600" />,
+	'Path Release Observed': <ArrowRightLeft className="w-5 h-5 text-blue-600" />,
+	'Settlement Event Observed': <CheckCircle className="w-5 h-5 text-purple-600" />,
+	Settled: <CheckCircle className="w-5 h-5 text-green-600" />,
+	'Reserve Not Met': <AlertTriangle className="w-5 h-5 text-red-600" />,
+	Cancelled: <Ban className="w-5 h-5 text-gray-600" />,
+	'Validating…': <AlertTriangle className="w-5 h-5 text-amber-600" />,
+}
+
+const VERIFIED_BADGE_TEXT: Record<SettlementDescriptor['verifiedBadge'], string | null> = {
+	none: null,
+	settlement: 'Verified · Settlement confirmed',
+	'settlement-pending-redemption': 'Settlement accepted · Awaiting redemption',
+	'path-release': 'Verified · Path release confirmed',
+	verifying: 'Verifying…',
+}
+
+function AuctionSettlementStatus({ descriptor, isValidating }: { descriptor: SettlementDescriptor | null; isValidating: boolean }) {
+	const displayState = isValidating ? 'Validating…' : describeOrderSettlementStatus(descriptor)
+	const style = SETTLEMENT_STATE_STYLE[displayState]
+	const description = isValidating
+		? 'Validating the auction settlement against its path release and bid chain before showing a status.'
+		: (descriptor?.message ?? 'Waiting for the auction to end and the settlement flow to start.')
+	const evidenceText = descriptor ? VERIFIED_BADGE_TEXT[descriptor.verifiedBadge] : null
+
+	return (
+		<Card>
+			<CardHeader className="p-4">
+				<div className={`flex items-center gap-3 p-3 rounded-lg border ${style.badge}`}>
+					{SETTLEMENT_STATE_ICON[displayState]}
+					<div>
+						<h3 className={`font-semibold ${style.text}`} data-testid="auction-settlement-status">
+							{displayState}
+						</h3>
+						<p className={`text-sm mt-1 ${style.text} opacity-80`}>{description}</p>
+					</div>
+				</div>
+			</CardHeader>
+			{descriptor && (descriptor.bidAmount > 0 || evidenceText) && (
+				<CardContent className="px-4 pb-4 pt-0">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+						{descriptor.bidAmount > 0 && (
+							<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+								<span className="text-muted-foreground font-medium">Winning Bid:</span>
+								<span className="font-bold">{descriptor.bidAmount.toLocaleString()} sats</span>
+							</div>
+						)}
+						{evidenceText && (
+							<div className="flex justify-between items-center bg-gray-50 p-2 rounded">
+								<span className="text-muted-foreground font-medium">Evidence:</span>
+								<span className={descriptor.verifiedBadge === 'verifying' ? 'text-amber-700 font-medium' : 'text-green-700 font-medium'}>
+									{evidenceText}
+								</span>
+							</div>
+						)}
+					</div>
+				</CardContent>
+			)}
+		</Card>
+	)
+}
+
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
@@ -142,6 +240,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const canViewLegacyBuyerContact = isBuyer
 	const canViewBuyerContact = isBuyer || isOrderSeller
+	const auctionCoordinates = getAuctionCoordinatesFromOrder(order)
+	const isAuctionOrder = !!auctionCoordinates
 	const auctionClaimFields = getAuctionClaimPublicMarkerFields({ pubkey: orderEvent.pubkey, tags: orderEvent.tags })
 	const privateAuctionClaimQuery = usePrivateAuctionClaimForOrder(orderEvent, isOrderSeller && !!auctionClaimFields)
 	const privateAuctionClaimResult = privateAuctionClaimQuery.data
@@ -329,8 +429,148 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		})),
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
-	const headerTitle = `Products (${products.length} unique)`
-	const headerSubText = `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
+	// Fetch auction-related data if this is an auction order
+	const auctionCoords = isValidATag(auctionCoordinates || '') ? getCoordsFromATag(auctionCoordinates || '') : null
+
+	const { data: auctionBids = [] } = useAuctionBids('', 500, auctionCoordinates || '')
+	const { data: auctionSettlements = [] } = useAuctionSettlements('', 100, auctionCoordinates || '')
+	const { data: auctionPathReleases = [] } = useAuctionPathReleases('', 200, auctionCoordinates || '')
+	const {
+		data: auctionData,
+		isLoading: auctionLoading,
+		isError: auctionError,
+	} = useQuery({
+		...auctionByATagQueryOptions(auctionCoords?.pubkey ?? '', auctionCoords?.identifier ?? ''),
+		enabled: !!auctionCoords?.pubkey && !!auctionCoords.identifier,
+	})
+
+	// --- Validated settlement status (ADR-0003 / ADR-0004) ---
+	// Relay-sourced bids, path releases, and settlements are untrusted. The
+	// settlement card never derives status from raw `settlements[0]` or bare
+	// path-release presence; everything flows through getSettlementDescriptor(),
+	// which validates bid quorum, path-release/bid-chain integrity, and
+	// settlement completeness first.
+	const { data: auctionVerdicts = [] } = useAuctionVerdicts(
+		auctionData?.id ?? '',
+		500,
+		auctionCoordinates || '',
+		isAuctionOrder ? getAuctionAuditors(auctionData ?? null) : [],
+	)
+	const { data: auctionClaimOrders = [] } = useAuctionClaimOrders(auctionCoordinates || '')
+
+	const parsedAuctionForSettlement = useMemo(() => {
+		if (!auctionData) return null
+		const result = parseAuctionEvent(auctionData.rawEvent())
+		return result.ok ? result.value : null
+	}, [auctionData])
+
+	const parsedBidsForSettlement = useMemo(
+		() =>
+			auctionBids
+				.map((b) => parseBidEvent(b.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok)
+				.map((r) => r.value),
+		[auctionBids],
+	)
+
+	const parsedVerdictsForSettlement = useMemo(
+		() =>
+			auctionVerdicts
+				.map((e) =>
+					parseValidatorVerdictEvent(
+						e as unknown as { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number },
+					),
+				)
+				.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
+				.map((r) => r.value),
+		[auctionVerdicts],
+	)
+
+	const parsedSettlementsForSettlement = useMemo(
+		() =>
+			auctionSettlements
+				.map((s) => parseSettlementEvent(s.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
+				.map((r) => r.value),
+		[auctionSettlements],
+	)
+
+	const parsedPathReleasesForSettlement = useMemo(
+		() =>
+			auctionPathReleases
+				.map((pr) => parsePathReleaseEvent(pr.rawEvent()))
+				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
+				.map((r) => r.value),
+		[auctionPathReleases],
+	)
+
+	const [orderSettlementDescriptor, setOrderSettlementDescriptor] = useState<SettlementDescriptor | null>(null)
+	const [descriptorFailed, setDescriptorFailed] = useState(false)
+	const [descriptorReady, setDescriptorReady] = useState(false)
+
+	const descriptorInput = useMemo<GetSettlementDescriptorInput | null>(() => {
+		if (!parsedAuctionForSettlement) return null
+		const myBids = user?.pubkey ? parsedBidsForSettlement.filter((b) => b.bidderPubkey === user.pubkey) : []
+		const myTopBidEvent = myBids.length
+			? myBids.reduce((best, bid) => {
+					if (bid.amount > best.amount) return bid
+					if (bid.amount < best.amount) return best
+					return bid.createdAt < best.createdAt ? bid : best
+				})
+			: null
+		return {
+			auction: parsedAuctionForSettlement,
+			bids: parsedBidsForSettlement,
+			verdicts: parsedVerdictsForSettlement,
+			settlements: parsedSettlementsForSettlement,
+			pathReleases: parsedPathReleasesForSettlement,
+			claimOrders: auctionClaimOrders.map((o) => o.rawEvent()),
+			currentUserPubkey: user?.pubkey || undefined,
+			myTopBidEvent,
+			hasBidderRecord: !!(myTopBidEvent && findBidderRecord(myTopBidEvent.id)),
+			hasPlacedBid: myBids.length > 0,
+			now: Math.floor(Date.now() / 1000),
+		}
+	}, [
+		parsedAuctionForSettlement,
+		parsedBidsForSettlement,
+		parsedVerdictsForSettlement,
+		parsedSettlementsForSettlement,
+		parsedPathReleasesForSettlement,
+		auctionClaimOrders,
+		user?.pubkey,
+	])
+
+	useEffect(() => {
+		if (!descriptorInput) {
+			setDescriptorReady(false)
+			return
+		}
+		let cancelled = false
+		getSettlementDescriptor(descriptorInput)
+			.then((d) => {
+				if (cancelled) return
+				setOrderSettlementDescriptor(d)
+				setDescriptorFailed(false)
+				setDescriptorReady(true)
+			})
+			.catch((err) => {
+				console.error('getSettlementDescriptor failed:', err)
+				if (!cancelled) setDescriptorFailed(true)
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [descriptorInput])
+
+	// Without the auction event, or with a failed parse/descriptor run, we
+	// cannot claim any validated status — surface 'Validating…' instead of a
+	// potentially wrong one.
+	const settlementValidating =
+		isAuctionOrder && (auctionLoading || auctionError || !parsedAuctionForSettlement || descriptorFailed || !descriptorReady)
+
+	const headerTitle = isAuctionOrder && auctionData ? `Auction: ${getAuctionTitle(auctionData)}` : `Products (${products.length} unique)`
+	const headerSubText = isAuctionOrder ? undefined : `${orderItems.reduce((total, item) => total + item.quantity, 0)} items`
 
 	return (
 		<div className="container mx-auto px-4 py-4">
@@ -342,11 +582,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
 							<div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
 								<div className="flex items-center space-x-3">
-									<div className={`p-2 rounded-lg ${'bg-blue-100'}`}>
-										<Package className="w-5 h-5 text-blue-700" />
+									<div className={`p-2 rounded-lg ${isAuctionOrder ? 'bg-purple-100' : 'bg-blue-100'}`}>
+										{isAuctionOrder ? <Package className="w-5 h-5 text-purple-700" /> : <Package className="w-5 h-5 text-blue-700" />}
 									</div>
 									<div>
-										<p className="text-sm font-medium text-gray-900">{'Products'}</p>
+										<p className="text-sm font-medium text-gray-900">{isAuctionOrder ? 'Auction Item' : 'Products'}</p>
 										<h2 className="font-semibold truncate max-w-[300px] text-gray-800" title={headerTitle}>
 											{headerTitle}
 										</h2>
@@ -459,32 +699,51 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				)}
 				<PrivateOrderDetailsCard order={order} currentUserPubkey={user?.pubkey} showUnavailable={shouldShowPrivateDetailsUnavailable} />
 
-				{/* Products */}
-				{products.length > 0 && (
+				{/* Products or Auctions */}
+				{(products.length > 0 || (isAuctionOrder && auctionData)) && (
 					<Card>
 						<CardHeader>
-							<CardTitle>{'Products'}</CardTitle>
+							<CardTitle>{isAuctionOrder ? 'Auction Item' : 'Products'}</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid grid-cols-1 gap-4">
-								{products.map((product) => {
-									const lookupId = getProductId(product) || product.id
-									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
-
-									return (
-										<div key={product.id} className="p-4 border rounded-lg">
-											{
-												<div>
-													<ProductCard product={product} />
-													<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-														<span className="text-sm text-gray-500">Quantity</span>
-														<span className="text-lg font-semibold">{quantity}</span>
-													</div>
-												</div>
-											}
+								{isAuctionOrder && auctionData ? (
+									<div key={auctionData.id} className="p-4 border rounded-lg">
+										<AuctionCard auction={auctionData} bids={auctionBids} className="w-full" />
+										<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+											<span className="text-sm text-gray-500">Quantity</span>
+											<span className="text-lg font-semibold">1</span>
 										</div>
-									)
-								})}
+									</div>
+								) : (
+									products.map((product) => {
+										const lookupId = getProductId(product) || product.id
+										const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
+										const isAuction = product.kind === 30408
+
+										return (
+											<div key={product.id} className="p-4 border rounded-lg">
+												{isAuction ? (
+													<div className="space-y-4">
+														<AuctionCard auction={product} bids={auctionBids} className="w-full" />
+														<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+															<span className="text-sm text-gray-500">Quantity</span>
+															<span className="text-lg font-semibold">{quantity}</span>
+														</div>
+													</div>
+												) : (
+													<div>
+														<ProductCard product={product} />
+														<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+															<span className="text-sm text-gray-500">Quantity</span>
+															<span className="text-lg font-semibold">{quantity}</span>
+														</div>
+													</div>
+												)}
+											</div>
+										)
+									})
+								)}
 							</div>
 						</CardContent>
 					</Card>
@@ -546,7 +805,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				)}
 
 				{/* --- PAYMENT SECTION --- */}
-				{
+				{/* For Auctions: Show Settlement Status */}
+				{isAuctionOrder ? (
+					<>
+						<AuctionSettlementStatus descriptor={orderSettlementDescriptor} isValidating={settlementValidating} />
+					</>
+				) : (
 					/* For Products: Show Invoice Logic */
 					<>
 						{totalInvoices > 0 && (
@@ -598,7 +862,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 						{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
 					</>
-				}
+				)}
 
 				{/* Order Timeline */}
 				{allEvents.length > 0 && (

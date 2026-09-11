@@ -5,7 +5,7 @@ import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getBuyerPubkey, getOrderStatus, getSellerPubkey, isAuctionOrder } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
@@ -35,6 +35,8 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
 
+	const isAuction = isAuctionOrder(order)
+
 	const status = getOrderStatus(order)
 
 	const buyerPubkey = getBuyerPubkey(order.order)
@@ -54,6 +56,14 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 
 	// Buyer actions
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
+
+	// Auction orders are handled by the auction settlement flow (ADR-0003),
+	// not the product order lifecycle: there is no invoice to confirm and
+	// cancellation cannot release the bidder's locked proofs. Suppress the
+	// Cancel/Confirm buttons without touching canProcess/canShip/canReceive,
+	// so auction orders still progress through processing/shipping.
+	const showCancel = canCancel && !isAuction
+	const showConfirm = canConfirm && !isAuction
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
 		const orderEventId = order.order.id
@@ -107,9 +117,9 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 	return (
 		<div className={cn('space-y-3 w-full mx-2', className)}>
 			{/* Primary Action Button */}
-			{(canCancel || canConfirm || canProcess || canShip || canReceive) && (
-				<div className="flex flex-wrap gap-2">
-					{canCancel && (
+			{(showCancel || showConfirm || canProcess || canShip || canReceive) && (
+				<div className="flex gap-3">
+					{showCancel && (
 						<Button
 							variant="outline"
 							onClick={() => setIsCancelOpen(true)}
@@ -120,7 +130,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 						</Button>
 					)}
 
-					{canConfirm && (
+					{showConfirm && (
 						<Button onClick={() => setIsPaymentConfirmOpen(true)} disabled={updateOrderStatus.isPending} className="w-full sm:w-auto">
 							<Check className="w-4 h-4 mr-2" /> Confirm Payment Received
 						</Button>
@@ -155,7 +165,7 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 			)}
 
 			{/* Final State Indicators */}
-			{!canCancel && !canConfirm && !canProcess && !canShip && !canReceive && (
+			{!showCancel && !showConfirm && !canProcess && !canShip && !canReceive && (
 				<div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
 					{status === ORDER_STATUS.COMPLETED ? (
 						<>
@@ -252,15 +262,15 @@ export function OrderActions({ order, userPubkey, className = '' }: OrderActions
 				</DialogContent>
 			</Dialog>
 
-			{/* Stock Update Dialog - only for product orders */}
-			{
+			{/* Stock Update Dialog - only for product orders, not auctions */}
+			{!isAuction && (
 				<StockUpdateDialog
 					open={isStockUpdateOpen}
 					onOpenChange={setIsStockUpdateOpen}
 					order={order}
 					onComplete={() => {}} // No-op: no additional actions needed.
 				/>
-			}
+			)}
 		</div>
 	)
 }
