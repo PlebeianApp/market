@@ -698,7 +698,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(pendingClassified?.classification).toBe('pending')
 	})
 
-	test('post-rollout bid whose keyset is not in dleqKeysets is invalid (fail-closed: bidder-controlled id must not skip DLEQ verification)', () => {
+	test('post-rollout bid whose keyset is not in a SUPPLIED dleqKeysets map is PENDING (evidence unavailable, not fraud)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
 			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
@@ -709,9 +709,13 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
 		]
 		// The bid declares keyset `00deadbeef` but the fetched map only holds
-		// `other.mint` keysets — the lookup must MISS and fail closed rather
-		// than skipping DLEQ verification (a malicious bidder could otherwise
-		// point dleqProofs[0].id at an unfetched id and bypass the check).
+		// `other.mint` keysets — exactly what `fetchDleqKeysetsForBids` yields
+		// when the keyset fetch for THIS (mint, keyset) pair failed. PR #1280
+		// round 3: an absent entry in a supplied map means EVIDENCE
+		// UNAVAILABLE (temporary mint/network failure), not fraud — the bid
+		// is pending (ADR-0011 Decision 6a), never valid: a malicious bidder
+		// pointing dleqProofs[0].id at an unfetched id still cannot make the
+		// bid win, since pending bids are excluded from validBids/winner.
 		const otherKeysets = new Map([['https://other.mint:00deadbeef', dleqKeyset1]])
 
 		const result = computeValidatedBids({
@@ -724,10 +728,50 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.validBids).toHaveLength(0)
-		expect(result.invalidBids).toHaveLength(1)
-		const invalidClassified = result.classified.find((cl) => cl.bid.id === bid.id)
-		expect(invalidClassified?.classification).toBe('invalid')
-		expect(invalidClassified?.invalidReason).toBe('dleq_invalid')
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
+		expect(pendingClassified?.invalidReason).toBeUndefined()
+	})
+
+	test('multi-proof leg with one absent keyset is PENDING even when another proof has garbage DLEQ (no condemning on incomplete evidence)', () => {
+		const auction = buildPostRolloutAuction()
+		// Proof 0: garbage DLEQ under a keyset that IS in the map (would be
+		// dleq_invalid on its own). Proof 1: keyset never fetched (absent).
+		// Evidence for the leg as a whole is INCOMPLETE, so the bid is
+		// pending — dleq_invalid is reserved for positive verification
+		// failure over COMPLETE evidence.
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const secret0 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-0')
+		const secret1 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-1')
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			lockSecrets: [secret0, secret1],
+			// Proof amounts sum to the default 5_000 leg so the ONLY thing
+			// blocking verification is the absent keyset. Distinct C values —
+			// M5 rejects duplicate C within a bid as fabricated collateral.
+			dleqProofs: [garbageDleq, { id: '00feedface', amount: 4_900, C: TWO_G_HEX, e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const partialKeysets = new Map([['https://mint.test:00deadbeef', dleqKeyset1]])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets: partialKeysets,
+		})
+
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
 	})
 
 	test('post-rollout bid with no dleqProofs is invalid via structural check (validateBid Step 3.5)', () => {

@@ -1460,8 +1460,12 @@ Operational notes:
   parameter in `computeValidatedBids`). A post-rollout bid whose
   DLEQ proofs fail cryptographic verification is classified
   `bid_invalid` with `reason=dleq_invalid`. When the keyset is not
-  yet available, the bid stays quorum-valid (mirrors the NUT-7
-  evidence-deferred pattern — Decision 6). Pre-rollout auctions are
+  yet available — including an entry missing from a SUPPLIED map
+  because its `fetchDleqKeysetsForBids` fetch failed (temporary
+  mint/network failure) — the bid stays `pending`, never valid and
+  never condemned (mirrors the NUT-7 evidence-deferred pattern —
+  Decision 6a: `dleq_invalid` requires a positive verification
+  failure over complete evidence). Pre-rollout auctions are
   grandfathered and skip DLEQ verification (Decision 7).
 - **ADR-0011 B4 — Structural DLEQ field validation:** the validator
   pipeline (Step 3.5 in `validateBid`) now also performs structural
