@@ -2,7 +2,7 @@ import type { Nut7ProofState, ValidatorClaim } from './constants'
 import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from './events'
 import { validateBid } from './validation'
-import { verifyBidDleq, type DleqProof } from '../cashu/dleq'
+import { verifyBidDleqWithKeysets, type DleqProof } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
 
 export type BidClassification = 'valid' | 'pending' | 'invalid'
@@ -489,30 +489,20 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 						continue
 					}
 					{
-						const keysetId = dleqProofs[0].id
-						const key = `${c.bid.mint}:${keysetId}`
-						const keyset = dleqKeysetMap.get(key)
-						// Fail-closed: `dleqProofs[].id` is bidder-controlled (it
-						// comes from the bid's own `dleq_proof` tags), so a lookup
-						// MISS on a populated keyset map must NOT silently skip
-						// verification — a malicious bidder could set
-						// `dleqProofs[0].id` to any id the client didn't fetch and
-						// defeat the DLEQ check. When keysets were gathered but this
-						// bid's keyset is absent, we cannot verify → dleq_invalid.
-						if (!keyset) {
-							c.classification = 'invalid'
-							c.invalidReason = 'dleq_invalid'
-							finalInvalid.push(c.bid)
-							continue
-						}
 						const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
 							...dp,
 							secret: c.bid.lockSecrets[i] ?? '',
 						}))
-						// verifyBidDleq is non-throwing (dleq.ts wraps hasValidDleq
-						// in try/catch), so malformed/attacker-controlled hex returns
-						// { ok: false } rather than crashing the pipeline.
-						const dleqResult = verifyBidDleq({ legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets }, keyset)
+						// Verify each proof against the keyset named by its OWN `id`
+						// (multi-keyset fix): a rebid leg may be funded by proofs from
+						// more than one keyset after a mint keyset rotation. This
+						// function is non-throwing and fail-closed, so a proof whose
+						// keyset is absent from the populated map yields ok=false →
+						// dleq_invalid.
+						const dleqResult = verifyBidDleqWithKeysets(
+							{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
+							dleqKeysetMap,
+						)
 						if (!dleqResult.ok) {
 							// Record the reason on the classified entry so
 							// downstream consumers can distinguish DLEQ
