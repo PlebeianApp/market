@@ -32,7 +32,7 @@ export interface PasswordSignerSession {
 	signer: PasswordSigner
 	/** Capability-seam view; every call gated on `unlocked`. */
 	capability: SignerCapability
-	/** Zero the in-memory key (lock-on-logout). The ncryptsec stays stored. */
+	/** Drop the in-memory key reference (lock-on-logout). The ncryptsec stays stored. */
 	lock(): void
 }
 
