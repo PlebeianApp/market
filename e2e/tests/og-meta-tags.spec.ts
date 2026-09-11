@@ -52,7 +52,7 @@ test.use({ scenario: 'base' })
 
 // Feature Quality Gate: always record video for this gate spec so the happy
 // path produces a viewable video on success (overrides the config default of
-// retain-on-failure). See Gate 2 in docs/PR_REVIEW_CHECKLIST.md.
+// retain-on-failure).
 test.use({ video: 'on' })
 
 // Per e2e/AGENTS.md + ADR-0005, intercept external CDN image requests so the
