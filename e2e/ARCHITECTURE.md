@@ -363,6 +363,26 @@ Since `nak serve` stores data in memory, the relay starts empty on each Playwrig
 
 For CI, the relay always starts fresh. For local dev, `reuseExistingServer: true` means the relay might have stale data from previous runs - this is generally fine since events are idempotent (replaceable events with same `d` tag get overwritten).
 
+### Production-Valid Fixture Chains
+
+A multi-event fixture must be something a real client could have published.
+`buildAuctionOrderFixture()` (`e2e/scenarios/index.ts`) therefore returns only
+after `assertAuctionOrderFixtureValid()` has pushed every seeded event through
+the **production** parsers (`parseAuctionEvent`, `parseBidEvent`,
+`parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`)
+and the production **cross-event** validators (`computeValidatedBids`,
+`validatePathRelease`, `validateSettlementCompleteness`). A fixture that cannot
+represent a real relay history throws while it is being built.
+
+This matters because a green E2E run over impossible relay data - an auction
+that is still open, a settlement below the reserve, a placeholder bid
+reference - proves only that the UI reacts to events no client would publish.
+The fixture asserts against the parsers and validators production uses, not a
+hand-rolled copy, so parser drift fails the fixture instead of silently
+weakening the test. Follow the same shape for any new multi-event fixture;
+`e2e/scenarios/auctionOrderFixture.test.ts` covers both the valid chain and the
+gate's rejections.
+
 ---
 
 ## 3. Auth Layer

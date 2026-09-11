@@ -671,6 +671,12 @@ import {
 } from '@/lib/auction/tagBuilders'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import { validatePathRelease, validateSettlementCompleteness } from '@/lib/auction/validation'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 
 // ============================================================================
 // Auction order fixture (kind 30408 → 1023 → 30440 → 1025 → 1024 → claim order)
@@ -716,6 +722,8 @@ export interface AuctionOrderFixture {
 	itemTagValue: string
 	/** Settlement amount in sats — the buyer's claim order must declare the same amount. */
 	amount: number
+	/** The unix-second `now` the chain was built against (validation clock). */
+	now: number
 }
 
 const compressedPubkeyFromSecretKey = (secretKeyHex: string): string => bytesToHex(secp256k1.getPublicKey(hexToBytes(secretKeyHex), true))
@@ -897,7 +905,107 @@ export function buildAuctionOrderFixture(input: { now: number; title?: string; d
 		hexToBytes(devUser1.sk),
 	)
 
-	return { auctionEvent, bidEvent, verdictEvent, pathReleaseEvent, settlementEvent, itemTagValue, amount }
+	const fixture: AuctionOrderFixture = {
+		auctionEvent,
+		bidEvent,
+		verdictEvent,
+		pathReleaseEvent,
+		settlementEvent,
+		itemTagValue,
+		amount,
+		now,
+	}
+
+	// Publish-time gate: a fixture that cannot pass the SAME parsers and
+	// cross-event validators production runs must never reach the relay.
+	// Green E2E on impossible relay data proves nothing, so this throws
+	// instead of seeding an impossible auction.
+	assertAuctionOrderFixtureValid(fixture)
+
+	return fixture
+}
+
+/**
+ * Cross-event validation gate for {@link buildAuctionOrderFixture}.
+ *
+ * Runs every seeded event through the production parsers, then through the
+ * production cross-event validators:
+ *
+ *   - `computeValidatedBids` — auditor quorum makes the seeded bid the
+ *     canonical winner,
+ *   - `validatePathRelease` — the kind-1025 release is a valid winner release
+ *     for that bid (derivation path / child pubkey / release timing),
+ *   - `validateSettlementCompleteness` — the kind-1024 settled event is
+ *     complete for the winning bid chain (matching payout, close_at after
+ *     `max_end_at`, `final_amount` >= reserve).
+ *
+ * Throws on the first violation, so `buildAuctionOrderFixture` can never seed
+ * an auction whose events a real client would never have published.
+ */
+export function assertAuctionOrderFixtureValid(fixture: AuctionOrderFixture): void {
+	const parsed = <T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }, label: string): T => {
+		if (!result.ok) throw new Error(`auction order fixture: ${label} does not parse — ${result.error.message}`)
+		return result.value
+	}
+
+	const auction = parsed(parseAuctionEvent(fixture.auctionEvent), 'kind-30408 listing')
+	const bid = parsed(parseBidEvent(fixture.bidEvent), 'kind-1023 winning bid')
+	const verdict = parsed(parseValidatorVerdictEvent(fixture.verdictEvent), 'kind-30440 auditor verdict')
+	const pathRelease = parsed(parsePathReleaseEvent(fixture.pathReleaseEvent), 'kind-1025 path release')
+	const settlement = parsed(parseSettlementEvent(fixture.settlementEvent), 'kind-1024 settlement')
+
+	if (auction.endAt >= fixture.now) {
+		throw new Error(
+			`auction order fixture: auction is still open (end_at=${auction.endAt} >= now=${fixture.now}); a settlement cannot exist for an open auction`,
+		)
+	}
+	if (auction.reserve == null || auction.reserve <= 0) {
+		throw new Error('auction order fixture: auction has no positive reserve')
+	}
+	if (settlement.finalAmount < auction.reserve) {
+		throw new Error(`auction order fixture: settlement final_amount ${settlement.finalAmount} is below the reserve ${auction.reserve}`)
+	}
+
+	const quorum = computeValidatedBids({
+		auction,
+		bids: [bid],
+		verdicts: [verdict],
+		postSettlement: true,
+		settledBidIds: new Set([bid.id]),
+	})
+	if (quorum.canonicalWinner?.id !== bid.id) {
+		throw new Error(`auction order fixture: auditor quorum does not confirm ${bid.id} as the canonical winning bid`)
+	}
+
+	const releaseValidity = validatePathRelease({
+		auction,
+		bid,
+		release: pathRelease,
+		now: fixture.now,
+		postCloseDecision: 'winner',
+		// Token decoding needs mint keysets the fixture deliberately does not
+		// fetch; production validators also skip it (it is the seller's
+		// redemption-time check).
+		skipCashuTokenCheck: true,
+	})
+	if (!releaseValidity.isValid) {
+		throw new Error(`auction order fixture: kind-1025 path release is invalid (${releaseValidity.failureCode}) — ${releaseValidity.detail}`)
+	}
+
+	const completeness = validateSettlementCompleteness({
+		auction,
+		settlement,
+		winningBid: bid,
+		pathRelease,
+		winningBidClaim: verdict.claim,
+		winningBidPostCloseDecision: 'winner',
+		// A settled settlement by definition follows the seller's redemption;
+		// the fixture declares its payout as redeemed.
+		winningBidNut7State: 'spent',
+	})
+	if (!completeness.isComplete) {
+		throw new Error(`auction order fixture: kind-1024 settlement is not complete (${completeness.failureCode}) — ${completeness.detail}`)
+	}
 }
 
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
