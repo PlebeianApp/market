@@ -1154,8 +1154,19 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			// Stage: Pending Payment (Base case - just the order creation exists)
 			if (stage === 'pending-payment') return
 
-			// Common to all: Status Update to 'confirmed'
-			if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+			// Status update to 'confirmed' — PRODUCT ONLY.
+			//
+			// A generic payment confirmation is a product-flow event: the seller
+			// confirms they received payment. The auction flow never publishes
+			// one (AUCTIONS.md 4.3.3): the buyer's payment is the settled
+			// kind-1024 settlement, and fulfillment is authorized by the
+			// validated settlement + canonical claim while the order is still
+			// PENDING. Seeding `CONFIRMED` for an auction order would
+			// manufacture relay data no auction client can produce, and would
+			// let an e2e pass through the generic `isSeller && CONFIRMED` gate
+			// instead of exercising the auction authority path. Auction orders
+			// therefore stay PENDING until the seller processes them.
+			if (type === 'product' && ['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
 				const statusUpdate = finalizeEvent(
 					{
 						kind: ORDER_PROCESS_KIND,
@@ -1289,6 +1300,12 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 				// `final_amount 500` settlement that used to live in this
 				// branch are exactly the impossible relay data this fixture
 				// exists to avoid (R1).
+				//
+				// The generic CONFIRMED status update is skipped above for the
+				// same reason: an auction order's payment is the settlement,
+				// not a seller-authored confirmation, and its fulfillment
+				// authority is the validated settlement + canonical claim
+				// while the order is still PENDING.
 			}
 		}
 

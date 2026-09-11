@@ -394,6 +394,18 @@ auction chain. A claim marker naming an unresolved settlement grants no
 authority, and `auctionOrderFixture.test.ts` asserts both directions through
 `getAuctionClaimPublicMarkerFields()` and `getAuctionFulfillmentAuthority()`.
 
+The same rule applies to the seeded order's _status_ events. `advanceStage()`
+publishes the generic `CONFIRMED` status update for **product orders only**: a
+payment confirmation is a product-flow event, and the auction flow never
+publishes one (AUCTIONS.md 4.3.3) — an auction claim order is fulfillment-ready
+while still `PENDING`, authorized by the validated settlement + canonical claim.
+Seeding `CONFIRMED` on an auction order would manufacture a status no auction
+client produces _and_ let the auction e2e pass through the generic
+`isSeller && CONFIRMED` gate instead of the authority path.
+`seedOrder('auction', 'confirmed')` therefore deliberately leaves the order
+`PENDING`, and `Order Details - Seller View - Auctions` asserts exactly that,
+with `Process Order` reachable at `PENDING`.
+
 The fixture test runs in the unit suite (`bun run test:unit` includes
 `e2e/scenarios/`), so the publish-time gate is enforced on every PR rather than
 only when the Playwright suite happens to execute.
