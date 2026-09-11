@@ -3,7 +3,7 @@ import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
-import { buildAuctionOrderFixture } from './index'
+import { assertAuctionOrderFixtureValid, buildAuctionOrderFixture } from './index'
 
 /**
  * Cross-event validation for the auction order fixture.
@@ -15,10 +15,11 @@ import { buildAuctionOrderFixture } from './index'
  * assert the cross-event relationships (closed auction, winning bid -> verdict,
  * path release -> real bid id, settlement -> reserve + winning bid).
  */
-describe('auction order fixture is production-valid', () => {
-	const now = Math.floor(Date.now() / 1000)
-	const fixture = buildAuctionOrderFixture({ now })
+/** Single shared build: the fixture is deterministic for a given `now`. */
+const now = Math.floor(Date.now() / 1000)
+const fixture = buildAuctionOrderFixture({ now })
 
+describe('auction order fixture is production-valid', () => {
 	test('the kind-30408 listing parses and is CLOSED, not still open', () => {
 		const parsed = parseAuctionEvent(fixture.auctionEvent)
 		expect(parsed.ok).toBe(true)
@@ -79,5 +80,35 @@ describe('auction order fixture is production-valid', () => {
 	test('the fixture advertises the settlement amount the claim order must declare', () => {
 		expect(fixture.amount).toBeGreaterThanOrEqual(1000)
 		expect(fixture.itemTagValue.startsWith('30408:')).toBe(true)
+	})
+})
+
+/**
+ * The publish-time gate (`assertAuctionOrderFixtureValid`) is what makes the
+ * fixture safe to seed: it runs the SAME cross-event validators production
+ * runs, so a fixture that cannot represent a real relay history throws while
+ * being built instead of quietly seeding data no client would ever publish.
+ */
+describe('auction order fixture publish-time gate', () => {
+	test('accepts the fixture it just built', () => {
+		expect(() => assertAuctionOrderFixtureValid(fixture)).not.toThrow()
+	})
+
+	test('rejects an auction that is still open at validation time', () => {
+		// Same events, evaluated at a clock before the auction closed: a
+		// settlement cannot exist for an auction that is still running.
+		const tampered = { ...fixture, now: now - 3600 }
+		expect(() => assertAuctionOrderFixtureValid(tampered)).toThrow(/still open/)
+	})
+
+	test('rejects a settlement that pays less than the reserve', () => {
+		const tampered = {
+			...fixture,
+			settlementEvent: {
+				...fixture.settlementEvent,
+				tags: fixture.settlementEvent.tags.map((tag) => (tag[0] === 'final_amount' ? ['final_amount', '500', ...tag.slice(2)] : tag)),
+			},
+		}
+		expect(() => assertAuctionOrderFixtureValid(tampered)).toThrow(/below the reserve/)
 	})
 })
