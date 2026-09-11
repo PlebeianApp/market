@@ -1,6 +1,7 @@
-import { NDKUser, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
+import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
+import type { SignerCapability } from './signer-capability'
 
 export const NIP59_SEAL_KIND = 13
 export const NIP59_GIFT_WRAP_KIND = 1059
@@ -26,7 +27,7 @@ export type CreateNip59GiftWrapParams = {
 
 export type CreateNip59GiftWrapWithSignerParams = {
 	rumor: UnsignedRumor
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 	recipientPubkey: string
 	wrapperPrivateKey?: Uint8Array
 	createdAt?: number
@@ -41,7 +42,7 @@ export type UnwrapNip59GiftWrapParams = {
 
 export type UnwrapNip59GiftWrapWithSignerParams = {
 	giftWrap: Event
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 	expectedRecipientPubkey?: string
 	expectedSenderPubkey?: string
 }
@@ -214,18 +215,13 @@ export function normalizeUnsignedRumorId(rumor: unknown): UnsignedRumor {
 	}
 }
 
-export async function signerSupportsNip44(signer: NDKSigner | null | undefined, operation: Nip44SignerOperation): Promise<boolean> {
+export async function signerSupportsNip44(signer: SignerCapability | null | undefined, operation: Nip44SignerOperation): Promise<boolean> {
 	if (!signer) return false
-	if (typeof signer.encryptionEnabled !== 'function') return false
-	if (operation === 'encrypt' && typeof signer.encrypt !== 'function') return false
-	if (operation === 'decrypt' && typeof signer.decrypt !== 'function') return false
-
-	try {
-		const enabled = await signer.encryptionEnabled('nip44')
-		return enabled.includes('nip44')
-	} catch {
-		return false
-	}
+	const nip44 = signer.nip44
+	if (!nip44) return false
+	if (operation === 'encrypt' && typeof nip44.encrypt !== 'function') return false
+	if (operation === 'decrypt' && typeof nip44.decrypt !== 'function') return false
+	return true
 }
 
 function unixNow(): number {
@@ -252,7 +248,10 @@ function decryptFromSender(ciphertext: string, recipientPrivateKey: Uint8Array, 
 	}
 }
 
-async function assertSignerSupportsNip44(signer: NDKSigner | null | undefined, operation: Nip44SignerOperation): Promise<NDKSigner> {
+async function assertSignerSupportsNip44(
+	signer: SignerCapability | null | undefined,
+	operation: Nip44SignerOperation,
+): Promise<SignerCapability> {
 	if (!signer) {
 		throw new Error(`Signer does not support NIP-44 ${operation}`)
 	}
@@ -262,29 +261,33 @@ async function assertSignerSupportsNip44(signer: NDKSigner | null | undefined, o
 	return signer
 }
 
-async function signerPubkeyFor(signer: NDKSigner): Promise<string> {
-	const user = await signer.user()
-	const pubkey = user.pubkey
+async function signerPubkeyFor(signer: SignerCapability): Promise<string> {
+	const pubkey = await signer.getPublicKey()
 	assertHexPubkey(pubkey, 'signer pubkey')
 	return pubkey
 }
 
 async function encryptForRecipientWithSigner(
 	plaintext: string,
-	signer: NDKSigner,
+	signer: SignerCapability,
 	recipientPubkey: string,
 	label: string,
 ): Promise<string> {
 	try {
-		return await signer.encrypt(new NDKUser({ pubkey: recipientPubkey }), plaintext, 'nip44')
+		return await signer.nip44!.encrypt(recipientPubkey, plaintext)
 	} catch {
 		throw new Error(`NIP-44 encryption failed for ${label}`)
 	}
 }
 
-async function decryptFromSenderWithSigner(ciphertext: string, signer: NDKSigner, senderPubkey: string, label: string): Promise<string> {
+async function decryptFromSenderWithSigner(
+	ciphertext: string,
+	signer: SignerCapability,
+	senderPubkey: string,
+	label: string,
+): Promise<string> {
 	try {
-		return await signer.decrypt(new NDKUser({ pubkey: senderPubkey }), ciphertext, 'nip44')
+		return await signer.nip44!.decrypt(senderPubkey, ciphertext)
 	} catch {
 		throw new Error(`NIP-44 decryption failed for ${label}`)
 	}
@@ -298,26 +301,25 @@ type SignableEvent = {
 	pubkey: string
 }
 
-async function signEventWithSigner(signableEvent: SignableEvent, signer: NDKSigner, label: string): Promise<Event> {
-	if (typeof signer.sign !== 'function') {
+async function signEventWithSigner(signableEvent: SignableEvent, signer: SignerCapability, label: string): Promise<Event> {
+	if (typeof signer.signEvent !== 'function') {
 		throw new Error(`Signer does not support signing ${label}`)
 	}
 
-	let sig: string
+	let signed: NostrEvent
 	try {
-		sig = await signer.sign(signableEvent as Parameters<NDKSigner['sign']>[0])
+		signed = await signer.signEvent(signableEvent as EventTemplate)
 	} catch {
 		throw new Error(`Failed to sign ${label}`)
 	}
 
-	const event = {
-		...signableEvent,
-		id: getEventHash(signableEvent),
-		sig,
+	if (signed.pubkey !== signableEvent.pubkey) {
+		throw new Error(`Invalid ${label} pubkey`)
 	}
-	assertEvent(event, label)
-	if (!verifyEventSignature(event)) throw new Error(`Invalid ${label} signature`)
-	return event
+
+	assertEvent(signed, label)
+	if (!verifyEventSignature(signed)) throw new Error(`Invalid ${label} signature`)
+	return signed
 }
 
 function parseEventJson(json: string, label: string): Event {

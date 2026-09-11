@@ -105,6 +105,10 @@ mock.module('applesauce-relay', () => ({
 	},
 }))
 
+import { bytesToHex } from 'nostr-tools/utils'
+import { generateSecretKey, getEventHash, getPublicKey, verifyEvent } from 'nostr-tools'
+
+import { createPrivateKeySigner, setSignerCapability } from '../nostr/signer-registry'
 import { applesauceIo } from '../nostr/io-applesauce'
 import { ndkIo } from '../nostr/io-ndk'
 import { type NostrIo, fetchEvents, getNostrIo, getUser, publish, setNostrIo, sign, subscribe } from '../nostr/io'
@@ -297,7 +301,10 @@ describe('ndk bridge adapter (io-ndk)', () => {
 })
 
 describe('applesauce adapter (io-applesauce)', () => {
-	afterEach(resetNdkState)
+	afterEach(() => {
+		resetNdkState()
+		setSignerCapability(undefined)
+	})
 
 	test('fetchEvents resolves [] when no relays are configured (short-circuit)', async () => {
 		mockNdkStore.state.explicitRelayUrls = []
@@ -450,10 +457,39 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(poolPublishController).toHaveBeenCalledWith(['wss://override.example'], stubRawEvent)
 	})
 
-	test('sign throws the explicit Wave A3 not-wired error', async () => {
+	test('sign throws when no signer capability is attached (logged out)', async () => {
 		await expect(applesauceIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).rejects.toThrow(
-			'applesauceIo.sign is not wired until Wave A3',
+			'applesauceIo.sign: no signer capability attached',
 		)
+	})
+
+	test('sign routes through the attached signer capability (local lane) and returns a verified event', async () => {
+		const secretKey = generateSecretKey()
+		const pubkey = getPublicKey(secretKey)
+		const capability = createPrivateKeySigner(bytesToHex(secretKey))
+		setSignerCapability(capability)
+
+		const template = { kind: 1, content: 'hello world', tags: [], created_at: 1_700_000_000 }
+		const signed = await applesauceIo.sign(template)
+
+		expect(signed.pubkey).toBe(pubkey)
+		expect(signed.id).toBe(getEventHash(signed))
+		expect(verifyEvent(signed)).toBe(true)
+	})
+
+	test('sign fails closed when the signer returns an event for a different pubkey', async () => {
+		const userSecretKey = generateSecretKey()
+		const attackerSecretKey = generateSecretKey()
+		const userPubkey = getPublicKey(userSecretKey)
+		const attackerSigner = createPrivateKeySigner(bytesToHex(attackerSecretKey))
+
+		// A capability that presents the user's pubkey but signs with the attacker key.
+		setSignerCapability({
+			getPublicKey: async () => userPubkey,
+			signEvent: (template) => attackerSigner.signEvent(template),
+		})
+
+		await expect(applesauceIo.sign({ kind: 1, content: 'c', tags: [], created_at: 1_700_000_000 })).rejects.toThrow(/different pubkey/)
 	})
 
 	test('getUser delegates to the NDK bridge (signer not migrated yet)', async () => {

@@ -29,9 +29,9 @@
 		"test:e2e:debug": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --debug",
 		"test:e2e:flake": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --retries=0 --repeat-each=${E2E_REPEAT:-5}",
 		"dev:contextvm-server": "bun run contextvm/server.ts",
-		"test:unit": "bun test $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
-		"test:unit:watch": "bun test --watch $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
-		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)",
+		"test:unit": "bun test --isolate $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
+		"test:unit:watch": "bun test --watch --isolate $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
+		"test:integration": "bun test --isolate $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)",
 		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {
@@ -60,6 +60,7 @@
 		"@yudiel/react-qr-scanner": "^2.6.0",
 		"applesauce-core": "^6.2.0",
 		"applesauce-relay": "^6.2.0",
+		"applesauce-signers": "6.2.2",
 		"bitcoinjs-lib": "^7.0.1",
 		"bs58check": "^4.0.0",
 		"bun-plugin-tailwind": "^0.1.2",
@@ -92,6 +93,7 @@
 		"@tanstack/router-cli": "^1.166.43",
 		"@tanstack/router-plugin": "^1.167.35",
 		"@types/bun": "^1.3.14",
+		"@types/debug": "^4.1.13",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"@types/ws": "^8.18.1",
@@ -102,5 +104,11 @@
 		"tailwindcss": "^4.3.0",
 		"tailwindcss-animate": "^1.0.7",
 		"ws": "^8.20.1"
+	},
+	"overrides": {
+		"bun": "1.4.2"
+	},
+	"patchedDependencies": {
+		"rxjs@7.8.2": "patches/rxjs@7.8.2.patch"
 	}
 }

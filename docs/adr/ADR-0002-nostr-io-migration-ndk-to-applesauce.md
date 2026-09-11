@@ -234,3 +234,57 @@ Negative / tradeoffs:
 - Upstream epic: `PlebeianApp/market#1005`
 - Martin Fowler, "StranglerFig":
   https://martinfowler.com/bliki/StranglerFigApplication.html
+
+## Amendment (2026-09): Signer migration to applesauce-signers
+
+Waves A3 (NIP-07 + nsec) and A3b (NIP-46) of this ADR — the deferred signer seat — are specified and implemented by this migration. The signer-migration draft was numbered `ADR-0022`, then renumbered `ADR-0008`, and was never merged as a standalone document: its decision is folded into this amendment, so neither number may be cited as an ADR (the index reserves 0008 for a different open conflict).
+
+### Baseline: current `master` auth behavior
+
+The migration contract is anchored to what `master` does today, characterized from source at `master` = `4cbe2b26` (2026-09-07) — not to the workarounds carried by PR #1199.
+
+| Concern           | Current `master` behavior (source)                                                                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Login lanes       | `src/lib/stores/auth.ts`: nsec (`NDKPrivateKeySigner`), NIP-07 extension (`NDKNip07Signer`), NIP-46 bunker (`NDKNip46Signer(ndk, bunkerUrl, localSigner)`, the client key being an app-generated `NDKPrivateKeySigner`), and NIP-49 ncryptsec (`nostr-tools/nip49` `decrypt` → `NDKPrivateKeySigner`). |
+| Boot / auto-login | `getAuthFromLocalStorageAndLogin` replays a stored NIP-46 session from **plaintext** `localStorage` (`nostr_local_signer_key` = client private key, `nostr_connect_key` = bunker URL); otherwise it prompts for the ncryptsec password, otherwise it attempts the extension.                           |
+| NIP-46 connect    | The remote signer is pinned by the bunker URI; `blockUntilReady()` settles before the session is persisted, and the client key + bunker URL are written only after `signer.user()` resolves.                                                                                                           |
+| Identity          | Resolved from the signer (`signer.user()`). The NIP-46 remote-signer pubkey and the authenticated user pubkey are separate values, and nothing asserts that a returned event was signed by the resolved user.                                                                                          |
+| NIP-59 / NIP-44   | `src/lib/nostr/nip59.ts` checks `signer.encryptionEnabled('nip44')` before delegating, **and** has local-key helpers that encrypt/decrypt through `nip44.v2.utils.getConversationKey(<local private key>, …)` — today's module can therefore synthesise NIP-44 from a key the app holds.               |
+| `nostrconnect://` | The client-initiated QR flow puts the generated secret on the non-standard `token` param and the QR peer channel accepts a connect reply whose `params.token` matches; the app-generated `bunker://` URI already uses `secret` (#807).                                                                 |
+
+PR #1199 is **not an input dependency** of this migration: no implementation, test, or invariant here derives from its workarounds or from its test suite. It is retained only as a source of regression cases, and Wave A3b supersedes it.
+
+### Executable invariants preserved through A3/A3b
+
+Each invariant is protocol-faithful (NIP-46 / NIP-07 / NIP-59), derived from the characterized `master` behavior plus the protocol, and has an executable test at the **production seam** (not at a module-mocked seam). The migration may not regress them, and coverage must not fall below the characterized baseline.
+
+- **I1 — The connect secret is validated before binding.** An unknown remote signer is never bound from a bare `ack`; the expected `secret` must validate first. (Implementation: `nostr-connect-signer.ts`. Tests: `nostr-connect-signer.test.ts` — "a bare \"ack\" never binds an unknown remote signer", "a wrong connect secret never binds the remote signer".)
+- **I2 — Remote signer ≠ authenticated user.** The remote-signer pubkey stays separate from the authenticated user pubkey, which is learned only via `get_public_key` / `getPublicKey()`. (Tests: `nostr-connect-signer.test.ts` — "identity resolution is via getPublicKey() only — never clientPubkey"; `nip46-signer-capability.test.ts` — identity-collapse cases.)
+- **I3 — Signed events are bound to the resolved user identity.** A returned signed event must be cryptographically valid **and** satisfy `event.pubkey === authenticatedUserPubkey`; a valid signature from a different key fails closed. (Tests: `nostr-connect-signer.test.ts` — "signEvent fails closed when the returned event pubkey differs from the authenticated user"; the `io-applesauce.ts` sign port.)
+- **I4 — NIP-44 is capability-gated, never synthesised locally.** `SignerCapability.nip44` is optional: a NIP-07 extension without `window.nostr.nip44`, or a NIP-46 signer without the RPC, has no capability, and NIP-59 fails closed instead of falling back to local `nostr-tools` NIP-44 behind a user who never exposed a key. (Implementation: `signer-capability.ts`, `signer-registry.ts` `createExtensionSigner`, `nip59.ts` `signerSupportsNip44`. Tests: `extension-signer.test.ts` — "leaves nip04 and nip44 absent when the extension lacks them (fail closed)"; `nip59.test.ts`.) This is a deliberate behaviour change from `master`, whose NIP-59 module can encrypt with a locally held key.
+- **I5 — Session secrets are never silently plaintext.** A persisted NIP-46 session is encrypted at rest in the vault; existing plaintext sessions are migrated to the vault or force an **intentional re-login**. Retaining plaintext bearer-capability storage is only ever a named maintainer risk-acceptance recorded against the open unencrypted-session-key finding (`#996` H8) — never a silent default. (Implementation: `session-vault.ts`, `stores/auth.ts`. Tests: `session-vault.test.ts`, `auth-session-vault-real-seam.test.ts`.)
+
+### Decisions
+
+- Adopt `applesauce-signers`, pinned exactly at `6.2.2` in `package.json`, for signing alongside the applesauce relay I/O already behind the io seam. `NostrConnectSigner` (NIP-46), `ExtensionSigner` (NIP-07), `PrivateKeySigner` (nsec), and `PasswordSigner` (NIP-49, ncryptsec encrypted at rest with `unlock`/`lock`) replace their NDK equivalents. Prerequisite met on `master`: `applesauce-core` / `applesauce-relay` 6.2.x landed via #1253 (2026-09-01). No NDK-internal workaround is ported; NDK still drops entirely and Wave D stays gated on A3b. `nostr-tools` remains the shared event/nip19/nip44 layer.
+- All `applesauce-signers` imports live behind a signer registry inside `src/lib/nostr/`; stores and UI components never import it directly. The signer seat is a second, equally narrow exception to the `applesauce-*` import rule in `src/AGENTS.md` (relay I/O being the first), and that rule text is amended in this change rather than deferred.
+- One app-owned signer capability seam (`getPublicKey`, `signEvent`, optional `nip44.encrypt`/`decrypt`) covers NIP-07, NIP-46, and local signers (I4). Local signers implement NIP-44 locally; NIP-07 and NIP-46 delegate it, so no path falls back to local NIP-44 behind a user who never exposed a key.
+- The NIP-46 trust/identity chain is locked as invariants I1–I3, with negative coverage for the wrong secret, ack-only binding in the client-initiated flow, remote-signer/user separation, and a valid signature from the wrong user key.
+- NIP-46 session persistence stores the **nbunksec**: the `Nbunksec` / `BunkerURI` session token (`createNbunksec` / `parseNbunksec`, consumed by `NostrConnectSigner.fromNbunksec`) that carries the client secret key and the bunker pointer. It is encrypted at rest (I5).
+- Migration contract: characterize current `master` behavior as executable tests first, then swap per wave preserving those invariants; coverage must not regress below the baseline, and the e2e NIP-46 mock uses distinct remote-signer/user keypairs. Coverage is anchored to the production seam, not to module-mocked seams: a wave's restore/unlock path must be exercised non-mocked (e.g. the real `rehydrateNostrConnectSession` → `NostrConnectSigner` connect RPC), because a suite that mocks the seam cannot observe an unwired transport. The Authentication e2e family runs on every PR.
+
+Related: unencrypted NIP-46 session key — open security finding `#996` H8.
+
+### Build-level patch: `rxjs` index re-exports under `bun dev`
+
+The Authentication e2e family is the first browser code path that reaches `applesauce-relay`'s `RelayPool` (the NIP-46 lane's transport), and it surfaced a bundler-level defect rather than a signer bug:
+
+- `bun`'s dev-server bundler (the server every local run and the `e2e-grep`/`e2e-full` jobs start) registers only the **first** named re-export per source path when it builds a module's export map.
+- `rxjs@7.8.2`'s `index.js` re-exports two names from each of three module paths: `TimeoutError` + `timeout` (`./internal/operators/timeout`), `empty` + `EMPTY` (`./internal/observable/empty`), and `never` + `NEVER` (`./internal/observable/never`).
+- The second name of each pair is therefore missing from the browser bundle's `rxjs` namespace, and `Relay.publish()` / `Relay.request()` build a `timeout(...)` operator synchronously — so every publish/request through the applesauce pool throws `import_rxjsN.timeout is not a function`. That broke the NIP-46 bunker connect path (Authentication) **and** the orders read path (`applesauceIo.fetchEvents` in `src/queries/orders.tsx` → Order Details), which is why both gated families were red on this branch. Bun's own runtime resolution is unaffected because it uses rxjs's CJS entry.
+
+The fix is a semantics-preserving patch of rxjs's two ESM index files, applied through bun's first-class `patchedDependencies` mechanism (`patches/rxjs@7.8.2.patch`): the duplicate-path statements are merged into one statement per path (`export { TimeoutError, timeout } from './internal/operators/timeout'`), which exports exactly the same names and restores all three. `bun install --frozen-lockfile` applies the patch, so CI gets the same bundle the local runs do. Remove the patch once the bundler registers every named re-export or rxjs ships merged statements; drift is loud, not silent, because a patch that no longer applies fails `bun install`.
+
+### NIP-46 QR lane: bounded connect for the listener
+
+The nostrconnect (`QR code`) lane kept its own NDK instance for the scan subscription and awaited `ndk.connect()` with no bound. NDK only settles that promise once **every** relay in the instance's pool reaches `CONNECTED`, so a single slow or unreachable relay — the default `wss://relay.plebeian.market` pick, or a user-typed relay — left the kind-24133 subscription unstarted and the signer's `connect` request unanswered (the relay answered the signer with `mute: no one was listening for this`, which is what the e2e QR spec saw). `NostrConnectQR` now bounds the connect at 3s: the socket keeps connecting in the background and the listener starts, so a slow relay degrades to a retry instead of a dead scan.

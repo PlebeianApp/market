@@ -1,6 +1,6 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import type { Event } from 'nostr-tools'
 import { createNip17GiftWrapsWithSigner } from '../nostr/nip17'
+import type { SignerCapability } from '../nostr/signer-capability'
 import { resolveNip17RelayTargetsFromEvents, type Nip17DmRelayListEvent, type Nip17RelayTargetsResult } from '../nostr/nip17Relays'
 import { assertOrderMessageRumor, type OrderMessageRumor } from './orderMessageRumor'
 
@@ -16,7 +16,7 @@ export type PublishNip17GiftWrapResult = unknown
 
 export type PublishNip17OrderMessageParams = {
 	rumor: OrderMessageRumor
-	signer: NDKSigner
+	signer: SignerCapability
 	recipientPubkey: string
 	recipientRelayEvents: Nip17DmRelayListEvent[]
 	senderRelayEvents: Nip17DmRelayListEvent[]
@@ -98,10 +98,10 @@ async function publishReadyGiftWrap(
 	}
 }
 
-async function getSignerPubkey(signer: NDKSigner): Promise<string> {
-	const user = await signer.user()
-	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
-	return user.pubkey
+async function getSignerPubkey(signer: SignerCapability): Promise<string> {
+	const pubkey = await signer.getPublicKey()
+	if (!pubkey) throw new Error('Signer pubkey unavailable')
+	return pubkey
 }
 
 function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string {

@@ -23,7 +23,7 @@ components, hooks, and the current Bun server entry area.
   state as sensitive. Do not log them.
 - Preserve TanStack Router file-based route conventions and current Bun runtime
   assumptions.
-- As of [ADR-0002: Strangler-Fig Pattern for Nostr I/O Migration (NDK → Applesauce)](../docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md), no new `@nostr-dev-kit` or `applesauce-*` imports; route all Nostr relay I/O through `src/lib/nostr/io.ts` instead.
+- As of [ADR-0002: Strangler-Fig Pattern for Nostr I/O Migration (NDK → Applesauce)](../docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md), no new `@nostr-dev-kit` or `applesauce-*` imports; route all Nostr relay I/O through `src/lib/nostr/io.ts` instead. The signer seat is a second, equally narrow exception to the `applesauce-*` import rule (relay I/O being the first): `applesauce-signers` imports live only behind the signer registry and its sibling homes inside `src/lib/nostr/` (`signer-registry.ts`, `nostr-connect-signer.ts`, `nostr-connect-session.ts`, `password-signer-session.ts`, `session-vault.ts`, `nostr-connect-uri.ts`), per the [ADR-0002 amendment (2026-09)](../docs/adr/ADR-0002-nostr-io-migration-ndk-to-applesauce.md). Stores and UI components never import `applesauce-signers` directly.
 
 ## Instructions
 

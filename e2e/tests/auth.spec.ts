@@ -4,7 +4,6 @@ import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
 import { v2 as nip44 } from 'nostr-tools/nip44'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { nip19 } from 'nostr-tools'
 import { Nip46Mock } from '../utils/nip46-mock'
 import { RELAY_URL } from '../test-config'
 import { encrypt } from 'nostr-tools/nip49'
@@ -108,11 +107,6 @@ async function expectAuthenticated(page: Page) {
 /** Verify the user is NOT authenticated (login button visible) */
 async function expectNotAuthenticated(page: Page) {
 	await expect(page.locator('[data-testid="login-button"]').first()).toBeVisible({ timeout: 10_000 })
-}
-
-/** Convert hex SK to nsec format */
-function hexToNsec(hexSk: string): string {
-	return nip19.nsecEncode(hexToBytes(hexSk))
 }
 
 // ─── Tests ──────────────────────────────────────────────────
@@ -317,14 +311,18 @@ test.describe('Authentication', () => {
 		test('remove stored key shows fresh key input', async ({ browser }) => {
 			test.setTimeout(45_000) // fresh context + relay operations need more time
 			const context = await browser.newContext()
-			const nsec = hexToNsec(devUser2.sk)
+			// Store a real ncryptsec, not a raw nsec: a raw nsec in the
+			// encrypted-key slot is the legacy-migration case, whose
+			// MigratePrivateKeyDialog overlay is not dismissible and made this
+			// spec race the app's boot (see #1224).
+			const ncryptsec = encrypt(hexToBytes(devUser2.sk), 'testpassword123')
 
 			await context.addInitScript(
-				({ pk, nsec }: { pk: string; nsec: string }) => {
-					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${nsec}`)
+				({ pk, ncryptsec }: { pk: string; ncryptsec: string }) => {
+					localStorage.setItem('nostr_local_encrypted_signer_key', `${pk}:${ncryptsec}`)
 					localStorage.setItem('plebeian_terms_accepted', 'true')
 				},
-				{ pk: devUser2.pk, nsec },
+				{ pk: devUser2.pk, ncryptsec },
 			)
 
 			const page = await context.newPage()
@@ -435,13 +433,18 @@ test.describe('Authentication', () => {
 				// auth directly since the intermediate text may flash too fast.
 				await expectAuthenticated(page)
 
-				// Verify localStorage has NIP-46 keys
-				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
-				expect(signerKey).toBeTruthy()
-
-				const connectUrl = await page.evaluate(() => localStorage.getItem('nostr_connect_url'))
-				expect(connectUrl).toBeTruthy()
-				expect(connectUrl).toContain('bunker://')
+				// ADR-0002 amendment I5 (session secrets are never silently
+				// plaintext): the nostrconnect lane runs without a session
+				// passphrase here, so the session is in-memory only — the legacy
+				// plaintext pair is never written and no vault exists either.
+				const stored = await page.evaluate(() => ({
+					connect: localStorage.getItem('nostr_connect_url'),
+					signer: localStorage.getItem('nostr_local_signer_key'),
+					vault: localStorage.getItem('nostr_session_v1'),
+				}))
+				expect(stored.connect).toBeNull()
+				expect(stored.signer).toBeNull()
+				expect(stored.vault).toBeNull()
 			} finally {
 				mock.close()
 				await context.close()
@@ -475,13 +478,18 @@ test.describe('Authentication', () => {
 				// Verify auth succeeds
 				await expectAuthenticated(page)
 
-				// Verify localStorage
-				const storedConnectUrl = await page.evaluate(() => localStorage.getItem('nostr_connect_url'))
-				expect(storedConnectUrl).toBeTruthy()
-				expect(storedConnectUrl).toContain('bunker://')
-
-				const signerKey = await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))
-				expect(signerKey).toBeTruthy()
+				// ADR-0002 amendment I5 (session secrets are never silently
+				// plaintext): without a session passphrase the nbunksec session
+				// is in-memory only — the legacy plaintext pair is never
+				// written and no vault exists either.
+				const stored = await page.evaluate(() => ({
+					connect: localStorage.getItem('nostr_connect_url'),
+					signer: localStorage.getItem('nostr_local_signer_key'),
+					vault: localStorage.getItem('nostr_session_v1'),
+				}))
+				expect(stored.connect).toBeNull()
+				expect(stored.signer).toBeNull()
+				expect(stored.vault).toBeNull()
 			} finally {
 				mock.close()
 				await context.close()
@@ -594,6 +602,65 @@ test.describe('Authentication', () => {
 	})
 
 	test.describe('Persistence and Reload', () => {
+		test('vaulted bunker session: reload → unlock with passphrase → identity restored', async ({ browser }) => {
+			test.setTimeout(90_000)
+			const context = await browser.newContext()
+			const page = await createFreshPage(context)
+			const mock = new Nip46Mock(devUser2.sk)
+			const secret = 'test-secret-' + Date.now()
+			const passphrase = 'vault-pass-123'
+
+			try {
+				// Start the signer loop BEFORE navigating (must be ready for the signer).
+				const cleanup = await mock.startSignerLoop(RELAY_URL)
+
+				await page.goto('/')
+				await page.waitForLoadState('domcontentloaded')
+				await openLoginDialog(page)
+
+				// Navigate to N-Connect → Bunker URL tab
+				await page.locator('[data-testid="connect-tab"]').click()
+				await page.locator('[data-testid="bunker-tab"]').click()
+
+				// Connect with a session passphrase so the nbunksec is vaulted at rest.
+				const bunkerUrl = `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}&secret=${secret}`
+				await page.locator('[data-testid="bunker-url-input"]').fill(bunkerUrl)
+				await page.locator('[data-testid="session-passphrase-input"]').fill(passphrase)
+
+				// The boot restore gate is `nostr_auto_login` (unchanged from
+				// master): `getAuthFromLocalStorageAndLogin` only looks for a
+				// persisted session when it is set. Enable it so the reload
+				// exercises the vault unlock prompt instead of the logged-out
+				// shell.
+				await page.locator('[data-testid="auto-login-checkbox"]').click()
+				await page.locator('[data-testid="connect-bunker-button"]').click()
+
+				// Verify auth succeeds and the vault is persisted.
+				await expectAuthenticated(page)
+				const vault = await page.evaluate(() => localStorage.getItem('nostr_session_v1'))
+				expect(vault).toBeTruthy()
+
+				// Reload — the vaulted session must trigger the unlock prompt
+				// (no silent plaintext re-login).
+				await page.reload()
+				await page.waitForLoadState('domcontentloaded')
+				await expect(page.locator('[data-testid="session-unlock-dialog"]')).toBeVisible({ timeout: 15_000 })
+
+				// Unlock with the passphrase → identity restored through the REAL
+				// rehydrate seam (NostrConnectSigner.fromNbunksec + connect RPC).
+				await page.locator('[data-testid="session-passphrase-input"]').fill(passphrase)
+				await page.locator('[data-testid="session-unlock-button"]').click()
+				await expectAuthenticated(page)
+
+				// The vault survives the unlock (still encrypted at rest).
+				const vaultAfter = await page.evaluate(() => localStorage.getItem('nostr_session_v1'))
+				expect(vaultAfter).toBeTruthy()
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+
 		test('auto-login with extension after reload', async ({ browser }) => {
 			const context = await browser.newContext()
 			await setupExtensionOnly(context, devUser1)
