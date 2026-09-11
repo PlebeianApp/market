@@ -78,9 +78,29 @@ kind-1025 path release already publishes full proofs at settlement.
    (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
    verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps
    the "validator is structural/opinion-only" architecture intact.
+   6a. **Bounded keyset acquisition (Amendment).** Every ingestion and settlement path that
+   calls `computeValidatedBids` MUST acquire the mint keysets needed to DLEQ-verify
+   bids (`fetchDleqKeysetsForBids`), bounded to the auction's `mint` allowlist. Missing
+   DLEQ evidence is NON-AUTHORITATIVE: a DLEQ-required bid whose keyset cannot be
+   gathered is classified `pending`, never valid. Without feeding evidence, a
+   DLEQ-required auction can never settle — fail-safe, not fail-open.
 7. **Migration by `start_at`.** Auctions with `start_at >= DLEQ_ROLLOUT_START_AT` require
    the DLEQ path; live auctions (already open) are grandfathered under the legacy
    non-DLEQ path so they are not broken mid-flight.
+8. **Canonical activation (Amendment).** The DLEQ requirement is recorded on the signed
+   auction event as a `dleq_required` tag (`"1"`/`"0"`), emitted at publish time from the
+   same boundary decision the publish gate enforces. This makes activation canonical
+   protocol truth: two clients reading the same signed event derive the same requirement
+   regardless of their deploy-time boundary config, and a seller cannot backdate
+   `start_at` to change it. The client-side boundary comparison remains only as a
+   fallback for legacy events published before the tag existed. The bidder publish path
+   derives BOTH its lock requirement (`lockAuctionBidFunds({ dleqRequired })`) and its
+   published `dleq_proof` tags from this single signed value — never from a second,
+   locally re-derived boundary comparison, which could make the lock and the published
+   kind-1023 disagree. The bid form carries that value explicitly
+   (`AuctionBidFormData.dleqRequired`, read from the event via `getAuctionDleqRequired`,
+   which delegates to the same `resolveDleqRequired` predicate); the boundary fallback
+   inside `publishAuctionBid` exists only for callers that predate the field.
 
 ### Tag serialization (resolved per AUCTIONS.md §4.2)
 

@@ -197,6 +197,7 @@ export const VALIDATOR_REASONS = [
 	'unsupported_mint',
 	'bad_lock',
 	'bad_proof_y',
+	'dleq_invalid',
 	'proof_spent',
 	'proof_missing',
 	// signature / structure
@@ -226,3 +227,91 @@ export const BIDDER_AGGREGATE_SCHEMA_TYPE = 'auction_bidder_aggregate_v1'
 
 /** d-tag prefix for validator policy events (kind 30441). */
 export const VALIDATOR_POLICY_D_PREFIX = 'policy:auction'
+
+// ---------- DLEQ rollout boundary (ADR-0011, Decision 7) ------------------
+
+/** Default rollout boundary — 2026-09-08T00:00:00Z (PR-merge epoch). */
+export const DEFAULT_DLEQ_ROLLOUT_START_AT = 1788825600
+
+/**
+ * Resolve the rollout boundary from a raw env value, falling back to the
+ * default when unset, empty, whitespace, or non-canonical (fail-closed — a
+ * malformed value must never enable a MORE permissive boundary). Only a
+ * canonical digits-only string (e.g. `"1788825600"` or an explicit `"0"` for
+ * immediate rollout) is accepted; everything else (`"0x12AB"`, `"1.79e9"`,
+ * negatives, fractions, whitespace) falls back to the default.
+ */
+export function resolveDleqRolloutStartAt(raw: string | undefined): number {
+	if (raw === undefined) return DEFAULT_DLEQ_ROLLOUT_START_AT
+	const trimmed = raw.trim()
+	if (!/^\d+$/.test(trimmed)) return DEFAULT_DLEQ_ROLLOUT_START_AT
+	const parsed = Number(trimmed)
+	return Number.isSafeInteger(parsed) ? parsed : DEFAULT_DLEQ_ROLLOUT_START_AT
+}
+
+/**
+ * Migration boundary for NUT-12 DLEQ bid-time collateral verification.
+ *
+ * Auctions whose `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` follow the
+ * DLEQ-required path (ADR-0011): every allowlisted mint must advertise NUT-12
+ * support (Decision 5) and bids must publish `dleq_proof` tags (Decision 1).
+ * Auctions started before this boundary are grandfathered under the legacy
+ * non-DLEQ path so live auctions are not broken mid-flight (Decision 7).
+ *
+ * Overridable via the `APP_AUCTION_DLEQ_ROLLOUT_START_AT` environment variable
+ * (epoch seconds), following the repo's `APP_*` convention — see
+ * `src/server/runtime.ts`. The default literal is the rollout epoch; operators
+ * pin the real value at deploy.
+ *
+ * NOTE: bundlers inline `process.env.*` at build time for browser bundles, so
+ * the fallback must remain a build-time literal (never a runtime lookup). A
+ * deploy that wants a different boundary must set the env var at build time or
+ * bump `DEFAULT_DLEQ_ROLLOUT_START_AT`.
+ */
+export const APP_AUCTION_DLEQ_ROLLOUT_START_AT: number = resolveDleqRolloutStartAt(process.env.APP_AUCTION_DLEQ_ROLLOUT_START_AT)
+
+/**
+ * True when an auction starting at `startAt` (epoch seconds) must follow the
+ * DLEQ-required path (ADR-0011, Decision 7: migration by `start_at`).
+ *
+ * `startAt` is expected to be a validated non-negative integer epoch (callers
+ * pass the field parsed from the auction event, which the bid/auction Zod
+ * schemas already normalize). Non-finite input is treated as pre-rollout,
+ * which errs toward grandfathering a malformed coordinate rather than failing
+ * it open.
+ */
+export function requiresDleqForAuction(startAt: number): boolean {
+	return startAt >= APP_AUCTION_DLEQ_ROLLOUT_START_AT
+}
+
+// ---------- Canonical DLEQ activation (ADR-0011, Decision 8) ---------------
+
+/** Tag name carrying the canonical DLEQ requirement on the signed auction event. */
+export const DLEQ_REQUIRED_TAG = 'dleq_required'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ required". */
+export const DLEQ_REQUIRED_TRUE = '1'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ not required". */
+export const DLEQ_REQUIRED_FALSE = '0'
+
+/**
+ * Resolve the canonical DLEQ requirement for an auction from its signed
+ * `dleq_required` tag. This is the single shared activation predicate every
+ * path consumes (ADR-0011, Decision 8).
+ *
+ * The signed tag is protocol truth: two clients reading the same signed event
+ * derive the same requirement regardless of their deploy-time boundary config,
+ * and a seller cannot backdate `start_at` to change it. Only when the tag is
+ * absent (a legacy event published before the tag existed) do we fall back to
+ * the boundary comparison so already-published auctions are not broken.
+ *
+ * @param dleqRequiredRaw raw value of the `dleq_required` tag, or `undefined`
+ *   when the tag is absent.
+ * @param startAt auction `start_at` (epoch seconds), used only for the legacy
+ *   fallback when the tag is absent.
+ */
+export function resolveDleqRequired(dleqRequiredRaw: string | undefined, startAt: number): boolean {
+	if (dleqRequiredRaw === undefined) return requiresDleqForAuction(startAt)
+	return dleqRequiredRaw === DLEQ_REQUIRED_TRUE
+}

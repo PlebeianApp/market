@@ -88,6 +88,7 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 	maxSkewSec: 60,
 	fallbackDelaySec: 1_800,
 	vadiumRatioBps: 10_000,
+	dleqRequired: false,
 	schema: 'auction_v1',
 	...overrides,
 })

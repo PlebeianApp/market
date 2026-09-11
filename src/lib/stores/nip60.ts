@@ -15,7 +15,7 @@ import {
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
-import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS, resolveDleqRequired } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
@@ -28,6 +28,7 @@ import {
 	type Proof,
 } from '@cashu/cashu-ts'
 import { getP2PKLocktime } from '@/lib/utils/cashu'
+import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
@@ -130,6 +131,15 @@ export interface LockAuctionBidFundsParams {
 	 * auction's p2pk_xpub before calling lockAuctionBidFunds.
 	 */
 	lockPubkey: string
+	/**
+	 * ADR-0011 Blocker 2/3: true when the auction requires NUT-12 DLEQ on
+	 * the locked output proofs (i.e. `auction.dleqRequired`). When true the
+	 * lock swaps all eligible inputs and then validates the freshly issued
+	 * P2PK output proofs carry a DLEQ proof (fail-closed). When false
+	 * (grandfathered/pre-rollout auction), no such output requirement is
+	 * enforced, so a legacy non-DLEQ balance can still lock.
+	 */
+	dleqRequired?: boolean
 	auctionEventId?: string
 	auctionCoordinates?: string
 	sellerPubkey?: string
@@ -947,21 +957,31 @@ const lockAuctionBidProofs = async (
 	amount: number,
 	proofs: Proof[],
 	params: {
-		includeDleq: boolean
 		lockPubkey: string
 		locktime: number
 		refundPubkey: string
+		/**
+		 * ADR-0011 Blocker 2/3: whether to require NUT-12 DLEQ on the
+		 * NEWLY ISSUED P2PK swap OUTPUT proofs. The DLEQ security property
+		 * lives on the output, NOT on the input proofs — so we swap ALL
+		 * eligible inputs (regardless of input DLEQ metadata, which a
+		 * legacy/grandfathered balance may lack) and validate the outputs
+		 * after the swap. When true, an output proof without a DLEQ proof
+		 * fails closed.
+		 */
+		requireDleqOnOutput?: boolean
 	},
 ) => {
-	const spendableProofs = params.includeDleq ? proofs.filter((proof) => proof.dleq != null) : proofs
-	if (getProofsTotal(spendableProofs) < amount) {
+	// No input-side DLEQ filtering. The mint consumes whatever inputs are
+	// selected and issues freshly locked P2PK proofs.
+	if (getProofsTotal(proofs) < amount) {
 		throw new Error('Not enough funds available to send')
 	}
 
 	// cashu-ts 2.9 `send()` ignores `p2pk` when existing proofs exactly
 	// satisfy the amount. Use `swap()` so every auction bid always receives
 	// freshly minted NUT-11 P2PK proofs.
-	return cashuWallet.swap(amount, spendableProofs, {
+	return cashuWallet.swap(amount, proofs, {
 		p2pk: {
 			pubkey: params.lockPubkey,
 			locktime: params.locktime,
@@ -2131,60 +2151,42 @@ export const nip60Actions = {
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
+			let lockedProofs: Proof[] = []
+			let changeProofs: Proof[] = []
+
 			// 1-of-1 P2PK lock. The seller alone cannot spend pre-locktime because
 			// the derivation path that produced `lockPubkey` is held secret by the
 			// auction's path oracle — see AUCTIONS.md §5.2.
-			const buildLockOptions = (includeDleq: boolean) => ({
-				includeDleq,
+			// ADR-0011 Blocker 2: the DLEQ security property lives on the NEWLY
+			// ISSUED P2PK swap outputs, not on the input proofs. `lockAuctionBidProofs`
+			// swaps ALL eligible inputs (no input DLEQ filter) and we validate the
+			// output proofs' DLEQ below. Blocker 3: `requireDleqOnOutput` is derived
+			// from the auction's canonical `dleqRequired`, so legacy non-DLEQ balances
+			// can still bid on grandfathered auctions.
+			const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, {
 				lockPubkey,
 				locktime,
 				refundPubkey,
 			})
-
-			let lockedProofs: Proof[] = []
-			let changeProofs: Proof[] = []
-
-			try {
-				const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, buildLockOptions(true))
-				lockedProofs = result.send
-				changeProofs = result.keep
-			} catch (primaryErr) {
-				const message = primaryErr instanceof Error ? primaryErr.message.toLowerCase() : String(primaryErr).toLowerCase()
-				const insufficient = message.includes('not enough funds available to send')
-				if (!insufficient) {
-					throw primaryErr
-				}
-
-				try {
-					// Some wallet states contain proofs without DLEQ metadata.
-					// Retry without DLEQ requirement using full mint proofs for demo reliability.
-					const retry = await lockAuctionBidProofs(cashuWallet, amount, mintProofs, buildLockOptions(false))
-					lockedProofs = retry.send
-					changeProofs = retry.keep
-				} catch (secondaryErr) {
-					const secondaryMessage = secondaryErr instanceof Error ? secondaryErr.message.toLowerCase() : String(secondaryErr).toLowerCase()
-					const stillInsufficient = secondaryMessage.includes('not enough funds available to send')
-					if (!stillInsufficient) {
-						throw secondaryErr
-					}
-
-					// Last-resort path: reconcile wallet state, then retry once.
-					try {
-						await nip60Actions.consolidateProofs()
-					} catch (consolidateErr) {
-						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
-					}
-
-					const refreshedProofs = getSpendableProofsForMint(wallet, targetMint)
-					const retryAfterConsolidate = await lockAuctionBidProofs(cashuWallet, amount, refreshedProofs, buildLockOptions(false))
-					lockedProofs = retryAfterConsolidate.send
-					changeProofs = retryAfterConsolidate.keep
-				}
-			}
+			lockedProofs = result.send
+			changeProofs = result.keep
 
 			if (!lockedProofs.length) {
 				throw new Error('Mint returned no locked proofs for bid')
 			}
+
+			// ADR-0011 Blocker 2: validate the freshly issued outputs' security
+			// properties — P2PK lock pubkey (already done by
+			// assertAuctionBidProofsLockedToP2pk below) AND, for DLEQ-required
+			// auctions, a DLEQ proof on each output. Validation stays AFTER the
+			// swap so a bad output is still reclaim-eligible (the pending-token
+			// record, persisted below, is the wallet's durable observation).
+			// When the auction requires DLEQ, every locked output proof MUST carry
+			// a NUT-12 DLEQ proof — the publisher cannot build verifiable
+			// `dleq_proof` tags otherwise. Fail closed (buildDleqProofs throws on
+			// a missing DLEQ proof), but do this AFTER the strict pending-token
+			// persist so a check failure leaves a reclaim-eligible leg.
+			const requireDleqOnOutput = params.dleqRequired === true
 
 			const token = getEncodedToken({
 				mint: targetMint,
@@ -2236,6 +2238,20 @@ export const nip60Actions = {
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
 			assertAuctionBidProofsLockedToP2pk(lockedProofs, lockPubkey)
+
+			// ADR-0011 Blocker 2 — validate the freshly issued P2PK swap outputs'
+			// DLEQ property when the auction requires it. Fail-closed and AFTER
+			// the durable pending-token persist, so a leg whose outputs fail the
+			// P2PK or DLEQ check is still reclaim-eligible (the pending token is
+			// the wallet's durable observation).
+			if (requireDleqOnOutput) {
+				// A DLEQ-required lock must emit NUT-12 DLEQ proofs on its
+				// freshly issued P2PK outputs — the bid publisher cannot build
+				// verifiable `dleq_proof` tags otherwise. Fail closed via
+				// buildDleqProofs (which throws on any proof lacking a DLEQ
+				// proof), inside the post-swap durable path.
+				buildDleqProofs(lockedProofs)
+			}
 
 			// Apply the wallet-state delta SYNCHRONOUSLY before returning so
 			// the balance UI doesn't briefly double-count the consumed
@@ -2639,6 +2655,10 @@ export const nip60Actions = {
 			sellerPubkey: selected.pubkey,
 			p2pkXpub,
 			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
+			// ADR-0011 Decision 8 (review N1) — carry the auction's canonical
+			// DLEQ activation so the lock and the published `dleq_proof` tags
+			// come from the signed decision, not the deploy-time boundary.
+			dleqRequired: resolveDleqRequired(getFirstTagValue(selected, 'dleq_required'), startAt),
 		}
 
 		const bidEventId = await publishAuctionBid(formData, signer, ndk)

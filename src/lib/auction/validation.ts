@@ -30,6 +30,7 @@ import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
 	BID_FLOOR_TIME_GRACE_SECONDS,
+	requiresDleqForAuction,
 	type PathReleaseReason,
 	type Nut7ProofState,
 	type ValidatorClaim,
@@ -38,6 +39,8 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
+import type { DleqProof } from '../cashu/dleq'
+import { mintSupportsDleq, type MintDleqSupportOptions } from '../cashu/mintCapability'
 import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
@@ -124,6 +127,53 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	}
 	keysetCache.set(mintUrl, { keysets, cachedAt: Date.now(), isFailure: false })
 	return keysets
+}
+
+// ---------- DLEQ mint support (ADR-0011, Decisions 4 & 6) -----------------
+
+// Re-exported so the auction-layer import surface is unchanged; the single
+// canonical implementation (with bounded timeout + injectable transport)
+// lives in `src/lib/cashu/mintCapability.ts`.
+export { mintSupportsDleq, type MintDleqSupportOptions }
+
+/**
+ * Enforce the DLEQ publish gate (ADR-0011, Decision 6: migration by `start_at`).
+ *
+ * When `startAt` is at or after {@link APP_AUCTION_DLEQ_ROLLOUT_START_AT}, every
+ * allowlisted mint must advertise NUT-12 DLEQ support. Any mint that fails the
+ * probe is a hard reject with a clear error naming each offending mint; the
+ * auction is not created. Auctions starting before the boundary (or with an
+ * empty mint allowlist) pass without any network probes — live auctions are
+ * grandfathered under the legacy non-DLEQ path.
+ *
+ * @param supportsDleq injectable probe (defaults to {@link mintSupportsDleq}) —
+ *   lets callers and tests substitute a policy-enforcing or fake transport.
+ */
+export async function assertAuctionMintsSupportDleq(
+	startAt: number,
+	mints: readonly string[],
+	supportsDleq: (mintUrl: string) => Promise<boolean> = mintSupportsDleq,
+): Promise<void> {
+	if (!requiresDleqForAuction(startAt)) return
+
+	const unsupported: string[] = []
+	for (const mint of mints) {
+		let ok = false
+		try {
+			ok = await supportsDleq(mint)
+		} catch {
+			ok = false
+		}
+		if (!ok) unsupported.push(mint)
+	}
+
+	if (unsupported.length > 0) {
+		throw new Error(
+			`This auction starts after the DLEQ rollout boundary (ADR-0011), but the following trusted ` +
+				`mint(s) do not advertise NUT-12 DLEQ support: ${unsupported.join(', ')}. ` +
+				`Use NUT-12-capable mints or set an earlier start time.`,
+		)
+	}
 }
 
 /**
@@ -361,6 +411,68 @@ export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: nu
 }
 
 // ============================================================================
+// DLEQ proof structural validation (ADR-0011 B4)
+// ============================================================================
+
+const HEX_RE = /^[0-9a-fA-F]+$/
+const COMPRESSED_PK_RE = /^(02|03)[0-9a-fA-F]{64}$/
+
+/**
+ * Validate the structure of a single NUT-12 DLEQ proof entry (ADR-0011 B4).
+ *
+ * Returns a human-readable failure detail string when the proof is malformed,
+ * or `undefined` when it is structurally well-formed. This is a STRUCTURAL
+ * check only — it does not (and cannot, without a keyset) verify the DLEQ
+ * cryptographically; that is {@link verifyBidDleq}'s job. But a proof that
+ * fails this check can never pass crypto verification anyway (a missing
+ * keyset id, negative amount, wrong-length `C`, or absent blinding factor
+ * `r` all break NUT-12), so rejecting it here both gives an earlier, clearer
+ * verdict and is defense-in-depth against hand-built `ParsedBidEvent`s.
+ *
+ * `index` is the 0-based proof position, used only for the error message.
+ */
+const validateDleqProofStructure = (proof: DleqProof | null | undefined, index: number): string | undefined => {
+	const n = index + 1
+
+	// Defense-in-depth: `dleqProofs` is typed `DleqProof[]`, but a hand-built
+	// `ParsedBidEvent` (the exact path this check exists to guard) could
+	// inject a null/undefined array entry. A dereference would throw a
+	// TypeError and abort the whole pipeline instead of returning a
+	// fail-closed `bid_invalid` verdict. Guard the entry itself first.
+	if (proof === null || proof === undefined || typeof proof !== 'object') {
+		return `proof ${n}: dleq_proof must be an object (got ${JSON.stringify(proof)})`
+	}
+
+	// NOTE: the id / e / s / r checks below are deliberately LENGTH-AGNOSTIC
+	// (any non-empty hex passes). Cashu v1 keyset ids are 16 hex chars and
+	// NUT-12 scalars are 64 hex chars, but enforcing those exact lengths
+	// here would duplicate what the cryptographic verification
+	// (`verifyBidDleq` → `hasValidDleq`) already does strictly. This layer
+	// stays a cheap syntactic gate; scalar/keyset length and validity are
+	// the crypto layer's job, where a bad scalar yields `ok: false`, never a
+	// silent pass.
+	if (typeof proof.id !== 'string' || proof.id.length === 0 || !HEX_RE.test(proof.id)) {
+		return `proof ${n}: dleq_proof id must be a non-empty hex keyset id (got ${JSON.stringify(proof.id)})`
+	}
+	if (typeof proof.amount !== 'number' || !Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+		return `proof ${n}: dleq_proof amount must be a positive safe integer (got ${JSON.stringify(proof.amount)})`
+	}
+	if (typeof proof.C !== 'string' || !COMPRESSED_PK_RE.test(proof.C)) {
+		return `proof ${n}: dleq_proof C must be a 66-char compressed secp256k1 pubkey (02/03 prefix, got ${JSON.stringify(proof.C)})`
+	}
+	if (typeof proof.e !== 'string' || proof.e.length === 0 || !HEX_RE.test(proof.e)) {
+		return `proof ${n}: dleq_proof e (challenge) must be a non-empty hex string (got ${JSON.stringify(proof.e)})`
+	}
+	if (typeof proof.s !== 'string' || proof.s.length === 0 || !HEX_RE.test(proof.s)) {
+		return `proof ${n}: dleq_proof s (response) must be a non-empty hex string (got ${JSON.stringify(proof.s)})`
+	}
+	if (typeof proof.r !== 'string' || proof.r.length === 0 || !HEX_RE.test(proof.r)) {
+		return `proof ${n}: dleq_proof r (blinding factor) must be a non-empty hex string (got ${JSON.stringify(proof.r)})`
+	}
+	return undefined
+}
+
+// ============================================================================
 // validateBid — the §7.1 pipeline
 // ============================================================================
 
@@ -425,6 +537,44 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 
+	// --- Step 3.5: NUT-12 DLEQ collateral presence (ADR-0011 Decision 6/7) --
+	// Auctions starting at/after the rollout boundary require every bid to
+	// publish one DLEQ proof per locked proof. Missing or mismatched DLEQ
+	// collateral fails closed (`dleq_invalid`) rather than grandfathering the
+	// economic-verification gap. Pre-rollout auctions are grandfathered.
+	// NOTE: a partial-count mismatch (0 < dleqProofs.length < lockSecrets.length)
+	// is rejected earlier at parse time by the schema's triple-parallel refine,
+	// so through the real parse→validate path this branch fires primarily for
+	// the fully-absent (0 proofs) case; the count check remains here as
+	// defense-in-depth for hand-built `ParsedBidEvent`s.
+	if (auction.dleqRequired) {
+		const dleqProofs = bid.dleqProofs ?? []
+		if (dleqProofs.length !== bid.lockSecrets.length) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'dleq_invalid',
+				detail: `DLEQ-required auction (dleq_required=1) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
+			}
+		}
+		// B4 (ADR-0011): structural field validation of every dleq_proof entry.
+		// Each proof must carry the complete NUT-12 DLEQ tuple — keyset id,
+		// amount, unblinded signature `C`, challenge `e`, response `s`, and the
+		// blinding factor `r`. A malformed or field-omitted proof fails closed
+		// (`dleq_invalid`) the same way a missing proof would: the bidder's
+		// `dleq_proof` tag is untrusted input, and a structurally-broken proof
+		// cannot be verified cryptographically downstream. This is
+		// defense-in-depth for hand-built `ParsedBidEvent`s (the Zod schema
+		// already rejects most malformed tags at parse time), and it pins the
+		// `r`-is-required contract that `verifyProofDleq` also enforces
+		// fail-closed (NUT-12 needs the blinding factor to reblind offline).
+		for (let i = 0; i < dleqProofs.length; i++) {
+			const structuralError = validateDleqProofStructure(dleqProofs[i], i)
+			if (structuralError) {
+				return { claim: 'bid_invalid', reason: 'dleq_invalid', detail: structuralError }
+			}
+		}
+	}
+
 	// --- Step 4: lock secret structure --------------------------------------
 
 	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
@@ -451,9 +601,11 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 	// Cashu token has a unique secret and Y value by construction.
 	const seenLockSecrets = new Set<string>()
 	const seenProofYs = new Set<string>()
+	const seenDleqCs = new Set<string>()
 	for (let i = 0; i < bid.lockSecrets.length; i++) {
 		const secretLower = bid.lockSecrets[i].toLowerCase()
 		const proofYLower = bid.proofYs[i].toLowerCase()
+		const dleqC = bid.dleqProofs?.[i]?.C?.toLowerCase()
 		if (seenLockSecrets.has(secretLower)) {
 			return {
 				claim: 'bid_invalid',
@@ -468,8 +620,16 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 				detail: `duplicate proof_y at index ${i} — each proof must have a unique Y value`,
 			}
 		}
+		if (dleqC && seenDleqCs.has(dleqC)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'dleq_invalid',
+				detail: `duplicate dleq_proof C at index ${i} — each proof must have a unique mint signature`,
+			}
+		}
 		seenLockSecrets.add(secretLower)
 		seenProofYs.add(proofYLower)
+		if (dleqC) seenDleqCs.add(dleqC)
 	}
 	// Validate every proof's secret independently. All MUST share the same
 	// lock parameters — the bidder split their input across multiple

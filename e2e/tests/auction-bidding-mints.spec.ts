@@ -61,9 +61,15 @@ test.beforeEach(async ({ buyerPage }) => {
 	await interceptPlaceholdImages(buyerPage)
 })
 
-async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string }) {
+async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string; dleqRequired?: boolean }) {
 	const skBytes = hexToBytes(devUser1.sk)
 	const now = Math.floor(Date.now() / 1000)
+	// Live auction (post-DLEQ-rollout path). The local Cashu mint (nutshell
+	// FakeWallet) advertises NUT-12 and returns DLEQ proofs on mint/swap, so
+	// the post-rollout DLEQ-required bid path works against it — see
+	// auctionDLEQ.mint.integration.test.ts. A relative start keeps the auction
+	// live regardless of when CI runs (a fixed past epoch would make it ENDED
+	// and hide the bid button).
 	const startAt = now - 60
 	const endAt = now + 3600
 	const maxEndAt = now + 7200
@@ -100,6 +106,12 @@ async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: st
 				['settlement_grace', '7200'],
 				['extension_rule', 'none'],
 				['schema', 'auction_v1'],
+				// ADR-0011 Decision 8 — emit the canonical DLEQ activation tag
+				// explicitly instead of relying on the deploy-time `start_at`
+				// boundary, so these scenarios keep exercising the DLEQ-required
+				// lock path if the boundary ever moves. Scenario 4 below passes
+				// `dleqRequired: false` for the grandfathered legacy path.
+				['dleq_required', (overrides.dleqRequired ?? true) ? '1' : '0'],
 				...overrides.mints.map((mint) => ['mint', mint]),
 				['image', 'https://placehold.co/600x600', '600x600', '0'],
 			],
@@ -473,13 +485,39 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // ---------------------------------------------------------------------------
 // Direct Lightning Bid Funding — video-recorded e2e scenarios (PR #1205/#1235)
 //
-// These tests exercise the full bid → deposit → mint → publish lifecycle
-// against the REAL local Cashu mint. The invoice the app creates (NUT-04) is
-// settled by the local mint's FakeWallet backend instantly, and the wallet's
-// deposit monitor completes the real NUT-05 minting round trip on its own —
-// the __nip60 dev bridge is used only for wallet set-up (mintTestEcash,
-// addMint) and to READ deposit status (getDepositStatus). No payment is
-// faked via simulateDepositSuccess.
+// RESOLVED (PR #1280 round 3): these tests were temporarily disabled
+// (2026-09-10) because they failed deterministically on the DLEQ-required
+// lock path — the bid lock's P2PK swap outputs carried no NUT-12 DLEQ
+// proofs, so the lock outcome was classified "unconfirmed" and the bid
+// never reached "placing your bid".
+//
+// Root cause (isolated empirically by probing the local mint's NUT-04/05
+// and P2PK-lock swap directly with cashu-ts 2.9.0): NOT the DLEQ lock
+// path, but the CI-installed nutshell version. e2e.yml installed
+// `pip install cashu` unpinned, which pulled nutshell
+// >= 0.20.x — a version whose /v1/swap does not return NUT-12 DLEQ proofs
+// on the P2PK-lock swap and whose version-01 keyset ids @cashu/cashu-ts
+// 2.9.0 cannot even verify. nutshell 0.19.2 (the known-good triple
+// already pinned in ci-unit.yml) returns NUT-12 DLEQ proofs on mint AND
+// swap. e2e.yml now pins 'cashu==0.19.2', and
+// src/lib/__tests__/auctionDLEQ.mint.integration.test.ts locks the
+// property in CI: the P2PK lock-path swap issues output proofs carrying
+// verifiable DLEQ (ADR-0011 Blocker 2).
+//
+// The scenarios therefore run on the REAL DLEQ-required lock path: the
+// seeded auction carries an explicit signed `dleq_required=1` tag, so the
+// payment path AND the DLEQ lock path are exercised together, per the
+// round-3 review (legacy payment-path coverage must not be disabled).
+// Scenario 4 is the grandfathered counterpart (`dleq_required=0`) — the
+// legacy non-DLEQ cohort keeps its own end-to-end payment-path coverage.
+//
+// These tests exercise the full bid → deposit → mint → lock → publish
+// lifecycle against the REAL local Cashu mint. The invoice the app creates
+// (NUT-04) is settled by the local mint's FakeWallet backend instantly,
+// and the wallet's deposit monitor completes the real NUT-05 minting round
+// trip on its own — the __nip60 dev bridge is used only for wallet set-up
+// (mintTestEcash, addMint) and to READ deposit status (getDepositStatus).
+// No payment is faked via simulateDepositSuccess.
 //
 // NOTE: These tests require a running dev server (port 34567), local relay
 // (nak serve on port 10547), and a local Cashu mint (port 3338, started
@@ -662,6 +700,31 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			expect(bidEvent!.pubkey).toBe(devUser2.pk)
 			// The bid event must reference the auction root event id via 'e' tag.
 			expect(bidEvent!.tags.some((t) => t[0] === 'e' && t[1] === auctionEvent.id)).toBe(true)
+
+			// ADR-0011 — DLEQ-required lock coverage, end to end. The seeded
+			// auction carries `dleq_required=1`, so the lock validated the
+			// freshly issued P2PK outputs carry NUT-12 proofs and the published
+			// kind-1023 must carry one `dleq_proof` tag per `lock_secret`, in
+			// parallel order. Without this the bid would be unverifiable
+			// collateral (validators classify a DLEQ-required bid with no
+			// `dleq_proof` tags as `dleq_invalid`).
+			const lockSecrets = bidEvent!.tags.filter((t) => t[0] === 'lock_secret')
+			const proofYs = bidEvent!.tags.filter((t) => t[0] === 'proof_y')
+			const dleqProofs = bidEvent!.tags.filter((t) => t[0] === 'dleq_proof')
+			expect(lockSecrets.length).toBeGreaterThan(0)
+			expect(proofYs).toHaveLength(lockSecrets.length)
+			expect(dleqProofs).toHaveLength(lockSecrets.length)
+			for (const tag of dleqProofs) {
+				const parsed = JSON.parse(tag[1]) as { id?: string; amount?: number; C?: string; e?: string; s?: string; r?: string }
+				expect(parsed.id).toBeTruthy()
+				expect(parsed.amount).toBeGreaterThan(0)
+				// Compressed secp256k1 point (the mint signature `C`).
+				expect(parsed.C).toMatch(/^0[23][0-9a-f]{64}$/)
+				expect(parsed.e).toBeTruthy()
+				expect(parsed.s).toBeTruthy()
+				// `r` (blinding factor) is what makes the proof verifiable offline.
+				expect(parsed.r).toBeTruthy()
+			}
 
 			await buyerPage.screenshot({
 				path: path.join(SCREENSHOT_DIR, 'pr1205-ln-bid-funding-happy-path.png'),
@@ -984,6 +1047,78 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 				return ids
 			})
 			expect(localBidEventIds).toContain(retriedBidEvent!.id)
+		} finally {
+			relay.close()
+		}
+	})
+
+	// ── Scenario 4: grandfathered (non-DLEQ) auction ───────────────────
+
+	test('legacy auction (dleq_required=0): bid funds and publishes WITHOUT dleq_proof tags', async ({ buyerPage }) => {
+		const relay = await Relay.connect(RELAY_URL)
+		try {
+			// ADR-0011 Decision 7/8 — a grandfathered auction opts out of the
+			// DLEQ requirement with the canonical signed tag. The legacy
+			// non-DLEQ collateral path must stay fully usable for that cohort,
+			// so this scenario is the non-DLEQ counterpart of the happy path
+			// above: same payment funnel, no `dleq_proof` tags on the result.
+			// It also covers the bid FORM's canonical threading end to end:
+			// with the form omitting `dleqRequired`, the publish path fell back
+			// to the `start_at` boundary and this bid carried two `dleq_proof`
+			// tags (RED) instead of none.
+			const auctionEvent = await seedAuction(relay, {
+				mints: [MINT_A],
+				dTag: 'e2e-ln-bid-funding-legacy-auction',
+				dleqRequired: false,
+			})
+
+			await acknowledgeAuctionRules(buyerPage)
+
+			await buyerPage.goto(`/auctions/${auctionEvent.id}`)
+			await expect(buyerPage.locator('h1')).toContainText('E2E Mint Test Auction', { timeout: 15_000 })
+
+			await waitForWalletReady(buyerPage)
+			await fundWallet(buyerPage, 20, MINT_A)
+			await buyerPage.reload()
+			await waitForWalletReady(buyerPage)
+			await waitForWalletBalance(buyerPage, 1)
+			await buyerPage.evaluate((mint) => {
+				const w = (window as any).__nip60
+				if (w?.addMint) w.addMint(mint)
+			}, MINT_A)
+			await waitForWalletMint(buyerPage, MINT_A)
+
+			await ensureInsufficientBidFunds(buyerPage)
+			await buyerPage
+				.getByRole('button', { name: /place bid|bid\s+[\d,]+\s+sats/i })
+				.first()
+				.click()
+
+			const confirmDialog = buyerPage.getByRole('dialog', { name: /confirm bid/i })
+			await expect(confirmDialog).toBeVisible({ timeout: 10_000 })
+
+			const mintSelectTrigger = confirmDialog.getByRole('combobox').first()
+			if (await mintSelectTrigger.isVisible().catch(() => false)) {
+				await mintSelectTrigger.click()
+				await buyerPage.getByRole('option').first().click()
+			}
+
+			await confirmDialog.getByRole('button', { name: 'Confirm' }).click()
+
+			await expect(buyerPage.getByText(/placing your bid|bid successfully placed/i)).toBeVisible({ timeout: 30_000 })
+
+			const bidEvent = await waitForBidEvent(relay, auctionEvent.id, 30_000)
+			expect(bidEvent).not.toBeNull()
+			expect(bidEvent!.kind).toBe(AUCTION_BID_KIND)
+			expect(bidEvent!.pubkey).toBe(devUser2.pk)
+			expect(bidEvent!.tags.some((t) => t[0] === 'e' && t[1] === auctionEvent.id)).toBe(true)
+
+			// The legacy path still publishes its lock collateral...
+			expect(bidEvent!.tags.filter((t) => t[0] === 'lock_secret').length).toBeGreaterThan(0)
+			// ...and must NOT publish `dleq_proof` tags: the lock ran without
+			// the output DLEQ requirement (N1 — the tag decision follows the
+			// same signed `dleq_required=0` the lock was given).
+			expect(bidEvent!.tags.filter((t) => t[0] === 'dleq_proof')).toHaveLength(0)
 		} finally {
 			relay.close()
 		}

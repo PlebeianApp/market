@@ -207,6 +207,14 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
       apply the same computation locally to warn before publishing.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
+- `dleq_required`: `"1"` or `"0"` (ADR-0011). Canonical DLEQ activation for
+  this auction, recorded on the signed event at publish time. When `"1"`,
+  every bid must publish NUT-12 `dleq_proof` tags and the allowlisted mints
+  must advertise NUT-12 support. This is the protocol truth — two clients
+  reading the same event derive the same requirement regardless of their
+  deploy-time boundary config, and a seller cannot backdate `start_at` to
+  change it. Absent on legacy events predating the tag; compliant readers
+  fall back to the boundary comparison for those.
 - `auditor_quorum`: integer N. When present and ≥2, a bid is considered
   "valid" by a compliant client only if at least N of the listed
   `auditors` have emitted a `valid_bid_placed` reputation event for it.
@@ -393,6 +401,26 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
   refuse a bid whose `amount` is at or below its `prev_bid`'s `amount`
   (`replacement_chain_invalid`).
 - `note`: short human text.
+
+### Required tags (DLEQ-required auctions — ADR-0011)
+
+- `dleq_proof`: **repeated tag** — JSON-serialized NUT-12 DLEQ proof, one per
+  locked proof, parallel to `lock_secret`/`proof_y`. Each value carries
+  `{id, amount, C, e, s, r}` (keyset id, amount in sats, mint signature `C`,
+  DLEQ challenge/response `e`/`s`, blinding factor `r`). OPTIONAL for
+  grandfathered (non-required) auctions; REQUIRED when the auction's canonical
+  DLEQ activation resolves true — i.e. the signed `dleq_required` tag is `"1"`
+  (with the `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary
+  comparison applying only as the legacy fallback for events published before
+  the tag existed; see §11.1 and ADR-0011 Decision 8). The bidder publisher
+  derives this from the SAME canonical decision it threads into the lock, so
+  the lock path and the published tags can never disagree. Bids with missing
+  or malformed `dleq_proof` tags on a DLEQ-required auction are classified
+  `dleq_invalid` by the validation pipeline (§7.1). See
+  `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
+  (Missing `dleq_proof` tags are classified `dleq_invalid` by the validation
+  pipeline; **malformed** `dleq_proof` JSON is instead rejected at parse time
+  with a `malformed_dleq_proof` error — see §4.2 parser.)
 
 ### Forbidden tags
 
@@ -998,6 +1026,13 @@ of each proof are published in the kind-1023 bid event so validators
 can audit; the bidder MUST persist the full proofs (including `C`)
 locally so they can refund if the auction griefs.
 
+**Mint NUT-12 capability.** ADR-0011 (Decisions 4 & 5) requires NUT-12
+DLEQ-capable mints for post-rollout auctions. The `mintSupportsDleq`
+helper in `src/lib/cashu/mintCapability.ts` probes a mint's `/v1/info`
+endpoint via `CashuMint.getInfo()` (`nuts["12"].supported`) and returns `false`
+on any error (fail-closed), so a mint whose DLEQ capability cannot be
+confirmed is treated as non-DLEQ.
+
 ## 5.5 Bidder-held HD path model
 
 The bidder generates a fresh derivation path per bid and never
@@ -1077,6 +1112,10 @@ computation. The bidder MUST:
    `proof_y` (§4.2) so validators can audit.
 6. Persist `(path, fullProof)` locally — encrypted backup
    RECOMMENDED.
+7. The client bid-lock path (`lockAuctionBidFunds`) is **DLEQ-only
+   (fail-closed)**: the mint MUST return NUT-12 DLEQ proofs; if it
+   cannot, the lock surfaces an error instead of silently falling
+   back to non-DLEQ collateral (ADR-0011).
 
 ### Validator, while the bid is live — amended per ADR-0004
 
@@ -1403,7 +1442,10 @@ flowchart TD
     OK --> CLIENT{Client: NUT-7 state == unspent?<br/>(via checkProofStateBatch)}
     CLIENT -->|spent| CR1[Client: treat as invalid<br/>proof_spent / fraudulent_bid]
     CLIENT -->|pending/unknown| CR2[Client: bid_pending_review<br/>no settlement CTAs]
-    CLIENT -->|unspent| COK[Client: bid fully valid<br/>settlement CTAs enabled]
+    CLIENT -->|unspent| COK[Client: NUT-7 ok]
+    COK --> DLEQ{Client: DLEQ verified?<br/>(via verifyBidDleq, ADR-0011 C1)}
+    DLEQ -->|dleq_invalid| DR1[Client: treat as invalid<br/>dleq_invalid → bid_invalid]
+    DLEQ -->|ok / not yet checked| DOK[Client: bid fully valid<br/>settlement CTAs enabled]
 ```
 
 Operational notes:
@@ -1413,6 +1455,27 @@ Operational notes:
 - The client runs NUT-7 independently after confirming quorum of
   `valid_bid_placed` verdicts, using `checkProofStateBatch` with the
   bid's `proof_y` values.
+- **ADR-0011 C1 — DLEQ crypto verification:** the client also runs
+  `verifyBidDleq` against a pre-fetched mint keyset (`dleqKeysets`
+  parameter in `computeValidatedBids`). A post-rollout bid whose
+  DLEQ proofs fail cryptographic verification is classified
+  `bid_invalid` with `reason=dleq_invalid`. When the keyset is not
+  yet available — including an entry missing from a SUPPLIED map
+  because its `fetchDleqKeysetsForBids` fetch failed (temporary
+  mint/network failure) — the bid stays `pending`, never valid and
+  never condemned (mirrors the NUT-7 evidence-deferred pattern —
+  Decision 6a: `dleq_invalid` requires a positive verification
+  failure over complete evidence). Pre-rollout auctions are
+  grandfathered and skip DLEQ verification (Decision 7).
+- **ADR-0011 B4 — Structural DLEQ field validation:** the validator
+  pipeline (Step 3.5 in `validateBid`) now also performs structural
+  field validation on every `dleq_proof` entry for post-rollout
+  auctions: the keyset `id`, `C` (compressed pubkey), `e`, `s`, and
+  `r` must all be non-empty hex strings, and `amount` must be a
+  positive safe integer. A structurally malformed proof is rejected
+  as `dleq_invalid` — fail-closed defense-in-depth (the Zod schema
+  already catches most of these at parse time, but hand-built
+  `ParsedBidEvent`s that bypass the parser get the same rejection).
 - If the mint is unreachable, the client MAY treat the bid as
   `bid_pending_review` and retry; it MUST NOT treat the bid as fully
   valid until at least one successful `unspent` reading.
@@ -1820,9 +1883,16 @@ sell). See §14 for the full threat analysis.
 > **Mitigation:** Per-auction rate limits, validator policy gates
 > (relatr score, account age, NIP-05), and the `vadium_ratio_bps`
 > parameter (which can require >100% deposit) partially deter this
-> attack. A future protocol enhancement could close this gap by
-> enabling offline signature validation, but the specific approach is
-> not yet settled (see ADR-0004 known limitations).
+> attack. ADR-0011 closes this gap by adopting NUT-12 DLEQ proof
+> publication + offline verification — the verification module lives at
+> `src/lib/cashu/dleq.ts` (`verifyProofDleq` / `verifyBidDleq` /
+> `getMintKeyset` / `buildDleqProofs`). `buildDleqProofs` maps the locked
+> proofs returned by `lockAuctionBidFunds` into the `DleqProof[]` array
+> fed to `buildBidEventTags`, and is fail-closed: it throws if any locked
+> proof lacks a DLEQ proof (or its blinding factor `r`), so a
+> post-rollout bid can never be published with unverifiable collateral.
+> Full details in
+> `docs/adr/ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md`.
 
 ## 9.2 Fake cashu / invalid proofs
 
@@ -1975,7 +2045,10 @@ The protocol logic is split across small, focused modules under
 - `src/lib/auction/` — protocol core:
   - `constants.ts` — protocol constants (event kinds, tag names, preset values).
   - `events.ts` — typed auction event shapes (listing, bid, settlement, verdict).
-  - `tagBuilders.ts` — tag-array constructors for each event kind.
+  - `tagBuilders.ts` — tag-array constructors for each event kind
+    (`buildBidEventTags` emits one `dleq_proof` tag per locked proof,
+    JSON-serialized `{id, amount, C, e, s, r}`, parallel to
+    `lock_secret`/`proof_y`).
   - `validation.ts` — pure validation pipeline for bid / auditor rules
     (side-effect-free functions).
   - `bidderRecords.ts` — bidder-side local record shapes (path, proofs,
@@ -2049,6 +2122,23 @@ and prod deploys, so the canonical stage is read from `/api/config`
 - Enforce immutable auction mechanics after first valid bid.
 - Compute `max_end_at` deterministically and expose it in UI.
 - Track settlement deadlines and alert seller on pending close.
+- Enforce DLEQ activation (ADR-0011, Decisions 4, 6 & 8). The requirement is the
+  auction's canonical signed `dleq_required` tag (`"1"`/`"0"`), emitted at
+  publish time from the same decision the publish gate enforces; the
+  `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary survives only as the
+  fallback for legacy events published before the tag existed. For a
+  DLEQ-required auction the platform verifies every allowlisted
+  `mint` advertises NUT-12 DLEQ support (mint `/v1/info` `nuts["12"]`) via
+  `assertAuctionMintsSupportDleq` and rejects the publish with a clear error
+  naming any non-compliant mint. A bidder on a DLEQ-required auction locks its
+  P2PK outputs with the DLEQ requirement and publishes `dleq_proof` tags from
+  the SAME signed decision the lock used — carried on the bid form, so the lock
+  and the published kind-1023 can never disagree. Grandfathered auctions
+  (`dleq_required="0"`, or pre-tag events below the boundary) stay on the legacy
+  non-DLEQ path. The boundary is configurable via the
+  `APP_AUCTION_DLEQ_ROLLOUT_START_AT` environment variable (epoch seconds;
+  inlined at build time for browser bundles — see
+  `src/lib/auction/constants.ts`), defaulting to the rollout epoch.
 
 Note: in the bidder-held-path scheme, the platform does NOT release paths
 or hold bidder funds. The bidder generates and releases the path; the seller
@@ -2336,3 +2426,49 @@ childPubkey` on the bidder side before locking funds (§5.6).
 - ALWAYS run settlement preflight (`preflightAuctionSettlementP2pk`,
   `src/lib/auctionSettlementP2pk.ts`) before the seller attempts
   redemption.
+
+### 15.7 Offline DLEQ test fixture
+
+`src/lib/cashu/dleqFixture.ts` provides an in-process, deterministic NUT-12
+DLEQ proof fixture for tests. It constructs a keyset and a valid DLEQ proof
+offline so that `hasValidDleq(proof, keyset)` returns `true` (honest case)
+and exposes per-field corruption helpers for negative-path verification
+tests. No mint, no network. See `src/lib/__tests__/dleqFixture.test.ts`.
+
+### 15.8 DLEQ real-mint integration test
+
+`src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` exercises the
+NUT-12 DLEQ round-trip against a **real local Cashu mint** (nutshell,
+FakeWallet backend, `e2e/start-local-mint.sh` on `:3338`) rather than the
+offline A3 fixture. It:
+
+1. spawns the mint, waits for it, and then — as the **first** assertion,
+   before minting anything — checks `GET /v1/info` →
+   `nuts["12"].supported === true` (a mint without NUT-12 would make the
+   collateral unverifiable),
+2. mints a real proof carrying a NUT-12 DLEQ proof, serializes it to the
+   `dleq_proof` bid-tag shape via `buildDleqProofs`, and runs
+   `verifyBidDleq` end-to-end (`ok: true`), and
+3. covers the two negative cases end-to-end: a wrong amount sum
+   (`legDelta !== sum(proofs[].amount)` → `matchesAmount: false`) and a
+   forged signature `C` (→ `allProofsValid: false`,
+   `failedProofIndex` set).
+
+Run via `bun run test:integration`; the suite spawns and tears down its own
+mint (isolated data dir), so no external services are required.
+
+### 15.9 DLEQ bid sum-check (verifyBidDleq)
+
+`verifyBidDleq` (in `src/lib/cashu/dleq.ts`) batch-verifies a bid's DLEQ
+proofs and enforces the amount invariant: `ok` is `true` only when every
+proof verifies AND `sum(proofs[].amount) === legDelta`. The sum-check is
+covered by unit tests in `src/lib/__tests__/auctionDLEQ.test.ts` using the
+honest A3 fixture for both the single-leg bid (one proof) and the rebid-leg
+(multiple proofs) cases, asserting `ok` flips with the amount sum.
+
+The happy-path verification coverage lives in
+`src/lib/__tests__/auctionDLEQ.test.ts`: `verifyProofDleq` returns `true`
+for an honest fixture proof (single and across denominations), and
+`verifyBidDleq` returns `ok=true` when honest proofs sum to the declared
+`legDelta` (single- and multi-proof), while an honest-but-mismatched sum
+yields `allProofsValid=true` / `matchesAmount=false` / `ok=false`.

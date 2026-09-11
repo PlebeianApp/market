@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
-import type { Nut7ProofState } from '../auction/constants'
+import { APP_AUCTION_DLEQ_ROLLOUT_START_AT, type Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import type { MintKeys } from '@cashu/cashu-ts'
 
 // =============================================================================
 // computeValidatedBids — quorum eligibility, NUT-7 truthfulness, and
@@ -73,6 +75,7 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
+		dleqRequired: overrides.dleqRequired ?? false,
 		...overrides,
 	}
 }
@@ -116,6 +119,7 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: Partial<ParsedBidEvent
 		childPubkey,
 		lockSecrets,
 		proofYs,
+		dleqProofs: overrides.dleqProofs,
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
@@ -504,5 +508,342 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 		const err = validateBidChainNut7PrePublish(chain, nut7, 100)
 		expect(err).not.toBeNull()
 		expect(err).toMatch(/omitted/)
+	})
+})
+
+// =============================================================================
+// M5 — cross-bid duplicate-proof detection extended to DLEQ mint signatures C
+// =============================================================================
+
+describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
+	test("a bid reusing another bid's dleq_proof C is marked invalid (fabricated collateral)", () => {
+		const auction = buildAuction()
+		const sharedDleq = { id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }
+		const bid1 = buildBid(auction, { dleqProofs: [sharedDleq] })
+		const bid2 = buildBid(auction, { dleqProofs: [sharedDleq] }) // distinct lock_secret (nonce-N), same C
+		// Prove the fixture's two bids differ on secret/Y and share ONLY the
+		// DLEQ `C`, so the C-dedup is the sole discriminator (not the legacy
+		// secret/Y dedup) and this test cannot pass vacuously.
+		expect(bid1.lockSecrets).not.toEqual(bid2.lockSecrets)
+		expect(bid1.proofYs).not.toEqual(bid2.proofYs)
+		expect(bid1.dleqProofs?.[0]?.C).toBe(bid2.dleqProofs?.[0]?.C)
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+		})
+
+		// Earliest observed bid keeps the C; the reuser is invalid.
+		expect(result.validBids.map((b) => b.id)).toEqual([bid1.id])
+		expect(result.invalidBids.map((b) => b.id)).toContain(bid2.id)
+	})
+
+	test('two bids with distinct dleq_proof C values both stay valid', () => {
+		const auction = buildAuction()
+		const bid1 = buildBid(auction, { dleqProofs: [{ id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }] })
+		const bid2 = buildBid(auction, {
+			amount: 6_000,
+			dleqProofs: [{ id: '00deadbeef', amount: 100, C: '02' + '7'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+		})
+
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.validBids).toHaveLength(2)
+	})
+})
+
+// =============================================================================
+// DLEQ crypto verification — ADR-0011 C1: dleq_invalid when verifyBidDleq fails
+// =============================================================================
+
+const GENERATOR_HEX = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const TWO_G_HEX = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+
+const makeDleqKeyset = (amounts: number[]): MintKeys => {
+	const keys: Record<number, string> = {}
+	for (const amt of amounts) {
+		keys[amt] = amt === 1 ? GENERATOR_HEX : TWO_G_HEX
+	}
+	return { id: '00deadbeef', unit: 'sat', keys }
+}
+
+const dleqKeyset1 = makeDleqKeyset([100])
+
+// Garbage DLEQ — will NEVER pass hasValidDleq (real crypto verification fails)
+const garbageDleq = { id: '00deadbeef', amount: 100, C: GENERATOR_HEX, e: '00', s: '00', r: 'ff' }
+
+const buildPostRolloutAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctionEvent =>
+	buildAuction({
+		...overrides,
+		startAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT,
+		endAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_000,
+		maxEndAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_100,
+		dleqRequired: true,
+	})
+
+describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () => {
+	test('dleq_invalid: post-rollout bid with garbage DLEQ fails crypto verification and is invalid', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			dleqProofs: [garbageDleq],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const dleqKeysets = new Map([['https://mint.test:00deadbeef', dleqKeyset1]])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets,
+		})
+
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.invalidBids).toHaveLength(1)
+		expect(result.validBids).toHaveLength(0)
+		// The invalidation is DLEQ-specific, not a NUT-7 or structural failure.
+		const invalidClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(invalidClassified?.classification).toBe('invalid')
+		expect(invalidClassified?.invalidReason).toBe('dleq_invalid')
+	})
+
+	test('dleq_invalid: DLEQ sum-check mismatch (proof amount != legDelta) invalidates', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			amount: 5_000,
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			dleqProofs: [{ id: '00deadbeef', amount: 100, C: GENERATOR_HEX, e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const dleqKeysets = new Map([['https://mint.test:00deadbeef', dleqKeyset1]])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets,
+		})
+
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.invalidBids).toHaveLength(1)
+		expect(result.validBids).toHaveLength(0)
+		const invalidClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(invalidClassified?.classification).toBe('invalid')
+		expect(invalidClassified?.invalidReason).toBe('dleq_invalid')
+	})
+
+	test('grandfathered pre-rollout bid without dleqKeysets stays valid (no DLEQ check)', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction)
+		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		expect(result.canonicalWinner?.id).toBe(bid.id)
+		expect(result.validBids).toHaveLength(1)
+	})
+
+	test('post-rollout bid without dleqKeysets is PENDING (DLEQ evidence not yet gathered, non-authoritative)', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			dleqProofs: [garbageDleq],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+		})
+
+		// Unavailable DLEQ evidence is non-authoritative: the bid must NOT be
+		// treated as valid (it cannot be crypto-verified), but it is also not
+		// condemned — it is pending until the keyset is gathered.
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
+	})
+
+	test('post-rollout bid whose keyset is not in a SUPPLIED dleqKeysets map is PENDING (evidence unavailable, not fraud)', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			dleqProofs: [garbageDleq],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		// The bid declares keyset `00deadbeef` but the fetched map only holds
+		// `other.mint` keysets — exactly what `fetchDleqKeysetsForBids` yields
+		// when the keyset fetch for THIS (mint, keyset) pair failed. PR #1280
+		// round 3: an absent entry in a supplied map means EVIDENCE
+		// UNAVAILABLE (temporary mint/network failure), not fraud — the bid
+		// is pending (ADR-0011 Decision 6a), never valid: a malicious bidder
+		// pointing dleqProofs[0].id at an unfetched id still cannot make the
+		// bid win, since pending bids are excluded from validBids/winner.
+		const otherKeysets = new Map([['https://other.mint:00deadbeef', dleqKeyset1]])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets: otherKeysets,
+		})
+
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
+		expect(pendingClassified?.invalidReason).toBeUndefined()
+	})
+
+	test('multi-proof leg with one absent keyset is PENDING even when another proof has garbage DLEQ (no condemning on incomplete evidence)', () => {
+		const auction = buildPostRolloutAuction()
+		// Proof 0: garbage DLEQ under a keyset that IS in the map (would be
+		// dleq_invalid on its own). Proof 1: keyset never fetched (absent).
+		// Evidence for the leg as a whole is INCOMPLETE, so the bid is
+		// pending — dleq_invalid is reserved for positive verification
+		// failure over COMPLETE evidence.
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const secret0 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-0')
+		const secret1 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-1')
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			lockSecrets: [secret0, secret1],
+			// Proof amounts sum to the default 5_000 leg so the ONLY thing
+			// blocking verification is the absent keyset. Distinct C values —
+			// M5 rejects duplicate C within a bid as fabricated collateral.
+			dleqProofs: [garbageDleq, { id: '00feedface', amount: 4_900, C: TWO_G_HEX, e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const partialKeysets = new Map([['https://mint.test:00deadbeef', dleqKeyset1]])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets: partialKeysets,
+		})
+
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(1)
+		const pendingClassified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(pendingClassified?.classification).toBe('pending')
+	})
+
+	test('post-rollout bid with no dleqProofs is invalid via structural check (validateBid Step 3.5)', () => {
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			dleqProofs: [],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		// No dleqProofs and no dleqKeysets — the bid cannot be crypto-verified,
+		// but the structural presence check (validateBid Step 3.5) already
+		// rejects it pre-DLEQ as dleq_invalid.
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+		})
+
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.invalidBids).toHaveLength(1)
+		expect(result.validBids).toHaveLength(0)
+	})
+
+	test('multi-keyset rebid leg: proofs spanning two keysets are NOT dleq_invalid (both keysets supplied)', () => {
+		const auction = buildPostRolloutAuction()
+		// A mint keyset rotation: this leg's proofs were minted against two
+		// cryptographically distinct keysets (distinct base keys), so proof[1]
+		// does NOT verify under proof[0]'s keyset. Pre-fix the consumer resolved
+		// only `dleqProofs[0].id` and verified every proof against that single
+		// keyset → false `dleq_invalid`. Post-fix each proof resolves its OWN
+		// keyset via the supplied `${mint}:${keysetId}` map.
+		const ksAId = '00aaaaaaaaaaaaaa'
+		const ksBId = '00bbbbbbbbbbbbbb'
+		const ksA = makeFixtureKeyset([500], { keysetId: ksAId, basePrivKey: 500 })
+		const ksB = makeFixtureKeyset([500], { keysetId: ksBId, basePrivKey: 900 })
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const secretA = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'multi-ks-nonce-a')
+		const secretB = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'multi-ks-nonce-b')
+		const proofA = makeHonestDleqProof(500, secretA, { keysetId: ksAId, basePrivKey: 500 })
+		const proofB = makeHonestDleqProof(500, secretB, { keysetId: ksBId, basePrivKey: 900 })
+		const bid = buildBid(auction, {
+			amount: 1_000,
+			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			lockSecrets: [secretA, secretB],
+			dleqProofs: [proofA, proofB],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const dleqKeysets = new Map([
+			[`https://mint.test:${ksAId}`, ksA],
+			[`https://mint.test:${ksBId}`, ksB],
+		])
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets,
+		})
+
+		const classified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(classified?.classification).toBe('valid')
+		expect(classified?.invalidReason).toBeUndefined()
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.validBids).toHaveLength(1)
+		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 })
