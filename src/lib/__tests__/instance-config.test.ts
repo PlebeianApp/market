@@ -178,4 +178,18 @@ describe('runtime-config-aware handler metadata', () => {
 		expect(event.tags).toContainEqual(['d', DEFAULT_INSTANCE_CONFIG.handlerId])
 		expect(event.tags).toContainEqual(['web', `${DEFAULT_INSTANCE_CONFIG.siteUrl}/product/<bech32>`, 'naddr'])
 	})
+
+	test('uses explicit handler metadata from the instance configuration form', () => {
+		const event = createHandlerInfoEventData(
+			'd'.repeat(64),
+			{ ok: true },
+			'wss://relay.selfhost.example',
+			'selfhost-handler',
+			'https://selfhost.example',
+		)
+
+		expect(event.tags).toContainEqual(['d', 'selfhost-handler'])
+		expect(event.tags).toContainEqual(['r', 'wss://relay.selfhost.example'])
+		expect(event.tags).toContainEqual(['web', 'https://selfhost.example/product/<bech32>', 'naddr'])
+	})
 })
