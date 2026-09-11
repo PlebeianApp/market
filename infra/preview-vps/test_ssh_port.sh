@@ -177,6 +177,44 @@ check "SCP_BASE still pins StrictHostKeyChecking=yes + ssh-ed25519" \
 check "provision.sh still compares the scanned fingerprint to the pinned secret" \
   grep -qE '\[ "\$\{ACTUAL_FP\}" != "\$\{FINGERPRINT\}" \]' "${PROVISION}"
 
+# ── 7. Regression guard: the ssh-keyscan COMMENT line must be skipped ─────
+# ssh-keyscan prints `# <host>:<port> SSH-2.0-<banner>` BEFORE the key line.
+# Feeding that straight into `head -n 1` therefore captures the comment,
+# ssh-keygen cannot parse it, ACTUAL_FP ends up empty, and provision.sh aborts
+# with a bogus "FATAL: host key fingerprint mismatch" even when the pinned
+# secret is exactly right -- every deploy fails and the error wrongly blames
+# the secret. Guarded twice: statically here, behaviourally in section 8.
+check_not "provision.sh never feeds ssh-keyscan straight into head -n 1" \
+  grep -qE 'ssh-keyscan[^|]*\|[[:space:]]*head -n 1' "${PROVISION}"
+
+check "provision.sh selects the first non-comment known_hosts record" \
+  grep -qF "awk 'NF >= 3 && \$1 !~ /^#/ { print; exit }'" "${PROVISION}"
+
+check "provision.sh aborts when no fingerprint can be parsed" \
+  grep -qF 'could not read a SHA256 fingerprint from the scanned host key' "${PROVISION}"
+
+# ── 8. Behavioural: same input, with and without the guard ────────────────
+# Build a REAL ed25519 key, synthesise the exact two-line stdout ssh-keyscan
+# produces, and run the selection provision.sh performs. Proves the bug is
+# real (head -n 1 yields the comment) and that the guard returns the key.
+_tmp="$(mktemp -d)"
+trap 'rm -rf "${_tmp}"' EXIT
+ssh-keygen -q -t ed25519 -N '' -C 'preview-port-test' -f "${_tmp}/k" >/dev/null 2>&1
+_pub="$(cat "${_tmp}/k.pub")"
+_scan="$(printf '# 203.0.113.9:22 SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4\n%s\n' "${_pub}")"
+_selected="$(printf '%s\n' "${_scan}" | awk 'NF >= 3 && $1 !~ /^#/ { print; exit }')"
+_fp="$(printf '%s\n' "${_selected}" | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')"
+_want="$(ssh-keygen -lf "${_tmp}/k.pub" | awk '{print $2}')"
+
+check "head -n 1 captures the comment line on real ssh-keyscan output" \
+  grep -q '^#' <<<"$(printf '%s\n' "${_scan}" | head -n 1)"
+check "the guard selects the key line, not the comment" \
+  test "${_selected}" = "${_pub}"
+check "the selected key line yields a SHA256 fingerprint" \
+  test -n "${_fp}"
+check "that fingerprint matches the key it came from" \
+  test "${_fp}" = "${_want}"
+
 printf '\n%s checks, %s failure(s)\n' "${CHECKS}" "${FAILURES}"
 if [ "${FAILURES}" -ne 0 ]; then
   printf 'RESULT: FAIL\n'

@@ -61,12 +61,29 @@ PORT="$(echo -n "${PREVIEW_VPS_SSH_PORT:-22}" | tr -d '[:space:]')"
 # negotiation to the verified ed25519 key, so an impostor cannot offer a
 # different key type that was never pinned.
 echo "==> Verifying VPS host key fingerprint for ${HOST} (ssh port ${PORT})"
-HOSTKEY_LINE="$(ssh-keyscan -T 10 -p "${PORT}" -t ed25519 "${HOST}" 2>/dev/null | head -n 1)"
+# ssh-keyscan prints a comment line BEFORE the key line:
+#   # <host>:<port> SSH-2.0-<banner>
+# so a bare `| head -n 1` captures the COMMENT, ssh-keygen then fails to parse
+# it, ACTUAL_FP comes back empty, and this script aborts with a bogus
+# "FATAL: host key fingerprint mismatch" even when the pinned secret is exactly
+# right. Every deploy fails, and the error blames the secret. Select the first
+# real known_hosts-format record instead: three fields, first field not a
+# comment. (Same trap fixed independently in ssh-pin.sh.)
+HOSTKEY_LINE="$(ssh-keyscan -T 10 -p "${PORT}" -t ed25519 "${HOST}" 2>/dev/null \
+  | awk 'NF >= 3 && $1 !~ /^#/ { print; exit }')"
 if [ -z "${HOSTKEY_LINE}" ]; then
   echo "FATAL: ssh-keyscan could not reach ${HOST}:${PORT} to fetch its host key" >&2
+  echo "  No host key was offered, so this is a network/target problem, NOT a" >&2
+  echo "  secret problem — a wrong or missing PREVIEW_VPS_HOST_FINGERPRINT" >&2
+  echo "  reports a *mismatch* below, never this message." >&2
   exit 1
 fi
-ACTUAL_FP="$(printf '%s\n' "${HOSTKEY_LINE}" | ssh-keygen -lf - | awk '{print $2}')"
+ACTUAL_FP="$(printf '%s\n' "${HOSTKEY_LINE}" | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')"
+if [ -z "${ACTUAL_FP}" ]; then
+  echo "FATAL: could not read a SHA256 fingerprint from the scanned host key for ${HOST}:${PORT}" >&2
+  echo "  scanned line: ${HOSTKEY_LINE}" >&2
+  exit 1
+fi
 if [ "${ACTUAL_FP}" != "${FINGERPRINT}" ]; then
   echo "FATAL: host key fingerprint mismatch for ${HOST}" >&2
   echo "  pinned: ${FINGERPRINT}" >&2

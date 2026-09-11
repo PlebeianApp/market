@@ -203,14 +203,48 @@ host key belongs to the host, not to the listening port:
 ```bash
 # Fingerprint for 23.182.128.51 on port 22 (the value to pin in the secret).
 ssh-keyscan -p 22 -t ed25519 23.182.128.51 | ssh-keygen -lf -
-# → 256 SHA256:… (ED25519)
-
-# Same host key, same fingerprint, whichever port you scan:
-ssh-keyscan -p 2222 -t ed25519 23.182.128.51 | ssh-keygen -lf -
+# → 23.182.128.51 ED25519 SHA256:rjbvoYsKckQMv/L9Y4LQNCx86z95pqonoNGmXdUS41M
 ```
+
+A host key belongs to the **host**, so the same fingerprint comes back from any
+port that reaches *that host's* sshd. It is not, however, a property of the IP:
+on this box port 2222 reaches a different machine entirely (see the socat
+warning below), so always verify against the port you are actually pinning.
 
 So changing `PREVIEW_VPS_SSH_PORT` never requires re-issuing
 `PREVIEW_VPS_HOST_FINGERPRINT`.
+
+### e) `ssh-keyscan` prints a comment line first — never pipe it into `head -n 1`
+
+`ssh-keyscan` writes a banner comment **before** the key:
+
+```
+# 23.182.128.51:22 SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4   ← comment, printed FIRST
+23.182.128.51 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQssByZ…  ← the key
+```
+
+So `ssh-keyscan … | head -n 1` captures the **comment**, `ssh-keygen -lf -`
+cannot parse it, the computed fingerprint comes out empty, and the deploy aborts
+with a **bogus** `FATAL: host key fingerprint mismatch` — pointing the operator
+at the secret when the secret is perfectly fine. Every deploy fails.
+
+Skip the comment lines instead:
+
+```bash
+# One scan, first real known_hosts record (3 fields, first field not a comment).
+ssh-keyscan -T 10 -p 22 -t ed25519 23.182.128.51 2>/dev/null \
+  | awk 'NF >= 3 && $1 !~ /^#/ { print; exit }' | ssh-keygen -lf -
+```
+
+`provision.sh` does exactly this and has a test for it
+(`infra/preview-vps/test_ssh_port.sh`). Diagnose the two failure modes apart:
+
+- **`could not reach … to fetch its host key`** → no key was offered at all.
+  Network/target/firewall problem, or fail2ban has banned your source. Cannot be
+  caused by a wrong fingerprint.
+- **`host key fingerprint mismatch`** with a non-empty `actual:` → the host
+  answered with a key that does not match the pinned secret. Either the host
+  was rebuilt (re-keyed) or you are pinning the wrong host/port.
 
 ### ⚠️ Legacy socat forwarder on port 2222 — do NOT use it
 
