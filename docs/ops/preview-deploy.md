@@ -207,7 +207,7 @@ ssh-keyscan -p 22 -t ed25519 23.182.128.51 | ssh-keygen -lf -
 ```
 
 A host key belongs to the **host**, so the same fingerprint comes back from any
-port that reaches *that host's* sshd. It is not, however, a property of the IP:
+port that reaches _that host's_ sshd. It is not, however, a property of the IP:
 on this box port 2222 reaches a different machine entirely (see the socat
 warning below), so always verify against the port you are actually pinning.
 
