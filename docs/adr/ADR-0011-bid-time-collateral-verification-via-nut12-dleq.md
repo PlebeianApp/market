@@ -93,7 +93,14 @@ kind-1025 path release already publishes full proofs at settlement.
    protocol truth: two clients reading the same signed event derive the same requirement
    regardless of their deploy-time boundary config, and a seller cannot backdate
    `start_at` to change it. The client-side boundary comparison remains only as a
-   fallback for legacy events published before the tag existed.
+   fallback for legacy events published before the tag existed. The bidder publish path
+   derives BOTH its lock requirement (`lockAuctionBidFunds({ dleqRequired })`) and its
+   published `dleq_proof` tags from this single signed value — never from a second,
+   locally re-derived boundary comparison, which could make the lock and the published
+   kind-1023 disagree. The bid form carries that value explicitly
+   (`AuctionBidFormData.dleqRequired`, read from the event via `getAuctionDleqRequired`,
+   which delegates to the same `resolveDleqRequired` predicate); the boundary fallback
+   inside `publishAuctionBid` exists only for callers that predate the field.
 
 ### Tag serialization (resolved per AUCTIONS.md §4.2)
 
