@@ -13,12 +13,15 @@ import { NostrConnectSigner } from 'applesauce-signers'
 import type { NostrPool } from 'applesauce-signers'
 import { bytesToHex } from 'nostr-tools/utils'
 
-import { createNostrConnectCapability, NIP46_PERMISSIONS } from './nostr-connect-signer'
+import { createNostrConnectCapability, defaultPool, NIP46_PERMISSIONS } from './nostr-connect-signer'
 import type { NostrConnectBundle } from './nostr-connect-signer'
 
 export interface RehydrateOptions {
 	permissions?: string[]
-	/** Injected transport (tests). Defaults to the shared relay pool. */
+	/**
+	 * Injected transport (tests). When omitted, `defaultPool()` maps the shared
+	 * io-seam `RelayPool` (io-applesauce.ts) — there is no other default.
+	 */
 	pool?: NostrPool
 	rpcTimeoutMs?: number
 }
@@ -32,7 +35,11 @@ export interface RehydrateOptions {
 export async function rehydrateNostrConnectSession(nbunksec: string, options: RehydrateOptions = {}): Promise<NostrConnectBundle> {
 	const signer = await NostrConnectSigner.fromNbunksec(nbunksec, {
 		permissions: options.permissions ?? NIP46_PERMISSIONS,
-		pool: options.pool,
+		// The nbunksec pins `remote`, so the strict-bind wrapper is not required
+		// on restore. Default to the shared relay pool when no transport is
+		// injected (P1: without this the constructor throws "Missing
+		// subscriptionMethod" and vault unlock / legacy migration break).
+		pool: options.pool ?? defaultPool(),
 	})
 	return {
 		signer,

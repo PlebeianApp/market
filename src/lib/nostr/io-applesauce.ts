@@ -20,7 +20,7 @@ import { getSignerCapability } from './signer-registry'
 
 let pool: RelayPool | null = null
 
-function getPool(): RelayPool {
+export function getPool(): RelayPool {
 	if (!pool) pool = new RelayPool()
 	return pool
 }

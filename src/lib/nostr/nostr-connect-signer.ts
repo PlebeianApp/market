@@ -25,12 +25,12 @@
  */
 import { NostrConnectSigner, PrivateKeySigner } from 'applesauce-signers'
 import type { NostrPool } from 'applesauce-signers'
-import { RelayPool } from 'applesauce-relay'
 import { from, filter, mergeMap } from 'rxjs'
 import { bytesToHex } from 'nostr-tools/utils'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import type { NipEncryptionCapability, SignerCapability } from './signer-capability'
+import { getPool } from './io-applesauce'
 
 /** Default deadline for a NIP-46 RPC (connect / sign / encrypt / decrypt). */
 export const NIP46_RPC_TIMEOUT_MS = 30_000
@@ -80,17 +80,14 @@ export type NostrConnectSignerLike = {
 	nip44?: NipEncryptionCapability
 }
 
-/** A lazy, shared applesauce `RelayPool` behind `src/lib/nostr/io.ts`'s seam semantics. */
-let relayPool: RelayPool | null = null
-
-function getRelayPool(): RelayPool {
-	if (!relayPool) relayPool = new RelayPool()
-	return relayPool
-}
-
-/** Map the applesauce `RelayPool` to the signer's `NostrPool` transport shape. */
-function defaultPool(): NostrPool {
-	const pool = getRelayPool()
+/**
+ * Map the io seam's shared applesauce `RelayPool` (io-applesauce.ts) to the
+ * signer's `NostrPool` transport shape. Reusing the seam pool keeps NIP-46
+ * transport on the SAME relay layer as the rest of the app (ADR-0002 single
+ * relay layer) instead of opening a second set of WS connections.
+ */
+export function defaultPool(): NostrPool {
+	const pool = getPool()
 	return {
 		subscription: (relays, filters) => pool.subscription(relays, filters),
 		publish: (relays, event) => pool.publish(relays, event),
