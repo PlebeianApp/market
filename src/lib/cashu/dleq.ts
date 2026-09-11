@@ -211,6 +211,14 @@ export const verifyBidDleq = (
  * the check (fail-closed — `dleq_proof[].id` is bidder-controlled, so
  * a lookup miss must never be treated as a pass).
  *
+ * Caller note (ADR-0011 Decision 6a): absence means EVIDENCE UNAVAILABLE,
+ * not fraud. `computeValidatedBids` pre-checks keyset presence and defers
+ * a bid with any missing keyset to `pending` instead of calling this
+ * function; a `false` from here over complete evidence is a positive
+ * verification failure → `dleq_invalid`. The fail-closed contract of this
+ * function is unchanged (defense-in-depth for callers that skip the
+ * pre-check).
+ *
  * @returns A {@link DleqVerifyResult} with `ok` only when every proof
  *   verifies against its own keyset AND the amounts sum to `legDelta`.
  */

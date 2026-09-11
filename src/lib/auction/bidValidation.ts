@@ -119,12 +119,19 @@ export interface ComputeValidatedBidsInput {
 	 * calls inside this synchronous pure function. When absent for a post-
 	 * rollout bid, DLEQ verification is skipped (like NUT-7 — the evidence
 	 * hasn't been gathered yet and the bid stays quorum-valid, Decision 6).
-	 * When present and DLEQ verification fails, or when the bid's referenced
-	 * keyset id is not in the map, the bid is invalidated (`dleq_invalid` —
-	 * fail-closed, since `dleqProofs[].id` is bidder-controlled). Callers that
-	 * pass this map MUST cover every keyset id any accepted bid may reference
-	 * (including rotated keysets) and MUST normalize mint URLs identically to
-	 * bid parsing so the `${mintUrl}:${keysetId}` key matches exactly.
+	 * The same applies PER KEYSET inside a supplied map: an entry absent from
+	 * the map (a failed `fetchDleqKeysetsForBids` fetch — temporary
+	 * mint/network failure) leaves the evidence unavailable, so the bid is
+	 * classified `pending` (ADR-0011 Decision 6a), never valid. Only a
+	 * POSITIVE verification failure over COMPLETE evidence — every referenced
+	 * keyset present and the DLEQ crypto check failing — invalidates the bid
+	 * (`dleq_invalid`). Pending is not a pass: pending bids are excluded
+	 * from `validBids`/winner selection, so a bidder-controlled
+	 * `dleqProofs[].id` pointing at an unfetchable keyset can never yield a
+	 * winning bid. Callers SHOULD cover every keyset id any accepted bid may
+	 * reference (including rotated keysets) and MUST normalize mint URLs
+	 * identically to bid parsing so the `${mintUrl}:${keysetId}` key matches
+	 * exactly.
 	 */
 	dleqKeysets?: Map<string, MintKeys>
 }
@@ -488,6 +495,23 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 						finalPending.push(c.bid)
 						continue
 					}
+					// PR #1280 round 3: an entry ABSENT from a supplied map is
+					// also evidence-unavailable, not fraud. fetchDleqKeysetsForBids
+					// leaves a (mint, keyset) entry out precisely when its fetch
+					// failed (temporary mint/network failure), so a lookup miss
+					// here defers the bid to PENDING (ADR-0011 Decision 6a:
+					// "a DLEQ-required bid whose keyset cannot be gathered is
+					// classified pending, never valid") rather than condemning
+					// it as dleq_invalid. Fail-safe holds: pending is not a
+					// pass — the bid is excluded from validBids and the winner
+					// — and dleqProofs[].id being bidder-controlled still
+					// cannot skip verification, because a miss never verifies.
+					const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
+					if (missingKeysetIds.length > 0) {
+						c.classification = 'pending'
+						finalPending.push(c.bid)
+						continue
+					}
 					{
 						const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
 							...dp,
@@ -496,9 +520,10 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 						// Verify each proof against the keyset named by its OWN `id`
 						// (multi-keyset fix): a rebid leg may be funded by proofs from
 						// more than one keyset after a mint keyset rotation. This
-						// function is non-throwing and fail-closed, so a proof whose
-						// keyset is absent from the populated map yields ok=false →
-						// dleq_invalid.
+						// function is non-throwing and fail-closed; every keyset is
+						// known-present at this point (pre-checked above), so a
+						// failure here is a POSITIVE verification failure over
+						// complete evidence → dleq_invalid.
 						const dleqResult = verifyBidDleqWithKeysets(
 							{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
 							dleqKeysetMap,
