@@ -250,12 +250,26 @@ export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Ma
  * transport lets the caller enforce outbound destination policy
  * without this module knowing about it.
  *
- * @returns The first matching keyset from the mint's `/v1/keys` response.
+ * Fail-loud (not silently-wrong): a mint that returns no keyset, or a
+ * keyset whose `id` does not match the requested `keysetId`, throws.
+ * Returning the wrong keys would DLEQ-verify a proof against a
+ * mismatched keyset and silently misclassify it, so a mismatch is an
+ * error the caller must surface, never a value.
+ *
+ * @returns The mint's keyset, asserted to match the requested `keysetId`.
+ * @throws when the mint returns no keyset, or a keyset with a different `id`.
  */
 export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: GetMintKeysetOptions): Promise<MintKeys> => {
 	const mint = new CashuMint(mintUrl, opts?.customRequest as never)
 	const response = await mint.getKeys(keysetId)
-	return response.keysets[0]
+	const keyset = response.keysets?.[0]
+	if (!keyset) {
+		throw new Error(`getMintKeyset: mint ${mintUrl} returned no keyset for keyset id ${keysetId}`)
+	}
+	if (keyset.id !== keysetId) {
+		throw new Error(`getMintKeyset: mint ${mintUrl} returned keyset ${keyset.id}, expected ${keysetId}`)
+	}
+	return keyset
 }
 
 // ---------- fetchDleqKeysetsForBids -----------------------------------------
