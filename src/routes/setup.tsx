@@ -163,8 +163,9 @@ function SetupRoute() {
 					ownerPk: ownerPubkeyHex,
 				}
 
-				// Use a fixed handler ID for consistency across setup and seeding
-				const handlerId = 'plebeian-market-handler'
+				// Keep setup consistent with the resolved instance config, but preserve the
+				// legacy default when no custom handler has been configured yet.
+				const handlerId = config.handlerId || 'plebeian-market-handler'
 				let handlerEvent = createHandlerInfoEventData(ownerPubkeyHex, appSettingsContent, config.appRelay, handlerId)
 				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
 				await submitAppSettings(handlerEvent)
