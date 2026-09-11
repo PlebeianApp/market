@@ -1,4 +1,5 @@
 import { ndkActions } from '../lib/stores/ndk'
+import { configStore } from '../lib/stores/config'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -45,6 +46,7 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 	})
 	const content = JSON.stringify(walletsToStore)
 	const encryptedContent = await signer.encrypt(user, content)
+	const instanceName = configStore.state.config.displayName || configStore.state.config.name || 'Plebeian Market'
 
 	const event = new NDKEvent(ndk)
 	event.kind = USER_NWC_WALLET_LIST_KIND
@@ -52,7 +54,7 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 	event.content = encryptedContent
 	event.tags = [
 		['l', USER_NWC_WALLET_LIST_LABEL],
-		['client', 'plebeian.market'],
+		['client', instanceName],
 	]
 
 	await event.sign(signer)

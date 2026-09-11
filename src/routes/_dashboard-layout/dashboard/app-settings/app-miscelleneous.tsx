@@ -34,12 +34,13 @@ function parseList(value: string): string[] | undefined {
 	return items.length > 0 ? items : undefined
 }
 
-function createSocialLinks(value: { twitterUrl: string; newsletterUrl: string; telegramUrl: string; githubUrl: string }) {
+function createSocialLinks(value: { twitterUrl: string; newsletterUrl: string; telegramUrl: string; githubUrl: string; nostrUrl: string }) {
 	const socialLinks = {
 		twitter: value.twitterUrl || undefined,
 		newsletter: value.newsletterUrl || undefined,
 		telegram: value.telegramUrl || undefined,
 		github: value.githubUrl || undefined,
+		nostr: value.nostrUrl || undefined,
 	}
 
 	return Object.values(socialLinks).some(Boolean) ? socialLinks : undefined
@@ -71,6 +72,7 @@ function AppMiscelleneousComponent() {
 			newsletterUrl: appSettings?.socialLinks?.newsletter ?? config?.socialLinks?.newsletter ?? '',
 			telegramUrl: appSettings?.socialLinks?.telegram ?? config?.socialLinks?.telegram ?? '',
 			githubUrl: appSettings?.socialLinks?.github ?? config?.socialLinks?.github ?? '',
+			nostrUrl: appSettings?.socialLinks?.nostr ?? config?.socialLinks?.nostr ?? '',
 			supportContact: appSettings?.supportContact ?? config?.supportContact ?? '',
 			contactEmail: appSettings?.contactEmail ?? '',
 			defaultCurrency: appSettings?.defaultCurrency ?? CURRENCIES[0],
@@ -116,13 +118,13 @@ function AppMiscelleneousComponent() {
 			}
 
 			try {
-				const { twitterUrl, newsletterUrl, telegramUrl, githubUrl, publicRelays, trustedMints, ...settingsValue } = value
+				const { twitterUrl, newsletterUrl, telegramUrl, githubUrl, nostrUrl, publicRelays, trustedMints, ...settingsValue } = value
 				const updatedSettings = {
 					...settingsValue,
 					ownerPk: config.appSettings.ownerPk,
 					publicRelays: parseList(publicRelays),
 					trustedMints: parseList(trustedMints),
-					socialLinks: createSocialLinks(value),
+					socialLinks: createSocialLinks({ twitterUrl, newsletterUrl, telegramUrl, githubUrl, nostrUrl }),
 					// Strip empty strings to undefined for optional URL fields
 					siteUrl: value.siteUrl || undefined,
 					bugRelay: value.bugRelay || undefined,
@@ -562,8 +564,9 @@ function AppMiscelleneousComponent() {
 							['newsletterUrl', 'Newsletter URL', 'https://example.substack.com/'],
 							['telegramUrl', 'Telegram URL', 'https://t.me/example'],
 							['githubUrl', 'GitHub URL', 'https://github.com/example/market'],
+							['nostrUrl', 'Nostr profile URL', 'https://njump.me/npub1...'],
 						].map(([name, label, placeholder]) => (
-							<form.Field key={name} name={name as 'twitterUrl' | 'newsletterUrl' | 'telegramUrl' | 'githubUrl'}>
+							<form.Field key={name} name={name as 'twitterUrl' | 'newsletterUrl' | 'telegramUrl' | 'githubUrl' | 'nostrUrl'}>
 								{(field) => (
 									<div>
 										<Label className="font-medium" htmlFor={field.name}>
