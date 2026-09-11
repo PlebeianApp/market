@@ -15,7 +15,7 @@ import {
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
-import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS, resolveDleqRequired } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
@@ -2655,6 +2655,10 @@ export const nip60Actions = {
 			sellerPubkey: selected.pubkey,
 			p2pkXpub,
 			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
+			// ADR-0011 Decision 8 (review N1) — carry the auction's canonical
+			// DLEQ activation so the lock and the published `dleq_proof` tags
+			// come from the signed decision, not the deploy-time boundary.
+			dleqRequired: resolveDleqRequired(getFirstTagValue(selected, 'dleq_required'), startAt),
 		}
 
 		const bidEventId = await publishAuctionBid(formData, signer, ndk)
