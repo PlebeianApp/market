@@ -144,17 +144,33 @@ jobs:
         run: |
           set -euo pipefail
           # Write the SSH key to a temp file for scp/ssh.
-          # Use printf (not echo) to avoid trailing newline which corrupts
-          # the PEM key format and causes "hostname contains invalid
-          # characters" errors from ssh.
           KEY_FILE=$(mktemp)
           # Clean up the key file on exit (success OR failure — a bare rm at
           # the end would be skipped under set -e if provisioning fails).
           trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s' "$PREVIEW_VPS_SSH_KEY" > "$KEY_FILE"
-          # Convert literal \n to real newlines (GitHub secrets may escape them)
+          # Convert literal \n escapes to real newlines: some secret entry
+          # paths store the key as a single escaped line.
           sed -i 's/\\n/\n/g' "$KEY_FILE"
+          # A trailing newline on the LAST line is mandatory. OpenSSH rejects a
+          # private key whose final line is not newline-terminated with
+          # "Load key \"...\": error in libcrypto", then silently falls through
+          # to password auth and reports "Too many authentication failures" —
+          # two errors that both point away from the real cause. GitHub strips
+          # trailing newlines from secret values, so restore it here. This is
+          # why the materialisation does NOT use a bare `printf '%s'`:
+          #   ssh-keygen -y -f <443-byte key>  -> error in libcrypto
+          #   ssh-keygen -y -f <444-byte key>  -> ok
+          if [ -n "$(tail -c1 "$KEY_FILE")" ]; then
+            printf '\n' >> "$KEY_FILE"
+          fi
           chmod 600 "$KEY_FILE"
+          # Fail loudly and specifically if the materialised key is unusable,
+          # rather than three steps later with an unrelated-sounding error.
+          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
+            echo "::error::PREVIEW_VPS_SSH_KEY did not materialise into a loadable OpenSSH private key. Expected an unencrypted private key (-----BEGIN OPENSSH PRIVATE KEY-----) with a trailing newline; got $(wc -c < "$KEY_FILE") bytes."
+            exit 1
+          fi
           export PREVIEW_VPS_SSH_KEY="$KEY_FILE"
           # Run the idempotent provision script. It verifies the VPS host
           # key against PREVIEW_VPS_HOST_FINGERPRINT before any key

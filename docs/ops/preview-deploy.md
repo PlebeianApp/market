@@ -246,6 +246,43 @@ ssh-keyscan -T 10 -p 22 -t ed25519 23.182.128.51 2>/dev/null \
   answered with a key that does not match the pinned secret. Either the host
   was rebuilt (re-keyed) or you are pinning the wrong host/port.
 
+### f) The private key must end with a newline
+
+`PREVIEW_VPS_SSH_KEY` is materialised to a file at run time. OpenSSH requires
+the **final line to be newline-terminated**; a key whose last byte is not `\n`
+is rejected:
+
+```
+Load key "/tmp/tmp.XXXX": error in libcrypto
+...
+Received disconnect ... Too many authentication failures
+```
+
+Both messages point away from the cause, and the second one sends you looking at
+`authorized_keys`. GitHub **strips trailing newlines from secret values**, so a
+key that is perfectly valid on disk arrives without its final newline and every
+deploy fails.
+
+The workflow restores it and then proves the result is loadable, so this fails
+loudly at the materialisation step instead of three steps later:
+
+```bash
+if [ -n "$(tail -c1 "$KEY_FILE")" ]; then printf '\n' >> "$KEY_FILE"; fi
+chmod 600 "$KEY_FILE"
+ssh-keygen -y -f "$KEY_FILE" >/dev/null   # must succeed
+```
+
+Regression test: `infra/preview-vps/test_key_materialisation.sh` (proves the
+unterminated key is rejected and the guard repairs it, byte-for-byte).
+
+If you set the secret yourself, verify the round trip the same way rather than
+trusting the upload:
+
+```bash
+gh secret set PREVIEW_VPS_SSH_KEY --repo PlebeianApp/market < ~/.ssh/<key>
+# then a preview-deploy run must get past "Bootstrap VPS"
+```
+
 ### ⚠️ Legacy socat forwarder on port 2222 — do NOT use it
 
 `testserver2` also runs a legacy systemd unit `fips-ssh-proxy.service` that
