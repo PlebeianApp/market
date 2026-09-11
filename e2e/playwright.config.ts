@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
+import { RELAY_URL, SELF_HOSTED_HANDLER_ID, TEST_APP_PRIVATE_KEY, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -89,6 +89,7 @@ export default defineConfig({
 						// Playwright-managed local run could never get past startup,
 						// which is what pushed local runs onto a reused dev server.
 						CVM_SERVER_KEY: 'e2e2222222222222222222222222222222222222222222222222222222222222',
+						INSTANCE_HANDLER_ID: SELF_HOSTED_HANDLER_ID,
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
 						APP_DEV_TEST_MINT_URL: 'http://localhost:3338',
