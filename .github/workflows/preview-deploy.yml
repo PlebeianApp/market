@@ -25,6 +25,14 @@ name: Preview Deploy
 # a PR colliding with a live preview (congruent mod 100) fails the deploy
 # loudly instead of racing on shared host ports. Caddy on the VPS uses
 # on-demand TLS to serve each pr{N}.test-market.orangesync.tech subdomain.
+#
+# SSH port: the VPS is reached on the port in the OPTIONAL repository secret
+# PREVIEW_VPS_SSH_PORT. It defaults to 22, so leaving the secret unset keeps
+# the historical behaviour exactly (the preview VPS listens on 22 today). Set
+# it only if the box is fronted by a non-standard ingress (NAT/port-forward
+# or a different sshd port) — no workflow edit is needed for that. The
+# host-key pin (PREVIEW_VPS_HOST_FINGERPRINT) is per-HOST, not per-port, so
+# it stays valid if the port changes. See docs/ops/preview-deploy.md.
 
 on:
   pull_request:
@@ -104,6 +112,9 @@ jobs:
       # check then reports a visible "skipped" instead of a confusing FAIL.
       # See docs/ops/preview-deploy.md for the secrets to set and the
       # `pull_request_target` option for real fork-PR previews.
+      #
+      # PREVIEW_VPS_SSH_PORT is NOT checked here on purpose: it is optional
+      # and defaults to 22. Only the four secrets above are required.
       - name: Check preview VPS secrets
         id: secrets
         env:
@@ -127,6 +138,7 @@ jobs:
           PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
           PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
           PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
         run: |
@@ -163,6 +175,8 @@ jobs:
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
+          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
           script: |
             mkdir -p "$HOME/previews/pr-${{ github.event.pull_request.number }}"
 
@@ -174,6 +188,8 @@ jobs:
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
+          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
           source: 'deploy-package/*'
           target: '/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package'
           strip_components: 1
@@ -186,6 +202,8 @@ jobs:
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
+          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
           script: |
             set -euo pipefail
             PR_NUMBER="${{ github.event.pull_request.number }}"
@@ -388,6 +406,8 @@ jobs:
           username: ${{ secrets.PREVIEW_VPS_USER }}
           key: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
           fingerprint: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          # Optional secret — unset ⇒ 22 (previous behaviour unchanged).
+          port: ${{ secrets.PREVIEW_VPS_SSH_PORT || 22 }}
           script: |
             set -uo pipefail
             PR_NUMBER="${{ github.event.pull_request.number }}"

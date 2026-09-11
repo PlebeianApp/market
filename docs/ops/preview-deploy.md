@@ -98,17 +98,131 @@ add these as **repository secrets** (the `deploy` job currently has no
 trigger is switched to `pull_request_target`, as secrets scoped to that
 environment:
 
-| Secret                         | Value                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                 |
-| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                |
-| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                             |
-| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). The same secret verifies the host in the appleboy actions (`fingerprint:` input) and in `provision.sh`, which compares it against the scanned key and aborts before any private-key material is exchanged. |
-| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit on the zone)                                                                                                                                                                                                                                                                                              |
-| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for `test-market.orangesync.tech`                                                                                                                                                                                                                                                                                     |
+| Secret                         | Value                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                                                                                                                                    |
+| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). The same secret verifies the host in the appleboy actions (`fingerprint:` input) and in `provision.sh`, which compares it against the scanned key and aborts before any private-key material is exchanged. A host-key fingerprint is per-**host**, not per-**port**, so it stays valid when the SSH port changes. |
+| `PREVIEW_VPS_SSH_PORT`         | **OPTIONAL** — sshd port on the preview VPS. Leave unset (or empty) for the default **22**, which is what the current box uses. Set it only when the host is fronted by a non-standard ingress (NAT/port-forward, different sshd port). `port:` is passed to every `appleboy/ssh-action` + `appleboy/scp-action` step as `${{ secrets.PREVIEW_VPS_SSH_PORT \|\| 22 }}`, and `provision.sh` uses it for `ssh-keyscan -p`, `ssh -p` and `scp -P`. |
+| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit on the zone)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for `test-market.orangesync.tech`                                                                                                                                                                                                                                                                                                                                                                                            |
 
 If any required secret is missing the workflow skips loudly instead of failing
 opaque — do not treat a green "skipped" check as proof previews are live.
+`PREVIEW_VPS_SSH_PORT` is **not** part of that guard: it is optional and
+defaults to 22, so the deploy does not skip when it is absent.
+
+## VPS prerequisites (one-time, per host)
+
+The workflow assumes a Linux box that is already reachable over SSH with a
+deploy user that can `sudo`. The worked example below is the current preview
+host: `23.182.128.51` (hostname `testserver2`, Debian 13, deploy user
+`debian`), whose sshd listens on port **22**. Do these four steps once per
+host. They are operator tasks — `provision.sh` installs Docker/Caddy/the
+gateway/the manager but deliberately does **not** touch SSH auth, fail2ban,
+or the firewall.
+
+### a) Dedicated deploy keypair (never a personal identity key)
+
+Generate a keypair that exists **only** for this automation, append its
+public half to the deploy user's `authorized_keys`, and upload the private
+half as the repo secret straight from the file — so no key material is ever
+pasted into a chat or the GitHub web UI.
+
+```bash
+# 1. DEDICATED, passphrase-less keypair for CI only. Tag the comment so it
+#    is obvious this is not a personal identity key. (The CI runner cannot
+#    unlock a passphrase, hence -N ''.)
+ssh-keygen -t ed25519 -C 'preview-deploy@ci' -f ~/.ssh/preview_deploy_ed25519 -N ''
+
+# 2. Append the PUBLIC half to the deploy user's authorized_keys on the VPS
+#    (as its own line). Replace the -i key with your own operator key.
+ssh -i ~/.ssh/<operator-key> debian@23.182.128.51 \
+  'umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys' \
+  < ~/.ssh/preview_deploy_ed25519.pub
+
+# 3. Upload the PRIVATE half as the repo secret — the file is the sole
+#    content of PREVIEW_VPS_SSH_KEY.
+gh secret set PREVIEW_VPS_SSH_KEY --repo PlebeianApp/market < ~/.ssh/preview_deploy_ed25519
+
+# 4. Prove the key works before wiring it into CI.
+ssh -i ~/.ssh/preview_deploy_ed25519 debian@23.182.128.51 'echo ok'
+```
+
+Revoke by removing that one line from `~/.ssh/authorized_keys` on the VPS;
+the personal key is never involved.
+
+### b) fail2ban must not ban the operator or the CI runners
+
+fail2ban's `sshd` jail bans a source after a few failed auth attempts. CI
+runner IPs change every run, so a runner that fails auth a handful of times
+gets banned — and **a banned source sees SSH _time out_, not `Permission
+denied`**. That is indistinguishable from a closed/filtered port and is a
+classic multi-hour debugging trap. Whitelist every egress CIDR the operator
+and CI can appear from:
+
+```bash
+sudo tee /etc/fail2ban/jail.d/00-operator-whitelist.local > /dev/null <<'EOF'
+[DEFAULT]
+# Never ban the operator or the CI runners. Replace the CIDRs below with
+# your own egress ranges; 127.0.0.1/8 and ::1 cover on-box checks.
+ignoreip = 127.0.0.1/8 ::1 <operator CIDR> <operator CIDR 2>
+EOF
+
+sudo systemctl reload fail2ban
+sudo fail2ban-client status sshd   # confirm: "IP list:" should not contain you
+```
+
+Diagnostics and the fix for an already-banned source:
+
+```bash
+sudo fail2ban-client status sshd                    # banned IP list + totals
+sudo fail2ban-client set sshd unbanip 203.0.113.7   # unban one source now
+```
+
+**Rule of thumb:** if `ssh` hangs and then times out (instead of answering
+`Permission denied`), suspect fail2ban before you suspect the port or ufw.
+
+### c) Open the SSH port in the firewall
+
+```bash
+sudo ufw allow 22/tcp        # or: sudo ufw allow "${PREVIEW_VPS_SSH_PORT}/tcp"
+sudo ufw status verbose
+```
+
+`ufw` is stateful and per-port: if you later move sshd to a non-standard port,
+open that port instead and set `PREVIEW_VPS_SSH_PORT` to match. Leaving 22
+open as well is fine — this only affects reachability, not authentication.
+
+### d) The host-key fingerprint is per-HOST, not per-PORT
+
+`PREVIEW_VPS_HOST_FINGERPRINT` stays valid if the port changes, because a
+host key belongs to the host, not to the listening port:
+
+```bash
+# Fingerprint for 23.182.128.51 on port 22 (the value to pin in the secret).
+ssh-keyscan -p 22 -t ed25519 23.182.128.51 | ssh-keygen -lf -
+# → 256 SHA256:… (ED25519)
+
+# Same host key, same fingerprint, whichever port you scan:
+ssh-keyscan -p 2222 -t ed25519 23.182.128.51 | ssh-keygen -lf -
+```
+
+So changing `PREVIEW_VPS_SSH_PORT` never requires re-issuing
+`PREVIEW_VPS_HOST_FINGERPRINT`.
+
+### ⚠️ Legacy socat forwarder on port 2222 — do NOT use it
+
+`testserver2` also runs a legacy systemd unit `fips-ssh-proxy.service` that
+listens on public `0.0.0.0:2222` and forwards (via `socat`) to a **different**
+host over a mesh network. Port 2222 on that box is therefore **not** this
+machine's sshd. Never set `PREVIEW_VPS_HOST=23.182.128.51` with
+`PREVIEW_VPS_SSH_PORT=2222` expecting to land on the preview VPS: you would
+reach an entirely different machine, and the pinned host-key fingerprint check
+would (correctly) fail. Use port 22 — or whatever port the box's own sshd is
+moved to — and verify with `ssh-keyscan -p <port> -t ed25519 <host>` matching
+the pinned fingerprint before deploying.
 
 ## Security notes
 

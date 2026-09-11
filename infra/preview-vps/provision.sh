@@ -11,7 +11,7 @@ set -euo pipefail
 # re-running from CI never bounces the gateway).
 #
 # Requires these env vars:
-#   PREVIEW_VPS_HOST             — VPS hostname or IP (SSH port 22)
+#   PREVIEW_VPS_HOST             — VPS hostname or IP
 #   PREVIEW_VPS_USER             — SSH user (typically "debian")
 #   PREVIEW_VPS_SSH_KEY          — path to the SSH private key file
 #   PREVIEW_VPS_HOST_FINGERPRINT — VPS SSH *host* key SHA256 fingerprint
@@ -22,6 +22,15 @@ set -euo pipefail
 #                                  `fingerprint:` input). The connection is
 #                                  pinned to it — no TOFU, no
 #                                  StrictHostKeyChecking=no.
+#                                  NOTE: a host key fingerprint is
+#                                  per-HOST, not per-PORT, so the pinned
+#                                  value stays valid if the SSH port
+#                                  changes (`ssh-keyscan -p <port> -t
+#                                  ed25519 <host> | ssh-keygen -lf -`).
+#   PREVIEW_VPS_SSH_PORT         — OPTIONAL sshd port on the VPS. Empty or
+#                                  unset ⇒ 22 (identical to the previous
+#                                  behaviour). Set it only when the box is
+#                                  fronted by a non-standard ingress.
 #   PREVIEW_CLOUDFLARE_API_TOKEN — Cloudflare token (DNS edit on the zone);
 #                                  shipped to the VPS as manager.env so the
 #                                  manager can delete preview DNS records.
@@ -38,6 +47,10 @@ KEY="$(echo -n "${PREVIEW_VPS_SSH_KEY:?PREVIEW_VPS_SSH_KEY is required}" | tr -d
 FINGERPRINT="$(echo -n "${PREVIEW_VPS_HOST_FINGERPRINT:?PREVIEW_VPS_HOST_FINGERPRINT is required}" | tr -d '[:space:]')"
 CF_TOKEN="${PREVIEW_CLOUDFLARE_API_TOKEN:?PREVIEW_CLOUDFLARE_API_TOKEN is required}"
 CF_ZONE="$(echo -n "${PREVIEW_CLOUDFLARE_ZONE_ID:?PREVIEW_CLOUDFLARE_ZONE_ID is required}" | tr -d '[:space:]')"
+# Optional SSH port (PREVIEW_VPS_SSH_PORT). Unset OR empty ⇒ 22, which
+# is exactly the previous behaviour — the secret is purely additive.
+PORT="$(echo -n "${PREVIEW_VPS_SSH_PORT:-22}" | tr -d '[:space:]')"
+[ -z "$PORT" ] && PORT=22
 
 # ── Pinned host-key verification (no MITM window, no TOFU) ──────────────
 # Scan the host key, compare its SHA256 fingerprint against the pinned
@@ -47,10 +60,10 @@ CF_ZONE="$(echo -n "${PREVIEW_CLOUDFLARE_ZONE_ID:?PREVIEW_CLOUDFLARE_ZONE_ID is 
 # StrictHostKeyChecking=yes against it. HostKeyAlgorithms pins the
 # negotiation to the verified ed25519 key, so an impostor cannot offer a
 # different key type that was never pinned.
-echo "==> Verifying VPS host key fingerprint for ${HOST}"
-HOSTKEY_LINE="$(ssh-keyscan -T 10 -t ed25519 "${HOST}" 2>/dev/null | head -n 1)"
+echo "==> Verifying VPS host key fingerprint for ${HOST} (ssh port ${PORT})"
+HOSTKEY_LINE="$(ssh-keyscan -T 10 -p "${PORT}" -t ed25519 "${HOST}" 2>/dev/null | head -n 1)"
 if [ -z "${HOSTKEY_LINE}" ]; then
-  echo "FATAL: ssh-keyscan could not reach ${HOST} to fetch its host key" >&2
+  echo "FATAL: ssh-keyscan could not reach ${HOST}:${PORT} to fetch its host key" >&2
   exit 1
 fi
 ACTUAL_FP="$(printf '%s\n' "${HOSTKEY_LINE}" | ssh-keygen -lf - | awk '{print $2}')"
@@ -68,10 +81,16 @@ printf '%s\n' "${HOSTKEY_LINE}" > "${KNOWN_HOSTS}"
 chmod 600 "${KNOWN_HOSTS}"
 trap 'rm -f "${KNOWN_HOSTS}"' EXIT
 
-SSH_BASE=(ssh -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
-SCP_BASE=(scp -i "${KEY}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
+# Port note: ssh takes the port as lowercase -p, but scp uses UPPERCASE -P
+# (lowercase -p means "preserve mtime"). Both carry ${PORT}, which defaults
+# to 22, so these arrays are byte-identical in effect to the previous
+# port-22-only versions when PREVIEW_VPS_SSH_PORT is unset.
+# Host-key pinning is unchanged: StrictHostKeyChecking=yes against the
+# pre-verified known_hosts, HostKeyAlgorithms pinned to ssh-ed25519.
+SSH_BASE=(ssh -i "${KEY}" -p "${PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
+SCP_BASE=(scp -i "${KEY}" -P "${PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${KNOWN_HOSTS}" -o HostKeyAlgorithms=ssh-ed25519 -o LogLevel=ERROR)
 
-echo "==> Provisioning VPS ${_VPS_USER}@${HOST} (host key pinned)"
+echo "==> Provisioning VPS ${_VPS_USER}@${HOST} (ssh port ${PORT}, host key pinned)"
 
 # ── 0. Install base tooling (Docker + Caddy) if missing ──
 # The target VPS may be a bare Debian box with neither Docker nor Caddy
