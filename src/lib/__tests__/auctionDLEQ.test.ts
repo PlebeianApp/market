@@ -350,6 +350,18 @@ describe('getMintKeyset', () => {
 		// the pure verification helpers are the non-throwing ones.
 		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow('mint unreachable')
 	})
+
+	test('throws when the mint returns an empty keysets array (fail loudly, not silently)', async () => {
+		const customRequest = async () => ({ keysets: [] })
+		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow(/no keyset/)
+	})
+
+	test('throws when the returned keyset id does not match the requested id', async () => {
+		const customRequest = async () => ({ keysets: [{ id: '11cafebabe', unit: 'sat', keys: { 1: GENERATOR_HEX } }] })
+		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow(
+			/11cafebabe, expected 00deadbeef/,
+		)
+	})
 })
 
 // ---------- buildDleqProofs -------------------------------------------------
