@@ -151,6 +151,20 @@ const router = createRouter({
 
 Set the .env variables by copying and renaming the `.env.example` file, then set your own values for the variables.
 
+For self-hosted deployments, `INSTANCE_*` variables configure the public
+identity and service endpoints: name, display name, logo, banner, site URL,
+handler ID, public relays, trusted mints, bug relay, terms URL, support contact,
+and social links. See [`deploy-simple/README.md`](deploy-simple/README.md) for a
+complete example. Runtime precedence is:
+
+```text
+kind 31990 app-settings event -> INSTANCE_* environment variables -> shipped defaults
+```
+
+When `INSTANCE_HANDLER_ID` is configured, app-settings discovery tries that
+d-tag first and falls back to `plebeian-market-handler` for compatibility with
+existing deployments.
+
 ### Development relay
 
 During development, you should spin up a relay to seed data and use it during the development cycle, you can use `nak serve` as a quick solution, or run another relay locally, then set it in your `.env` variables, and run `bun seed` to seed it.
