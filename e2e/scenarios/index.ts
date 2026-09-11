@@ -7,6 +7,7 @@ import WebSocket from 'ws'
 import { devUser1, devUser2, devUser3, WALLETED_USER_LUD16, XPUB } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { isAddressableKind } from 'nostr-tools/kinds'
+import { AUCTION_CLAIM_SUBJECT } from '@/lib/auctions/privateAuctionClaimMessage'
 import { v4 as uuidv4 } from 'uuid'
 
 useWebSocketImplementation(WebSocket)
@@ -926,6 +927,37 @@ export function buildAuctionOrderFixture(input: { now: number; title?: string; d
 }
 
 /**
+ * Canonical auction-claim ORDER tags for the seeded auction chain.
+ *
+ * Mirrors the production public marker builder
+ * (`buildAuctionClaimPublicMarkerTags` in
+ * `@/lib/auctions/privateAuctionClaimMessage`) so the seeded order parses
+ * through `getAuctionClaimPublicMarkerFields()` and validates as the canonical
+ * claim order for {@link buildAuctionOrderFixture}'s settlement:
+ *
+ *   - `subject: 'auction-claim'` (the marker discriminator),
+ *   - `a` = the kind-30408 coordinate, `p` = the seller,
+ *   - `e <auction root>` (no marker) and `e <settlement id> '' 'settlement'`,
+ *   - `amount` = the settlement's final amount.
+ *
+ * The `item` tag is kept alongside because the order surfaces render the item
+ * title from it; it plays no part in the marker.
+ */
+export function buildAuctionClaimOrderTags(fixture: AuctionOrderFixture, orderId: string): string[][] {
+	return [
+		['p', fixture.auctionEvent.pubkey],
+		['subject', AUCTION_CLAIM_SUBJECT],
+		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		['order', orderId],
+		['amount', String(fixture.amount)],
+		['item', fixture.itemTagValue, '1'],
+		['a', fixture.itemTagValue],
+		['e', fixture.auctionEvent.id],
+		['e', fixture.settlementEvent.id, '', 'settlement'],
+	]
+}
+
+/**
  * Cross-event validation gate for {@link buildAuctionOrderFixture}.
  *
  * Runs every seeded event through the production parsers, then through the
@@ -1086,21 +1118,23 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			orderAmount = String(auctionFixture.amount)
 		}
 
-		// 2. Construct Base Tags Array (MUTABLE)
-		// FIX: Build tags array as a mutable variable first
-		const baseTags: string[][] = [
-			['p', devUser1.pk], // Seller
-			['subject', `Order #${orderId}`],
-			['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
-			['order', orderId],
-			['amount', orderAmount],
-			['item', itemTagValue, '1'],
-		]
-
-		// Add 'a' tag if it's an auction
-		if (type === 'auction') {
-			baseTags.push(['a', itemTagValue])
-		}
+		// 2. Construct Base Tags Array
+		// Auction orders ARE the claim order: they carry the canonical claim
+		// marker (the same tags `buildAuctionClaimPublicMarkerTags` emits in
+		// production) bound to the seeded settlement event id. Without it the
+		// order is only auction-associated and never reaches the validated
+		// fulfillment authority the order surfaces require.
+		const baseTags: string[][] =
+			type === 'auction' && auctionFixture
+				? buildAuctionClaimOrderTags(auctionFixture, orderId)
+				: [
+						['p', devUser1.pk], // Seller
+						['subject', `Order #${orderId}`],
+						['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+						['order', orderId],
+						['amount', orderAmount],
+						['item', itemTagValue, '1'],
+					]
 
 		// 3. Create Order Event Data Object
 		const orderEventData: EventTemplate = {
@@ -1246,44 +1280,15 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 					}
 				}
 			} else if (type === 'auction') {
-				// Auction Flow: Path Release -> Settlement
-				if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
-					// Buyer publishes Path Release (Kind 1025)
-					const pathRelease = finalizeEvent(
-						{
-							kind: AUCTION_PATH_RELEASE_KIND,
-							created_at: now + 5,
-							content: '',
-							tags: [
-								['p', devUser1.pk],
-								['a', itemTagValue],
-								['winning_bid', 'bid_event_id_placeholder'],
-							],
-						},
-						buyerSkBytes,
-					)
-					await relay.publish(pathRelease)
-
-					// Seller publishes Settlement (Kind 1024)
-					if (['processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
-						const settlement = finalizeEvent(
-							{
-								kind: AUCTION_SETTLEMENT_KIND,
-								created_at: now + 10,
-								content: '',
-								tags: [
-									['p', devUser2.pk],
-									['a', itemTagValue],
-									['status', 'settled'],
-									['winner', devUser2.pk],
-									['final_amount', '500'],
-								],
-							},
-							sellerSkBytes,
-						)
-						await relay.publish(settlement)
-					}
-				}
+				// The auction chain is published up front by
+				// buildAuctionOrderFixture(): the real kind-1023 winning bid,
+				// the auditor verdict, the winner's kind-1025 path release and
+				// the seller's settled kind-1024 settlement. No stage-local
+				// auction events belong here — the placeholder release
+				// (`winning_bid = bid_event_id_placeholder`) and the
+				// `final_amount 500` settlement that used to live in this
+				// branch are exactly the impossible relay data this fixture
+				// exists to avoid (R1).
 			}
 		}
 
