@@ -130,14 +130,15 @@ jobs:
         # Interactions incl. the reaction test, ...) are not gated here; they
         # run in the scheduled/manual e2e-full job instead.
         #
-        # `Authentication` is deliberately HELD OUT of this per-PR gate. The
-        # NIP-46 bunker connect path currently has branch regressions (the
-        # signer `auth_url`/`onAuth` approval challenge is not surfaced, so
-        # connect never completes; 4 NIP-46 specs + the vaulted-session spec
-        # pass on master and fail here). Gating it now would make a required
-        # PR gate permanently red. Those failures are tracked separately and
-        # the family returns to this gate once they are fixed.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock' --repeat-each=2
+        # `Authentication` is gated here again. It was held out while the
+        # NIP-46 bunker connect path was red on this branch; the root cause
+        # turned out to be a bun dev-bundler defect that dropped rxjs's
+        # `timeout`/`EMPTY`/`NEVER` re-exports (see the ADR-0002 amendment,
+        # "Build-level patch: rxjs index re-exports under `bun dev`"), which
+        # broke every applesauce RelayPool publish/request in the browser —
+        # including this family and Order Details. `patches/rxjs@7.8.2.patch`
+        # restores those names and the family is green locally.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|Authentication' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
@@ -158,7 +159,7 @@ jobs:
 
   e2e-full:
     # The e2e-grep job runs reliable test families on every PR/push.
-    # Families with pre-existing failures (Authentication, App Settings,
+    # Families with pre-existing failures (App Settings,
     # NWC, Cart, PII, Products, Multi-Merchant Cart, Zaps, Buyer Purchase,
     # Auction Mint State, Auction Shipping, Product Page Interactions)
     # remain in the scheduled e2e-full job.
