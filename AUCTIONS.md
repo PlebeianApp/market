@@ -2122,13 +2122,19 @@ and prod deploys, so the canonical stage is read from `/api/config`
 - Enforce immutable auction mechanics after first valid bid.
 - Compute `max_end_at` deterministically and expose it in UI.
 - Track settlement deadlines and alert seller on pending close.
-- Enforce the DLEQ rollout boundary (ADR-0011, Decisions 4 & 6). Auctions
-  whose `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` follow the
-  DLEQ-required path: at publish time the platform verifies every allowlisted
+- Enforce DLEQ activation (ADR-0011, Decisions 4, 6 & 8). The requirement is the
+  auction's canonical signed `dleq_required` tag (`"1"`/`"0"`), emitted at
+  publish time from the same decision the publish gate enforces; the
+  `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary survives only as the
+  fallback for legacy events published before the tag existed. For a
+  DLEQ-required auction the platform verifies every allowlisted
   `mint` advertises NUT-12 DLEQ support (mint `/v1/info` `nuts["12"]`) via
   `assertAuctionMintsSupportDleq` and rejects the publish with a clear error
-  naming any non-compliant mint; bids must also publish `dleq_proof` tags.
-  Auctions started before the boundary are grandfathered under the legacy
+  naming any non-compliant mint. A bidder on a DLEQ-required auction locks its
+  P2PK outputs with the DLEQ requirement and publishes `dleq_proof` tags from
+  the SAME signed decision the lock used — carried on the bid form, so the lock
+  and the published kind-1023 can never disagree. Grandfathered auctions
+  (`dleq_required="0"`, or pre-tag events below the boundary) stay on the legacy
   non-DLEQ path. The boundary is configurable via the
   `APP_AUCTION_DLEQ_ROLLOUT_START_AT` environment variable (epoch seconds;
   inlined at build time for browser bundles — see
