@@ -295,10 +295,23 @@ test.describe('OG Meta Tags - Happy Path (Video)', () => {
 	 * Walks through: raw HTML fetch → OG tag verification → browser load →
 	 * SPA hydration → document.title update → meta tag persistence.
 	 * Produces one coherent video for PR comment evidence.
+	 *
+	 * This test runs on Playwright's built-in `page` fixture rather than the
+	 * shared unauthenticatedPage fixture. unauthenticatedPage builds its own
+	 * context with `browser.newContext()` and no options, which silently drops
+	 * the file-level `test.use({ video: 'on' })` — the run was green but no
+	 * video artifact was ever written, so the evidence this test exists for was
+	 * missing. The built-in fixture creates the context from the resolved
+	 * `use` options, so the happy path is really recorded
+	 * (test-results/<test>/video.webm).
 	 */
-	test('full OG meta tags happy path', async ({ unauthenticatedPage }) => {
+	test.beforeEach(async ({ page }) => {
+		await interceptCdnImages(page)
+	})
+
+	test('full OG meta tags happy path', async ({ page }) => {
 		// Step 1: Fetch raw HTML (what crawlers/link-unfurlers receive).
-		const response = await unauthenticatedPage.request.get(`/products/${regularProductId}`)
+		const response = await page.request.get(`/products/${regularProductId}`)
 		expect(response.status()).toBe(200)
 		const html = await response.text()
 
@@ -313,21 +326,21 @@ test.describe('OG Meta Tags - Happy Path (Video)', () => {
 		expect(html).toContain('product:price:currency')
 
 		// Step 3: Load the page in the browser (SPA navigation).
-		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await page.goto(`/products/${regularProductId}`)
 
 		// Step 4: Wait for SPA hydration — product hero renders.
-		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+		await expect(page.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
 
 		// Step 5: Verify document.title updated client-side.
-		await expect(unauthenticatedPage).toHaveTitle(/OG Meta Test Product/, { timeout: 10_000 })
-		await expect(unauthenticatedPage).toHaveTitle(/Plebeian Market/)
+		await expect(page).toHaveTitle(/OG Meta Test Product/, { timeout: 10_000 })
+		await expect(page).toHaveTitle(/Plebeian Market/)
 
 		// Step 6: Verify server-rendered meta tags persist after hydration.
-		const ogTitle = unauthenticatedPage.locator('meta[property="og:title"]')
+		const ogTitle = page.locator('meta[property="og:title"]')
 		await expect(ogTitle).toHaveCount(1)
 		await expect(ogTitle).toHaveAttribute('content', 'OG Meta Test Product')
 
-		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
+		const ogImage = page.locator('meta[property="og:image"]')
 		await expect(ogImage).toHaveCount(1)
 		await expect(ogImage).toHaveAttribute('content', /cdn\.satellite\.earth/)
 	})
