@@ -20,7 +20,11 @@ fronts it for the public internet. It serves two roles:
      cached certificate (m3). The poke is non-fatal: errors are logged and the
      request still proceeds to a bounded-connect-retry proxy (~up to 15 s while
      the preview boots). If the preview never comes up, the client gets a 503
-     with a JSON error body. The proxy is a deliberately TOLERANT HTTP client:
+     with a JSON error body. A BROWSER (`Accept: text/html`) instead gets a small
+     self-reloading page saying the preview is starting, so a lazy-started
+     preview does not look broken; every other client keeps the JSON contract
+     that the CI health check and scripts rely on. The proxy is a deliberately
+     TOLERANT HTTP client:
      it ignores leading blank line(s) before the upstream status line (RFC 9112
      §2.2 — the preview app emits one, and strict clients such as urllib raise
      BadStatusLine on it), and any upstream/proxy failure is answered as a JSON
@@ -35,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import http.client
 import json
 import re
@@ -278,6 +283,116 @@ def http_proxy(
         raise OSError(str(e)) from e
 
 
+# ── The 503 body: machines get JSON, humans get a page they can watch ─────────
+#
+# A preview is lazy-started: the first visit to a stopped preview pokes the
+# manager, the app boots, and until it does the gateway has nothing to proxy to.
+# Answering that window with a JSON blob looks like a broken site, so browsers
+# get a small self-contained page (no external assets — the app is not up yet)
+# that explains the wait and reloads itself every few seconds.
+#
+# Content negotiation is deliberately crude: `Accept: text/html` means a browser.
+# curl, `fetch()` in a script, uptime probes and the CI health check send `*/*`
+# or nothing and MUST keep the machine-readable JSON contract — the health check
+# greps the status and body size, and the deploy comments quote `detail`.
+
+STARTING_PAGE_REFRESH_SECONDS = 5
+
+STARTING_PAGE_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="__REFRESH_SECONDS__">
+<meta name="robots" content="noindex">
+<title>PR __PR_NUMBER__ preview is starting</title>
+<style>
+  :root { color-scheme: dark }
+  * { box-sizing: border-box }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #0a0a0a; color: #ededed;
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { width: min(32rem, 92vw); padding: 3rem 1.5rem; text-align: center }
+  .pulse {
+    width: .7rem; height: .7rem; border-radius: 99px; background: #f7931a;
+    display: inline-block; margin-right: .55rem;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+  h1 { font-size: 1.3rem; margin: 0 0 .75rem; font-weight: 600 }
+  p { margin: .5rem 0; color: #b4b4b4 }
+  .bar {
+    height: 4px; border-radius: 99px; overflow: hidden; background: #232323;
+    margin: 1.75rem auto 0; width: min(18rem, 70vw);
+  }
+  .bar > i { display: block; height: 100%; width: 0; background: #f7931a;
+             transition: width 1s linear }
+  a { color: #f7931a }
+  small { display: block; margin-top: 1.5rem; color: #7b7b7b; font-size: .82rem }
+  .detail { word-break: break-word }
+</style>
+</head>
+<body>
+<main>
+  <span class="pulse" aria-hidden="true"></span>
+  <h1>PR __PR_NUMBER__ preview is starting</h1>
+  <p>The container for this pull-request preview is booting. The first start
+     takes a little while, so this page will reload itself every
+     __REFRESH_SECONDS__ seconds — nothing to do on your end.</p>
+  <div class="bar"><i id="bar"></i></div>
+  <small><a href="">Reload now</a></small>
+  <small>Still seeing this after a minute? The preview may have failed to
+     start — check the “Deploy preview” check on the pull request for the run
+     log.</small>
+  __DETAIL__
+</main>
+<script>
+  // Cosmetic only: the <meta http-equiv="refresh"> above performs the reload.
+  var left = __REFRESH_SECONDS__, total = __REFRESH_SECONDS__;
+  var bar = document.getElementById('bar');
+  setInterval(function () {
+    left = left > 0 ? left - 1 : 0;
+    bar.style.width = (100 * (total - left) / total) + '%';
+  }, 1000);
+</script>
+</body>
+</html>
+"""
+
+
+def prefers_html(accept: Optional[str]) -> bool:
+    """True when the client is a browser rather than a script/probe (pure)."""
+    if not accept:
+        return False
+    return "text/html" in accept.lower()
+
+
+def starting_page(
+    pr_number: int,
+    detail: str = "",
+    refresh_seconds: int = STARTING_PAGE_REFRESH_SECONDS,
+) -> bytes:
+    """The self-reloading "preview is starting" page (pure).
+
+    `detail` is exception text from an untrusted upstream, so it is HTML-escaped
+    and only rendered when present.
+    """
+    detail_html = ""
+    if detail:
+        detail_html = (
+            '<small class="detail">Technical detail: '
+            f"{html.escape(detail)}</small>"
+        )
+    page = (
+        STARTING_PAGE_TEMPLATE.replace("__PR_NUMBER__", str(int(pr_number)))
+        .replace("__REFRESH_SECONDS__", str(int(refresh_seconds)))
+        .replace("__DETAIL__", detail_html)
+    )
+    return page.encode("utf-8")
+
+
 # ── HTTP server ───────────────────────────────────────────────────────────────
 
 
@@ -375,16 +490,30 @@ def make_handler(state: GatewayState) -> type:
             self.wfile.write(resp_body)
 
         def _send_503(self, pr_number: int, detail: str = "") -> None:
-            payload = {
-                "error": "preview not ready",
-                "pr": pr_number,
-                "detail": detail or "preview app did not accept connections within the boot budget",
-            }
+            """Answer "not ready yet".
+
+            Browsers (`Accept: text/html`) get a self-reloading page; every other
+            client gets the JSON body it already expects. Either way the status is
+            503 and `Retry-After` says when to come back.
+            """
+            detail = detail or "preview app did not accept connections within the boot budget"
+            if prefers_html(self.headers.get("Accept")):
+                body = starting_page(pr_number, detail)
+                content_type = "text/html; charset=utf-8"
+            else:
+                payload = {
+                    "error": "preview not ready",
+                    "pr": pr_number,
+                    "detail": detail,
+                }
+                body = json.dumps(payload).encode()
+                content_type = "application/json"
             self.send_response(503)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(json.dumps(payload).encode())))
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Retry-After", str(STARTING_PAGE_REFRESH_SECONDS))
             self.end_headers()
-            self.wfile.write(json.dumps(payload).encode())
+            self.wfile.write(body)
 
         def _handle(self) -> None:
             try:
