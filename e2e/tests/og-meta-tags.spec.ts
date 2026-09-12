@@ -4,6 +4,7 @@ import { finalizeEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { RELAY_URL, TEST_PORT } from '../test-config'
 import { devUser1 } from '@/lib/fixtures'
+import { OG_OWNED_META_SELECTORS } from '@/lib/ogTags'
 import { seedProduct } from '../scenarios'
 import type { VerifiedEvent } from 'nostr-tools'
 import type { Page } from '@playwright/test'
@@ -67,6 +68,7 @@ let regularProductId: string
 let regularProductEvent: VerifiedEvent
 let nsfwProductId: string
 let noImageProductId: string
+let usdProductId: string
 
 /**
  * Publish a kind 30402 product event with a content-warning: nsfw tag.
@@ -169,6 +171,21 @@ test.beforeAll(async () => {
 			dTag: 'og-meta-no-image-' + Date.now(),
 		})
 		noImageProductId = noImageEvent.id
+
+		// Seed a product with a DIFFERENT currency so the currency-selector
+		// staleness check is discriminating: A→C(SATS→USD) must rewrite
+		// product:price:currency, and a leftover A tag would keep saying SATS.
+		const usdEvent = await seedProduct(relay, devUser1.sk, {
+			title: 'OG Meta USD Product',
+			description: 'A product priced in USD for currency ownership testing.',
+			price: '100',
+			currency: 'USD',
+			status: 'on-sale',
+			category: 'Bitcoin',
+			stock: '10',
+			dTag: 'og-meta-usd-' + Date.now(),
+		})
+		usdProductId = usdEvent.id
 
 		// Seed an NSFW product (content-warning: nsfw tag).
 		const nsfwEvent = await seedNsfwProduct(relay, devUser1.sk, {
@@ -361,38 +378,127 @@ test.describe('OG Meta Tags - Hostile Host Regression', () => {
 // Blocker 2: the product route owns every og/twitter selector while mounted
 // and removes them all on unmount (no restore of remembered content), so no
 // tag from a previous product leaks onto the next route. The matrix covers
-// A→B, A-with-image→B-without-image, product→non-product, and A→B→A.
+// A→B, A-with-image→B-without-image, product→non-product, A→B→A, and a
+// currency-changing A→C.
+//
+// The matrix is pinned by an explicit, hand-written selector list
+// (SPA_OWNED_CLEANUP_MATRIX) that names every selector the product route owns
+// — including `meta[property="product:price:currency"]`, the selector the
+// review finding called out. An explicit list is the point: a matrix that only
+// derives from a shared constant cannot catch an omission from that constant.
+// A drift test inside the describe asserts the literal matrix and
+// OG_OWNED_META_SELECTORS (the exact list removeOwnedOgMetaTags() removes) are
+// equal in both directions, so neither side can silently drift from the other.
+// meta[name="description"] was also missing from the previous hand-written
+// list and is now covered.
 
 test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
 	// Helper: SPA-navigate to a product by clicking its card in the
 	// "More from this seller" grid (a TanStack Link → client-side nav).
-	async function spaNavTo(page: import('@playwright/test').Page, productId: string) {
+	async function spaNavTo(page: Page, productId: string) {
 		const link = page.locator('a[href="/products/' + productId + '"]').first()
 		await expect(link).toBeVisible({ timeout: 30_000 })
 		await link.click()
 		await expect(page.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
 	}
 
+	/**
+	 * The selectors this matrix pins, written out by name. `product:price:currency`
+	 * is listed here explicitly (it is the reviewed selector), and the literal
+	 * list is deliberately NOT derived from the implementation constant: a matrix
+	 * that only derives cannot catch an omission from the thing it derives from.
+	 * The drift test below keeps this list and OG_OWNED_META_SELECTORS equal in
+	 * both directions.
+	 */
+	const SPA_OWNED_CLEANUP_MATRIX = [
+		'meta[property="og:type"]',
+		'meta[property="og:title"]',
+		'meta[property="og:description"]',
+		'meta[property="og:url"]',
+		'meta[property="og:site_name"]',
+		'meta[property="og:image"]',
+		'meta[property="product:price:amount"]',
+		'meta[property="product:price:currency"]',
+		'meta[name="twitter:card"]',
+		'meta[name="twitter:title"]',
+		'meta[name="twitter:description"]',
+		'meta[name="twitter:image"]',
+		'meta[name="description"]',
+	] as const
+
+	/** Selectors that exist only while the current product has an image. */
+	const imageOwnedSelectors = ['meta[property="og:image"]', 'meta[name="twitter:image"]'] as const
+
+	// The literal matrix and the route's implementation list must agree exactly.
+	// A selector the route owns but the matrix omits (the reviewed defect), or a
+	// matrix entry the route no longer owns, fails here before any nav runs.
+	test('cleanup matrix matches the product route owned-selector list', () => {
+		expect([...SPA_OWNED_CLEANUP_MATRIX].sort()).toEqual([...OG_OWNED_META_SELECTORS].sort())
+		// Belt and braces: the reviewed selector is named in the literal matrix.
+		expect([...SPA_OWNED_CLEANUP_MATRIX]).toContain('meta[property="product:price:currency"]')
+	})
+
+	/** No owned selector may remain (nothing stale survives the unmount). */
+	async function expectNoOwnedMeta(page: Page) {
+		for (const sel of SPA_OWNED_CLEANUP_MATRIX) {
+			await expect(page.locator(sel), `${sel} must be removed by cleanup`).toHaveCount(0)
+		}
+	}
+
+	/** No owned selector may appear more than once (no duplicates). */
+	async function expectNoDuplicateOwnedMeta(page: Page) {
+		for (const sel of SPA_OWNED_CLEANUP_MATRIX) {
+			expect(await page.locator(sel).count(), `${sel} must not be duplicated`).toBeLessThanOrEqual(1)
+		}
+	}
+
+	/** A product with an image and a price owns exactly one of every selector. */
+	async function expectAllOwnedMetaOnce(page: Page) {
+		for (const sel of SPA_OWNED_CLEANUP_MATRIX) {
+			await expect(page.locator(sel), `${sel} must exist exactly once`).toHaveCount(1)
+		}
+	}
+
 	test('SPA nav A→B: B tags replace A tags, no stale og:title', async ({ unauthenticatedPage }) => {
 		await unauthenticatedPage.goto(`/products/${regularProductId}`)
 		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+		// A (image + price) owns every selector before the nav.
+		await expectAllOwnedMetaOnce(unauthenticatedPage)
 
 		await spaNavTo(unauthenticatedPage, noImageProductId)
 
+		// B's values replaced A's; nothing of A survives.
 		const ogTitle = unauthenticatedPage.locator('meta[property="og:title"]')
 		await expect(ogTitle).toHaveCount(1)
 		await expect(ogTitle).toHaveAttribute('content', 'OG Meta No Image Product')
+		await expect(unauthenticatedPage.locator('meta[property="og:url"]')).toHaveAttribute(
+			'content',
+			new RegExp(`/products/${noImageProductId}$`),
+		)
+		// B has no image, so the image selectors must be gone entirely.
+		for (const sel of imageOwnedSelectors) {
+			await expect(unauthenticatedPage.locator(sel), `${sel} must not leak from A`).toHaveCount(0)
+		}
+		await expectNoDuplicateOwnedMeta(unauthenticatedPage)
 	})
 
 	test('SPA nav A-with-image→B-without-image: no stale og:image', async ({ unauthenticatedPage }) => {
 		await unauthenticatedPage.goto(`/products/${regularProductId}`)
 		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+		await expect(unauthenticatedPage.locator('meta[property="og:image"]')).toHaveCount(1)
 
 		await spaNavTo(unauthenticatedPage, noImageProductId)
 
 		// B has no image: og:image must be gone entirely, and the card is summary.
 		await expect(unauthenticatedPage.locator('meta[property="og:image"]')).toHaveCount(0)
+		await expect(unauthenticatedPage.locator('meta[name="twitter:image"]')).toHaveCount(0)
 		await expect(unauthenticatedPage.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary')
+		// Every non-image owned tag was rewritten for B, not left at A's value.
+		await expect(unauthenticatedPage.locator('meta[property="og:title"]')).toHaveAttribute('content', 'OG Meta No Image Product')
+		await expect(unauthenticatedPage.locator('meta[name="description"]')).toHaveAttribute(
+			'content',
+			'A product with no image for OG meta ownership testing.',
+		)
 	})
 
 	test('product→non-product route removes all owned tags', async ({ unauthenticatedPage }) => {
@@ -405,23 +511,12 @@ test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
 		await homeLink.click()
 		await expect(unauthenticatedPage).toHaveURL(/\/$/)
 
-		// No owned og/twitter/description meta remains on the non-product page.
-		for (const sel of [
-			'meta[property="og:type"]',
-			'meta[property="og:title"]',
-			'meta[property="og:description"]',
-			'meta[property="og:url"]',
-			'meta[property="og:site_name"]',
-			'meta[property="og:image"]',
-			'meta[property="product:price:amount"]',
-			'meta[property="product:price:currency"]',
-			'meta[name="twitter:card"]',
-			'meta[name="twitter:title"]',
-			'meta[name="twitter:description"]',
-			'meta[name="twitter:image"]',
-		]) {
-			await expect(unauthenticatedPage.locator(sel)).toHaveCount(0)
-		}
+		// EVERY owned selector — og:, twitter:, product:price:* (currency
+		// included, the reviewed one) and meta[name="description"] — must be
+		// gone. The matrix is the literal SPA_OWNED_CLEANUP_MATRIX, and the
+		// drift test proves it names exactly what the route owns, so a newly
+		// owned selector cannot be silently uncovered here either.
+		await expectNoOwnedMeta(unauthenticatedPage)
 		// document.title restored to the static default.
 		await expect(unauthenticatedPage).toHaveTitle('Plebeian Market')
 	})
@@ -434,14 +529,29 @@ test.describe('OG Meta Tags - SPA Nav Ownership Matrix', () => {
 		await spaNavTo(unauthenticatedPage, regularProductId)
 
 		// Each owned selector appears exactly once, with the current product's data.
+		await expectAllOwnedMetaOnce(unauthenticatedPage)
+		await expectNoDuplicateOwnedMeta(unauthenticatedPage)
 		const ogTitle = unauthenticatedPage.locator('meta[property="og:title"]')
-		await expect(ogTitle).toHaveCount(1)
 		await expect(ogTitle).toHaveAttribute('content', 'OG Meta Test Product')
-		const ogImage = unauthenticatedPage.locator('meta[property="og:image"]')
-		await expect(ogImage).toHaveCount(1)
-		await expect(unauthenticatedPage.locator('meta[name="twitter:card"]')).toHaveCount(1)
+		await expect(unauthenticatedPage.locator('meta[property="og:image"]')).toHaveAttribute('content', /cdn\.satellite\.earth/)
 		const ogCurrency = unauthenticatedPage.locator('meta[property="product:price:currency"]')
-		await expect(ogCurrency).toHaveCount(1)
 		await expect(ogCurrency).toHaveAttribute('content', 'SATS')
+	})
+
+	test('SPA nav A(SATS)→C(USD): currency tag follows the product, no stale value', async ({ unauthenticatedPage }) => {
+		const currencyTag = unauthenticatedPage.locator('meta[property="product:price:currency"]')
+
+		await unauthenticatedPage.goto(`/products/${regularProductId}`)
+		await expect(unauthenticatedPage.locator('.hero-content-product')).toBeVisible({ timeout: 30_000 })
+		await expect(currencyTag).toHaveCount(1)
+		await expect(currencyTag).toHaveAttribute('content', 'SATS')
+
+		await spaNavTo(unauthenticatedPage, usdProductId)
+
+		// The reviewed selector must be rewritten for C: a stale A tag would
+		// still read SATS here, or duplicate rather than replace.
+		await expect(currencyTag).toHaveCount(1)
+		await expect(currencyTag).toHaveAttribute('content', 'USD')
+		await expectNoDuplicateOwnedMeta(unauthenticatedPage)
 	})
 })
