@@ -63,32 +63,47 @@ makes **no** destructive decisions for that run — it logs a `skip_reason`
 line (visible in `journalctl`) instead. Teardown failures are recorded in
 the cycle summary and the preview is kept for retry rather than deleted.
 
-## Why the check skips (empty `PREVIEW_VPS_*` secrets)
+## Why the check skips (missing preview secrets)
 
-The "Bootstrap VPS" step consumes four secrets:
+The deploy path consumes **six** secrets — the four VPS ones plus the two
+Cloudflare ones used for the per-PR DNS record and the on-VPS `manager.env`:
 
 - `PREVIEW_VPS_HOST`
 - `PREVIEW_VPS_USER`
 - `PREVIEW_VPS_SSH_KEY`
 - `PREVIEW_VPS_HOST_FINGERPRINT`
-
-(and, for the DNS record step and the on-VPS `manager.env`):
-
 - `PREVIEW_CLOUDFLARE_API_TOKEN`
 - `PREVIEW_CLOUDFLARE_ZONE_ID`
 
-A `pull_request`-triggered workflow **never receives repository secrets when
-the PR head is on a fork**. `secrets.PREVIEW_VPS_*` resolve to empty strings in
-the runner, so `provision.sh` aborts immediately with:
+`infra/preview-vps/provision.sh` aborts on the first of these that is unset
+(`${VAR:?…}`), e.g.:
 
 ```
-infra/preview-vps/provision.sh: PREVIEW_VPS_HOST is required
+infra/preview-vps/provision.sh: line 39: PREVIEW_CLOUDFLARE_API_TOKEN is required
 ```
 
-The workflow detects this up front (step `Check preview VPS secrets`),
-emits a clear annotation, skips all VPS/DNS/deploy steps, and posts a
-"Preview deploy skipped" PR comment instead of failing confusingly. The
-"Deploy preview" check reports success (skipped) in this state.
+The workflow therefore checks **all six together** up front (step
+`Check preview VPS secrets`): if any is missing it sets `previews_ready=false`,
+emits a `::warning` naming the missing secrets, skips every VPS/DNS step, and
+posts a "Preview deploy skipped" PR comment. The check reports a clean skip
+rather than a red failure.
+
+The two lists must stay in lockstep — a guard that asserts fewer secrets than
+the deploy consumes reports "ready" and then dies inside `provision.sh`, which is
+exactly how this check first went red. `bun run test:unit` enforces the
+correspondence (`src/lib/__tests__/preview-deploy-workflow-guard.test.ts`), so
+adding a required env var to `provision.sh` without extending the guard fails CI.
+
+A `pull_request`-triggered workflow **never receives repository secrets when the
+PR head is on a fork**, and GitHub additionally downgrades the workflow's
+`GITHUB_TOKEN` to **read-only** for those runs. Both effects come from the same
+place, so on a fork PR the guard skips cleanly (all six secrets resolve empty)
+**and** the "Preview deploy skipped" comment cannot be posted — the comment step
+fails with `GraphQL: Resource not accessible by integration (addComment)` and is
+deliberately `continue-on-error`, leaving the skip visible only as the
+`::warning` annotation and the `missing_secrets=` line in the run log. Fork-PR
+previews therefore need the `pull_request_target` decision described below, not
+just the secrets.
 
 ## Required secrets (maintainer-side)
 
@@ -98,15 +113,15 @@ add these as **repository secrets** (the `deploy` job currently has no
 trigger is switched to `pull_request_target`, as secrets scoped to that
 environment:
 
-| Secret                         | Value                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                                                                                                                                    |
-| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). The same secret verifies the host in the appleboy actions (`fingerprint:` input) and in `provision.sh`, which compares it against the scanned key and aborts before any private-key material is exchanged. A host-key fingerprint is per-**host**, not per-**port**, so it stays valid when the SSH port changes. |
-| `PREVIEW_VPS_SSH_PORT`         | **OPTIONAL** — sshd port on the preview VPS. Leave unset (or empty) for the default **22**, which is what the current box uses. Set it only when the host is fronted by a non-standard ingress (NAT/port-forward, different sshd port). `port:` is passed to every `appleboy/ssh-action` + `appleboy/scp-action` step as `${{ secrets.PREVIEW_VPS_SSH_PORT \|\| 22 }}`, and `provision.sh` uses it for `ssh-keyscan -p`, `ssh -p` and `scp -P`. |
-| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit on the zone)                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for `test-market.orangesync.tech`                                                                                                                                                                                                                                                                                                                                                                                            |
+| Secret                         | Value                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                                                                                              |
+| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                                                                                             |
+| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                                                                                                          |
+| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). `ssh-prepare.sh` verifies the materialised key against it, and `provision.sh` compares it against the scanned key and aborts before any private-key material is exchanged. A host-key fingerprint is per-**host**, not per-**port**, so it stays valid when the SSH port changes.       |
+| `PREVIEW_VPS_SSH_PORT`         | **OPTIONAL** — sshd port on the preview VPS. Leave unset (or empty) for the default **22**, which is what the current box uses. Set it only when the host is fronted by a non-standard ingress (NAT/port-forward, different sshd port). `ssh-prepare.sh` publishes it to `$GITHUB_ENV`, `remote-ssh.sh`/`remote-scp.sh` use it for `-p`/`-P`, and `provision.sh` uses it for `ssh-keyscan -p`, `ssh -p` and `scp -P`. |
+| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Zone → DNS → Edit** on the `orangesync.tech` zone (the manager deletes preview records; the deploy upserts them)                                                                                                                                                                                                                                                                          |
+| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for the zone that holds `test-market.orangesync.tech` (currently `orangesync.tech`)                                                                                                                                                                                                                                                                                                                |
 
 If any required secret is missing the workflow skips loudly instead of failing
 opaque — do not treat a green "skipped" check as proof previews are live.
@@ -352,20 +367,50 @@ would (correctly) fail. Use port 22 — or whatever port the box's own sshd is
 moved to — and verify with `ssh-keyscan -p <port> -t ed25519 <host>` matching
 the pinned fingerprint before deploying.
 
+## Troubleshooting a red or silent preview check
+
+1. **The check went red inside `provision.sh`.** The guard was satisfied but the
+   deploy needs something the guard does not assert. Read the last line of the
+   "Bootstrap VPS" step; the missing secret is named there.
+2. **The deploy reached the VPS but SSH/timing failed.** Confirm the host in
+   `PREVIEW_VPS_HOST` still exists. A recycled or retired VPS IP leaves the DNS
+   A record behind, so `test-market.orangesync.tech` keeps resolving to a dead
+   address while the live host has moved — verify the A record against the
+   intended host before blaming the workflow.
+   ```bash
+   dig +short test-market.orangesync.tech
+   ssh-keyscan -t ed25519 "$PREVIEW_VPS_HOST" | ssh-keygen -lf -   # fingerprint for the secret
+   ```
+   If the fingerprint changed (provider reinstall, new host), update
+   `PREVIEW_VPS_HOST_FINGERPRINT` in the same change as `PREVIEW_VPS_HOST`.
+3. **Previews never appear although the check is green.** A green check in the
+   `skipped` state means the secrets are absent; look for the
+   `Preview deploy skipped` comment and the `missing_secrets=` line in the run.
+4. **The PR comment is not updated when a PR closes.** The `teardown` job has no
+   checkout on purpose (the head branch can be deleted before the close event),
+   so it runs `gh` with `GH_REPO` set. Without that repository context
+   `gh pr comment` aborts with `failed to run git: fatal: not a git repository`
+   and the comment keeps the old "preview live" text.
+
 ## Security notes
 
 **SSH host-key verification (no TOFU, no `StrictHostKeyChecking=no`).** Every
-SSH/scp connection — both the appleboy actions (`fingerprint:` input on every
-step) and `provision.sh` — verifies the VPS host key against
-`PREVIEW_VPS_HOST_FINGERPRINT` before the deploy key is used. `provision.sh`
+SSH/scp connection — the pinned OpenSSH helpers and `provision.sh` — verifies
+the VPS host key against `PREVIEW_VPS_HOST_FINGERPRINT` before the deploy key is
+used. `ssh-prepare.sh` writes a private `known_hosts` and checks the scanned key
+against the pinned fingerprint before any connection; `remote-ssh.sh` and
+`remote-scp.sh` then run with `StrictHostKeyChecking=yes`,
+`HostKeyAlgorithms=ssh-ed25519` and that private `known_hosts`. `provision.sh`
 scans the host key, compares its SHA256 fingerprint to the pinned secret, and
 aborts on mismatch before any authentication, pinning the negotiation to the
 verified ed25519 key. A MITM on the path never receives the private key.
 
-**Pinned third-party actions.** The `appleboy/ssh-action` and
-`appleboy/scp-action` steps — which handle the VPS private key — are pinned by
-commit SHA (with the version in a trailing comment), so a mutated upstream tag
-cannot exfiltrate the key. Audit the SHA when bumping the version.
+**No third-party action holds the deploy key.** The VPS private key is handled
+only by this repository's own OpenSSH helper scripts — plain shell, reviewed
+in-tree — so there is no pinned third-party SSH action in the path that a
+mutated upstream tag could turn into a key exfiltration. Re-adding
+`uses: appleboy/…` (or any other Go/drone-ssh action) is a regression:
+`infra/preview-vps/test_pinned_openssh.sh` fails if it reappears.
 
 **`pull_request_target` (do not switch blindly).** To get real previews from
 **fork** PR branches you would need the secrets in the runner, which
