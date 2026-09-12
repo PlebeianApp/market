@@ -224,6 +224,35 @@ jobs:
             deploy-package/* \
             "$PREVIEW_SSH_TARGET:/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package"
 
+      # Upstream's nak image on ghcr.io is gone: the registry now denies
+      # anonymous pulls (the token endpoint returns no token and the manifest
+      # GET is denied), so `docker compose up` aborted at "Claim host-port
+      # offset (M6) then bring up services" and the Cloudflare DNS step never
+      # ran — the preview URL stayed NXDOMAIN.
+      # Build nak from source on the preview host instead, pinned to the same
+      # commit upstream's e2e workflow uses (b6568388), and tag it
+      # market-nak:b6568388 for docker-compose. Cached via `docker image
+      # inspect` so repeat deploys on the same host skip the build.
+      - name: Build nak image on VPS (registry image is gone)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # Remote script piped to `bash -s` over stdin through the shared
+          # OpenSSH helper (never a Go-based action — see the block comment
+          # above "Prepare SSH key + pinned host key").
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          if docker image inspect market-nak:b6568388 >/dev/null 2>&1; then
+            echo "nak image market-nak:b6568388 already present — skipping build"
+            exit 0
+          fi
+          cd /tmp
+          rm -rf nak-build
+          git clone https://github.com/fiatjaf/nak.git nak-build
+          cd nak-build
+          git checkout b65683886b58382890888fbdda90e5c2129df488
+          docker build -t market-nak:b6568388 .
+          REMOTE_EOF
+
       - name: Claim host-port offset (M6) then bring up services
         if: steps.secrets.outputs.previews_ready == 'true'
         run: |
@@ -270,7 +299,7 @@ jobs:
               depends_on:
                 - nak-relay
             nak-relay:
-              image: ghcr.io/fiatjaf/nak:latest
+              image: market-nak:b6568388
               command: serve --hostname 0.0.0.0
               ports:
                 - "${RELAY_PORT}:10547"
