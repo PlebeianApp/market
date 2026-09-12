@@ -63,6 +63,25 @@ makes **no** destructive decisions for that run — it logs a `skip_reason`
 line (visible in `journalctl`) instead. Teardown failures are recorded in
 the cycle summary and the preview is kept for retry rather than deleted.
 
+## The nak relay image is built from source on the host
+
+The preview's `nak-relay` service used to pull `ghcr.io/fiatjaf/nak:latest`.
+That image is no longer pullable — an anonymous token request for the
+repository returns no token and the manifest GET is denied — so
+`docker compose up` aborted inside the claim/compose step, the Cloudflare DNS
+step never ran, and the preview URL stayed `NXDOMAIN`. The deploy now builds
+the relay image **on the preview host** instead, in a step named **Build nak
+image on VPS (registry image is gone)** placed between the deploy-package
+upload and the port-offset claim: it clones `https://github.com/fiatjaf/nak.git`
+into `/tmp/nak-build`, checks out `b65683886b58382890888fbdda90e5c2129df488`
+(the pin upstream's own e2e workflow uses), and tags the result
+`market-nak:b6568388`, which is the image the generated `docker-compose.yml`
+names. The step runs through `infra/preview-vps/remote-ssh.sh` like every other
+VPS step, is gated on `previews_ready`, and is cached on
+`docker image inspect market-nak:b6568388` — a host that already has the image
+skips the clone and build. The ordering is the point: the image must exist
+before the claim/compose step resolves the tag.
+
 ## Why the check skips (missing preview secrets)
 
 The deploy path consumes **six** secrets — the four VPS ones plus the two

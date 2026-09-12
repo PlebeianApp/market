@@ -157,3 +157,51 @@ describe('preview teardown job', () => {
 		expect(body).not.toMatch(/steps\.secrets\.outputs\.previews_ready == /)
 	})
 })
+
+/**
+ * A third incident motivated this block: the preview's `nak-relay` service
+ * pulled `ghcr.io/fiatjaf/nak:latest`, and that registry now denies anonymous
+ * pulls (the token request returns no token and the manifest GET is denied).
+ * `docker compose up` aborted inside "Claim host-port offset (M6) then bring
+ * up services", the Cloudflare DNS step never ran, and the preview URL stayed
+ * `NXDOMAIN`. The image is now built from source on the preview host.
+ */
+describe('preview nak relay image', () => {
+	const BUILD_STEP = 'Build nak image on VPS (registry image is gone)'
+	const CLAIM_STEP = 'Claim host-port offset (M6) then bring up services'
+	const NAK_IMAGE = 'market-nak:b6568388'
+	/** The upstream commit the host build checks out. */
+	const NAK_COMMIT = 'b65683886b58382890888fbdda90e5c2129df488'
+
+	test('the workflow never references the dead ghcr.io nak image again', () => {
+		expect(workflow).not.toContain('ghcr.io/fiatjaf/nak')
+	})
+
+	test('the nak-relay compose service uses the image built on the host', () => {
+		// The compose file is a heredoc inside the claim/up step, so assert on
+		// that step's body: the `nak-relay:` service must name the local tag.
+		expect(stepNamed(deployJob, CLAIM_STEP)).toMatch(new RegExp(`nak-relay:\\s*\\n\\s+image:\\s*${NAK_IMAGE}`))
+	})
+
+	test('the build step exists, is gated on readiness, and precedes compose up', () => {
+		const build = stepNamed(deployJob, BUILD_STEP)
+		expect(build).toContain('steps.secrets.outputs.previews_ready == ')
+
+		// Ordering is the substance of the fix: `docker compose up` resolves the
+		// tag, so a build that ran after the claim/up step would still fail.
+		const stepOrder = stepsOf(deployJob).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
+		expect(stepOrder.indexOf(BUILD_STEP)).toBeGreaterThanOrEqual(0)
+		expect(stepOrder.indexOf(BUILD_STEP)).toBeLessThan(stepOrder.indexOf(CLAIM_STEP))
+	})
+
+	test('the build step shells out through the pinned-OpenSSH helper, not an action', () => {
+		const build = stepNamed(deployJob, BUILD_STEP)
+		// A `uses:` action here would break the pinned-OpenSSH host-key rule
+		// (infra/preview-vps/test_pinned_openssh.sh), so this must be a `run:`.
+		expect(build).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(build).not.toMatch(/^\s+uses:/m)
+		// The build is pinned to a commit and cached so repeat deploys skip it.
+		expect(build).toContain(NAK_COMMIT)
+		expect(build).toContain(`docker image inspect ${NAK_IMAGE}`)
+	})
+})
