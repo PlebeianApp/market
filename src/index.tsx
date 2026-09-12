@@ -246,9 +246,10 @@ console.log(`App port: ${PORT}`)
  * it through Bun's HTML import pipeline (asset rewrites, dev scripts) — so
  * the injected page stays byte-identical to the catch-all shell apart from
  * the extra <meta> tags. og:url / og:image use `APP_PUBLIC_ORIGIN`. On any
- * shell-fetch or lookup miss (unknown id, relay timeout, NSFW product) the
- * untouched module shell is served with HTTP 200 — an SEO-only enrichment
- * failure never reduces product-page availability.
+ * shell-fetch or lookup failure — unknown id, relay timeout, NSFW product,
+ * rejected lookup, or render error — the untouched module shell is served
+ * with HTTP 200: an SEO-only enrichment failure never reduces product-page
+ * availability.
  */
 async function productPageWithOg(productId: string): Promise<Response> {
 	const { shellOrigin, publicOrigin } = resolveServerOrigins(

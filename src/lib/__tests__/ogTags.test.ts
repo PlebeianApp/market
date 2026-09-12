@@ -386,6 +386,29 @@ describe('serveProductPageWithOg (shell acquisition)', () => {
 		expect(await res.text()).toBe(SHELL)
 	})
 
+	// Blocker 1 (availability half): "preserve normal product-page availability
+	// if OG enrichment or shell acquisition fails". Shell acquisition is
+	// covered above; a *throwing* enrichment lookup must degrade to the plain
+	// module shell too — an unhandled rejection here would surface as a 5xx
+	// from the product route for an SEO-only feature.
+	test('enrichment failure still serves 200 with the module shell (no 5xx)', async () => {
+		const res = await serveProductPageWithOg(
+			'64hexproductid0123456789abcdef0123456789abcdef0123456789abcdef',
+			{
+				shellOrigin: 'http://localhost:34567',
+				publicOrigin: 'http://localhost:34567',
+				relayUrl: 'ws://x',
+				indexShell: indexShell(),
+				getProductOgMeta: async () => {
+					throw new Error('relay exploded')
+				},
+			},
+			okFetcher(SHELL),
+		)
+		expect(res.status).toBe(200)
+		expect(await res.text()).toBe(SHELL)
+	})
+
 	test('healthy shell fetch injects og tags with the public origin', async () => {
 		const res = await serveProductPageWithOg(
 			'64hexproductid0123456789abcdef0123456789abcdef0123456789abcdef',

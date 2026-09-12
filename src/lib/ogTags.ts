@@ -173,10 +173,11 @@ export interface ServeProductOgContext<Shell extends Response | object> {
 /**
  * Serve `/products/:productId` HTML: fetch the module shell from the
  * server-controlled origin, inject og:/twitter:/product: meta, and degrade
- * gracefully — on ANY shell-fetch failure the untouched module shell is
- * served with HTTP 200, so an SEO-only enrichment failure can never 5xx the
- * product page. `fetcher` is injectable (default global fetch) for unit
- * testing the shell-failure path without a server.
+ * gracefully — on ANY shell-fetch failure, and on ANY enrichment failure
+ * (lookup rejection or render throw, not just a null miss), the untouched
+ * module shell is served with HTTP 200, so an SEO-only enrichment failure can
+ * never 5xx the product page. `fetcher` is injectable (default global fetch)
+ * for unit testing the shell-failure path without a server.
  */
 export async function serveProductPageWithOg<Shell extends Response | object>(
 	productId: string,
@@ -193,13 +194,20 @@ export async function serveProductPageWithOg<Shell extends Response | object>(
 	}
 	if (baseHtml === null) return ctx.indexShell
 
-	const meta = await ctx.getProductOgMeta(ctx.relayUrl, productId)
-	return new Response(renderProductPageHtml(baseHtml, meta, `${ctx.publicOrigin}/products/${productId}`, ctx.publicOrigin), {
-		headers: {
-			'Content-Type': 'text/html;charset=utf-8',
-			'Cache-Control': 'no-cache',
-		},
-	})
+	try {
+		const meta = await ctx.getProductOgMeta(ctx.relayUrl, productId)
+		return new Response(renderProductPageHtml(baseHtml, meta, `${ctx.publicOrigin}/products/${productId}`, ctx.publicOrigin), {
+			headers: {
+				'Content-Type': 'text/html;charset=utf-8',
+				'Cache-Control': 'no-cache',
+			},
+		})
+	} catch (e) {
+		// A rejected lookup or a render throw is an enrichment failure like any
+		// other: serve the plain product page rather than propagating a 5xx.
+		console.warn('og: enrichment failed, serving module shell:', e)
+		return ctx.indexShell
+	}
 }
 
 /** Minimal shape of a kind 30402 product event needed to derive preview meta. */
