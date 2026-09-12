@@ -332,9 +332,13 @@ would hold an ECDSA record while it forces `HostKeyAlgorithms=ssh-ed25519`.
 
 **Regression guard.** `infra/preview-vps/test_pinned_openssh.sh` fails if any
 `uses: appleboy/…` reappears, if the workflow calls `ssh`/`scp` directly instead
-of through the helpers, or if a helper stops pinning the host key. Run it (and
-`test_ssh_port.sh`, `test_key_materialisation.sh`) before touching this
-workflow.
+of through the helpers, or if a helper stops pinning the host key. It also fails
+if any `.github/workflows/*.yml` spells an expression placeholder inside a shell
+comment in a `run:` body — a file GitHub cannot parse loads no workflow, runs no
+job and reports **no check run at all**, so the pull request looks green while
+every preview deploy dies — and, when `actionlint` is installed, if that tool
+reports any error in those files. Run it (and `test_ssh_port.sh`,
+`test_key_materialisation.sh`) before touching this workflow.
 
 ### ⚠️ Legacy socat forwarder on port 2222 — do NOT use it
 

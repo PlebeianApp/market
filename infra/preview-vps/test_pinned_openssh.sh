@@ -20,6 +20,16 @@
 # re-breaking the deploy. It is OFFLINE: the only socket it opens is to a closed
 # port on 127.0.0.1, never the VPS.
 #
+# The same script guards the second, SILENT failure mode that killed every
+# preview deploy while the pull request still looked green: a workflow file
+# GitHub cannot PARSE. preview-deploy.yml spelled a literal placeholder back
+# into a SHELL COMMENT inside a `run: |` body; GitHub scans those sequences for
+# expression validity even when they sit in a shell comment, so it rejected the
+# whole file at load time and created NO check run for it. PR #1271 therefore
+# showed every check green while every deploy died (run 34653473352: zero jobs,
+# no log, run name left as the truncated file path instead of "Preview
+# Deploy"). Sections 5A and 5B below are the durable guards for that class.
+#
 #   bash infra/preview-vps/test_pinned_openssh.sh
 set -uo pipefail
 
@@ -211,6 +221,179 @@ check "an already-terminated secret is handled identically (idempotent guard)" \
 
 check "both secret forms reach the same conclusion (byte-identical stderr)" \
   bash -c 'cmp -s "$1" "$2"' _ "$_err" "$_err3"
+
+# ── 5. Every workflow file must LOAD (the silent, all-green failure) ───────
+# ── 5A. Static: no shell comment in a `run` body spells an expression ──────
+# GitHub substitutes `${{ }}` placeholders in a `run` body, but it VALIDATES
+# every one of them first — including the ones inside shell comments, which the
+# runner would otherwise have thrown away as text. An invalid placeholder in a
+# comment therefore rejects the whole workflow file at load time. YAML is parsed
+# properly here (python3 + pyyaml), so a legitimate placeholder in `if:`,
+# `env:`, `with:` or on a live (non-comment) line of a run body is never
+# flagged: only a comment inside a run body is a defect.
+WORKFLOWS_DIR="${REPO_ROOT}/.github/workflows"
+
+# run_body_comment_guard [<tree-or-workflow-file>] — prints one line per
+# offending shell comment inside a workflow `run` body, and exits 1 if it found
+# any (0 when the tree is clean). Defaults to this repository. A missing
+# python3/pyyaml exits 2 rather than passing silently: a guard that cannot run
+# must never look like a guard that passed.
+# shellcheck disable=SC2329  # invoked indirectly through check()/check_not()
+run_body_comment_guard() {
+  python3 - "${1:-${REPO_ROOT}}" <<'PY'
+import glob
+import os
+import sys
+
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write(
+        "python3 + pyyaml are required for the run-body comment guard\n"
+    )
+    sys.exit(2)
+
+target = sys.argv[1]
+if os.path.isdir(target):
+    workflows = os.path.join(target, ".github", "workflows")
+    files = sorted(glob.glob(os.path.join(workflows, "*.yml"))) + sorted(
+        glob.glob(os.path.join(workflows, "*.yaml"))
+    )
+else:
+    files = [target]
+
+
+def get(mapping, name):
+    """Value node for key `name` in a PyYAML mapping node, else None."""
+    for key, value in getattr(mapping, "value", []):
+        if getattr(key, "value", None) == name:
+            return value
+    return None
+
+
+offenders = []
+for path in files:
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    try:
+        root = yaml.compose(text)
+    except yaml.YAMLError as exc:
+        offenders.append("%s: not parseable as YAML: %s" % (path, exc))
+        continue
+    jobs = get(root, "jobs") if root is not None else None
+    for _, job in getattr(jobs, "value", []):
+        steps = get(job, "steps")
+        for step in getattr(steps, "value", []):
+            run = get(step, "run")
+            if run is None or not run.value:
+                continue
+            # A block scalar's value starts on the line after its `run: |` key;
+            # an inline scalar sits on the key's own line.
+            span = 2 if getattr(run, "style", None) in ("|", ">") else 1
+            for offset, body_line in enumerate(run.value.splitlines()):
+                if body_line.lstrip().startswith("#") and "${{" in body_line:
+                    offenders.append(
+                        "%s:%d: shell comment inside a run body spells a workflow"
+                        " expression: %s"
+                        % (
+                            path,
+                            run.start_mark.line + span + offset,
+                            body_line.strip(),
+                        )
+                    )
+
+for offender in offenders:
+    print(offender)
+sys.exit(1 if offenders else 0)
+PY
+}
+
+_guard_hits="$(run_body_comment_guard "${REPO_ROOT}" 2>&1 || true)"
+if [ -n "${_guard_hits}" ]; then printf '%s\n' "${_guard_hits}"; fi
+check "no shell comment inside a workflow run body spells a workflow expression (5A)" \
+  test -z "${_guard_hits}"
+
+# Behavioural proof that 5A fires, on the exact shape of the defect and on the
+# legitimate shapes it must stay quiet about. The fixtures live in a temp tree,
+# never in the repository.
+_fixtures="${_tmp}/guard-workflows"
+mkdir -p "${_fixtures}/hits/.github/workflows" "${_fixtures}/clean/.github/workflows"
+
+{
+  printf '%s\n' \
+    'name: Broken' \
+    'on: [push]' \
+    'jobs:' \
+    '  build:' \
+    '    runs-on: ubuntu-latest' \
+    '    steps:' \
+    '      - name: broken' \
+    '        run: |' \
+    '          echo start' \
+    '          # ${{ ... }} expressions are substituted by GitHub BEFORE this shell' \
+    '          echo end'
+} >"${_fixtures}/hits/.github/workflows/broken.yml"
+
+{
+  printf '%s\n' \
+    'name: Clean' \
+    'on: [push]' \
+    'jobs:' \
+    '  build:' \
+    "    if: \${{ github.event_name == 'push' }}" \
+    '    runs-on: ubuntu-latest' \
+    '    env:' \
+    '      TARGET: ${{ github.sha }}' \
+    '    steps:' \
+    '      - name: noop' \
+    '        with:' \
+    '          ref: ${{ github.ref }}' \
+    '        run: |' \
+    '          # a shell comment that mentions $HOME but no expression' \
+    '          echo "sha ${{ github.sha }}"'
+} >"${_fixtures}/clean/.github/workflows/clean.yml"
+
+_hit_out="$(run_body_comment_guard "${_fixtures}/hits" 2>&1 || true)"
+
+check "5A flags the defect's exact shape (comment with a placeholder in a run body)" \
+  test "$(printf '%s\n' "${_hit_out}" | grep -c 'broken\.yml:10:')" = "1"
+check "5A reports the file and the offending line" \
+  test "$(printf '%s\n' "${_hit_out}" | grep -c 'shell comment inside a run body')" = "1"
+
+_clean_out="$(run_body_comment_guard "${_fixtures}/clean" 2>&1 || true)"
+check "5A ignores legitimate placeholders in if:, env:, with: and live run lines" \
+  test -z "${_clean_out}"
+
+# ── 5B. actionlint: the file must parse for GitHub, not just for us ────────
+# actionlint's own expression check is what names the defect precisely
+# (the error text is `unexpected token "."` with the tag [expression]). It is
+# run with shellcheck DISABLED on
+# purpose: the shellcheck findings in deploy*.yml, e2e.yml and release.yml are
+# pre-existing lint noise unrelated to whether a workflow loads, and they only
+# appear when shellcheck happens to be installed — which would make this guard
+# depend on the machine. What is gated here is loadability.
+ACTIONLINT_BIN="${ACTIONLINT:-}"
+if [ -z "${ACTIONLINT_BIN}" ] && command -v actionlint >/dev/null 2>&1; then
+  ACTIONLINT_BIN="$(command -v actionlint)"
+fi
+if [ -z "${ACTIONLINT_BIN}" ] && [ -x "${HOME}/bin/actionlint" ]; then
+  ACTIONLINT_BIN="${HOME}/bin/actionlint"
+fi
+
+if [ -z "${ACTIONLINT_BIN}" ]; then
+  printf 'SKIP  actionlint not installed - skipped\n'
+else
+  # `set +e` around the capture: section 4 above leaves errexit ON, and a
+  # non-zero actionlint must be REPORTED here, not turn into a silent abort
+  # before the tally.
+  set +e
+  _al_out="$("${ACTIONLINT_BIN}" -shellcheck= "${WORKFLOWS_DIR}"/*.yml 2>&1)"
+  _al_rc=$?
+  set -e 2>/dev/null || true
+  if [ -n "${_al_out}" ]; then printf '%s\n' "${_al_out}"; fi
+  check "actionlint reports no error in any .github/workflows/*.yml (${ACTIONLINT_BIN})" \
+    test "${_al_rc}" -eq 0
+fi
 
 printf '\n%s checks, %s failure(s)\n' "${CHECKS}" "${FAILURES}"
 if [ "${FAILURES}" -ne 0 ]; then
