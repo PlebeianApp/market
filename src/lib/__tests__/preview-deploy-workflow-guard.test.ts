@@ -205,3 +205,68 @@ describe('preview nak relay image', () => {
 		expect(build).toContain(`docker image inspect ${NAK_IMAGE}`)
 	})
 })
+
+/**
+ * A fourth incident motivated this block: the PR #1271 preview deployed, its
+ * health check ran, and it served a BLANK page. `GET /` answered
+ * `HTTP/1.1 200 OK` with a zero-length body and no Content-Type while
+ * `/api/config` returned normal JSON and the app logged a clean startup, so
+ * nothing in the pipeline noticed. Two independent causes:
+ *
+ *  1. `src/index.tsx` has no static middleware: it imports `./index.html` and
+ *     hands that import to Bun as the `/*` route, so Bun bundles the shell at
+ *     REQUEST time inside the preview container. That bundle resolves
+ *     `../public/images/logo.svg` and `/styles/index.css`, and the deploy
+ *     package shipped neither:
+ *       error: Could not resolve: "../public/images/logo.svg"
+ *       error: Could not resolve: "/styles/index.css"
+ *     That also broke the `serveStatic` routes reading `public/`
+ *     (`/manifest.json`, `/favicon.ico` answered 500).
+ *  2. The container ran `bun install --production`, which drops the
+ *     `tailwindcss` devDependency while keeping `bun-plugin-tailwind` — the
+ *     dependency that `bunfig.toml` enables to resolve the stylesheet's
+ *     `@import 'tailwindcss'`. The request-time bundle then fails:
+ *       error: Could not resolve: "tailwindcss" at styles/globals.css:1:1
+ *     Measured live in the preview container (oven/bun:1.4.1):
+ *       `bun install --production` -> GET / = HTTP 500 "Build Failed", 0 bytes
+ *       `bun install`              -> GET / = HTTP 200 text/html, 891 bytes
+ *
+ * The empty body stayed invisible because the health check was `curl -sf`,
+ * which exits 0 on a 200 whose body is zero bytes.
+ */
+describe('preview app serves a real document', () => {
+	const PACKAGE_STEP = 'Create deployment package'
+	const CLAIM_STEP = 'Claim host-port offset (M6) then bring up services'
+	const HEALTH_STEP = 'Health check'
+
+	test('the deploy package ships the assets the request-time HTML bundle needs', () => {
+		const body = runBody(stepNamed(deployJob, PACKAGE_STEP))
+		// `public/` and `styles/` are both copied; assert on the cp line itself
+		// rather than a fixed ordering of the arguments.
+		expect(body).toMatch(/^\s*cp -r .*\bpublic\b.* deploy-package\/$/m)
+		expect(body).toMatch(/^\s*cp -r .*\bstyles\b.* deploy-package\/$/m)
+		// bunfig.toml carries `[serve.static] plugins = ["bun-plugin-tailwind"]`,
+		// the plugin that resolves the stylesheet's tailwind import.
+		expect(body).toContain('cp bunfig.toml deploy-package/')
+	})
+
+	test('the app container installs dev dependencies too', () => {
+		// Comments are stripped so the prose explaining WHY `--production` is
+		// wrong is not read as a use of it.
+		const body = stripComments(runBody(stepNamed(deployJob, CLAIM_STEP)))
+		expect(body).not.toContain('bun install --production')
+		expect(body).toContain('bun install && bun run start:production')
+	})
+
+	test('the health check requires a non-empty HTML body, not merely a status', () => {
+		// Comments are stripped so prose ABOUT `curl -sf` is not read as a use.
+		const body = stripComments(runBody(stepNamed(deployJob, HEALTH_STEP)))
+		expect(body).not.toContain('curl -sf')
+		expect(body).not.toContain('-o /dev/null')
+		// Assert a byte count and the app's doctype, so a 200 with an empty
+		// body fails instead of being reported as "Preview is live".
+		expect(body).toContain('wc -c')
+		expect(body).toContain('-gt 0')
+		expect(body).toContain('<!doctype html')
+	})
+})

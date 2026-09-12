@@ -102,6 +102,38 @@ VPS step, is gated on `previews_ready`, and is cached on
 skips the clone and build. The ordering is the point: the image must exist
 before the claim/compose step resolves the tag.
 
+## The app bundles its HTML at request time — ship `public/`, `styles/` and dev deps
+
+`src/index.tsx` has no static middleware: it does `import index from
+'./index.html'` and hands that import to Bun as the `/*` route, so Bun bundles
+the shell (HTML + CSS + JS) **inside the preview container, on the first request
+for `/`**. That bundle resolves every local asset the HTML references, so the
+deploy package has to carry them:
+
+- `src/index.html` → `../public/images/logo.svg`, `../public/favicon.ico`: ship
+  `public/`. It also backs the `serveStatic` routes, so without it
+  `/manifest.json` and `/favicon.ico` answer 500.
+- `src/index.html` → `/styles/index.css` → `@import './globals.css'` →
+  `styles/globals.css` → `@import 'tailwindcss'`: ship `styles/` **and**
+  `bunfig.toml`, which enables `[serve.static] plugins =
+["bun-plugin-tailwind"]` (the plugin that resolves that import).
+- Install the **full** dependency set — `bun install`, not
+  `bun install --production`. The production install drops `tailwindcss` (a
+  devDependency) while keeping `bun-plugin-tailwind`, and the bundle then fails
+  with `Could not resolve: "tailwindcss"`.
+
+When the bundle cannot be built the app still answers: `GET /` returns
+`200 OK` — or `500 Build Failed` — with **zero body bytes** and no
+`Content-Type`, while `/api/config` keeps returning normal JSON and the process
+logs a clean startup. That is why the health check requires a non-empty body
+containing `<!doctype html` rather than merely a 2xx status: `curl -sf -o
+/dev/null` exits 0 on an empty 200, which would report a blank page as a working
+preview. Staging is unaffected because it serves a pre-built `dist/index.html`;
+only the preview depends on request-time bundling.
+
+To diagnose, run `docker compose logs market-app` in `~/previews/pr-<N>/` —
+Bun's bundler prints the exact path it could not resolve.
+
 ## Why the check skips (missing preview secrets)
 
 The deploy path consumes **six** secrets — the four VPS ones plus the two

@@ -82,6 +82,23 @@ jobs:
           bun run generate-routes
           bun run build
 
+      # The app has NO static-file middleware: `src/index.tsx` imports
+      # `./index.html` and hands that import straight to Bun as the `/*` route,
+      # so Bun bundles the shell (HTML + CSS + JS) AT REQUEST TIME inside the
+      # preview container, on the first request for `/`. That bundle resolves
+      # every local asset the HTML references, and a missing one fails the
+      # whole route:
+      #   src/index.html -> ../public/images/logo.svg, ../public/favicon.ico
+      #   src/index.html -> /styles/index.css -> @import './globals.css'
+      #   styles/globals.css -> @import 'tailwindcss'  (resolved by the plugin
+      #                        named in bunfig.toml, see below)
+      # Observed on PR #1271, with the app's own deps fully installed:
+      #   error: Could not resolve: "../public/images/logo.svg"
+      #   error: Could not resolve: "/styles/index.css"
+      # and `GET /` answered an empty 200 while `/api/config` stayed healthy.
+      # (`icons/` is NOT needed — styles/icons.css inlines its glyphs as data
+      # URIs, and the bundle builds fine without it.)
+      # So public/, styles/ and the tailwind entry have to ship with the app.
       - name: Create deployment package
         run: |
           mkdir -p deploy-package
@@ -89,6 +106,8 @@ jobs:
           cp -r src deploy-package/
           cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
+          cp -r public styles deploy-package/
+          cp bunfig.toml deploy-package/
 
       - name: Compute per-PR ports
         id: ports
@@ -286,7 +305,21 @@ jobs:
               working_dir: /app
               volumes:
                 - ./deploy-package:/app
-              command: sh -c "bun install --production && bun run start:production"
+              # Install the FULL dependency set — not `--production`.
+              # bun-plugin-tailwind is a normal dependency, but the Tailwind
+              # framework it drives is a devDependency, and the app's own
+              # stylesheet opens with `@import 'tailwindcss'`. Under
+              # `bun install --production` the plugin loads and the framework
+              # it needs is gone, so the request-time HTML bundle for `/`
+              # cannot be built: the route answers an empty body while
+              # /api/config stays healthy. Measured on the PR #1271 preview
+              # container (oven/bun:1.4.1):
+              #   bun install --production -> `error: Could not resolve:
+              #     "tailwindcss"` at /app/styles/globals.css:1:1, GET / =
+              #     HTTP 500 "Build Failed", 0 body bytes
+              #   bun install              -> Bundled 1589 modules, GET / =
+              #     HTTP 200 text/html, 891 body bytes starting "<!doctype html>"
+              command: sh -c "bun install && bun run start:production"
               ports:
                 - "${APP_PORT}:3000"
               environment:
@@ -367,6 +400,17 @@ jobs:
         continue-on-error: true
         run: |
           PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          BODY_FILE="$RUNNER_TEMP/preview-body.html"
+          # `curl -sf -o /dev/null` is NOT a liveness test: it exits 0 for a 200
+          # whose body is ZERO bytes (and curl even reports 200 when the server
+          # answers a bare blank line, treating it as HTTP/0.9). The preview app
+          # serves exactly that when its request-time HTML bundle cannot be
+          # built — observed on PR #1271 live: `GET /` = "HTTP/1.1 200 OK" with
+          # an empty body and no Content-Type, while `/api/config` returned
+          # normal JSON. A health check that accepts it reports a blank page as
+          # a working preview. Require a real HTML document instead: 200 AND a
+          # non-empty body AND the app's doctype.
+          #
           # Individual failed attempts inside this loop are TRANSIENT warm-up
           # (preview booting, DNS propagating, Caddy issuing the cert). Only
           # after all 12 attempts (~3 min) are exhausted is this a FINAL
@@ -374,14 +418,21 @@ jobs:
           # the job green) so the comment step posts the explicit degraded
           # state instead of an open-ended "give it a minute".
           for _ in $(seq 1 12); do
-            if curl -sf -o /dev/null --max-time 10 "$PREVIEW_URL"; then
-              echo "Preview is live: $PREVIEW_URL"
+            STATUS="$(curl -s -o "$BODY_FILE" -w '%{http_code}' --max-time 10 "$PREVIEW_URL" 2>/dev/null || true)"
+            SIZE=0
+            if [ -f "$BODY_FILE" ]; then
+              SIZE="$(wc -c < "$BODY_FILE" | tr -d ' ')"
+            fi
+            DOCTYPE="$(grep -ci '<!doctype html' "$BODY_FILE" 2>/dev/null || true)"
+            if [ "${STATUS:-000}" = "200" ] && [ "${SIZE:-0}" -gt 0 ] && [ "${DOCTYPE:-0}" -gt 0 ]; then
+              echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present)"
               echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            echo "attempt: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s), doctype matches: ${DOCTYPE:-0} — not a servable HTML document yet"
             sleep 5
           done
-          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL"
+          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app process is up but its request-time HTML bundle does not build (on the preview host: docker compose logs market-app)."
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           exit 1
 
