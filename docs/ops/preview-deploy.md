@@ -63,6 +63,26 @@ makes **no** destructive decisions for that run — it logs a `skip_reason`
 line (visible in `journalctl`) instead. Teardown failures are recorded in
 the cycle summary and the preview is kept for retry rather than deleted.
 
+## The gateway is a tolerant HTTP client on purpose
+
+`preview_gateway.py` does not use a bare `urllib.request.urlopen` for the
+proxy hop. The preview app can emit a stray blank line **before** the status
+line (raw socket read: `b"\r\n"` then `HTTP/1.1 200 OK ...`). RFC 9112 §2.2
+lets a client ignore at least one empty line there and `curl` does — which is
+why a `curl` health check of the app port can return `200` — but strict
+clients (`http.client`/`urllib`) do not: they raise
+`http.client.BadStatusLine('\r\n')`. The gateway therefore skips leading
+empty line(s) before parsing the status line and otherwise parses the response
+normally, so the body (chunked included) is still decoded by `http.client`.
+
+For the same reason `_answer_route()` treats **any** proxy failure as a JSON
+`503`: connect failures (`OSError`), malformed upstream replies
+(`http.client.HTTPException`, e.g. `BadStatusLine`/`RemoteDisconnected`), and
+anything else unexpected. A failure that escaped the handler would close the
+connection with no reply at all and Caddy would render it as **502 Bad
+Gateway** — indistinguishable from a routing or TLS problem. A logged 503 with
+a `detail` field is debuggable; an empty 502 is not.
+
 ## The nak relay image is built from source on the host
 
 The preview's `nak-relay` service used to pull `ghcr.io/fiatjaf/nak:latest`.

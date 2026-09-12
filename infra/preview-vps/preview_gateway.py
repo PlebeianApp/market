@@ -20,7 +20,12 @@ fronts it for the public internet. It serves two roles:
      cached certificate (m3). The poke is non-fatal: errors are logged and the
      request still proceeds to a bounded-connect-retry proxy (~up to 15 s while
      the preview boots). If the preview never comes up, the client gets a 503
-     with a JSON error body.
+     with a JSON error body. The proxy is a deliberately TOLERANT HTTP client:
+     it ignores leading blank line(s) before the upstream status line (RFC 9112
+     §2.2 — the preview app emits one, and strict clients such as urllib raise
+     BadStatusLine on it), and any upstream/proxy failure is answered as a JSON
+     503 rather than escaping the handler as an empty reply (which Caddy shows
+     as 502 Bad Gateway).
 
 Everything is a small pure function over `dataclass RouteDecision` so the
 routing logic is unit-testable without sockets (test_preview_gateway.py).
@@ -30,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import http.client
 import json
 import re
 import socket
@@ -175,6 +181,72 @@ def wait_for_port(
         time.sleep(poll_seconds)
 
 
+# ── Tolerant upstream HTTP client (RFC 9112 §2.2) ────────────────────────────
+#
+# The preview app answers with a stray blank line BEFORE the status line (raw
+# socket read: b"\r\n" then "HTTP/1.1 200 OK ..."). RFC 9112 §2.2 says a client
+# MAY ignore at least one empty line before the status line, and curl does —
+# but http.client/urllib do not: `urlopen` raises
+# http.client.BadStatusLine('\r\n'), which is an HTTPException and NOT an
+# OSError. The gateway must behave like curl here.
+
+
+class _LeadingBlankLineSkippingFile:
+    """Socket-file wrapper that swallows leading empty line(s).
+
+    It alters ONLY the first read: leading b"\\r\\n" / b"\\n" lines are consumed
+    until a non-empty line arrives, which is then returned as the status line.
+    Every subsequent read — header lines and the body, chunked bodies included —
+    is delegated untouched to the original socket file, so the response is still
+    parsed and the body still decoded by http.client's own parser (no
+    intermediate buffer, no hand-rolled HTTP parsing).
+    """
+
+    def __init__(self, fp) -> None:
+        self._fp = fp
+        self._skipped = False
+
+    def readline(self, *args, **kwargs) -> bytes:
+        line = self._fp.readline(*args, **kwargs)
+        if not self._skipped:
+            while line in (b"\r\n", b"\n"):
+                line = self._fp.readline(*args, **kwargs)
+            self._skipped = True
+        return line
+
+    def __getattr__(self, name):
+        # close/gettimeout/read/readinto/... all behave exactly as before.
+        return getattr(self._fp, name)
+
+
+class _TolerantHTTPResponse(http.client.HTTPResponse):
+    """HTTPResponse that tolerates leading empty line(s) before the status
+    line by wrapping the socket file before http.client parses the reply."""
+
+    def begin(self):
+        if not isinstance(self.fp, _LeadingBlankLineSkippingFile):
+            self.fp = _LeadingBlankLineSkippingFile(self.fp)
+        return super().begin()
+
+
+class _TolerantHTTPConnection(http.client.HTTPConnection):
+    response_class = _TolerantHTTPResponse
+
+
+class _TolerantHTTPHandler(urllib.request.HTTPHandler):
+    """urllib handler that builds tolerant connections.
+
+    `build_opener` drops the stock HTTPHandler because this is a subclass of
+    it, so every http:// urlopen below goes through _TolerantHTTPConnection.
+    """
+
+    def http_open(self, req):
+        return self.do_open(_TolerantHTTPConnection, req)
+
+
+_TOLERANT_OPENER = urllib.request.build_opener(_TolerantHTTPHandler)
+
+
 def http_proxy(
     method: str,
     path: str,
@@ -187,7 +259,9 @@ def http_proxy(
     """Proxy one request to the local preview app (or health endpoint).
 
     Returns (status, body, content_type). Raises OSError on connect failure —
-    the caller maps that to the retry loop or the 503 JSON error.
+    the caller maps that to the retry loop or the 503 JSON error. A malformed
+    upstream reply raises http.client.HTTPException (BadStatusLine,
+    RemoteDisconnected, ...); the caller answers 503 rather than crashing.
     """
     target = f"http://127.0.0.1:{port}{path}"
     req = urllib.request.Request(target, data=body if method in ("POST", "PUT", "PATCH") else None, method=method)
@@ -196,7 +270,7 @@ def http_proxy(
             continue  # rewritten by urllib for the new upstream
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=connect_timeout + read_timeout) as resp:
+        with _TOLERANT_OPENER.open(req, timeout=connect_timeout + read_timeout) as resp:
             return resp.status, resp.read(), resp.headers.get("Content-Type", "application/octet-stream")
     except urllib.error.HTTPError as e:
         return e.code, e.read(), e.headers.get("Content-Type", "text/plain")
@@ -276,6 +350,23 @@ def make_handler(state: GatewayState) -> type:
                 )
             except OSError as e:
                 self._send_503(pr_number, detail=str(e))
+                return
+            except http.client.HTTPException as e:
+                # A malformed upstream reply (leading garbage, empty reply,
+                # truncated headers, ...) is an HTTPException, NOT an OSError.
+                # Letting it escape closes the connection with no response at
+                # all, which Caddy renders as 502 Bad Gateway. Answer a JSON
+                # 503 instead: a debuggable error beats an empty reply.
+                log(f"proxy to pr{pr_number} got a malformed upstream response: {e!r}")
+                self._send_503(
+                    pr_number, detail=f"upstream returned a malformed HTTP response: {e}"
+                )
+                return
+            except Exception as e:
+                # Defensive: a proxy that returns a 503 is debuggable; an
+                # exception escaping the handler (→ 502) is not.
+                log(f"proxy to pr{pr_number} failed: {e!r}")
+                self._send_503(pr_number, detail=f"proxy failed: {e}")
                 return
             self.send_response(status)
             self.send_header("Content-Type", ctype)

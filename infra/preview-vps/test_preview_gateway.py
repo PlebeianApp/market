@@ -2,14 +2,28 @@
 """Unit tests for infra/preview-vps/preview_gateway.py.
 
 Pure-function tests for the gateway's routing logic (host→port math, ask
-approval, non-preview rejection, wake poke, proxy retry/503 behavior) — no
-sockets, no network (ADR-0005). The HTTP handler itself is exercised through a
-stubbed GatewayState with fake poke/probe/proxy functions.
+approval, non-preview rejection, wake poke, proxy retry/503 behavior). The HTTP
+handler itself is exercised through a stubbed GatewayState with fake
+poke/probe/proxy functions.
+
+The http_proxy tests at the bottom DO open real sockets, but only to a
+localhost raw-TCP stub upstream started inside the test (127.0.0.1, ephemeral
+port). That stub is the whole point: the production preview app emits bytes a
+strict HTTP client rejects (a leading blank line before the status line), which
+cannot be reproduced through a socket-free fake. No external network is
+touched (ADR-0005).
+
+Sockets:
+  * raw TCP stub upstream on 127.0.0.1, torn down in the test.
 """
 
 from __future__ import annotations
 
+import contextlib
+import json
+import socket
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -23,6 +37,54 @@ import preview_gateway as gw  # noqa: E402
 
 
 BASE = "test-market.orangesync.tech"
+
+
+# ── raw TCP stub upstream (localhost only) ────────────────────────────────────
+
+@contextlib.contextmanager
+def raw_upstream(payload: bytes):
+    """A localhost-only raw TCP "HTTP" stub that writes `payload` verbatim.
+
+    Real `http.server` cannot emit a leading CRLF or a garbage status line, so
+    the stub is a plain socket: accept → drain the request → sendall(payload) →
+    close. Yields the ephemeral port it is listening on.
+    """
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(8)
+    # A short accept timeout keeps teardown instant: close() does not interrupt
+    # a blocked accept() in another thread on Linux.
+    listener.settimeout(0.1)
+    port = listener.getsockname()[1]
+    stop = threading.Event()
+
+    def serve() -> None:
+        while not stop.is_set():
+            try:
+                conn, _ = listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return  # listener closed at teardown
+            try:
+                conn.settimeout(5.0)
+                conn.recv(65536)  # drain the request line + headers
+                conn.sendall(payload)
+            except OSError:
+                pass
+            finally:
+                conn.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        yield port
+    finally:
+        stop.set()
+        listener.close()
+        thread.join(timeout=2)
+
 
 
 # ── host → port math (M1) ─────────────────────────────────────────────────────
@@ -339,3 +401,86 @@ def test_gateway_manager_port_contract():
 
     for pr in (0, 1, 42, 99, 100, 1157, 1257, 12345):
         assert gw.app_port_for_pr(pr) == 3000 + pm.port_offset_for_pr(pr)
+
+
+# ── tolerant upstream parsing (RFC 9112 §2.2) ─────────────────────────────────
+#
+# The live preview app answers every request with a stray blank line first
+# (raw socket read: b'\r\n' then 'HTTP/1.1 200 OK...'). curl ignores it (RFC
+# 9112 §2.2 lets a client ignore at least one empty line), http.client/urllib
+# do NOT: urlopen raises BadStatusLine('\r\n') and the request dies. The
+# gateway must behave like curl here.
+
+def test_http_proxy_tolerates_leading_blank_line_before_status_line():
+    # Byte-for-byte the shape the real preview app emits.
+    payload = b"\r\nHTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nhello world"
+    with raw_upstream(payload) as port:
+        status, body, ctype = gw.http_proxy("GET", "/", {}, b"", port)
+    assert status == 200
+    assert body == b"hello world"
+    assert isinstance(ctype, str)
+
+
+def test_http_proxy_tolerates_lf_only_and_repeated_blank_lines():
+    payload = b"\n\r\n\nHTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"
+    with raw_upstream(payload) as port:
+        status, body, _ctype = gw.http_proxy("GET", "/", {}, b"", port)
+    assert status == 204
+    assert body == b""
+
+
+def test_http_proxy_decodes_chunked_body_after_leading_blank_line():
+    # The leading-blank-line skip must not bypass http.client's own parser:
+    # the chunked body still has to be decoded through the response object.
+    payload = (
+        b"\r\n"
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: text/plain\r\n"
+        b"Transfer-Encoding: chunked\r\n"
+        b"\r\n"
+        b"6\r\nhello \r\n"
+        b"5\r\nworld\r\n"
+        b"0\r\n\r\n"
+    )
+    with raw_upstream(payload) as port:
+        status, body, ctype = gw.http_proxy("GET", "/", {}, b"", port)
+    assert status == 200
+    assert body == b"hello world"
+    assert ctype == "text/plain"
+
+
+def test_route_handler_answers_503_json_on_garbage_upstream_response(monkeypatch):
+    # A non-HTTP first line ("not http at all") makes http.client raise
+    # BadStatusLine — an HTTPException, NOT an OSError. It must never escape
+    # the handler: Caddy renders an empty reply as 502 Bad Gateway, while a
+    # JSON 503 is debuggable.
+    logged: list[str] = []
+    monkeypatch.setattr(gw, "log", lambda message: logged.append(message))
+
+    with raw_upstream(b"not http at all\r\n") as port:
+        # The port the handler routes to is derived from the PR number; pin it
+        # to the stub's ephemeral port.
+        monkeypatch.setattr(gw, "app_port_for_pr", lambda pr: port)
+
+        pokes: list[int] = []
+        state = gw.GatewayState(
+            base_domain=BASE,
+            manager_path=Path("/mgr.py"),
+            python_bin="/usr/bin/python3",
+            poke=lambda pr, path, py: pokes.append(pr) or True,
+            prober=lambda p: True,
+            boot_budget=0.0,
+        )
+        handler_cls = gw.make_handler(state)
+        FakeHandler = _make_fake_handler(handler_cls, f"pr42.{BASE}")
+
+        h = FakeHandler()
+        h._answer_route()  # must NOT raise
+
+    assert pokes == [42]
+    assert ("status", 503) in h._sent
+    payload = json.loads(h.wfile.text)
+    assert payload["error"] == "preview not ready"
+    assert payload["pr"] == 42
+    assert "malformed" in payload["detail"]
+    assert any("malformed" in line for line in logged)
