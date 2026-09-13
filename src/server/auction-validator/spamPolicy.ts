@@ -8,6 +8,9 @@ export interface BidSpamPolicy {
 	/** Rolling window length in seconds. */
 	rateWindowSec: number
 	/** Maximum tracked bids from one bidder in one auction. */
+	/** LIFETIME cap per (auction, bidder) — bids are append-only and the
+	 *  count includes bids that later became invalid. See subscriber.ts
+	 *  (review 5645059400 finding 2). */
 	maxActiveBidsPerAuction: number
 	/**
 	 * Maximum number of events retained per key in a pending buffer —
@@ -108,9 +111,15 @@ export type BidSpamDecision =
 			detail: string
 	  }
 
-export type BidEnvelopeDecision = { ok: true } | { ok: false; reason: 'event_too_large' | 'too_many_tags'; detail: string }
+export type EventEnvelopeDecision = { ok: true } | { ok: false; reason: 'event_too_large' | 'too_many_tags'; detail: string }
 
-export const checkBidEnvelope = (event: NostrEvent, policy?: Partial<BidSpamPolicy>): BidEnvelopeDecision => {
+/**
+ * Size/shape gate for a relay-fed event. Kind-agnostic on purpose: all
+ * four auction ingestion paths (30408, 1023, 1024, 1025) are
+ * attacker-fed and feed the same state, so the same envelope applies to
+ * each (review 5645059400 finding 3). Parsing is what is kind-specific.
+ */
+export const checkEventEnvelope = (event: NostrEvent, policy?: Partial<BidSpamPolicy>): EventEnvelopeDecision => {
 	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
 	const eventBytes = Buffer.byteLength(JSON.stringify(event), 'utf8')
 	if (eventBytes > resolved.maxEventBytes) {
