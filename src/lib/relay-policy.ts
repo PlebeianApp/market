@@ -35,6 +35,8 @@ export interface NdkConfigComputed {
 	explicitRelayUrls: string[]
 	/** Write relays — staging/dev confine writes to the app relay only. */
 	writeRelayUrls: string[]
+	/** Zap-monitoring relays — always includes ZAP_RELAYS; instance relays are additive. */
+	zapRelayUrls: string[]
 	/** NDK outbox model — disabled in non-prod to keep relay discovery off. */
 	enableOutbox: boolean
 }
@@ -45,8 +47,6 @@ export interface ComputeNdkConfigInput {
 	appRelay?: string
 	/** Runtime-provided public relays for reads (e.g., from instance config). Falls back to DEFAULT_PUBLIC_RELAYS. */
 	publicRelays?: string[]
-	/** Runtime-provided zap relays for zap monitoring (e.g., from instance config). Falls back to ZAP_RELAYS. */
-	zapRelays?: string[]
 	/** Caller-supplied relay overrides (used during NDK re-init / tests). */
 	overrideRelays?: string[]
 	/** Bun-side flag forcing local-relay-only behavior. */
@@ -70,7 +70,7 @@ export function resolveMainRelay(stage: Stage | undefined, appRelay?: string): s
  * always computed together at NDK init time.
  */
 export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigComputed {
-	const { stage, appRelay, publicRelays, zapRelays, overrideRelays, localRelayOnly } = input
+	const { stage, appRelay, publicRelays, overrideRelays, localRelayOnly } = input
 	const mainRelay = resolveMainRelay(stage, appRelay)
 
 	const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
@@ -85,7 +85,13 @@ export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigCompute
 	const writeRelayUrls =
 		stage === 'staging' || stage === 'development' || localRelayOnly ? (mainRelay ? [mainRelay] : []) : explicitRelayUrls
 
-	return { explicitRelayUrls, writeRelayUrls, enableOutbox }
+	// Zap monitoring needs the dedicated zap relays on top of the read set —
+	// derived here so the zap relay set is covered by the same policy tests
+	// as the read set (and so no caller can accidentally pass a relay set that
+	// displaces ZAP_RELAYS).
+	const zapRelayUrls = resolveZapRelays(explicitRelayUrls)
+
+	return { explicitRelayUrls, writeRelayUrls, zapRelayUrls, enableOutbox }
 }
 
 /**
@@ -125,9 +131,17 @@ export function resolveExplicitRelays(input: {
 /**
  * Zap-monitoring NDK uses a wider relay set — LSPs broadcast zap
  * receipts to their own public relays, not to ours. Always returns
- * the union of ZAP_RELAYS + whatever the main read set is.
+ * the union of ZAP_RELAYS + any instance-configured zap relays +
+ * whatever the main read set is.
+ *
+ * ZAP_RELAYS is never dropped. `/api/config` always returns a relay
+ * set (`publicRelays` defaults to DEFAULT_PUBLIC_RELAYS), so "no zap
+ * override configured" cannot be detected from absence: treating an
+ * instance relay set as a *replacement* silently removed the
+ * dedicated zap relays (`relay.coinos.io`, `nwc.primal.net`,
+ * `relay.primal.net`) from production zap monitoring. Instance
+ * relays are additive.
  */
 export function resolveZapRelays(explicitRelays: string[], zapRelays?: string[]): string[] {
-	const effectiveZapRelays = zapRelays ?? ZAP_RELAYS
-	return Array.from(new Set([...effectiveZapRelays, ...explicitRelays]))
+	return Array.from(new Set([...ZAP_RELAYS, ...(zapRelays ?? []), ...explicitRelays]))
 }
