@@ -1,5 +1,6 @@
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../../lib/auction/events'
 import type { NostrEvent } from 'nostr-tools'
+import type { PendingBufferLimits } from './pendingBuffer'
 
 export interface BidSpamPolicy {
 	/** Maximum accepted bids from one bidder during the rolling window. */
@@ -8,8 +9,27 @@ export interface BidSpamPolicy {
 	rateWindowSec: number
 	/** Maximum tracked bids from one bidder in one auction. */
 	maxActiveBidsPerAuction: number
-	/** Maximum number of bids buffered before their auction is known. */
-	maxPendingBidsPerAuction: number
+	/**
+	 * Maximum number of events retained per key in a pending buffer —
+	 * bids per unknown auction, path releases per unknown bid,
+	 * settlements per unknown auction.
+	 */
+	maxPendingEventsPerKey: number
+	/**
+	 * Maximum number of distinct keys retained by each pending buffer.
+	 * Buffered keys are attacker-chosen ids (review 5645059400 finding
+	 * 1), so a per-key cap alone would let an attacker mint a fresh
+	 * budget per invented id.
+	 */
+	maxPendingKeys: number
+	/** Maximum number of buffered events retained across each pending buffer. */
+	maxPendingEvents: number
+	/**
+	 * Seconds after which a pending key that never resolved is evicted.
+	 * Measured from first sight of the key so a trickle of events
+	 * cannot pin it forever.
+	 */
+	pendingTtlSec: number
 	/** Maximum number of event ids retained for cross-relay deduplication. */
 	maxSeenEventIds: number
 	/** Maximum serialized raw event size accepted by the auction path. */
@@ -28,13 +48,37 @@ export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 	maxBidsPerWindow: 20,
 	rateWindowSec: 60,
 	maxActiveBidsPerAuction: 100,
-	maxPendingBidsPerAuction: 256,
+	maxPendingEventsPerKey: 256,
+	// Worst case per buffer: maxPendingEvents × maxEventBytes
+	// (1024 × 64 KB = 64 MB) and in practice ~1 MB, since buffering only
+	// happens in the ordering gap between an event and its parent.
+	maxPendingKeys: 512,
+	maxPendingEvents: 1_024,
+	// Two hours: far longer than any relay ordering gap that can still
+	// produce a usable verdict, and long enough that an auction event
+	// arriving after its bids is never dropped for age.
+	pendingTtlSec: 7_200,
 	maxSeenEventIds: 10_000,
 	maxEventBytes: 64 * 1024,
 	maxTagCount: 128,
 	maxNonceLength: 256,
 	maxProofCount: 64,
 	maxContentBytes: 16 * 1024,
+}
+
+/**
+ * Project the operator policy onto the bounds enforced by
+ * {@link createPendingBuffer}. Kept here so every pending buffer in the
+ * subscriber is bounded by the same resolved policy.
+ */
+export const resolvePendingBufferLimits = (policy?: Partial<BidSpamPolicy>): PendingBufferLimits => {
+	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
+	return {
+		maxPendingKeys: resolved.maxPendingKeys,
+		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
+		maxPendingEvents: resolved.maxPendingEvents,
+		pendingTtlSec: resolved.pendingTtlSec,
+	}
 }
 
 export interface BidSpamState {
