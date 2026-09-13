@@ -32,10 +32,11 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { createPendingBuffer } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
-import { checkBidEnvelope, checkBidSpamPolicy, DEFAULT_BID_SPAM_POLICY, recordAcceptedBid, type BidSpamPolicy } from './spamPolicy'
+import { checkBidEnvelope, checkBidSpamPolicy, recordAcceptedBid, resolvePendingBufferLimits, type BidSpamPolicy } from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -82,11 +83,19 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	// Active unsubscribe handles, one per REQ we currently have open.
 	const unsubscribes: Array<() => void> = []
-	// Buffered bids/releases/settlements that arrived before we knew
-	// about their auction. Each carries the validator's first-observed
-	// time so replay uses the original sighting, not replay-time now()
-	// (which would let relay ordering change prompt/late classification).
-	const pendingBids = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	// Bounded, TTL'd buffers for events that arrived before we knew
+	// about their parent. Each entry carries the validator's
+	// first-observed time so replay uses the original sighting, not
+	// replay-time now() (which would let relay ordering change
+	// prompt/late classification).
+	//
+	// The keys come straight off the relay, so they are attacker-chosen:
+	// a bidder signing bids against invented auction ids must not be
+	// able to grow one of these maps without limit, and a key whose
+	// parent never arrives must not be pinned for the process lifetime
+	// (review 5645059400 findings 1 and 3).
+	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
+	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
 	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
 
@@ -189,14 +198,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// and replay it (with this first-observed time) when the auction
 		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
-			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			const maxPending = deps.spamPolicy?.maxPendingBidsPerAuction ?? DEFAULT_BID_SPAM_POLICY.maxPendingBidsPerAuction
-			if (existing.length >= maxPending) {
-				logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: pending auction buffer is full`)
-				return
+			const admission = pendingBids.add(bid.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: pending buffer ${admission}`)
 			}
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingBids.set(bid.auctionRootEventId, existing)
 			return
 		}
 
@@ -345,8 +350,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const drainPending = async (auctionRootEventId: string): Promise<void> => {
-		const bids = pendingBids.get(auctionRootEventId) ?? []
-		pendingBids.delete(auctionRootEventId)
+		const bids = pendingBids.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
 		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
