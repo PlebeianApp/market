@@ -13,6 +13,7 @@ import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingS
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
+import { evaluateReserveNotMetGuard } from '@/lib/auction/reserveGuard'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
@@ -1688,11 +1689,27 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			dleqKeysets: rnmDleqKeysets,
 		})
 
-		if (rnmValidated.canonicalWinner && rnmValidated.canonicalWinner.amount >= parsedAuction.reserve) {
+		// ADR-0011 review A2 (PR #1280 discussion_r3999446834): the guard must
+		// consider bids whose DLEQ evidence is UNRESOLVED, not only the canonical
+		// winner. A quorum-confirmed, structurally valid reserve-meeting bid is
+		// demoted to `pending` when its mint keyset fetch fails, so it does NOT
+		// appear in `canonicalWinner`; a winner-only check therefore reads the
+		// auction as reserve-unmet and lets the seller publish a terminal state
+		// that contradicts a bid which may still become valid. Evidence
+		// unavailability is a RETRY signal, never a licence to publish.
+		const rnmGuard = evaluateReserveNotMetGuard(rnmValidated, parsedAuction.reserve)
+		if (rnmGuard.kind === 'blocked') {
 			throw new Error(
 				'Cannot publish reserve_not_met: a validated bid meeting the reserve exists. ' +
-					`Canonical winner: ${rnmValidated.canonicalWinner.id} ` +
-					`(${rnmValidated.canonicalWinner.amount} sats).`,
+					`Canonical winner: ${rnmGuard.winnerBidId} ` +
+					`(${rnmGuard.winnerAmount} sats).`,
+			)
+		}
+		if (rnmGuard.kind === 'evidence-unavailable') {
+			throw new Error(
+				'Cannot publish reserve_not_met: DLEQ evidence is unavailable for reserve-meeting ' +
+					`bid(s) ${rnmGuard.bidIds.join(', ')} (up to ${rnmGuard.maxPendingAmount} sats). ` +
+					'Retry once the mint keyset fetch succeeds — publishing now would contradict a bid that may still be valid.',
 			)
 		}
 

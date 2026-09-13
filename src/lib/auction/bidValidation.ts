@@ -7,12 +7,27 @@ import type { MintKeys } from '@cashu/cashu-ts'
 
 export type BidClassification = 'valid' | 'pending' | 'invalid'
 
+/**
+ * Why a bid is `pending`. Optional, and only set for the cases a CONSUMER must
+ * act on differently from ordinary quorum-pending (ADR-0011 review A2,
+ * PR #1280 discussion_r3999446834).
+ *
+ * `dlequ_evidence_unavailable` means the bid is quorum-confirmed and
+ * structurally valid, but the keyset evidence needed to crypto-verify its
+ * collateral could not be gathered (mint unreachable). That is a RETRY signal,
+ * never a terminal verdict: such a bid is absent from `canonicalWinner`, so
+ * consumers that ask "did anything meet the reserve?" must consult this field
+ * or they will read "unavailable evidence" as "no such bid".
+ */
+export type BidPendingReason = 'dlequ_evidence_unavailable'
+
 export interface ClassifiedBid {
 	bid: ParsedBidEvent
 	classification: BidClassification
 	observedAt: number
 	nut7State?: Nut7ProofState
 	invalidReason?: string
+	pendingReason?: BidPendingReason
 }
 
 export interface ValidatedBidSet {
@@ -487,6 +502,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 					// authoritative merely because the map was omitted.
 					if (!dleqKeysetMap) {
 						c.classification = 'pending'
+						c.pendingReason = 'dlequ_evidence_unavailable'
 						finalPending.push(c.bid)
 						continue
 					}
@@ -504,6 +520,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 					const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
 					if (missingKeysetIds.length > 0) {
 						c.classification = 'pending'
+						c.pendingReason = 'dlequ_evidence_unavailable'
 						finalPending.push(c.bid)
 						continue
 					}
