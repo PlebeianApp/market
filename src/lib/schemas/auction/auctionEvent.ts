@@ -30,7 +30,6 @@ import {
 	DEFAULT_MAX_SKEW_SECONDS,
 	FALLBACK_DELAY_DENOMINATOR,
 	FALLBACK_DELAY_NUMERATOR,
-	DLEQ_REQUIRED_TAG,
 	resolveDleqRequired,
 } from '../../auction/constants'
 import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '../../auction/events'
@@ -173,12 +172,14 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	const p2pkXpub = readSingleTag(event, 'p2pk_xpub') ?? ''
 	const schema = readSingleTag(event, 'schema') ?? 'auction_v1'
 
-	// Canonical DLEQ activation (ADR-0011 Blocker 4). The signed
-	// `dleq_required` tag is the protocol truth. When absent (legacy event
-	// published before the tag existed), fall back to the boundary comparison
-	// so already-published auctions are not broken.
-	const dleqRequiredRaw = readSingleTag(event, DLEQ_REQUIRED_TAG)
-	const dleqRequired = resolveDleqRequired(dleqRequiredRaw, startAt)
+	// Canonical DLEQ activation (ADR-0011 Blocker 4 / review A1). The signed
+	// `dleq_required` tag is the protocol truth, read through the single
+	// strict parser (`readDleqRequiredTag` via `resolveDleqRequired`): only a
+	// lone `["dleq_required","1"|"0"]` is canonical, and any malformed or
+	// ambiguous form fails closed to "required". When the tag is absent
+	// (legacy event published before the tag existed), fall back to the
+	// boundary comparison so already-published auctions are not broken.
+	const dleqRequired = resolveDleqRequired(event.tags, startAt)
 
 	const parsed = AuctionEventSchema.safeParse({
 		dTag,

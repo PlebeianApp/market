@@ -2658,7 +2658,9 @@ export const nip60Actions = {
 			// ADR-0011 Decision 8 (review N1) — carry the auction's canonical
 			// DLEQ activation so the lock and the published `dleq_proof` tags
 			// come from the signed decision, not the deploy-time boundary.
-			dleqRequired: resolveDleqRequired(getFirstTagValue(selected, 'dleq_required'), startAt),
+			// Read strictly (review A1): duplicates/malformed forms fail
+			// closed to required.
+			dleqRequired: resolveDleqRequired(selected.tags, startAt),
 		}
 
 		const bidEventId = await publishAuctionBid(formData, signer, ndk)

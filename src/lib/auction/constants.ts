@@ -124,6 +124,13 @@ export const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'settlement_grace',
 	'min_bid_curve',
 	'settlement_policy',
+	// ADR-0011 Decision 8 (review A1): the DLEQ activation decision is part
+	// of the auction's signed identity. A later kind-30408 replacement that
+	// adds, drops, or flips `dleq_required` would change which bids are
+	// authoritative for the same coordinates, so it is rejected outright
+	// (a bidder who read the tag before bidding must never be re-scored by
+	// a replacement that flips it).
+	'dleq_required',
 	'schema',
 	'auditor_quorum',
 	'max_skew_sec',
@@ -296,22 +303,91 @@ export const DLEQ_REQUIRED_TRUE = '1'
 export const DLEQ_REQUIRED_FALSE = '0'
 
 /**
+ * Why a present `dleq_required` tag is NOT canonical (review A1).
+ *
+ * - `duplicate`        — more than one `dleq_required` tag. Which one wins
+ *   would otherwise depend on each reader's scan order (`find` vs
+ *   first-non-empty), so two clients could derive different requirements
+ *   from the same signed event.
+ * - `empty`            — the tag carries no value (`["dleq_required"]` or
+ *   `["dleq_required", ""]`).
+ * - `multi-value`      — the tag carries more than one value
+ *   (`["dleq_required", "1", "0"]`), so there is no single meaning.
+ * - `unexpected-value` — a value that is not exactly `"1"` or `"0"`.
+ */
+export type DleqRequiredTagDefect = 'duplicate' | 'empty' | 'multi-value' | 'unexpected-value'
+
+/**
+ * The strict, single-source-of-truth read of the `dleq_required` tag.
+ *
+ * Every reader (schema parse, query helpers, wallet bid path, publish gate)
+ * MUST go through this function rather than scanning `event.tags`
+ * independently — the divergence between readers is exactly what review A1
+ * flagged.
+ */
+export type DleqRequiredTagState =
+	| { kind: 'absent' }
+	| { kind: 'canonical'; required: boolean }
+	| { kind: 'non-canonical'; reason: DleqRequiredTagDefect }
+
+/**
+ * Read the `dleq_required` tag strictly.
+ *
+ * Only a single tag with a single value of exactly `"1"` or `"0"` is
+ * canonical. Anything else is classified non-canonical with a reason, and
+ * every consumer must treat non-canonical as fail-closed (DLEQ required).
+ */
+export function readDleqRequiredTag(tags: readonly (readonly string[])[]): DleqRequiredTagState {
+	const matching = tags.filter((tag) => tag[0] === DLEQ_REQUIRED_TAG)
+	if (matching.length === 0) return { kind: 'absent' }
+	if (matching.length > 1) return { kind: 'non-canonical', reason: 'duplicate' }
+	const tag = matching[0]
+	if (tag.length > 2) return { kind: 'non-canonical', reason: 'multi-value' }
+	const value = tag[1]
+	if (value === undefined || value.length === 0) return { kind: 'non-canonical', reason: 'empty' }
+	if (value === DLEQ_REQUIRED_TRUE) return { kind: 'canonical', required: true }
+	if (value === DLEQ_REQUIRED_FALSE) return { kind: 'canonical', required: false }
+	return { kind: 'non-canonical', reason: 'unexpected-value' }
+}
+
+/**
  * Resolve the canonical DLEQ requirement for an auction from its signed
  * `dleq_required` tag. This is the single shared activation predicate every
  * path consumes (ADR-0011, Decision 8).
  *
- * The signed tag is protocol truth: two clients reading the same signed event
- * derive the same requirement regardless of their deploy-time boundary config,
- * and a seller cannot backdate `start_at` to change it. Only when the tag is
- * absent (a legacy event published before the tag existed) do we fall back to
- * the boundary comparison so already-published auctions are not broken.
+ * Semantics (review A1 — one immutable, strict protocol meaning):
  *
- * @param dleqRequiredRaw raw value of the `dleq_required` tag, or `undefined`
- *   when the tag is absent.
+ *   - canonical `"1"` → DLEQ required (explicit opt-in), at any `start_at`.
+ *   - canonical `"0"` → DLEQ NOT required. This is LEGAL at any `start_at`:
+ *     it is the seller's explicit, signed, pre-bid-visible announcement that
+ *     the auction does not carry collateral verification, and it is
+ *     immutable (see `AUCTION_IMMUTABLE_SINGLE_TAGS`), so no bidder can be
+ *     surprised by a later flip. The signed tag is protocol truth: two
+ *     clients reading the same signed event derive the same requirement
+ *     regardless of their deploy-time boundary config, and a seller cannot
+ *     backdate `start_at` to change it.
+ *   - absent → legacy event published before the tag existed: fall back to
+ *     the `start_at` boundary comparison so already-published auctions are
+ *     not broken (Decision 7). This is the ONLY remaining boundary consumer.
+ *   - non-canonical (duplicate / empty / multi-value / unexpected value) →
+ *     FAIL CLOSED to required. A malformed or ambiguous tag must never
+ *     silently mean "not required" — that is the fail-open reading review A1
+ *     rejected. Order-independence is a property of this classification:
+ *     conflicting duplicates are rejected whatever order the relay returned
+ *     them in.
+ *
+ * @param tags signed auction event tags (kind 30408).
  * @param startAt auction `start_at` (epoch seconds), used only for the legacy
  *   fallback when the tag is absent.
  */
-export function resolveDleqRequired(dleqRequiredRaw: string | undefined, startAt: number): boolean {
-	if (dleqRequiredRaw === undefined) return requiresDleqForAuction(startAt)
-	return dleqRequiredRaw === DLEQ_REQUIRED_TRUE
+export function resolveDleqRequired(tags: readonly (readonly string[])[], startAt: number): boolean {
+	const state = readDleqRequiredTag(tags)
+	switch (state.kind) {
+		case 'canonical':
+			return state.required
+		case 'absent':
+			return requiresDleqForAuction(startAt)
+		case 'non-canonical':
+			return true
+	}
 }
