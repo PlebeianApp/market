@@ -1,6 +1,7 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@/components/Media'
 import { AuctionFilters } from '@/components/AuctionFilters'
+import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,14 +15,17 @@ import {
 	auctionsQueryOptions,
 	filterNSFWAuctions,
 	getAuctionCategories,
+	getAuctionId,
 	getAuctionImages,
 	getAuctionRootEventId,
 	getAuctionTitle,
+	useAuctionBidsByBidderStream,
 	useAuctionBidsForList,
+	useAuctionsByPubkeyStream,
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions } from '@/queries/featured'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -60,7 +64,7 @@ function useFeaturedAuctionEvents(featuredAuctions: string[] | undefined) {
 
 	return results
 		.filter((result) => !result.isLoading && result.data)
-		.map((result) => result.data as NDKEvent)
+		.map((result) => result.data as NostrEventLike)
 		.filter((auction) => getAuctionImages(auction).length > 0)
 }
 
@@ -77,6 +81,7 @@ function AuctionsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)
+	const { user: currentUser } = useStore(authStore)
 	const { showNSFWContent } = useStore(uiStore)
 	const [filters, setFilters] = useState<AuctionFilterState>(defaultAuctionFilters)
 
@@ -87,10 +92,39 @@ function AuctionsRoute() {
 		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
 
-	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
+	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NostrEventLike[], showNSFWContent)
 
 	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
+
+	// Your Auctions — auctions created by the current user (live subscription)
+	const userPubkey = currentUser?.pubkey
+	const { auctions: myAuctions } = useAuctionsByPubkeyStream(userPubkey || '', 50)
+	const myAuctionsFiltered = filterNSFWAuctions(myAuctions, showNSFWContent)
+
+	// Previously Bid — auctions the user has bid on (live subscription)
+	const { bids: myBids } = useAuctionBidsByBidderStream(userPubkey || '', 500)
+	const myBidAuctionIds = useMemo(() => {
+		const ids = new Set<string>()
+		for (const bid of myBids) {
+			const auctionId = bid.tags?.find((t) => t[0] === 'e')?.[1] || ''
+			if (auctionId) ids.add(auctionId)
+		}
+		return ids
+	}, [myBids])
+	const previouslyBidAuctions = useMemo(() => {
+		if (!myBidAuctionIds.size) return []
+		return auctions.filter((a) => {
+			const id = getAuctionRootEventId(a) || a.id
+			return id && myBidAuctionIds.has(id) && !(userPubkey && a.pubkey === userPubkey)
+		})
+	}, [auctions, myBidAuctionIds, userPubkey])
+
+	// Apply the filter bar state (filters + URL tag) to the authenticated section
+	// grids too, so all three grids are governed by the same filters. Called
+	// unconditionally at the top level of the route (Rules of Hooks).
+	const myAuctionsVisible = useFilteredAuctions({ auctions: myAuctionsFiltered, filters, tag })
+	const previouslyBidVisible = useFilteredAuctions({ auctions: previouslyBidAuctions, filters, tag })
 
 	const { data: config } = useConfigQuery()
 	const { data: featuredAuctionsData } = useFeaturedAuctions(config?.appPublicKey || '')
@@ -322,6 +356,18 @@ function AuctionsRoute() {
 					<AuctionFilters filters={filters} onFiltersChange={setFilters} />
 				</div>
 			</div>
+
+			{isAuthenticated && userPubkey && myAuctionsVisible.length > 0 && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid title="Your Auctions" auctions={myAuctionsVisible} bidsByAuctionId={bidsByAuctionId} />
+				</div>
+			)}
+
+			{isAuthenticated && userPubkey && previouslyBidVisible.length > 0 && (
+				<div className="px-8 py-4">
+					<AuctionSectionGrid title="You Previously Bid" auctions={previouslyBidVisible} bidsByAuctionId={bidsByAuctionId} />
+				</div>
+			)}
 
 			<div className="px-8 py-4">
 				{auctionsQuery.isError && auctions.length === 0 ? (

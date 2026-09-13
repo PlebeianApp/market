@@ -44,6 +44,21 @@ export const applesauceIo: NostrIo = {
 		if (urls.length === 0) return Promise.resolve([])
 		const filters = asFilters(filter)
 		const collected: NostrEvent[] = []
+		// Deduplicate by event id.
+		//
+		// `RelayPool.request(urls, filters)` delivers an event once per matching
+		// filter, so a request with several filters (e.g. fetchAuctionBids sends
+		// `#e` AND `#a`) emits any event carrying both tags more than once. The
+		// NDK adapter this port replaces returned a `Set` (deduplicated by
+		// `deduplicationKey()`, see `ndkActions.fetchEventsWithTimeout`), and the
+		// `NostrIo` port documents a single collection of matching events. Callers
+		// rely on that: duplicate bids make `computeValidatedBids`' M5
+		// same-bidder proof-reuse screen flag a legitimate bid as invalid, which
+		// aborts a settlement publish.
+		//
+		// Uniqueness is therefore part of the port contract and is enforced here,
+		// at the seam, so every caller gets it.
+		const seenIds = new Set<string>()
 		return new Promise<NostrEvent[]>((resolve, reject) => {
 			let subscription: { unsubscribe(): void } | undefined
 			const timer = setTimeout(() => {
@@ -53,7 +68,15 @@ export const applesauceIo: NostrIo = {
 			subscription = getPool()
 				.request(urls, filters)
 				.subscribe({
-					next: (event) => collected.push(event as NostrEvent),
+					next: (event) => {
+						const raw = event as NostrEvent
+						const id = raw?.id
+						if (id) {
+							if (seenIds.has(id)) return
+							seenIds.add(id)
+						}
+						collected.push(raw)
+					},
 					complete: () => {
 						clearTimeout(timer)
 						resolve(collected)
