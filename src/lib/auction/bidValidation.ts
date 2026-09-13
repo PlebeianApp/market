@@ -243,6 +243,17 @@ function classifyBid(
 	}
 }
 
+/**
+ * The collateral identity keys a bid claims, namespaced per field so a locked
+ * secret can never collide with a proof `Y` or a DLEQ `C`. Compared as opaque
+ * lowercased hex/JSON strings (the same normalization the M5 rules use).
+ */
+const collateralClaimKeys = (bid: ParsedBidEvent): string[] => [
+	...bid.lockSecrets.map((secret) => `lock_secret:${secret.toLowerCase()}`),
+	...bid.proofYs.map((proofY) => `proof_y:${proofY.toLowerCase()}`),
+	...(bid.dleqProofs ?? []).flatMap((proof) => (proof.C ? [`dlequ_c:${proof.C.toLowerCase()}`] : [])),
+]
+
 function computeLegLockedAmounts(bids: ParsedBidEvent[]): void {
 	const bidById = new Map(bids.map((b) => [b.id, b]))
 
@@ -397,6 +408,18 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	const seenLockSecretsByBidder = new Map<string, Set<string>>()
 	const seenProofYsByBidder = new Map<string, Set<string>>()
 	const seenDleqCsByBidder = new Map<string, Set<string>>()
+	// ADR-0011 review A3 (PR #1280 discussion_r3999446835): scoping these sets
+	// per Nostr pubkey is NOT sufficient. DLEQ authenticates the Cashu proof
+	// against the mint keyset — it says nothing about OWNERSHIP by the event
+	// author — and `lock_secret` / `proof_y` / `C` are public in whichever bid
+	// event first published them. A second author can therefore republish
+	// another bidder's collateral under its own (higher) amount and a fresh
+	// DLEQ tuple, so two bids would both be authoritative for the SAME coins
+	// while only one can ever be redeemed. Collateral is therefore bound to
+	// exactly ONE bidder across authors: the first-observed claim wins and any
+	// later claim by a DIFFERENT author is invalid. (Same-author reuse remains
+	// the M5 rule above.)
+	const collateralClaimant = new Map<string, string>()
 	const sortedByObserved = [...classified].sort((a, b) => a.observedAt - b.observedAt)
 	const bidsWithDuplicateProofs = new Set<string>()
 	for (const c of sortedByObserved) {
@@ -405,11 +428,24 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		const bidderSeenSecrets = seenLockSecretsByBidder.get(bidder) ?? new Set()
 		const bidderSeenProofYs = seenProofYsByBidder.get(bidder) ?? new Set()
 		const bidderSeenDleqCs = seenDleqCsByBidder.get(bidder) ?? new Set()
+		// A3: collateral already claimed by a DIFFERENT author is a cross-author
+		// collision — the same coins cannot back two bids. Checked before the
+		// same-author reuse rules because it is the security-critical one.
 		let hasDup = false
-		for (const secret of c.bid.lockSecrets) {
-			if (bidderSeenSecrets.has(secret.toLowerCase())) {
+		const claimKeys = collateralClaimKeys(c.bid)
+		for (const key of claimKeys) {
+			const claimant = collateralClaimant.get(key)
+			if (claimant && claimant !== bidder) {
 				hasDup = true
 				break
+			}
+		}
+		if (!hasDup) {
+			for (const secret of c.bid.lockSecrets) {
+				if (bidderSeenSecrets.has(secret.toLowerCase())) {
+					hasDup = true
+					break
+				}
 			}
 		}
 		if (!hasDup) {
@@ -443,6 +479,10 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			seenLockSecretsByBidder.set(bidder, bidderSeenSecrets)
 			seenProofYsByBidder.set(bidder, bidderSeenProofYs)
 			seenDleqCsByBidder.set(bidder, bidderSeenDleqCs)
+			// A3: bind this collateral to this bidder for the rest of the pass.
+			for (const key of claimKeys) {
+				if (!collateralClaimant.has(key)) collateralClaimant.set(key, bidder)
+			}
 		}
 	}
 	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
