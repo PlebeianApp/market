@@ -19,6 +19,7 @@ import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
+import { UnlockSessionDialog } from '@/components/auth/UnlockSessionDialog'
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal' // Add this import
 import type { PIIScanResult } from '@/lib/utils/piiScanner'
 
@@ -113,6 +114,7 @@ function RootLayout() {
 				{/* Having some build error with this rn */}
 				{/* <TanStackRouterDevtools /> */}
 				<MigratePrivateKeyDialog />
+				<UnlockSessionDialog />
 				<DecryptPasswordDialog />
 				<SheetRegistry />
 				<DialogRegistry />

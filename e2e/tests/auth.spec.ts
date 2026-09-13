@@ -554,6 +554,80 @@ test.describe('Authentication', () => {
 		})
 	})
 
+	test.describe('Vaulted session unlock prompt', () => {
+		/** Seed a legacy plaintext bunker pair + auto-login (pre-B-3 storage). */
+		async function seedLegacySession(context: BrowserContext, bunkerUrl: string) {
+			await context.addInitScript(
+				({ clientKey, connectUrl }: { clientKey: string; connectUrl: string }) => {
+					localStorage.setItem('nostr_local_signer_key', clientKey)
+					localStorage.setItem('nostr_connect_url', connectUrl)
+					localStorage.setItem('nostr_auto_login', 'true')
+					localStorage.setItem('plebeian_terms_accepted', 'true')
+				},
+				{ clientKey: 'dd'.repeat(32), connectUrl: bunkerUrl },
+			)
+		}
+
+		test('legacy plaintext session + auto-login → the unlock prompt renders, discard logs out', async ({ browser }) => {
+			const context = await browser.newContext()
+			const bunkerUrl = `bunker://${'cc'.repeat(32)}?relay=${encodeURIComponent(RELAY_URL)}&secret=hunter2`
+			await seedLegacySession(context, bunkerUrl)
+			const page = await context.newPage()
+
+			try {
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+
+				// Review 5654374915 item 1: the prompt is actually RENDERED —
+				// before this change the flag had zero component consumers and
+				// the user was silently logged out at boot.
+				await expect(page.locator('[data-testid="session-unlock-dialog"]')).toBeVisible({ timeout: 10_000 })
+				await expectNotAuthenticated(page)
+
+				// Discard = intentional forced re-login: plaintext pair deleted,
+				// no vault written, auto-login cleared.
+				await page.locator('[data-testid="session-unlock-discard-button"]').click()
+				await expect(page.locator('[data-testid="session-unlock-dialog"]')).toBeHidden({ timeout: 10_000 })
+
+				expect(await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))).toBeNull()
+				expect(await page.evaluate(() => localStorage.getItem('nostr_connect_url'))).toBeNull()
+				expect(await page.evaluate(() => localStorage.getItem('nostr_auto_login'))).toBeNull()
+				expect(await page.evaluate(() => localStorage.getItem('nostr_session_v1'))).toBeNull()
+				await expectNotAuthenticated(page)
+			} finally {
+				await context.close()
+			}
+		})
+
+		test('legacy plaintext session unlock migrates to a vault and logs in', async ({ browser }) => {
+			test.setTimeout(90_000)
+			const context = await browser.newContext()
+			const mock = new Nip46Mock(devUser2.sk)
+			await mock.startSignerLoop(RELAY_URL)
+			await seedLegacySession(context, `bunker://${mock.pk}?relay=${encodeURIComponent(RELAY_URL)}&secret=hunter2`)
+			const page = await context.newPage()
+
+			try {
+				await page.goto('/')
+				await page.waitForLoadState('networkidle')
+				await expect(page.locator('[data-testid="session-unlock-dialog"]')).toBeVisible({ timeout: 10_000 })
+
+				await page.locator('[data-testid="session-unlock-passphrase-input"]').fill('device-pass')
+				await page.locator('[data-testid="session-unlock-button"]').click()
+
+				// Migrate-on-unlock: the legacy pair is rehydrated, wrapped and
+				// deleted, and the user is signed in.
+				await expectAuthenticated(page)
+				expect(await page.evaluate(() => localStorage.getItem('nostr_session_v1'))).toBeTruthy()
+				expect(await page.evaluate(() => localStorage.getItem('nostr_local_signer_key'))).toBeNull()
+				expect(await page.evaluate(() => localStorage.getItem('nostr_connect_url'))).toBeNull()
+			} finally {
+				mock.close()
+				await context.close()
+			}
+		})
+	})
+
 	test.describe('Persistence and Reload', () => {
 		test('auto-login with extension after reload', async ({ browser }) => {
 			const context = await browser.newContext()
