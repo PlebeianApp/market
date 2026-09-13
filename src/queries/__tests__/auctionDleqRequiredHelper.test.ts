@@ -46,15 +46,27 @@ describe('getAuctionDleqRequired (ADR-0011 Decision 8, review N1)', () => {
 
 	// The reader inherits `resolveDleqRequired`'s tag semantics; pin them here
 	// so a future refactor of the reader cannot silently change the decision.
-	test('only the canonical "1" opts in — a present but malformed tag does not', () => {
+	//
+	// Review A1 flipped this expectation: a present-but-malformed value used to
+	// read as "not required" (fail-open — any garbage tag was a silent opt-out).
+	// It now fails CLOSED to "required", so the malformed cases below are true.
+	test('a present but malformed tag FAILS CLOSED to required (review A1)', () => {
 		for (const malformed of ['true', '2', '', 'yes']) {
-			expect(getAuctionDleqRequired(buildAuctionEvent({ startAt: boundary + 1, dleqRequired: malformed }))).toBe(false)
+			expect(getAuctionDleqRequired(buildAuctionEvent({ startAt: boundary + 1, dleqRequired: malformed }))).toBe(true)
 		}
 	})
 
-	test('repeated tags: the first one wins (matches the parser’s single-tag read)', () => {
-		const event = buildAuctionEvent({ startAt: boundary + 1, dleqRequired: '0' })
-		event.tags.push(['dleq_required', '1'])
-		expect(getAuctionDleqRequired(event)).toBe(false)
+	// Review A1: duplicate tags have no canonical meaning, so they fail closed
+	// to required regardless of which one a reader would have scanned first
+	// (the old expectation — "first one wins" — made the decision depend on
+	// per-reader scan order and on relay tag order).
+	test('repeated tags FAIL CLOSED to required, in either order (review A1)', () => {
+		const zeroThenOne = buildAuctionEvent({ startAt: boundary + 1, dleqRequired: '0' })
+		zeroThenOne.tags.push(['dleq_required', '1'])
+		expect(getAuctionDleqRequired(zeroThenOne)).toBe(true)
+
+		const oneThenZero = buildAuctionEvent({ startAt: boundary + 1, dleqRequired: '1' })
+		oneThenZero.tags.push(['dleq_required', '0'])
+		expect(getAuctionDleqRequired(oneThenZero)).toBe(true)
 	})
 })
