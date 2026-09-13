@@ -1,19 +1,21 @@
 /**
  * NIP-46 session rehydration from a vaulted nbunksec (ADR-0008 B-3).
  *
- * `NostrConnectSigner.fromNbunksec()` immediately re-sends `connect` over
- * its relays, so this factory is only invoked from the unlock prompt (the
- * user just typed the vault passphrase) — never speculatively at boot.
+ * Rehydration immediately re-sends `connect` over the stored relays, so this
+ * factory is only invoked from the unlock prompt (the user just typed the
+ * vault passphrase) — never speculatively at boot.
  *
  * The rehydrated signer goes through the SAME B-2 invariant wrapper
- * (`createNostrConnectCapability`) as a fresh login, so RPC timeouts and the
- * signed-event pubkey-equality assertion hold on restore too.
+ * (`createNostrConnectCapability`) as a fresh login — and the connect RPC
+ * itself is bounded here too, exactly like `connectBunkerSigner`: a silent
+ * bunker must not hang `unlockVaultedSession` with `isAuthenticating` stuck
+ * (Gate/ review 5191403562 C).
  */
-import { NostrConnectSigner } from 'applesauce-signers'
+import { NostrConnectSigner, PrivateKeySigner } from 'applesauce-signers'
 import type { NostrPool } from 'applesauce-signers'
 import { bytesToHex } from 'nostr-tools/utils'
 
-import { createNostrConnectCapability, NIP46_PERMISSIONS } from './nostr-connect-signer'
+import { createNostrConnectCapability, NIP46_PERMISSIONS, NIP46_RPC_TIMEOUT_MS, withRpcTimeout } from './nostr-connect-signer'
 import type { NostrConnectBundle } from './nostr-connect-signer'
 
 export interface RehydrateOptions {
@@ -26,17 +28,45 @@ export interface RehydrateOptions {
 /**
  * Rehydrate a NIP-46 session from a plaintext nbunksec string (already
  * unwrapped from the vault by the caller) and wrap it in the ADR-0008
- * capability seam. `NostrConnectSigner.fromNbunksec` performs the connect
- * RPC against the stored remote.
+ * capability seam. The `connect` RPC is deadline-bounded; a signer whose
+ * connect times out is closed before the rejection propagates so the partial
+ * restore does not leak its REQ subscription on the shared relay pool.
+ *
+ * The signer is constructed here rather than through
+ * `NostrConnectSigner.fromNbunksec` precisely so the partial signer is in
+ * hand on the failure path (fromNbunksec keeps its own reference private).
  */
 export async function rehydrateNostrConnectSession(nbunksec: string, options: RehydrateOptions = {}): Promise<NostrConnectBundle> {
-	const signer = await NostrConnectSigner.fromNbunksec(nbunksec, {
-		permissions: options.permissions ?? NIP46_PERMISSIONS,
+	const { remote, clientKey, relays, bunkerSecret } = NostrConnectSigner.parseNbunksec(nbunksec)
+	const permissions = options.permissions ?? NIP46_PERMISSIONS
+	const timeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
+
+	const signer = new NostrConnectSigner({
+		relays,
+		remote,
+		signer: PrivateKeySigner.fromKey(clientKey),
+		bunkerSecret,
 		pool: options.pool,
 	})
+
+	try {
+		await withRpcTimeout('rehydrate_connect', signer.connect(bunkerSecret, permissions), timeoutMs)
+	} catch (error) {
+		// close(), not logout(): logout() would send a courtesy Logout RPC to
+		// a remote that just proved it is silent, adding a second hang.
+		// close() unsubscribes the partial REQ and rejects the pending
+		// waitingPromise, so the abandoned connect() settles too.
+		try {
+			await signer.close()
+		} catch {
+			// Already closed by connect()'s own failure path — nothing to do.
+		}
+		throw error
+	}
+
 	return {
 		signer,
-		capability: createNostrConnectCapability(signer, options.rpcTimeoutMs),
+		capability: createNostrConnectCapability(signer, timeoutMs),
 		clientKeyHex: bytesToHex(signer.signer.key),
 	}
 }
