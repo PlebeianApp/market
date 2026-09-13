@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	APP_AUCTION_DLEQ_ROLLOUT_START_AT,
-	DLEQ_REQUIRED_TAG,
-	readDleqRequiredTag,
-	resolveDleqRequired,
-} from '../auction/constants'
+import { APP_AUCTION_DLEQ_ROLLOUT_START_AT, DLEQ_REQUIRED_TAG, readDleqRequiredTag, resolveDleqRequired } from '../auction/constants'
 import { auctionImmutableFieldsMatch } from '../auction/immutability'
 import type { NostrEventLike } from '../nostr/eventLike'
 

@@ -103,12 +103,11 @@ kind-1025 path release already publishes full proofs at settlement.
    inside `publishAuctionBid` exists only for callers that predate the field.
    8a. **Strict canonical activation (Amendment, review A1).** `dleq_required` has
    exactly ONE meaning, and only one form carries it:
-
    - `["dleq_required","1"]` → DLEQ required, at any `start_at` (explicit opt-in).
    - `["dleq_required","0"]` → DLEQ not required, at any `start_at`. This is LEGAL:
      it is the seller's explicit, signed, pre-bid-visible, IMMUTABLE announcement that
      the auction does not carry collateral verification. Review A1 asked for this to be
-     *defined* rather than left implicit — the protocol answer is "legal, but never
+     _defined_ rather than left implicit — the protocol answer is "legal, but never
      implicit": an opt-out is only an opt-out when it is a canonical, lone, signed tag.
    - **absent** → legacy event (published before the tag existed): fall back to the
      `start_at` rollout boundary, so already-published auctions are not broken. This is
@@ -118,7 +117,7 @@ kind-1025 path release already publishes full proofs at settlement.
      to required**. A malformed or ambiguous tag must never read as "not required" —
      that fail-open reading (any garbage tag was a silent opt-out, and the winning
      value depended on each reader's scan order) is what A1 rejected. Because the
-     classification rejects *all* duplicates, the result cannot depend on relay tag
+     classification rejects _all_ duplicates, the result cannot depend on relay tag
      order.
 
    `readDleqRequiredTag` / `resolveDleqRequired` in `src/lib/auction/constants.ts` are
@@ -136,7 +135,7 @@ kind-1025 path release already publishes full proofs at settlement.
    For tag-less (legacy) events, activation is still decided by
    `APP_AUCTION_DLEQ_ROLLOUT_START_AT`, an env var resolved at build time
    (`resolveDleqRolloutStartAt`, `src/lib/auction/constants.ts`). That retains a
-   deployment-controlled input to the interpretation of a *signed* Nostr event, which
+   deployment-controlled input to the interpretation of a _signed_ Nostr event, which
    is review B2's objection: two builds with different boundaries can classify the same
    event differently, and a seller can backdate `start_at` below the boundary to land in
    the grandfathering branch (equivalent to signing `"0"`, but implicit instead of
@@ -145,14 +144,13 @@ kind-1025 path release already publishes full proofs at settlement.
 
    **Decision required (maintainer):** how should a tag-less event be classified once
    the rollout is over?
-
    - **A (recommended) — freeze the boundary as a protocol constant.** Stop reading
-     `APP_AUCTION_DLEQ_ROLLOUT_START_AT` from env on the *validity* path; keep the
+     `APP_AUCTION_DLEQ_ROLLOUT_START_AT` from env on the _validity_ path; keep the
      literal in `DEFAULT_DLEQ_ROLLOUT_START_AT` as an immutable protocol constant that
      every build shares. The boundary then only ever classifies pre-rollout legacy
      events, so moving it can no longer change which winner a build derives, and
      backdating `start_at` buys a seller nothing that signing a canonical `"0"` does not
-     already grant explicitly. The env var may remain a *publish-time* input (which
+     already grant explicitly. The env var may remain a _publish-time_ input (which
      value OUR build stamps on auctions we create) because the stamped value is signed
      and therefore canonical once published.
    - **B — keep the env override as-is** (status quo) and accept that tag-less events
