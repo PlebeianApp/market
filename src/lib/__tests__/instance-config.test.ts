@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_INSTANCE_CONFIG, parseInstanceConfigEnvironment, resolveInstanceConfig } from '@/lib/instance-config'
+import {
+	DEFAULT_INSTANCE_CONFIG,
+	parseInstanceConfigEnvironment,
+	resolveHandlerIdChain,
+	resolveInstanceConfig,
+} from '@/lib/instance-config'
+import { APP_SETTINGS_D_TAG } from '@/lib/appSettings'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { configActions, configStore } from '@/lib/stores/config'
 import { createHandlerInfoEventData, createClientTag } from '@/publish/nip89'
@@ -131,6 +137,40 @@ describe('parseInstanceConfigEnvironment', () => {
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_ALLOW_REGISTER: 'yes' })).toThrow()
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_PUBLIC_RELAYS: 'https://relay.example.com' })).toThrow()
 		expect(() => parseInstanceConfigEnvironment({ INSTANCE_SITE_URL: 'ftp://market.example.com' })).toThrow()
+	})
+
+	test('tolerates surrounding whitespace on boolean environment values', () => {
+		// Regression: `.env` files saved with CRLF (or values quoted with a
+		// trailing space) used to throw inside `setAppSettings`, which exits the
+		// whole server at boot. Whitespace is not a configuration error.
+		expect(parseInstanceConfigEnvironment({ INSTANCE_ALLOW_REGISTER: 'true ' }).allowRegister).toBe(true)
+		expect(parseInstanceConfigEnvironment({ INSTANCE_SHOW_NOSTR_LINK: '	false\r\n' }).showNostrLink).toBe(false)
+		expect(parseInstanceConfigEnvironment({ INSTANCE_ALLOW_REGISTER: ' true ' }).allowRegister).toBe(true)
+
+		// Genuinely invalid values still fail closed.
+		expect(() => parseInstanceConfigEnvironment({ INSTANCE_ALLOW_REGISTER: ' yes ' })).toThrow()
+	})
+})
+
+describe('resolveHandlerIdChain', () => {
+	test('prefers the configured handler ID and keeps the shipped default as fallback', () => {
+		expect(resolveHandlerIdChain('selfhost-handler')).toEqual(['selfhost-handler', DEFAULT_INSTANCE_CONFIG.handlerId])
+	})
+
+	test('falls back to the shipped default when no handler ID is configured', () => {
+		expect(resolveHandlerIdChain(undefined)).toEqual([DEFAULT_INSTANCE_CONFIG.handlerId])
+		expect(resolveHandlerIdChain('   ')).toEqual([DEFAULT_INSTANCE_CONFIG.handlerId])
+	})
+
+	test('trims and dedupes so a configured default appears once', () => {
+		expect(resolveHandlerIdChain(` ${DEFAULT_INSTANCE_CONFIG.handlerId} `)).toEqual([DEFAULT_INSTANCE_CONFIG.handlerId])
+	})
+
+	test('the shipped default is the legacy app-settings d-tag', () => {
+		// If these ever drift, boot discovery stops finding settings published by
+		// an instance that never set INSTANCE_HANDLER_ID.
+		expect(DEFAULT_INSTANCE_CONFIG.handlerId).toBe(APP_SETTINGS_D_TAG)
+		expect(resolveHandlerIdChain(undefined)).toContain(APP_SETTINGS_D_TAG)
 	})
 })
 

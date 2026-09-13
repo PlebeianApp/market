@@ -81,6 +81,17 @@ describe('resolveZapRelays', () => {
 		})
 	})
 
+	test('keeps ZAP_RELAYS when instance zap relays are supplied', () => {
+		// Regression: `/api/config` always returns a relay set now (publicRelays
+		// defaults to DEFAULT_PUBLIC_RELAYS), so an instance-provided override
+		// must add to ZAP_RELAYS instead of replacing the dedicated zap relays.
+		const result = resolveZapRelays(['wss://app.selfhost.example'], ['wss://zap.selfhost.example'])
+
+		ZAP_RELAYS.forEach((relay) => expect(result).toContain(relay))
+		expect(result).toContain('wss://zap.selfhost.example')
+		expect(result).toContain('wss://app.selfhost.example')
+	})
+
 	test('deduplicates relays', () => {
 		const result = resolveZapRelays(['wss://relay.damus.io', 'wss://relay.damus.io'])
 		const damusCount = result.filter((r) => r === 'wss://relay.damus.io').length
@@ -94,7 +105,6 @@ describe('computeNdkConfig', () => {
 			stage: 'production',
 			appRelay: 'wss://selfhost.example',
 			publicRelays: ['wss://relay1.selfhost.example', 'wss://relay2.selfhost.example'],
-			zapRelays: ['wss://zap.selfhost.example'],
 		})
 
 		expect(config.explicitRelayUrls).toContain('wss://selfhost.example')
