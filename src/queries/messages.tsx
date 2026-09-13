@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, NDKEvent, type NDKUser, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { messageKeys } from './queryKeyFactory'
 import { looksLikeJSON, extractActualContent } from '@/lib/utils/message-content'
 import { toast } from 'sonner'
@@ -138,7 +139,9 @@ export function useConversationsList() {
 				{ kinds: MESSAGE_KINDS, '#p': [currentUserPubkey] },
 			]
 
-			const eventsSet = await ndk.fetchEvents(filters)
+			// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+			// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+			const eventsSet = await fetchNdkEventSet(applesauceIo, ndk, filters)
 			const events = Array.from(eventsSet)
 
 			const conversationsMap = new Map<string, { otherUser: NDKUser; lastEvent: NDKEvent }>()
@@ -200,7 +203,9 @@ export function useConversationMessages(otherUserPubkey: string | undefined) {
 				{ kinds: MESSAGE_KINDS, authors: [otherUserPubkey], '#p': [currentUserPubkey] },
 			]
 
-			const eventsSet = await ndk.fetchEvents(filters)
+			// Relay reads go through the applesauceIo seam (ADR-0002); raw events are
+			// verified and rehydrated into NDKEvents so consumer shapes stay identical.
+			const eventsSet = await fetchNdkEventSet(applesauceIo, ndk, filters)
 			const events = Array.from(eventsSet)
 			return events.sort((a: NDKEvent, b: NDKEvent) => (a.created_at ?? 0) - (b.created_at ?? 0)) // Ascending for chat display
 		},

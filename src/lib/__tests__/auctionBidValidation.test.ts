@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { computeBidFloor, validateBid } from '../auction/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'

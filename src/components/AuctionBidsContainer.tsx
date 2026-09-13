@@ -1,6 +1,6 @@
 // src/components/auction/LatestBidsContainer.tsx
 import { getBidAmount, getBidMint, useStreamingAuctionBids } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { cn } from '@/lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
 import { formatSats, getMintHostname } from '@/lib/wallet'

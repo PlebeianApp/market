@@ -2,6 +2,7 @@ import { defaultRelaysUrls, ZAP_RELAYS, type Stage } from '@/lib/constants'
 import { computeNdkConfig, resolveMainRelay, resolveZapRelays } from '@/lib/relay-policy'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
+import { runSignerTeardown, setSignerCapability } from '@/lib/nostr/signer-registry'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
@@ -711,6 +712,20 @@ export const ndkActions = {
 		if (state.ndk) state.ndk.signer = signer
 		if (state.zapNdk) state.zapNdk.signer = signer
 		ndkStore.setState((s) => ({ ...s, signer }))
+
+		// Clear the attached signer capability in lockstep with the NDK
+		// signer. `setSigner(undefined)` is the single chokepoint through
+		// which EVERY detach path runs (authActions.logout, removeSigner,
+		// NIP-60 reset) — so clearing the registry HERE guarantees
+		// `io-applesauce.sign()` fails closed again no matter who removed
+		// the signer, not just authActions.logout.
+		if (!signer) {
+			setSignerCapability(undefined)
+			// Also tear down the NIP-46 signer session (closes its REQ
+			// subscription) so every detach path stops the leak, not just
+			// authActions.logout.
+			void runSignerTeardown()
+		}
 	},
 
 	/**

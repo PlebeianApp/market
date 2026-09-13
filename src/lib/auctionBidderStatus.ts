@@ -4,7 +4,7 @@ import {
 	getAuctionWindowValidBids,
 	type AuctionBidChainGroup,
 } from '@/lib/auctionSettlement'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 
 export type AuctionBidderStatusKind = 'winning' | 'outbid' | 'won' | 'was_outbid'
 

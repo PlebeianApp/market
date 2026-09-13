@@ -1,4 +1,4 @@
-import { NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@/lib/nostr/ndk-events'
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import {

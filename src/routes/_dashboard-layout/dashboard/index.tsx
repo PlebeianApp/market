@@ -7,7 +7,7 @@ import { useConversationsList } from '@/queries/messages'
 import { useOrders } from '@/queries/orders'
 import { useProductsByPubkey } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 

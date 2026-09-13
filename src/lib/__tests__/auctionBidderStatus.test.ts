@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getAuctionBidderStatus } from '@/lib/auctionBidderStatus'
 
 const makeAuction = (params: { id?: string; startAt?: number; endAt?: number }): NDKEvent =>

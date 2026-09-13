@@ -110,7 +110,7 @@ describe('LiveChatPanel hooks order', () => {
 				['d', 'auction:test'],
 				['starts', String(Math.floor(Date.now() / 1000) + 3600)],
 			],
-		} as import('@nostr-dev-kit/ndk').NDKEvent
+		} as import('@/lib/nostr/ndk-events').NDKEvent
 
 		const { LiveChatPanel } = await import('@/components/LiveChatPanel')
 

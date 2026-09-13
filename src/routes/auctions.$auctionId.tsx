@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
 import { getAuctionSettlementGraceSeconds, nip60Actions } from '@/lib/stores/nip60'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
@@ -642,7 +642,7 @@ function AuctionDetailRoute() {
 	useEffect(() => {
 		const checkIfOwnAuction = async () => {
 			if (!auction) return
-			const user = await ndkActions.getUser()
+			const user = await applesauceIo.getUser()
 			if (!user?.pubkey) return
 			setCurrentUserPubkey(user.pubkey)
 			setIsOwnAuction(user.pubkey === auction.pubkey)

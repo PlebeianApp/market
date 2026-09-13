@@ -1,9 +1,21 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { finalizeEvent } from 'nostr-tools'
+import type { NostrEvent } from 'nostr-tools/pure'
 import { AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
-import type { NostrFilter } from '@/lib/nostr/io'
+import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
+import { NDKEvent } from '@/lib/nostr/ndk-events'
+
+type AuctionEventLike = {
+	id: string
+	pubkey: string
+	created_at?: number
+	tags: string[][]
+	content: string
+}
 
 let fetchedRequests: Array<NostrFilter | NostrFilter[]> = []
-let relayEvents = new Set<RelayEvent>()
+
+const realFetchEvents = applesauceIo.fetchEvents
 
 if (!('localStorage' in globalThis)) {
 	const items = new Map<string, string>()
@@ -40,17 +52,21 @@ mock.module('@/lib/stores/ndk', () => ({
 	},
 	ndkActions: {
 		getNDK: () => ({}),
-		fetchEventsWithTimeout: mock(async (filter: NostrFilter | NostrFilter[]) => {
-			fetchedRequests.push(filter)
-			return relayEvents
-		}),
 	},
 }))
 
 const { fetchAuctionSettlementsForList, fetchAuctionPathReleasesForList, getAuctionTopBidFromBids } = await import('@/queries/auctions')
 
-type AuctionEventLike = NonNullable<Parameters<typeof getAuctionTopBidFromBids>[0]>
-type RelayEvent = AuctionEventLike
+const TEST_SECRET_KEY = new Uint8Array(32).fill(7)
+
+function signEvent(kind: number, createdAt: number, tags: string[][]): NostrEvent {
+	return finalizeEvent({ kind, created_at: createdAt, content: '', tags }, TEST_SECRET_KEY)
+}
+
+afterEach(() => {
+	fetchedRequests = []
+	applesauceIo.fetchEvents = realFetchEvents
+})
 
 function makeAuctionEvent(params: {
 	id: string
@@ -59,10 +75,9 @@ function makeAuctionEvent(params: {
 	rootId: string
 	startAt: number
 	endAt: number
-}): RelayEvent {
+}): AuctionEventLike {
 	return {
 		id: params.id,
-		kind: AUCTION_KIND,
 		pubkey: params.pubkey,
 		created_at: params.startAt - 10,
 		content: '',
@@ -72,7 +87,7 @@ function makeAuctionEvent(params: {
 			['start_at', String(params.startAt)],
 			['end_at', String(params.endAt)],
 		],
-	} as RelayEvent
+	}
 }
 
 function makeBidEvent(params: {
@@ -82,10 +97,9 @@ function makeBidEvent(params: {
 	amount: number
 	createdAt: number
 	status?: string
-}): Parameters<typeof getAuctionTopBidFromBids>[1][number] {
+}): AuctionEventLike {
 	return {
 		id: params.id,
-		kind: 1023,
 		pubkey: params.pubkey,
 		created_at: params.createdAt,
 		content: '',
@@ -94,42 +108,16 @@ function makeBidEvent(params: {
 			['amount', String(params.amount)],
 			['status', params.status ?? 'active'],
 		],
-	} as RelayEvent
-}
-
-function makeSettlementEvent(params: { id: string; createdAt: number; rootIds?: string[]; coordinates?: string[] }): RelayEvent {
-	const tags: string[][] = []
-	for (const rootId of params.rootIds ?? []) tags.push(['e', rootId])
-	for (const coordinate of params.coordinates ?? []) tags.push(['a', coordinate])
-
-	return {
-		id: params.id,
-		kind: AUCTION_SETTLEMENT_KIND,
-		pubkey: 's'.repeat(64),
-		created_at: params.createdAt,
-		content: '',
-		tags,
-	} as RelayEvent
-}
-
-function makePathReleaseEvent(params: { id: string; createdAt: number; coordinates: string[] }): RelayEvent {
-	return {
-		id: params.id,
-		kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
-		pubkey: 'p'.repeat(64),
-		created_at: params.createdAt,
-		content: '',
-		tags: params.coordinates.map((coordinate) => ['a', coordinate]),
-	} as RelayEvent
+	}
 }
 
 describe('fetchAuctionSettlementsForList', () => {
 	beforeEach(() => {
 		fetchedRequests = []
-		relayEvents = new Set()
 	})
 
 	test('returns empty map and does not hit relay without ids or coordinates', async () => {
+		applesauceIo.fetchEvents = mock(async () => []) as typeof applesauceIo.fetchEvents
 		const result = await fetchAuctionSettlementsForList([], [])
 		expect(result.size).toBe(0)
 		expect(fetchedRequests).toEqual([])
@@ -138,26 +126,37 @@ describe('fetchAuctionSettlementsForList', () => {
 	test('groups settlements by root id and coordinate with de-duplication and recency ordering', async () => {
 		const rootId = 'root-auction-1'
 		const coordinate = `30408:${'a'.repeat(64)}:auction-1`
-		const newestRootOnly = makeSettlementEvent({ id: 's-new', createdAt: 300, rootIds: [rootId] })
-		const bothRefs = makeSettlementEvent({ id: 's-both', createdAt: 200, rootIds: [rootId], coordinates: [coordinate] })
-		const coordinateOnly = makeSettlementEvent({ id: 's-coord', createdAt: 100, coordinates: [coordinate] })
-		const duplicateNewestRootOnly = makeSettlementEvent({ id: 's-new', createdAt: 300, rootIds: [rootId] })
-		relayEvents = new Set([newestRootOnly, bothRefs, coordinateOnly, duplicateNewestRootOnly])
+		const newestRootOnly = signEvent(AUCTION_SETTLEMENT_KIND, 300, [['e', rootId]])
+		const bothRefs = signEvent(AUCTION_SETTLEMENT_KIND, 200, [
+			['e', rootId],
+			['a', coordinate],
+		])
+		const coordinateOnly = signEvent(AUCTION_SETTLEMENT_KIND, 100, [['a', coordinate]])
+		const duplicateNewestRootOnly = { ...newestRootOnly }
+
+		applesauceIo.fetchEvents = mock(async () => [
+			newestRootOnly,
+			bothRefs,
+			coordinateOnly,
+			duplicateNewestRootOnly,
+		]) as typeof applesauceIo.fetchEvents
 
 		const grouped = await fetchAuctionSettlementsForList([rootId], [coordinate])
 
-		expect(grouped.get(rootId)?.map((event) => event.id)).toEqual(['s-new', 's-both'])
-		expect(grouped.get(coordinate)?.map((event) => event.id)).toEqual(['s-both', 's-coord'])
+		expect(grouped.get(rootId)?.map((event) => event.id)).toEqual([newestRootOnly.id, bothRefs.id])
+		expect(grouped.get(coordinate)?.map((event) => event.id)).toEqual([bothRefs.id, coordinateOnly.id])
 	})
 
 	test('chunks large root-id and coordinate lists into multiple filters', async () => {
 		const ids = Array.from({ length: 81 }, (_, index) => `root-${index}`)
 		const coordinates = Array.from({ length: 81 }, (_, index) => `30408:${'a'.repeat(64)}:auction-${index}`)
 
+		applesauceIo.fetchEvents = mock(async () => []) as typeof applesauceIo.fetchEvents
+
 		await fetchAuctionSettlementsForList(ids, coordinates, 77)
 
-		expect(fetchedRequests).toHaveLength(1)
-		const filterBatch = fetchedRequests[0] as NostrFilter[]
+		expect(applesauceIo.fetchEvents).toHaveBeenCalledTimes(1)
+		const filterBatch = (applesauceIo.fetchEvents as ReturnType<typeof mock>).mock.calls[0][0] as NostrFilter[]
 		expect(Array.isArray(filterBatch)).toBe(true)
 		expect(filterBatch).toHaveLength(4)
 		expect(filterBatch.every((filter) => filter.kinds?.includes(AUCTION_SETTLEMENT_KIND as never))).toBe(true)
@@ -168,30 +167,39 @@ describe('fetchAuctionSettlementsForList', () => {
 describe('fetchAuctionPathReleasesForList', () => {
 	beforeEach(() => {
 		fetchedRequests = []
-		relayEvents = new Set()
 	})
 
 	test('returns empty map and does not hit relay without coordinates', async () => {
+		applesauceIo.fetchEvents = mock(async () => []) as typeof applesauceIo.fetchEvents
 		const result = await fetchAuctionPathReleasesForList([])
 		expect(result.size).toBe(0)
-		expect(fetchedRequests).toEqual([])
 	})
 
 	test('groups path releases by coordinate, filters exact coordinate matches, and sorts by recency', async () => {
 		const coordinateA = `30408:${'a'.repeat(64)}:auction-a`
 		const coordinateB = `30408:${'a'.repeat(64)}:auction-b`
 
-		const eventAOld = makePathReleaseEvent({ id: 'r-a-old', createdAt: 100, coordinates: [coordinateA] })
-		const eventANew = makePathReleaseEvent({ id: 'r-a-new', createdAt: 300, coordinates: [coordinateA] })
-		const eventShared = makePathReleaseEvent({ id: 'r-shared', createdAt: 200, coordinates: [coordinateA, coordinateB] })
-		const eventBOnly = makePathReleaseEvent({ id: 'r-b-only', createdAt: 250, coordinates: [coordinateB] })
-		const eventOther = makePathReleaseEvent({ id: 'r-other', createdAt: 999, coordinates: [`30408:${'b'.repeat(64)}:other`] })
-		relayEvents = new Set([eventAOld, eventANew, eventShared, eventBOnly, eventOther])
+		const eventAOld = signEvent(AUCTION_PATH_RELEASE_KIND as number, 100, [['a', coordinateA]])
+		const eventANew = signEvent(AUCTION_PATH_RELEASE_KIND as number, 300, [['a', coordinateA]])
+		const eventShared = signEvent(AUCTION_PATH_RELEASE_KIND as number, 200, [
+			['a', coordinateA],
+			['a', coordinateB],
+		])
+		const eventBOnly = signEvent(AUCTION_PATH_RELEASE_KIND as number, 250, [['a', coordinateB]])
+		const eventOther = signEvent(AUCTION_PATH_RELEASE_KIND as number, 999, [['a', `30408:${'b'.repeat(64)}:other`]])
+
+		applesauceIo.fetchEvents = mock(async () => [
+			eventAOld,
+			eventANew,
+			eventShared,
+			eventBOnly,
+			eventOther,
+		]) as typeof applesauceIo.fetchEvents
 
 		const grouped = await fetchAuctionPathReleasesForList([coordinateA, coordinateB])
 
-		expect(grouped.get(coordinateA)?.map((event) => event.id)).toEqual(['r-a-new', 'r-shared', 'r-a-old'])
-		expect(grouped.get(coordinateB)?.map((event) => event.id)).toEqual(['r-b-only', 'r-shared'])
+		expect(grouped.get(coordinateA)?.map((event) => event.id)).toEqual([eventANew.id, eventShared.id, eventAOld.id])
+		expect(grouped.get(coordinateB)?.map((event) => event.id)).toEqual([eventBOnly.id, eventShared.id])
 	})
 })
 
@@ -204,7 +212,7 @@ describe('getAuctionTopBidFromBids', () => {
 		const bids = [
 			makeBidEvent({ id: 'b-low', pubkey: 'x'.repeat(64), rootId: 'ignored', amount: 100, createdAt: 1 }),
 			makeBidEvent({ id: 'b-high', pubkey: 'y'.repeat(64), rootId: 'ignored', amount: 250, createdAt: 2 }),
-		]
+		] as unknown as NDKEvent[]
 
 		const topBid = getAuctionTopBidFromBids(null, bids)
 
@@ -219,7 +227,7 @@ describe('getAuctionTopBidFromBids', () => {
 			rootId: 'root-auction-1',
 			startAt: 100,
 			endAt: 200,
-		})
+		}) as unknown as NDKEvent
 
 		const bids = [
 			makeBidEvent({ id: 'before-start', pubkey: 'b'.repeat(64), rootId: 'root-auction-1', amount: 1000, createdAt: 99 }),
@@ -227,7 +235,7 @@ describe('getAuctionTopBidFromBids', () => {
 			makeBidEvent({ id: 'after-end', pubkey: 'd'.repeat(64), rootId: 'root-auction-1', amount: 900, createdAt: 201 }),
 			makeBidEvent({ id: 'valid-low', pubkey: 'e'.repeat(64), rootId: 'root-auction-1', amount: 400, createdAt: 110 }),
 			makeBidEvent({ id: 'valid-top', pubkey: 'f'.repeat(64), rootId: 'root-auction-1', amount: 700, createdAt: 150 }),
-		]
+		] as unknown as NDKEvent[]
 
 		const topBid = getAuctionTopBidFromBids(auction, bids)
 

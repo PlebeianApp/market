@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
-import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 
 export interface BugReport {
 	id: string
@@ -36,9 +36,10 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		...(until && { until }),
 	}
 
-	// Query the app relay explicitly so bug report history stays on the standard relay.
-	const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
-	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
+	// Query the app relay explicitly (seam relayUrls pin, ADR-0002) so bug
+	// report history stays on the standard relay. Raw events are verified and
+	// rehydrated into NDKEvents so consumer shapes stay identical.
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { relayUrls: [relayUrl] })
 	const bugReports = Array.from(events)
 		.map(
 			(event): BugReport => ({

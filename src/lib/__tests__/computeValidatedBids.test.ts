@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'

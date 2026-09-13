@@ -52,3 +52,6 @@ contextvm/
 
 # Encrypted test wallet material
 scripts/encrypted_test_wallet.json
+
+# auto-generated opencode session handover (do not commit)
+HANDOVER.md

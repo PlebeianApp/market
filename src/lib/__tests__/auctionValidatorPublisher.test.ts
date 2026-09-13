@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'

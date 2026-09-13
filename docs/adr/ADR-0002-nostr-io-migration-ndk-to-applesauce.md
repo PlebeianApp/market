@@ -229,6 +229,57 @@ Negative / tradeoffs:
   can carry relay-targeting options; Wave A4 and Wave C define the publish
   rollout boundaries.
 
+## Wave 1 addendum (PR #1262) — explicit behavior deltas
+
+Wave 1 flips the read-path query modules from direct @nostr-dev-kit usage to
+the applesauceIo seam. As a result the following read-topology and validation
+behaviors are now explicit and MUST be treated as canonical until a later wave
+changes them:
+
+### F3 — outbox-model routing is intentionally terminated for migrated reads
+
+Production NDK is constructed with `enableOutboxModel: true`, so legacy
+`ndk.fetchEvents` calls on author-scoped filters could route to an author's
+NIP-65 write relays discovered via the outbox model. Every wave-1 read pins to
+the configured relay set (`ndkStore.state.explicitRelayUrls`, with zap reads
+pinning to `ZAP_RELAYS` union `explicitRelayUrls`). Outbox discovery is
+therefore NOT applied to migrated reads. This is aligned with ADR-0002's
+leak-avoidance motivation, but it is a real read-topology change:
+relay-result completeness for third-party reads (user relay lists, message
+`#p` reads, author lookups) can differ from the old outbox-routed behavior.
+
+### F4 — invalid-signature events are dropped at the seam
+
+`rehydrateVerifiedNdkEvent` runs `verifyEvent` on every raw event and discards
+those failing. NDK's default subscription path did not verify signatures by
+default, so bad-signature events that previously flowed into query data are
+now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
+validated"). The failure is silent (a relay serving malformed data now reads
+as absence); later waves should add a debug-level drop counter for
+observability.
+
+### F5 — live-subscribe is disabled until the main relay is known
+
+`useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` return
+without subscribing when `getMainRelay()` is undefined. Previously
+`getAppRelaySet()` returned undefined in that state and `ndk.subscribe` ran
+pool-wide. In the not-yet-configured window (staging, first paint before config
+load) live invalidation is now off where it previously worked on all pool
+relays. Fetch parity is preserved (both old and new fetch paths return null in
+that window); only live invalidation regresses for the edge case, as a
+conscious pinned-relay discipline.
+
+### Deterministic latest-wins for replaceable event reads
+
+Conflicting `created_at` versions of a replaceable/parameterized event resolve
+to the highest `created_at`, independent of relay-arrival order. On an equal
+`created_at` tie the lexicographically lowest event id wins (direct string
+comparison, not locale collation). `fetchNdkEventSet` dedupes on the NDK
+coordinate key (`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and
+keeps the latest-wins copy; `fetchNdkEvent` / `fetchLatestNdkEvent` select the
+single winner with the same `created_at DESC, id ASC` ordering. kind-0 `lud16`
+selection (zaps) routes through `fetchLatestNdkEvent` with the pinned relay set.
+
 ## References
 
 - Upstream epic: `PlebeianApp/market#1005`

@@ -1,4 +1,4 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NDKSigner } from '@/lib/nostr/ndk-events'
 import type { Event } from 'nostr-tools'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {

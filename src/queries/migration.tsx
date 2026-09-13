@@ -1,7 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { configStore } from '@/lib/stores/config'
 import { migrationKeys } from '@/queries/queryKeyFactory'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchLatestNdkEvent, fetchNdkEventSet, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions } from '@tanstack/react-query'
 
 export { migrationKeys }
@@ -13,24 +14,13 @@ export const fetchUserRelayList = async (userPubkey: string): Promise<string[]> 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents({
+	// Conflicting replaceable versions resolve deterministically to the newest
+	// created_at (fetchLatestNdkEvent — NDK dedup-key parity, relay-arrival
+	// order must not decide which copy wins).
+	const mostRecentEvent = await fetchLatestNdkEvent(applesauceIo, ndk, {
 		kinds: [10002],
 		authors: [userPubkey],
 		limit: 1,
-	})
-
-	if (events.size === 0) {
-		return []
-	}
-
-	// Get the most recent relay list event
-	let mostRecentEvent: NDKEvent | undefined
-	let mostRecentTimestamp = 0
-	events.forEach((event) => {
-		if (event.created_at && event.created_at > mostRecentTimestamp) {
-			mostRecentEvent = event
-			mostRecentTimestamp = event.created_at
-		}
 	})
 
 	if (!mostRecentEvent) {
@@ -109,7 +99,7 @@ export const fetchNip15Products = async (userPubkey: string): Promise<NDKEvent[]
 	}
 
 	try {
-		const events = await ndk.fetchEvents(filter)
+		const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 		const eventsArray = Array.from(events)
 		return eventsArray
 	} catch (error) {
@@ -145,7 +135,7 @@ export const fetchMigratedEvents = async (userPubkey: string): Promise<Set<strin
 	}
 
 	try {
-		const events = await ndk.fetchEvents(filter)
+		const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 		const migratedOriginalIds = new Set<string>()
 
 		events.forEach((event) => {

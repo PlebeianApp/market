@@ -1,8 +1,8 @@
 import { CollectionImageTagSchema, CollectionSummaryTagSchema, CollectionTitleTagSchema } from '@/lib/schemas/productCollection.ts'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
-import type { NDKFilter, NDKKind } from '@nostr-dev-kit/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
+import { fetchNdkEvent, fetchNdkEventSet, ndkFilterFromId, NDKEvent, NDKKind, type NDKFilter } from '@/lib/nostr/ndk-events'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
@@ -105,7 +105,7 @@ export const fetchCollections = async () => {
 	}
 
 	// Use timeout helper to prevent hanging if relays don't respond
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted collections and authors, then filter out locally-deleted collections
@@ -140,7 +140,7 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	}
 
 	// Use timeout helper to prevent hanging if relays don't respond
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted collections (author check not needed since we're querying by author)
@@ -172,7 +172,7 @@ export const fetchCollection = async (dTag: string) => {
 		'#d': [dTag],
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await fetchNdkEventSet(applesauceIo, ndk, filter)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {
@@ -195,7 +195,7 @@ export const fetchCollectionByEventId = async (id: string) => {
 	}
 	if (!id) return null
 
-	const event = await ndk.fetchEvent({
+	const event = await fetchNdkEvent(applesauceIo, ndk, {
 		ids: [id],
 	})
 
@@ -221,7 +221,7 @@ export const fetchCollectionByATag = async (pubkey: string, dTag: string) => {
 	if (!pubkey || !dTag) return null
 
 	const naddr = naddrFromAddress(30405, pubkey, dTag)
-	return await ndk.fetchEvent(naddr)
+	return await fetchNdkEvent(applesauceIo, ndk, ndkFilterFromId(naddr))
 }
 
 /**

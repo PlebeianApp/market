@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
+import { buildNostrConnectUri, isMatchingConnectSecret } from '@/lib/nostr/nostr-connect-uri'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
@@ -105,20 +106,20 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		if (!localPubkey || !config) return null
 		if (isCustomRelay && !customRelay) return null
 
-		const params = new URLSearchParams()
-		params.set('relay', activeRelay)
-		params.set(
-			'metadata',
-			JSON.stringify({
+		// #807 (ADR-0008 B-4): the nostrconnect URI must carry the secret via the
+		// spec `secret` param — buildNostrConnectUri fails closed (throws) if a
+		// secret is ever missing / attempts a legacy `token`-only output.
+		return buildNostrConnectUri({
+			clientPubkey: localPubkey,
+			relay: activeRelay,
+			secret: tempSecret,
+			metadata: {
 				name: 'Plebeian.market',
 				description: 'Connect with Plebeian.market',
 				url: window.location.origin,
 				icons: [],
-			}),
-		)
-		params.set('token', tempSecret)
-
-		return `nostrconnect://${localPubkey}?` + params.toString()
+			},
+		})
 	}, [localPubkey, config, tempSecret, activeRelay, isCustomRelay, customRelay])
 
 	const constructBunkerUrl = useCallback(
@@ -167,7 +168,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				}
 
 				setConnectionStatus('connected')
-				await authActions.loginWithNip46(bunkerUrl, localSigner)
+				await authActions.loginWithNip46(bunkerUrl, localSigner.privateKey)
 
 				triggerSuccess()
 			} catch (err) {
@@ -249,7 +250,10 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							processedRequestIds.add(request.id)
 						}
 
-						if (request.params && request.params.token === tempSecret) {
+						// #807 (ADR-0008 B-4): the connect request must echo the secret via the
+						// spec `secret` param. A legacy `token`-only request is a mismatch
+						// (fail closed) — isMatchingConnectSecret reads ONLY `secret`.
+						if (isMatchingConnectSecret(request.params, tempSecret)) {
 							const response = {
 								id: request.id,
 								result: tempSecret,
