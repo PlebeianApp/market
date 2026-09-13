@@ -362,6 +362,22 @@ describe('getMintKeyset', () => {
 			/11cafebabe, expected 00deadbeef/,
 		)
 	})
+
+	test('rejects a keyset whose unit is not sat (collateral is SAT-denominated — A4)', async () => {
+		// A same-mint keyset for another unit (e.g. usd) shares the id namespace
+		// but MUST NOT be used to DLEQ-verify auction collateral: a usd-denominated
+		// proof would otherwise verify "honestly" against its own keys and then be
+		// counted as sat collateral (the auction's amount/unit would be a lie).
+		// `unit` is part of a keyset's identity, not a display label.
+		const customRequest = async () => ({ keysets: [{ id: '00deadbeef', unit: 'usd', keys: { 1: GENERATOR_HEX } }] })
+		await expect(getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })).rejects.toThrow(/unit/)
+	})
+
+	test('returns a sat-unit keyset (positive control for the unit binding)', async () => {
+		const customRequest = async () => ({ keysets: [{ id: '00deadbeef', unit: 'sat', keys: { 1: GENERATOR_HEX } }] })
+		const result = await getMintKeyset('https://mint.example.com', '00deadbeef', { customRequest })
+		expect(result.unit).toBe('sat')
+	})
 })
 
 // ---------- buildDleqProofs -------------------------------------------------

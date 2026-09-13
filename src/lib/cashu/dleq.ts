@@ -265,7 +265,8 @@ export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Ma
  * error the caller must surface, never a value.
  *
  * @returns The mint's keyset, asserted to match the requested `keysetId`.
- * @throws when the mint returns no keyset, or a keyset with a different `id`.
+ * @throws when the mint returns no keyset, or a keyset with a different `id`,
+ *   or a keyset whose `unit` is not `sat`.
  */
 export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: GetMintKeysetOptions): Promise<MintKeys> => {
 	const mint = new CashuMint(mintUrl, opts?.customRequest as never)
@@ -276,6 +277,19 @@ export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: Ge
 	}
 	if (keyset.id !== keysetId) {
 		throw new Error(`getMintKeyset: mint ${mintUrl} returned keyset ${keyset.id}, expected ${keysetId}`)
+	}
+	// ADR-0011 review A4 (PR #1280, src/lib/cashu/dleq.ts:280): bind the DLEQ
+	// collateral to the SAT unit. `unit` is part of a keyset's identity, not a
+	// display label — the same mint can publish keysets for several units that
+	// share an id namespace, and the signed keys of, say, a usd keyset would
+	// DLEQ-verify an equally-denominated non-sat proof as "honest". Auction
+	// amounts, `locktime`/reserve math and the NUT-7 poll are all SAT-denominated,
+	// so a proof verified against a non-sat keyset would be counted as sat
+	// collateral. Fail loudly, exactly as for an id mismatch.
+	if (keyset.unit !== 'sat') {
+		throw new Error(
+			`getMintKeyset: mint ${mintUrl} returned keyset ${keysetId} in unit '${keyset.unit}', expected 'sat' — refusing to DLEQ-verify auction collateral against a non-sat keyset`,
+		)
 	}
 	return keyset
 }
