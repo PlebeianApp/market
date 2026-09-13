@@ -384,6 +384,12 @@ export const authActions = {
 		// Clear the signer capability in lockstep with the NDK signer so the
 		// io-applesauce `sign()` port fails closed again after logout.
 		setSignerCapability(undefined)
+		// Restore the CENTRALIZED per-user onboarding teardown (active NWC
+		// wallet URI + NIP-60 wallet state) — without it user A's wallet
+		// state bleeds into the unauthenticated session and the next login's
+		// onboarding window. Runs before the NDK-availability guard below:
+		// teardown must not depend on `ndk` still being initialized.
+		ndkActions.clearSignerOnboarding()
 		if (!ndk) return
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)

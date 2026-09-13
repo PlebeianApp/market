@@ -28,6 +28,7 @@ const mockNdkActions = {
 	setSigner: mock(() => {}),
 	removeSigner: mock(() => {}),
 	runSignerOnboarding: mock(() => {}),
+	clearSignerOnboarding: mock(() => {}),
 }
 const mockCartActions = {
 	reconcileRemoteCartForUser: mock(() => {}),
@@ -98,6 +99,7 @@ beforeEach(() => {
 	mockConnectBunker.mockClear()
 	mockNdkActions.setSigner.mockClear()
 	mockNdkActions.removeSigner.mockClear()
+	mockNdkActions.clearSignerOnboarding.mockClear()
 	mockCartActions.clear.mockClear()
 	setSignerCapability(undefined)
 	setSignerTeardown(undefined)
@@ -255,6 +257,28 @@ describe('logout clears the vault (lock-on-logout)', () => {
 
 		expect(hasVaultedSession()).toBe(false)
 		expect(memoryStorage.has(VAULT_STORAGE_KEY)).toBe(false)
+	})
+
+	test('logout restores the centralized per-user onboarding teardown (wallet state must not bleed)', async () => {
+		// Review 5654374915 item 2 + review 5191403562 B: the NDK store's
+		// teardown counterpart (activeNwcWalletUri + NIP-60 wallet state) has
+		// to run on logout, or user A's wallet state survives into the
+		// unauthenticated session and the next login's onboarding window.
+		await seedVault('nbunksec1stored', 'pass')
+
+		authActions.logout()
+
+		expect(mockNdkActions.clearSignerOnboarding).toHaveBeenCalledTimes(1)
+	})
+
+	test('logout tears the onboarding state down even when NDK is unavailable', () => {
+		// The signer-teardown chokepoint must not be skipped by the
+		// `if (!ndk) return` guard below it.
+		mockNdkActions.getNDK.mockImplementationOnce(() => null as never)
+
+		authActions.logout()
+
+		expect(mockNdkActions.clearSignerOnboarding).toHaveBeenCalledTimes(1)
 	})
 })
 

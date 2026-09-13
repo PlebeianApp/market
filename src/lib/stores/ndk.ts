@@ -768,9 +768,10 @@ export const ndkActions = {
 	},
 
 	/**
-	 * Tear-down counterpart to `runSignerOnboarding`. Auth logout calls
-	 * this after `setSigner(undefined)` so the store doesn't carry
-	 * stale NWC / NIP-60 state into the unauthenticated session.
+	 * Tear-down counterpart to `runSignerOnboarding`. `authActions.logout`
+	 * calls this on every logout path (before its NDK-availability guard) so
+	 * the store doesn't carry stale NWC / NIP-60 state into the
+	 * unauthenticated session or the next user's onboarding window.
 	 */
 	clearSignerOnboarding: (): void => {
 		ndkActions.setActiveNwcWalletUri(null)
