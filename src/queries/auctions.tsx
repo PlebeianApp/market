@@ -31,7 +31,6 @@ import { fetchNdkEvent, fetchNdkEventSet, rehydrateVerifiedNdkEvent, NDKEvent, t
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
