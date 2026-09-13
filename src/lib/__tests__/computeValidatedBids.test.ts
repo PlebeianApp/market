@@ -847,3 +847,120 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 })
+
+// =============================================================================
+// M5 (A3) — collateral must be bound to ONE bidder across authors
+//
+// Review A3 (PR #1280 discussion_r3999446835): scoping the duplicate-collateral
+// check per Nostr pubkey was insufficient. DLEQ authenticates the Cashu proof
+// against the mint keyset — it says nothing about OWNERSHIP by the event author
+// — and the `lock_secret` / `proof_y` / `C` values are public in whichever
+// event first published them. A second author can therefore republish another
+// bidder's collateral under its own (higher) amount, and both bids would be
+// treated as authoritative for the same coins. These tests extend the M5
+// material above (same fixtures, no duplication).
+// =============================================================================
+
+const OTHER_BIDDER_PK = '9'.repeat(64)
+
+describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across authors', () => {
+	test("a DIFFERENT author republishing another bid's locked proof is invalid (collateral is bound to one bidder)", () => {
+		const auction = buildAuction()
+		const bid1 = buildBid(auction, { id: 'a'.repeat(64), amount: 5_000, createdAt: 1_450 })
+		// bid2 republishes bid1's WHOLE locked proof (`lock_secret` and the
+		// `proof_y` it hashes to are public in bid1's event) under a new author
+		// and a HIGHER amount. `proof_y` cannot be forged independently: validateBid
+		// binds each `proofY` to its own `lockSecret`, so a same-Y/different-secret
+		// bid is already structurally invalid — the reachable cross-author attack
+		// is copying the secret (and therefore the Y, and therefore the coins).
+		// A distinct DLEQ C keeps the legacy C dedup from being the discriminator.
+		const bid2 = buildBid(auction, {
+			id: 'b'.repeat(64),
+			bidderPubkey: OTHER_BIDDER_PK,
+			amount: 6_000,
+			createdAt: 1_600,
+			lockSecrets: bid1.lockSecrets,
+			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: '02' + '7'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		expect(bid2.bidderPubkey).not.toBe(bid1.bidderPubkey)
+		expect(bid2.lockSecrets).toEqual(bid1.lockSecrets)
+		expect(bid2.proofYs).toEqual(bid1.proofYs)
+		expect(bid2.dleqProofs?.[0]?.C).not.toBe(bid1.dleqProofs?.[0]?.C)
+
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+
+		const both = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		expect(both.invalidBids.map((b) => b.id)).toContain(bid2.id)
+		expect(both.validBids.map((b) => b.id)).toEqual([bid1.id])
+		expect(both.canonicalWinner?.id).toBe(bid1.id)
+
+		// Non-vacuity — on its own, the SAME bid2 (same verdicts, same NUT-7)
+		// is a valid canonical winner, so the cross-author collateral collision
+		// is the sole reason it is rejected above.
+		const alone = computeValidatedBids({
+			auction,
+			bids: [bid2],
+			verdicts: verdicts.filter((v) => v.bidEventId === bid2.id),
+			nut7States: unspent([bid2]),
+		})
+		expect(alone.canonicalWinner?.id).toBe(bid2.id)
+	})
+
+	test("a DIFFERENT author reusing another bid's DLEQ `C` (fabricated collateral) is invalid", () => {
+		const auction = buildAuction()
+		const sharedC = '02' + 'c'.repeat(64)
+		const bid1 = buildBid(auction, {
+			id: 'c'.repeat(64),
+			amount: 5_000,
+			createdAt: 1_450,
+			dleqProofs: [{ id: '00deadbeef', amount: 5_000, C: sharedC, e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const bid2 = buildBid(auction, {
+			id: 'd'.repeat(64),
+			bidderPubkey: OTHER_BIDDER_PK,
+			amount: 6_000,
+			createdAt: 1_600,
+			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: sharedC, e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		// C is the sole shared value: distinct authors, secrets, Ys.
+		expect(bid2.lockSecrets).not.toEqual(bid1.lockSecrets)
+		expect(bid2.proofYs).not.toEqual(bid1.proofYs)
+		expect(bid2.dleqProofs?.[0]?.C).toBe(bid1.dleqProofs?.[0]?.C)
+
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+		const result = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		expect(result.validBids.map((b) => b.id)).toEqual([bid1.id])
+		expect(result.invalidBids.map((b) => b.id)).toContain(bid2.id)
+	})
+
+	test('positive control: different authors with fully DISTINCT collateral both stay valid', () => {
+		const auction = buildAuction()
+		const bid1 = buildBid(auction, { id: 'e'.repeat(64), amount: 5_000, createdAt: 1_450 })
+		const bid2 = buildBid(auction, {
+			id: 'f'.repeat(64),
+			bidderPubkey: OTHER_BIDDER_PK,
+			amount: 6_000,
+			createdAt: 1_600,
+			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: '02' + '8'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
+		})
+		const verdicts = [
+			buildVerdict(bid1, { validatorPubkey: V1 }),
+			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
+			buildVerdict(bid2, { validatorPubkey: V1 }),
+			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
+		]
+		const result = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		expect(result.invalidBids).toHaveLength(0)
+		expect(result.validBids.map((b) => b.id).sort()).toEqual([bid1.id, bid2.id].sort())
+	})
+})
