@@ -57,3 +57,19 @@ describe('rehydrate honours the NIP-46 RPC deadline (gap 1)', () => {
 		expect(pool.opened()).toBe(0)
 	})
 })
+
+describe('rehydrate supplies a transport when none is injected', () => {
+	test('restore builds the shared strict-bind pool instead of throwing "Missing subscriptionMethod"', async () => {
+		// The browser restore lane injects nothing: `options.pool` is undefined
+		// there. NostrConnectSigner's constructor throws
+		// 'Missing subscriptionMethod…' unless a pool (or a static class
+		// fallback) is supplied, so the rehydrate lane MUST build the same
+		// strict-bind pool a fresh login uses — otherwise the unlock prompt can
+		// never complete in production (found by the e2e unlock spec).
+		//
+		// With a real pool the connect RPC races the deadline: the assertion is
+		// that the failure is the DEADLINE (proving a transport exists), not the
+		// constructor's missing-transport error.
+		await expect(rehydrateNostrConnectSession(NBUNKSEC, { rpcTimeoutMs: 25 })).rejects.toThrow(Nip46RpcTimeoutError)
+	})
+})

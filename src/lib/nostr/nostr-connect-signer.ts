@@ -98,6 +98,20 @@ function defaultPool(): NostrPool {
 }
 
 /**
+ * The shared relay pool behind the strict-bind gate — the transport every
+ * NIP-46 lane uses when no pool is injected (tests inject a fake one).
+ *
+ * `NostrConnectSigner`'s constructor throws "Missing subscriptionMethod" when
+ * neither `pool` nor `subscriptionMethod` is supplied and no static fallback
+ * is set, so EVERY lane must pass this — including vault rehydration, which
+ * previously forwarded `pool: undefined` and therefore could never connect on
+ * restore.
+ */
+export function strictBindPoolFor(clientSigner: PrivateKeySigner, injected?: NostrPool): NostrPool {
+	return strictBindPool(clientSigner, injected ?? defaultPool())
+}
+
+/**
  * Classify an inbound kind-24133 event during the unbound phase: is it a bare
  * `"ack"` (no id, no method) that the lax library bind would accept? Only a
  * top-level `{ result: "ack" }` with NO request id is a bare ack — an RPC
@@ -172,7 +186,7 @@ export interface NostrConnectClientOptions {
 /** Build a `NostrConnectSigner` whose transport is gated by the strict-bind wrapper. */
 export function createNostrConnectClient(options: NostrConnectClientOptions): NostrConnectSigner {
 	const clientSigner = options.clientKeyHex ? PrivateKeySigner.fromKey(options.clientKeyHex) : new PrivateKeySigner()
-	const pool = strictBindPool(clientSigner, options.pool ?? defaultPool())
+	const pool = strictBindPoolFor(clientSigner, options.pool)
 	return new NostrConnectSigner({
 		relays: options.relays,
 		remote: options.remote,
@@ -213,7 +227,7 @@ export async function connectBunkerSigner(bunkerUrl: string, options: BunkerConn
 		signer: clientSigner,
 		bunkerSecret,
 		onAuth: options.onAuth,
-		pool: strictBindPool(clientSigner, options.pool ?? defaultPool()),
+		pool: strictBindPoolFor(clientSigner, options.pool),
 	})
 	const timeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
 	await withRpcTimeout('connect', signer.connect(bunkerSecret, options.permissions ?? NIP46_PERMISSIONS), timeoutMs)

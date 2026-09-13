@@ -6,16 +6,22 @@
  * vault passphrase) — never speculatively at boot.
  *
  * The rehydrated signer goes through the SAME B-2 invariant wrapper
- * (`createNostrConnectCapability`) as a fresh login — and the connect RPC
- * itself is bounded here too, exactly like `connectBunkerSigner`: a silent
- * bunker must not hang `unlockVaultedSession` with `isAuthenticating` stuck
- * (Gate/ review 5191403562 C).
+ * (`createNostrConnectCapability`) as a fresh login — and the same strict-bind
+ * transport: the connect RPC is deadline-bounded here too, so a silent bunker
+ * cannot hang `unlockVaultedSession` with `isAuthenticating` stuck (review
+ * 5654374915 item 5 / review 5191403562 C).
  */
 import { NostrConnectSigner, PrivateKeySigner } from 'applesauce-signers'
 import type { NostrPool } from 'applesauce-signers'
 import { bytesToHex } from 'nostr-tools/utils'
 
-import { createNostrConnectCapability, NIP46_PERMISSIONS, NIP46_RPC_TIMEOUT_MS, withRpcTimeout } from './nostr-connect-signer'
+import {
+	createNostrConnectCapability,
+	NIP46_PERMISSIONS,
+	NIP46_RPC_TIMEOUT_MS,
+	strictBindPoolFor,
+	withRpcTimeout,
+} from './nostr-connect-signer'
 import type { NostrConnectBundle } from './nostr-connect-signer'
 
 export interface RehydrateOptions {
@@ -41,12 +47,15 @@ export async function rehydrateNostrConnectSession(nbunksec: string, options: Re
 	const permissions = options.permissions ?? NIP46_PERMISSIONS
 	const timeoutMs = options.rpcTimeoutMs ?? NIP46_RPC_TIMEOUT_MS
 
+	const clientSigner = PrivateKeySigner.fromKey(clientKey)
 	const signer = new NostrConnectSigner({
 		relays,
 		remote,
-		signer: PrivateKeySigner.fromKey(clientKey),
+		signer: clientSigner,
 		bunkerSecret,
-		pool: options.pool,
+		// Same transport as a fresh login (shared relay pool behind the
+		// strict-bind gate); only tests inject `options.pool`.
+		pool: strictBindPoolFor(clientSigner, options.pool),
 	})
 
 	try {
