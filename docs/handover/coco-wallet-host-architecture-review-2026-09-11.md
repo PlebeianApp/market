@@ -6,6 +6,8 @@
 
 **Review hardening:** 2026-09-13
 
+**As-is Red audit integration:** 2026-09-13
+
 **Governing ADR:** ADR-0010 at `4cbe2b268247e8f3c72875f9d5e60696b38a7530`
 
 **Purpose:** publish the current Wallet Host / Coco integration architecture so maintainers and independent reviewers can inspect the actual design, identify drift early, and comment before implementation resumes.
@@ -24,16 +26,17 @@ If the generic wallet-engine invariants cannot be maintained upstream, Coco adop
 
 Current architecture status:
 
-- Coco remains the target wallet engine.
+- Coco remains the target Cashu wallet engine.
 - A permanent Plebeian Coco fork is not acceptable.
 - Current legacy rc11/NIP-60 paths remain transitional only.
+- The **currently implemented wallet remains staging-only**; real-value use is NO-GO.
 - I1B2 / production Coco integration remains paused.
 - Wallet Host implementation remains unauthorized.
 - Real-value use remains NO-GO.
 
 ## 2. Target architecture
 
-The proposed product-facing "Plebeian Powered Wrapper" is implemented internally as a **Plebeian Wallet Host** plus a sealed **CocoEnginePort**.
+The proposed product-facing "Plebeian Powered Wrapper" is implemented internally as a **Plebeian Wallet Host** plus sealed monetary capability ports.
 
 ```text
 Application / Auctions / Orders / NIP-60
@@ -43,49 +46,77 @@ Application / Auctions / Orders / NIP-60
                     │
                     ▼
            Plebeian Wallet Host
-              ┌─────┴─────┐
-              ▼           ▼
-     Host Command DB   sealed CocoEnginePort
-                              │
-                              ▼
-                     CocoEngineAdapter
-                              │
-                              ▼
-                    official upstream Coco
-                              │
-                              ▼
-                         Cashu mint
+        ┌───────────┼───────────────────┐
+        ▼           ▼                   ▼
+Host Command DB  sealed             sealed
+                 CocoEnginePort      LightningPayerPort
+                    │                   │
+                    ▼                   ▼
+            CocoEngineAdapter       NWC adapter
+                    │                   │
+                    ▼                   ▼
+          official upstream Coco    NWC wallet/server
+                    │                   │
+                    ▼                   ▼
+                Cashu mint          Lightning network
 ```
 
 The governing boundary is:
 
-> **Coco owns money. Plebeian owns intent, policy, identity, workflow, migration, interoperability, delivery state, and UX.**
+> **For Cashu, Coco owns monetary authority. Plebeian owns intent, policy, identity, workflow, migration, interoperability, delivery state, and UX. NWC remains a separate remote Lightning-payment authority behind a sealed capability boundary.**
 
 ### Upstream Coco owns
 
-- canonical proofs;
+- canonical Cashu proofs;
 - spendability;
 - proof ownership;
-- monetary operation state;
+- Cashu monetary operation state;
 - Send / Receive / Mint / Melt recovery;
 - Restore/replay decisions;
 - exact Send result recovery;
-- runtime monetary fencing;
+- runtime Cashu monetary fencing;
 - P2PK witness construction and reclaim execution;
 - seed/key custody for Coco's generic wallet key hierarchy.
 
 ### Plebeian owns
 
 - workflow/business identity;
-- account lifecycle;
+- canonical account lifecycle and full account namespace;
 - migration phase and epoch;
 - host command identity and idempotency;
 - durable host-command → Coco-operation binding;
+- durable host-command → external-payment binding where NWC is used;
 - Auction/business policy;
 - application-specific refund-authority policy and protected reference;
 - NIP-60 event handling and delivery state;
 - business retry policy and UX;
 - backup/export policy.
+
+### External Lightning payer boundary
+
+NWC is not a Cashu proof authority, but possession of an NWC URI grants an independently authorized remote Lightning payment capability. The target Host must therefore treat NWC as a separate irreversible external-payment boundary rather than as a UI convenience or fallback wallet engine.
+
+Rules:
+
+- NWC credentials are scoped to the **full canonical account identity and environment**; they never live in a global cross-account wallet list.
+- Ordinary application code does not receive raw NWC credentials after Host composition.
+- The Host persists the business command, exact invoice/quote identity, account/workflow binding, and related Coco Mint operation binding before authorizing an NWC payment.
+- An NWC acknowledgement is not proof that Cashu outputs were issued or durably admitted into Coco.
+- A timeout or lost NWC response is ambiguous until the remote Lightning payment is reconciled; it cannot authorize a second payment.
+- Direct Auction Lightning funding must reconcile two separate remote boundaries: **Lightning payment** and **Cashu mint issuance**. Neither boundary may be inferred from the other.
+- NWC credentials are a migration/credential-domain concern, not Cashu proof inventory, and must never be imported as proof authority.
+
+### Account identity / namespace rule
+
+All target wallet state is scoped by a canonical **full account identity**, plus environment and any other required wallet namespace components. Truncated pubkey prefixes are forbidden for monetary, recovery, command, credential, or Auction-recovery namespaces.
+
+Required behavior:
+
+- account switch/logout closes the old wallet context before the new context becomes writable;
+- stale asynchronous callbacks from an old account/session cannot write into the new account;
+- Host provenance may identify the creating session, but monetary authorization is revalidated against current Coco OWNER/FENCE state;
+- legacy records found under truncated namespaces are migration input only and are **not** automatically attributed to the currently logged-in account;
+- if more than one full identity can map to the same legacy namespace, migration quarantines the records until ownership can be proven.
 
 ### Refund-authority clarification
 
@@ -107,13 +138,14 @@ The target boundary is therefore:
 - raw bearer-token cache for retry convenience;
 - post-cutover NIP-60/legacy wallet fallback;
 - exposing Coco Manager/repositories/ProofRepository to ordinary application code;
+- exposing raw NWC authorization credentials to ordinary application code after Host composition;
 - implementing missing OWNER/FENCE or generic Cashu recovery in Market;
 - generic P2PK witness/reclaim implementation in Market;
 - treating import containment alone as proof that no second spending capability exists.
 
 ## 3. Normative command protocol
 
-Every command that may cross an irreversible monetary boundary follows this sequence:
+Every Cashu command that may cross an irreversible monetary boundary follows this sequence:
 
 ```text
 persist Host command
@@ -141,6 +173,8 @@ Required invariants:
 9. Orphan ambiguity quarantines; it never guesses.
 10. Host/session checks are policy controls only; upstream Coco must enforce monetary OWNER/FENCE inside the authorizing transaction.
 11. No background processor, watcher, or startup recovery path may advance a newly prepared operation across its irreversible boundary before the Host binding is durable.
+
+For workflows that additionally invoke NWC, the NWC payment command is separately journaled/bound and follows the same ambiguity rule: a possible remote Lightning payment is reconciled as the **same external payment intent**, never replaced because a response was lost.
 
 ### Deterministic PREPARE identity is a production requirement
 
@@ -211,7 +245,7 @@ A general wallet Host binding must be separate from the accepted migration-only 
 Conceptual immutable identity includes:
 
 - host command ID;
-- full wallet/account namespace;
+- **full canonical wallet/account namespace**;
 - environment;
 - authority epoch / current Coco authority-generation reference where applicable;
 - workflow type / workflow ID / workflow leg;
@@ -234,7 +268,7 @@ Required uniqueness:
 
 The stored session generation is **creation provenance**, not permanent authorization. A later legitimate session must be able to resume the command after current authority is revalidated.
 
-The Host binding must never contain proofs, token payloads, OutputData, blind signatures, Coco proof state, seeds, nsecs, KeyRing secrets, application refund secrets, or generic monetary recovery material.
+The Host binding must never contain proofs, token payloads, OutputData, blind signatures, Coco proof state, seeds, nsecs, KeyRing secrets, application refund secrets, NWC authorization secrets, or generic monetary recovery material.
 
 ## 6. Orphan PREPARE recovery
 
@@ -296,7 +330,9 @@ Rules:
 - EXECUTE accepts only a validated bound operation reference;
 - any access to an application-specific refund authority is narrowly capability-scoped to the bound P2PK operation and never grants ordinary application code direct proof/token mutation capability.
 
-This boundary exists to isolate upstream API evolution, not to normalize multiple production monetary engines.
+The separate `LightningPayerPort` is likewise capability-specific: it exists only to isolate account-bound remote Lightning payment authorization. It is not a generic multi-wallet router and cannot substitute for Coco monetary state.
+
+These boundaries isolate upstream API evolution and external payment capabilities; they do not normalize multiple production Cashu engines.
 
 ## 8. Error and retry semantics
 
@@ -312,7 +348,7 @@ RECONCILE_SAME_OPERATION
 
 is the safe default.
 
-A timeout, lost response, browser cancellation, unknown exception, stale runtime, unavailable mint, or failed business write is **not** sufficient to authorize a new monetary operation.
+A timeout, lost response, browser cancellation, unknown exception, stale runtime, unavailable mint, failed NWC response, or failed business write is **not** sufficient to authorize a new monetary operation or external payment.
 
 `FAILED_SAFE_TO_RETRY` is allowed only when the **accepted upstream candidate's authoritative semantics** prove that:
 
@@ -321,6 +357,8 @@ A timeout, lost response, browser cancellation, unknown exception, stale runtime
 - no proofs remain reserved/inflight for that operation;
 - all value is durably reconciled under canonical ownership;
 - and treating the original intent as no-effect/rolled-back does not violate method-specific ownership semantics.
+
+For NWC, safe retry similarly requires authoritative reconciliation that the prior Lightning payment did not settle and cannot still settle under the same invoice/payment intent.
 
 ### Ordinary Send response-loss qualification
 
@@ -351,6 +389,7 @@ It must **not** durably store:
 - OutputData;
 - blind signatures;
 - application refund secrets;
+- NWC authorization secrets;
 - generic wallet recovery material.
 
 Required flow:
@@ -381,7 +420,7 @@ At the reviewed/current line of development:
 
 This is a **recovery-semantics gap**, not necessarily a need for a new getter. An existing operation lookup is sufficient if upstream guarantees that response-loss recovery reconstructs and persists the exact result.
 
-Open upstream Send transaction work (#463, currently head `e2aa6236e90a453331c56251e369d1dfa5b3fb33`) is directionally relevant: it preserves unknown outcomes, claims recovery by revision, reconstructs exact persisted outputs, restores KEEP as ready and SEND as inflight, rebuilds the token, and applies the result through its transaction gateway. It remains unmerged evidence and is not an accepted Plebeian production dependency.
+Open upstream Send transaction work (#463, checked at head `17f36cf808ac302795fefb64cb6575e8b415c5dd`) appears to implement the required mechanism: it preserves ambiguous execution, reconstructs the persisted output allocation, restores KEEP/SEND ownership, rebuilds the exact token, and applies the recovered result through the Send transaction gateway. It remains **unmerged candidate evidence** until an exact merged/pinned SHA passes Plebeian's G2 crash/response-loss acceptance tests.
 
 Required upstream invariant:
 
@@ -439,7 +478,34 @@ Outgoing NIP-60 publication must originate from the exact authoritative Coco Sen
 
 Current direct NIP-60/cashu-ts monetary paths are transitional and must be disabled/contained at cutover rather than retained as availability fallback.
 
-## 13. Mechanical capability and dependency boundary
+### Cutover single-authority proof
+
+Before `CUTOVER_COMMITTED`, the migration must demonstrate that every currently executable monetary authority has been accounted for. After `CUTOVER_COMMITTED`:
+
+- legacy Coco rc11 cannot originate or commit Cashu monetary mutation;
+- NIP-60/direct `cashu-ts` paths cannot originate or commit Cashu monetary mutation;
+- Auction bidder/pending/recovery records cannot act as a second proof repository;
+- NIP-60 relay state is candidate interoperability input only;
+- only official accepted Coco can determine local Cashu spendability and proof ownership;
+- NWC remains separately usable only through the account-bound `LightningPayerPort`, never as a Cashu fallback.
+
+## 13. Migration hazards from the current wallet
+
+A blind as-is Red Team review reconstructed the current wallet before comparing it with this target. Its local review target was `6cfc2ebb393c6bc62a19bc7d9c929f686b0bb3fc`; current upstream Auctions was separately verified at `50199dce5a11c1d33d42bfe8bdda55447e6ab5d7`. Findings from the local target are migration evidence, not automatically claims about every upstream file.
+
+Several high-value hazards are independently visible in current upstream Auctions and are now explicit migration requirements:
+
+1. **Multiple local Cashu authorities.** Legacy Coco rc11 remains executable while NIP-60/direct `cashu-ts` is the primary wallet/Auction path. Cutover must retire both legacy mutation paths rather than add Coco as a third co-equal engine.
+2. **Truncated legacy namespaces.** Existing wallet localStorage and legacy Coco IndexedDB use first-eight-pubkey scoping in important paths. Migration never guesses a full owner from a truncated namespace; collisions/ambiguity quarantine.
+3. **Duplicate Auction bearer material.** Current Auction locking persists the encoded locked token in the strict NIP-60 pending-token store, while bidder recovery records persist full locked proofs and the refund private key. These copies are migration evidence for one locked value, not independent value to import twice.
+4. **NIP-60 relay reconstruction may be stale.** Relay events/tombstones are candidate evidence and must be reconciled against mint state and local migration ownership before value becomes spendable.
+5. **Unresolved legacy operations remain unresolved.** A timeout, error string, missing local record, or stale relay projection never promotes ambiguous legacy value directly to ready Coco proofs.
+6. **Auction recovery data must survive without remaining proof authority.** Refund authority, derivation paths, lock conditions, chain identity, and exact business-event identity are retained/rebound while full proof ownership moves to Coco.
+7. **NWC credentials are a separate credential domain.** They require full-account rebinding and teardown but are not imported into Coco proof inventory.
+
+For duplicate bearer material, the migration classifier must deduplicate/reconcile using canonical mint, unit, keyset/proof identity, operation/business binding, and authoritative mint state. A bidder record and pending token that describe the same locked proofs must never produce two ready/imported values.
+
+## 14. Mechanical capability and dependency boundary
 
 Target rule:
 
@@ -459,15 +525,15 @@ Implementation acceptance should include mechanical enforcement for:
 - legacy transitional allowlist;
 - dependency-tree inspection for duplicate or aliased monetary runtimes;
 - lockfile checks that the accepted Coco candidate resolves the reviewed `cashu-ts` generation;
-- a forbidden-capability/export test proving ordinary application modules cannot obtain Manager, repositories, ProofRepository, KeyRing secrets, raw proofs/tokens, seed services, or application refund-secret decryption capability.
+- a forbidden-capability/export test proving ordinary application modules cannot obtain Manager, repositories, ProofRepository, KeyRing secrets, raw proofs/tokens, seed services, application refund-secret decryption capability, or raw NWC authorization capability.
 
 The legacy allowlist should be explicit and monotonically shrink. New exceptions should fail CI unless deliberately approved.
 
-During migration, legacy and new package generations may coexist only behind explicit transitional boundaries. Objects from different `cashu-ts` generations must never cross the adapter boundary as shared domain objects. After cutover there must be one active canonical monetary runtime; a duplicate `cashu-ts` copy or vendored alias must not become a hidden second wallet path.
+During migration, legacy and new package generations may coexist only behind explicit transitional boundaries. Objects from different `cashu-ts` generations must never cross the adapter boundary as shared domain objects. After cutover there must be one active canonical Cashu monetary runtime; a duplicate `cashu-ts` copy or vendored alias must not become a hidden second wallet path.
 
 This is architectural containment, not an XSS security sandbox.
 
-## 14. Upstream evidence status
+## 15. Upstream evidence status
 
 Evidence is intentionally separated from architectural ownership. "Upstream Coco owns this responsibility" does **not** mean current upstream implements it sufficiently today.
 
@@ -480,17 +546,17 @@ Fresh upstream master checked 2026-09-13: `8e6796e2c47f6bd5a51e21efeb04630c8b13e
 | Wallet-wide OWNER/FENCE | No verified wallet-wide generation/fence; in-process locks only | No accepted wallet-wide fence identified; `MintScopedLock` remains single-runtime | **BLOCKED** |
 | Operation-owned proof mutation/release | Ownership metadata exists but mutation APIs are not uniformly owner-conditioned | `releaseProofs(mintUrl, secrets)` still has no expected-operation owner in the public repository contract | **BLOCKED** |
 | Atomic operation/proof/result transitions | Partial transaction groundwork | #489 adds Mint metadata transaction groundwork; does not establish all-operation monetary atomicity | **BLOCKED / partial upstream progress** |
-| Exact Send lost-response recovery | Gap verified | Gap still present on master; #463 is open and directionally relevant | **BLOCKED** |
-| Receive Restore-before-replay | Not established by this review | Not accepted/verified here | **BLOCKED pending focused verification/upstream work** |
-| Melt/Mint recovery integrity | Partial recovery exists | Partial; exact production invariants remain unaccepted | **BLOCKED** |
+| Exact Send lost-response recovery | Gap verified | Gap still present on master; #463 is open and appears to implement the required mechanism | **BLOCKED pending merge/pin + G2 acceptance** |
+| Receive Restore-before-replay | Not established by this review | Not accepted/verified here; #462 remains open | **BLOCKED pending focused verification/upstream work** |
+| Melt/Mint recovery integrity | Partial recovery exists | Partial; exact production invariants remain unaccepted; Mint work remains open | **BLOCKED** |
 | Crash-safe P2PK reclaim/refund | Construction/recovery exists, generic refund/reclaim acceptance not established | No accepted production reclaim path for Plebeian's gate | **BLOCKED** |
 | Quiescent / controlled startup | Not implemented: initialization runs recovery sweeps | Still unconditional recovery in `initializeCoco()` | **BLOCKED** |
-| Deterministic Mint/orphan identity | `listByQuote` exists; no general caller-keyed idempotent PREPARE | No accepted deterministic caller-correlation contract identified | **BLOCKED** |
-| Coco/cashu-ts pinned compatibility | Coco core resolves `@cashu/cashu-ts@5.0.0-rc.4` | Still `5.0.0-rc.4` | **BLOCKED pending exact compatibility acceptance; RC status is risk, not automatic rejection** |
+| Deterministic orphan identity | `listByQuote` / prepared/in-flight APIs exist; no general caller-keyed idempotent PREPARE | Caller-supplied/idempotent operation identity is tracked upstream in #493 | **BLOCKED pending upstream contract** |
+| Coco/cashu-ts pinned compatibility | Coco core resolves `@cashu/cashu-ts@5.0.0-rc.4` | Still `5.0.0-rc.4` at the checked baseline | **BLOCKED pending exact compatibility acceptance; RC status is risk, not automatic rejection** |
 
 This table is a point-in-time evidence ledger, not a permanent claim about Coco. It must be refreshed before selecting or accepting a production candidate.
 
-## 15. Remaining upstream gates
+## 16. Remaining upstream gates
 
 An official pinned upstream candidate must still demonstrate at least:
 
@@ -502,12 +568,12 @@ An official pinned upstream candidate must still demonstrate at least:
 6. Melt/change and Mint recovery integrity;
 7. crash-safe P2PK reclaim/refund;
 8. quiescent/controlled startup for orphan reconciliation and per-operation PREPARE/bind ordering;
-9. deterministic orphan identity/resolution, including terminal discovery after differential restore;
+9. deterministic orphan identity/resolution, including durable caller correlation and terminal discovery after differential restore;
 10. pinned Coco/cashu-ts persistence/keyset compatibility.
 
 These are upstream wallet-engine responsibilities. They must not be reimplemented as generic Plebeian monetary logic.
 
-## 16. External LLM review adjudication
+## 17. External LLM review adjudication
 
 PR #1304 received a multi-model adversarial review synthesis based on substantive Qwen and GLM reviews; the attempted Kimi pass failed and produced no review. The two substantive families both agreed that the Wallet Host boundary does **not** inherently create a second wallet engine, but they identified several seams requiring clarification or hardening.
 
@@ -520,20 +586,39 @@ Architect adjudication incorporated here:
 | Quiescent startup is unavailable at reviewed Coco | **ACCEPT / VERIFIED** | Kept as explicit upstream production gate and extended to prevent autonomous advancement before binding |
 | Import lint is not capability containment | **ACCEPT** | Added dependency-tree, alias/duplicate runtime, forbidden-capability, and single-production-runtime checks |
 | No operation enumeration APIs exist | **REJECT / FALSE** | Prepared/in-flight/listByQuote APIs exist; residual issue is deterministic identity/terminal discovery, not total absence of enumeration |
-| Current `rolled_back + restored ready proofs` ordinary Send should be `FAILED_SAFE_TO_RETRY` | **REJECT as accepted-candidate semantics** | ADR-0010 G2 requires exact outgoing token + KEEP/SEND ownership; current behavior remains a candidate blocker |
+| Current `rolled_back + restored ready proofs` ordinary Send should be `FAILED_SAFE_TO_RETRY` | **REJECT as accepted-candidate semantics** | ADR-0010 G2 requires exact outgoing token + KEEP/SEND ownership; current master remains a candidate blocker while #463 is evaluated |
 | Differential Host/Coco backup skew | **ACCEPT** | Added explicit restore-reconciliation, non-reusable epoch/generation, and terminal-discovery requirements |
 | Evidence status should distinguish assertions from verified current code | **ACCEPT** | Added reviewed-SHA/current-master/adoption-status ledger |
 | `cashu-ts@5.0.0-rc.4` pin is risk | **ACCEPT as risk** | Kept exact compatibility gate; RC label alone is not an automatic rejection |
 
+The later upstream addendum correctly identified #463 as the likely owner of exact-Send G2 recovery and #493 as the caller-correlation issue. It did **not** eliminate the separate quiescent-startup, Receive, Mint, Melt, P2PK reclaim, OWNER/FENCE, or exact compatibility acceptance gates.
+
 The failed third-model run is not treated as a review. Another independent family is welcome on this amended artifact, but completion of that run is not required to record or act on the verified findings above.
 
-## 17. Current checkpoint
+## 18. Current-system Red audit adjudication
+
+A separate blind-first Red Team audit reconstructed the currently implemented wallet before reading this target architecture. Its final verdict was:
+
+```text
+CURRENT_WALLET_ARCHITECTURE_STAGING_ONLY
+REAL_FUNDS_SAFE: NO
+SECOND_MONETARY_AUTHORITY_FOUND: YES
+```
+
+Architect adjudication accepts the main system-design findings with one terminology refinement: the current system has **two overlapping local Cashu monetary authorities** (legacy Coco rc11 and NIP-60/direct `cashu-ts`) plus **NWC as a separate remote Lightning payment authority**. Auction storage also contains bearer-capable recovery copies, but that does not make it a third general Cashu engine.
+
+This audit supports rather than contradicts the target design. It expands the migration inventory and adds the NWC/account-namespace requirements above; it does not authorize repairing the legacy wallet into the target architecture.
+
+The current wallet remains **staging-only** while these migration and upstream gates are unresolved.
+
+## 19. Current checkpoint
 
 | Item | Status |
 |---|---|
 | ADR-0010 | governing / unchanged |
+| Current implemented wallet | `STAGING_ONLY` / real funds NO-GO |
 | Zero-fork adoption gate | `GO_PENDING_UPSTREAM_CHANGES` |
-| Wallet Host architecture | `FREEZE_WITH_ADDITIONAL_NOTES` / review artifact |
+| Wallet Host architecture | `FREEZE_WITH_ADDITIONAL_NOTES` / architecture freeze candidate |
 | Plebeian I1A | Red-pass foundation |
 | Plebeian I1B1 | Red-pass foundation |
 | I1B2 | paused |
@@ -543,7 +628,7 @@ The failed third-model run is not treated as a review. Another independent famil
 | Wallet Host implementation | not authorized yet |
 | Real-value use | NO-GO |
 
-## 18. Review requested on amended artifact
+## 20. Review requested on amended artifact
 
 Maintainer / independent LLM review is now specifically requested on the narrowed remaining questions:
 
@@ -552,12 +637,15 @@ Maintainer / independent LLM review is now specifically requested on the narrowe
 3. Can an official Coco candidate expose supported quiescent startup / per-operation advancement control without Plebeian reconstructing Manager startup internals?
 4. Is the differential Host/Coco restore protocol sufficient to prevent lost bindings, epoch reuse, and accidental replacement operations?
 5. Does any path still allow current Coco's ordinary-Send rollback-style recovery to be misclassified as accepted G2 semantics?
-6. Are the dependency/capability containment checks strong enough to prevent a hidden second monetary runtime after cutover?
-7. Has any remaining responsibility that belongs generically in Coco leaked back into the Host?
+6. Are the dependency/capability containment checks strong enough to prevent a hidden second Cashu monetary runtime after cutover?
+7. Does the full-account namespace rule sufficiently prevent legacy first-eight-prefix ambiguity from being silently reassigned during migration?
+8. Is the NWC/`LightningPayerPort` boundary sufficient to prevent Lightning acknowledgement from being confused with Cashu issuance, especially in direct Auction funding?
+9. Does the migration rule for duplicate Auction bearer material prevent bidder records and pending tokens from being imported as independent value?
+10. Has any remaining responsibility that belongs generically in Coco leaked back into the Host?
 
-Please review the architecture, not just this document's conclusions. Counterexamples at crash/restart, account-switch, stale-runtime, orphan-prepare, differential-restore, response-loss, and P2PK-refund boundaries are especially useful.
+Please review the architecture, not just this document's conclusions. Counterexamples at crash/restart, account-switch, stale-runtime, orphan-prepare, differential-restore, response-loss, NWC payment, migration deduplication, and P2PK-refund boundaries are especially useful.
 
-## 19. Non-goals for this review artifact
+## 21. Non-goals for this review artifact
 
 This PR does not:
 
@@ -565,10 +653,11 @@ This PR does not:
 - change dependencies or lockfiles;
 - implement the Host;
 - resume I1B2;
-- change Auctions or NIP-60;
+- change Auctions, NIP-60, or NWC runtime code;
 - package the temporary Coco research branch;
 - authorize migration/cutover;
 - authorize production or real funds;
-- resolve the upstream gates by adding Plebeian-owned monetary logic.
+- resolve the upstream gates by adding Plebeian-owned monetary logic;
+- attempt to rehabilitate legacy Coco rc11 or NIP-60 as the long-term monetary authority.
 
 The goal is to push reviewable progress early so architecture feedback happens before implementation gets large.
