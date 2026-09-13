@@ -1,10 +1,13 @@
-import { finalizeEvent, type EventTemplate, type VerifiedEvent } from 'nostr-tools/pure'
+import { finalizeEvent, getPublicKey, type EventTemplate, type VerifiedEvent } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
-import { hexToBytes } from '@noble/hashes/utils.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
+import { getEncodedToken } from '@cashu/cashu-ts'
 import WebSocket from 'ws'
-import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, devUser3, WALLETED_USER_LUD16, XPUB } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { isAddressableKind } from 'nostr-tools/kinds'
+import { AUCTION_CLAIM_SUBJECT } from '@/lib/auctions/privateAuctionClaimMessage'
 import { v4 as uuidv4 } from 'uuid'
 
 useWebSocketImplementation(WebSocket)
@@ -653,7 +656,389 @@ export async function seedAuction(
 }
 
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
-import { AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND } from '@/lib/auction/constants'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_KIND,
+	AUCTION_PATH_RELEASE_KIND,
+	AUCTION_SETTLEMENT_KIND,
+	VALIDATOR_VERDICT_KIND,
+} from '@/lib/auction/constants'
+import {
+	buildAuctionEventTags,
+	buildBidEventTags,
+	buildPathReleaseTags,
+	buildSettlementTags,
+	buildValidatorVerdictTags,
+} from '@/lib/auction/tagBuilders'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import { validatePathRelease, validateSettlementCompleteness } from '@/lib/auction/validation'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+
+// ============================================================================
+// Auction order fixture (kind 30408 → 1023 → 30440 → 1025 → 1024 → claim order)
+// ============================================================================
+
+/**
+ * The mint the seeded auction lists and the winning bid locks against. This is
+ * the local nutshell mint the e2e harness starts (`e2e/start-local-mint.sh`,
+ * `APP_DEV_TEST_MINT_URL`), so the seeded events reference a mint the app is
+ * actually configured with — no external network egress.
+ */
+const E2E_AUCTION_MINT_URL = 'http://localhost:3338'
+
+/** FakeWallet keyset id of the local mint; only used to shape a decodable token. */
+const E2E_AUCTION_KEYSET_ID = '009a1f293253e41e'
+
+/**
+ * 5 non-hardened BIP-32 levels, matching AUCTION_PATH_HD_DEPTH (the path
+ * entropy the protocol requires of a bidder-generated release path).
+ */
+const E2E_AUCTION_DERIVATION_PATH = 'm/0/1/2/3/4'
+
+const E2E_AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
+/** The seeded auction closed half an hour before the fixture is built. */
+const E2E_AUCTION_CLOSED_SECONDS_AGO = 1800
+const E2E_AUCTION_OPENED_SECONDS_AGO = 7200
+const E2E_AUCTION_RESERVE_SATS = 1000
+const E2E_AUCTION_STARTING_BID_SATS = 1000
+const E2E_AUCTION_WINNING_BID_SATS = 1500
+
+export interface AuctionOrderFixture {
+	/** kind-30408 auction listing, seller-signed, canonical (first) publish. */
+	auctionEvent: VerifiedEvent
+	/** kind-1023 winning bid, bidder-signed, real lock over a derived P2PK child key. */
+	bidEvent: VerifiedEvent
+	/** kind-30440 auditor verdict confirming the winning bid (`auditor_quorum` = 1). */
+	verdictEvent: VerifiedEvent
+	/** kind-1025 path release for the winning bid, carrying the locked proofs as a cashu token. */
+	pathReleaseEvent: VerifiedEvent
+	/** kind-1024 settled settlement, seller-signed. */
+	settlementEvent: VerifiedEvent
+	/** Addressable coordinate `30408:<seller>:<d>` used as the order's `item`/`a` value. */
+	itemTagValue: string
+	/** Settlement amount in sats — the buyer's claim order must declare the same amount. */
+	amount: number
+	/** The unix-second `now` the chain was built against (validation clock). */
+	now: number
+}
+
+const compressedPubkeyFromSecretKey = (secretKeyHex: string): string => bytesToHex(secp256k1.getPublicKey(hexToBytes(secretKeyHex), true))
+
+/**
+ * Build the NUT-10/NUT-11 P2PK well-known secret a bidder locks a bid's proofs
+ * with under `cashu_p2pk_bidder_path_v1` (§5.3): single child pubkey, single
+ * refund key, `n_sigs = n_sigs_refund = 1`, `SIG_INPUTS`, mandatory locktime.
+ */
+const buildAuctionLockSecret = (input: { childPubkey: string; refundPubkey: string; locktime: number; nonce: string }): string =>
+	JSON.stringify([
+		'P2PK',
+		{
+			nonce: input.nonce,
+			data: input.childPubkey,
+			tags: [
+				['sigflag', 'SIG_INPUTS'],
+				['locktime', String(input.locktime)],
+				['refund', input.refundPubkey],
+				['n_sigs', '1'],
+				['n_sigs_refund', '1'],
+			],
+		},
+	])
+
+/**
+ * Build the full, production-valid auction chain behind an auction order:
+ * a *closed* kind-30408 listing, a real kind-1023 winning bid locked to a
+ * derived seller child key, the auditor kind-30440 confirmation that makes the
+ * bid the canonical winner, the winner's kind-1025 path release (referencing
+ * the real bid event id and carrying the locked proofs), and the seller's
+ * settled kind-1024 settlement (`close_at` after `max_end_at`, `final_amount`
+ * >= `reserve`, payout for the winning leg).
+ *
+ * Every event is signed locally (deterministic ids, no relay, no mint, no
+ * network) and is shaped by the same tag builders production publishes with, so
+ * the app's own parsers/validators (`parseAuctionEvent`, `parseBidEvent`,
+ * `parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`,
+ * `validateBid`, `validatePathRelease`, `validateSettlementCompleteness`,
+ * `computeValidatedBids`) accept the result. See
+ * `e2e/scenarios/auctionOrderFixture.test.ts` for that cross-validation.
+ */
+export function buildAuctionOrderFixture(input: { now: number; title?: string; description?: string }): AuctionOrderFixture {
+	const { now } = input
+	const title = input.title ?? 'Test Auction'
+
+	const startAt = now - E2E_AUCTION_OPENED_SECONDS_AGO
+	const endAt = now - E2E_AUCTION_CLOSED_SECONDS_AGO
+	// No anti-snipe extension: the auction closes at end_at/max_end_at.
+	const maxEndAt = endAt
+	const settlementGrace = E2E_AUCTION_SETTLEMENT_GRACE_SECONDS
+	const reserve = E2E_AUCTION_RESERVE_SATS
+	const amount = E2E_AUCTION_WINNING_BID_SATS
+	const locktime = maxEndAt + settlementGrace
+
+	const auctionId = `auc_${now}_${uuidv4().slice(0, 8)}`
+	const auctionTags = buildAuctionEventTags({
+		dTag: auctionId,
+		title,
+		startAt,
+		endAt,
+		maxEndAt,
+		settlementGrace,
+		reserve,
+		startingBid: E2E_AUCTION_STARTING_BID_SATS,
+		bidIncrement: 100,
+		mints: [E2E_AUCTION_MINT_URL],
+		p2pkXpub: XPUB,
+		auditors: [devUser3.pk],
+		auditorQuorum: 1,
+		minBidCurve: { shape: 'none', peakMultiplier: 1, raw: '' },
+		summary: 'E2E test auction',
+		categories: ['bitcoin'],
+	})
+	// Display-only tag the auction surfaces use for pricing cards.
+	auctionTags.push(['price', String(amount), 'SAT'])
+
+	const auctionEvent = finalizeEvent(
+		{
+			kind: AUCTION_KIND,
+			created_at: startAt,
+			content: input.description ?? 'E2E test auction description.',
+			tags: auctionTags,
+		},
+		hexToBytes(devUser1.sk),
+	)
+
+	const itemTagValue = `${AUCTION_KIND}:${auctionEvent.pubkey}:${auctionId}`
+	const bidderPubkey = getPublicKey(hexToBytes(devUser2.sk))
+	const refundPubkey = compressedPubkeyFromSecretKey(devUser2.sk)
+	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(XPUB, E2E_AUCTION_DERIVATION_PATH)
+	const lockSecret = buildAuctionLockSecret({ childPubkey, refundPubkey, locktime, nonce: uuidv4() })
+	const proofY = hashToCurveHexFromString(lockSecret)
+
+	const bidEvent = finalizeEvent(
+		{
+			kind: AUCTION_BID_KIND,
+			created_at: maxEndAt - 60,
+			content: 'E2E winning bid',
+			tags: buildBidEventTags({
+				auctionRootEventId: auctionEvent.id,
+				auctionCoordinate: itemTagValue,
+				sellerPubkey: auctionEvent.pubkey,
+				amount,
+				mint: E2E_AUCTION_MINT_URL,
+				locktime,
+				refundPubkey,
+				childPubkey,
+				lockSecrets: [lockSecret],
+				proofYs: [proofY],
+				createdForEndAt: endAt,
+				bidNonce: uuidv4(),
+			}),
+		},
+		hexToBytes(devUser2.sk),
+	)
+
+	const verdictEvent = finalizeEvent(
+		{
+			kind: VALIDATOR_VERDICT_KIND,
+			created_at: bidEvent.created_at + 30,
+			content: 'E2E auditor confirmation',
+			tags: buildValidatorVerdictTags({
+				bidderPubkey,
+				auctionRootEventId: auctionEvent.id,
+				auctionCoordinate: itemTagValue,
+				bidEventId: bidEvent.id,
+				claim: 'won_pending_settlement',
+				observedAt: bidEvent.created_at,
+			}),
+		},
+		hexToBytes(devUser3.sk),
+	)
+
+	// The locked proofs as a redeemable cashu token. The proofs are P2PK-locked
+	// to derive(p2pk_xpub, path), so publishing the token grants spend authority
+	// to nobody but the seller. `C` is the bidder's own (valid) compressed key —
+	// the e2e harness never spends this, so no live mint is involved.
+	const cashuToken = getEncodedToken({
+		mint: E2E_AUCTION_MINT_URL,
+		proofs: [{ id: E2E_AUCTION_KEYSET_ID, amount, secret: lockSecret, C: refundPubkey }],
+	})
+
+	const pathReleaseEvent = finalizeEvent(
+		{
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: maxEndAt + 60,
+			content: '',
+			tags: buildPathReleaseTags({
+				bidEventId: bidEvent.id,
+				auctionCoordinate: itemTagValue,
+				sellerPubkey: auctionEvent.pubkey,
+				derivationPath: E2E_AUCTION_DERIVATION_PATH,
+				childPubkey,
+				releaseReason: 'settlement',
+				cashuToken,
+			}),
+		},
+		hexToBytes(devUser2.sk),
+	)
+
+	const settlementEvent = finalizeEvent(
+		{
+			kind: AUCTION_SETTLEMENT_KIND,
+			created_at: maxEndAt + 120,
+			content: '',
+			tags: buildSettlementTags({
+				auctionRootEventId: auctionEvent.id,
+				auctionCoordinate: itemTagValue,
+				status: 'settled',
+				closeAt: maxEndAt + 60,
+				finalAmount: amount,
+				winningBidId: bidEvent.id,
+				winnerPubkey: bidderPubkey,
+				pathReleaseEventId: pathReleaseEvent.id,
+				payouts: [{ bidEventId: bidEvent.id, amount, status: 'redeemed' }],
+			}),
+		},
+		hexToBytes(devUser1.sk),
+	)
+
+	const fixture: AuctionOrderFixture = {
+		auctionEvent,
+		bidEvent,
+		verdictEvent,
+		pathReleaseEvent,
+		settlementEvent,
+		itemTagValue,
+		amount,
+		now,
+	}
+
+	// Publish-time gate: a fixture that cannot pass the SAME parsers and
+	// cross-event validators production runs must never reach the relay.
+	// Green E2E on impossible relay data proves nothing, so this throws
+	// instead of seeding an impossible auction.
+	assertAuctionOrderFixtureValid(fixture)
+
+	return fixture
+}
+
+/**
+ * Canonical auction-claim ORDER tags for the seeded auction chain.
+ *
+ * Mirrors the production public marker builder
+ * (`buildAuctionClaimPublicMarkerTags` in
+ * `@/lib/auctions/privateAuctionClaimMessage`) so the seeded order parses
+ * through `getAuctionClaimPublicMarkerFields()` and validates as the canonical
+ * claim order for {@link buildAuctionOrderFixture}'s settlement:
+ *
+ *   - `subject: 'auction-claim'` (the marker discriminator),
+ *   - `a` = the kind-30408 coordinate, `p` = the seller,
+ *   - `e <auction root>` (no marker) and `e <settlement id> '' 'settlement'`,
+ *   - `amount` = the settlement's final amount.
+ *
+ * The `item` tag is kept alongside because the order surfaces render the item
+ * title from it; it plays no part in the marker.
+ */
+export function buildAuctionClaimOrderTags(fixture: AuctionOrderFixture, orderId: string): string[][] {
+	return [
+		['p', fixture.auctionEvent.pubkey],
+		['subject', AUCTION_CLAIM_SUBJECT],
+		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		['order', orderId],
+		['amount', String(fixture.amount)],
+		['item', fixture.itemTagValue, '1'],
+		['a', fixture.itemTagValue],
+		['e', fixture.auctionEvent.id],
+		['e', fixture.settlementEvent.id, '', 'settlement'],
+	]
+}
+
+/**
+ * Cross-event validation gate for {@link buildAuctionOrderFixture}.
+ *
+ * Runs every seeded event through the production parsers, then through the
+ * production cross-event validators:
+ *
+ *   - `computeValidatedBids` — auditor quorum makes the seeded bid the
+ *     canonical winner,
+ *   - `validatePathRelease` — the kind-1025 release is a valid winner release
+ *     for that bid (derivation path / child pubkey / release timing),
+ *   - `validateSettlementCompleteness` — the kind-1024 settled event is
+ *     complete for the winning bid chain (matching payout, close_at after
+ *     `max_end_at`, `final_amount` >= reserve).
+ *
+ * Throws on the first violation, so `buildAuctionOrderFixture` can never seed
+ * an auction whose events a real client would never have published.
+ */
+export function assertAuctionOrderFixtureValid(fixture: AuctionOrderFixture): void {
+	const parsed = <T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }, label: string): T => {
+		if (!result.ok) throw new Error(`auction order fixture: ${label} does not parse — ${result.error.message}`)
+		return result.value
+	}
+
+	const auction = parsed(parseAuctionEvent(fixture.auctionEvent), 'kind-30408 listing')
+	const bid = parsed(parseBidEvent(fixture.bidEvent), 'kind-1023 winning bid')
+	const verdict = parsed(parseValidatorVerdictEvent(fixture.verdictEvent), 'kind-30440 auditor verdict')
+	const pathRelease = parsed(parsePathReleaseEvent(fixture.pathReleaseEvent), 'kind-1025 path release')
+	const settlement = parsed(parseSettlementEvent(fixture.settlementEvent), 'kind-1024 settlement')
+
+	if (auction.endAt >= fixture.now) {
+		throw new Error(
+			`auction order fixture: auction is still open (end_at=${auction.endAt} >= now=${fixture.now}); a settlement cannot exist for an open auction`,
+		)
+	}
+	if (auction.reserve == null || auction.reserve <= 0) {
+		throw new Error('auction order fixture: auction has no positive reserve')
+	}
+	if (settlement.finalAmount < auction.reserve) {
+		throw new Error(`auction order fixture: settlement final_amount ${settlement.finalAmount} is below the reserve ${auction.reserve}`)
+	}
+
+	const quorum = computeValidatedBids({
+		auction,
+		bids: [bid],
+		verdicts: [verdict],
+		postSettlement: true,
+		settledBidIds: new Set([bid.id]),
+	})
+	if (quorum.canonicalWinner?.id !== bid.id) {
+		throw new Error(`auction order fixture: auditor quorum does not confirm ${bid.id} as the canonical winning bid`)
+	}
+
+	const releaseValidity = validatePathRelease({
+		auction,
+		bid,
+		release: pathRelease,
+		now: fixture.now,
+		postCloseDecision: 'winner',
+		// Token decoding needs mint keysets the fixture deliberately does not
+		// fetch; production validators also skip it (it is the seller's
+		// redemption-time check).
+		skipCashuTokenCheck: true,
+	})
+	if (!releaseValidity.isValid) {
+		throw new Error(`auction order fixture: kind-1025 path release is invalid (${releaseValidity.failureCode}) — ${releaseValidity.detail}`)
+	}
+
+	const completeness = validateSettlementCompleteness({
+		auction,
+		settlement,
+		winningBid: bid,
+		pathRelease,
+		winningBidClaim: verdict.claim,
+		winningBidPostCloseDecision: 'winner',
+		// A settled settlement by definition follows the seller's redemption;
+		// the fixture declares its payout as redeemed.
+		winningBidNut7State: 'spent',
+	})
+	if (!completeness.isComplete) {
+		throw new Error(`auction order fixture: kind-1024 settlement is not complete (${completeness.failureCode}) — ${completeness.detail}`)
+	}
+}
 
 export type OrderStage = 'pending-payment' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed'
 export type OrderType = 'product' | 'auction'
@@ -682,6 +1067,7 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 
 		let productEvent: VerifiedEvent | undefined
 		let auctionEvent: VerifiedEvent | undefined
+		let auctionFixture: AuctionOrderFixture | undefined
 		let itemTagValue = ''
 		let orderAmount = '1000'
 		const shippingOptionCoords = '30406:' + devUser1.pk + ':shippingdtag123'
@@ -710,43 +1096,45 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			await relay.publish(productEvent)
 			itemTagValue = `30402:${devUser1.pk}:${productId}`
 		} else {
-			const auctionId = `auc_${now}_${uuidv4().slice(0, 8)}`
-			auctionEvent = finalizeEvent(
-				{
-					kind: 30408,
-					created_at: now,
-					content: 'Test Auction Description',
-					tags: [
-						['d', auctionId],
-						['title', 'Test Auction'],
-						['price', '500', 'SAT'],
-						['start_at', String(now - 100)],
-						['end_at', String(now + 100)],
-						['reserve', '1000'],
-					],
-				},
-				sellerSkBytes,
-			)
-			await relay.publish(auctionEvent)
-			itemTagValue = `30408:${devUser1.pk}:${auctionId}`
-			orderAmount = '500'
+			// Production-valid auction chain: a *closed* kind-30408 listing, the
+			// real kind-1023 winning bid, the auditor confirmation that makes it
+			// the canonical winner, the winner's kind-1025 path release
+			// (referencing that bid event id), and the seller's settled kind-1024
+			// (final_amount >= reserve, close_at after max_end_at). Published
+			// before the claim order so the order can reference the real
+			// settlement event id.
+			auctionFixture = buildAuctionOrderFixture({ now })
+			for (const event of [
+				auctionFixture.auctionEvent,
+				auctionFixture.bidEvent,
+				auctionFixture.verdictEvent,
+				auctionFixture.pathReleaseEvent,
+				auctionFixture.settlementEvent,
+			]) {
+				await relay.publish(event)
+			}
+			auctionEvent = auctionFixture.auctionEvent
+			itemTagValue = auctionFixture.itemTagValue
+			orderAmount = String(auctionFixture.amount)
 		}
 
-		// 2. Construct Base Tags Array (MUTABLE)
-		// FIX: Build tags array as a mutable variable first
-		const baseTags: string[][] = [
-			['p', devUser1.pk], // Seller
-			['subject', `Order #${orderId}`],
-			['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
-			['order', orderId],
-			['amount', orderAmount],
-			['item', itemTagValue, '1'],
-		]
-
-		// Add 'a' tag if it's an auction
-		if (type === 'auction') {
-			baseTags.push(['a', itemTagValue])
-		}
+		// 2. Construct Base Tags Array
+		// Auction orders ARE the claim order: they carry the canonical claim
+		// marker (the same tags `buildAuctionClaimPublicMarkerTags` emits in
+		// production) bound to the seeded settlement event id. Without it the
+		// order is only auction-associated and never reaches the validated
+		// fulfillment authority the order surfaces require.
+		const baseTags: string[][] =
+			type === 'auction' && auctionFixture
+				? buildAuctionClaimOrderTags(auctionFixture, orderId)
+				: [
+						['p', devUser1.pk], // Seller
+						['subject', `Order #${orderId}`],
+						['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+						['order', orderId],
+						['amount', orderAmount],
+						['item', itemTagValue, '1'],
+					]
 
 		// 3. Create Order Event Data Object
 		const orderEventData: EventTemplate = {
@@ -766,8 +1154,19 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 			// Stage: Pending Payment (Base case - just the order creation exists)
 			if (stage === 'pending-payment') return
 
-			// Common to all: Status Update to 'confirmed'
-			if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
+			// Status update to 'confirmed' — PRODUCT ONLY.
+			//
+			// A generic payment confirmation is a product-flow event: the seller
+			// confirms they received payment. The auction flow never publishes
+			// one (AUCTIONS.md 4.3.3): the buyer's payment is the settled
+			// kind-1024 settlement, and fulfillment is authorized by the
+			// validated settlement + canonical claim while the order is still
+			// PENDING. Seeding `CONFIRMED` for an auction order would
+			// manufacture relay data no auction client can produce, and would
+			// let an e2e pass through the generic `isSeller && CONFIRMED` gate
+			// instead of exercising the auction authority path. Auction orders
+			// therefore stay PENDING until the seller processes them.
+			if (type === 'product' && ['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
 				const statusUpdate = finalizeEvent(
 					{
 						kind: ORDER_PROCESS_KIND,
@@ -892,44 +1291,21 @@ export async function seedOrder(type: OrderType, stage: OrderStage): Promise<See
 					}
 				}
 			} else if (type === 'auction') {
-				// Auction Flow: Path Release -> Settlement
-				if (['confirmed', 'processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
-					// Buyer publishes Path Release (Kind 1025)
-					const pathRelease = finalizeEvent(
-						{
-							kind: AUCTION_PATH_RELEASE_KIND,
-							created_at: now + 5,
-							content: '',
-							tags: [
-								['p', devUser1.pk],
-								['a', itemTagValue],
-								['winning_bid', 'bid_event_id_placeholder'],
-							],
-						},
-						buyerSkBytes,
-					)
-					await relay.publish(pathRelease)
-
-					// Seller publishes Settlement (Kind 1024)
-					if (['processing', 'shipped', 'delivered', 'completed'].includes(stage)) {
-						const settlement = finalizeEvent(
-							{
-								kind: AUCTION_SETTLEMENT_KIND,
-								created_at: now + 10,
-								content: '',
-								tags: [
-									['p', devUser2.pk],
-									['a', itemTagValue],
-									['status', 'settled'],
-									['winner', devUser2.pk],
-									['final_amount', '500'],
-								],
-							},
-							sellerSkBytes,
-						)
-						await relay.publish(settlement)
-					}
-				}
+				// The auction chain is published up front by
+				// buildAuctionOrderFixture(): the real kind-1023 winning bid,
+				// the auditor verdict, the winner's kind-1025 path release and
+				// the seller's settled kind-1024 settlement. No stage-local
+				// auction events belong here — the placeholder release
+				// (`winning_bid = bid_event_id_placeholder`) and the
+				// `final_amount 500` settlement that used to live in this
+				// branch are exactly the impossible relay data this fixture
+				// exists to avoid (R1).
+				//
+				// The generic CONFIRMED status update is skipped above for the
+				// same reason: an auction order's payment is the settlement,
+				// not a seller-authored confirmation, and its fulfillment
+				// authority is the validated settlement + canonical claim
+				// while the order is still PENDING.
 			}
 		}
 

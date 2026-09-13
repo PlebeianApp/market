@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementParticipantRole } from '../auction/settlementDescriptor'
+import {
+	getAuctionFulfillmentAuthority,
+	getSettlementDescriptor,
+	type GetSettlementDescriptorInput,
+	type SettlementParticipantRole,
+} from '../auction/settlementDescriptor'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,
@@ -1246,5 +1251,101 @@ describe('rebid chain path release validation', () => {
 		// seller falls back to "Settlement Ready" (both path releases are valid).
 		expect(d?.title).toBe('Settlement Ready')
 		expect(d?.verifiedBadge).toBe('path-release')
+	})
+})
+
+describe('getAuctionFulfillmentAuthority', () => {
+	// A fully validated settled chain: the auditor-confirmed canonical winner
+	// released its path, and the seller's kind-1024 settled settlement pays that
+	// exact winning leg. This is the ONLY shape that may authorize fulfillment.
+	const settledInput = (extra: InputOverrides = {}): GetSettlementDescriptorInput =>
+		makeInput({
+			bids: [winningBid],
+			verdicts: [verdictForBid(winningBid.id)],
+			nut7States: unspentNut7States([winningBid]),
+			pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
+			settlements: [
+				makeSettlement({
+					winningBidId: winningBid.id,
+					finalAmount: 50000,
+					pathReleaseEventId: 'pr-1',
+					payouts: [{ bidEventId: winningBid.id, amount: 50000, status: 'redeemed' }],
+				}),
+			],
+			// The seller is the party that fulfills, so authority is requested
+			// from the seller's perspective (the claim order is the buyer's).
+			currentUserPubkey: SELLER_PUBKEY,
+			now: 120,
+			...extra,
+		})
+
+	test('a validated settled chain with no claim order is NOT fulfillment-ready', async () => {
+		const input = settledInput()
+		// Precondition: the descriptor itself classifies this chain as settled.
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(false)
+		expect(authority.settlementEventId).toBe('settle-1')
+		expect(authority.claimOrderId).toBeUndefined()
+	})
+
+	test('a validated settled chain plus its canonical claim order IS fulfillment-ready', async () => {
+		const input = settledInput({ claimOrders: [makeClaimOrder()] })
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+		expect(authority.settlementEventId).toBe('settle-1')
+	})
+
+	test('a forged marker naming a settlement that does not exist grants NO fulfillment authority', async () => {
+		// The exact forgery the claim marker alone must never unlock: a
+		// well-formed marker whose 'settlement' e tag points at 64 hex chars
+		// that resolve to no validated settlement event.
+		const forged = makeClaimOrder({
+			id: 'order-forged',
+			tags: [
+				['p', SELLER_PUBKEY],
+				['type', 'order_creation'],
+				['order', 'order-forged'],
+				['amount', '50000'],
+				['a', '30408:seller:d-tag'],
+				['e', 'auction-root'],
+				['e', 'f'.repeat(64), '', 'settlement'],
+			],
+		})
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [forged] }))
+		expect(authority.fulfillmentReady).toBe(false)
+		expect(authority.claimOrderId).toBeUndefined()
+	})
+
+	test('a claim order whose author is not the settlement winner grants NO fulfillment authority', async () => {
+		const wrongAuthor = makeClaimOrder({ id: 'order-wrong-author', pubkey: OTHER_BIDDER_PUBKEY })
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [wrongAuthor] }))
+		expect(authority.fulfillmentReady).toBe(false)
+	})
+
+	test('a claim order whose amount disagrees with the settlement grants NO fulfillment authority', async () => {
+		const wrongAmount = makeClaimOrder({
+			id: 'order-wrong-amount',
+			tags: makeClaimOrder().tags.map((tag) => (tag[0] === 'amount' ? ['amount', '1'] : tag)),
+		})
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [wrongAmount] }))
+		expect(authority.fulfillmentReady).toBe(false)
+	})
+
+	test('an unsettled auction is never fulfillment-ready, even with a claim order', async () => {
+		// Reserve not met: the claim order validates against nothing, and the
+		// terminal non-settled outcome must not unlock fulfillment.
+		const input = settledInput({
+			auction: makeAuction({ reserve: 90000 }),
+			settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0, payouts: [] })],
+			claimOrders: [makeClaimOrder()],
+		})
+		const descriptor = await getSettlementDescriptor(input)
+		expect(descriptor?.phase).toBe('reserve-not-met')
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
 	})
 })

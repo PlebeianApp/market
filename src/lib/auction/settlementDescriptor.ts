@@ -21,6 +21,7 @@ export type SettlementPhase =
 	| 'settlement-window-expired'
 	| 'settled'
 	| 'reserve-not-met'
+	| 'griefed-no-fallback'
 	| 'cancelled'
 	| 'closed'
 
@@ -491,14 +492,60 @@ function classifyPhase(d: DerivedState): SettlementPhase {
 				return 'settled'
 			case 'reserve_not_met':
 				return 'reserve-not-met'
-			case 'cancelled':
+			// Grief is a distinct terminal outcome: the winning bidder never
+			// released the path and no fallback was exercised. ADR-0004 derives
+			// it from validator quorum, so it must not be collapsed into the
+			// seller-cancelled case on the order surfaces.
 			case 'griefed_no_fallback':
+				return 'griefed-no-fallback'
+			case 'cancelled':
 				return 'cancelled'
 			default:
 				return 'closed'
 		}
 	}
 	return d.settlementWindowExpired ? 'settlement-window-expired' : 'settlement-window-open'
+}
+
+/**
+ * Validated auction fulfillment authority (ADR-0003 / ADR-0004).
+ *
+ * Fulfillment is a settlement decision, not a display decision, so it is never
+ * granted by a broad auction detector or by the buyer-authored claim marker
+ * alone. It requires BOTH:
+ *
+ *   1. a settlement this module validated — correct seller/root/coordinate,
+ *      a canonical winning bid, a valid path release, and a complete payout
+ *      chain (see `deriveState` / `classifyPhase`), and
+ *   2. a claim order that passes the 8-point `validateClaimOrder` check
+ *      *against that exact settlement* (referenced settlement resolved from the
+ *      validated set, buyer === settlement winner, amount === final amount).
+ *
+ * A forged marker — buyer-authored tags naming any 64-hex settlement event id
+ * that resolves to nothing — therefore grants no authority: the referenced
+ * settlement is resolved here, never taken on faith from the marker.
+ *
+ * Synchronous on purpose: it reuses the same derived state
+ * `getSettlementDescriptor` builds. The mint-keyset fetch that descriptor
+ * performs only affects path-release proof decoding, which is not part of the
+ * fulfillment transition.
+ */
+export interface AuctionFulfillmentAuthority {
+	/** True only for validated settled settlement + canonical claim order. */
+	fulfillmentReady: boolean
+	/** The validated settlement event the claim is bound to (when one exists). */
+	settlementEventId?: string
+	/** The canonical claim order id bound to that settlement (when one exists). */
+	claimOrderId?: string
+}
+
+export function getAuctionFulfillmentAuthority(input: GetSettlementDescriptorInput): AuctionFulfillmentAuthority {
+	const derived = deriveState(input)
+	return {
+		fulfillmentReady: classifyPhase(derived) === 'settled' && derived.hasMatchedClaimOrder,
+		settlementEventId: derived.latestSettlement?.id,
+		claimOrderId: derived.matchedClaimOrderId,
+	}
 }
 
 function build(

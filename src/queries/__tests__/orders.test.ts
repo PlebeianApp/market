@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
-import { getAuctionCoordinatesFromOrder, isAuctionOrder } from '@/queries/orders'
+import { getAuctionCoordinatesFromOrder, getAuctionOrderClassification, isAuctionOrder } from '@/queries/orders'
 import { describeOrderSettlementStatus } from '@/components/orders/orderSettlementStatusView'
 import type { SettlementDescriptor } from '@/lib/auction/settlementDescriptor'
 
@@ -217,5 +217,82 @@ describe('orderSettlementStatusView', () => {
 			'Awaiting Settlement',
 		)
 		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'bidding-open', verifiedBadge: 'none' }))).toBe('Awaiting Settlement')
+	})
+
+	test('griefed-no-fallback phase maps to Griefed (No Fallback)', () => {
+		// Terminal grief is derived from validator quorum (ADR-0004) and must be
+		// representable without a path release — it is not a seller cancellation.
+		expect(describeOrderSettlementStatus(makeDescriptor({ phase: 'griefed-no-fallback', verifiedBadge: 'none' }))).toBe(
+			'Griefed (No Fallback)',
+		)
+	})
+})
+
+// Canonical auction-claim marker tags, shaped exactly as
+// getAuctionClaimPublicMarkerFields() expects to parse them.
+const SELLER_PK = 'b'.repeat(64)
+const BUYER_PK = 'a'.repeat(64)
+const AUCTION_EVENT_ID = 'c'.repeat(64)
+const SETTLEMENT_EVENT_ID = 'd'.repeat(64)
+const AUCTION_COORDS = `30408:${SELLER_PK}:e2e-auction-test`
+
+const claimMarkerTags = (): string[][] => [
+	['p', SELLER_PK],
+	['subject', 'auction-claim'],
+	['type', '1'],
+	['order', 'order-1'],
+	['amount', '1000'],
+	['a', AUCTION_COORDS],
+	['e', AUCTION_EVENT_ID],
+	['e', SETTLEMENT_EVENT_ID, '', 'settlement'],
+]
+
+const orderEventWith = (tags: string[][]): NDKEvent =>
+	({
+		tags,
+		pubkey: BUYER_PK,
+		created_at: Math.floor(Date.now() / 1000),
+		kind: 16,
+		content: '',
+	}) as unknown as NDKEvent
+
+describe('getAuctionOrderClassification', () => {
+	test('exposes NO authority flag — classification is presentation/legacy-compatibility only', () => {
+		// Authority for settlement, payment, and fulfillment lives in
+		// getAuctionFulfillmentAuthority() (@/lib/auction/settlementDescriptor),
+		// which resolves AND validates the referenced settlement. A local
+		// authority-shaped flag derived from buyer-authored tags is exactly the
+		// boundary this test exists to prevent from coming back.
+		const classification = getAuctionOrderClassification(orderEventWith(claimMarkerTags()))
+		expect(Object.keys(classification).sort()).toEqual(['claimMarker', 'coordinates', 'hasClaimMarker'])
+	})
+
+	test('plain auction coordinate: coordinates set, no claim marker', () => {
+		const classification = getAuctionOrderClassification(orderEventWith([['a', AUCTION_COORDS]]))
+		expect(classification.coordinates).toBe(AUCTION_COORDS)
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
+	})
+
+	test('a structurally-parseable claim marker is surfaced, but is not authority', () => {
+		const classification = getAuctionOrderClassification(orderEventWith(claimMarkerTags()))
+		expect(classification.coordinates).toBe(AUCTION_COORDS)
+		expect(classification.hasClaimMarker).toBe(true)
+		expect(classification.claimMarker?.orderId).toBe('order-1')
+		expect(classification.claimMarker?.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+	})
+
+	test('a non-auction order has neither coordinates nor a claim marker', () => {
+		const classification = getAuctionOrderClassification(orderEventWith([['amount', '1000']]))
+		expect(classification.coordinates).toBeNull()
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
+	})
+
+	test('a claim marker naming a different seller than the coordinate is not parseable', () => {
+		const mismatched = claimMarkerTags().map((tag) => (tag[0] === 'p' ? ['p', 'e'.repeat(64)] : tag))
+		const classification = getAuctionOrderClassification(orderEventWith(mismatched))
+		expect(classification.claimMarker).toBeNull()
+		expect(classification.hasClaimMarker).toBe(false)
 	})
 })
