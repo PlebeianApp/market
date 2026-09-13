@@ -209,6 +209,26 @@ describe('unlock: migrate + rehydrate', () => {
 	})
 })
 
+describe('unlock: vault vs legacy coexistence (review 5654374915 item 6)', () => {
+	test('vault + legacy plaintext pair → the vault wins, the stale pair is purged, the vault survives', async () => {
+		await seedVault('nbunksec1vaulted', 'pass')
+		memoryStorage.set(NOSTR_LOCAL_SIGNER_KEY, LEGACY_CLIENT_KEY)
+		memoryStorage.set(NOSTR_CONNECT_KEY, LEGACY_BUNKER_URL)
+
+		await authActions.unlockVaultedSession('pass', { minIterations: TEST_ITERATIONS })
+
+		// The VAULT's session rehydrated — the stale legacy pair was not
+		// migrated over it (which would silently log the user into the old
+		// session and destroy the fresh vault).
+		expect(rehydratedSessions).toEqual(['nbunksec1vaulted'])
+		await expect(unlockVault(undefined, 'pass', { minIterations: TEST_ITERATIONS })).resolves.toBe('nbunksec1vaulted')
+		// The stale plaintext bearer capability is purged, never retained.
+		expect(hasLegacyPlaintextSession()).toBe(false)
+		expect(memoryStorage.has(NOSTR_CONNECT_KEY)).toBe(false)
+		expect(authStore.state.isAuthenticated).toBe(true)
+	})
+})
+
 describe('refuse-migration-logout', () => {
 	test('discard deletes plaintext, writes no vault, logs out', () => {
 		memoryStorage.set(NOSTR_LOCAL_SIGNER_KEY, LEGACY_CLIENT_KEY)

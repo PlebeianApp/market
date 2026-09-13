@@ -21,6 +21,7 @@ import {
 	hasLegacyPlaintextSession,
 	hasVaultedSession,
 	migrateLegacySessionToVault,
+	preferredSessionSource,
 	unlockVault,
 	wrapSession,
 } from '@/lib/nostr/session-vault'
@@ -189,5 +190,32 @@ describe('legacy plaintext migration (read ONCE policy)', () => {
 	test('migration without a legacy session fails closed', async () => {
 		await expect(migrateLegacySessionToVault('pass', { iterations: TEST_ITERATIONS })).rejects.toThrow(SessionVaultError)
 		expect(hasVaultedSession()).toBe(false)
+	})
+})
+
+describe('persisted-session source precedence (review 5654374915 item 6)', () => {
+	test('no persisted session at all → none', () => {
+		expect(preferredSessionSource()).toBe('none')
+	})
+
+	test('legacy plaintext pair only → legacy', () => {
+		memoryStorage.set(LEGACY_LOCAL_SIGNER_KEY, LEGACY_CLIENT_KEY)
+		memoryStorage.set(LEGACY_CONNECT_URL_KEY, LEGACY_BUNKER_URL)
+
+		expect(preferredSessionSource()).toBe('legacy')
+	})
+
+	test('vault + legacy plaintext pair together → the vault wins', async () => {
+		memoryStorage.set(LEGACY_LOCAL_SIGNER_KEY, LEGACY_CLIENT_KEY)
+		memoryStorage.set(LEGACY_CONNECT_URL_KEY, LEGACY_BUNKER_URL)
+
+		const { saveVaultedSession } = await import('@/lib/nostr/session-vault')
+		await saveVaultedSession('nbunksec1newer', 'pass', { iterations: TEST_ITERATIONS })
+
+		// The vault is the newer, encrypted form (only pre-B-3 builds wrote
+		// the plaintext pair); migrating the stale pair over it would
+		// DESTROY the fresh session and silently log the user into the old
+		// one. The vault always wins when both are present.
+		expect(preferredSessionSource()).toBe('vault')
 	})
 })

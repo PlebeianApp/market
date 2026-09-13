@@ -214,6 +214,25 @@ export function hasLegacyPlaintextSession(): boolean {
 	return localStorage.getItem(LEGACY_LOCAL_SIGNER_KEY) !== null
 }
 
+/** Which persisted NIP-46 session form a restore should use. */
+export type PersistedSessionSource = 'vault' | 'legacy' | 'none'
+
+/**
+ * Resolve the persisted session form to restore from, in precedence order.
+ *
+ * The vault ALWAYS wins when a vault and a legacy plaintext pair coexist:
+ * only pre-B-3 builds wrote the plaintext pair, so a vault is by construction
+ * the newer session — and `loginWithNip46` never deletes the old pair, so
+ * the two can coexist. Migrating the stale pair would overwrite (destroy)
+ * the fresh vault and silently sign the user into the old session
+ * (review 5654374915 item 6).
+ */
+export function preferredSessionSource(): PersistedSessionSource {
+	if (hasVaultedSession()) return 'vault'
+	if (hasLegacyPlaintextSession()) return 'legacy'
+	return 'none'
+}
+
 /**
  * Legacy migration, happy path: rebuild the nbunksec session from the
  * plaintext pair (client key hex + `bunker://` URL), wrap it into the vault,

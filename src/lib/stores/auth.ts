@@ -25,6 +25,7 @@ import {
 	LEGACY_CONNECT_URL_KEY,
 	LEGACY_LOCAL_SIGNER_KEY,
 	migrateLegacySessionToVault,
+	preferredSessionSource,
 	saveVaultedSession,
 	unlockVault,
 	discardLegacySession,
@@ -421,13 +422,22 @@ export const authActions = {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
 			let nbunksec: string
-			if (hasLegacyPlaintextSession()) {
+			// Precedence (review 5654374915 item 6): the vault wins whenever it
+			// exists. A legacy plaintext pair can coexist with a newer vault
+			// (loginWithNip46 never deletes it), and migrating the stale pair
+			// would overwrite the fresh vault and silently restore the OLD
+			// session.
+			if (preferredSessionSource() === 'legacy') {
 				// Read-ONCE migration: wrap the plaintext pair, then delete it.
 				;({ nbunksec } = await migrateLegacySessionToVault(passphrase, options))
 			} else {
 				if (!hasVaultedSession()) throw new Error('No vaulted session to unlock')
 				const { iterations: _wrapOnly, ...unlockOptions } = options ?? {}
 				nbunksec = await unlockVault(undefined, passphrase, unlockOptions)
+				// The vault opened, so it is the live session: purge the stale
+				// plaintext bearer capability rather than retain it (ADR-0008
+				// invariant 4 — never silently keep plaintext at rest).
+				discardLegacySession()
 			}
 
 			// Restore path: derive → decrypt → fromNbunksec → NostrConnectSigner.
