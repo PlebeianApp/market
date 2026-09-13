@@ -1,7 +1,16 @@
 import { getPublicKey } from 'nostr-tools/pure'
-import { APP_SETTINGS_D_TAG, fetchAppSettings } from '../lib/appSettings'
+import { fetchAppSettings } from '../lib/appSettings'
+import { resolveHandlerIdChain } from '../lib/instance-config'
 import { getEventHandler } from './EventHandler'
-import { APP_PRIVATE_KEY, RELAY_URL, getAppSettings, setAppPublicKey, setAppSettings, setEventHandlerReady } from './runtime'
+import {
+	APP_PRIVATE_KEY,
+	RELAY_URL,
+	getAppSettings,
+	getInstanceConfig,
+	setAppPublicKey,
+	setAppSettings,
+	setEventHandlerReady,
+} from './runtime'
 
 /**
  * Initialise process-level state required by every other server module.
@@ -20,11 +29,14 @@ export async function initializeAppSettings(): Promise<void> {
 		const publicKey = getPublicKey(privateKeyBytes)
 		setAppPublicKey(publicKey)
 
-		// D-tag fallback chain: try custom handler ID first (if env-provided),
-		// then fall back to Plebeian default. This allows self-hosted instances
-		// to publish their own handler ID without breaking existing Plebeian deploys.
-		const customHandlerId = process.env.INSTANCE_HANDLER_ID
-		const handlerIds = customHandlerId ? [customHandlerId, APP_SETTINGS_D_TAG] : [APP_SETTINGS_D_TAG]
+		// D-tag fallback chain derived from the resolved instance config: the
+		// configured handler ID first (INSTANCE_HANDLER_ID), then the shipped
+		// default so pre-config deployments keep resolving. `getInstanceConfig()`
+		// runs before the fetch, so at this point it reflects the environment
+		// only — which is exactly what discovery can query. The owner UI no
+		// longer publishes under an arbitrary d tag (it uses the resolved
+		// config handler ID), so publish and discovery stay in lockstep.
+		const handlerIds = resolveHandlerIdChain(getInstanceConfig().handlerId)
 
 		const settings = await fetchAppSettings(RELAY_URL as string, publicKey, handlerIds)
 		setAppSettings(settings)

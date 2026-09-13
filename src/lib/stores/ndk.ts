@@ -1,5 +1,5 @@
-import { defaultRelaysUrls, ZAP_RELAYS, type Stage } from '@/lib/constants'
-import { computeNdkConfig, resolveMainRelay, resolveZapRelays } from '@/lib/relay-policy'
+import { defaultRelaysUrls, type Stage } from '@/lib/constants'
+import { computeNdkConfig, resolveMainRelay } from '@/lib/relay-policy'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -410,11 +410,10 @@ export const ndkActions = {
 		if (ndkStore.state.ndk) return ndkStore.state.ndk
 
 		const stage = getCurrentStage()
-		const { explicitRelayUrls, writeRelayUrls, enableOutbox } = computeNdkConfig({
+		const { explicitRelayUrls, writeRelayUrls, zapRelayUrls, enableOutbox } = computeNdkConfig({
 			stage,
 			appRelay: configStore.state.config.appRelay,
 			publicRelays: configStore.state.config.publicRelays,
-			zapRelays: configStore.state.config.publicRelays, // Use same set for zaps; can be overridden per-instance
 			overrideRelays: relays,
 			localRelayOnly: isBunLocalRelayOnly(),
 		})
@@ -437,16 +436,17 @@ export const ndkActions = {
 			aiGuardrails: enableGuardrails ? { skip: new Set(['ndk-no-cache', 'fetch-events-usage']) } : false,
 		})
 
-		// Monitor zap receipts on public ZAP_RELAYS (plus the app relay) in
-		// production. LSPs publish zap receipts to their own public relays,
-		// not the local/app relay, so we must subscribe there to detect paid
-		// invoices. The server computes externalZapRelaysEnabled in /api/config
+		// Monitor zap receipts on public ZAP_RELAYS (plus the app relay and any
+		// instance-configured public relays) in production. LSPs publish zap
+		// receipts to their own public relays, not the local/app relay, so we
+		// must subscribe there to detect paid invoices. `zapRelayUrls` comes
+		// from the relay policy and always contains ZAP_RELAYS — instance
+		// relays are additive, never a replacement (see resolveZapRelays).
+		// The server computes externalZapRelaysEnabled in /api/config
 		// and sends it to the browser — one decision point, no client/server
 		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
 		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
-		const zapNdk = externalZapRelaysEnabled
-			? new NDK({ explicitRelayUrls: resolveZapRelays(explicitRelayUrls, configStore.state.config.publicRelays) })
-			: null
+		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: zapRelayUrls }) : null
 
 		ndkStore.setState((s) => ({ ...s, ndk, zapNdk, explicitRelayUrls, writeRelayUrls }))
 
@@ -509,7 +509,7 @@ export const ndkActions = {
 			ndkStore.setState((s) => ({ ...s, isZapNdkConnected: connected }))
 
 			if (connected) {
-				console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
+				console.log('✅ Zap NDK connected to relays:', state.zapNdk?.explicitRelayUrls ?? [])
 			} else {
 				console.warn('⚠️ Zap NDK could not connect. Zap monitoring will be unavailable.')
 			}
