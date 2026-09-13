@@ -251,12 +251,16 @@ class FakeRfile:
         return b""
 
 
-def _make_fake_handler(handler_cls, host: str):
+def _make_fake_handler(handler_cls, host: str, accept: str | None = None):
     class FakeHandler(handler_cls):
         def __init__(self):
             self.command = "GET"
             self.path = "/"
             self.headers = {"Host": host}
+            if accept is not None:
+                # Only set when the test cares: an absent Accept is exactly the
+                # curl/CI case the JSON contract must keep serving.
+                self.headers["Accept"] = accept
             self.wfile = _FakeWfile()
             self._sent = []
             self.rfile = FakeRfile()
@@ -339,6 +343,119 @@ def test_route_handler_flow_503_on_proxy_oserror():
     h._answer_route()
     assert ("status", 503) in h._sent
     assert "connection reset" in h.wfile.text
+
+
+# ── the 503 body: JSON for machines, a self-reloading page for humans ─────────
+
+
+def test_prefers_html_detects_browser_accept_headers():
+    # Browsers.
+    assert (
+        gw.prefers_html(
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8"
+        )
+        is True
+    )
+    assert gw.prefers_html("text/html") is True
+    assert gw.prefers_html("TEXT/HTML") is True
+    # curl, fetch() from a script, the CI health check, health probes.
+    assert gw.prefers_html("*/*") is False
+    assert gw.prefers_html("application/json") is False
+    assert gw.prefers_html("") is False
+    assert gw.prefers_html(None) is False
+
+
+def test_route_handler_503_serves_a_starting_page_to_browsers():
+    pokes: list[int] = []
+    # If the handler wrongly calls the proxy, this raises and fails the test.
+    state = _route_state(
+        pokes,
+        False,
+        AssertionError("proxy must not be called when boot fails"),
+    )
+    handler_cls = gw.make_handler(state)
+    FakeHandler = _make_fake_handler(
+        handler_cls, f"pr42.{BASE}", accept="text/html,application/xhtml+xml,*/*;q=0.8"
+    )
+
+    h = FakeHandler()
+    h._answer_route()
+
+    assert ("status", 503) in h._sent
+    assert ("Content-Type", "text/html; charset=utf-8") in h._sent
+    # Tell well-behaved clients when to come back …
+    assert ("Retry-After", str(gw.STARTING_PAGE_REFRESH_SECONDS)) in h._sent
+    page = h.wfile.text
+    # … and self-reload, so the viewer never has to hit refresh.
+    assert page.startswith("<!doctype html>")
+    assert (
+        f'<meta http-equiv="refresh" content="{gw.STARTING_PAGE_REFRESH_SECONDS}"'
+        in page
+    )
+    assert "PR 42" in page
+    assert "starting" in page.lower()
+    # The raw JSON payload is what we are replacing: it must not be in the page.
+    assert '"error"' not in page
+    assert '"preview not ready"' not in page
+
+
+def test_route_handler_503_keeps_json_for_non_browser_clients():
+    # No Accept header at all is the curl / CI health-check case.
+    pokes: list[int] = []
+    state = _route_state(
+        pokes,
+        False,
+        AssertionError("proxy must not be called when boot fails"),
+    )
+    handler_cls = gw.make_handler(state)
+    FakeHandler = _make_fake_handler(handler_cls, f"pr42.{BASE}")
+
+    h = FakeHandler()
+    h._answer_route()
+
+    assert ("status", 503) in h._sent
+    assert ("Content-Type", "application/json") in h._sent
+    payload = json.loads(h.wfile.text)
+    assert payload["error"] == "preview not ready"
+    assert payload["pr"] == 42
+    # Machine clients get the retry hint too.
+    assert ("Retry-After", str(gw.STARTING_PAGE_REFRESH_SECONDS)) in h._sent
+
+
+def test_route_handler_503_keeps_json_for_explicit_json_accept():
+    pokes: list[int] = []
+    state = _route_state(pokes, False, AssertionError("proxy must not be called"))
+    handler_cls = gw.make_handler(state)
+    FakeHandler = _make_fake_handler(handler_cls, f"pr42.{BASE}", accept="application/json")
+
+    h = FakeHandler()
+    h._answer_route()
+
+    assert ("Content-Type", "application/json") in h._sent
+    assert json.loads(h.wfile.text)["pr"] == 42
+
+
+def test_route_handler_503_serves_the_page_when_the_upstream_is_broken():
+    # A browser gets the friendly page on the proxy-failure path too (the app is
+    # up but answering garbage), and the technical detail stays visible.
+    pokes: list[int] = []
+    state = _route_state(pokes, True, OSError("Remote end closed connection without response"))
+    handler_cls = gw.make_handler(state)
+    FakeHandler = _make_fake_handler(handler_cls, f"pr42.{BASE}", accept="text/html")
+
+    h = FakeHandler()
+    h._answer_route()
+
+    assert ("status", 503) in h._sent
+    assert h.wfile.text.startswith("<!doctype html>")
+    assert "Remote end closed connection" in h.wfile.text
+
+
+def test_starting_page_escapes_the_detail():
+    # The detail is exception text from an untrusted upstream: never inject it.
+    page = gw.starting_page(7, '<script>alert("x")</script>').decode()
+    assert "<script>alert" not in page
+    assert "&lt;script&gt;" in page
 
 
 def test_route_handler_flow_rejects_non_preview_host():

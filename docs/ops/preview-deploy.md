@@ -83,6 +83,29 @@ connection with no reply at all and Caddy would render it as **502 Bad
 Gateway** — indistinguishable from a routing or TLS problem. A logged 503 with
 a `detail` field is debuggable; an empty 502 is not.
 
+### The 503 "preview is starting" page
+
+A preview is lazy-started, so the first visit to a stopped preview arrives while
+the container is still booting. The gateway answers that window with `503`. For a
+**browser** (`Accept: text/html`) it now returns a small self-contained page — no
+external assets, since the app is not up yet — that says the preview is starting
+and reloads itself every 5 s (`<meta http-equiv="refresh">` plus a cosmetic
+countdown bar), so the viewer never has to hit refresh. The page is served **in
+place**, not as a redirect: the URL keeps pointing at the preview, so the reload
+lands on the app the moment it is ready.
+
+Every other client — curl, `fetch()` from a script, uptime probes, and the CI
+health check — keeps the machine-readable JSON body:
+
+```json
+{ "error": "preview not ready", "pr": 1271, "detail": "…" }
+```
+
+That preserves the health check's status/body assertions and the deploy comment,
+which quotes `detail`. Both variants carry `Retry-After: 5`, and the technical
+`detail` is HTML-escaped before it is rendered (it is text from an untrusted
+upstream).
+
 ## The nak relay image is built from source on the host
 
 The preview's `nak-relay` service used to pull `ghcr.io/fiatjaf/nak:latest`.
