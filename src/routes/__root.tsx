@@ -8,6 +8,7 @@ import { useAmIAdmin } from '@/queries/app-settings'
 import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
+import { SessionUnlockDialog } from '@/components/auth/SessionUnlockDialog'
 import { Toaster } from 'sonner'
 import { useBlacklistSync } from '@/hooks/useBlacklistSync'
 import { useVanitySync } from '@/hooks/useVanitySync'
@@ -114,6 +115,7 @@ function RootLayout() {
 				{/* <TanStackRouterDevtools /> */}
 				<MigratePrivateKeyDialog />
 				<DecryptPasswordDialog />
+				<SessionUnlockDialog />
 				<SheetRegistry />
 				<DialogRegistry />
 				<Toaster />

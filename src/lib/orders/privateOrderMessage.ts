@@ -1,6 +1,6 @@
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
+import type { SignerCapability } from '../nostr/signer-capability'
 import {
 	createNip59GiftWrap,
 	createNip59GiftWrapWithSigner,
@@ -52,7 +52,7 @@ export type CreateEncryptedPrivateOrderMessageParams = CreatePrivateOrderDetails
 }
 
 export type CreateEncryptedPrivateOrderMessageWithSignerParams = CreatePrivateOrderDetailsRumorParams & {
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 	wrapperPrivateKey?: Uint8Array
 }
 
@@ -65,7 +65,7 @@ export type DecryptPrivateOrderMessageParams = {
 
 export type DecryptPrivateOrderMessageWithSignerParams = {
 	giftWrap: Event
-	signer: NDKSigner | null | undefined
+	signer: SignerCapability | null | undefined
 	expectedSellerPubkey?: string
 	expectedBuyerPubkey?: string
 }
