@@ -32,6 +32,7 @@ import {
 } from '@/lib/nostr/session-vault'
 import type { UnlockOptions, WrapOptions } from '@/lib/nostr/session-vault'
 import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
+import type { SignerCapability } from '@/lib/nostr/signer-capability'
 
 // Single source of truth for the legacy plaintext-pair literals is
 // session-vault.ts (LEGACY_*_KEY) — these aliases keep the historical
@@ -76,6 +77,35 @@ const initialState: AuthState = {
 }
 
 export const authStore = new Store<AuthState>(initialState)
+
+/**
+ * Attach a fully-ready signer session in ONE step (review 5191403562 A):
+ * capability registry + NDK signer + auth identity together, and only after
+ * every fallible step of the lane has succeeded.
+ *
+ * `applesauceIo.sign()` authorizes from `getSignerCapability()`, NOT from the
+ * auth store, so registering the capability before readiness / identity
+ * resolution / persistence would leave a USABLE signer behind when the login
+ * then fails.
+ */
+function attachSignerSession(capability: SignerCapability, signer: NdkSignerAdapter, user: NDKUser, extraState?: Partial<AuthState>): void {
+	setSignerCapability(capability)
+	ndkActions.setSigner(signer)
+	authStore.setState((state) => ({ ...state, user, isAuthenticated: true, ...extraState }))
+}
+
+/**
+ * Detach everything a failed login may have registered (review 5191403562 A).
+ * Called from every lane's catch path: clears the capability so
+ * `applesauceIo.sign()` fails closed again, detaches the NDK signer through
+ * the store's single detach chokepoint, and runs the signer teardown so a
+ * half-open NIP-46 transport is closed exactly once.
+ */
+function rollbackSignerAttachment(): void {
+	setSignerCapability(undefined)
+	ndkActions.removeSigner()
+	void runSignerTeardown()
+}
 
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
@@ -204,29 +234,29 @@ export const authActions = {
 			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
 			// unchanged (ADR-0008 strangler-fig). No NEW plaintext is persisted here
 			// — the nsec key stays in-memory until Wave B-3 unifies session storage.
+			//
+			// Readiness + identity resolution happen BEFORE anything is attached
+			// (review 5191403562 A): `applesauceIo.sign()` authorizes from the
+			// capability registry, not from auth-store state.
 			const capability = createPrivateKeySigner(privateKey)
 			const signer = new NdkSignerAdapter(capability)
-			setSignerCapability(capability)
 			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
+			const user = await signer.user()
+
+			// Atomic attach: capability + NDK signer + auth identity together.
+			attachSignerSession(capability, signer, user)
+
 			// Kick off the post-signer onboarding pipeline (relay list,
 			// NWC select, NIP-60 init) in the background — login can
 			// resolve before these finish so the user isn't gated on a
 			// slow relay-list fetch.
 			void ndkActions.runSignerOnboarding(signer)
 
-			const user = await signer.user()
-
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
-
 			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
+			rollbackSignerAttachment()
 			authStore.setState((state) => ({
 				...state,
 				isAuthenticated: false,
@@ -265,19 +295,15 @@ export const authActions = {
 			// registry + capability seam, then attach an NDKSigner adapter so the
 			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
 			// unchanged (ADR-0008 strangler-fig). No key is held locally.
+			//
+			// Readiness + identity resolution + persistence happen BEFORE anything
+			// is attached (review 5191403562 A).
 			const capability = createExtensionSigner()
 			const signer = new NdkSignerAdapter(capability)
-			setSignerCapability(capability)
 			// blockUntilReady awaits getPublicKey — the extension-available check
 			// (ExtensionSigner throws ExtensionMissingError when window.nostr is
 			// absent, on top of the getAvailableNostrExtensions guard above).
 			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 init) in the background — login can
-			// resolve before these finish so the user isn't gated on a
-			// slow relay-list fetch.
-			void ndkActions.runSignerOnboarding(signer)
 
 			const user = await signer.user()
 
@@ -289,16 +315,20 @@ export const authActions = {
 			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
 			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
+			// Atomic attach: capability + NDK signer + auth identity together.
+			attachSignerSession(capability, signer, user)
+
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(signer)
 
 			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
+			rollbackSignerAttachment()
 			authStore.setState((state) => ({
 				...state,
 				isAuthenticated: false,
@@ -333,40 +363,41 @@ export const authActions = {
 					: undefined,
 			})
 			const adapter = new NdkSignerAdapter(bundle.capability)
-			setSignerCapability(bundle.capability)
-			// Keep the live signer handle so any detach path (logout / removeSigner)
-			// can tear it down. `NostrConnectSigner.logout()` notifies the remote and
-			// close()s the repeat()/retry() REQ subscription — without this, a
-			// re-login stacks a second kind-24133 subscription on the shared pool.
+			// Keep the live signer handle so any detach path (logout / removeSigner
+			// / a failed login rollback) can tear it down. `NostrConnectSigner.logout()`
+			// notifies the remote and close()s the repeat()/retry() REQ subscription —
+			// without this, a re-login stacks a second kind-24133 subscription on the
+			// shared pool. Registered as soon as the transport exists so a later
+			// failure in this lane closes it (review 5191403562 A/C).
 			setSignerTeardown(() => bundle.signer.logout())
 			await adapter.blockUntilReady()
-			ndkActions.setSigner(adapter)
-			// Kick off the post-signer onboarding pipeline (relay list,
-			// NWC select, NIP-60 init) in the background — login can
-			// resolve before these finish so the user isn't gated on a
-			// slow relay-list fetch.
-			void ndkActions.runSignerOnboarding(adapter)
 			const user = await adapter.user()
 
 			// Session persistence (ADR-0008 B-3 / #996 H8): with a passphrase the
 			// nbunksec session is wrapped PBKDF2+AES-GCM under nostr_session_v1;
 			// without one the session stays in-memory. The legacy plaintext pair
-			// is NEVER written again.
+			// is NEVER written again. Persistence runs BEFORE the attach
+			// (review 5191403562 A): a vault-write failure must not leave a
+			// usable signer attached.
 			if (options?.sessionPassphrase) {
 				const wrapOptions: WrapOptions | undefined = options.vaultIterations != null ? { iterations: options.vaultIterations } : undefined
 				await saveVaultedSession(bundle.signer.getNbunksec(), options.sessionPassphrase, wrapOptions)
 			}
 
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
+			// Atomic attach: capability + NDK signer + auth identity together.
+			attachSignerSession(bundle.capability, adapter, user)
+
+			// Kick off the post-signer onboarding pipeline (relay list,
+			// NWC select, NIP-60 init) in the background — login can
+			// resolve before these finish so the user isn't gated on a
+			// slow relay-list fetch.
+			void ndkActions.runSignerOnboarding(adapter)
 
 			void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
 
 			return user
 		} catch (error) {
+			rollbackSignerAttachment()
 			authStore.setState((state) => ({
 				...state,
 				isAuthenticated: false,
@@ -443,31 +474,28 @@ export const authActions = {
 			// Restore path: derive → decrypt → fromNbunksec → NostrConnectSigner.
 			const bundle = await rehydrateNostrConnectSession(nbunksec)
 			const adapter = new NdkSignerAdapter(bundle.capability)
-			setSignerCapability(bundle.capability)
 			setSignerTeardown(() => bundle.signer.logout())
 			await adapter.blockUntilReady()
-			ndkActions.setSigner(adapter)
+			const user = await adapter.user()
+
+			// Atomic attach (review 5191403562 A): the unlock lane runs the
+			// same all-or-nothing attach as the login lanes.
+			attachSignerSession(bundle.capability, adapter, user, { needsSessionUnlock: false })
+
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			// Kick off the post-signer onboarding pipeline (relay list,
 			// NWC select, NIP-60 init) in the background — login can
 			// resolve before these finish so the user isn't gated on a
 			// slow relay-list fetch.
 			void ndkActions.runSignerOnboarding(adapter)
-			const user = await adapter.user()
-
-			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
-
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-				needsSessionUnlock: false,
-			}))
 
 			void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
 			authActions.checkAndShowTermsDialog()
 
 			return user
 		} catch (error) {
+			rollbackSignerAttachment()
 			authStore.setState((state) => ({ ...state, isAuthenticated: false }))
 			throw error
 		} finally {
