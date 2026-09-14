@@ -4,6 +4,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Trophy } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Media } from '@/components/Media'
 import { UserCard } from '@/components/UserCard'
@@ -26,6 +36,7 @@ export function AuctionWonModal() {
 	const active = queue[0] ?? null
 	const queryClient = useQueryClient()
 	const [isSettling, setIsSettling] = useState(false)
+	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
 
 	const auctionQuery = useQuery(auctionQueryOptions(active?.auctionRootEventId ?? ''))
 	const auction = auctionQuery.data ?? null
@@ -37,9 +48,19 @@ export function AuctionWonModal() {
 
 	useEffect(() => {
 		setIsSettling(false)
+		setIsLeaveConfirmOpen(false)
 	}, [active?.auctionRootEventId])
 
 	if (!active) return null
+
+	const handleOpenChange = (open: boolean) => {
+		if (!open) setIsLeaveConfirmOpen(true)
+	}
+
+	const handleLeaveSettlement = () => {
+		setIsLeaveConfirmOpen(false)
+		auctionWonActions.dismissActive()
+	}
 
 	const handleSettle = async () => {
 		setIsSettling(true)
@@ -59,50 +80,68 @@ export function AuctionWonModal() {
 	}
 
 	return (
-		<Dialog open>
-			<DialogContent className="overflow-hidden sm:max-w-md">
-				<ConfettiBurst />
-				<div className="relative flex flex-col items-center gap-4 pt-2 text-center">
-					<div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-						<Trophy className="h-7 w-7" />
-					</div>
-
-					<div>
-						<DialogTitle className="text-2xl font-bold">You won!</DialogTitle>
-						<DialogDescription className="mt-1 text-sm text-muted-foreground">
-							Your bid was the highest when the auction closed. Settle now to let the seller ship your item.
-						</DialogDescription>
-					</div>
-
-					{imageUrl && (
-						<div className="h-40 w-40 overflow-hidden rounded-lg border">
-							<Media src={imageUrl} alt={title} video={false} className="h-full w-full object-cover" />
+		<>
+			<Dialog open onOpenChange={handleOpenChange}>
+				<DialogContent className="overflow-hidden sm:max-w-md">
+					<ConfettiBurst />
+					<div className="relative flex flex-col items-center gap-4 pt-2 text-center">
+						<div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+							<Trophy className="h-7 w-7" />
 						</div>
-					)}
 
-					<h3 className="text-lg font-semibold">{title}</h3>
-
-					{sellerPubkey && (
-						<div className="flex items-center gap-2 text-sm text-muted-foreground">
-							<span>Seller:</span>
-							<UserCard pubkey={sellerPubkey} size="xs" subtitle="none" onPress="none" />
+						<div>
+							<DialogTitle className="text-2xl font-bold">You won!</DialogTitle>
+							<DialogDescription className="mt-1 text-sm text-muted-foreground">
+								Your bid was the highest when the auction closed. Settle now to let the seller ship your item.
+							</DialogDescription>
 						</div>
-					)}
 
-					<div className="rounded-lg bg-muted px-4 py-2">
-						<div className="text-xs text-muted-foreground">Your winning bid</div>
-						<div className="text-xl font-bold">{formatSats(active.bidAmount)} sats</div>
+						{imageUrl && (
+							<div className="h-40 w-40 overflow-hidden rounded-lg border">
+								<Media src={imageUrl} alt={title} video={false} className="h-full w-full object-cover" />
+							</div>
+						)}
+
+						<h3 className="text-lg font-semibold">{title}</h3>
+
+						{sellerPubkey && (
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
+								<span>Seller:</span>
+								<UserCard pubkey={sellerPubkey} size="xs" subtitle="none" onPress="none" />
+							</div>
+						)}
+
+						<div className="rounded-lg bg-muted px-4 py-2">
+							<div className="text-xs text-muted-foreground">Your winning bid</div>
+							<div className="text-xl font-bold">{formatSats(active.bidAmount)} sats</div>
+						</div>
+
+						<div className="text-sm font-medium text-muted-foreground">
+							{settlementCountdown.isEnded ? 'Settlement window expired' : `Time left to settle: ${settlementCountdown.displayLabel}`}
+						</div>
+
+						<Button size="lg" className="w-full" onClick={handleSettle} disabled={isSettling}>
+							{isSettling ? 'Settling…' : 'Settle Auction'}
+						</Button>
 					</div>
+				</DialogContent>
+			</Dialog>
 
-					<div className="text-sm font-medium text-muted-foreground">
-						{settlementCountdown.isEnded ? 'Settlement window expired' : `Time left to settle: ${settlementCountdown.displayLabel}`}
-					</div>
-
-					<Button size="lg" className="w-full" onClick={handleSettle} disabled={isSettling}>
-						{isSettling ? 'Settling…' : 'Settle Auction'}
-					</Button>
-				</div>
-			</DialogContent>
-		</Dialog>
+			<AlertDialog open={isLeaveConfirmOpen} onOpenChange={setIsLeaveConfirmOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Leave settlement?</AlertDialogTitle>
+						<AlertDialogDescription>
+							You are leaving this auction unsettled. The settlement window will continue to count down, and the seller cannot redeem your
+							payment until you settle.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Continue settlement</AlertDialogCancel>
+						<AlertDialogAction onClick={handleLeaveSettlement}>Leave settlement</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	)
 }
