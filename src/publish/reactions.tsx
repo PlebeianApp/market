@@ -1,3 +1,4 @@
+import { getEventAddress } from '@/lib/nostr/eventLike'
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from '@/queries/queryKeyFactory'
 import type { Reaction } from '@/queries/reactions'
@@ -49,7 +50,7 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
 	const tags: string[][] = []
 
 	if (isAddressableKind(event.kind)) {
-		const address = event.tagAddress()
+		const address = getEventAddress(event)
 		// Add 'a' tag with coordinates (kind:pubkey:d-tag)
 		const aTag = ['a', address]
 		tags.push(aTag)
