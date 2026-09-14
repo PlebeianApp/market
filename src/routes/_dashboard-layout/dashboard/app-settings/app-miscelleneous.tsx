@@ -62,7 +62,7 @@ function AppMiscelleneousComponent() {
 			displayName: appSettings?.displayName ?? '',
 			picture: appSettings?.picture ?? '',
 			banner: appSettings?.banner ?? '',
-			handlerId: appSettings?.handlerId ?? config?.handlerId ?? '',
+			handlerId: config?.handlerId ?? '',
 			siteUrl: appSettings?.siteUrl ?? config?.siteUrl ?? '',
 			publicRelays: (appSettings?.publicRelays ?? config?.publicRelays ?? []).join('\n'),
 			trustedMints: (appSettings?.trustedMints ?? config?.trustedMints ?? []).join('\n'),
@@ -121,6 +121,12 @@ function AppMiscelleneousComponent() {
 				const { twitterUrl, newsletterUrl, telegramUrl, githubUrl, nostrUrl, publicRelays, trustedMints, ...settingsValue } = value
 				const updatedSettings = {
 					...settingsValue,
+					// The kind-31990 d tag must stay the one boot discovery can
+					// derive from the environment — publishing under a d tag that
+					// `resolveHandlerIdChain` cannot produce would drop the event
+					// out of the `#d` query chain (settings revert to the legacy
+					// event, or `needsSetup` flips back to true).
+					handlerId: config.handlerId,
 					ownerPk: config.appSettings.ownerPk,
 					publicRelays: parseList(publicRelays),
 					trustedMints: parseList(trustedMints),
@@ -135,7 +141,7 @@ function AppMiscelleneousComponent() {
 					supportContact: value.supportContact || undefined,
 				}
 
-				const handlerId = value.handlerId || config.handlerId || 'plebeian-market-handler'
+				const handlerId = config.handlerId
 				let handlerEvent = createHandlerInfoEventData(
 					config.appSettings.ownerPk,
 					updatedSettings,
@@ -431,11 +437,16 @@ function AppMiscelleneousComponent() {
 									id={field.name}
 									className="mt-1 border-2"
 									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
+									readOnly
 									onBlur={field.handleBlur}
 									placeholder="my-market-handler"
 								/>
-								<p className="mt-1 text-muted-foreground text-xs">The NIP-89 d-tag used to discover this instance.</p>
+								<p className="mt-1 text-muted-foreground text-xs">
+									The NIP-89 d-tag used to discover this instance. It is resolved at boot from <code>INSTANCE_HANDLER_ID</code> (or the
+									shipped default) and used both here and for discovery, so it is read-only: publishing under a d-tag boot discovery cannot
+									derive would make these settings revert after a restart. To change it, set <code>INSTANCE_HANDLER_ID</code> and restart
+									the instance.
+								</p>
 							</div>
 						)}
 					</form.Field>

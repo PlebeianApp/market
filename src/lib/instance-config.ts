@@ -98,9 +98,10 @@ function optionalList(value: string | undefined): string[] | undefined {
 }
 
 function optionalBoolean(value: string | undefined): boolean | undefined {
-	if (!value?.trim()) return undefined
-	if (value === 'true') return true
-	if (value === 'false') return false
+	const trimmed = value?.trim()
+	if (!trimmed) return undefined
+	if (trimmed === 'true') return true
+	if (trimmed === 'false') return false
 	throw new Error(`Expected "true" or "false", received "${value}"`)
 }
 
@@ -177,4 +178,25 @@ export function resolveInstanceConfig(appSettings: AppSettings | null, environme
 		trustedMints: [...resolved.trustedMints],
 		socialLinks: { ...resolved.socialLinks },
 	}
+}
+
+/**
+ * Kind-31990 `d`-tag discovery chain for the instance app-settings event.
+ *
+ * The resolved instance handler ID comes first (INSTANCE_HANDLER_ID at boot,
+ * else the shipped default), with the shipped default kept as a fallback so
+ * deployments that published settings before instance config existed keep
+ * resolving.
+ *
+ * Publish and boot discovery must both derive from this list: discovery can
+ * only query d tags it can resolve from the environment, so an owner UI field
+ * that publishes under an arbitrary new d tag leaves the `#d` query chain at
+ * boot — settings then silently revert to the legacy event, or `needsSetup`
+ * flips back to true and users land in `/setup`. The app-settings form
+ * therefore publishes under the resolved config handler ID and shows it
+ * read-only.
+ */
+export function resolveHandlerIdChain(handlerId: string | undefined): string[] {
+	const configured = handlerId?.trim()
+	return Array.from(new Set([configured || DEFAULT_INSTANCE_CONFIG.handlerId, DEFAULT_INSTANCE_CONFIG.handlerId]))
 }
