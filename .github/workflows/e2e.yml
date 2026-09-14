@@ -129,7 +129,14 @@ jobs:
         # failures still produce traces. Flaky families (Cart, Product Page
         # Interactions incl. the reaction test, ...) are not gated here; they
         # run in the scheduled/manual e2e-full job instead.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock' --repeat-each=2
+        #
+        # `OG Meta Tags` (e2e/tests/og-meta-tags.spec.ts, issue #459) is gated
+        # here so server-rendered product previews are exercised on every PR.
+        # It runs on the local relay/dev server like every other family in this
+        # job: no new triggers, permissions, secrets, or env are introduced.
+        # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
+        # describe in that spec stops matching this pattern.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()

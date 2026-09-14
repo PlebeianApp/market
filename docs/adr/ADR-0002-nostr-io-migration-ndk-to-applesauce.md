@@ -155,6 +155,32 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
 - Gate this work with integration tests. It is not expected to change
   marketplace e2e flakiness directly.
 
+- `src/server/ogMeta.ts` (Open Graph product previews) performs server-runtime
+  relay I/O via raw `nostr-tools` and is the documented Wave-E seam exception
+  (see its header comment). It bounds aggregate work with a process-wide
+  concurrency cap (`OG_MAX_CONCURRENT_LOOKUPS`) and coalesces concurrent
+  lookups for the same product id onto a single in-flight relay query, so
+  rotating random ids cannot drive unbounded concurrent server-side work.
+
+- The OG product route is availability-preserving by contract: the shell is
+  fetched from a server-controlled origin (`APP_SHELL_ORIGIN` / fixed
+  loopback — never the request `Host`), and every failure mode — shell
+  acquisition, relay lookup miss, rejected lookup, or a render error —
+  degrades to the plain module shell with HTTP 200. The SEO-only path must
+  never 5xx the product page.
+
+- The OG Meta Tags e2e family runs in the per-PR `e2e-grep` gate
+  (`.github/workflows/e2e.yml`). `e2e/playwright.config.ts` sets no
+  `outputDir`, so Playwright's default output dir resolves to the repo-root
+  `test-results/` (nearest `package.json` walking up from the config dir).
+  Both the `e2e-grep` and `e2e-full` jobs must upload `test-results/` — never
+  `e2e/test-results/`, which never exists and silently captures no failure
+  artifacts. A unit guard
+  (`src/lib/__tests__/e2e-workflow-artifact-path.test.ts`) enforces this. A
+  second guard (`src/lib/__tests__/e2e-workflow-gate-membership.test.ts`)
+  asserts every `OG Meta Tags` describe title matches the gate pattern, so the
+  family cannot silently drop out of the per-PR gate when it is renamed.
+
 Root-cause flakiness work is concentrated in Wave A, Wave C publish files,
 and Wave D. Wave 0, Wave B, the dashboard type-only work, and Wave E are
 enablers or cleanup unless later code review shows otherwise.
