@@ -21,8 +21,12 @@ import { ConfettiBurst } from '@/components/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
+import { getAuctionCoordinate } from '@/lib/auctionSettlement'
+import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import {
 	auctionQueryOptions,
+	auctionSettlementsQueryOptions,
 	getAuctionBiddingCutoffAt,
 	getAuctionImages,
 	getAuctionSettlementGrace,
@@ -40,12 +44,26 @@ export function AuctionWonModal() {
 
 	const auctionQuery = useQuery(auctionQueryOptions(active?.auctionRootEventId ?? ''))
 	const auction = auctionQuery.data ?? null
+	const auctionCoordinate = auction ? getAuctionCoordinate(auction) : ''
+	const settlementsQuery = useQuery(auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate))
 	const title = getAuctionTitle(auction)
 	const imageUrl = getAuctionImages(auction)[0]?.[1]
 	const sellerPubkey = auction?.pubkey
 	const settlementDeadlineAt = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
 	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
+	const hasFinalSettlement =
+		auction !== null &&
+		(settlementsQuery.data ?? []).some((event) => {
+			const parsed = parseSettlementEvent(toRawEvent(event))
+			return (
+				parsed.ok &&
+				parsed.value.sellerPubkey === auction.pubkey &&
+				parsed.value.auctionRootEventId === active?.auctionRootEventId &&
+				parsed.value.auctionCoordinate === auctionCoordinate
+			)
+		})
+	const hasVerifiedUnresolved = auctionQuery.isSuccess && settlementsQuery.isSuccess && !hasFinalSettlement
 
 	useEffect(() => {
 		setIsSettling(false)
@@ -53,10 +71,10 @@ export function AuctionWonModal() {
 	}, [active?.auctionRootEventId])
 
 	useEffect(() => {
-		if (active && hasSettlementExpired) auctionWonActions.dismissActive()
-	}, [active, hasSettlementExpired])
+		if (active && (hasSettlementExpired || hasFinalSettlement)) auctionWonActions.dismissActive()
+	}, [active, hasFinalSettlement, hasSettlementExpired])
 
-	if (!active || hasSettlementExpired) return null
+	if (!active || !hasVerifiedUnresolved || hasSettlementExpired) return null
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) setIsLeaveConfirmOpen(true)
