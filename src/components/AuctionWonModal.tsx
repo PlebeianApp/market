@@ -32,10 +32,6 @@ export function AuctionWonModal() {
 
 	if (!active) return null
 
-	const handleOpenChange = (open: boolean) => {
-		if (!open) auctionWonActions.dismissActive()
-	}
-
 	const handleSettle = async () => {
 		setIsSettling(true)
 		try {
@@ -54,7 +50,7 @@ export function AuctionWonModal() {
 	}
 
 	return (
-		<Dialog open onOpenChange={handleOpenChange}>
+		<Dialog open>
 			<DialogContent className="overflow-hidden sm:max-w-md">
 				<ConfettiBurst />
 				<div className="relative flex flex-col items-center gap-4 pt-2 text-center">

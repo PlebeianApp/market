@@ -74,13 +74,10 @@ export function useAuctionWinMonitor() {
 					const bidAmount = getBidAmount(topChain.latestBid)
 					const reserveMet = bidAmount >= getAuctionReserve(auction)
 					if (!reserveMet) continue
-					if (auctionWonActions.hasBeenDismissed(pubkey, rootEventId)) continue
-
 					auctionWonActions.enqueue({
 						auctionRootEventId: rootEventId,
 						bidEventId: topChain.latestBid.id,
 						bidAmount,
-						userPubkey: pubkey,
 					})
 				}
 			} catch (error) {
