@@ -10,7 +10,14 @@ import { UserCard } from '@/components/UserCard'
 import { ConfettiBurst } from '@/components/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { nip60Actions } from '@/lib/stores/nip60'
-import { auctionQueryOptions, getAuctionImages, getAuctionTitle } from '@/queries/auctions'
+import { useAuctionCountdown } from '@/components/AuctionCountdown'
+import {
+	auctionQueryOptions,
+	getAuctionBiddingCutoffAt,
+	getAuctionImages,
+	getAuctionSettlementGrace,
+	getAuctionTitle,
+} from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import { formatSats } from '@/lib/wallet/display'
 
@@ -25,6 +32,8 @@ export function AuctionWonModal() {
 	const title = getAuctionTitle(auction)
 	const imageUrl = getAuctionImages(auction)[0]?.[1]
 	const sellerPubkey = auction?.pubkey
+	const settlementDeadlineAt = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
+	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
 
 	useEffect(() => {
 		setIsSettling(false)
@@ -83,6 +92,10 @@ export function AuctionWonModal() {
 					<div className="rounded-lg bg-muted px-4 py-2">
 						<div className="text-xs text-muted-foreground">Your winning bid</div>
 						<div className="text-xl font-bold">{formatSats(active.bidAmount)} sats</div>
+					</div>
+
+					<div className="text-sm font-medium text-muted-foreground">
+						{settlementCountdown.isEnded ? 'Settlement window expired' : `Time left to settle: ${settlementCountdown.displayLabel}`}
 					</div>
 
 					<Button size="lg" className="w-full" onClick={handleSettle} disabled={isSettling}>
