@@ -45,13 +45,18 @@ export function AuctionWonModal() {
 	const sellerPubkey = auction?.pubkey
 	const settlementDeadlineAt = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
+	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
 
 	useEffect(() => {
 		setIsSettling(false)
 		setIsLeaveConfirmOpen(false)
 	}, [active?.auctionRootEventId])
 
-	if (!active) return null
+	useEffect(() => {
+		if (active && hasSettlementExpired) auctionWonActions.dismissActive()
+	}, [active, hasSettlementExpired])
+
+	if (!active || hasSettlementExpired) return null
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) setIsLeaveConfirmOpen(true)
@@ -116,9 +121,7 @@ export function AuctionWonModal() {
 							<div className="text-xl font-bold">{formatSats(active.bidAmount)} sats</div>
 						</div>
 
-						<div className="text-sm font-medium text-muted-foreground">
-							{settlementCountdown.isEnded ? 'Settlement window expired' : `Time left to settle: ${settlementCountdown.displayLabel}`}
-						</div>
+						<div className="text-sm font-medium text-muted-foreground">Time left to settle: {settlementCountdown.displayLabel}</div>
 
 						<Button size="lg" className="w-full" onClick={handleSettle} disabled={isSettling}>
 							{isSettling ? 'Settling…' : 'Settle Auction'}

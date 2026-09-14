@@ -9,6 +9,7 @@ import {
 	fetchAuctionBidsByBidder,
 	getAuctionBiddingCutoffAt,
 	getAuctionReserve,
+	getAuctionSettlementGrace,
 	getBidAmount,
 	getBidAuctionEventId,
 } from '@/queries/auctions'
@@ -56,7 +57,14 @@ export function useAuctionWinMonitor() {
 					if (!auction) continue
 
 					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
-					if (biddingCutoffAt <= 0 || biddingCutoffAt > Math.floor(Date.now() / 1000)) continue // Auction hasn't ended yet.
+					const now = Math.floor(Date.now() / 1000)
+					if (biddingCutoffAt <= 0 || biddingCutoffAt > now) continue // Auction hasn't ended yet.
+
+					const settlementDeadlineAt = biddingCutoffAt + getAuctionSettlementGrace(auction)
+					if (settlementDeadlineAt <= now) {
+						resolvedRootEventIds.current.add(rootEventId)
+						continue
+					}
 
 					const bids = await fetchAuctionBids(rootEventId, 500)
 					let chains
