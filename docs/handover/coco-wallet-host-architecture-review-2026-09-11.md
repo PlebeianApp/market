@@ -541,18 +541,18 @@ Reviewed baseline for the external LLM sweep: `6945ac41271bc2d1e26a9cc9fdcf8f5ab
 
 Fresh upstream master checked 2026-09-13: `8e6796e2c47f6bd5a51e21efeb04630c8b13e4d7`.
 
-| Gate | Reviewed `6945ac4` | Current `8e6796e` | Plebeian adoption status |
-|---|---|---|---|
-| Wallet-wide OWNER/FENCE | No verified wallet-wide generation/fence; in-process locks only | No accepted wallet-wide fence identified; `MintScopedLock` remains single-runtime | **BLOCKED** |
-| Operation-owned proof mutation/release | Ownership metadata exists but mutation APIs are not uniformly owner-conditioned | `releaseProofs(mintUrl, secrets)` still has no expected-operation owner in the public repository contract | **BLOCKED** |
-| Atomic operation/proof/result transitions | Partial transaction groundwork | #489 adds Mint metadata transaction groundwork; does not establish all-operation monetary atomicity | **BLOCKED / partial upstream progress** |
-| Exact Send lost-response recovery | Gap verified | Gap still present on master; #463 is open and appears to implement the required mechanism | **BLOCKED pending merge/pin + G2 acceptance** |
-| Receive Restore-before-replay | Not established by this review | Not accepted/verified here; #462 remains open | **BLOCKED pending focused verification/upstream work** |
-| Melt/Mint recovery integrity | Partial recovery exists | Partial; exact production invariants remain unaccepted; Mint work remains open | **BLOCKED** |
-| Crash-safe P2PK reclaim/refund | Construction/recovery exists, generic refund/reclaim acceptance not established | No accepted production reclaim path for Plebeian's gate | **BLOCKED** |
-| Quiescent / controlled startup | Not implemented: initialization runs recovery sweeps | Still unconditional recovery in `initializeCoco()` | **BLOCKED** |
-| Deterministic orphan identity | `listByQuote` / prepared/in-flight APIs exist; no general caller-keyed idempotent PREPARE | Caller-supplied/idempotent operation identity is tracked upstream in #493 | **BLOCKED pending upstream contract** |
-| Coco/cashu-ts pinned compatibility | Coco core resolves `@cashu/cashu-ts@5.0.0-rc.4` | Still `5.0.0-rc.4` at the checked baseline | **BLOCKED pending exact compatibility acceptance; RC status is risk, not automatic rejection** |
+| Gate                                      | Reviewed `6945ac4`                                                                        | Current `8e6796e`                                                                                         | Plebeian adoption status                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Wallet-wide OWNER/FENCE                   | No verified wallet-wide generation/fence; in-process locks only                           | No accepted wallet-wide fence identified; `MintScopedLock` remains single-runtime                         | **BLOCKED**                                                                                    |
+| Operation-owned proof mutation/release    | Ownership metadata exists but mutation APIs are not uniformly owner-conditioned           | `releaseProofs(mintUrl, secrets)` still has no expected-operation owner in the public repository contract | **BLOCKED**                                                                                    |
+| Atomic operation/proof/result transitions | Partial transaction groundwork                                                            | #489 adds Mint metadata transaction groundwork; does not establish all-operation monetary atomicity       | **BLOCKED / partial upstream progress**                                                        |
+| Exact Send lost-response recovery         | Gap verified                                                                              | Gap still present on master; #463 is open and appears to implement the required mechanism                 | **BLOCKED pending merge/pin + G2 acceptance**                                                  |
+| Receive Restore-before-replay             | Not established by this review                                                            | Not accepted/verified here; #462 remains open                                                             | **BLOCKED pending focused verification/upstream work**                                         |
+| Melt/Mint recovery integrity              | Partial recovery exists                                                                   | Partial; exact production invariants remain unaccepted; Mint work remains open                            | **BLOCKED**                                                                                    |
+| Crash-safe P2PK reclaim/refund            | Construction/recovery exists, generic refund/reclaim acceptance not established           | No accepted production reclaim path for Plebeian's gate                                                   | **BLOCKED**                                                                                    |
+| Quiescent / controlled startup            | Not implemented: initialization runs recovery sweeps                                      | Still unconditional recovery in `initializeCoco()`                                                        | **BLOCKED**                                                                                    |
+| Deterministic orphan identity             | `listByQuote` / prepared/in-flight APIs exist; no general caller-keyed idempotent PREPARE | Caller-supplied/idempotent operation identity is tracked upstream in #493                                 | **BLOCKED pending upstream contract**                                                          |
+| Coco/cashu-ts pinned compatibility        | Coco core resolves `@cashu/cashu-ts@5.0.0-rc.4`                                           | Still `5.0.0-rc.4` at the checked baseline                                                                | **BLOCKED pending exact compatibility acceptance; RC status is risk, not automatic rejection** |
 
 This table is a point-in-time evidence ledger, not a permanent claim about Coco. It must be refreshed before selecting or accepting a production candidate.
 
@@ -579,17 +579,17 @@ PR #1304 received a multi-model adversarial review synthesis based on substantiv
 
 Architect adjudication incorporated here:
 
-| External finding | Disposition | Result in this document |
-|---|---|---|
-| Refund authority creates a second spender / contradicts boundary | **PARTIAL ACCEPT** | Clarified that ADR-0010 permits application-specific refund authority; raw secrets are excluded from Host/outbox state, capability is explicitly sensitive, witness/reclaim stays Coco-owned |
-| Caller correlation cannot remain optional | **ACCEPT as production liveness/safety requirement** | Added deterministic non-heuristic PREPARE identity, serialized PREPARE lane, durable pre-PREPARE journal, no heuristic matching |
-| Quiescent startup is unavailable at reviewed Coco | **ACCEPT / VERIFIED** | Kept as explicit upstream production gate and extended to prevent autonomous advancement before binding |
-| Import lint is not capability containment | **ACCEPT** | Added dependency-tree, alias/duplicate runtime, forbidden-capability, and single-production-runtime checks |
-| No operation enumeration APIs exist | **REJECT / FALSE** | Prepared/in-flight/listByQuote APIs exist; residual issue is deterministic identity/terminal discovery, not total absence of enumeration |
-| Current `rolled_back + restored ready proofs` ordinary Send should be `FAILED_SAFE_TO_RETRY` | **REJECT as accepted-candidate semantics** | ADR-0010 G2 requires exact outgoing token + KEEP/SEND ownership; current master remains a candidate blocker while #463 is evaluated |
-| Differential Host/Coco backup skew | **ACCEPT** | Added explicit restore-reconciliation, non-reusable epoch/generation, and terminal-discovery requirements |
-| Evidence status should distinguish assertions from verified current code | **ACCEPT** | Added reviewed-SHA/current-master/adoption-status ledger |
-| `cashu-ts@5.0.0-rc.4` pin is risk | **ACCEPT as risk** | Kept exact compatibility gate; RC label alone is not an automatic rejection |
+| External finding                                                                             | Disposition                                          | Result in this document                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Refund authority creates a second spender / contradicts boundary                             | **PARTIAL ACCEPT**                                   | Clarified that ADR-0010 permits application-specific refund authority; raw secrets are excluded from Host/outbox state, capability is explicitly sensitive, witness/reclaim stays Coco-owned |
+| Caller correlation cannot remain optional                                                    | **ACCEPT as production liveness/safety requirement** | Added deterministic non-heuristic PREPARE identity, serialized PREPARE lane, durable pre-PREPARE journal, no heuristic matching                                                              |
+| Quiescent startup is unavailable at reviewed Coco                                            | **ACCEPT / VERIFIED**                                | Kept as explicit upstream production gate and extended to prevent autonomous advancement before binding                                                                                      |
+| Import lint is not capability containment                                                    | **ACCEPT**                                           | Added dependency-tree, alias/duplicate runtime, forbidden-capability, and single-production-runtime checks                                                                                   |
+| No operation enumeration APIs exist                                                          | **REJECT / FALSE**                                   | Prepared/in-flight/listByQuote APIs exist; residual issue is deterministic identity/terminal discovery, not total absence of enumeration                                                     |
+| Current `rolled_back + restored ready proofs` ordinary Send should be `FAILED_SAFE_TO_RETRY` | **REJECT as accepted-candidate semantics**           | ADR-0010 G2 requires exact outgoing token + KEEP/SEND ownership; current master remains a candidate blocker while #463 is evaluated                                                          |
+| Differential Host/Coco backup skew                                                           | **ACCEPT**                                           | Added explicit restore-reconciliation, non-reusable epoch/generation, and terminal-discovery requirements                                                                                    |
+| Evidence status should distinguish assertions from verified current code                     | **ACCEPT**                                           | Added reviewed-SHA/current-master/adoption-status ledger                                                                                                                                     |
+| `cashu-ts@5.0.0-rc.4` pin is risk                                                            | **ACCEPT as risk**                                   | Kept exact compatibility gate; RC label alone is not an automatic rejection                                                                                                                  |
 
 The later upstream addendum correctly identified #463 as the likely owner of exact-Send G2 recovery and #493 as the caller-correlation issue. It did **not** eliminate the separate quiescent-startup, Receive, Mint, Melt, P2PK reclaim, OWNER/FENCE, or exact compatibility acceptance gates.
 
@@ -613,20 +613,20 @@ The current wallet remains **staging-only** while these migration and upstream g
 
 ## 19. Current checkpoint
 
-| Item | Status |
-|---|---|
-| ADR-0010 | governing / unchanged |
-| Current implemented wallet | `STAGING_ONLY` / real funds NO-GO |
-| Zero-fork adoption gate | `GO_PENDING_UPSTREAM_CHANGES` |
-| Wallet Host architecture | `FREEZE_WITH_ADDITIONAL_NOTES` / architecture freeze candidate |
-| Plebeian I1A | Red-pass foundation |
-| Plebeian I1B1 | Red-pass foundation |
-| I1B2 | paused |
-| Current upstream Coco | not accepted for production |
-| Temporary Coco research branch | evidence only |
-| Permanent Coco fork | forbidden |
-| Wallet Host implementation | not authorized yet |
-| Real-value use | NO-GO |
+| Item                           | Status                                                         |
+| ------------------------------ | -------------------------------------------------------------- |
+| ADR-0010                       | governing / unchanged                                          |
+| Current implemented wallet     | `STAGING_ONLY` / real funds NO-GO                              |
+| Zero-fork adoption gate        | `GO_PENDING_UPSTREAM_CHANGES`                                  |
+| Wallet Host architecture       | `FREEZE_WITH_ADDITIONAL_NOTES` / architecture freeze candidate |
+| Plebeian I1A                   | Red-pass foundation                                            |
+| Plebeian I1B1                  | Red-pass foundation                                            |
+| I1B2                           | paused                                                         |
+| Current upstream Coco          | not accepted for production                                    |
+| Temporary Coco research branch | evidence only                                                  |
+| Permanent Coco fork            | forbidden                                                      |
+| Wallet Host implementation     | not authorized yet                                             |
+| Real-value use                 | NO-GO                                                          |
 
 ## 20. Review requested on amended artifact
 
