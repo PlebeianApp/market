@@ -250,6 +250,97 @@ test.describe('NWC Wallet Management', () => {
 		// The wallet should be removed
 		await expect(buyerPage.getByText('Test Wallet To Delete')).not.toBeVisible({ timeout: 5_000 })
 	})
+
+	/**
+	 * Seed one unclaimed pending token for the logged-in buyer.
+	 *
+	 * Pending tokens are persisted per user under a pubkey-scoped localStorage
+	 * key (see src/lib/wallet/storage.ts + src/lib/stores/nip60.ts), which is
+	 * the same handle production uses to recover them. Seeding the record
+	 * directly keeps this test off the mint/Lightning path.
+	 */
+	async function seedPendingToken(page: Page, token: { id: string; amount: number }): Promise<void> {
+		await page.evaluate(
+			(arg) => {
+				localStorage.setItem(
+					`nip60_pending_tokens_${arg.pubkey.slice(0, 8)}`,
+					JSON.stringify([
+						{
+							id: arg.id,
+							token: 'cashuAe2e-pending-token',
+							amount: arg.amount,
+							mintUrl: 'https://mint.e2e.local',
+							createdAt: Date.now(),
+							status: 'pending',
+						},
+					]),
+				)
+			},
+			{ pubkey: devUser2.pk, id: token.id, amount: token.amount },
+		)
+	}
+
+	/** Open the header wallet popover and expand its pending-token list. */
+	async function openPendingTokens(page: Page): Promise<void> {
+		await page.getByTestId('wallet-button').click()
+		const pendingToggle = page.getByTitle('Pending tokens')
+		await expect(pendingToggle).toBeVisible({ timeout: 10_000 })
+		await pendingToggle.click()
+	}
+
+	test('can remove a pending token only after explicit confirmation', async ({ buyerPage }) => {
+		await safeGoto(buyerPage, '/')
+		await seedPendingToken(buyerPage, { id: 'e2e-pending-token', amount: 1234 })
+		await buyerPage.reload()
+		await expect(buyerPage.getByTestId('wallet-button')).toBeVisible({ timeout: 10_000 })
+
+		await openPendingTokens(buyerPage)
+		await expect(buyerPage.getByText('1,234 sats')).toBeVisible({ timeout: 5_000 })
+
+		// The trash icon must NOT remove the token immediately
+		await buyerPage.getByTitle('Remove from list').click()
+		const dialog = buyerPage.getByRole('alertdialog')
+		await expect(dialog).toBeVisible({ timeout: 5_000 })
+		await expect(dialog.getByText('Remove token from list?')).toBeVisible()
+		await expect(dialog.getByText(/bearer instrument worth 1,234 sats/i)).toBeVisible()
+		await expect(dialog.getByText(/does not reclaim the funds/i)).toBeVisible()
+
+		// Cancelling leaves the pending token in the list
+		await dialog.getByRole('button', { name: /cancel/i }).click()
+		await expect(dialog).not.toBeVisible({ timeout: 5_000 })
+		await expect(buyerPage.getByText('1,234 sats')).toBeVisible()
+
+		// Only the explicit confirmation removes it
+		await buyerPage.getByTitle('Remove from list').click()
+		await expect(dialog).toBeVisible({ timeout: 5_000 })
+		await dialog.getByRole('button', { name: /remove anyway/i }).click()
+		await expect(dialog).not.toBeVisible({ timeout: 5_000 })
+		await expect(buyerPage.getByText('1,234 sats')).not.toBeVisible({ timeout: 5_000 })
+		await expect(buyerPage.getByTitle('Pending tokens')).not.toBeVisible({ timeout: 5_000 })
+	})
+
+	test('keeps the pending-token dialog open through the reclaim attempt', async ({ buyerPage }) => {
+		await safeGoto(buyerPage, '/')
+		await seedPendingToken(buyerPage, { id: 'e2e-pending-token-claim', amount: 2100 })
+		await buyerPage.reload()
+		await expect(buyerPage.getByTestId('wallet-button')).toBeVisible({ timeout: 10_000 })
+
+		await openPendingTokens(buyerPage)
+		await buyerPage.getByTitle('Remove from list').click()
+
+		const dialog = buyerPage.getByRole('alertdialog')
+		await expect(dialog).toBeVisible({ timeout: 5_000 })
+
+		const claimFirst = dialog.getByRole('button', { name: /claim first/i })
+		await claimFirst.click()
+
+		// "Claim first" must not close the dialog up front: the disabled/spinner
+		// state is only reachable while the reclaim is still in flight, and a
+		// failed reclaim must leave the choice (Cancel / Remove anyway) available.
+		await buyerPage.waitForTimeout(2_000)
+		await expect(dialog).toBeVisible()
+		await expect(claimFirst).toBeEnabled({ timeout: 10_000 })
+	})
 })
 
 // ---------------------------------------------------------------------------
