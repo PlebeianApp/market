@@ -285,11 +285,26 @@ test.describe('NWC Wallet Management', () => {
 		)
 	}
 
-	/** Open the header wallet popover and expand its pending-token list. */
+	/**
+	 * Open the header wallet popover and expand its pending-token list.
+	 *
+	 * The pending-token section only renders once the NIP-60 wallet is ready —
+	 * otherwise the popover shows only "No Cashu wallet found" — and a fresh
+	 * test user has no kind-17375 wallet event. Creating the wallet here stays
+	 * inside the local test infrastructure: `NDKCashuWallet.create` generates a
+	 * local privkey and publishes the wallet event to the relay set, it does not
+	 * contact the configured mints.
+	 */
 	async function openPendingTokens(page: Page): Promise<void> {
 		await page.getByTestId('wallet-button').click()
+
+		const createWallet = page.getByRole('button', { name: /create wallet/i })
+		if (await createWallet.isVisible().catch(() => false)) {
+			await createWallet.click()
+		}
+
 		const pendingToggle = page.getByTitle('Pending tokens')
-		await expect(pendingToggle).toBeVisible({ timeout: 10_000 })
+		await expect(pendingToggle).toBeVisible({ timeout: 20_000 })
 		await pendingToggle.click()
 	}
 
