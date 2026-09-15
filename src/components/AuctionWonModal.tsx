@@ -24,7 +24,7 @@ import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
-import { hasFinalSettlementForAuctionWin, isAuctionDetailPath } from '@/lib/auction/winNotification'
+import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath } from '@/lib/auction/winNotification'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
@@ -59,7 +59,7 @@ export function AuctionWonModal() {
 	const hasFinalSettlement =
 		active !== null && auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
 	const hasVerifiedUnresolved = auctionQuery.isSuccess && settlementsQuery.isSuccess && !hasFinalSettlement
-	const isOnAuctionDetail = isAuctionDetailPath(location.pathname)
+	const isOnFocusedWorkflow = isAuctionWonModalSuppressedPath(location.pathname)
 
 	useEffect(() => {
 		setIsSettling(false)
@@ -70,7 +70,7 @@ export function AuctionWonModal() {
 		if (active && (hasSettlementExpired || hasFinalSettlement)) auctionWonActions.dismissActive()
 	}, [active, hasFinalSettlement, hasSettlementExpired])
 
-	if (!active || !isActiveBidder || !hasVerifiedUnresolved || hasSettlementExpired || isOnAuctionDetail) return null
+	if (!active || !isActiveBidder || !hasVerifiedUnresolved || hasSettlementExpired || isOnFocusedWorkflow) return null
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) setIsLeaveConfirmOpen(true)

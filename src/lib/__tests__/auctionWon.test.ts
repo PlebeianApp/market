@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { hasFinalSettlementForAuctionWin, isAuctionDetailPath } from '@/lib/auction/winNotification'
+import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath } from '@/lib/auction/winNotification'
 import { auctionWonActions, auctionWonStore, type AuctionWonPayload } from '@/lib/stores/auctionWon'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
 
@@ -134,14 +134,16 @@ describe('auction win settlement verification', () => {
 })
 
 describe('auction winner modal route visibility', () => {
-	test('suppresses the global modal on auction detail routes', () => {
-		expect(isAuctionDetailPath(`/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
-		expect(isAuctionDetailPath(`/dashboard/products/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
+	test('suppresses the global modal on auction and order detail routes', () => {
+		expect(isAuctionWonModalSuppressedPath(`/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
+		expect(isAuctionWonModalSuppressedPath(`/dashboard/products/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
+		expect(isAuctionWonModalSuppressedPath('/dashboard/orders/order-1')).toBe(true)
 	})
 
 	test('allows the global modal on auction lists and unrelated routes', () => {
-		expect(isAuctionDetailPath('/auctions')).toBe(false)
-		expect(isAuctionDetailPath('/dashboard/products/auctions')).toBe(false)
-		expect(isAuctionDetailPath('/products')).toBe(false)
+		expect(isAuctionWonModalSuppressedPath('/auctions')).toBe(false)
+		expect(isAuctionWonModalSuppressedPath('/dashboard/products/auctions')).toBe(false)
+		expect(isAuctionWonModalSuppressedPath('/dashboard/orders')).toBe(false)
+		expect(isAuctionWonModalSuppressedPath('/products')).toBe(false)
 	})
 })

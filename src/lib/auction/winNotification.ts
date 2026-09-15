@@ -6,8 +6,10 @@ export interface QueuedAuctionWin {
 	auctionRootEventId: string
 }
 
-export const isAuctionDetailPath = (pathname: string): boolean =>
-	/^\/auctions\/[^/]+\/?$/.test(pathname) || /^\/dashboard\/products\/auctions\/[^/]+\/?$/.test(pathname)
+export const isAuctionWonModalSuppressedPath = (pathname: string): boolean =>
+	/^\/auctions\/[^/]+\/?$/.test(pathname) ||
+	/^\/dashboard\/products\/auctions\/[^/]+\/?$/.test(pathname) ||
+	/^\/dashboard\/orders\/[^/]+\/?$/.test(pathname)
 
 export const hasFinalSettlementForAuctionWin = (
 	win: QueuedAuctionWin,
