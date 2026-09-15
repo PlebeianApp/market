@@ -101,7 +101,7 @@ export async function hasValidatedPathReleaseForAuctionWin(
 }
 
 export const hasFinalSettlementForAuctionWin = (
-	win: QueuedAuctionWin,
+	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
 	auction: NostrEventLike,
 	auctionCoordinate: string,
 	settlements: NostrEventLike[],

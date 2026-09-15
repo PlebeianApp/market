@@ -375,7 +375,7 @@ export const fetchAuctionPathReleasesForList = async (
 
 export const fetchAuctionBids = async (
 	auctionEventId: string,
-	limit: number = 500,
+	limit: number | null = 500,
 	auctionCoordinates?: string,
 ): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
@@ -385,14 +385,14 @@ export const fetchAuctionBids = async (
 		filters.push({
 			kinds: [AUCTION_BID_KIND],
 			'#e': [auctionEventId],
-			limit,
+			...(limit === null ? {} : { limit }),
 		})
 	}
 	if (auctionCoordinates) {
 		filters.push({
 			kinds: [AUCTION_BID_KIND],
 			'#a': [auctionCoordinates],
-			limit,
+			...(limit === null ? {} : { limit }),
 		})
 	}
 
@@ -400,20 +400,20 @@ export const fetchAuctionBids = async (
 	return filterBlacklistedEvents(events).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
-export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 500): Promise<NostrEventLike[]> => {
+export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number | null = 500): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
 	const events = await applesauceIo.fetchEvents({
 		kinds: [AUCTION_BID_KIND],
 		authors: [pubkey],
-		limit,
+		...(limit === null ? {} : { limit }),
 	})
 	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuctionSettlements = async (
 	auctionEventId: string,
-	limit: number = 100,
+	limit: number | null = 100,
 	auctionCoordinates?: string,
 	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<NostrEventLike[]> => {
@@ -424,14 +424,14 @@ export const fetchAuctionSettlements = async (
 		filters.push({
 			kinds: [AUCTION_SETTLEMENT_KIND],
 			'#e': [auctionEventId],
-			limit,
+			...(limit === null ? {} : { limit }),
 		})
 	}
 	if (auctionCoordinates) {
 		filters.push({
 			kinds: [AUCTION_SETTLEMENT_KIND],
 			'#a': [auctionCoordinates],
-			limit,
+			...(limit === null ? {} : { limit }),
 		})
 	}
 
@@ -447,7 +447,7 @@ export const fetchAuctionSettlements = async (
  */
 export const fetchAuctionPathReleases = async (
 	auctionEventId: string,
-	limit: number = 200,
+	limit: number | null = 200,
 	auctionCoordinates?: string,
 	fetchFn: EventFetcher = applesauceIo.fetchEvents,
 ): Promise<NostrEventLike[]> => {
@@ -464,13 +464,13 @@ export const fetchAuctionPathReleases = async (
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
-export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number = 200): NostrFilter | null {
+export function buildAuctionPathReleaseFilter(auctionCoordinates: string | undefined, limit: number | null = 200): NostrFilter | null {
 	const coordinate = auctionCoordinates?.trim()
 	if (!coordinate) return null
 	return {
 		kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
 		'#a': [coordinate],
-		limit,
+		...(limit === null ? {} : { limit }),
 	}
 }
 
@@ -501,7 +501,7 @@ export function isAuctionPathReleaseForCoordinate(event: NostrEventLike, auction
  */
 export const fetchAuctionVerdicts = async (
 	auctionEventId: string,
-	limit: number = 500,
+	limit: number | null = 500,
 	auctionCoordinates?: string,
 	validatorPubkeys?: string[],
 	fetchFn: EventFetcher = applesauceIo.fetchEvents,
@@ -514,7 +514,7 @@ export const fetchAuctionVerdicts = async (
 
 	const filter: NostrFilter = {
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
-		limit,
+		...(limit === null ? {} : { limit }),
 	}
 	if (auditorPubkeys) filter.authors = auditorPubkeys
 	if (auctionEventId) filter['#e'] = [auctionEventId]

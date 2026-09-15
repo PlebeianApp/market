@@ -2,7 +2,11 @@ import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { auctionWonActions } from '@/lib/stores/auctionWon'
-import { getValidatedAuctionBids, hasValidatedPathReleaseForAuctionWin } from '@/lib/auction/winNotification'
+import {
+	getValidatedAuctionBids,
+	hasFinalSettlementForAuctionWin,
+	hasValidatedPathReleaseForAuctionWin,
+} from '@/lib/auction/winNotification'
 import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
@@ -14,6 +18,7 @@ import {
 	fetchAuctionBids,
 	fetchAuctionBidsByBidder,
 	fetchAuctionPathReleases,
+	fetchAuctionSettlements,
 	fetchAuctionVerdicts,
 	getAuctionBiddingCutoffAt,
 	getAuctionSettlementGrace,
@@ -30,12 +35,13 @@ const POLL_INTERVAL_MS = 20000
 export function useAuctionWinMonitor() {
 	const { isAuthenticated, user } = useStore(authStore)
 	const pubkey = user?.pubkey
-	// Auctions already resolved (won or not) this session, so we don't keep re-fetching them.
-	const resolvedRootEventIds = useRef<Set<string>>(new Set())
+	const terminalRootEventIds = useRef<Set<string>>(new Set())
+	const announcedRootEventIds = useRef<Set<string>>(new Set())
 	const isChecking = useRef(false)
 
 	useEffect(() => {
-		resolvedRootEventIds.current = new Set()
+		terminalRootEventIds.current = new Set()
+		announcedRootEventIds.current = new Set()
 		if (isAuthenticated && pubkey) auctionWonActions.retainForBidder(pubkey)
 		else auctionWonActions.clear()
 	}, [isAuthenticated, pubkey])
@@ -49,11 +55,11 @@ export function useAuctionWinMonitor() {
 			if (isChecking.current) return
 			isChecking.current = true
 			try {
-				const ownBids = await fetchAuctionBidsByBidder(pubkey, 500)
+				const ownBids = await fetchAuctionBidsByBidder(pubkey, null)
 				const candidateRootEventIds = new Set<string>()
 				for (const bid of ownBids) {
 					const rootEventId = getBidAuctionEventId(bid)
-					if (rootEventId && !resolvedRootEventIds.current.has(rootEventId)) {
+					if (rootEventId && !terminalRootEventIds.current.has(rootEventId) && !announcedRootEventIds.current.has(rootEventId)) {
 						candidateRootEventIds.add(rootEventId)
 					}
 				}
@@ -70,7 +76,7 @@ export function useAuctionWinMonitor() {
 
 					const settlementDeadlineAt = biddingCutoffAt + getAuctionSettlementGrace(auction)
 					if (settlementDeadlineAt <= now) {
-						resolvedRootEventIds.current.add(rootEventId)
+						terminalRootEventIds.current.add(rootEventId)
 						continue
 					}
 
@@ -78,11 +84,16 @@ export function useAuctionWinMonitor() {
 					if (!parsedAuctionResult.ok) continue
 					const parsedAuction = parsedAuctionResult.value
 
-					const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
-						fetchAuctionBids(rootEventId, 500, parsedAuction.coordinate),
-						fetchAuctionVerdicts(rootEventId, 500, parsedAuction.coordinate, parsedAuction.auditors),
-						fetchAuctionPathReleases(rootEventId, 200, parsedAuction.coordinate),
+					const [bidEvents, verdictEvents, pathReleaseEvents, settlementEvents] = await Promise.all([
+						fetchAuctionBids(rootEventId, null, parsedAuction.coordinate),
+						fetchAuctionVerdicts(rootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
+						fetchAuctionPathReleases(rootEventId, null, parsedAuction.coordinate),
+						fetchAuctionSettlements(rootEventId, null, parsedAuction.coordinate),
 					])
+					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
+						terminalRootEventIds.current.add(rootEventId)
+						continue
+					}
 					const parsedBids = bidEvents
 						.map((bid) => parseBidEvent(toRawEvent(bid)))
 						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
@@ -100,16 +111,10 @@ export function useAuctionWinMonitor() {
 					const canonicalWinner = validatedBids.canonicalWinner
 
 					if (!canonicalWinner) continue
-					if (canonicalWinner.bidderPubkey !== pubkey) {
-						resolvedRootEventIds.current.add(rootEventId)
-						continue
-					}
+					if (canonicalWinner.bidderPubkey !== pubkey) continue
 
 					const reserveMet = canonicalWinner.amount >= parsedAuction.reserve
-					if (!reserveMet) {
-						resolvedRootEventIds.current.add(rootEventId)
-						continue
-					}
+					if (!reserveMet) continue
 					const win = {
 						bidderPubkey: pubkey,
 						auctionRootEventId: rootEventId,
@@ -117,12 +122,12 @@ export function useAuctionWinMonitor() {
 						bidAmount: canonicalWinner.amount,
 					}
 					if (await hasValidatedPathReleaseForAuctionWin(win, parsedAuction, validatedBids, parsedPathReleases, now)) {
-						resolvedRootEventIds.current.add(rootEventId)
+						announcedRootEventIds.current.add(rootEventId)
 						continue
 					}
 					if (cancelled || !authStore.state.isAuthenticated || authStore.state.user?.pubkey !== pubkey) return
 					auctionWonActions.enqueue(win)
-					resolvedRootEventIds.current.add(rootEventId)
+					announcedRootEventIds.current.add(rootEventId)
 				}
 			} catch (error) {
 				console.error('[AuctionWinMonitor] Failed to check for auction wins:', error)

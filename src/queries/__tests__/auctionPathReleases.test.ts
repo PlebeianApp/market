@@ -107,6 +107,17 @@ describe('auction path-release queries', () => {
 		expect(fetchedFilters[0]).not.toHaveProperty('#e')
 	})
 
+	test('null limit omits the relay limit for complete win resolution', async () => {
+		await fetchAuctionPathReleases(AUCTION_ROOT_EVENT_ID, null, AUCTION_COORDINATE, injectedFetch)
+
+		expect(fetchedFilters).toEqual([
+			{
+				kinds: [AUCTION_PATH_RELEASE_KIND as unknown as number],
+				'#a': [AUCTION_COORDINATE],
+			},
+		])
+	})
+
 	test('ignores unrelated kind-1025 events for another auction coordinate', async () => {
 		const unrelated = pathReleaseEvent('unrelated', OTHER_AUCTION_COORDINATE, 2)
 		const related = pathReleaseEvent('related', AUCTION_COORDINATE, 1)

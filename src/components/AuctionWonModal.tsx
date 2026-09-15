@@ -68,9 +68,9 @@ export function AuctionWonModal() {
 			if (!parsedAuctionResult.ok) throw new Error('Auction event is malformed')
 			const parsedAuction = parsedAuctionResult.value
 			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
-				fetchAuctionBids(active.auctionRootEventId, 500, parsedAuction.coordinate),
-				fetchAuctionVerdicts(active.auctionRootEventId, 500, parsedAuction.coordinate, parsedAuction.auditors),
-				fetchAuctionPathReleases(active.auctionRootEventId, 200, parsedAuction.coordinate),
+				fetchAuctionBids(active.auctionRootEventId, null, parsedAuction.coordinate),
+				fetchAuctionVerdicts(active.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
+				fetchAuctionPathReleases(active.auctionRootEventId, null, parsedAuction.coordinate),
 			])
 			const parsedBids = bidEvents
 				.map((bid) => parseBidEvent(toRawEvent(bid)))
