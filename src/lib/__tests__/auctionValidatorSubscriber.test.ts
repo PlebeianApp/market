@@ -70,6 +70,7 @@ const buildAuctionState = (state: ValidatorState) => {
 		maxSkewSec: 60,
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
+		dleqRequired: false,
 		schema: 'auction_v1' as const,
 	}
 	const result = upsertAuction(state, parsedAuction as any)

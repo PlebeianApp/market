@@ -43,6 +43,25 @@ const LOCK_SECRET = JSON.stringify([
 	},
 ])
 const PROOF_Y = hashToCurveHexFromString(LOCK_SECRET)
+// A second, INDEPENDENT collateral pair. Bid collateral (`lock_secret` and the
+// `proof_y` it hashes to) is public in the bid event, so two different bidders
+// must lock DISTINCT proofs: sharing them would leave two bids authoritative
+// for the same coins while only one is redeemable (M5/A3 uniqueness rules).
+const LOCK_SECRET_2 = JSON.stringify([
+	'P2PK',
+	{
+		nonce: 'b'.repeat(16),
+		data: CHILD_PUBKEY,
+		tags: [
+			['n_sigs', '1'],
+			['locktime', String(AUCTION_LOCKTIME)],
+			['refund', REFUND_PUBKEY],
+			['n_sigs_refund', '1'],
+			['sigflag', 'SIG_INPUTS'],
+		],
+	},
+])
+const PROOF_Y_2 = hashToCurveHexFromString(LOCK_SECRET_2)
 const TEST_PROOF: Proof = {
 	amount: 50000,
 	secret: LOCK_SECRET,
@@ -81,6 +100,7 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 		maxSkewSec: 30,
 		fallbackDelaySec: 25,
 		vadiumRatioBps: 0,
+		dleqRequired: false,
 		schema: '',
 		...overrides,
 	} as ParsedAuctionEvent
@@ -275,7 +295,15 @@ describe('getSettlementDescriptor', () => {
 		})
 
 		test('outbid-bidder: I have a validated bid but am not the top', async () => {
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 			const d = await getSettlementDescriptor(
 				makeInput({
@@ -683,7 +711,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('refund: outbid bidder with reserve_not_met settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 30000 })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
@@ -709,7 +745,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('no card: outbid with validated bid, no settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid, myBid],

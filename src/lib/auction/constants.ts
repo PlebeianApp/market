@@ -124,6 +124,13 @@ export const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'settlement_grace',
 	'min_bid_curve',
 	'settlement_policy',
+	// ADR-0011 Decision 8 (review A1): the DLEQ activation decision is part
+	// of the auction's signed identity. A later kind-30408 replacement that
+	// adds, drops, or flips `dleq_required` would change which bids are
+	// authoritative for the same coordinates, so it is rejected outright
+	// (a bidder who read the tag before bidding must never be re-scored by
+	// a replacement that flips it).
+	'dleq_required',
 	'schema',
 	'auditor_quorum',
 	'max_skew_sec',
@@ -197,6 +204,7 @@ export const VALIDATOR_REASONS = [
 	'unsupported_mint',
 	'bad_lock',
 	'bad_proof_y',
+	'dleq_invalid',
 	'proof_spent',
 	'proof_missing',
 	// signature / structure
@@ -226,3 +234,160 @@ export const BIDDER_AGGREGATE_SCHEMA_TYPE = 'auction_bidder_aggregate_v1'
 
 /** d-tag prefix for validator policy events (kind 30441). */
 export const VALIDATOR_POLICY_D_PREFIX = 'policy:auction'
+
+// ---------- DLEQ rollout boundary (ADR-0011, Decision 7) ------------------
+
+/** Default rollout boundary — 2026-09-08T00:00:00Z (PR-merge epoch). */
+export const DEFAULT_DLEQ_ROLLOUT_START_AT = 1788825600
+
+/**
+ * Resolve the rollout boundary from a raw env value, falling back to the
+ * default when unset, empty, whitespace, or non-canonical (fail-closed — a
+ * malformed value must never enable a MORE permissive boundary). Only a
+ * canonical digits-only string (e.g. `"1788825600"` or an explicit `"0"` for
+ * immediate rollout) is accepted; everything else (`"0x12AB"`, `"1.79e9"`,
+ * negatives, fractions, whitespace) falls back to the default.
+ */
+export function resolveDleqRolloutStartAt(raw: string | undefined): number {
+	if (raw === undefined) return DEFAULT_DLEQ_ROLLOUT_START_AT
+	const trimmed = raw.trim()
+	if (!/^\d+$/.test(trimmed)) return DEFAULT_DLEQ_ROLLOUT_START_AT
+	const parsed = Number(trimmed)
+	return Number.isSafeInteger(parsed) ? parsed : DEFAULT_DLEQ_ROLLOUT_START_AT
+}
+
+/**
+ * Migration boundary for NUT-12 DLEQ bid-time collateral verification.
+ *
+ * Auctions whose `start_at >= APP_AUCTION_DLEQ_ROLLOUT_START_AT` follow the
+ * DLEQ-required path (ADR-0011): every allowlisted mint must advertise NUT-12
+ * support (Decision 5) and bids must publish `dleq_proof` tags (Decision 1).
+ * Auctions started before this boundary are grandfathered under the legacy
+ * non-DLEQ path so live auctions are not broken mid-flight (Decision 7).
+ *
+ * Overridable via the `APP_AUCTION_DLEQ_ROLLOUT_START_AT` environment variable
+ * (epoch seconds), following the repo's `APP_*` convention — see
+ * `src/server/runtime.ts`. The default literal is the rollout epoch; operators
+ * pin the real value at deploy.
+ *
+ * NOTE: bundlers inline `process.env.*` at build time for browser bundles, so
+ * the fallback must remain a build-time literal (never a runtime lookup). A
+ * deploy that wants a different boundary must set the env var at build time or
+ * bump `DEFAULT_DLEQ_ROLLOUT_START_AT`.
+ */
+export const APP_AUCTION_DLEQ_ROLLOUT_START_AT: number = resolveDleqRolloutStartAt(process.env.APP_AUCTION_DLEQ_ROLLOUT_START_AT)
+
+/**
+ * True when an auction starting at `startAt` (epoch seconds) must follow the
+ * DLEQ-required path (ADR-0011, Decision 7: migration by `start_at`).
+ *
+ * `startAt` is expected to be a validated non-negative integer epoch (callers
+ * pass the field parsed from the auction event, which the bid/auction Zod
+ * schemas already normalize). Non-finite input is treated as pre-rollout,
+ * which errs toward grandfathering a malformed coordinate rather than failing
+ * it open.
+ */
+export function requiresDleqForAuction(startAt: number): boolean {
+	return startAt >= APP_AUCTION_DLEQ_ROLLOUT_START_AT
+}
+
+// ---------- Canonical DLEQ activation (ADR-0011, Decision 8) ---------------
+
+/** Tag name carrying the canonical DLEQ requirement on the signed auction event. */
+export const DLEQ_REQUIRED_TAG = 'dleq_required'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ required". */
+export const DLEQ_REQUIRED_TRUE = '1'
+
+/** Canonical `dleq_required` tag value meaning "DLEQ not required". */
+export const DLEQ_REQUIRED_FALSE = '0'
+
+/**
+ * Why a present `dleq_required` tag is NOT canonical (review A1).
+ *
+ * - `duplicate`        — more than one `dleq_required` tag. Which one wins
+ *   would otherwise depend on each reader's scan order (`find` vs
+ *   first-non-empty), so two clients could derive different requirements
+ *   from the same signed event.
+ * - `empty`            — the tag carries no value (`["dleq_required"]` or
+ *   `["dleq_required", ""]`).
+ * - `multi-value`      — the tag carries more than one value
+ *   (`["dleq_required", "1", "0"]`), so there is no single meaning.
+ * - `unexpected-value` — a value that is not exactly `"1"` or `"0"`.
+ */
+export type DleqRequiredTagDefect = 'duplicate' | 'empty' | 'multi-value' | 'unexpected-value'
+
+/**
+ * The strict, single-source-of-truth read of the `dleq_required` tag.
+ *
+ * Every reader (schema parse, query helpers, wallet bid path, publish gate)
+ * MUST go through this function rather than scanning `event.tags`
+ * independently — the divergence between readers is exactly what review A1
+ * flagged.
+ */
+export type DleqRequiredTagState =
+	| { kind: 'absent' }
+	| { kind: 'canonical'; required: boolean }
+	| { kind: 'non-canonical'; reason: DleqRequiredTagDefect }
+
+/**
+ * Read the `dleq_required` tag strictly.
+ *
+ * Only a single tag with a single value of exactly `"1"` or `"0"` is
+ * canonical. Anything else is classified non-canonical with a reason, and
+ * every consumer must treat non-canonical as fail-closed (DLEQ required).
+ */
+export function readDleqRequiredTag(tags: readonly (readonly string[])[]): DleqRequiredTagState {
+	const matching = tags.filter((tag) => tag[0] === DLEQ_REQUIRED_TAG)
+	if (matching.length === 0) return { kind: 'absent' }
+	if (matching.length > 1) return { kind: 'non-canonical', reason: 'duplicate' }
+	const tag = matching[0]
+	if (tag.length > 2) return { kind: 'non-canonical', reason: 'multi-value' }
+	const value = tag[1]
+	if (value === undefined || value.length === 0) return { kind: 'non-canonical', reason: 'empty' }
+	if (value === DLEQ_REQUIRED_TRUE) return { kind: 'canonical', required: true }
+	if (value === DLEQ_REQUIRED_FALSE) return { kind: 'canonical', required: false }
+	return { kind: 'non-canonical', reason: 'unexpected-value' }
+}
+
+/**
+ * Resolve the canonical DLEQ requirement for an auction from its signed
+ * `dleq_required` tag. This is the single shared activation predicate every
+ * path consumes (ADR-0011, Decision 8).
+ *
+ * Semantics (review A1 — one immutable, strict protocol meaning):
+ *
+ *   - canonical `"1"` → DLEQ required (explicit opt-in), at any `start_at`.
+ *   - canonical `"0"` → DLEQ NOT required. This is LEGAL at any `start_at`:
+ *     it is the seller's explicit, signed, pre-bid-visible announcement that
+ *     the auction does not carry collateral verification, and it is
+ *     immutable (see `AUCTION_IMMUTABLE_SINGLE_TAGS`), so no bidder can be
+ *     surprised by a later flip. The signed tag is protocol truth: two
+ *     clients reading the same signed event derive the same requirement
+ *     regardless of their deploy-time boundary config, and a seller cannot
+ *     backdate `start_at` to change it.
+ *   - absent → legacy event published before the tag existed: fall back to
+ *     the `start_at` boundary comparison so already-published auctions are
+ *     not broken (Decision 7). This is the ONLY remaining boundary consumer.
+ *   - non-canonical (duplicate / empty / multi-value / unexpected value) →
+ *     FAIL CLOSED to required. A malformed or ambiguous tag must never
+ *     silently mean "not required" — that is the fail-open reading review A1
+ *     rejected. Order-independence is a property of this classification:
+ *     conflicting duplicates are rejected whatever order the relay returned
+ *     them in.
+ *
+ * @param tags signed auction event tags (kind 30408).
+ * @param startAt auction `start_at` (epoch seconds), used only for the legacy
+ *   fallback when the tag is absent.
+ */
+export function resolveDleqRequired(tags: readonly (readonly string[])[], startAt: number): boolean {
+	const state = readDleqRequiredTag(tags)
+	switch (state.kind) {
+		case 'canonical':
+			return state.required
+		case 'absent':
+			return requiresDleqForAuction(startAt)
+		case 'non-canonical':
+			return true
+	}
+}

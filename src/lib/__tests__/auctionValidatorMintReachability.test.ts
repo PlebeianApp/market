@@ -54,6 +54,7 @@ const buildAuction = (mints: string[]): ParsedAuctionEvent => {
 		maxSkewSec: 60,
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
+		dleqRequired: false,
 		schema: 'auction_v1',
 	}
 }

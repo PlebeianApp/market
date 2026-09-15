@@ -2,8 +2,24 @@ import type { Nut7ProofState, ValidatorClaim } from './constants'
 import { VALIDATOR_CONFIRM_CLAIMS, VALIDATOR_CONDEMN_CLAIMS } from './constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from './events'
 import { validateBid } from './validation'
+import { verifyBidDleqWithKeysets, type DleqProof } from '../cashu/dleq'
+import type { MintKeys } from '@cashu/cashu-ts'
 
 export type BidClassification = 'valid' | 'pending' | 'invalid'
+
+/**
+ * Why a bid is `pending`. Optional, and only set for the cases a CONSUMER must
+ * act on differently from ordinary quorum-pending (ADR-0011 review A2,
+ * PR #1280 discussion_r3999446834).
+ *
+ * `dlequ_evidence_unavailable` means the bid is quorum-confirmed and
+ * structurally valid, but the keyset evidence needed to crypto-verify its
+ * collateral could not be gathered (mint unreachable). That is a RETRY signal,
+ * never a terminal verdict: such a bid is absent from `canonicalWinner`, so
+ * consumers that ask "did anything meet the reserve?" must consult this field
+ * or they will read "unavailable evidence" as "no such bid".
+ */
+export type BidPendingReason = 'dlequ_evidence_unavailable'
 
 export interface ClassifiedBid {
 	bid: ParsedBidEvent
@@ -11,6 +27,7 @@ export interface ClassifiedBid {
 	observedAt: number
 	nut7State?: Nut7ProofState
 	invalidReason?: string
+	pendingReason?: BidPendingReason
 }
 
 export interface ValidatedBidSet {
@@ -110,6 +127,31 @@ export interface ComputeValidatedBidsInput {
 	 * cross-checks. Pass the ids from `winning_bid` + `payout` tags.
 	 */
 	settledBidIds?: Set<string>
+	/**
+	 * Pre-fetched mint keysets for DLEQ cryptographic verification (ADR-0011
+	 * C1). Keyed by `${mintUrl}:${keysetId}` so the verification logic can
+	 * look up the `MintKeys` for each bid's `dleqProofs` without async network
+	 * calls inside this synchronous pure function. When absent for a post-
+	 * rollout bid, DLEQ verification cannot run: the bid is classified
+	 * `pending` — non-authoritative (never a `canonicalWinner` candidate),
+	 * never valid and never `dleq_invalid` (the evidence has not been gathered
+	 * yet, so nothing is being condemned). Same fail-safe direction as NUT-7's
+	 * evidence-deferred handling (Decision 6).
+	 * The same applies PER KEYSET inside a supplied map: an entry absent from
+	 * the map (a failed `fetchDleqKeysetsForBids` fetch — temporary
+	 * mint/network failure) leaves the evidence unavailable, so the bid is
+	 * classified `pending` (ADR-0011 Decision 6a), never valid. Only a
+	 * POSITIVE verification failure over COMPLETE evidence — every referenced
+	 * keyset present and the DLEQ crypto check failing — invalidates the bid
+	 * (`dleq_invalid`). Pending is not a pass: pending bids are excluded
+	 * from `validBids`/winner selection, so a bidder-controlled
+	 * `dleqProofs[].id` pointing at an unfetchable keyset can never yield a
+	 * winning bid. Callers SHOULD cover every keyset id any accepted bid may
+	 * reference (including rotated keysets) and MUST normalize mint URLs
+	 * identically to bid parsing so the `${mintUrl}:${keysetId}` key matches
+	 * exactly.
+	 */
+	dleqKeysets?: Map<string, MintKeys>
 }
 
 /** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). Re-exported from constants so the client quorum screen and the validator publisher agree. */
@@ -200,6 +242,17 @@ function classifyBid(
 		observedAt: bid.createdAt,
 	}
 }
+
+/**
+ * The collateral identity keys a bid claims, namespaced per field so a locked
+ * secret can never collide with a proof `Y` or a DLEQ `C`. Compared as opaque
+ * lowercased hex/JSON strings (the same normalization the M5 rules use).
+ */
+const collateralClaimKeys = (bid: ParsedBidEvent): string[] => [
+	...bid.lockSecrets.map((secret) => `lock_secret:${secret.toLowerCase()}`),
+	...bid.proofYs.map((proofY) => `proof_y:${proofY.toLowerCase()}`),
+	...(bid.dleqProofs ?? []).flatMap((proof) => (proof.C ? [`dlequ_c:${proof.C.toLowerCase()}`] : [])),
+]
 
 function computeLegLockedAmounts(bids: ParsedBidEvent[]): void {
 	const bidById = new Map(bids.map((b) => [b.id, b]))
@@ -354,6 +407,19 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	// observedAt (earliest wins).
 	const seenLockSecretsByBidder = new Map<string, Set<string>>()
 	const seenProofYsByBidder = new Map<string, Set<string>>()
+	const seenDleqCsByBidder = new Map<string, Set<string>>()
+	// ADR-0011 review A3 (PR #1280 discussion_r3999446835): scoping these sets
+	// per Nostr pubkey is NOT sufficient. DLEQ authenticates the Cashu proof
+	// against the mint keyset — it says nothing about OWNERSHIP by the event
+	// author — and `lock_secret` / `proof_y` / `C` are public in whichever bid
+	// event first published them. A second author can therefore republish
+	// another bidder's collateral under its own (higher) amount and a fresh
+	// DLEQ tuple, so two bids would both be authoritative for the SAME coins
+	// while only one can ever be redeemed. Collateral is therefore bound to
+	// exactly ONE bidder across authors: the first-observed claim wins and any
+	// later claim by a DIFFERENT author is invalid. (Same-author reuse remains
+	// the M5 rule above.)
+	const collateralClaimant = new Map<string, string>()
 	const sortedByObserved = [...classified].sort((a, b) => a.observedAt - b.observedAt)
 	const bidsWithDuplicateProofs = new Set<string>()
 	for (const c of sortedByObserved) {
@@ -361,11 +427,25 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		const bidder = c.bid.bidderPubkey.toLowerCase()
 		const bidderSeenSecrets = seenLockSecretsByBidder.get(bidder) ?? new Set()
 		const bidderSeenProofYs = seenProofYsByBidder.get(bidder) ?? new Set()
+		const bidderSeenDleqCs = seenDleqCsByBidder.get(bidder) ?? new Set()
+		// A3: collateral already claimed by a DIFFERENT author is a cross-author
+		// collision — the same coins cannot back two bids. Checked before the
+		// same-author reuse rules because it is the security-critical one.
 		let hasDup = false
-		for (const secret of c.bid.lockSecrets) {
-			if (bidderSeenSecrets.has(secret.toLowerCase())) {
+		const claimKeys = collateralClaimKeys(c.bid)
+		for (const key of claimKeys) {
+			const claimant = collateralClaimant.get(key)
+			if (claimant && claimant !== bidder) {
 				hasDup = true
 				break
+			}
+		}
+		if (!hasDup) {
+			for (const secret of c.bid.lockSecrets) {
+				if (bidderSeenSecrets.has(secret.toLowerCase())) {
+					hasDup = true
+					break
+				}
 			}
 		}
 		if (!hasDup) {
@@ -376,13 +456,33 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 				}
 			}
 		}
+		if (!hasDup) {
+			// M5: extend the dup check to DLEQ mint signatures `C` — two proofs
+			// sharing the same `C` are the same proof (fabricated collateral).
+			for (const proof of c.bid.dleqProofs ?? []) {
+				const dleqC = proof.C?.toLowerCase()
+				if (dleqC && bidderSeenDleqCs.has(dleqC)) {
+					hasDup = true
+					break
+				}
+			}
+		}
 		if (hasDup) {
 			bidsWithDuplicateProofs.add(c.bid.id)
 		} else {
 			for (const secret of c.bid.lockSecrets) bidderSeenSecrets.add(secret.toLowerCase())
 			for (const proofY of c.bid.proofYs) bidderSeenProofYs.add(proofY.toLowerCase())
+			for (const proof of c.bid.dleqProofs ?? []) {
+				const dleqC = proof.C?.toLowerCase()
+				if (dleqC) bidderSeenDleqCs.add(dleqC)
+			}
 			seenLockSecretsByBidder.set(bidder, bidderSeenSecrets)
 			seenProofYsByBidder.set(bidder, bidderSeenProofYs)
+			seenDleqCsByBidder.set(bidder, bidderSeenDleqCs)
+			// A3: bind this collateral to this bidder for the rest of the pass.
+			for (const key of claimKeys) {
+				if (!collateralClaimant.has(key)) collateralClaimant.set(key, bidder)
+			}
 		}
 	}
 	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
@@ -432,7 +532,79 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		})
 
 		if (verdict.claim === 'valid_bid_placed') {
-			// Structural checks passed. Now apply NUT-7 evidence separately.
+			// Structural checks passed. Apply DLEQ crypto verification
+			// (ADR-0011 C1) BEFORE NUT-7: a bid must pass both DLEQ and NUT-7
+			// to be fully valid. DLEQ follows the same client-side ownership
+			// model as NUT-7 (Decision 6) — when evidence is unavailable the
+			// bid stays quorum-valid; when evidence IS available and DLEQ
+			// fails, the bid is invalidated (Decision 4: dleq_invalid).
+			if (auction.dleqRequired) {
+				const dleqProofs = c.bid.dleqProofs
+				if (dleqProofs && dleqProofs.length > 0) {
+					const dleqKeysetMap = input.dleqKeysets
+					// Unavailable DLEQ evidence is NON-AUTHORITATIVE (Blocker 1):
+					// a bid we cannot crypto-verify must never be treated as
+					// valid. When the caller has not gathered keysets, the bid
+					// is PENDING (like an unconfirmed NUT-7 poll), not valid —
+					// otherwise structurally-valid garbage DLEQ stays
+					// authoritative merely because the map was omitted.
+					if (!dleqKeysetMap) {
+						c.classification = 'pending'
+						c.pendingReason = 'dlequ_evidence_unavailable'
+						finalPending.push(c.bid)
+						continue
+					}
+					// PR #1280 round 3: an entry ABSENT from a supplied map is
+					// also evidence-unavailable, not fraud. fetchDleqKeysetsForBids
+					// leaves a (mint, keyset) entry out precisely when its fetch
+					// failed (temporary mint/network failure), so a lookup miss
+					// here defers the bid to PENDING (ADR-0011 Decision 6a:
+					// "a DLEQ-required bid whose keyset cannot be gathered is
+					// classified pending, never valid") rather than condemning
+					// it as dleq_invalid. Fail-safe holds: pending is not a
+					// pass — the bid is excluded from validBids and the winner
+					// — and dleqProofs[].id being bidder-controlled still
+					// cannot skip verification, because a miss never verifies.
+					const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
+					if (missingKeysetIds.length > 0) {
+						c.classification = 'pending'
+						c.pendingReason = 'dlequ_evidence_unavailable'
+						finalPending.push(c.bid)
+						continue
+					}
+					{
+						const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
+							...dp,
+							secret: c.bid.lockSecrets[i] ?? '',
+						}))
+						// Verify each proof against the keyset named by its OWN `id`
+						// (multi-keyset fix): a rebid leg may be funded by proofs from
+						// more than one keyset after a mint keyset rotation. This
+						// function is non-throwing and fail-closed; every keyset is
+						// known-present at this point (pre-checked above), so a
+						// failure here is a POSITIVE verification failure over
+						// complete evidence → dleq_invalid.
+						const dleqResult = verifyBidDleqWithKeysets(
+							{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
+							dleqKeysetMap,
+						)
+						if (!dleqResult.ok) {
+							// Record the reason on the classified entry so
+							// downstream consumers can distinguish DLEQ
+							// failure from NUT-7 `spent` (reason=dleq_invalid,
+							// ADR-0011 Decision 4).
+							c.classification = 'invalid'
+							c.invalidReason = 'dleq_invalid'
+							finalInvalid.push(c.bid)
+							continue
+						}
+					}
+				}
+				// No dleqProofs on a post-rollout bid → already caught by
+				// validateBid Step 3.5 (dleq_invalid structural check).
+			}
+
+			// Now apply NUT-7 evidence separately.
 			// - `spent` pre-settlement = double-spend fraud → invalid.
 			// - `spent` post-settlement (recorded in the settlement) = expected
 			//   terminal redemption → valid (see spendExcusable below).

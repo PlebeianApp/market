@@ -28,6 +28,7 @@ import {
 	loadPreLockRecoveryRecords,
 	type BidderBidRecord,
 } from '../auction/bidderRecords'
+import { APP_AUCTION_DLEQ_ROLLOUT_START_AT } from '../auction/constants'
 
 // =============================================================================
 // localStorage polyfill — Bun's test runtime doesn't provide one.
@@ -112,7 +113,14 @@ const buildFormData = (amount: number) => {
 		auctionEventId: '1'.repeat(64),
 		auctionCoordinates: `30408:${SELLER_PK}:auction-1`,
 		amount,
-		auctionStartAt: now - 1_000,
+		// Grandfathered pre-rollout start (ADR-0011 Decision 7): these tests
+		// exercise #1235 retry/idempotency logic, not DLEQ collateral
+		// verification. A post-rollout start would route them through the
+		// DLEQ-required path and fail on the dummyProof fixtures lacking
+		// NUT-12 metadata. Pin start_at just below the rollout boundary so
+		// they stay on the pre-rollout (non-DLEQ) path regardless of when
+		// they run.
+		auctionStartAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT - 1,
 		auctionEffectiveEndAt: now + 3_600,
 		auctionLocktimeAt: now + 7_200,
 		settlementGraceSeconds: 300,
@@ -126,11 +134,23 @@ const buildFormData = (amount: number) => {
 // Mocks — nip60 (mint lock) and ndk (relay publish). No network, ever.
 // =============================================================================
 
-const lockAuctionBidFundsMock = mock(async (input: { amount: number; locktime?: number }) => {
+const lockAuctionBidFundsMock = mock(async (input: { amount: number; locktime?: number; dleqRequired?: boolean }) => {
 	// #1235 round-3 B1 test hook: an injected throw models a lock failure
 	// (raw pre-lock validation error, or AuctionBidLockMutationPossibleError).
 	if (lockShouldThrow) throw lockShouldThrow
-	return buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length)
+	const result = buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length)
+	// Mirror the real mint's ADR-0011 contract: when the lock requests DLEQ
+	// (`dleqRequired: true`) the freshly issued P2PK outputs carry NUT-12
+	// DLEQ metadata (nutshell 0.19.2 behaviour — see
+	// auctionDLEQ.mint.integration.test.ts). Legacy locks get proofs WITHOUT
+	// `dleq`, exactly like a non-DLEQ mint.
+	if (input.dleqRequired === true) {
+		result.proofs = result.proofs.map((p: Proof) => ({
+			...p,
+			dleq: { e: 'e'.repeat(64), s: '5'.repeat(64), r: 'r'.repeat(64) },
+		}))
+	}
+	return result
 })
 
 let lockShouldThrow: unknown = null
@@ -138,11 +158,11 @@ let lockShouldThrow: unknown = null
 const updatePendingTokenContextMock = mock(() => ({ tokenId: 'pending-token-1', context: {} }))
 
 /** Raw payloads passed to the relay publish surface, in call order. */
-const publishedPayloads: Array<{ id: string; sig?: string; kind: number }> = []
+const publishedPayloads: Array<{ id: string; sig?: string; kind: number; tags?: string[][] }> = []
 let publishShouldFail = false
 
 const publishEventMock = mock(async (event: NDKEvent) => {
-	publishedPayloads.push({ id: event.id, sig: event.sig, kind: event.kind })
+	publishedPayloads.push({ id: event.id, sig: event.sig, kind: event.kind, tags: (event.tags as string[][] | undefined) ?? [] })
 	if (publishShouldFail) throw new Error('relay down')
 	return new Set(['wss://relay.test'])
 })
@@ -719,5 +739,61 @@ describe('AuctionBidLockOutcomeUncertainError reclaim copy is gated on pendingTo
 		const explicitFalse = new AuctionBidLockOutcomeUncertainError({ ...baseParams, pendingTokenPersisted: false })
 		expect(explicitFalse.pendingTokenPersisted).toBe(false)
 		expect(explicitFalse.message).toBe(recordOnly.message)
+	})
+})
+
+// =============================================================================
+// PR #1280 round 3 (maximotodev, P1) — DLEQ tag generation must follow the
+// same canonical signed `dleq_required` decision the lock consumes. The lock
+// receives `formData.dleqRequired ?? requiresDleqForAuction(start_at)`; the
+// `dleq_proof` tags must be derived from the SAME value, otherwise the lock
+// and the published bid disagree:
+//
+//   - signed `dleq_required=0` + post-boundary `start_at`: the lock runs the
+//     legacy non-DLEQ path, then `buildDleqProofs` throws fail-closed on the
+//     DLEQ-less outputs → AuctionBidLockedButUnpublishedError (reclaim-only)
+//     for every grandfathered auction once the boundary passes.
+//   - signed `dleq_required=1` + pre-boundary `start_at`: the lock enforces
+//     DLEQ outputs, but the bid publishes WITHOUT `dleq_proof` tags → the
+//     validation pipeline structurally rejects it as `dleq_invalid`.
+// =============================================================================
+
+describe('publishAuctionBid dleq_proof tags follow the canonical signed dleq_required decision (PR #1280 round 3)', () => {
+	const dleqProofTagCount = () => (publishedPayloads[0]?.tags ?? []).filter((t) => t[0] === 'dleq_proof').length
+
+	test('grandfathered auction (signed dleq_required=0, start_at AFTER the rollout boundary) publishes without dleq_proof tags', async () => {
+		const formData = {
+			...buildFormData(700),
+			auctionStartAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1,
+			dleqRequired: false,
+		}
+
+		const bidEventId = await publishAuctionBid(formData, signer, ndkInstance)
+
+		// The publish SUCCEEDS — no AuctionBidLockedButUnpublishedError from a
+		// fail-closed buildDleqProofs over non-DLEQ lock outputs.
+		expect(bidEventId).toHaveLength(64)
+		expect(publishedPayloads).toHaveLength(1)
+		// The lock and the published tags agreed on the SAME (legacy) decision.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(expect.objectContaining({ dleqRequired: false }))
+		expect(dleqProofTagCount()).toBe(0)
+	})
+
+	test('DLEQ-required auction (signed dleq_required=1, start_at BEFORE the rollout boundary) publishes with dleq_proof tags', async () => {
+		const formData = {
+			...buildFormData(700),
+			auctionStartAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT - 1,
+			dleqRequired: true,
+		}
+
+		const bidEventId = await publishAuctionBid(formData, signer, ndkInstance)
+
+		expect(bidEventId).toHaveLength(64)
+		expect(publishedPayloads).toHaveLength(1)
+		// One dleq_proof tag per locked proof, parallel to lock_secret/proof_y.
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledWith(expect.objectContaining({ dleqRequired: true }))
+		const lockSecretCount = (publishedPayloads[0]?.tags ?? []).filter((t) => t[0] === 'lock_secret').length
+		expect(dleqProofTagCount()).toBe(lockSecretCount)
+		expect(dleqProofTagCount()).toBeGreaterThan(0)
 	})
 })
