@@ -1270,7 +1270,17 @@ export const publishBidderPathRelease = async (
 		if (!validated.canonicalWinner || validated.canonicalWinner.id !== input.bidEventId) {
 			throw new Error('Auction winner changed. Refresh and try again.')
 		}
-		if (settlementEvents.some((event) => parseSettlementEvent(toRawEvent(event)).ok)) {
+		const hasAuctionSettlement = settlementEvents.some((event) => {
+			const parsedSettlementResult = parseSettlementEvent(toRawEvent(event))
+			if (!parsedSettlementResult.ok) return false
+			const settlement = parsedSettlementResult.value
+			return (
+				settlement.sellerPubkey.toLowerCase() === parsedAuction.sellerPubkey.toLowerCase() &&
+				settlement.auctionRootEventId === parsedAuction.rootEventId &&
+				settlement.auctionCoordinate === parsedAuction.coordinate
+			)
+		})
+		if (hasAuctionSettlement) {
 			throw new Error('Auction already has a settlement. Refresh and try again.')
 		}
 	} catch (err) {
