@@ -55,7 +55,7 @@ export function useAuctionWinMonitor() {
 			if (isChecking.current) return
 			isChecking.current = true
 			try {
-				const ownBids = await fetchAuctionBidsByBidder(pubkey, null)
+				const ownBids = await fetchAuctionBidsByBidder(pubkey, null, true)
 				const candidateRootEventIds = new Set<string>()
 				for (const bid of ownBids) {
 					const rootEventId = getBidAuctionEventId(bid)
@@ -67,7 +67,7 @@ export function useAuctionWinMonitor() {
 				for (const rootEventId of candidateRootEventIds) {
 					if (cancelled) return
 
-					const auction = await fetchAuction(rootEventId)
+					const auction = await fetchAuction(rootEventId, true)
 					if (!auction) continue
 
 					const biddingCutoffAt: number = getAuctionBiddingCutoffAt(auction)
@@ -85,10 +85,10 @@ export function useAuctionWinMonitor() {
 					const parsedAuction = parsedAuctionResult.value
 
 					const [bidEvents, verdictEvents, pathReleaseEvents, settlementEvents] = await Promise.all([
-						fetchAuctionBids(rootEventId, null, parsedAuction.coordinate),
+						fetchAuctionBids(rootEventId, null, parsedAuction.coordinate, true),
 						fetchAuctionVerdicts(rootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
-						fetchAuctionPathReleases(rootEventId, null, parsedAuction.coordinate),
-						fetchAuctionSettlements(rootEventId, null, parsedAuction.coordinate),
+						fetchAuctionPathReleases(rootEventId, null, parsedAuction.coordinate, undefined, true),
+						fetchAuctionSettlements(rootEventId, null, parsedAuction.coordinate, undefined, true),
 					])
 					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
 						terminalRootEventIds.current.add(rootEventId)

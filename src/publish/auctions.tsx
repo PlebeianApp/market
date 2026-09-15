@@ -1243,7 +1243,7 @@ export const publishBidderPathRelease = async (
 			import('@/lib/schemas/auction/validatorEvents'),
 			import('@/lib/auction/bidValidation'),
 		])
-		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId, true)
 		if (!auctionEvent) throw new Error('Auction no longer exists')
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
 		if (!parsedAuctionResult.ok) throw new Error('Auction is malformed')
@@ -1253,9 +1253,9 @@ export const publishBidderPathRelease = async (
 		if (now >= settlementDeadline) throw new Error('Settlement window has expired')
 
 		const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
-			fetchAuctionBids(latestLeg.auctionRootEventId, null, parsedAuction.coordinate),
+			fetchAuctionBids(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, true),
 			fetchAuctionVerdicts(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
-			fetchAuctionSettlements(latestLeg.auctionRootEventId, null, parsedAuction.coordinate),
+			fetchAuctionSettlements(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, undefined, true),
 		])
 		const parsedBids = bidEvents
 			.map((event) => parseBidEvent(toRawEvent(event)))
@@ -1290,7 +1290,7 @@ export const publishBidderPathRelease = async (
 				import('@/lib/schemas/auction/validatorEvents'),
 				import('@/lib/schemas/auction/auctionEvent'),
 			])
-		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, 500, latestLeg.auctionCoordinate)
+		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, null, latestLeg.auctionCoordinate, undefined, true)
 		const parsedVerdicts = verdictEvents
 			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
@@ -1298,7 +1298,7 @@ export const publishBidderPathRelease = async (
 			.filter((v) => v.bidEventId === input.bidEventId && v.claim === 'won_pending_settlement')
 
 		// Fetch the auction to get auditor list + quorum threshold.
-		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId, true)
 		if (auctionEvent) {
 			const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
 			if (parsedAuctionResult.ok) {
@@ -1514,7 +1514,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	const { checkProofStateBatch, aggregateBidNut7State } = nut7Mod
 
 	// 1. Auction event.
-	const auctionEvent = await fetchAuction(formData.auctionEventId)
+	const auctionEvent = await fetchAuction(formData.auctionEventId, true)
 	if (!auctionEvent) throw new Error(`Auction ${formData.auctionEventId} not found on relay`)
 	const sellerPubkey = auctionEvent.pubkey
 	const signerUser = await signer.user()
@@ -1589,8 +1589,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// canonical winner exists. A seller who has already redeemed a
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
-			fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-			fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+			fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
+			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, true),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(toRawEvent(b)))
@@ -1623,7 +1623,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// auction — the seller cannot displace a completed settlement with a
 		// later terminal event. (Structural check only: seller + auction
 		// refs; deeper completeness validation happens on the read path.)
-		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, 100, auctionCoordinate)
+		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, null, auctionCoordinate, undefined, true)
 		const hasSettledSettlement = existingSettlements.some((s) => {
 			const parsed = parseSettlementEvent(toRawEvent(s))
 			if (!parsed.ok) return false
@@ -1654,8 +1654,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// does not trust the caller's assertion of who won — it derives the
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
-		fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-		fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+		fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
+		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, true),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')

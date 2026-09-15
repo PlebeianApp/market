@@ -30,6 +30,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
 import type { NostrFilter } from '@/lib/nostr/io'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
@@ -37,6 +38,17 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 
 type EventFetcher = (filter: NostrFilter | NostrFilter[]) => Promise<NostrEventLike[]>
+
+const filterVerifiedAuctionEvents = (events: NostrEventLike[], verifySignatures: boolean): NostrEventLike[] => {
+	if (!verifySignatures) return events
+	return events.filter((event) => {
+		try {
+			return verifyNostrEventSignature(toRawEvent(event) as Parameters<typeof verifyNostrEventSignature>[0])
+		} catch {
+			return false
+		}
+	})
+}
 
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
 
@@ -175,7 +187,7 @@ export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike
 	)
 }
 
-export const fetchAuction = async (id: string): Promise<NostrEventLike | null> => {
+export const fetchAuction = async (id: string, verifySignatures = false): Promise<NostrEventLike | null> => {
 	if (!id) return null
 
 	const filter: NostrFilter = {
@@ -185,13 +197,13 @@ export const fetchAuction = async (id: string): Promise<NostrEventLike | null> =
 	}
 
 	const events = await applesauceIo.fetchEvents(filter)
-	const event = events[0] ?? null
+	const event = filterVerifiedAuctionEvents(events, verifySignatures)[0] ?? null
 	if (!event) return null
 	const dTag = getAuctionId(event)
 	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
 	if (!dTag) return filterBlacklistedEvents([event])[0] || null
 
-	const versionEvents = await fetchAuctionVersionEvents(event.pubkey, dTag)
+	const versionEvents = filterVerifiedAuctionEvents(await fetchAuctionVersionEvents(event.pubkey, dTag), verifySignatures)
 	return resolveCanonicalAuctionEvent(dedupeEventsById([event, ...versionEvents]))
 }
 
@@ -377,6 +389,7 @@ export const fetchAuctionBids = async (
 	auctionEventId: string,
 	limit: number | null = 500,
 	auctionCoordinates?: string,
+	verifySignatures = false,
 ): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
 
@@ -397,10 +410,16 @@ export const fetchAuctionBids = async (
 	}
 
 	const events = await applesauceIo.fetchEvents(filters)
-	return filterBlacklistedEvents(events).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
+		(a, b) => (a.created_at || 0) - (b.created_at || 0),
+	)
 }
 
-export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number | null = 500): Promise<NostrEventLike[]> => {
+export const fetchAuctionBidsByBidder = async (
+	pubkey: string,
+	limit: number | null = 500,
+	verifySignatures = false,
+): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
 	const events = await applesauceIo.fetchEvents({
@@ -408,7 +427,9 @@ export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number | n
 		authors: [pubkey],
 		...(limit === null ? {} : { limit }),
 	})
-	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
+		(a, b) => (b.created_at || 0) - (a.created_at || 0),
+	)
 }
 
 export const fetchAuctionSettlements = async (
@@ -416,6 +437,7 @@ export const fetchAuctionSettlements = async (
 	limit: number | null = 100,
 	auctionCoordinates?: string,
 	fetchFn: EventFetcher = applesauceIo.fetchEvents,
+	verifySignatures = false,
 ): Promise<NostrEventLike[]> => {
 	if (!auctionEventId && !auctionCoordinates) return []
 
@@ -436,7 +458,9 @@ export const fetchAuctionSettlements = async (
 	}
 
 	const events = await fetchFn(filters)
-	return filterBlacklistedEvents(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
+		(a, b) => (b.created_at || 0) - (a.created_at || 0),
+	)
 }
 
 /**
@@ -450,6 +474,7 @@ export const fetchAuctionPathReleases = async (
 	limit: number | null = 200,
 	auctionCoordinates?: string,
 	fetchFn: EventFetcher = applesauceIo.fetchEvents,
+	verifySignatures = false,
 ): Promise<NostrEventLike[]> => {
 	const filter = buildAuctionPathReleaseFilter(auctionCoordinates, limit)
 	if (!filter) return []
@@ -459,7 +484,7 @@ export const fetchAuctionPathReleases = async (
 	void auctionEventId
 
 	const events = await fetchFn(filter)
-	return filterBlacklistedEvents(events)
+	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures)
 		.filter((event) => isAuctionPathReleaseForCoordinate(event, coordinate))
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
@@ -562,10 +587,10 @@ export const auctionsByPubkeyQueryOptions = (pubkey: string, limit: number = 100
 		enabled: !!pubkey,
 	})
 
-export const auctionQueryOptions = (id: string) =>
+export const auctionQueryOptions = (id: string, verifySignatures = false) =>
 	queryOptions({
-		queryKey: auctionKeys.details(id),
-		queryFn: () => fetchAuction(id),
+		queryKey: [...auctionKeys.details(id), verifySignatures ? 'verified' : 'unverified'],
+		queryFn: () => fetchAuction(id, verifySignatures),
 		staleTime: 300000,
 		enabled: !!id,
 	})
@@ -655,10 +680,19 @@ export const auctionBidsByBidderQueryOptions = (pubkey: string, limit: number = 
 		refetchInterval: 5000,
 	})
 
-export const auctionSettlementsQueryOptions = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
+export const auctionSettlementsQueryOptions = (
+	auctionEventId: string,
+	limit: number = 100,
+	auctionCoordinates?: string,
+	verifySignatures = false,
+) =>
 	queryOptions({
-		queryKey: [...auctionKeys.settlements(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
-		queryFn: () => fetchAuctionSettlements(auctionEventId, limit, auctionCoordinates),
+		queryKey: [
+			...auctionKeys.settlements(auctionEventId || auctionCoordinates || ''),
+			auctionCoordinates || '',
+			verifySignatures ? 'verified' : 'unverified',
+		],
+		queryFn: () => fetchAuctionSettlements(auctionEventId, limit, auctionCoordinates, undefined, verifySignatures),
 		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 5000,
 		refetchInterval: 5000,

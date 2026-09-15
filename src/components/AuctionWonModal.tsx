@@ -58,10 +58,10 @@ export function AuctionWonModal() {
 	const [isClosingAfterSettlement, setIsClosingAfterSettlement] = useState(false)
 	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
 
-	const auctionQuery = useQuery(auctionQueryOptions(active?.auctionRootEventId ?? ''))
+	const auctionQuery = useQuery(auctionQueryOptions(active?.auctionRootEventId ?? '', true))
 	const auction = auctionQuery.data ?? null
 	const auctionCoordinate = auction ? getAuctionCoordinate(auction) : ''
-	const settlementsQuery = useQuery(auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate))
+	const settlementsQuery = useQuery(auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate, true))
 	const winResolutionQuery = useQuery({
 		queryKey: auctionKeys.winResolution(active?.auctionRootEventId ?? '', active?.bidEventId ?? ''),
 		enabled: !!(active && auction && auctionCoordinate && isActiveBidder),
@@ -71,9 +71,9 @@ export function AuctionWonModal() {
 			if (!parsedAuctionResult.ok) throw new Error('Auction event is malformed')
 			const parsedAuction = parsedAuctionResult.value
 			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
-				fetchAuctionBids(active.auctionRootEventId, null, parsedAuction.coordinate),
+				fetchAuctionBids(active.auctionRootEventId, null, parsedAuction.coordinate, true),
 				fetchAuctionVerdicts(active.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
-				fetchAuctionPathReleases(active.auctionRootEventId, null, parsedAuction.coordinate),
+				fetchAuctionPathReleases(active.auctionRootEventId, null, parsedAuction.coordinate, undefined, true),
 			])
 			const parsedBids = bidEvents
 				.map((bid) => parseBidEvent(toRawEvent(bid)))
