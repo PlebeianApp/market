@@ -40,12 +40,12 @@ export function useAuctionWinMonitor() {
 	const { isAuthenticated, user } = useStore(authStore)
 	const pubkey = user?.pubkey
 	const terminalRootEventIds = useRef<Set<string>>(new Set())
-	const announcedRootEventIds = useRef<Set<string>>(new Set())
+	const announcedBidIdsByRoot = useRef<Map<string, string>>(new Map())
 	const isChecking = useRef(false)
 
 	useEffect(() => {
 		terminalRootEventIds.current = new Set()
-		announcedRootEventIds.current = new Set()
+		announcedBidIdsByRoot.current = new Map()
 		if (isAuthenticated && pubkey) auctionWonActions.retainForBidder(pubkey)
 		else auctionWonActions.clear()
 	}, [isAuthenticated, pubkey])
@@ -64,7 +64,7 @@ export function useAuctionWinMonitor() {
 				const candidateRootEventIds = new Set<string>()
 				for (const bid of ownBids) {
 					const rootEventId = getBidAuctionEventId(bid)
-					if (rootEventId && !terminalRootEventIds.current.has(rootEventId) && !announcedRootEventIds.current.has(rootEventId)) {
+					if (rootEventId && !terminalRootEventIds.current.has(rootEventId)) {
 						candidateRootEventIds.add(rootEventId)
 					}
 				}
@@ -82,6 +82,8 @@ export function useAuctionWinMonitor() {
 					const settlementDeadlineAt = biddingCutoffAt + getAuctionSettlementGrace(auction)
 					if (settlementDeadlineAt <= now) {
 						terminalRootEventIds.current.add(rootEventId)
+						announcedBidIdsByRoot.current.delete(rootEventId)
+						auctionWonActions.removeForAuction(rootEventId)
 						continue
 					}
 
@@ -97,6 +99,8 @@ export function useAuctionWinMonitor() {
 					])
 					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
 						terminalRootEventIds.current.add(rootEventId)
+						announcedBidIdsByRoot.current.delete(rootEventId)
+						auctionWonActions.removeForAuction(rootEventId)
 						continue
 					}
 					const parsedBids = bidEvents
@@ -115,11 +119,28 @@ export function useAuctionWinMonitor() {
 					const validatedBids = getValidatedAuctionBids(parsedAuction, parsedBids, parsedVerdicts, nut7States)
 					const canonicalWinner = validatedBids.canonicalWinner
 
-					if (!canonicalWinner) continue
-					if (canonicalWinner.bidderPubkey !== pubkey) continue
+					const previouslyAnnouncedBidId = announcedBidIdsByRoot.current.get(rootEventId)
+					if (!canonicalWinner) {
+						if (previouslyAnnouncedBidId) {
+							announcedBidIdsByRoot.current.delete(rootEventId)
+							auctionWonActions.removeForAuction(rootEventId)
+						}
+						continue
+					}
+					if (canonicalWinner.bidderPubkey !== pubkey) {
+						if (previouslyAnnouncedBidId) {
+							announcedBidIdsByRoot.current.delete(rootEventId)
+							auctionWonActions.removeForAuction(rootEventId)
+						}
+						continue
+					}
 
 					const reserveMet = canonicalWinner.amount >= parsedAuction.reserve
-					if (!reserveMet) continue
+					if (!reserveMet) {
+						announcedBidIdsByRoot.current.delete(rootEventId)
+						auctionWonActions.removeForAuction(rootEventId)
+						continue
+					}
 					const win = {
 						bidderPubkey: pubkey,
 						auctionRootEventId: rootEventId,
@@ -127,12 +148,17 @@ export function useAuctionWinMonitor() {
 						bidAmount: canonicalWinner.amount,
 					}
 					if (await hasValidatedPathReleaseForAuctionWin(win, parsedAuction, validatedBids, parsedPathReleases, now)) {
-						announcedRootEventIds.current.add(rootEventId)
+						announcedBidIdsByRoot.current.set(rootEventId, canonicalWinner.id)
+						auctionWonActions.removeForAuction(rootEventId)
 						continue
+					}
+					if (previouslyAnnouncedBidId === canonicalWinner.id) continue
+					if (previouslyAnnouncedBidId && previouslyAnnouncedBidId !== canonicalWinner.id) {
+						auctionWonActions.removeForAuction(rootEventId)
 					}
 					if (cancelled || !authStore.state.isAuthenticated || authStore.state.user?.pubkey !== pubkey) return
 					auctionWonActions.enqueue(win)
-					announcedRootEventIds.current.add(rootEventId)
+					announcedBidIdsByRoot.current.set(rootEventId, canonicalWinner.id)
 				}
 			} catch (error) {
 				console.error('[AuctionWinMonitor] Failed to check for auction wins:', error)

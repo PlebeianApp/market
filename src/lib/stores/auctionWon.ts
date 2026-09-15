@@ -26,6 +26,12 @@ export const auctionWonActions = {
 		auctionWonStore.setState((state) => ({ queue: state.queue.slice(1) }))
 	},
 
+	removeForAuction: (auctionRootEventId: string) => {
+		auctionWonStore.setState((state) => ({
+			queue: state.queue.filter((win) => win.auctionRootEventId !== auctionRootEventId),
+		}))
+	},
+
 	clear: () => {
 		auctionWonStore.setState(() => ({ queue: [] }))
 	},

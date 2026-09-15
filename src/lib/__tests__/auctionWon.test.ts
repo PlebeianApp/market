@@ -237,6 +237,21 @@ describe('auction win queue', () => {
 		expect(auctionWonStore.state.queue).toEqual([secondWin])
 	})
 
+	test('removes a superseded auction win without affecting other auctions', () => {
+		const secondWin: AuctionWonPayload = {
+			bidderPubkey: WINNER_PUBKEY,
+			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
+			bidEventId: '3'.repeat(64),
+			bidAmount: 7000,
+		}
+		auctionWonActions.enqueue(win)
+		auctionWonActions.enqueue(secondWin)
+
+		auctionWonActions.removeForAuction(AUCTION_ROOT_ID)
+
+		expect(auctionWonStore.state.queue).toEqual([secondWin])
+	})
+
 	test('retains only wins owned by the authenticated bidder', () => {
 		const otherBidderWin: AuctionWonPayload = {
 			bidderPubkey: OTHER_BIDDER_PUBKEY,
