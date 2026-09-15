@@ -78,9 +78,92 @@ kind-1025 path release already publishes full proofs at settlement.
    (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
    verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps
    the "validator is structural/opinion-only" architecture intact.
+   6a. **Bounded keyset acquisition (Amendment).** Every ingestion and settlement path that
+   calls `computeValidatedBids` MUST acquire the mint keysets needed to DLEQ-verify
+   bids (`fetchDleqKeysetsForBids`), bounded to the auction's `mint` allowlist. Missing
+   DLEQ evidence is NON-AUTHORITATIVE: a DLEQ-required bid whose keyset cannot be
+   gathered is classified `pending`, never valid. Without feeding evidence, a
+   DLEQ-required auction can never settle — fail-safe, not fail-open.
 7. **Migration by `start_at`.** Auctions with `start_at >= DLEQ_ROLLOUT_START_AT` require
    the DLEQ path; live auctions (already open) are grandfathered under the legacy
    non-DLEQ path so they are not broken mid-flight.
+8. **Canonical activation (Amendment).** The DLEQ requirement is recorded on the signed
+   auction event as a `dleq_required` tag (`"1"`/`"0"`), emitted at publish time from the
+   same boundary decision the publish gate enforces. This makes activation canonical
+   protocol truth: two clients reading the same signed event derive the same requirement
+   regardless of their deploy-time boundary config, and a seller cannot backdate
+   `start_at` to change it. The client-side boundary comparison remains only as a
+   fallback for legacy events published before the tag existed. The bidder publish path
+   derives BOTH its lock requirement (`lockAuctionBidFunds({ dleqRequired })`) and its
+   published `dleq_proof` tags from this single signed value — never from a second,
+   locally re-derived boundary comparison, which could make the lock and the published
+   kind-1023 disagree. The bid form carries that value explicitly
+   (`AuctionBidFormData.dleqRequired`, read from the event via `getAuctionDleqRequired`,
+   which delegates to the same `resolveDleqRequired` predicate); the boundary fallback
+   inside `publishAuctionBid` exists only for callers that predate the field.
+   8a. **Strict canonical activation (Amendment, review A1).** `dleq_required` has
+   exactly ONE meaning, and only one form carries it:
+   - `["dleq_required","1"]` → DLEQ required, at any `start_at` (explicit opt-in).
+   - `["dleq_required","0"]` → DLEQ not required, at any `start_at`. This is LEGAL:
+     it is the seller's explicit, signed, pre-bid-visible, IMMUTABLE announcement that
+     the auction does not carry collateral verification. Review A1 asked for this to be
+     _defined_ rather than left implicit — the protocol answer is "legal, but never
+     implicit": an opt-out is only an opt-out when it is a canonical, lone, signed tag.
+   - **absent** → legacy event (published before the tag existed): fall back to the
+     `start_at` rollout boundary, so already-published auctions are not broken. This is
+     the ONLY remaining consumer of the deployment boundary (see 8b).
+   - **non-canonical** (more than one `dleq_required` tag; an empty or missing value;
+     extra values on the tag; any value other than exactly `"1"`/`"0"`) → **fail closed
+     to required**. A malformed or ambiguous tag must never read as "not required" —
+     that fail-open reading (any garbage tag was a silent opt-out, and the winning
+     value depended on each reader's scan order) is what A1 rejected. Because the
+     classification rejects _all_ duplicates, the result cannot depend on relay tag
+     order.
+
+   `readDleqRequiredTag` / `resolveDleqRequired` in `src/lib/auction/constants.ts` are
+   the single implementation every reader MUST use (kind-30408 schema parse, query
+   helpers, the wallet/bid publish path). Re-scanning `event.tags` independently is a
+   protocol bug: readers diverging on the same signed event is exactly how two clients
+   derive different winners.
+
+   `dleq_required` is also listed in `AUCTION_IMMUTABLE_SINGLE_TAGS`, so a later
+   kind-30408 replacement that adds, drops, or flips the tag fails
+   `auctionImmutableFieldsMatch` and is rejected by compliant readers and validators. A
+   bidder who read the tag before bidding can never be re-scored by a replacement that
+   flips it.
+   8b. **The deployment boundary is not a validity oracle (OPEN — maintainer decision).**
+   For tag-less (legacy) events, activation is still decided by
+   `APP_AUCTION_DLEQ_ROLLOUT_START_AT`, an env var resolved at build time
+   (`resolveDleqRolloutStartAt`, `src/lib/auction/constants.ts`). That retains a
+   deployment-controlled input to the interpretation of a _signed_ Nostr event, which
+   is review B2's objection: two builds with different boundaries can classify the same
+   event differently, and a seller can backdate `start_at` below the boundary to land in
+   the grandfathering branch (equivalent to signing `"0"`, but implicit instead of
+   announced). The signed tag now removes that dependency for every event that carries
+   one (8a); it cannot remove it for legacy events without a protocol-level decision.
+
+   **Decision required (maintainer):** how should a tag-less event be classified once
+   the rollout is over?
+   - **A (recommended) — freeze the boundary as a protocol constant.** Stop reading
+     `APP_AUCTION_DLEQ_ROLLOUT_START_AT` from env on the _validity_ path; keep the
+     literal in `DEFAULT_DLEQ_ROLLOUT_START_AT` as an immutable protocol constant that
+     every build shares. The boundary then only ever classifies pre-rollout legacy
+     events, so moving it can no longer change which winner a build derives, and
+     backdating `start_at` buys a seller nothing that signing a canonical `"0"` does not
+     already grant explicitly. The env var may remain a _publish-time_ input (which
+     value OUR build stamps on auctions we create) because the stamped value is signed
+     and therefore canonical once published.
+   - **B — keep the env override as-is** (status quo) and accept that tag-less events
+     are interpreted per deployment. Rejected in the implementation review, but it is
+     the maintainer's call because it changes deploy behaviour (existing test fixtures
+     and e2e specs seed the boundary through this env var).
+   - **C — drop grandfathering for tag-less events entirely** (absent tag ⇒
+     DLEQ-required, no boundary at all). Strongest determinism, but it retroactively
+     changes the requirement for auctions already open and breaks every legacy client.
+
+   Until the maintainer chooses, this PR does NOT change the env mechanism: the
+   boundary remains the tag-less fallback, with the strict fail-closed parsing of 8a
+   layered on top.
 
 ### Tag serialization (resolved per AUCTIONS.md §4.2)
 
