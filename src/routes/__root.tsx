@@ -73,6 +73,20 @@ function RootLayout() {
 	}, [hasPII, scanResult])
 
 	useEffect(() => {
+		const instanceName = config?.displayName || config?.name
+		if (instanceName) {
+			document.title = instanceName
+		}
+
+		if (config?.picture) {
+			const iconLinks = document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]')
+			iconLinks.forEach((link) => {
+				link.href = config.picture as string
+			})
+		}
+	}, [config?.displayName, config?.name, config?.picture])
+
+	useEffect(() => {
 		if (config?.needsSetup && !isSetupPage) {
 			navigate({ to: '/setup' })
 		} else if (!config?.needsSetup && isSetupPage) {

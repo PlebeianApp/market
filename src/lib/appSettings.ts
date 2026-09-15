@@ -22,21 +22,31 @@ export interface AppSettingsEventLike {
 
 /**
  * Select the latest app-settings event that matches the expected publisher
- * authority: the event must be kind 31990, authored by `appPubkey`, and carry
- * the exact d tag 'plebeian-market-handler'. Events from any other publisher
- * (or with a different kind / d tag) are rejected — the content schema
- * validates shape, not authority, so a spoofed event that passes the schema
- * must still be refused here.
+ * authority. The event must be kind 31990, authored by `appPubkey`, and carry
+ * one of the provided d tags in priority order (tries first tag first, etc.).
+ * Events from any other publisher (or with a different kind / d tag) are
+ * rejected — the content schema validates shape, not authority, so a spoofed
+ * event that passes the schema must still be refused here.
+ *
+ * Fallback chain example: ['custom-handler', 'plebeian-market-handler']
+ *   - First tries events with d=custom-handler (self-hosted)
+ *   - Falls back to d=plebeian-market-handler (shipped default)
  */
 export function selectAuthoritativeAppSettingsEvent(
 	events: ReadonlyArray<AppSettingsEventLike>,
 	appPubkey: string,
+	handlerIds: string[] = [APP_SETTINGS_D_TAG],
 ): AppSettingsEventLike | undefined {
-	return events
-		.filter(
-			(e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === APP_SETTINGS_D_TAG),
-		)
-		.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	// Try each handler ID in priority order
+	for (const handlerId of handlerIds) {
+		const candidate = events
+			.filter((e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === handlerId))
+			.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+		if (candidate) return candidate
+	}
+
+	return undefined
 }
 
 /**
@@ -44,11 +54,19 @@ export function selectAuthoritativeAppSettingsEvent(
  *
  * `null` means the authoritative query completed and returned no candidate
  * events. Returned-but-unusable state is indeterminate and fails closed.
+ *
+ * @param events - Candidate events from the relay
+ * @param appPubkey - Expected publisher public key
+ * @param handlerIds - d-tag fallback chain: tries first, then second, etc.
  */
-export function resolveFetchedAppSettings(events: ReadonlyArray<AppSettingsEventLike>, appPubkey: string): AppSettings | null {
+export function resolveFetchedAppSettings(
+	events: ReadonlyArray<AppSettingsEventLike>,
+	appPubkey: string,
+	handlerIds: string[] = [APP_SETTINGS_D_TAG],
+): AppSettings | null {
 	if (events.length === 0) return null
 
-	const authoritativeEvent = selectAuthoritativeAppSettingsEvent(events, appPubkey)
+	const authoritativeEvent = selectAuthoritativeAppSettingsEvent(events, appPubkey, handlerIds)
 	if (!authoritativeEvent) {
 		throw new Error(`No authoritative app settings event from expected publisher: ${appPubkey}`)
 	}
@@ -68,8 +86,9 @@ export function resolveFetchedAppSettings(events: ReadonlyArray<AppSettingsEvent
 	return result.data
 }
 
-export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
-	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
+export async function fetchAppSettings(relayUrl: string, appPubkey: string, handlerIds?: string[]): Promise<AppSettings | null> {
+	const effectiveHandlerIds = handlerIds?.length ? handlerIds : [APP_SETTINGS_D_TAG]
+	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey} with handler IDs: ${effectiveHandlerIds.join(', ')}`)
 
 	// Reject a malformed app pubkey before creating an NDK instance or issuing
 	// any relay request. NDK's strict filter validation would also fail closed,
@@ -108,12 +127,12 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		}
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
-		// Include the d tag filter for better relay compatibility
+		// Query for all handler IDs in the fallback chain in a single filter.
 		const filter: NDKFilter = {
 			kinds: [31990],
 			authors: [appPubkey],
-			'#d': ['plebeian-market-handler'],
-			limit: 1,
+			'#d': effectiveHandlerIds,
+			limit: effectiveHandlerIds.length, // Allow fetching multiple events to evaluate priority
 		}
 
 		console.log('Fetching with filter:', JSON.stringify(filter))
@@ -139,7 +158,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 			console.log(`No app settings events found for pubkey: ${appPubkey}`)
 		}
 
-		return resolveFetchedAppSettings(eventArray, appPubkey)
+		return resolveFetchedAppSettings(eventArray, appPubkey, effectiveHandlerIds)
 	} catch (err) {
 		console.error('Failed to fetch app settings:', err)
 		throw err

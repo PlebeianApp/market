@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { submitAppSettings } from '@/lib/appSettings'
+import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { createHandlerInfoEventData } from '@/publish/nip89'
 import { useConfigQuery } from '@/queries/config'
@@ -51,12 +52,11 @@ export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
 })
 
-const availableLogos = [{ label: 'Default Logo', value: 'https://plebeian.market/images/logo.svg' }]
-
 const currencies = ['USD', 'EUR', 'BTC', 'SATS']
 
 function SetupRoute() {
 	const { data: config } = useConfigQuery()
+	const availableLogos = [{ label: 'Default Logo', value: config?.picture ?? DEFAULT_INSTANCE_CONFIG.picture }]
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 	const [adminsList, setAdminsList] = useState<string[]>([])
@@ -69,17 +69,18 @@ function SetupRoute() {
 			name: '',
 			displayName: '',
 			picture: availableLogos[0].value,
-			banner: 'https://plebeian.market/banner.svg',
+			banner: config?.banner ?? DEFAULT_INSTANCE_CONFIG.banner,
 			ownerPk: '',
 			contactEmail: '',
 			allowRegister: true as boolean,
 			defaultCurrency: currencies[0],
+			showNostrLink: false,
 		} satisfies z.infer<typeof AppSettingsSchema>,
 		validators: {
 			onSubmit: ({ value }) => {
 				const result = AppSettingsSchema.safeParse(value)
 				if (!result.success) {
-					return result.error.errors.reduce<Record<string, string>>((acc, curr) => {
+					return result.error.issues.reduce<Record<string, string>>((acc, curr) => {
 						const path = curr.path.join('.')
 						acc[path] = curr.message
 						return acc
@@ -163,8 +164,9 @@ function SetupRoute() {
 					ownerPk: ownerPubkeyHex,
 				}
 
-				// Use a fixed handler ID for consistency across setup and seeding
-				const handlerId = 'plebeian-market-handler'
+				// Keep setup consistent with the resolved instance config, but preserve the
+				// legacy default when no custom handler has been configured yet.
+				const handlerId = config.handlerId || 'plebeian-market-handler'
 				let handlerEvent = createHandlerInfoEventData(ownerPubkeyHex, appSettingsContent, config.appRelay, handlerId)
 				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
 				await submitAppSettings(handlerEvent)
