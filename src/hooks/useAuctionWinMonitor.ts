@@ -1,16 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
-import { buildActiveAuctionBidChains, compareAuctionBidChainPriority, getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { auctionWonActions } from '@/lib/stores/auctionWon'
+import { selectValidatedAuctionWinner } from '@/lib/auction/winNotification'
+import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import {
 	fetchAuction,
 	fetchAuctionBids,
 	fetchAuctionBidsByBidder,
+	fetchAuctionVerdicts,
 	getAuctionBiddingCutoffAt,
-	getAuctionReserve,
 	getAuctionSettlementGrace,
-	getBidAmount,
 	getBidAuctionEventId,
 } from '@/queries/auctions'
 
@@ -68,28 +72,37 @@ export function useAuctionWinMonitor() {
 						continue
 					}
 
-					const bids = await fetchAuctionBids(rootEventId, 500)
-					let chains
-					try {
-						chains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auction, bids))
-					} catch {
-						continue
-					}
+					const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
+					if (!parsedAuctionResult.ok) continue
+					const parsedAuction = parsedAuctionResult.value
 
+					const [bidEvents, verdictEvents] = await Promise.all([
+						fetchAuctionBids(rootEventId, 500, parsedAuction.coordinate),
+						fetchAuctionVerdicts(rootEventId, 500, parsedAuction.coordinate, parsedAuction.auditors),
+					])
+					const parsedBids = bidEvents
+						.map((bid) => parseBidEvent(toRawEvent(bid)))
+						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+						.map((result) => result.value)
+					const parsedVerdicts = verdictEvents
+						.map((verdict) => parseValidatorVerdictEvent(toRawEvent(verdict)))
+						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+						.map((result) => result.value)
+					const nut7States = await fetchBidNut7States(parsedBids, parsedAuction.mints)
+					const canonicalWinner = selectValidatedAuctionWinner(parsedAuction, parsedBids, parsedVerdicts, nut7States)
+
+					if (!canonicalWinner) continue
 					resolvedRootEventIds.current.add(rootEventId)
+					if (canonicalWinner.bidderPubkey !== pubkey) continue
 
-					const topChain = [...chains].sort(compareAuctionBidChainPriority)[0]
-					if (!topChain || topChain.bidderPubkey !== pubkey) continue
-
-					const bidAmount = getBidAmount(topChain.latestBid)
-					const reserveMet = bidAmount >= getAuctionReserve(auction)
+					const reserveMet = canonicalWinner.amount >= parsedAuction.reserve
 					if (!reserveMet) continue
 					if (cancelled || !authStore.state.isAuthenticated || authStore.state.user?.pubkey !== pubkey) return
 					auctionWonActions.enqueue({
 						bidderPubkey: pubkey,
 						auctionRootEventId: rootEventId,
-						bidEventId: topChain.latestBid.id,
-						bidAmount,
+						bidEventId: canonicalWinner.id,
+						bidAmount: canonicalWinner.amount,
 					})
 				}
 			} catch (error) {

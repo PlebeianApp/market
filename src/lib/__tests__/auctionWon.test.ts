@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath } from '@/lib/auction/winNotification'
+import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath, selectValidatedAuctionWinner } from '@/lib/auction/winNotification'
 import { auctionWonActions, auctionWonStore, type AuctionWonPayload } from '@/lib/stores/auctionWon'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 
 const AUCTION_ROOT_ID = 'a'.repeat(64)
 const OTHER_AUCTION_ROOT_ID = 'b'.repeat(64)
@@ -13,6 +15,8 @@ const OTHER_BIDDER_PUBKEY = '4'.repeat(64)
 const PATH_RELEASE_ID = '1'.repeat(64)
 const SETTLEMENT_ID = '2'.repeat(64)
 const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
+const AUDITOR_PUBKEY = '5'.repeat(64)
+const MINT_URL = 'https://mint.test'
 
 const auction: NostrEventLike = {
 	id: AUCTION_ROOT_ID,
@@ -47,6 +51,91 @@ const makeSettlement = (overrides: Partial<NostrEventLike> = {}): NostrEventLike
 		['path_release', PATH_RELEASE_ID],
 	],
 	...overrides,
+})
+
+const parsedAuction: ParsedAuctionEvent = {
+	rawEvent: auction,
+	dTag: 'auction-1',
+	sellerPubkey: SELLER_PUBKEY,
+	coordinate: AUCTION_COORDINATE,
+	rootEventId: AUCTION_ROOT_ID,
+	title: 'Auction',
+	content: '',
+	auctionType: 'english',
+	startAt: 100,
+	endAt: 200,
+	maxEndAt: 200,
+	settlementGrace: 100,
+	currency: 'SAT',
+	reserve: 0,
+	startingBid: 1000,
+	bidIncrement: 100,
+	minBidCurve: { shape: 'none', peakMultiplier: 1, raw: 'none:1.0' },
+	settlementPolicy: 'cashu_p2pk_bidder_path_v1',
+	keyScheme: 'hd_p2pk',
+	mints: [MINT_URL],
+	p2pkXpub: 'xpub-test',
+	auditors: [AUDITOR_PUBKEY],
+	auditorQuorum: 1,
+	maxSkewSec: 60,
+	fallbackDelaySec: 50,
+	vadiumRatioBps: 10_000,
+	schema: 'auction_v1',
+}
+
+const makeParsedBid = (id: string, bidderPubkey: string, amount: number, createdAt: number): ParsedBidEvent => {
+	const childPubkey = `02${'6'.repeat(64)}`
+	const refundPubkey = `03${'7'.repeat(64)}`
+	const locktime = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+	const lockSecret = JSON.stringify([
+		'P2PK',
+		{
+			nonce: id,
+			data: childPubkey,
+			tags: [
+				['sigflag', 'SIG_INPUTS'],
+				['locktime', String(locktime)],
+				['refund', refundPubkey],
+				['n_sigs_refund', '1'],
+			],
+		},
+	])
+	return {
+		rawEvent: { id, pubkey: bidderPubkey, kind: 1023, created_at: createdAt, content: '', tags: [] },
+		id,
+		bidderPubkey,
+		createdAt,
+		auctionRootEventId: AUCTION_ROOT_ID,
+		auctionCoordinate: AUCTION_COORDINATE,
+		sellerPubkey: SELLER_PUBKEY,
+		amount,
+		legLockedAmount: amount,
+		currency: 'SAT',
+		mint: MINT_URL,
+		locktime,
+		refundPubkey,
+		childPubkey,
+		lockSecrets: [lockSecret],
+		proofYs: [hashToCurveHexFromString(lockSecret)],
+		createdForEndAt: parsedAuction.endAt,
+		bidNonce: id,
+		keyScheme: 'hd_p2pk',
+		status: 'locked',
+	}
+}
+
+const makeConfirmVerdict = (bid: ParsedBidEvent): ParsedValidatorVerdictEvent => ({
+	rawEvent: { id: `v${bid.id.slice(1)}`, pubkey: AUDITOR_PUBKEY, kind: 30440, created_at: bid.createdAt + 1, content: '', tags: [] },
+	id: `v${bid.id.slice(1)}`,
+	validatorPubkey: AUDITOR_PUBKEY,
+	createdAt: bid.createdAt + 1,
+	dTag: `${bid.bidderPubkey}:${AUCTION_ROOT_ID}:${bid.id}`,
+	bidderPubkey: bid.bidderPubkey,
+	auctionRootEventId: AUCTION_ROOT_ID,
+	auctionCoordinate: AUCTION_COORDINATE,
+	bidEventId: bid.id,
+	claim: 'valid_bid_placed',
+	observedAt: bid.createdAt + 1,
 })
 
 beforeEach(() => {
@@ -130,6 +219,39 @@ describe('auction win settlement verification', () => {
 		const malformed = makeSettlement({ tags: makeSettlement().tags.filter((tag) => tag[0] !== 'path_release') })
 
 		expect(hasFinalSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [malformed])).toBe(false)
+	})
+})
+
+describe('auction win candidate selection', () => {
+	const lowerBid = makeParsedBid('8'.repeat(64), WINNER_PUBKEY, 2000, 150)
+	const unvalidatedHighBid = makeParsedBid('9'.repeat(64), OTHER_BIDDER_PUBKEY, 5000, 160)
+
+	test('does not promise a win to the highest window-valid bid without quorum', () => {
+		const winner = selectValidatedAuctionWinner(
+			parsedAuction,
+			[lowerBid, unvalidatedHighBid],
+			[makeConfirmVerdict(lowerBid)],
+			new Map([
+				[lowerBid.id, 'unspent'],
+				[unvalidatedHighBid.id, 'unspent'],
+			]),
+		)
+
+		expect(winner?.id).toBe(lowerBid.id)
+	})
+
+	test('excludes a quorum-confirmed high bid when NUT-7 reports it spent', () => {
+		const winner = selectValidatedAuctionWinner(
+			parsedAuction,
+			[lowerBid, unvalidatedHighBid],
+			[makeConfirmVerdict(lowerBid), makeConfirmVerdict(unvalidatedHighBid)],
+			new Map([
+				[lowerBid.id, 'unspent'],
+				[unvalidatedHighBid.id, 'spent'],
+			]),
+		)
+
+		expect(winner?.id).toBe(lowerBid.id)
 	})
 })
 
