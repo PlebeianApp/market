@@ -1224,6 +1224,58 @@ export const publishBidderPathRelease = async (
 		}
 	}
 
+	// Re-resolve the canonical winner immediately before publishing the path.
+	// Render-time checks and caller assertions can be stale: a newer bid,
+	// terminal settlement, or the locktime may have changed since the UI read.
+	try {
+		const [
+			{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdicts },
+			{ parseAuctionEvent },
+			{ parseBidEvent },
+			{ parseSettlementEvent },
+			{ parseValidatorVerdictEvent },
+			{ computeValidatedBids },
+		] = await Promise.all([
+			import('@/queries/auctions'),
+			import('@/lib/schemas/auction/auctionEvent'),
+			import('@/lib/schemas/auction/bidEvent'),
+			import('@/lib/schemas/auction/settlementEvents'),
+			import('@/lib/schemas/auction/validatorEvents'),
+			import('@/lib/auction/bidValidation'),
+		])
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
+		if (!auctionEvent) throw new Error('Auction no longer exists')
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
+		if (!parsedAuctionResult.ok) throw new Error('Auction is malformed')
+		const parsedAuction = parsedAuctionResult.value
+		const now = Math.floor(Date.now() / 1000)
+		const settlementDeadline = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+		if (now >= settlementDeadline) throw new Error('Settlement window has expired')
+
+		const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
+			fetchAuctionBids(latestLeg.auctionRootEventId, null, parsedAuction.coordinate),
+			fetchAuctionVerdicts(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
+			fetchAuctionSettlements(latestLeg.auctionRootEventId, null, parsedAuction.coordinate),
+		])
+		const parsedBids = bidEvents
+			.map((event) => parseBidEvent(toRawEvent(event)))
+			.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+			.map((result) => result.value)
+		const parsedVerdicts = verdictEvents
+			.map((event) => parseValidatorVerdictEvent(toRawEvent(event)))
+			.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+			.map((result) => result.value)
+		const validated = computeValidatedBids({ auction: parsedAuction, bids: parsedBids, verdicts: parsedVerdicts, postSettlement: false })
+		if (!validated.canonicalWinner || validated.canonicalWinner.id !== input.bidEventId) {
+			throw new Error('Auction winner changed. Refresh and try again.')
+		}
+		if (settlementEvents.some((event) => parseSettlementEvent(toRawEvent(event)).ok)) {
+			throw new Error('Auction already has a settlement. Refresh and try again.')
+		}
+	} catch (err) {
+		throw new Error(`Cannot release path: ${err instanceof Error ? err.message : String(err)}`)
+	}
+
 	// Verify won_pending_settlement quorum before releasing the path.
 	// The bidder should not release their locked ecash unless a quorum
 	// of auditors has confirmed that this bid is the canonical winner

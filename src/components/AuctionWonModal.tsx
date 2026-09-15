@@ -158,6 +158,22 @@ export function AuctionWonModal() {
 
 		setIsSettling(true)
 		try {
+			const [latestResolution, latestSettlements] = await Promise.all([winResolutionQuery.refetch(), settlementsQuery.refetch()])
+			const latestDeadline = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
+			const latestSettlementExpired = latestDeadline > 0 && Math.floor(Date.now() / 1000) >= latestDeadline
+			const latestSettlementExists =
+				auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, latestSettlements.data ?? [])
+			if (
+				!latestResolution.data?.isActiveWinner ||
+				latestResolution.data.hasReleasedPath ||
+				latestSettlementExpired ||
+				latestSettlementExists
+			) {
+				auctionWonActions.dismissActive()
+				toast.error('This auction is no longer available for settlement.')
+				return
+			}
+
 			await nip60Actions.settleAuctionAsWinner({
 				bidEventId: active.bidEventId,
 				releaseReason: 'settlement',
