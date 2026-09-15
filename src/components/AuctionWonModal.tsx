@@ -58,10 +58,22 @@ export function AuctionWonModal() {
 	const [isClosingAfterSettlement, setIsClosingAfterSettlement] = useState(false)
 	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
 
-	const auctionQuery = useQuery(auctionQueryOptions(active?.auctionRootEventId ?? '', true))
+	const auctionQuery = useQuery({
+		...auctionQueryOptions(active?.auctionRootEventId ?? '', true),
+		retry: 3,
+		retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+		refetchInterval: 5000,
+		refetchOnWindowFocus: true,
+	})
 	const auction = auctionQuery.data ?? null
 	const auctionCoordinate = auction ? getAuctionCoordinate(auction) : ''
-	const settlementsQuery = useQuery(auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate, true))
+	const settlementsQuery = useQuery({
+		...auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate, true),
+		retry: 3,
+		retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+		refetchInterval: 5000,
+		refetchOnWindowFocus: true,
+	})
 	const winResolutionQuery = useQuery({
 		queryKey: auctionKeys.winResolution(active?.auctionRootEventId ?? '', active?.bidEventId ?? ''),
 		enabled: !!(active && auction && auctionCoordinate && isActiveBidder),
