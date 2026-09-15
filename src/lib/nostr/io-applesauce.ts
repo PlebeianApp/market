@@ -14,7 +14,7 @@ import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io'
 
 let pool: RelayPool | null = null
 
@@ -151,10 +151,14 @@ export const applesauceIo: NostrIo = {
 		return stop
 	},
 
-	async publish(event, opts?: PublishOptions) {
+	async publish(event, opts?: PublishOptions): Promise<PublishResult> {
 		const urls = writeRelayUrls(opts?.relayUrls)
 		if (urls.length === 0) throw new Error('No relays configured for publish')
-		await getPool().publish(urls, event)
+		// RelayPool.publish resolves with one PublishResponse per relay that
+		// answered (errors are mapped to ok:false responses). Only ok responses
+		// are ACKs; surface those URLs so callers can fail closed on zero.
+		const responses = await getPool().publish(urls, event)
+		return { publishedRelays: new Set(responses.filter((response) => response.ok).map((response) => response.from)) }
 	},
 
 	async sign(_template: EventTemplate) {
