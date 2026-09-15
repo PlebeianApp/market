@@ -260,6 +260,11 @@ test.describe('NWC Wallet Management', () => {
 	 * directly keeps this test off the mint/Lightning path.
 	 */
 	async function seedPendingToken(page: Page, token: { id: string; amount: number }): Promise<void> {
+		// Belt-and-braces test isolation: the seeded token references a fake mint
+		// domain; fail any stray request to it so the test never reaches an
+		// external service even if a future reclaim-path refactor touches the mint
+		// before the token fails client-side decode.
+		await page.route('https://mint.e2e.local/**', (route) => route.abort())
 		await page.evaluate(
 			(arg) => {
 				localStorage.setItem(
@@ -337,6 +342,10 @@ test.describe('NWC Wallet Management', () => {
 		// "Claim first" must not close the dialog up front: the disabled/spinner
 		// state is only reachable while the reclaim is still in flight, and a
 		// failed reclaim must leave the choice (Cancel / Remove anyway) available.
+		// The seeded token string is deliberately invalid, so the reclaim fails and
+		// resets isReclaiming quickly; the sleep simply spans that in-flight window
+		// so the re-enabled assertion below is meaningful (the reclaim has no
+		// external network dependency — the token fails client-side decode).
 		await buyerPage.waitForTimeout(2_000)
 		await expect(dialog).toBeVisible()
 		await expect(claimFirst).toBeEnabled({ timeout: 10_000 })
