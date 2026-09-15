@@ -419,6 +419,7 @@ export const fetchAuctionBidsByBidder = async (
 	pubkey: string,
 	limit: number | null = 500,
 	verifySignatures = false,
+	since?: number,
 ): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
@@ -426,6 +427,7 @@ export const fetchAuctionBidsByBidder = async (
 		kinds: [AUCTION_BID_KIND],
 		authors: [pubkey],
 		...(limit === null ? {} : { limit }),
+		...(since === undefined ? {} : { since }),
 	})
 	return filterVerifiedAuctionEvents(filterBlacklistedEvents(events), verifySignatures).sort(
 		(a, b) => (b.created_at || 0) - (a.created_at || 0),

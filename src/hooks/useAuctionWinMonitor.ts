@@ -26,6 +26,10 @@ import {
 } from '@/queries/auctions'
 
 const POLL_INTERVAL_MS = 20000
+const BID_DISCOVERY_LIMIT = 500
+const AUCTION_EVENT_LIMIT = 500
+const PATH_RELEASE_LIMIT = 200
+const SETTLEMENT_LOOKBACK_SECONDS = 60 * 60 * 24 * 30
 
 /**
  * Globally watches auctions the current user has bid on and, once bidding closes with them
@@ -55,7 +59,8 @@ export function useAuctionWinMonitor() {
 			if (isChecking.current) return
 			isChecking.current = true
 			try {
-				const ownBids = await fetchAuctionBidsByBidder(pubkey, null, true)
+				const discoverySince = Math.floor(Date.now() / 1000) - SETTLEMENT_LOOKBACK_SECONDS
+				const ownBids = await fetchAuctionBidsByBidder(pubkey, BID_DISCOVERY_LIMIT, true, discoverySince)
 				const candidateRootEventIds = new Set<string>()
 				for (const bid of ownBids) {
 					const rootEventId = getBidAuctionEventId(bid)
@@ -85,10 +90,10 @@ export function useAuctionWinMonitor() {
 					const parsedAuction = parsedAuctionResult.value
 
 					const [bidEvents, verdictEvents, pathReleaseEvents, settlementEvents] = await Promise.all([
-						fetchAuctionBids(rootEventId, null, parsedAuction.coordinate, true),
-						fetchAuctionVerdicts(rootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
-						fetchAuctionPathReleases(rootEventId, null, parsedAuction.coordinate, undefined, true),
-						fetchAuctionSettlements(rootEventId, null, parsedAuction.coordinate, undefined, true),
+						fetchAuctionBids(rootEventId, AUCTION_EVENT_LIMIT, parsedAuction.coordinate, true),
+						fetchAuctionVerdicts(rootEventId, AUCTION_EVENT_LIMIT, parsedAuction.coordinate, parsedAuction.auditors),
+						fetchAuctionPathReleases(rootEventId, PATH_RELEASE_LIMIT, parsedAuction.coordinate, undefined, true),
+						fetchAuctionSettlements(rootEventId, AUCTION_EVENT_LIMIT, parsedAuction.coordinate, undefined, true),
 					])
 					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
 						terminalRootEventIds.current.add(rootEventId)
