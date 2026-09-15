@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { Trophy } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -22,8 +23,7 @@ import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
-import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
-import { toRawEvent } from '@/lib/nostr/eventLike'
+import { hasFinalSettlementForAuctionWin, isAuctionDetailPath } from '@/lib/auction/winNotification'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
@@ -37,6 +37,7 @@ import { formatSats } from '@/lib/wallet/display'
 
 export function AuctionWonModal() {
 	const { queue } = useStore(auctionWonStore)
+	const location = useLocation()
 	const active = queue[0] ?? null
 	const queryClient = useQueryClient()
 	const [isSettling, setIsSettling] = useState(false)
@@ -53,17 +54,9 @@ export function AuctionWonModal() {
 	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
 	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
 	const hasFinalSettlement =
-		auction !== null &&
-		(settlementsQuery.data ?? []).some((event) => {
-			const parsed = parseSettlementEvent(toRawEvent(event))
-			return (
-				parsed.ok &&
-				parsed.value.sellerPubkey === auction.pubkey &&
-				parsed.value.auctionRootEventId === active?.auctionRootEventId &&
-				parsed.value.auctionCoordinate === auctionCoordinate
-			)
-		})
+		active !== null && auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
 	const hasVerifiedUnresolved = auctionQuery.isSuccess && settlementsQuery.isSuccess && !hasFinalSettlement
+	const isOnAuctionDetail = isAuctionDetailPath(location.pathname)
 
 	useEffect(() => {
 		setIsSettling(false)
@@ -74,7 +67,7 @@ export function AuctionWonModal() {
 		if (active && (hasSettlementExpired || hasFinalSettlement)) auctionWonActions.dismissActive()
 	}, [active, hasFinalSettlement, hasSettlementExpired])
 
-	if (!active || !hasVerifiedUnresolved || hasSettlementExpired) return null
+	if (!active || !hasVerifiedUnresolved || hasSettlementExpired || isOnAuctionDetail) return null
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) setIsLeaveConfirmOpen(true)
