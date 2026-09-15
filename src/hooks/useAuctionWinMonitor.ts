@@ -30,7 +30,9 @@ export function useAuctionWinMonitor() {
 
 	useEffect(() => {
 		resolvedRootEventIds.current = new Set()
-	}, [pubkey])
+		if (isAuthenticated && pubkey) auctionWonActions.retainForBidder(pubkey)
+		else auctionWonActions.clear()
+	}, [isAuthenticated, pubkey])
 
 	useEffect(() => {
 		if (!isAuthenticated || !pubkey) return
@@ -56,7 +58,7 @@ export function useAuctionWinMonitor() {
 					const auction = await fetchAuction(rootEventId)
 					if (!auction) continue
 
-					const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
+					const biddingCutoffAt: number = getAuctionBiddingCutoffAt(auction)
 					const now = Math.floor(Date.now() / 1000)
 					if (biddingCutoffAt <= 0 || biddingCutoffAt > now) continue // Auction hasn't ended yet.
 
@@ -82,7 +84,9 @@ export function useAuctionWinMonitor() {
 					const bidAmount = getBidAmount(topChain.latestBid)
 					const reserveMet = bidAmount >= getAuctionReserve(auction)
 					if (!reserveMet) continue
+					if (cancelled || !authStore.state.isAuthenticated || authStore.state.user?.pubkey !== pubkey) return
 					auctionWonActions.enqueue({
+						bidderPubkey: pubkey,
 						auctionRootEventId: rootEventId,
 						bidEventId: topChain.latestBid.id,
 						bidAmount,

@@ -20,6 +20,7 @@ import { Media } from '@/components/Media'
 import { UserCard } from '@/components/UserCard'
 import { ConfettiBurst } from '@/components/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
+import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
@@ -37,8 +38,10 @@ import { formatSats } from '@/lib/wallet/display'
 
 export function AuctionWonModal() {
 	const { queue } = useStore(auctionWonStore)
+	const { isAuthenticated, user } = useStore(authStore)
 	const location = useLocation()
 	const active = queue[0] ?? null
+	const isActiveBidder = !!(isAuthenticated && user?.pubkey && active?.bidderPubkey === user.pubkey)
 	const queryClient = useQueryClient()
 	const [isSettling, setIsSettling] = useState(false)
 	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
@@ -67,7 +70,7 @@ export function AuctionWonModal() {
 		if (active && (hasSettlementExpired || hasFinalSettlement)) auctionWonActions.dismissActive()
 	}, [active, hasFinalSettlement, hasSettlementExpired])
 
-	if (!active || !hasVerifiedUnresolved || hasSettlementExpired || isOnAuctionDetail) return null
+	if (!active || !isActiveBidder || !hasVerifiedUnresolved || hasSettlementExpired || isOnAuctionDetail) return null
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) setIsLeaveConfirmOpen(true)
@@ -79,6 +82,12 @@ export function AuctionWonModal() {
 	}
 
 	const handleSettle = async () => {
+		if (!isAuthenticated || !user?.pubkey || active.bidderPubkey !== user.pubkey) {
+			auctionWonActions.clear()
+			toast.error('Your account changed. Reopen the auction before settling.')
+			return
+		}
+
 		setIsSettling(true)
 		try {
 			await nip60Actions.settleAuctionAsWinner({

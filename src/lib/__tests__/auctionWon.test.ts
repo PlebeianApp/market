@@ -9,6 +9,7 @@ const SELLER_PUBKEY = 'c'.repeat(64)
 const OTHER_SELLER_PUBKEY = 'd'.repeat(64)
 const WINNING_BID_ID = 'e'.repeat(64)
 const WINNER_PUBKEY = 'f'.repeat(64)
+const OTHER_BIDDER_PUBKEY = '4'.repeat(64)
 const PATH_RELEASE_ID = '1'.repeat(64)
 const SETTLEMENT_ID = '2'.repeat(64)
 const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
@@ -23,6 +24,7 @@ const auction: NostrEventLike = {
 }
 
 const win: AuctionWonPayload = {
+	bidderPubkey: WINNER_PUBKEY,
 	auctionRootEventId: AUCTION_ROOT_ID,
 	bidEventId: WINNING_BID_ID,
 	bidAmount: 5000,
@@ -54,6 +56,7 @@ beforeEach(() => {
 describe('auction win queue', () => {
 	test('queues multiple wins in FIFO order and ignores duplicate auctions', () => {
 		const secondWin: AuctionWonPayload = {
+			bidderPubkey: WINNER_PUBKEY,
 			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
 			bidEventId: '3'.repeat(64),
 			bidAmount: 7000,
@@ -68,6 +71,7 @@ describe('auction win queue', () => {
 
 	test('dismisses only the active win so the next queued win can be verified', () => {
 		const secondWin: AuctionWonPayload = {
+			bidderPubkey: WINNER_PUBKEY,
 			auctionRootEventId: OTHER_AUCTION_ROOT_ID,
 			bidEventId: '3'.repeat(64),
 			bidAmount: 7000,
@@ -78,6 +82,29 @@ describe('auction win queue', () => {
 		auctionWonActions.dismissActive()
 
 		expect(auctionWonStore.state.queue).toEqual([secondWin])
+	})
+
+	test('retains only wins owned by the authenticated bidder', () => {
+		const otherBidderWin: AuctionWonPayload = {
+			bidderPubkey: OTHER_BIDDER_PUBKEY,
+			auctionRootEventId: AUCTION_ROOT_ID,
+			bidEventId: '3'.repeat(64),
+			bidAmount: 7000,
+		}
+		auctionWonActions.enqueue(win)
+		auctionWonActions.enqueue(otherBidderWin)
+
+		auctionWonActions.retainForBidder(OTHER_BIDDER_PUBKEY)
+
+		expect(auctionWonStore.state.queue).toEqual([otherBidderWin])
+	})
+
+	test('clears every queued win on logout', () => {
+		auctionWonActions.enqueue(win)
+
+		auctionWonActions.clear()
+
+		expect(auctionWonStore.state.queue).toEqual([])
 	})
 })
 
