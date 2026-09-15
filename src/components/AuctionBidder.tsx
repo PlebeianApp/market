@@ -28,7 +28,13 @@ import {
 	getAuctionImages,
 	getAuctionAuditors,
 	getAuctionAuditorQuorum,
+	useAuctionVerdicts,
 } from '@/queries/auctions'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { UserCard } from './UserCard'
 import { AvatarUser } from './AvatarUser'
 import { computeAuctionFloorMultiplier, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
@@ -136,6 +142,31 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		shouldFetchBids ? auctionCoordinates : undefined,
 	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
+	// Fetch verdicts for validated bid computation
+	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
+	const verdictsData = verdictsQuery.data ?? []
+
+	// Compute validated bid set when verdicts are available
+	const validatedSet = useMemo(() => {
+		if (!auction || verdictsData.length === 0) return null
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
+		if (!parsedAuctionResult.ok) return null
+		const parsedBids = bids
+			.map((b) => parseBidEvent(toRawEvent(b)))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+			.map((r) => r.value)
+		const parsedVerdicts = verdictsData
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+		return computeValidatedBids({
+			auction: parsedAuctionResult.value,
+			bids: parsedBids,
+			verdicts: parsedVerdicts,
+		})
+	}, [auction, bids, verdictsData])
+
 	const endAt = getAuctionEndAt(auction)
 	const startAt = getAuctionStartAt(auction)
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
@@ -146,8 +177,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// "Not started yet" to "Place Bid" the moment start_at passes.
 	const notStarted = startAt > 0 && countdown.now < startAt
 
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const currentPrice = validatedSet
+		? Math.max(validatedSet.currentTopValidAmount, startingBid)
+		: getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = validatedSet ? validatedSet.validBids.length : getAuctionBidCountFromBids(auction, bids)
 	const hasPriorBids = bidsCount > 0
 	const bidStep = Math.max(bidIncrement, AUCTION_MIN_BID_LEG_SATS)
 	const signedInBidderPubkey = isAuthenticated ? user?.pubkey || currentUserPubkey || '' : ''
