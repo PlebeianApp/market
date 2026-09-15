@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath, selectValidatedAuctionWinner } from '@/lib/auction/winNotification'
+import {
+	hasFinalSettlementForAuctionWin,
+	isAuctionWonModalSuppressedPath,
+	resolveAuctionWin,
+	selectValidatedAuctionWinner,
+} from '@/lib/auction/winNotification'
 import { auctionWonActions, auctionWonStore, type AuctionWonPayload } from '@/lib/stores/auctionWon'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
-import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
+import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 
 const AUCTION_ROOT_ID = 'a'.repeat(64)
 const OTHER_AUCTION_ROOT_ID = 'b'.repeat(64)
@@ -17,6 +24,7 @@ const SETTLEMENT_ID = '2'.repeat(64)
 const AUCTION_COORDINATE = `30408:${SELLER_PUBKEY}:auction-1`
 const AUDITOR_PUBKEY = '5'.repeat(64)
 const MINT_URL = 'https://mint.test'
+const REAL_AUCTION_XPUB = 'xpub6CHGS91EATnrt7a3wBLqCeJ13KvVXQp3m39ufe1TYiFxHHmAK1TiwfrT1N89CAHNLa9YQgbJAyysBZTiRRH38wTvYeBiYvgRrqxALmvghTH'
 
 const auction: NostrEventLike = {
 	id: AUCTION_ROOT_ID,
@@ -138,6 +146,62 @@ const makeConfirmVerdict = (bid: ParsedBidEvent): ParsedValidatorVerdictEvent =>
 	observedAt: bid.createdAt + 1,
 })
 
+const makeReleasedBid = (params: {
+	id: string
+	path: string
+	amount: number
+	legAmount: number
+	createdAt: number
+	prevBidId?: string
+}): { bid: ParsedBidEvent; release: ParsedPathReleaseEvent } => {
+	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(REAL_AUCTION_XPUB, params.path)
+	const refundPubkey = `03${'7'.repeat(64)}`
+	const locktime = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+	const lockSecret = JSON.stringify([
+		'P2PK',
+		{
+			nonce: params.id,
+			data: childPubkey,
+			tags: [
+				['sigflag', 'SIG_INPUTS'],
+				['locktime', String(locktime)],
+				['refund', refundPubkey],
+				['n_sigs_refund', '1'],
+			],
+		},
+	])
+	const proof: Proof = {
+		id: '0000000000000000',
+		amount: params.legAmount,
+		secret: lockSecret,
+		C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
+	}
+	const bid: ParsedBidEvent = {
+		...makeParsedBid(params.id, WINNER_PUBKEY, params.amount, params.createdAt),
+		legLockedAmount: params.legAmount,
+		childPubkey,
+		lockSecrets: [lockSecret],
+		proofYs: [hashToCurveHexFromString(lockSecret)],
+		prevBidId: params.prevBidId,
+	}
+	const release: ParsedPathReleaseEvent = {
+		rawEvent: { id: `a${params.id.slice(1)}`, pubkey: WINNER_PUBKEY, kind: 1025, created_at: 220, content: '', tags: [] },
+		id: `a${params.id.slice(1)}`,
+		bidderPubkey: WINNER_PUBKEY,
+		createdAt: 220,
+		bidEventId: bid.id,
+		auctionCoordinate: AUCTION_COORDINATE,
+		sellerPubkey: SELLER_PUBKEY,
+		derivationPath: params.path,
+		childPubkey,
+		releaseReason: 'settlement',
+		auditorRefs: [],
+		cashuToken: getEncodedToken({ mint: MINT_URL, proofs: [proof] }),
+		content: '',
+	}
+	return { bid, release }
+}
+
 beforeEach(() => {
 	auctionWonStore.setState(() => ({ queue: [] }))
 })
@@ -252,6 +316,56 @@ describe('auction win candidate selection', () => {
 		)
 
 		expect(winner?.id).toBe(lowerBid.id)
+	})
+})
+
+describe('auction win path-release resolution', () => {
+	const releaseAuction = { ...parsedAuction, p2pkXpub: REAL_AUCTION_XPUB }
+
+	test('treats a validated release for the active winning bid as resolved', async () => {
+		const { bid, release } = makeReleasedBid({ id: '6'.repeat(64), path: 'm/0', amount: 2000, legAmount: 2000, createdAt: 150 })
+		const resolution = await resolveAuctionWin(
+			{ auctionRootEventId: AUCTION_ROOT_ID, bidEventId: bid.id },
+			releaseAuction,
+			[bid],
+			[makeConfirmVerdict(bid)],
+			[release],
+			new Map([[bid.id, 'unspent']]),
+			220,
+			new Map([[MINT_URL, []]]),
+		)
+
+		expect(resolution.isActiveWinner).toBe(true)
+		expect(resolution.hasReleasedPath).toBe(true)
+	})
+
+	test('requires a valid release for every leg in a winning rebid chain', async () => {
+		const first = makeReleasedBid({ id: '6'.repeat(64), path: 'm/0', amount: 2000, legAmount: 2000, createdAt: 150 })
+		const latest = makeReleasedBid({
+			id: '7'.repeat(64),
+			path: 'm/1',
+			amount: 3000,
+			legAmount: 1000,
+			createdAt: 160,
+			prevBidId: first.bid.id,
+		})
+		const args = [
+			{ auctionRootEventId: AUCTION_ROOT_ID, bidEventId: latest.bid.id },
+			releaseAuction,
+			[first.bid, latest.bid],
+			[makeConfirmVerdict(latest.bid)],
+		] as const
+		const nut7States = new Map([
+			[first.bid.id, 'unspent' as const],
+			[latest.bid.id, 'unspent' as const],
+		])
+		const keysets = new Map([[MINT_URL, []]])
+
+		const partial = await resolveAuctionWin(...args, [latest.release], nut7States, 220, keysets)
+		const complete = await resolveAuctionWin(...args, [first.release, latest.release], nut7States, 220, keysets)
+
+		expect(partial.hasReleasedPath).toBe(false)
+		expect(complete.hasReleasedPath).toBe(true)
 	})
 })
 

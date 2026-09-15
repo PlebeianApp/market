@@ -24,10 +24,19 @@ import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
-import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath } from '@/lib/auction/winNotification'
+import { hasFinalSettlementForAuctionWin, isAuctionWonModalSuppressedPath, resolveAuctionWin } from '@/lib/auction/winNotification'
+import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
+	fetchAuctionBids,
+	fetchAuctionPathReleases,
+	fetchAuctionVerdicts,
 	getAuctionBiddingCutoffAt,
 	getAuctionImages,
 	getAuctionSettlementGrace,
@@ -50,6 +59,45 @@ export function AuctionWonModal() {
 	const auction = auctionQuery.data ?? null
 	const auctionCoordinate = auction ? getAuctionCoordinate(auction) : ''
 	const settlementsQuery = useQuery(auctionSettlementsQueryOptions(active?.auctionRootEventId ?? '', 100, auctionCoordinate))
+	const winResolutionQuery = useQuery({
+		queryKey: auctionKeys.winResolution(active?.auctionRootEventId ?? '', active?.bidEventId ?? ''),
+		enabled: !!(active && auction && auctionCoordinate && isActiveBidder),
+		queryFn: async () => {
+			if (!active || !auction) throw new Error('Auction win is unavailable')
+			const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
+			if (!parsedAuctionResult.ok) throw new Error('Auction event is malformed')
+			const parsedAuction = parsedAuctionResult.value
+			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
+				fetchAuctionBids(active.auctionRootEventId, 500, parsedAuction.coordinate),
+				fetchAuctionVerdicts(active.auctionRootEventId, 500, parsedAuction.coordinate, parsedAuction.auditors),
+				fetchAuctionPathReleases(active.auctionRootEventId, 200, parsedAuction.coordinate),
+			])
+			const parsedBids = bidEvents
+				.map((bid) => parseBidEvent(toRawEvent(bid)))
+				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+				.map((result) => result.value)
+			const parsedVerdicts = verdictEvents
+				.map((verdict) => parseValidatorVerdictEvent(toRawEvent(verdict)))
+				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+				.map((result) => result.value)
+			const parsedPathReleases = pathReleaseEvents
+				.map((release) => parsePathReleaseEvent(toRawEvent(release)))
+				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedPathReleaseEvent } => result.ok)
+				.map((result) => result.value)
+			const nut7States = await fetchBidNut7States(parsedBids, parsedAuction.mints)
+			return resolveAuctionWin(
+				active,
+				parsedAuction,
+				parsedBids,
+				parsedVerdicts,
+				parsedPathReleases,
+				nut7States,
+				Math.floor(Date.now() / 1000),
+			)
+		},
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
 	const title = getAuctionTitle(auction)
 	const imageUrl = getAuctionImages(auction)[0]?.[1]
 	const sellerPubkey = auction?.pubkey
@@ -58,7 +106,15 @@ export function AuctionWonModal() {
 	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
 	const hasFinalSettlement =
 		active !== null && auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
-	const hasVerifiedUnresolved = auctionQuery.isSuccess && settlementsQuery.isSuccess && !hasFinalSettlement
+	const hasReleasedPath = winResolutionQuery.data?.hasReleasedPath === true
+	const isNoLongerWinner = !!winResolutionQuery.data?.canonicalWinner && !winResolutionQuery.data.isActiveWinner
+	const hasVerifiedUnresolved =
+		auctionQuery.isSuccess &&
+		settlementsQuery.isSuccess &&
+		winResolutionQuery.isSuccess &&
+		winResolutionQuery.data.isActiveWinner &&
+		!hasFinalSettlement &&
+		!hasReleasedPath
 	const isOnFocusedWorkflow = isAuctionWonModalSuppressedPath(location.pathname)
 
 	useEffect(() => {
@@ -67,8 +123,8 @@ export function AuctionWonModal() {
 	}, [active?.auctionRootEventId])
 
 	useEffect(() => {
-		if (active && (hasSettlementExpired || hasFinalSettlement)) auctionWonActions.dismissActive()
-	}, [active, hasFinalSettlement, hasSettlementExpired])
+		if (active && (hasSettlementExpired || hasFinalSettlement || hasReleasedPath || isNoLongerWinner)) auctionWonActions.dismissActive()
+	}, [active, hasFinalSettlement, hasReleasedPath, hasSettlementExpired, isNoLongerWinner])
 
 	if (!active || !isActiveBidder || !hasVerifiedUnresolved || hasSettlementExpired || isOnFocusedWorkflow) return null
 
