@@ -23,3 +23,8 @@ export const toRawEvent = (event: NostrEventLike): NostrEventLike => {
 	if (typeof maybeRawEvent === 'function') return maybeRawEvent.call(event) as NostrEventLike
 	return event
 }
+
+export const getEventAddress = (event: NostrEventLike): string => {
+	const identifier = event.tags.find((tag) => tag[0] === 'd')?.[1] ?? ''
+	return `${event.kind}:${event.pubkey}:${identifier}`
+}

@@ -122,6 +122,19 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 		expect(fetchedFilters[0]).not.toHaveProperty('authors')
 	})
 
+	test('null limit omits the relay limit for complete win resolution', async () => {
+		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, null, AUCTION_COORDINATE, [validatorPubkey], injectedFetch)
+
+		expect(fetchedFilters).toEqual([
+			{
+				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
+				authors: [validatorPubkey],
+				'#e': [AUCTION_ROOT_EVENT_ID],
+				'#a': [AUCTION_COORDINATE],
+			},
+		])
+	})
+
 	test('sends the configured auditors as the relay authors filter (de-duplicated, sorted)', async () => {
 		await fetchAuctionVerdicts(
 			AUCTION_ROOT_EVENT_ID,

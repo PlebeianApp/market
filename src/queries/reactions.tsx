@@ -1,3 +1,4 @@
+import { getEventAddress } from '@/lib/nostr/eventLike'
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from './queryKeyFactory'
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -168,7 +169,7 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> 
 	}
 
 	if (isAddressableKind(event.kind)) {
-		const address = event.tagAddress()
+		const address = getEventAddress(event)
 
 		filter['#a'] = [address]
 	} else {

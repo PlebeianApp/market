@@ -14,12 +14,14 @@ import { useVanitySync } from '@/hooks/useVanitySync'
 import { useNip05Sync } from '@/hooks/useNip05Sync'
 import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
 import { usePIIMonitor } from '@/hooks/usePIIMonitor' // Add this import
+import { useAuctionWinMonitor } from '@/hooks/useAuctionWinMonitor'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal' // Add this import
+import { AuctionWonModal } from '@/components/AuctionWonModal'
 import type { PIIScanResult } from '@/lib/utils/piiScanner'
 
 export const Route = createRootRoute({
@@ -64,6 +66,7 @@ function RootLayout() {
 	}, [isAuthenticated])
 
 	useNotificationMonitor()
+	useAuctionWinMonitor()
 
 	// Show PII modal when PII is detected
 	useEffect(() => {
@@ -116,6 +119,7 @@ function RootLayout() {
 				<DecryptPasswordDialog />
 				<SheetRegistry />
 				<DialogRegistry />
+				<AuctionWonModal />
 				<Toaster />
 			</div>
 		</TooltipProvider>
