@@ -15,6 +15,7 @@ import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvent
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import {
 	fetchAuction,
+	fetchAuctionWithRetry,
 	fetchAuctionBids,
 	fetchAuctionBidsByBidder,
 	fetchAuctionPathReleases,
@@ -72,8 +73,13 @@ export function useAuctionWinMonitor() {
 				for (const rootEventId of candidateRootEventIds) {
 					if (cancelled) return
 
-					const auction = await fetchAuction(rootEventId, true)
-					if (!auction) continue
+					const auction = await fetchAuctionWithRetry(rootEventId, true)
+					if (!auction) {
+						terminalRootEventIds.current.add(rootEventId)
+						announcedBidIdsByRoot.current.delete(rootEventId)
+						auctionWonActions.removeForAuction(rootEventId)
+						continue
+					}
 
 					const biddingCutoffAt: number = getAuctionBiddingCutoffAt(auction)
 					const now = Math.floor(Date.now() / 1000)

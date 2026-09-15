@@ -207,6 +207,20 @@ export const fetchAuction = async (id: string, verifySignatures = false): Promis
 	return resolveCanonicalAuctionEvent(dedupeEventsById([event, ...versionEvents]))
 }
 
+export const fetchAuctionWithRetry = async (
+	id: string,
+	verifySignatures = false,
+	attempts = 3,
+	delayMs = 500,
+): Promise<NostrEventLike | null> => {
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		const auction = await fetchAuction(id, verifySignatures)
+		if (auction) return auction
+		if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, delayMs))
+	}
+	return null
+}
+
 export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
@@ -589,10 +603,10 @@ export const auctionsByPubkeyQueryOptions = (pubkey: string, limit: number = 100
 		enabled: !!pubkey,
 	})
 
-export const auctionQueryOptions = (id: string, verifySignatures = false) =>
+export const auctionQueryOptions = (id: string, verifySignatures = false, retryUnavailable = false) =>
 	queryOptions({
 		queryKey: [...auctionKeys.details(id), verifySignatures ? 'verified' : 'unverified'],
-		queryFn: () => fetchAuction(id, verifySignatures),
+		queryFn: () => (retryUnavailable ? fetchAuctionWithRetry(id, verifySignatures) : fetchAuction(id, verifySignatures)),
 		staleTime: 300000,
 		enabled: !!id,
 	})

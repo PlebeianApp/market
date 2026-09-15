@@ -58,7 +58,7 @@ export function AuctionWonModal() {
 	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
 
 	const auctionQuery = useQuery({
-		...auctionQueryOptions(active?.auctionRootEventId ?? '', true),
+		...auctionQueryOptions(active?.auctionRootEventId ?? '', true, true),
 		retry: 3,
 		retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
 		refetchInterval: 5000,
