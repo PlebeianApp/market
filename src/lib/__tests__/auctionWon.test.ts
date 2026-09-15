@@ -299,6 +299,15 @@ describe('auction win settlement verification', () => {
 
 		expect(hasFinalSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [malformed])).toBe(false)
 	})
+
+	test('does not treat non-settled terminal statuses as winner settlement', () => {
+		for (const status of ['reserve_not_met', 'cancelled', 'griefed_no_fallback']) {
+			const nonSettled = makeSettlement({
+				tags: makeSettlement().tags.map((tag) => (tag[0] === 'status' ? ['status', status] : tag)),
+			})
+			expect(hasFinalSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [nonSettled])).toBe(false)
+		}
+	})
 })
 
 describe('auction win candidate selection', () => {

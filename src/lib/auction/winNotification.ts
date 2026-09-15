@@ -142,6 +142,7 @@ export const hasFinalSettlementForAuctionWin = (
 		const parsed = parseSettlementEvent(toRawEvent(event))
 		return (
 			parsed.ok &&
+			parsed.value.status === 'settled' &&
 			parsed.value.sellerPubkey === auction.pubkey &&
 			parsed.value.auctionRootEventId === win.auctionRootEventId &&
 			parsed.value.auctionCoordinate === auctionCoordinate
