@@ -1209,6 +1209,7 @@ export const publishBidderPathRelease = async (
 			`No local bidder record for bid ${input.bidEventId}. The bidder client must hold the derivation path to settle; lost record = unsettleable.`,
 		)
 	}
+	const latestLeg = chain[chain.length - 1]
 
 	// Pre-publish sanity for every leg. If any leg's derivation is
 	// corrupted, refuse the whole release — the seller would fail on
@@ -1281,7 +1282,6 @@ export const publishBidderPathRelease = async (
 	// of auditors has confirmed that this bid is the canonical winner
 	// and the auction is ready for settlement. This prevents premature
 	// release based on stale or incomplete information.
-	const latestLeg = chain[chain.length - 1]
 	try {
 		const [{ fetchAuctionVerdicts, fetchAuction }, { getAuctionTagValue }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] =
 			await Promise.all([
