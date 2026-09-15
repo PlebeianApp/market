@@ -92,6 +92,11 @@ export const configKeys = {
 	featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
 } as const
 
+export const storefrontKeys = {
+	all: ['storefront'] as const,
+	page: (pubkey: string) => [...storefrontKeys.all, 'page', pubkey] as const,
+} as const
+
 export const appSettingsKeys = {
 	all: ['appSettings'] as const,
 } as const
