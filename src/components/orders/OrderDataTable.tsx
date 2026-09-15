@@ -261,7 +261,7 @@ export function OrderDataTable<TData>({
 									</div>
 
 									{/* Desktop Grid Layout - only on xl screens and above */}
-									<div className="hidden xl:grid xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] gap-4 p-4 items-center">
+									<div className="hidden xl:grid xl:grid-cols-[repeat(6,minmax(0,1fr))_auto] gap-4 p-4 items-center">
 										{row.getVisibleCells().map((cell) => (
 											<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 										))}

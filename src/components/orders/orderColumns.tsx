@@ -1,9 +1,25 @@
 import { ndkActions } from '@/lib/stores/ndk'
+import { cn } from '@/lib/utils'
+import { getCoordsFromATag } from '@/lib/utils/coords'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
+import {
+	formatSats,
+	getAuctionCoordinatesFromOrder,
+	getBuyerPubkey,
+	getEventDate,
+	getOrderAmount,
+	getOrderId,
+	getSellerPubkey,
+	isAuctionOrder,
+} from '@/queries/orders'
+import { auctionByATagQueryOptions, getAuctionTitle } from '@/queries/auctions'
+import { getProductTitle, isEventId, productSmartQueryOptions } from '@/queries/products'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { OrderActions } from './OrderActions'
+import { getOrderItems } from './orderDetailHelpers'
 import { UserCard } from '../UserCard'
 
 // Base columns that are common to all order lists
@@ -39,6 +55,104 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		},
 	},
 ]
+
+// Type column: Product vs Auction chip. The distinction comes from the
+// PR's own `isAuctionOrder` helper (kind-30408 'a' tag on the order event).
+const orderTypeColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'type',
+	header: 'Type',
+	cell: ({ row }) => {
+		const isAuction = isAuctionOrder(row.original)
+		return (
+			<span
+				data-testid="order-type"
+				className={cn(
+					'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+					isAuction ? 'border-purple-200 bg-purple-50 text-purple-700' : 'border-blue-200 bg-blue-50 text-blue-700',
+				)}
+			>
+				{isAuction ? 'Auction' : 'Product'}
+			</span>
+		)
+	},
+}
+
+/**
+ * Item column: resolves the ordered item's title through the existing query
+ * layer — auctions via the kind-30408 coordinate ('a' tag), products via the
+ * smart (event-id or d-tag) product query. Falls back to the coordinate's
+ * d-tag string when the event cannot be resolved; malformed tags never crash.
+ */
+function OrderItemTitleCell({ order }: { order: OrderWithRelatedEvents }) {
+	const orderEvent = order.order
+	const orderSellerPubkey = getSellerPubkey(orderEvent)
+
+	const auctionCoordinates = getAuctionCoordinatesFromOrder(order)
+	const isAuction = !!auctionCoordinates
+
+	const auctionCoords = useMemo(() => {
+		if (!auctionCoordinates) return null
+		try {
+			return getCoordsFromATag(auctionCoordinates)
+		} catch {
+			return null
+		}
+	}, [auctionCoordinates])
+
+	const productLookup = useMemo(() => {
+		if (isAuction) return null
+		const firstItem = getOrderItems(orderEvent)[0]?.productRef ?? ''
+		if (!firstItem) return null
+		if (firstItem.includes(':')) {
+			try {
+				const parsed = getCoordsFromATag(firstItem)
+				if (parsed.kind === 30402) return { id: parsed.identifier, sellerPubkey: parsed.pubkey }
+				return null
+			} catch {
+				return null
+			}
+		}
+		// Legacy item refs may be bare event ids — fetchProductSmart handles them.
+		return { id: firstItem, sellerPubkey: undefined }
+	}, [isAuction, orderEvent])
+
+	const { data: auctionEvent } = useQuery({
+		...auctionByATagQueryOptions(auctionCoords?.pubkey ?? '', auctionCoords?.identifier ?? ''),
+		enabled: isAuction && !!auctionCoords?.pubkey && !!auctionCoords.identifier,
+	})
+
+	const { data: productEvent } = useQuery({
+		...productSmartQueryOptions(productLookup?.id ?? '', productLookup?.sellerPubkey ?? orderSellerPubkey),
+		enabled: !isAuction && !!productLookup && (isEventId(productLookup.id) || !!productLookup.sellerPubkey),
+	})
+
+	// Fallback: the coordinate d-tag (or raw item ref) — never an empty title.
+	const fallbackTitle = isAuction ? (auctionCoords?.identifier ?? '') : (productLookup?.id ?? '')
+
+	const title = isAuction
+		? auctionEvent
+			? getAuctionTitle(auctionEvent)
+			: fallbackTitle
+		: productEvent
+			? getProductTitle(productEvent) || fallbackTitle
+			: fallbackTitle
+
+	return (
+		<span
+			data-testid="order-item-title"
+			title={title}
+			className="inline-block max-w-[220px] truncate align-middle text-xs text-muted-foreground"
+		>
+			{title || 'Unknown item'}
+		</span>
+	)
+}
+
+const orderItemColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'item',
+	header: 'Item',
+	cell: ({ row }) => <OrderItemTitleCell order={row.original} />,
+}
 
 // Actions column for purchases (buyer's perspective)
 const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
@@ -79,6 +193,8 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 // Columns for purchases (buyer's perspective)
 export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	baseOrderColumns[0], // Order ID
+	orderTypeColumn, // Type (Product/Auction)
+	orderItemColumn, // Item title
 	{
 		accessorKey: 'seller',
 		header: 'Seller',
@@ -98,6 +214,8 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		...baseOrderColumns[0], // Order ID
 		accessorFn: (row) => getOrderId(row.order),
 	},
+	orderTypeColumn, // Type (Product/Auction)
+	orderItemColumn, // Item title
 	{
 		accessorKey: 'buyer',
 		header: 'Buyer',
@@ -115,6 +233,8 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 // Full columns (showing both buyer and seller)
 export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	baseOrderColumns[0], // Order ID
+	orderTypeColumn, // Type (Product/Auction)
+	orderItemColumn, // Item title
 	{
 		accessorKey: 'seller',
 		header: 'Seller',
