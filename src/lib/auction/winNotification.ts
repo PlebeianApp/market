@@ -6,6 +6,11 @@ import type { Nut7ProofState } from '@/lib/auction/constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { fetchMintKeysets, validatePathRelease } from '@/lib/auction/validation'
 import type { MintKeyset } from '@cashu/cashu-ts'
+import { fetchBidNut7States } from './useNut7Polling'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parsePathReleaseEvent } from '@/lib/schemas/auction/settlementEvents'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 
 export interface QueuedAuctionWin {
 	auctionRootEventId: string
@@ -35,6 +40,33 @@ export interface AuctionWinResolution {
 	canonicalWinner: ParsedBidEvent | null
 	isActiveWinner: boolean
 	hasReleasedPath: boolean
+}
+
+export const resolveAuctionWinFromEvents = async (
+	win: QueuedAuctionWin,
+	auctionEvent: NostrEventLike,
+	bidEvents: NostrEventLike[],
+	verdictEvents: NostrEventLike[],
+	pathReleaseEvents: NostrEventLike[],
+	now: number,
+): Promise<AuctionWinResolution> => {
+	const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
+	if (!parsedAuctionResult.ok) return { canonicalWinner: null, isActiveWinner: false, hasReleasedPath: false }
+	const auction = parsedAuctionResult.value
+	const parsedBids = bidEvents
+		.map((event) => parseBidEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: ParsedBidEvent } => result.ok)
+		.map((result) => result.value)
+	const parsedVerdicts = verdictEvents
+		.map((event) => parseValidatorVerdictEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: ParsedValidatorVerdictEvent } => result.ok)
+		.map((result) => result.value)
+	const parsedPathReleases = pathReleaseEvents
+		.map((event) => parsePathReleaseEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: ParsedPathReleaseEvent } => result.ok)
+		.map((result) => result.value)
+	const nut7States = await fetchBidNut7States(parsedBids, auction.mints)
+	return resolveAuctionWin(win, auction, parsedBids, parsedVerdicts, parsedPathReleases, nut7States, now)
 }
 
 export async function resolveAuctionWin(

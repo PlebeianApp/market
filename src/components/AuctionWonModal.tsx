@@ -24,13 +24,11 @@ import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
-import { hasFinalSettlementForAuctionWin, resolveAuctionWin, shouldUseNonBlockingAuctionWinPrompt } from '@/lib/auction/winNotification'
-import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
-import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
-import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
-import { parsePathReleaseEvent } from '@/lib/schemas/auction/settlementEvents'
-import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
-import { toRawEvent } from '@/lib/nostr/eventLike'
+import {
+	hasFinalSettlementForAuctionWin,
+	resolveAuctionWinFromEvents,
+	shouldUseNonBlockingAuctionWinPrompt,
+} from '@/lib/auction/winNotification'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
@@ -38,6 +36,7 @@ import {
 	fetchAuctionPathReleases,
 	fetchAuctionVerdicts,
 	getAuctionBiddingCutoffAt,
+	getAuctionAuditors,
 	getAuctionImages,
 	getAuctionSettlementGrace,
 	getAuctionTitle,
@@ -79,36 +78,14 @@ export function AuctionWonModal() {
 		enabled: !!(active && auction && auctionCoordinate && isActiveBidder),
 		queryFn: async () => {
 			if (!active || !auction) throw new Error('Auction win is unavailable')
-			const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
-			if (!parsedAuctionResult.ok) throw new Error('Auction event is malformed')
-			const parsedAuction = parsedAuctionResult.value
+			const auctionCoordinate = getAuctionCoordinate(auction)
+			const auditorPubkeys = getAuctionAuditors(auction)
 			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
-				fetchAuctionBids(active.auctionRootEventId, null, parsedAuction.coordinate, true),
-				fetchAuctionVerdicts(active.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
-				fetchAuctionPathReleases(active.auctionRootEventId, null, parsedAuction.coordinate, undefined, true),
+				fetchAuctionBids(active.auctionRootEventId, null, auctionCoordinate, true),
+				fetchAuctionVerdicts(active.auctionRootEventId, null, auctionCoordinate, auditorPubkeys),
+				fetchAuctionPathReleases(active.auctionRootEventId, null, auctionCoordinate, undefined, true),
 			])
-			const parsedBids = bidEvents
-				.map((bid) => parseBidEvent(toRawEvent(bid)))
-				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
-				.map((result) => result.value)
-			const parsedVerdicts = verdictEvents
-				.map((verdict) => parseValidatorVerdictEvent(toRawEvent(verdict)))
-				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
-				.map((result) => result.value)
-			const parsedPathReleases = pathReleaseEvents
-				.map((release) => parsePathReleaseEvent(toRawEvent(release)))
-				.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedPathReleaseEvent } => result.ok)
-				.map((result) => result.value)
-			const nut7States = await fetchBidNut7States(parsedBids, parsedAuction.mints)
-			return resolveAuctionWin(
-				active,
-				parsedAuction,
-				parsedBids,
-				parsedVerdicts,
-				parsedPathReleases,
-				nut7States,
-				Math.floor(Date.now() / 1000),
-			)
+			return resolveAuctionWinFromEvents(active, auction, bidEvents, verdictEvents, pathReleaseEvents, Math.floor(Date.now() / 1000))
 		},
 		staleTime: 5000,
 		refetchInterval: 5000,
