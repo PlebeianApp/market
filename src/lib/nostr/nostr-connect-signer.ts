@@ -1,8 +1,8 @@
 /**
  * NIP-46 bunker lane → applesauce `NostrConnectSigner` behind the signer
- * capability seam (ADR-0008 Wave A3b / task B-2).
+ * capability seam (ADR-0002 signer-migration amendment §Decisions).
  *
- * The library provides NONE of the ADR-0008 NIP-46 invariants — they live here
+ * The library provides NONE of the signer-migration NIP-46 invariants — they live here
  * as app-side wrappers (see `signers-api-audit.md` gaps, quoted inline):
  *
  *  - **Strict binding (gap 6):** the library binds an unknown remote on a bare
@@ -249,7 +249,7 @@ export function createNostrConnectCapability(
 	rpcTimeoutMs: number = NIP46_RPC_TIMEOUT_MS,
 ): SignerCapability {
 	// Cache the authenticated user pubkey so the signed-event identity assert
-	// (ADR-0008 invariant 3) does not issue a fresh `get_public_key` RPC on
+	// (ADR-0002 signer-migration amendment I3) does not issue a fresh `get_public_key` RPC on
 	// every sign. The cache is scoped to THIS capability instance: each
 	// `connectBunkerSigner` call builds a fresh capability, so a close/reconnect
 	// (which tears the signer down on logout) inherently invalidates it.
@@ -265,7 +265,7 @@ export function createNostrConnectCapability(
 		getPublicKey: () => resolvePubkey(),
 		signEvent: async (template) => {
 			const signed = await withRpcTimeout('sign_event', signer.signEvent(template as EventTemplate & { pubkey?: string }), rpcTimeoutMs)
-			// ADR-0008 invariant 3: in-signer verification does not prove WHICH key
+			// ADR-0002 signer-migration amendment I3: in-signer verification does not prove WHICH key
 			// signed. Assert the returned event's pubkey equals the authenticated
 			// user pubkey; a valid signature from the wrong key fails closed.
 			const userPubkey = await resolvePubkey()

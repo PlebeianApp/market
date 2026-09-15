@@ -1,5 +1,5 @@
 /**
- * NIP-46 session rehydration from a vaulted nbunksec (ADR-0008 B-3).
+ * NIP-46 session rehydration from a vaulted nbunksec (ADR-0002 signer-migration amendment I5).
  *
  * Rehydration immediately re-sends `connect` over the stored relays, so this
  * factory is only invoked from the unlock prompt (the user just typed the
@@ -33,8 +33,8 @@ export interface RehydrateOptions {
 
 /**
  * Rehydrate a NIP-46 session from a plaintext nbunksec string (already
- * unwrapped from the vault by the caller) and wrap it in the ADR-0008
- * capability seam. The `connect` RPC is deadline-bounded; a signer whose
+ * unwrapped from the vault by the caller) and wrap it in the ADR-0002
+ * signer-migration capability seam. The `connect` RPC is deadline-bounded; a signer whose
  * connect times out is closed before the rejection propagates so the partial
  * restore does not leak its REQ subscription on the shared relay pool.
  *

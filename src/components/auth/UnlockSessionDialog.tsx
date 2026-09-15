@@ -7,7 +7,7 @@ import { Loader2, LogOut } from 'lucide-react'
 import { useState } from 'react'
 
 /**
- * NIP-46 session-unlock prompt (ADR-0008 B-3, review 5654374915 item 1).
+ * NIP-46 session-unlock prompt (ADR-0002 signer-migration amendment I5, review 5654374915 item 1).
  *
  * `getAuthFromLocalStorageAndLogin` surfaces `needsSessionUnlock` on boot when
  * a persisted bunker session exists (encrypted vault, or the legacy plaintext
@@ -51,7 +51,7 @@ export function UnlockSessionDialog() {
 		try {
 			setIsDiscarding(true)
 			setError('')
-			// Intentional, user-visible forced re-login (ADR-0008 invariant 4b):
+			// Intentional, user-visible forced re-login (ADR-0002 signer-migration amendment I5):
 			// deletes the persisted session and logs out — plaintext bearer
 			// storage is never retained.
 			authActions.discardVaultedSession()

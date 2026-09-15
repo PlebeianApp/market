@@ -1,5 +1,5 @@
 /**
- * Session vault unit tests (ADR-0008 B-3, fixes #996 H8).
+ * Session vault unit tests (ADR-0002 signer-migration amendment I5, fixes #996 H8).
  *
  * The vault wraps the nbunksec NIP-46 session (client private key + bunker
  * secret — plaintext by default per signers-api-audit gap 8) in a WebCrypto

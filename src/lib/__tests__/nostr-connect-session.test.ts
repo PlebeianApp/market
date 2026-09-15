@@ -1,5 +1,5 @@
 /**
- * Vault-unlock rehydration tests (ADR-0008 B-3, signers-api-audit gap 1).
+ * Vault-unlock rehydration tests (ADR-0002 signer-migration amendment I5, signers-api-audit gap 1).
  *
  * `rehydrateNostrConnectSession` is the restore half of the NIP-46 session
  * vault: it immediately re-sends `connect` over the stored relays. The module

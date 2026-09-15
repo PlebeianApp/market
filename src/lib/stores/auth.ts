@@ -57,7 +57,7 @@ interface AuthState {
 interface Nip46LoginOptions {
 	onAuthUrl?: (url: string) => void
 	/**
-	 * Session passphrase for encrypted-at-rest persistence (ADR-0008 B-3 /
+	 * Session passphrase for encrypted-at-rest persistence (ADR-0002 signer-migration amendment I5 /
 	 * #996 H8). When supplied, the nbunksec session is wrapped
 	 * PBKDF2+AES-GCM under `nostr_session_v1`. Without it the session is
 	 * in-memory only — the plaintext pair is NEVER written again.
@@ -127,7 +127,7 @@ export const authActions = {
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
-			// Signer / Bunker URL — legacy plaintext pair (ADR-0008 invariant 4:
+			// Signer / Bunker URL — legacy plaintext pair (ADR-0002 signer-migration amendment I5:
 			// persisted-session migration policy). Read ONCE: surface the unlock
 			// prompt; the user either completes the migrate-on-unlock (wrap +
 			// delete) or is logged out. NEVER silently re-login with plaintext.
@@ -167,7 +167,7 @@ export const authActions = {
 			// Extract the ncryptsec part (format: "pubkey:ncryptsec...")
 			const [, encryptedKey] = encryptedPrivateKey.split(':')
 
-			// NIP-49 lane via PasswordSigner (ADR-0008 B-3/B-4): the ncryptsec is
+			// NIP-49 lane via PasswordSigner (ADR-0002 signer-migration amendment): the ncryptsec is
 			// decrypted inside the signer, which then holds the key in memory
 			// behind the capability seam. TRANSITIONAL: decryptAndLogin still
 			// derives the raw key hex below because loginWithPrivateKey expects
@@ -232,7 +232,7 @@ export const authActions = {
 			// nsec lane: build the applesauce PrivateKeySigner behind the signer
 			// registry + capability seam, then attach an NDKSigner adapter so the
 			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
-			// unchanged (ADR-0008 strangler-fig). No NEW plaintext is persisted here
+			// unchanged (ADR-0002 signer-migration amendment). No NEW plaintext is persisted here
 			// — the nsec key stays in-memory until Wave B-3 unifies session storage.
 			//
 			// Readiness + identity resolution happen BEFORE anything is attached
@@ -294,7 +294,7 @@ export const authActions = {
 			// NIP-07 lane: build the applesauce ExtensionSigner behind the signer
 			// registry + capability seam, then attach an NDKSigner adapter so the
 			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
-			// unchanged (ADR-0008 strangler-fig). No key is held locally.
+			// unchanged (ADR-0002 signer-migration amendment). No key is held locally.
 			//
 			// Readiness + identity resolution + persistence happen BEFORE anything
 			// is attached (review 5191403562 A).
@@ -348,7 +348,7 @@ export const authActions = {
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			// NIP-46 bunker lane: build the applesauce NostrConnectSigner behind
-			// the signer capability seam (ADR-0008 Wave A3b / B-2), then attach an
+			// the signer capability seam (ADR-0002 signer-migration amendment §Decisions), then attach an
 			// NDKSigner adapter so the ~70 `signer.user()` consumers (and the wallet
 			// NWC paths) keep working unchanged. The app-side wrappers enforce the
 			// ADR invariants the library does NOT provide (strict connect-secret
@@ -373,7 +373,7 @@ export const authActions = {
 			await adapter.blockUntilReady()
 			const user = await adapter.user()
 
-			// Session persistence (ADR-0008 B-3 / #996 H8): with a passphrase the
+			// Session persistence (ADR-0002 signer-migration amendment I5 / #996 H8): with a passphrase the
 			// nbunksec session is wrapped PBKDF2+AES-GCM under nostr_session_v1;
 			// without one the session stays in-memory. The legacy plaintext pair
 			// is NEVER written again. Persistence runs BEFORE the attach
@@ -428,7 +428,7 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
-		// Lock on logout (ADR-0008 B-3): the vaulted NIP-46 session is removed
+		// Lock on logout (ADR-0002 signer-migration amendment I5): the vaulted NIP-46 session is removed
 		// with the rest of the persisted auth state.
 		clearVaultedSession()
 		// Clear cart when user logs out
@@ -437,7 +437,7 @@ export const authActions = {
 	},
 
 	/**
-	 * Unlock prompt completion (ADR-0008 B-3). With a legacy plaintext pair
+	 * Unlock prompt completion (ADR-0002 signer-migration amendment I5). With a legacy plaintext pair
 	 * this migrates it into the encrypted vault (wrap + delete); otherwise it
 	 * unwraps the stored vault. Either way the recovered nbunksec session is
 	 * rehydrated into a live `NostrConnectSigner` and the user is signed in.
@@ -466,8 +466,8 @@ export const authActions = {
 				const { iterations: _wrapOnly, ...unlockOptions } = options ?? {}
 				nbunksec = await unlockVault(undefined, passphrase, unlockOptions)
 				// The vault opened, so it is the live session: purge the stale
-				// plaintext bearer capability rather than retain it (ADR-0008
-				// invariant 4 — never silently keep plaintext at rest).
+				// plaintext bearer capability rather than retain it (ADR-0002
+				// signer-migration amendment I5 — never silently keep plaintext at rest).
 				discardLegacySession()
 			}
 
@@ -504,7 +504,7 @@ export const authActions = {
 	},
 
 	/**
-	 * Unlock prompt refusal (ADR-0008 invariant 4b): the user declined the
+	 * Unlock prompt refusal (ADR-0002 signer-migration amendment I5): the user declined the
 	 * migration, so the session is discarded — plaintext pair deleted, NO
 	 * vault written, user logged out. An intentional, user-visible forced
 	 * re-login; never silent plaintext retention.

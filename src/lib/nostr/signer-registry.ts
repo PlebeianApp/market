@@ -1,6 +1,6 @@
 /**
  * Signer registry — the single sanctioned home for `applesauce-signers`
- * imports (ADR-0008 "Signer registry and src/AGENTS.md reconciliation").
+ * imports (ADR-0002 signer-migration amendment §Decisions: the signer registry).
  *
  * `src/lib/stores/auth.ts` and UI components never import `applesauce-signers`
  * directly; they build signers through this registry and wrap them in the

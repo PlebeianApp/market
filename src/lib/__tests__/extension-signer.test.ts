@@ -1,5 +1,5 @@
 /**
- * Extension signer factory tests (ADR-0008 A3-3).
+ * Extension signer factory tests (ADR-0002 signer-migration amendment Wave A3).
  *
  * `createExtensionSigner` wraps the NIP-07 `ExtensionSigner` (applesauce-signers)
  * as a `SignerCapability`. nip04/nip44 are pass-throughs to `window.nostr`; both
