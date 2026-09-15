@@ -190,6 +190,20 @@ export const VALIDATOR_REASONS = [
 	'post_end',
 	'late_arrival',
 	'timestamp_skew',
+	// relay/admission abuse controls
+	'event_too_large',
+	'too_many_tags',
+	'bid_payload_too_large',
+	'too_many_lock_secrets',
+	'invalid_bid_nonce',
+	'duplicate_bid_nonce',
+	'rate_limited',
+	'too_many_active_bids',
+	// Forward-declared for relay-side admission rules that this app boundary
+	// does not emit yet (review 5645059400 finding 5). Kept so consumers can
+	// narrow on a fixed vocabulary; nothing produces them today.
+	'too_many_invalid_attempts',
+	'validator_policy_rejected',
 	// amount/curve
 	'under_increment',
 	'under_curve',

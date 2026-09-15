@@ -32,9 +32,11 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 import { currentTopValidBidAmount } from './lifecycle'
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { createPendingBuffer } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
+import { checkBidSpamPolicy, checkEventEnvelope, recordAcceptedBid, resolvePendingBufferLimits, type BidSpamPolicy } from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -56,6 +58,8 @@ export interface ValidatorSubscriberDeps {
 	 * no seed and falls back to `now()` (correct first observation).
 	 */
 	seedObservedAt?: Map<string, number>
+	/** Validator admission limits. Defaults are intentionally permissive. */
+	spamPolicy?: Partial<BidSpamPolicy>
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -79,11 +83,19 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	// Active unsubscribe handles, one per REQ we currently have open.
 	const unsubscribes: Array<() => void> = []
-	// Buffered bids/releases/settlements that arrived before we knew
-	// about their auction. Each carries the validator's first-observed
-	// time so replay uses the original sighting, not replay-time now()
-	// (which would let relay ordering change prompt/late classification).
-	const pendingBids = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	// Bounded, TTL'd buffers for events that arrived before we knew
+	// about their parent. Each entry carries the validator's
+	// first-observed time so replay uses the original sighting, not
+	// replay-time now() (which would let relay ordering change
+	// prompt/late classification).
+	//
+	// The keys come straight off the relay, so they are attacker-chosen:
+	// a bidder signing bids against invented auction ids must not be
+	// able to grow one of these maps without limit, and a key whose
+	// parent never arrives must not be pinned for the process lifetime
+	// (review 5645059400 findings 1 and 3).
+	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
+	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
 	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
 
@@ -115,7 +127,28 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
+	/**
+	 * Envelope gate for every relay-fed event kind. `checkEventEnvelope`
+	 * is kind-agnostic (serialized size + tag count), so it is the cheap
+	 * first refusal on all four ingestion paths before parsing or
+	 * buffering — the kind-1023 admission policy below only ever
+	 * protected one of them (review 5645059400 finding 3).
+	 */
+	const passesEventEnvelope = (raw: NostrEvent, label: string): boolean => {
+		const decision = checkEventEnvelope(raw, deps.spamPolicy)
+		if (decision.ok) return true
+		logger.warn(`[validator] dropping ${label} ${raw.id.slice(0, 8)}: ${decision.reason}`)
+		return false
+	}
+
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'auction')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'auction')) {
 			return
 		}
@@ -157,6 +190,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'bid')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'bid')) {
 			return
 		}
@@ -181,14 +221,42 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// and replay it (with this first-observed time) when the auction
 		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
-			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingBids.set(bid.auctionRootEventId, existing)
+			const admission = pendingBids.add(bid.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
+			return
+		}
+
+		const auctionState = deps.state.auctions.get(bid.auctionRootEventId)
+		if (!auctionState) return
+		// LIFETIME count, by design (review 5645059400 finding 2): `bids` is
+		// append-only and retains bids the verdict pass later marks invalid, so
+		// this is a lifetime cap per (auction, bidder), NOT a count of open bids.
+		// Documented rather than derived: the stored bid state carries verdict
+		// reasons (currentClaim/currentReason), not an authoritative
+		// active/invalid flag, so computing "active" here would invent protocol
+		// semantics this boundary does not own. The policy limit is labelled
+		// lifetime in spamPolicy.ts.
+		const lifetimeBidCount = Array.from(auctionState.bids.values()).filter(
+			(existingBid) => existingBid.bid.bidderPubkey.toLowerCase() === bid.bidderPubkey.toLowerCase(),
+		).length
+		const spamDecision = checkBidSpamPolicy({
+			auction: auctionState.auction,
+			bid,
+			now: firstObservedAt,
+			state: deps.state.spam,
+			policy: deps.spamPolicy,
+			activeBidCount: lifetimeBidCount,
+		})
+		if (!spamDecision.ok) {
+			logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: ${spamDecision.reason}`)
 			return
 		}
 
 		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
+		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: deps.spamPolicy })
 
 		// Run derive + publish.
 		try {
@@ -203,6 +271,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'path release')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'path release')) {
 			return
 		}
@@ -265,6 +340,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'settlement')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'settlement')) {
 			return
 		}
@@ -315,8 +397,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const drainPending = async (auctionRootEventId: string): Promise<void> => {
-		const bids = pendingBids.get(auctionRootEventId) ?? []
-		pendingBids.delete(auctionRootEventId)
+		const bids = pendingBids.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
 		const settlements = pendingSettlements.get(auctionRootEventId) ?? []

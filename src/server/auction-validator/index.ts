@@ -21,6 +21,7 @@ import { publishValidatorPolicy } from './policy'
 import { recoverObservedAt } from './observedAtRecovery'
 import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
+import type { BidSpamPolicy } from './spamPolicy'
 
 export interface StartAuctionValidatorOptions {
 	signer: NostrSigner
@@ -43,6 +44,8 @@ export interface StartAuctionValidatorOptions {
 	 * https-only). Bounded concurrency + per-auction mint cap.
 	 */
 	mintProbePolicy?: MintProbePolicy
+	/** Admission limits for relay-fed kind-1023 bids. */
+	spamPolicy?: Partial<BidSpamPolicy>
 	/** Logger override. Default `console`. */
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
@@ -97,6 +100,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		logger,
 		mintProbePolicy: options.mintProbePolicy,
 		seedObservedAt,
+		spamPolicy: options.spamPolicy,
 	})
 
 	await subscriber.start()
