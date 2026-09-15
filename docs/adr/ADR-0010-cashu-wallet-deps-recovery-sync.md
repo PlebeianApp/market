@@ -38,7 +38,7 @@ safety spike performed after the 2026-08-21 wallet incident.
 
 - ADR-0002 — NDK footprint / relays are transport, not database
 - ADR-0005 — external mint test boundaries
-- ADR-0008 — signer migration
+- ADR-0002 amendment — signer migration
 - PR #1255 — original bundled Cashu wallet ADR
 - PR #1235 — direct Lightning auction funding
 - Wallet rebuild research handover (2026-08-27), decisions D2–D7
