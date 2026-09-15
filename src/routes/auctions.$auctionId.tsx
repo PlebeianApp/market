@@ -497,6 +497,7 @@ function AuctionDetailRoute() {
 				auction,
 				bids,
 				isEnded: ended,
+				validatedBidSet: validatedSet,
 			}),
 		[activeUserPubkey, auction, bids, ended],
 	)

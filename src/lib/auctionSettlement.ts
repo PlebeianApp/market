@@ -324,6 +324,7 @@ export const getAuctionBidAcceptanceEndAt = (auctionEvent: NostrEventLike, bids:
 	return getAuctionBiddingCutoffAt(auctionEvent)
 }
 
+/** @deprecated Use computeValidatedBids from @/lib/auction/bidValidation instead. */
 export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: NostrEventLike[]): NostrEventLike[] => {
 	const auctionRootEventId = getAuctionRootEventId(auctionEvent)
 	const startAt = getAuctionStartAt(auctionEvent)
@@ -338,9 +339,11 @@ export const getAuctionWindowValidBids = (auctionEvent: NostrEventLike, bids: No
 	})
 }
 
+/** @deprecated Use computeValidatedBids(...).currentTopValidAmount instead. */
 export const getAuctionCurrentPrice = (auctionEvent: NostrEventLike, bids: NostrEventLike[], startingBid: number = 0): number =>
 	getAuctionWindowValidBids(auctionEvent, bids).reduce((currentPrice, bid) => Math.max(currentPrice, getAuctionBidAmount(bid)), startingBid)
 
+/** @deprecated Use computeValidatedBids(...).canonicalWinner instead. */
 export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<string, NostrEventLike>): NostrEventLike[] => {
 	const chain: NostrEventLike[] = []
 	const seen = new Set<string>()
@@ -361,6 +364,7 @@ export const collectAuctionBidChain = (latestBid: NostrEventLike, bidById: Map<s
 	return chain
 }
 
+/** @deprecated Use computeValidatedBids(...).validBids / canonicalWinner instead. */
 export const buildActiveAuctionBidChains = (bids: NostrEventLike[]): AuctionBidChainGroup[] => {
 	const latestByBidder = new Map<string, NostrEventLike>()
 
@@ -393,6 +397,7 @@ export const buildActiveAuctionBidChains = (bids: NostrEventLike[]): AuctionBidC
 	}))
 }
 
+/** @deprecated Use computeValidatedBids(...).canonicalWinner instead. */
 export const compareAuctionBidChainPriority = (left: AuctionBidChainGroup, right: AuctionBidChainGroup): number => {
 	const amountDelta = getAuctionBidAmount(right.latestBid) - getAuctionBidAmount(left.latestBid)
 	if (amountDelta !== 0) return amountDelta
