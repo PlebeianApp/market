@@ -12,7 +12,7 @@ export interface QueuedAuctionWin {
 	bidEventId: string
 }
 
-export const isAuctionWonModalSuppressedPath = (pathname: string): boolean =>
+export const shouldUseNonBlockingAuctionWinPrompt = (pathname: string): boolean =>
 	/^\/auctions\/[^/]+\/?$/.test(pathname) ||
 	/^\/dashboard\/products\/auctions\/[^/]+\/?$/.test(pathname) ||
 	/^\/dashboard\/orders\/[^/]+\/?$/.test(pathname)

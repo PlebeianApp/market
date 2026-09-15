@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
 	hasFinalSettlementForAuctionWin,
-	isAuctionWonModalSuppressedPath,
 	resolveAuctionWin,
 	selectValidatedAuctionWinner,
+	shouldUseNonBlockingAuctionWinPrompt,
 } from '@/lib/auction/winNotification'
 import { auctionWonActions, auctionWonStore, type AuctionWonPayload } from '@/lib/stores/auctionWon'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
@@ -370,16 +370,16 @@ describe('auction win path-release resolution', () => {
 })
 
 describe('auction winner modal route visibility', () => {
-	test('suppresses the global modal on auction and order detail routes', () => {
-		expect(isAuctionWonModalSuppressedPath(`/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
-		expect(isAuctionWonModalSuppressedPath(`/dashboard/products/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
-		expect(isAuctionWonModalSuppressedPath('/dashboard/orders/order-1')).toBe(true)
+	test('uses the non-blocking prompt on auction and order detail routes', () => {
+		expect(shouldUseNonBlockingAuctionWinPrompt(`/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
+		expect(shouldUseNonBlockingAuctionWinPrompt(`/dashboard/products/auctions/${AUCTION_ROOT_ID}`)).toBe(true)
+		expect(shouldUseNonBlockingAuctionWinPrompt('/dashboard/orders/order-1')).toBe(true)
 	})
 
-	test('allows the global modal on auction lists and unrelated routes', () => {
-		expect(isAuctionWonModalSuppressedPath('/auctions')).toBe(false)
-		expect(isAuctionWonModalSuppressedPath('/dashboard/products/auctions')).toBe(false)
-		expect(isAuctionWonModalSuppressedPath('/dashboard/orders')).toBe(false)
-		expect(isAuctionWonModalSuppressedPath('/products')).toBe(false)
+	test('uses the full modal on auction lists and unrelated routes', () => {
+		expect(shouldUseNonBlockingAuctionWinPrompt('/auctions')).toBe(false)
+		expect(shouldUseNonBlockingAuctionWinPrompt('/dashboard/products/auctions')).toBe(false)
+		expect(shouldUseNonBlockingAuctionWinPrompt('/dashboard/orders')).toBe(false)
+		expect(shouldUseNonBlockingAuctionWinPrompt('/products')).toBe(false)
 	})
 })
