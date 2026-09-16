@@ -26,7 +26,6 @@ import {
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { applesauceIo } from '@/lib/nostr/io'
 import type { NostrFilter } from '@/lib/nostr/io'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
@@ -802,7 +801,7 @@ export const getAuctionAuditors = (event: NostrEventLike | null): string[] =>
 	(event?.tags ?? []).filter((tag) => tag[0] === 'auditors' && !!tag[1]).map((tag) => tag[1])
 
 /** Number of distinct auditor verdicts required for a bid to be confirmed (§4.1). */
-export const getAuctionAuditorQuorum = (event: NDKEvent | null): number => {
+export const getAuctionAuditorQuorum = (event: NostrEventLike | null): number => {
 	const raw = event?.tags.find((tag) => tag[0] === 'auditor_quorum' && !!tag[1])?.[1]
 	const parsed = raw ? parseInt(raw, 10) : NaN
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AUDITOR_QUORUM
@@ -935,8 +934,8 @@ export const useAuctionBids = (auctionEventId: string, limit: number = 500, auct
 
 // Pure helpers — exported for unit tests, used by useStreamingAuctionBids.
 
-export function buildAuctionBidFilters(rootEventId: string, coordinates: string | undefined, limit: number): NDKFilter[] {
-	const filters: NDKFilter[] = []
+export function buildAuctionBidFilters(rootEventId: string, coordinates: string | undefined, limit: number): NostrFilter[] {
+	const filters: NostrFilter[] = []
 	if (rootEventId) filters.push({ kinds: [AUCTION_BID_KIND], '#e': [rootEventId], limit })
 	if (coordinates) filters.push({ kinds: [AUCTION_BID_KIND], '#a': [coordinates], limit })
 	return filters
@@ -1091,7 +1090,7 @@ export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promi
 		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
-export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent): Promise<PrivateAuctionClaimLookupResult> => {
+export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NostrEventLike): Promise<PrivateAuctionClaimLookupResult> => {
 	const markerFields = getAuctionClaimPublicMarkerFields({ pubkey: publicMarker.pubkey, tags: publicMarker.tags })
 	if (!markerFields) return { status: 'unavailable', reason: 'missing_marker_fields' }
 
@@ -1115,8 +1114,8 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 	// post-marker grace covers relay timestamp/clock skew while keeping the
 	// lookup bounded at 5 pages / 500 seller-addressed gift wraps.
 	for (let page = 0; page < PRIVATE_AUCTION_CLAIM_GIFT_WRAP_MAX_PAGES; page += 1) {
-		const filter: NDKFilter = {
-			kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+		const filter: NostrFilter = {
+			kinds: [NIP59_GIFT_WRAP_KIND as unknown as NonNullable<NostrFilter['kinds']>[number]],
 			'#p': [markerFields.sellerPubkey],
 			limit: PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT,
 			...(since !== undefined ? { since } : {}),
@@ -1188,7 +1187,7 @@ export const useAuctionClaimOrders = (auctionCoordinates: string) =>
 		...auctionClaimOrdersQueryOptions(auctionCoordinates),
 	})
 
-export const privateAuctionClaimQueryOptions = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+export const privateAuctionClaimQueryOptions = (publicMarker: NostrEventLike | null | undefined, enabled: boolean = true) =>
 	queryOptions({
 		queryKey: [...auctionKeys.all, 'privateClaim', publicMarker?.id ?? ''],
 		queryFn: () => {
@@ -1199,7 +1198,7 @@ export const privateAuctionClaimQueryOptions = (publicMarker: NDKEvent | null | 
 		staleTime: 10000,
 	})
 
-export const usePrivateAuctionClaimForOrder = (publicMarker: NDKEvent | null | undefined, enabled: boolean = true) =>
+export const usePrivateAuctionClaimForOrder = (publicMarker: NostrEventLike | null | undefined, enabled: boolean = true) =>
 	useQuery({
 		...privateAuctionClaimQueryOptions(publicMarker, enabled),
 	})
