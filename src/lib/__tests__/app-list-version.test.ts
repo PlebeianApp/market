@@ -165,3 +165,37 @@ describe('selectPreferredAppListEvent', () => {
 		}
 	})
 })
+
+/**
+ * The ordering rule is shared, but each of the four authority reads carries its
+ * own kind + identifier shape: admin list (kind 30000, `d=admins`), editor list
+ * (kind 30000, `d=editors`), blacklist (kind 10000, no `d`), app settings
+ * (kind 31990, `d=plebeian-market-handler`). Pinning the shapes here means a
+ * refactor that special-cases one kind cannot silently drop the others.
+ */
+describe('stale-vs-newer selection per authority kind', () => {
+	const authorityLists = [
+		{ name: 'admin list', kind: 30000, tags: [['d', 'admins']] },
+		{ name: 'editor list', kind: 30000, tags: [['d', 'editors']] },
+		{ name: 'blacklist', kind: 10000, tags: [] },
+		{ name: 'app settings', kind: 31990, tags: [['d', 'plebeian-market-handler']] },
+	]
+
+	for (const { name, tags } of authorityLists) {
+		test(`${name}: a clock-skewed newer copy loses to the higher version`, () => {
+			const latestRevision = { label: 'latest-revision', created_at: 1_000, id: 'aa', tags: [...tags, ['version', '9']] }
+			const clockSkewedStale = { label: 'stale-revision', created_at: 9_999_999, id: 'bb', tags: [...tags, ['version', '3']] }
+
+			expect(selectPreferredAppListEvent([latestRevision, clockSkewedStale])?.label).toBe('latest-revision')
+			expect(selectPreferredAppListEvent([clockSkewedStale, latestRevision])?.label).toBe('latest-revision')
+		})
+
+		test(`${name}: still latest-wins on created_at when neither copy is versioned`, () => {
+			const older = { label: 'older', created_at: 1_000, id: 'aa', tags: [...tags] }
+			const newer = { label: 'newer', created_at: 2_000, id: 'bb', tags: [...tags] }
+
+			expect(selectPreferredAppListEvent([older, newer])?.label).toBe('newer')
+			expect(selectPreferredAppListEvent([newer, older])?.label).toBe('newer')
+		})
+	}
+})

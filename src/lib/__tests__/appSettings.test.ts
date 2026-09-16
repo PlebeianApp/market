@@ -86,4 +86,44 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 
 		expect(result?.created_at).toBe(200)
 	})
+
+	test('prefers the higher version tag over a clock-skewed newer copy', () => {
+		const latestRevision = mockEvent({
+			created_at: 1_000,
+			tags: [
+				['d', APP_SETTINGS_D_TAG],
+				['version', '12'],
+			],
+			content: '{"name":"latest"}',
+		})
+		const clockSkewedStale = mockEvent({
+			created_at: 9_999_999,
+			tags: [
+				['d', APP_SETTINGS_D_TAG],
+				['version', '4'],
+			],
+			content: '{"name":"stale"}',
+		})
+
+		const result = selectAuthoritativeAppSettingsEvent([clockSkewedStale, latestRevision], APP_PUBKEY)
+
+		expect(result?.content).toBe('{"name":"latest"}')
+	})
+
+	test('keeps the authority filter when the versioned copy is the spoofed one', () => {
+		const spoofed = mockEvent({
+			pubkey: SPOOF_PUBKEY,
+			created_at: 9_999_999,
+			tags: [
+				['d', APP_SETTINGS_D_TAG],
+				['version', '99'],
+			],
+			content: '{"name":"evil"}',
+		})
+		const real = mockEvent({ created_at: 50, content: '{"name":"real"}' })
+
+		const result = selectAuthoritativeAppSettingsEvent([spoofed, real], APP_PUBKEY)
+
+		expect(result?.content).toBe('{"name":"real"}')
+	})
 })
