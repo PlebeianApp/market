@@ -479,8 +479,8 @@ decided separately:
 
 **Authority for all three is the signing key — not a relay, and not a service.**
 NIP-01 already gives replaceable and addressable events a total order
-(`created_at`, then the lower event id); what no coordinator can supply is *set
-completeness* — knowing that no newer copy exists anywhere. A CVM-held "latest
+(`created_at`, then the lower event id); what no coordinator can supply is _set
+completeness_ — knowing that no newer copy exists anywhere. A CVM-held "latest
 event id" index is therefore only ever usable as an **optional index over signed,
 versioned events**: a data source, never the arbiter of what is latest. As a
 required pre-trust check it would add a service dependency and an RTT in front of
