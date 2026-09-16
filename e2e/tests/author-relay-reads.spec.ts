@@ -94,11 +94,16 @@ interface MockedAuthorRelay {
  * Stand up a mock relay at AUTHOR_RELAY_URL that serves `events` and records
  * every REQ. `connectToServer()` is deliberately never called, so the
  * connection is served in-process and cannot reach the network.
+ *
+ * Async on purpose: `page.routeWebSocket()` only takes effect once its promise
+ * resolves (the install adds a context init script that patches `WebSocket`),
+ * so a non-awaited registration silently lets the real connection out — the
+ * exact egress ADR-0005 forbids.
  */
-function mockAuthorRelay(page: Page, events: Event[]): MockedAuthorRelay {
+async function mockAuthorRelay(page: Page, events: Event[]): Promise<MockedAuthorRelay> {
 	const state: MockedAuthorRelay = { connections: 0, requests: [], filters: [] }
 
-	void page.routeWebSocket(/author-relay\.e2e\.invalid/, (ws: WebSocketRoute) => {
+	await page.routeWebSocket(/author-relay\.e2e\.invalid/, (ws: WebSocketRoute) => {
 		state.connections += 1
 
 		ws.onMessage((message) => {
@@ -129,7 +134,7 @@ test.describe('bounded author-relay reads (F3)', () => {
 		await publishToAppRelay([author.relayList, author.post])
 
 		await setExternalAuthorReadsEnabled(page, true)
-		const authorRelay = mockAuthorRelay(page, [author.profile])
+		const authorRelay = await mockAuthorRelay(page, [author.profile])
 
 		await page.goto(`/posts/${author.post.id}`)
 
@@ -149,7 +154,7 @@ test.describe('bounded author-relay reads (F3)', () => {
 		await publishToAppRelay([author.relayList, author.post])
 
 		await setExternalAuthorReadsEnabled(page, false)
-		const authorRelay = mockAuthorRelay(page, [author.profile])
+		const authorRelay = await mockAuthorRelay(page, [author.profile])
 
 		await page.goto(`/posts/${author.post.id}`)
 
