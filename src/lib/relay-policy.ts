@@ -35,6 +35,8 @@ export interface NdkConfigComputed {
 	explicitRelayUrls: string[]
 	/** Write relays — staging/dev confine writes to the app relay only. */
 	writeRelayUrls: string[]
+	/** Zap-monitoring relays — always includes ZAP_RELAYS; instance relays are additive. */
+	zapRelayUrls: string[]
 	/** NDK outbox model — disabled in non-prod to keep relay discovery off. */
 	enableOutbox: boolean
 }
@@ -43,6 +45,8 @@ export interface ComputeNdkConfigInput {
 	stage: Stage | undefined
 	/** Server-provided app relay from `/api/config` (preferred over stage defaults). */
 	appRelay?: string
+	/** Runtime-provided public relays for reads (e.g., from instance config). Falls back to DEFAULT_PUBLIC_RELAYS. */
+	publicRelays?: string[]
 	/** Caller-supplied relay overrides (used during NDK re-init / tests). */
 	overrideRelays?: string[]
 	/** Bun-side flag forcing local-relay-only behavior. */
@@ -66,16 +70,28 @@ export function resolveMainRelay(stage: Stage | undefined, appRelay?: string): s
  * always computed together at NDK init time.
  */
 export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigComputed {
-	const { stage, appRelay, overrideRelays, localRelayOnly } = input
+	const { stage, appRelay, publicRelays, overrideRelays, localRelayOnly } = input
 	const mainRelay = resolveMainRelay(stage, appRelay)
 
 	const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
 
-	const explicitRelayUrls = resolveExplicitRelays({ stage, mainRelay, overrideRelays, localRelayOnly })
+	const explicitRelayUrls = resolveExplicitRelays({
+		stage,
+		mainRelay,
+		publicRelays,
+		overrideRelays,
+		localRelayOnly,
+	})
 	const writeRelayUrls =
 		stage === 'staging' || stage === 'development' || localRelayOnly ? (mainRelay ? [mainRelay] : []) : explicitRelayUrls
 
-	return { explicitRelayUrls, writeRelayUrls, enableOutbox }
+	// Zap monitoring needs the dedicated zap relays on top of the read set —
+	// derived here so the zap relay set is covered by the same policy tests
+	// as the read set (and so no caller can accidentally pass a relay set that
+	// displaces ZAP_RELAYS).
+	const zapRelayUrls = resolveZapRelays(explicitRelayUrls)
+
+	return { explicitRelayUrls, writeRelayUrls, zapRelayUrls, enableOutbox }
 }
 
 /**
@@ -86,10 +102,11 @@ export function computeNdkConfig(input: ComputeNdkConfigInput): NdkConfigCompute
 export function resolveExplicitRelays(input: {
 	stage: Stage | undefined
 	mainRelay: string | undefined
+	publicRelays?: string[]
 	overrideRelays?: string[]
 	localRelayOnly?: boolean
 }): string[] {
-	const { stage, mainRelay, overrideRelays, localRelayOnly } = input
+	const { stage, mainRelay, publicRelays, overrideRelays, localRelayOnly } = input
 
 	// Stage-locked: development & local-only mode use the main relay only.
 	// AUCTIONS.md §11.0.1: dev/staging events MUST NOT reach public relays.
@@ -105,15 +122,26 @@ export function resolveExplicitRelays(input: {
 	}
 
 	// Default (production browser): main relay + the public read set.
-	const relays = mainRelay ? [mainRelay, ...DEFAULT_PUBLIC_RELAYS] : DEFAULT_PUBLIC_RELAYS
+	// Use runtime publicRelays if provided (self-hosted instance), else fall back to DEFAULT_PUBLIC_RELAYS.
+	const effectivePublicRelays = publicRelays ?? DEFAULT_PUBLIC_RELAYS
+	const relays = mainRelay ? [mainRelay, ...effectivePublicRelays] : effectivePublicRelays
 	return Array.from(new Set(relays))
 }
 
 /**
  * Zap-monitoring NDK uses a wider relay set — LSPs broadcast zap
  * receipts to their own public relays, not to ours. Always returns
- * the union of ZAP_RELAYS + whatever the main read set is.
+ * the union of ZAP_RELAYS + any instance-configured zap relays +
+ * whatever the main read set is.
+ *
+ * ZAP_RELAYS is never dropped. `/api/config` always returns a relay
+ * set (`publicRelays` defaults to DEFAULT_PUBLIC_RELAYS), so "no zap
+ * override configured" cannot be detected from absence: treating an
+ * instance relay set as a *replacement* silently removed the
+ * dedicated zap relays (`relay.coinos.io`, `nwc.primal.net`,
+ * `relay.primal.net`) from production zap monitoring. Instance
+ * relays are additive.
  */
-export function resolveZapRelays(explicitRelays: string[]): string[] {
-	return Array.from(new Set([...ZAP_RELAYS, ...explicitRelays]))
+export function resolveZapRelays(explicitRelays: string[], zapRelays?: string[]): string[] {
+	return Array.from(new Set([...ZAP_RELAYS, ...(zapRelays ?? []), ...explicitRelays]))
 }

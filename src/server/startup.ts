@@ -1,7 +1,16 @@
 import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
+import { resolveHandlerIdChain } from '../lib/instance-config'
 import { getEventHandler } from './EventHandler'
-import { APP_PRIVATE_KEY, RELAY_URL, getAppSettings, setAppPublicKey, setAppSettings, setEventHandlerReady } from './runtime'
+import {
+	APP_PRIVATE_KEY,
+	RELAY_URL,
+	getAppSettings,
+	getInstanceConfig,
+	setAppPublicKey,
+	setAppSettings,
+	setEventHandlerReady,
+} from './runtime'
 
 /**
  * Initialise process-level state required by every other server module.
@@ -19,7 +28,17 @@ export async function initializeAppSettings(): Promise<void> {
 		const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 		const publicKey = getPublicKey(privateKeyBytes)
 		setAppPublicKey(publicKey)
-		const settings = await fetchAppSettings(RELAY_URL as string, publicKey)
+
+		// D-tag fallback chain derived from the resolved instance config: the
+		// configured handler ID first (INSTANCE_HANDLER_ID), then the shipped
+		// default so pre-config deployments keep resolving. `getInstanceConfig()`
+		// runs before the fetch, so at this point it reflects the environment
+		// only — which is exactly what discovery can query. The owner UI no
+		// longer publishes under an arbitrary d tag (it uses the resolved
+		// config handler ID), so publish and discovery stay in lockstep.
+		const handlerIds = resolveHandlerIdChain(getInstanceConfig().handlerId)
+
+		const settings = await fetchAppSettings(RELAY_URL as string, publicKey, handlerIds)
 		setAppSettings(settings)
 		if (settings) {
 			console.log('App settings loaded successfully')

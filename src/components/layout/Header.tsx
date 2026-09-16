@@ -312,9 +312,7 @@ export function Header() {
 			<div className="flex justify-between items-center py-4 max-w-full h-full container">
 				<section className="inline-flex items-center">
 					<Link to="/" data-testid="home-link">
-						{config?.appSettings?.picture && (
-							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="px-2 w-16" />
-						)}
+						{config?.picture && <img src={config.picture} alt={config.displayName || config.name} className="px-2 w-16" />}
 					</Link>
 					<div className="hidden sm:flex gap-8 mx-8">
 						<Link
