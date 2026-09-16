@@ -318,10 +318,15 @@ Production NDK is constructed with `enableOutboxModel: true`
 `staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
 reads this wave touches still call NDK directly — `ndk.fetchEvents` at
 `src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`,
-`src/lib/stores/nip60.ts:159` and `src/lib/appSettings.ts:107`, with live
-subscriptions at `src/hooks/useNotificationMonitor.ts:135/161/185`. In production
-those reads are therefore outbox-routed today; no pinning is described here
-because none ships on `master`.
+`src/lib/stores/nip60.ts:159`, with live subscriptions at
+`src/hooks/useNotificationMonitor.ts:135/161/185`. In production those reads are
+therefore outbox-routed today; no pinning is described here because none ships on
+`master`.
+
+`src/lib/appSettings.ts:107` is **not** a client read: `fetchAppSettings`
+(`:42`) is imported only by the server entry (`src/index.tsx:7`, called at boot
+`:139` and refreshed at `:404`), and the browser consumes the parsed result from
+`/api/config` (`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-282`).
 
 **No decision is recorded.** Whether production keeps that reach for
 author-scoped reads, or gains a bounded author-relay path, is proposed in a
