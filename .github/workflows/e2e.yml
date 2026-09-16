@@ -136,7 +136,16 @@ jobs:
         # job: no new triggers, permissions, secrets, or env are introduced.
         # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
         # describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags' --repeat-each=2
+        #
+        # `bounded author-relay reads` (e2e/tests/author-relay-reads.spec.ts,
+        # ADR-0002 Wave 1 read topology F3, PR #1330) is gated here so the
+        # bounded author-relay read path is exercised on every PR. The
+        # author-declared relay is mocked in-process with `page.routeWebSocket`
+        # and the `/api/config` decision is rewritten per test, so the family
+        # needs only the local relay/dev server this job already starts: no new
+        # triggers, permissions, secrets, or env. The same guard covers this
+        # family, so renaming its describe cannot silently drop it from the gate.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|bounded author-relay reads' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
