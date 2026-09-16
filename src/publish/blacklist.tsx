@@ -1,4 +1,5 @@
 import { submitAppSettings } from '@/lib/appSettings'
+import { appListVersionTag, nextAppListVersion, readAppListVersion } from '@/lib/nostr/appListVersion'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchBlacklistSettings } from '@/queries/blacklist'
 import { configKeys } from '@/queries/queryKeyFactory'
@@ -15,7 +16,7 @@ export interface BlacklistData {
 /**
  * Creates a Kind 10000 blacklist event (NIP-51 mute list)
  */
-const createBlacklistEvent = (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+const createBlacklistEvent = (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK, version?: number): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 10000 // NIP-51 mute list
 	event.content = ''
@@ -38,6 +39,11 @@ const createBlacklistEvent = (blacklistData: BlacklistData, signer: NDKSigner, n
 		tags.push(['a', collectionCoords])
 	}
 
+	// Monotonic revision tag: readers prefer the highest version instead of
+	// trusting a publish-time created_at that a skewed clock can inflate
+	// (src/lib/nostr/appListVersion.ts).
+	if (version !== undefined) tags.push(appListVersionTag(version))
+
 	event.tags = tags
 	return event
 }
@@ -45,7 +51,7 @@ const createBlacklistEvent = (blacklistData: BlacklistData, signer: NDKSigner, n
 /**
  * Publishes an updated blacklist through WebSocket interface
  */
-export const publishBlacklist = async (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishBlacklist = async (blacklistData: BlacklistData, signer: NDKSigner, ndk: NDK, version?: number): Promise<string> => {
 	// Validate all pubkeys are valid hex strings
 	for (const pubkey of blacklistData.blacklistedPubkeys) {
 		if (!/^[0-9a-f]{64}$/i.test(pubkey)) {
@@ -54,7 +60,7 @@ export const publishBlacklist = async (blacklistData: BlacklistData, signer: NDK
 	}
 
 	// Create and sign the event normally
-	const event = createBlacklistEvent(blacklistData, signer, ndk)
+	const event = createBlacklistEvent(blacklistData, signer, ndk, version)
 	await event.sign(signer)
 
 	// Submit through WebSocket interface (will be re-signed with app pubkey)
@@ -96,6 +102,9 @@ export const addToBlacklist = async (userPubkey: string, signer: NDKSigner, ndk:
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 
@@ -132,6 +141,9 @@ export const removeFromBlacklist = async (userPubkey: string, signer: NDKSigner,
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 
@@ -279,6 +291,9 @@ export const addToBlacklistProducts = async (productCoords: string, signer: NDKS
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 
@@ -320,6 +335,9 @@ export const removeFromBlacklistProducts = async (
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 
@@ -361,6 +379,9 @@ export const addToBlacklistCollections = async (
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 
@@ -402,6 +423,9 @@ export const removeFromBlacklistCollections = async (
 		},
 		signer,
 		ndk,
+		// Version taken from the copy this revision was derived from: a revision
+		// built on stale content must not outrank the newer copy it came from.
+		nextAppListVersion(readAppListVersion(currentBlacklist?.event)),
 	)
 }
 

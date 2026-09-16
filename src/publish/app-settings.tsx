@@ -1,5 +1,6 @@
 import { submitAppSettings } from '@/lib/appSettings'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
+import { appListVersionTag, nextAppListVersion, readAppListVersion } from '@/lib/nostr/appListVersion'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchAdminSettings, fetchEditorSettings } from '@/queries/app-settings'
 import { configKeys } from '@/queries/queryKeyFactory'
@@ -18,7 +19,7 @@ export interface EditorListData {
 /**
  * Creates a Kind 30000 admin list event
  */
-const createAdminListEvent = (adminData: AdminListData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+const createAdminListEvent = (adminData: AdminListData, signer: NDKSigner, ndk: NDK, version?: number): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 30000
 	event.content = ''
@@ -31,6 +32,11 @@ const createAdminListEvent = (adminData: AdminListData, signer: NDKSigner, ndk: 
 		tags.push(['p', pubkey])
 	}
 
+	// Monotonic revision tag: readers prefer the highest version instead of
+	// trusting a publish-time created_at that a skewed clock can inflate
+	// (src/lib/nostr/appListVersion.ts).
+	if (version !== undefined) tags.push(appListVersionTag(version))
+
 	event.tags = tags
 	return event
 }
@@ -38,7 +44,7 @@ const createAdminListEvent = (adminData: AdminListData, signer: NDKSigner, ndk: 
 /**
  * Creates a Kind 30000 editor list event
  */
-const createEditorListEvent = (editorData: EditorListData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+const createEditorListEvent = (editorData: EditorListData, signer: NDKSigner, ndk: NDK, version?: number): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 30000
 	event.content = ''
@@ -51,6 +57,11 @@ const createEditorListEvent = (editorData: EditorListData, signer: NDKSigner, nd
 		tags.push(['p', pubkey])
 	}
 
+	// Monotonic revision tag: readers prefer the highest version instead of
+	// trusting a publish-time created_at that a skewed clock can inflate
+	// (src/lib/nostr/appListVersion.ts).
+	if (version !== undefined) tags.push(appListVersionTag(version))
+
 	event.tags = tags
 	return event
 }
@@ -58,7 +69,7 @@ const createEditorListEvent = (editorData: EditorListData, signer: NDKSigner, nd
 /**
  * Publishes an updated admin list through WebSocket interface
  */
-export const publishAdminList = async (adminData: AdminListData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishAdminList = async (adminData: AdminListData, signer: NDKSigner, ndk: NDK, version?: number): Promise<string> => {
 	// Validation
 	if (!adminData.admins || adminData.admins.length === 0) {
 		throw new Error('At least one admin is required')
@@ -72,7 +83,7 @@ export const publishAdminList = async (adminData: AdminListData, signer: NDKSign
 	}
 
 	// Create and sign the event normally
-	const event = createAdminListEvent(adminData, signer, ndk)
+	const event = createAdminListEvent(adminData, signer, ndk, version)
 	await event.sign(signer)
 
 	// Submit through WebSocket interface (will be re-signed with app pubkey)
@@ -111,7 +122,9 @@ export const addAdmin = async (newAdminPubkey: string, signer: NDKSigner, ndk: N
 	// Add new admin to the list
 	const updatedAdmins = [...currentAdmins, newAdminPubkey]
 
-	return publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishAdminList({ admins: updatedAdmins }, signer, ndk, nextAppListVersion(readAppListVersion(latestEvent)))
 }
 
 /**
@@ -150,7 +163,9 @@ export const removeAdmin = async (adminPubkeyToRemove: string, signer: NDKSigner
 	// Remove admin from the list
 	const updatedAdmins = currentAdmins.filter((pubkey) => pubkey !== adminPubkeyToRemove)
 
-	return publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishAdminList({ admins: updatedAdmins }, signer, ndk, nextAppListVersion(readAppListVersion(latestEvent)))
 }
 
 /**
@@ -267,7 +282,7 @@ export const useRemoveAdminMutation = () => {
 /**
  * Publishes an updated editor list through WebSocket interface
  */
-export const publishEditorList = async (editorData: EditorListData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishEditorList = async (editorData: EditorListData, signer: NDKSigner, ndk: NDK, version?: number): Promise<string> => {
 	// Validate all pubkeys are valid hex strings (if any)
 	for (const pubkey of editorData.editors) {
 		if (!/^[0-9a-f]{64}$/i.test(pubkey)) {
@@ -276,7 +291,7 @@ export const publishEditorList = async (editorData: EditorListData, signer: NDKS
 	}
 
 	// Create and sign the event normally
-	const event = createEditorListEvent(editorData, signer, ndk)
+	const event = createEditorListEvent(editorData, signer, ndk, version)
 	await event.sign(signer)
 
 	// Submit through WebSocket interface (will be re-signed with app pubkey)
@@ -315,7 +330,9 @@ export const addEditor = async (newEditorPubkey: string, signer: NDKSigner, ndk:
 	// Add new editor to the list
 	const updatedEditors = [...currentEditors, newEditorPubkey]
 
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishEditorList({ editors: updatedEditors }, signer, ndk, nextAppListVersion(readAppListVersion(latestEvent)))
 }
 
 /**
@@ -350,7 +367,9 @@ export const removeEditor = async (editorPubkeyToRemove: string, signer: NDKSign
 	const updatedEditors = currentEditors.filter((pubkey) => pubkey !== editorPubkeyToRemove)
 
 	// Allow removing all editors (unlike admins, editors list can be empty)
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishEditorList({ editors: updatedEditors }, signer, ndk, nextAppListVersion(readAppListVersion(latestEvent)))
 }
 
 /**
@@ -508,11 +527,25 @@ export const promoteEditorToAdmin = async (
 
 	// Publish both events
 	console.log('Publishing admin list update...', { updatedAdmins })
-	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	// Version taken from the copy this revision was derived from: a revision built
+	// on stale content must not outrank the newer copy it came from.
+	const adminEventId = await publishAdminList(
+		{ admins: updatedAdmins },
+		signer,
+		ndk,
+		nextAppListVersion(readAppListVersion(adminSettings?.event)),
+	)
 	console.log('Admin list published successfully:', adminEventId)
 
 	console.log('Publishing editor list update...', { updatedEditors })
-	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version taken from the copy this revision was derived from: a revision built
+	// on stale content must not outrank the newer copy it came from.
+	const editorEventId = await publishEditorList(
+		{ editors: updatedEditors },
+		signer,
+		ndk,
+		nextAppListVersion(readAppListVersion(editorSettings?.event)),
+	)
 	console.log('Editor list published successfully:', editorEventId)
 
 	return { adminEventId, editorEventId }
@@ -568,11 +601,25 @@ export const demoteAdminToEditor = async (
 
 	// Publish both events
 	console.log('Publishing admin list update (demote)...', { updatedAdmins })
-	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	// Version taken from the copy this revision was derived from: a revision built
+	// on stale content must not outrank the newer copy it came from.
+	const adminEventId = await publishAdminList(
+		{ admins: updatedAdmins },
+		signer,
+		ndk,
+		nextAppListVersion(readAppListVersion(adminSettings?.event)),
+	)
 	console.log('Admin list published successfully (demote):', adminEventId)
 
 	console.log('Publishing editor list update (demote)...', { updatedEditors })
-	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version taken from the copy this revision was derived from: a revision built
+	// on stale content must not outrank the newer copy it came from.
+	const editorEventId = await publishEditorList(
+		{ editors: updatedEditors },
+		signer,
+		ndk,
+		nextAppListVersion(readAppListVersion(editorSettings?.event)),
+	)
 	console.log('Editor list published successfully (demote):', editorEventId)
 
 	return { adminEventId, editorEventId }
@@ -608,7 +655,9 @@ export const promoteUserToEditor = async (userPubkey: string, signer: NDKSigner,
 	// Add to editors list
 	const updatedEditors = [...currentEditors, userPubkey]
 
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishEditorList({ editors: updatedEditors }, signer, ndk, nextAppListVersion(readAppListVersion(editorSettings?.event)))
 }
 
 /**
@@ -639,7 +688,9 @@ export const demoteEditorToUser = async (userPubkey: string, signer: NDKSigner, 
 	// Remove from editors list
 	const updatedEditors = editorSettings.editors.filter((pubkey) => pubkey !== userPubkey)
 
-	return publishEditorList({ editors: updatedEditors }, signer, ndk)
+	// Version derived from the same copy the updated list was built from, so a
+	// revision built on stale content cannot outrank the newer copy it came from.
+	return publishEditorList({ editors: updatedEditors }, signer, ndk, nextAppListVersion(readAppListVersion(editorSettings?.event)))
 }
 
 /**
@@ -679,13 +730,23 @@ export const removeUserFromAllRoles = async (
 		}
 
 		const updatedAdmins = adminSettings.admins.filter((pubkey) => pubkey !== userPubkey)
-		results.adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
+		results.adminEventId = await publishAdminList(
+			{ admins: updatedAdmins },
+			signer,
+			ndk,
+			nextAppListVersion(readAppListVersion(adminSettings?.event)),
+		)
 	}
 
 	// Remove from editor list if present
 	if (editorSettings && editorSettings.editors.includes(userPubkey)) {
 		const updatedEditors = editorSettings.editors.filter((pubkey) => pubkey !== userPubkey)
-		results.editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
+		results.editorEventId = await publishEditorList(
+			{ editors: updatedEditors },
+			signer,
+			ndk,
+			nextAppListVersion(readAppListVersion(editorSettings?.event)),
+		)
 	}
 
 	if (!results.adminEventId && !results.editorEventId) {
