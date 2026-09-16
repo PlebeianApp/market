@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
 import { type EventTemplate, type NostrEvent, ndkIo, setNostrIo } from '@/lib/nostr/io'
 import { publishTestLabel, publishTestLabelDeletion } from '@/lib/actions/testLabelActions'
@@ -22,6 +22,7 @@ import {
 	isLabelDeletionForLabel,
 	isValidAuthorizedTestLabel,
 	reconcileActiveTestLabels,
+	resetAuthorizedLabelersCache,
 } from '../testLabels'
 
 // --- Test fixtures ---
@@ -29,6 +30,7 @@ import {
 const ADMIN_PUBKEY = 'a'.repeat(64)
 const OTHER_ADMIN_PUBKEY = '1'.repeat(64)
 const UNAUTHORIZED_PUBKEY = 'b'.repeat(64)
+const EDITOR_PUBKEY = 'd'.repeat(64)
 const MERCHANT_PUBKEY = 'c'.repeat(64)
 
 const PRODUCT_COORD = `30402:${MERCHANT_PUBKEY}:my-product`
@@ -334,6 +336,13 @@ describe('reconcileActiveTestLabels', () => {
 // --- Fail-open behavior ---
 
 describe('getAuthorizedLabelerPubkeys', () => {
+	// The resolver caches for a short TTL and Bun's mock.module registry is
+	// process-wide, so clear the cache between cases instead of letting one
+	// case's authorization leak into the chunk-scheduling suite below.
+	afterEach(() => {
+		resetAuthorizedLabelersCache()
+	})
+
 	test('returns null when admin settings are unavailable (no NDK in unit-test runtime)', async () => {
 		// In the unit-test runtime no NDK instance exists, so fetchAdminSettings
 		// throws and the authorized set must be reported as unavailable (null),
@@ -423,8 +432,14 @@ describe('fetchTestLabels chunk scheduling', () => {
 		// keep this mock in the last test file of the suite (testLabels.test.ts
 		// sorts last among the unit files).
 		mock.module('@/queries/app-settings', () => ({
+			// The resolver reads BOTH lists (ADR-0009: editors UNION admins). A
+			// mock missing fetchEditorSettings makes that read throw, the whole
+			// authorization resolve to null, and the fetch this test measures
+			// never happen at all.
 			fetchAdminSettings: async () => ({ admins: [ADMIN_PUBKEY] }),
+			fetchEditorSettings: async () => ({ editors: [] }),
 		}))
+		resetAuthorizedLabelersCache()
 		mock.module('@/lib/stores/ndk', () => ({
 			ndkActions: { getNDK: () => ({}), fetchEventsWithTimeout },
 			getAppRelaySet: () => undefined,
@@ -526,5 +541,44 @@ describe('test-label publish via the io seam', () => {
 			'Test label deletion was not published to any relays',
 		)
 		expect(testLabelActions.isTestLabeled(PRODUCT_COORD)).toBe(true)
+	})
+})
+
+// --- Authorized labeler set: editors UNION admins (ADR-0009) ---
+//
+// These cases install a `@/queries/app-settings` mock whose reads SUCCEED. Bun's
+// mock registry is process-wide and is never uninstalled, and every earlier
+// case (fail-open, the show-test-listings toggle, chunk scheduling) depends on
+// authorization resolving to null — a succeeding mock sends those down the real
+// NDK path instead. So this describe MUST stay last in the file.
+describe('getAuthorizedLabelerPubkeys (editors UNION admins)', () => {
+	afterEach(() => {
+		resetAuthorizedLabelersCache()
+	})
+
+	test('unions the editor and admin lists, de-duplicated', async () => {
+		mock.module('@/queries/app-settings', () => ({
+			fetchAdminSettings: async () => ({ admins: [ADMIN_PUBKEY, OTHER_ADMIN_PUBKEY] }),
+			fetchEditorSettings: async () => ({ editors: [OTHER_ADMIN_PUBKEY, EDITOR_PUBKEY] }),
+		}))
+		resetAuthorizedLabelersCache()
+
+		const result = await getAuthorizedLabelerPubkeys()
+
+		// An editor-authored label must count, so editors are authorized too.
+		expect(result).not.toBeNull()
+		expect(new Set(result)).toEqual(new Set([ADMIN_PUBKEY, OTHER_ADMIN_PUBKEY, EDITOR_PUBKEY]))
+		// OTHER_ADMIN_PUBKEY is in both lists and must appear once.
+		expect(result).toHaveLength(3)
+	})
+
+	test('uses whichever list is readable when the other is unavailable', async () => {
+		mock.module('@/queries/app-settings', () => ({
+			fetchAdminSettings: async () => null,
+			fetchEditorSettings: async () => ({ editors: [EDITOR_PUBKEY] }),
+		}))
+		resetAuthorizedLabelersCache()
+
+		expect(await getAuthorizedLabelerPubkeys()).toEqual([EDITOR_PUBKEY])
 	})
 })

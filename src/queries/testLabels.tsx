@@ -98,6 +98,15 @@ export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> =>
 	}
 }
 
+/**
+ * Drop the module-level authorized-labeler cache so the next read re-reads the
+ * admin/editor settings. Exists so unit tests can isolate cache state between
+ * cases; production relies on the TTL above.
+ */
+export const resetAuthorizedLabelersCache = () => {
+	authorizedLabelersCache = null
+}
+
 // --- Event validation ---
 
 /**
