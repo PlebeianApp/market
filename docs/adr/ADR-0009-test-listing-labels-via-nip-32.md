@@ -39,9 +39,11 @@ Use **NIP-32 labeling events** (kind 1985) to tag items as tests.
   reason and a **contact reference** — an npub or nip05 the labeled item's
   author can reach if they believe the label was applied in error.
 - **Authorized labelers only** — labels count only when signed by keys the
-  app authorizes (initially the existing admin set; a dedicated moderator
-  role or an automated labeler can be enrolled later without protocol
-  change).
+  app authorizes. The authorized set is the app's **editors union its
+  admins** (plus the app owner): editors are the day-to-day curation role
+  and admins are curated content authorities, so both may curate. A
+  dedicated moderator role or an automated labeler can be enrolled later
+  without protocol change.
 - **Scope: products and auctions only.** Labels attach to item coordinates,
   never to users. A valid, active user may post test items; the user's
   presence (shop, products, community) is unaffected while the item is
@@ -141,13 +143,14 @@ blacklist checks, before queries return data**:
 
 ### UI
 
-Dashboard actions for authorized labelers on product and auction admin
-pages:
+Dashboard / moderation actions for authorized labelers (editors ∪ admins):
 
 - **Mark as "Test" Product** — publishes the kind 1985 label event.
-  Visible only to authorized labelers (admin/moderator). The `.content`
-  is pre-filled with a contact reference (the labeler's npub or a shared
-  moderation nip05) so the item author can appeal.
+  Reachable from the product's own dashboard edit page and, so a labeler can
+  curate a listing they do not own, from the product's public page via the
+  entity actions menu. The `.content` is pre-filled with a contact reference
+  (the labeler's npub or a shared moderation nip05) so the item author can
+  appeal.
 - **Unmark as "Test" Product** — publishes the NIP-09 deletion event for
   the existing label. Visible only when an active `test` label is present
   on the item. Confirm dialog before publishing.
@@ -162,6 +165,25 @@ regular users alike) on the browsing surface. It defaults to **hidden**
 test-labeled items in those feeds. The toggle only affects
 browsing/discovery read paths — direct links, seller profiles, and owner
 dashboards always show the item.
+
+Because gating is browsing-only, a labeled item stays visible on surfaces
+where the viewer has no way to know it is curated — a direct link, the
+seller's profile, the owner's dashboard. Every such surface therefore carries
+a **user-facing notice** (`TestListingNotice`):
+
+- **Detail page** — an amber "Test listing" pill beside the stock badge, next
+  to the entity actions menu. Clicking it opens the explainer dialog.
+- **Seller profile, owner dashboard, and toggle-revealed cards** — the same
+  component in its compact icon-only variant (an eye-with-slash marker). On
+  cards the marker must not trigger the surrounding link's navigation.
+- **Explainer dialog** — states the exact effect (hidden from browsing and
+  discovery, reachable by direct link) and gives an appeal path: the labeler's
+  npub, falling back to the Plebeian team when the labeler is unknown.
+
+**Copy invariant:** the mark/unmark confirmation dialogs MUST describe the
+browsing-only effect. An earlier revision claimed the item was "excluded from
+feeds and detail views", which is wrong — detail views are never gated — and
+misled the labeler about what the action does.
 
 ## Consequences
 
@@ -196,6 +218,8 @@ dashboards always show the item.
    test-labeled items in browsing feeds.
 6. Optional automation (e.g. an automated labeler key) for discretionary
    use during launch phases.
+7. User-facing notice on labeled items (detail page, profile, dashboard,
+   toggle-revealed cards) with an appeal contact.
 
 ## Related
 

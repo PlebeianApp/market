@@ -67,12 +67,15 @@ const chunkStrings = (values: string[], size: number): string[][] => {
 // --- Authorized labelers ---
 
 /**
- * Authorized labelers = the app's admin set (ADR-0009). A dedicated moderator
+ * Authorized labelers = the app's EDITORS union its ADMINS (ADR-0009).
+ *
+ * Editors are the day-to-day curation role and admins are curated content
+ * authorities, so both may mark / unmark test listings. A dedicated moderator
  * list or automated labeler key can be enrolled later without protocol change.
  *
- * Returns null when the admin settings are not available yet (NDK/relay not
- * ready) — callers must treat that as "cannot determine authorization" and
- * fail open (no labels applied, store not marked loaded).
+ * Returns null when neither settings set could be read (NDK/relay not ready) —
+ * callers must treat that as "cannot determine authorization" and fail open
+ * (no labels applied, store not marked loaded).
  */
 export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> => {
 	const now = Date.now()
@@ -81,13 +84,16 @@ export const getAuthorizedLabelerPubkeys = async (): Promise<string[] | null> =>
 	}
 
 	try {
-		const { fetchAdminSettings } = await import('@/queries/app-settings')
-		const settings = await fetchAdminSettings(configActions.getAppPublicKey())
-		if (!settings) return null
-		authorizedLabelersCache = { fetchedAt: now, pubkeys: settings.admins }
-		return settings.admins
+		const { fetchAdminSettings, fetchEditorSettings } = await import('@/queries/app-settings')
+		const appPubkey = configActions.getAppPublicKey()
+		const [adminSettings, editorSettings] = await Promise.all([fetchAdminSettings(appPubkey), fetchEditorSettings(appPubkey)])
+		// Both reads unavailable → authorization is undeterminable, not empty.
+		if (!adminSettings && !editorSettings) return null
+		const pubkeys = Array.from(new Set([...(adminSettings?.admins ?? []), ...(editorSettings?.editors ?? [])]))
+		authorizedLabelersCache = { fetchedAt: now, pubkeys }
+		return pubkeys
 	} catch (error) {
-		console.warn('Failed to fetch authorized labelers (admin settings):', error)
+		console.warn('Failed to fetch authorized labelers (admin/editor settings):', error)
 		return null
 	}
 }
