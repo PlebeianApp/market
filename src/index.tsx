@@ -5,6 +5,7 @@ import NDK from '@nostr-dev-kit/ndk'
 import { bech32 } from '@scure/base'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
+import { parseOperatorRelayUrls } from './lib/nostr/operatorRelays'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { resolveCvmServerPubkey } from './lib/cvm-identity'
 import { renderProductPageHtml, resolveServerOrigins, serveProductPageWithOg, type ServerOriginsEnv } from './lib/ogTags'
@@ -19,6 +20,11 @@ import.meta.hot.accept()
 
 const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
+// Additional OPERATOR-controlled relays for authority reads (comma-separated).
+// Empty by default: production runs a single operator relay, so the authority
+// reads (app-settings here, plus the client reads via getOperatorRelayUrls())
+// stay on that one relay until an operator configures another.
+const OPERATOR_RELAYS = parseOperatorRelayUrls(process.env.OPERATOR_RELAYS)
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
@@ -136,7 +142,7 @@ async function initializeAppSettings() {
 	try {
 		const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 		APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
-		appSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
+		appSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY, OPERATOR_RELAYS)
 		if (appSettings) {
 			console.log('App settings loaded successfully')
 		} else {
@@ -274,6 +280,9 @@ export const server = serve({
 				// Return cached settings loaded at startup
 				return Response.json({
 					appRelay: RELAY_URL,
+					// Operator-controlled relays for authority reads. Empty until an
+					// operator configures OPERATOR_RELAYS; never third-party relays.
+					operatorRelays: OPERATOR_RELAYS,
 					stage,
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,

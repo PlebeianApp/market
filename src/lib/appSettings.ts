@@ -1,5 +1,6 @@
 import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
+import { selectPreferredAppListEvent } from './nostr/appListVersion'
 import { isValidHexKey } from './utils'
 
 /** Kind for NIP-89 handler information / app-config events. */
@@ -27,19 +28,29 @@ export interface AppSettingsEventLike {
  * (or with a different kind / d tag) are rejected — the content schema
  * validates shape, not authority, so a spoofed event that passes the schema
  * must still be refused here.
+ *
+ * "Latest" is version-first: when two authoritative copies both carry a
+ * monotonic `['version', '<n>']` tag the higher version wins, and only
+ * otherwise does the legacy `created_at` rule decide — a relay can serve an
+ * older revision of these events, and a copy signed by a clock-skewed machine
+ * must not be able to outrank the real latest one (src/lib/nostr/appListVersion.ts).
  */
 export function selectAuthoritativeAppSettingsEvent(
 	events: ReadonlyArray<AppSettingsEventLike>,
 	appPubkey: string,
 ): AppSettingsEventLike | undefined {
-	return events
-		.filter(
-			(e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === APP_SETTINGS_D_TAG),
-		)
-		.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	const authoritative = events.filter(
+		(e) => e.kind === APP_SETTINGS_KIND && e.pubkey === appPubkey && e.tags.some((t) => t[0] === 'd' && t[1] === APP_SETTINGS_D_TAG),
+	)
+
+	return selectPreferredAppListEvent(authoritative)
 }
 
-export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
+export async function fetchAppSettings(
+	relayUrl: string,
+	appPubkey: string,
+	additionalRelayUrls: string[] = [],
+): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
 
 	// Reject a malformed app pubkey before creating an NDK instance or issuing
@@ -51,11 +62,18 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		return null
 	}
 
+	// The app relay plus any additional OPERATOR-controlled relays (never
+	// third-party): the read is pinned to the app pubkey via `authors`, so a
+	// relay can only answer with a stale copy — reading from relays the operator
+	// controls bounds who can answer with one at all. `selectAuthoritativeAppSettingsEvent`
+	// below then prefers the highest monotonic `version` over a skewed created_at.
+	const explicitRelayUrls = Array.from(new Set([relayUrl, ...additionalRelayUrls]))
+
 	try {
 		// Create a fresh NDK instance for server-side initialization
 		// to avoid shared store issues with ndkActions
 		const ndk = new NDK({
-			explicitRelayUrls: [relayUrl],
+			explicitRelayUrls,
 			// Server-side, one-off fetch of app-config events. AI guardrails are a
 			// dev-time educational tool and have no place here. NDK's default strict
 			// filter validation is retained (a malformed appPubkey fails closed

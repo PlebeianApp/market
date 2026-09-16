@@ -1,6 +1,8 @@
 import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
+import { selectPreferredAppListEvent } from '@/lib/nostr/appListVersion'
+import { ADDITIONAL_OPERATOR_RELAYS, buildOperatorRelayUrls, parseOperatorRelayUrls } from '@/lib/nostr/operatorRelays'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
@@ -134,7 +136,41 @@ export function getWriteRelaySet(): NDKRelaySet | undefined {
 }
 
 /**
- * Get an NDKRelaySet pinned to ONLY the app's main relay.
+ * Additional operator relays configured for this session: the `OPERATOR_RELAYS`
+ * environment variable (server side, comma-separated), the server-provided
+ * `config.operatorRelays` array (what the browser sees), plus anything compiled
+ * in through ADDITIONAL_OPERATOR_RELAYS.
+ *
+ * Defaults to empty. Production currently runs exactly one operator relay, so
+ * this returns nothing until a second operator relay is configured — the relay
+ * set below is then still just the app relay.
+ */
+export function getConfiguredOperatorRelays(): string[] {
+	// @ts-ignore - Bun.env is available in Bun runtime
+	const fromEnv = typeof Bun !== 'undefined' ? Bun.env?.OPERATOR_RELAYS : undefined
+
+	return [
+		...parseOperatorRelayUrls(fromEnv),
+		...parseOperatorRelayUrls(configStore.state.config.operatorRelays),
+		...ADDITIONAL_OPERATOR_RELAYS,
+	]
+}
+
+/**
+ * The operator-controlled relay set used for authority reads: the app relay for
+ * the current stage first, then any additional operator relays.
+ *
+ * Only relays the operator controls belong here. "Always at least three relays"
+ * applies to operator relays — never to third-party public relays, which
+ * buildOperatorRelayUrls refuses by name. See src/lib/nostr/operatorRelays.ts.
+ */
+export function getOperatorRelayUrls(): string[] {
+	return buildOperatorRelayUrls(getMainRelay(), getConfiguredOperatorRelays())
+}
+
+/**
+ * Get an NDKRelaySet pinned to the OPERATOR-controlled relay set (today: the
+ * app's main relay alone, until a second operator relay is configured).
  * Use for reads of app-config events (kind 31990 handler info, kind 30000 d=admins/editors,
  * kind 10000 mute list, NIP-51 featured lists). Prevents stale copies on user-added
  * NIP-65 relays or public relays from racing the canonical answer.
@@ -146,7 +182,7 @@ export function getAppRelaySet(): NDKRelaySet | undefined {
 	const ndk = ndkStore.state.ndk
 	const mainRelay = getMainRelay()
 	if (!ndk || !mainRelay) return undefined
-	return NDKRelaySet.fromRelayUrls([mainRelay], ndk)
+	return NDKRelaySet.fromRelayUrls(getOperatorRelayUrls(), ndk)
 }
 
 /**
@@ -157,8 +193,13 @@ export function getAppRelaySet(): NDKRelaySet | undefined {
 export type AppEventFilter = Omit<NDKFilter, 'kinds'> & { kinds?: number[] }
 
 /**
- * Fetch the latest event (highest created_at) matching the filter from the app relay only.
+ * Fetch the latest event matching the filter from the operator relay set only.
  * Returns null if NDK isn't ready, the app relay isn't known yet, or no event was found.
+ *
+ * "Latest" is version-first: when two copies of an app-owned list both carry a
+ * monotonic `['version', '<n>']` tag the higher version wins, and only otherwise
+ * does the legacy `created_at` rule decide (see src/lib/nostr/appListVersion.ts).
+ * This keeps a clock-skewed copy from outranking the real latest revision.
  */
 export async function fetchLatestAppEvent(filter: AppEventFilter): Promise<NDKEvent | null> {
 	const ndk = ndkStore.state.ndk
@@ -167,7 +208,7 @@ export async function fetchLatestAppEvent(filter: AppEventFilter): Promise<NDKEv
 	const events = await ndk.fetchEvents(filter as NDKFilter, undefined, relaySet)
 	const arr = Array.from(events)
 	if (arr.length === 0) return null
-	return arr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	return selectPreferredAppListEvent(arr) ?? null
 }
 
 /**
