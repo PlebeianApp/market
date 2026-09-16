@@ -70,6 +70,128 @@ export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 }
 
 /**
+ * Environment prefix for operator-supplied admission limits, plus a
+ * whole-policy JSON override. Before this existed the limits were
+ * declared as deps (`spamPolicy`) that no production call site ever
+ * supplied, so the effective policy was always an un-configurable
+ * hard-coded default (review 5645059400 required change 3).
+ *
+ * One variable per field: `AUCTION_VALIDATOR_<FIELD_IN_SNAKE_CASE>`,
+ * e.g. `AUCTION_VALIDATOR_MAX_PENDING_KEYS=64`.
+ */
+export const BID_SPAM_POLICY_ENV_PREFIX = 'AUCTION_VALIDATOR_'
+
+/** Whole-policy JSON override, e.g. `AUCTION_VALIDATOR_SPAM_POLICY={"maxPendingKeys":64}`. */
+export const BID_SPAM_POLICY_ENV_JSON = `${BID_SPAM_POLICY_ENV_PREFIX}SPAM_POLICY`
+
+/**
+ * Per-field environment variable name and accepted range. Every bound
+ * is `[1, max]`: an admission limit of 0 (or NaN, or Infinity) would
+ * either disable the gate entirely or mean "unbounded", which is
+ * exactly the failure mode this validation exists to prevent.
+ */
+const BID_SPAM_POLICY_ENV_FIELDS: Record<keyof BidSpamPolicy, { env: string; max: number }> = {
+	maxBidsPerWindow: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_BIDS_PER_WINDOW`, max: 10_000 },
+	rateWindowSec: { env: `${BID_SPAM_POLICY_ENV_PREFIX}RATE_WINDOW_SEC`, max: 86_400 },
+	maxActiveBidsPerAuction: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_ACTIVE_BIDS_PER_AUCTION`, max: 100_000 },
+	maxPendingEventsPerKey: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_PENDING_EVENTS_PER_KEY`, max: 10_000 },
+	maxPendingKeys: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_PENDING_KEYS`, max: 10_000 },
+	maxPendingEvents: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_PENDING_EVENTS`, max: 100_000 },
+	pendingTtlSec: { env: `${BID_SPAM_POLICY_ENV_PREFIX}PENDING_TTL_SEC`, max: 604_800 },
+	maxSeenEventIds: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_SEEN_EVENT_IDS`, max: 1_000_000 },
+	maxEventBytes: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_EVENT_BYTES`, max: 4 * 1024 * 1024 },
+	maxTagCount: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_TAG_COUNT`, max: 1_024 },
+	maxNonceLength: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_NONCE_LENGTH`, max: 4_096 },
+	maxProofCount: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_PROOF_COUNT`, max: 1_024 },
+	maxContentBytes: { env: `${BID_SPAM_POLICY_ENV_PREFIX}MAX_CONTENT_BYTES`, max: 1024 * 1024 },
+}
+
+const BID_SPAM_POLICY_FIELDS = Object.keys(DEFAULT_BID_SPAM_POLICY) as Array<keyof BidSpamPolicy>
+
+export interface BidSpamPolicyLogger {
+	warn: (...args: unknown[]) => void
+}
+
+/**
+ * Parse a raw env string as a non-negative integer literal. Anything
+ * that is not a plain run of digits (`"abc"`, `"-1"`, `"0x10"`,
+ * `"1.5"`, `""`, `"Infinity"`) is rejected so it falls back rather
+ * than reaching the buffer as NaN.
+ */
+const parsePolicyEnvNumber = (raw: string): number | undefined => {
+	const trimmed = raw.trim()
+	if (!/^\d+$/.test(trimmed)) return undefined
+	const value = Number(trimmed)
+	return Number.isSafeInteger(value) ? value : undefined
+}
+
+/**
+ * Resolve the effective admission policy from, in descending priority:
+ * explicit options, individual `AUCTION_VALIDATOR_*` env vars, the
+ * `AUCTION_VALIDATOR_SPAM_POLICY` JSON blob, then
+ * {@link DEFAULT_BID_SPAM_POLICY}.
+ *
+ * Invalid values (non-numeric, non-integer, non-finite, out of
+ * `[1, field max]`) are never applied: the default is kept and a
+ * warning naming the offending variable is logged, so a typo cannot
+ * silently widen — or zero — a bound. Returns the fully resolved
+ * policy so callers can log and expose exactly what is in force.
+ */
+export const resolveBidSpamPolicyFromEnv = (
+	explicit?: Partial<BidSpamPolicy>,
+	env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+	logger: BidSpamPolicyLogger = console,
+): BidSpamPolicy => {
+	const resolved: BidSpamPolicy = { ...DEFAULT_BID_SPAM_POLICY }
+	const numbers = resolved as unknown as Record<string, number>
+
+	const apply = (field: keyof BidSpamPolicy, value: unknown, source: string): void => {
+		const { max } = BID_SPAM_POLICY_ENV_FIELDS[field]
+		if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value < 1 || value > max) {
+			logger.warn(
+				`[validator] ignoring invalid admission limit ${field}=${String(value)} from ${source}; keeping ${DEFAULT_BID_SPAM_POLICY[field]}`,
+			)
+			return
+		}
+		numbers[field] = value
+	}
+
+	// Whole-policy JSON blob first, so individual vars below win over it.
+	const blob = env[BID_SPAM_POLICY_ENV_JSON]
+	if (blob !== undefined && blob.trim() !== '') {
+		try {
+			const parsed: unknown = JSON.parse(blob)
+			if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('expected a JSON object')
+			const record = parsed as Record<string, unknown>
+			for (const field of BID_SPAM_POLICY_FIELDS) {
+				if (record[field] !== undefined) apply(field, record[field], BID_SPAM_POLICY_ENV_JSON)
+			}
+		} catch (err) {
+			logger.warn(`[validator] ignoring malformed ${BID_SPAM_POLICY_ENV_JSON}:`, err instanceof Error ? err.message : err)
+		}
+	}
+
+	for (const field of BID_SPAM_POLICY_FIELDS) {
+		const { env: envName } = BID_SPAM_POLICY_ENV_FIELDS[field]
+		const raw = env[envName]
+		if (raw === undefined) continue
+		const value = parsePolicyEnvNumber(raw)
+		if (value === undefined) {
+			logger.warn(`[validator] ignoring non-numeric ${envName}=${JSON.stringify(raw)}; keeping ${DEFAULT_BID_SPAM_POLICY[field]}`)
+			continue
+		}
+		apply(field, value, envName)
+	}
+
+	for (const field of BID_SPAM_POLICY_FIELDS) {
+		const value = explicit?.[field]
+		if (value !== undefined) apply(field, value, 'options.spamPolicy')
+	}
+
+	return resolved
+}
+
+/**
  * Project the operator policy onto the bounds enforced by
  * {@link createPendingBuffer}. Kept here so every pending buffer in the
  * subscriber is bounded by the same resolved policy.

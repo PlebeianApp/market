@@ -294,6 +294,13 @@ async function main() {
 	// Auction validator (kind-30440 / 30441 publisher). Pure pub/sub
 	// daemon — no MCP transport, no CEP-15 announcement. Shares this
 	// process's signer + relay pool. See src/server/auction-validator.
+	//
+	// No `spamPolicy` is passed on purpose: `startAuctionValidator`
+	// resolves the admission limits itself from the `AUCTION_VALIDATOR_*`
+	// environment at startup (explicit options > env > defaults) and
+	// exposes the resolved values on the returned handle. Passing
+	// nothing here keeps exactly one resolution site, so an operator
+	// cannot configure the daemon into a state the code cannot see.
 	const validatorHandle = await startAuctionValidator({
 		signer,
 		relayPool,

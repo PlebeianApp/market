@@ -21,7 +21,7 @@ import { publishValidatorPolicy } from './policy'
 import { recoverObservedAt } from './observedAtRecovery'
 import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
-import type { BidSpamPolicy } from './spamPolicy'
+import { resolveBidSpamPolicyFromEnv, type BidSpamPolicy } from './spamPolicy'
 
 export interface StartAuctionValidatorOptions {
 	signer: NostrSigner
@@ -44,7 +44,13 @@ export interface StartAuctionValidatorOptions {
 	 * https-only). Bounded concurrency + per-auction mint cap.
 	 */
 	mintProbePolicy?: MintProbePolicy
-	/** Admission limits for relay-fed kind-1023 bids. */
+	/**
+	 * Admission limits for relay-fed auction events (bids, releases,
+	 * settlements). Optional programmatic override: any field left
+	 * unset here is resolved from the `AUCTION_VALIDATOR_*` environment
+	 * (or the built-in default). Env is read here, at startup — not in
+	 * `contextvm/server.ts` — so there is exactly one resolution site.
+	 */
 	spamPolicy?: Partial<BidSpamPolicy>
 	/** Logger override. Default `console`. */
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
@@ -55,12 +61,26 @@ export interface AuctionValidatorHandle {
 	stop: () => Promise<void>
 	/** Snapshot the live state — handy for debugging / dashboards. */
 	state: ValidatorState
+	/**
+	 * The admission policy actually in force — fully resolved, not the
+	 * caller's partial. Read this to verify what the operator
+	 * environment produced.
+	 */
+	spamPolicy: BidSpamPolicy
 }
 
 export const startAuctionValidator = async (options: StartAuctionValidatorOptions): Promise<AuctionValidatorHandle> => {
 	const logger = options.logger ?? defaultLogger()
 	const validatorPubkey = await options.signer.getPublicKey()
 	const state = createValidatorState(validatorPubkey)
+
+	// Admission limits are resolved ONCE, here: explicit options >
+	// AUCTION_VALIDATOR_* env > DEFAULT_BID_SPAM_POLICY (see
+	// resolveBidSpamPolicyFromEnv). The same resolved object is passed
+	// to the subscriber and returned on the handle, so the logged,
+	// exposed and enforced values cannot drift apart.
+	const spamPolicy = resolveBidSpamPolicyFromEnv(options.spamPolicy, process.env, logger)
+	logger.info(`[validator] admission policy resolved: ${JSON.stringify(spamPolicy)}`)
 
 	logger.info(`[validator] starting — pubkey: ${validatorPubkey.slice(0, 16)}…`)
 
@@ -100,7 +120,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		logger,
 		mintProbePolicy: options.mintProbePolicy,
 		seedObservedAt,
-		spamPolicy: options.spamPolicy,
+		spamPolicy,
 	})
 
 	await subscriber.start()
@@ -132,7 +152,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		logger.info('[validator] stopped')
 	}
 
-	return { stop, state }
+	return { stop, state, spamPolicy }
 }
 
 const defaultLogger = () => ({
