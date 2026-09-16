@@ -155,6 +155,32 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
 - Gate this work with integration tests. It is not expected to change
   marketplace e2e flakiness directly.
 
+- `src/server/ogMeta.ts` (Open Graph product previews) performs server-runtime
+  relay I/O via raw `nostr-tools` and is the documented Wave-E seam exception
+  (see its header comment). It bounds aggregate work with a process-wide
+  concurrency cap (`OG_MAX_CONCURRENT_LOOKUPS`) and coalesces concurrent
+  lookups for the same product id onto a single in-flight relay query, so
+  rotating random ids cannot drive unbounded concurrent server-side work.
+
+- The OG product route is availability-preserving by contract: the shell is
+  fetched from a server-controlled origin (`APP_SHELL_ORIGIN` / fixed
+  loopback — never the request `Host`), and every failure mode — shell
+  acquisition, relay lookup miss, rejected lookup, or a render error —
+  degrades to the plain module shell with HTTP 200. The SEO-only path must
+  never 5xx the product page.
+
+- The OG Meta Tags e2e family runs in the per-PR `e2e-grep` gate
+  (`.github/workflows/e2e.yml`). `e2e/playwright.config.ts` sets no
+  `outputDir`, so Playwright's default output dir resolves to the repo-root
+  `test-results/` (nearest `package.json` walking up from the config dir).
+  Both the `e2e-grep` and `e2e-full` jobs must upload `test-results/` — never
+  `e2e/test-results/`, which never exists and silently captures no failure
+  artifacts. A unit guard
+  (`src/lib/__tests__/e2e-workflow-artifact-path.test.ts`) enforces this. A
+  second guard (`src/lib/__tests__/e2e-workflow-gate-membership.test.ts`)
+  asserts every `OG Meta Tags` describe title matches the gate pattern, so the
+  family cannot silently drop out of the per-PR gate when it is renamed.
+
 Root-cause flakiness work is concentrated in Wave A, Wave C publish files,
 and Wave D. Wave 0, Wave B, the dashboard type-only work, and Wave E are
 enablers or cleanup unless later code review shows otherwise.
@@ -237,7 +263,7 @@ Negative / tradeoffs:
 
 ## Amendment (2026-09): Signer migration to applesauce-signers
 
-Waves A3 (NIP-07 + nsec) and A3b (NIP-46) of this ADR — the deferred signer seat — are specified and implemented by this migration. The signer-migration draft was numbered `ADR-0022`, then renumbered `ADR-0008`, and was never merged as a standalone document: its decision is folded into this amendment, so neither number may be cited as an ADR (the index reserves 0008 for a different open conflict).
+Waves A3 (NIP-07 + nsec) and A3b (NIP-46) of this ADR — the deferred signer seat — are specified by this amendment and implemented by the signer migration. The signer-migration draft was numbered `ADR-0022`, then renumbered `ADR-0008`, and was never merged as a standalone document: its decision is folded into this amendment, so neither number may be cited as an ADR (the index reserves 0008 for a different open conflict).
 
 ### Baseline: current `master` auth behavior
 
@@ -252,11 +278,11 @@ The migration contract is anchored to what `master` does today, characterized fr
 | NIP-59 / NIP-44   | `src/lib/nostr/nip59.ts` checks `signer.encryptionEnabled('nip44')` before delegating, **and** has local-key helpers that encrypt/decrypt through `nip44.v2.utils.getConversationKey(<local private key>, …)` — today's module can therefore synthesise NIP-44 from a key the app holds.               |
 | `nostrconnect://` | The client-initiated QR flow puts the generated secret on the non-standard `token` param and the QR peer channel accepts a connect reply whose `params.token` matches; the app-generated `bunker://` URI already uses `secret` (#807).                                                                 |
 
-PR #1199 is **not an input dependency** of this migration: no implementation, test, or invariant here derives from its workarounds or from its test suite. It is retained only as a source of regression cases, and Wave A3b supersedes it.
+PR #1199 is **not an input dependency** of the signer migration: no implementation, test, or invariant here derives from its workarounds or from its test suite. It is retained only as a source of regression cases, and Wave A3b supersedes it.
 
 ### Executable invariants preserved through A3/A3b
 
-Each invariant is protocol-faithful (NIP-46 / NIP-07 / NIP-59), derived from the characterized `master` behavior plus the protocol, and has an executable test at the **production seam** (not at a module-mocked seam). The migration may not regress them, and coverage must not fall below the characterized baseline.
+Each invariant is protocol-faithful (NIP-46 / NIP-07 / NIP-59), derived from the characterized `master` behavior plus the protocol, and has an executable test at the **production seam** (not at a module-mocked seam). The signer migration may not regress them, and coverage must not fall below the characterized baseline.
 
 - **I1 — The connect secret is validated before binding.** An unknown remote signer is never bound from a bare `ack`; the expected `secret` must validate first. (Implementation: `nostr-connect-signer.ts`. Tests: `nostr-connect-signer.test.ts` — "a bare \"ack\" never binds an unknown remote signer", "a wrong connect secret never binds the remote signer".)
 - **I2 — Remote signer ≠ authenticated user.** The remote-signer pubkey stays separate from the authenticated user pubkey, which is learned only via `get_public_key` / `getPublicKey()`. (Tests: `nostr-connect-signer.test.ts` — "identity resolution is via getPublicKey() only — never clientPubkey"; `nip46-signer-capability.test.ts` — identity-collapse cases.)
@@ -267,7 +293,7 @@ Each invariant is protocol-faithful (NIP-46 / NIP-07 / NIP-59), derived from the
 ### Decisions
 
 - Adopt `applesauce-signers`, pinned exactly at `6.2.2` in `package.json`, for signing alongside the applesauce relay I/O already behind the io seam. `NostrConnectSigner` (NIP-46), `ExtensionSigner` (NIP-07), `PrivateKeySigner` (nsec), and `PasswordSigner` (NIP-49, ncryptsec encrypted at rest with `unlock`/`lock`) replace their NDK equivalents. Prerequisite met on `master`: `applesauce-core` / `applesauce-relay` 6.2.x landed via #1253 (2026-09-01). No NDK-internal workaround is ported; NDK still drops entirely and Wave D stays gated on A3b. `nostr-tools` remains the shared event/nip19/nip44 layer.
-- All `applesauce-signers` imports live behind a signer registry inside `src/lib/nostr/`; stores and UI components never import it directly. The signer seat is a second, equally narrow exception to the `applesauce-*` import rule in `src/AGENTS.md` (relay I/O being the first), and that rule text is amended in this change rather than deferred.
+- All `applesauce-signers` imports live behind a signer registry inside `src/lib/nostr/`; stores and UI components never import it directly. The signer seat is a second, equally narrow exception to the `applesauce-*` import rule in `src/AGENTS.md` (relay I/O being the first), and that rule text is amended by the signer migration rather than deferred.
 - One app-owned signer capability seam (`getPublicKey`, `signEvent`, optional `nip44.encrypt`/`decrypt`) covers NIP-07, NIP-46, and local signers (I4). Local signers implement NIP-44 locally; NIP-07 and NIP-46 delegate it, so no path falls back to local NIP-44 behind a user who never exposed a key.
 - The NIP-46 trust/identity chain is locked as invariants I1–I3, with negative coverage for the wrong secret, ack-only binding in the client-initiated flow, remote-signer/user separation, and a valid signature from the wrong user key.
 - NIP-46 session persistence stores the **nbunksec**: the `Nbunksec` / `BunkerURI` session token (`createNbunksec` / `parseNbunksec`, consumed by `NostrConnectSigner.fromNbunksec`) that carries the client secret key and the bunker pointer. It is encrypted at rest (I5).
@@ -281,10 +307,10 @@ The Authentication e2e family is the first browser code path that reaches `apple
 
 - `bun`'s dev-server bundler (the server every local run and the `e2e-grep`/`e2e-full` jobs start) registers only the **first** named re-export per source path when it builds a module's export map.
 - `rxjs@7.8.2`'s `index.js` re-exports two names from each of three module paths: `TimeoutError` + `timeout` (`./internal/operators/timeout`), `empty` + `EMPTY` (`./internal/observable/empty`), and `never` + `NEVER` (`./internal/observable/never`).
-- The second name of each pair is therefore missing from the browser bundle's `rxjs` namespace, and `Relay.publish()` / `Relay.request()` build a `timeout(...)` operator synchronously — so every publish/request through the applesauce pool throws `import_rxjsN.timeout is not a function`. That broke the NIP-46 bunker connect path (Authentication) **and** the orders read path (`applesauceIo.fetchEvents` in `src/queries/orders.tsx` → Order Details), which is why both gated families were red on this branch. Bun's own runtime resolution is unaffected because it uses rxjs's CJS entry.
+- The second name of each pair is therefore missing from the browser bundle's `rxjs` namespace, and `Relay.publish()` / `Relay.request()` build a `timeout(...)` operator synchronously — so every publish/request through the applesauce pool throws `import_rxjsN.timeout is not a function`. That broke the NIP-46 bunker connect path (Authentication) **and** the orders read path (`applesauceIo.fetchEvents` in `src/queries/orders.tsx` → Order Details), which is why both gated families were red before this patch. Bun's own runtime resolution is unaffected because it uses rxjs's CJS entry.
 
 The fix is a semantics-preserving patch of rxjs's two ESM index files, applied through bun's first-class `patchedDependencies` mechanism (`patches/rxjs@7.8.2.patch`): the duplicate-path statements are merged into one statement per path (`export { TimeoutError, timeout } from './internal/operators/timeout'`), which exports exactly the same names and restores all three. `bun install --frozen-lockfile` applies the patch, so CI gets the same bundle the local runs do. Remove the patch once the bundler registers every named re-export or rxjs ships merged statements; drift is loud, not silent, because a patch that no longer applies fails `bun install`.
 
 ### NIP-46 QR lane: bounded connect for the listener
 
-The nostrconnect (`QR code`) lane kept its own NDK instance for the scan subscription and awaited `ndk.connect()` with no bound. NDK only settles that promise once **every** relay in the instance's pool reaches `CONNECTED`, so a single slow or unreachable relay — the default `wss://relay.plebeian.market` pick, or a user-typed relay — left the kind-24133 subscription unstarted and the signer's `connect` request unanswered (the relay answered the signer with `mute: no one was listening for this`, which is what the e2e QR spec saw). `NostrConnectQR` now bounds the connect at 3s: the socket keeps connecting in the background and the listener starts, so a slow relay degrades to a retry instead of a dead scan.
+The nostrconnect (`QR code`) lane kept its own NDK instance for the scan subscription and awaited `ndk.connect()` with no bound. NDK only settles that promise once **every** relay in the instance's pool reaches `CONNECTED`, so a single slow or unreachable relay — the default `wss://relay.plebeian.market` pick, or a user-typed relay — left the kind-24133 subscription unstarted and the signer's `connect` request unanswered (the relay answered the signer with `mute: no one was listening for this`, which is what the e2e QR spec saw). `NostrConnectQR` bounds the connect at 3s: the socket keeps connecting in the background and the listener starts, so a slow relay degrades to a retry instead of a dead scan.
