@@ -9,13 +9,21 @@
  * This is the regression that would have caught the P1 (unwired transport on
  * restore): before the fix, `unlockVaultedSession` threw "Missing
  * subscriptionMethod" and the vaulted session could not be restored.
+ *
+ * The second P1 consequence is covered too: the read-ONCE legacy migration
+ * (`migrateLegacySessionToVault`) runs BEFORE the rehydrate, so on the
+ * unwired transport it wrapped the plaintext session, DELETED the plaintext
+ * pair, and only then failed — a destructive-then-fails path, not a plain
+ * broken restore. The migration branch therefore gets its own real-seam
+ * regression here (auth-session-vault.test.ts covers it only against the
+ * mocked rehydrate).
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { ReplaySubject, Observable } from 'rxjs'
 import { finalizeEvent, getPublicKey, nip44 } from 'nostr-tools'
 import { hexToBytes } from 'nostr-tools/utils'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
-import { encodeNbunksec } from 'applesauce-signers/helpers'
+import { decodeNbunksec, encodeNbunksec } from 'applesauce-signers/helpers'
 
 const USER_PUBKEY = '33'.repeat(32)
 const CLIENT_SK = '11'.repeat(32)
@@ -74,8 +82,8 @@ mock.module('@/lib/nostr/nostr-connect-signer', () => ({
 	defaultPool: () => countingTransport.pool,
 }))
 
-import { authActions, authStore, NOSTR_AUTO_LOGIN } from '@/lib/stores/auth'
-import { hasVaultedSession, saveVaultedSession } from '@/lib/nostr/session-vault'
+import { authActions, authStore, NOSTR_AUTO_LOGIN, NOSTR_CONNECT_KEY, NOSTR_LOCAL_SIGNER_KEY } from '@/lib/stores/auth'
+import { hasLegacyPlaintextSession, hasVaultedSession, saveVaultedSession, unlockVault } from '@/lib/nostr/session-vault'
 import { runSignerTeardown, setSignerCapability, setSignerTeardown } from '@/lib/nostr/signer-registry'
 
 const TEST_ITERATIONS = 1_000
@@ -126,6 +134,9 @@ function makeNbunksec(): string {
 	})
 }
 
+/** The legacy plaintext pair auth.ts wrote pre-B-3: client key hex + bunker URL. */
+const LEGACY_BUNKER_URL = `bunker://${remotePk}?relay=wss://signer.example.com&secret=${BUNKER_SECRET}`
+
 describe('unlockVaultedSession over the REAL rehydrate seam (P1 regression)', () => {
 	test('vaulted session unlock restores identity through the real NostrConnectSigner', async () => {
 		await saveVaultedSession(makeNbunksec(), 'pass', { iterations: TEST_ITERATIONS })
@@ -138,5 +149,29 @@ describe('unlockVaultedSession over the REAL rehydrate seam (P1 regression)', ()
 		expect(authStore.state.needsSessionUnlock).toBe(false)
 		expect(authStore.state.user?.pubkey).toBe(USER_PUBKEY)
 		expect(hasVaultedSession()).toBe(true)
+	})
+})
+
+describe('legacy migrate-on-unlock over the REAL rehydrate seam (P1 regression)', () => {
+	test('migrating the legacy plaintext pair restores identity and keeps the vault, not the plaintext', async () => {
+		memoryStorage.set(NOSTR_LOCAL_SIGNER_KEY, CLIENT_SK)
+		memoryStorage.set(NOSTR_CONNECT_KEY, LEGACY_BUNKER_URL)
+		memoryStorage.set(NOSTR_AUTO_LOGIN, 'true')
+
+		// Threw "Missing subscriptionMethod" before the P1 fix — AFTER the
+		// migration had already purged the plaintext pair.
+		const user = await authActions.unlockVaultedSession('pass', { iterations: TEST_ITERATIONS })
+
+		expect(user.pubkey).toBe(USER_PUBKEY)
+		expect(authStore.state.isAuthenticated).toBe(true)
+		expect(authStore.state.needsSessionUnlock).toBe(false)
+		// Read-ONCE migration: the vault now holds the wrapped legacy session
+		// and the plaintext pair is gone.
+		expect(hasVaultedSession()).toBe(true)
+		expect(hasLegacyPlaintextSession()).toBe(false)
+		expect(memoryStorage.has(NOSTR_LOCAL_SIGNER_KEY)).toBe(false)
+		expect(memoryStorage.has(NOSTR_CONNECT_KEY)).toBe(false)
+		const nbunksec = await unlockVault(undefined, 'pass', { minIterations: TEST_ITERATIONS })
+		expect(decodeNbunksec(nbunksec).local_key).toBe(CLIENT_SK)
 	})
 })
