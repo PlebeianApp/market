@@ -319,6 +319,59 @@ export interface ParsedValidatorVerdictEvent {
 // kind 30441 — Validator policy declaration — §4.4.2
 // =========================================================================
 
+/**
+ * Admission limits a validator applies to relay-fed auction events
+ * BEFORE any auction rule is evaluated — the spam/DoS bounds resolved
+ * from `AUCTION_VALIDATOR_*` in `src/server/auction-validator/spamPolicy.ts`.
+ *
+ * Field set is kept in exact parity with `BidSpamPolicy` (the policy the
+ * validator actually enforces) by the compile-time guard in
+ * `src/server/auction-validator/policy.ts`: publishing must not be able
+ * to advertise a different set of knobs than the ones in force.
+ */
+export interface ValidatorAdmissionLimits {
+	/** Max accepted bids from one bidder key inside `rateWindowSec`. */
+	maxBidsPerWindow: number
+	/** Rolling window length for `maxBidsPerWindow`, in seconds. */
+	rateWindowSec: number
+	/** Lifetime cap on tracked bids per (auction, bidder). */
+	maxActiveBidsPerAuction: number
+	/** Max events retained per key in each pending buffer. */
+	maxPendingEventsPerKey: number
+	/** Max distinct keys retained by each pending buffer. */
+	maxPendingKeys: number
+	/** Max buffered events retained across each pending buffer. */
+	maxPendingEvents: number
+	/** Seconds after which an unresolved pending key is evicted. */
+	pendingTtlSec: number
+	/** Max serialized raw event size accepted on the auction path. */
+	maxEventBytes: number
+	/** Max number of tags accepted on the auction path. */
+	maxTagCount: number
+	/** Max event ids retained for cross-relay deduplication. */
+	maxSeenEventIds: number
+	/** Max bid nonce length. */
+	maxNonceLength: number
+	/** Max proof metadata pairs in a bid. */
+	maxProofCount: number
+	/** Max raw content length in a bid, in bytes. */
+	maxContentBytes: number
+}
+
+/**
+ * Admission declaration carried by the kind-30441 policy document.
+ *
+ * A DISCRIMINATED UNION with an explicit disabled state, deliberately:
+ * `{ enabled: false }` means "this validator runs no admission checks"
+ * and is a declared choice, not the absence of a field. A reader must be
+ * able to tell "declared no limits" apart from "old/unparsed document".
+ *
+ * When `enabled` is true every limit is mandatory — the published block
+ * mirrors the resolved policy the validator enforces, so no reader has
+ * to fall back to private defaults to know what is enforced.
+ */
+export type ValidatorAdmissionPolicy = { enabled: false } | ({ enabled: true } & ValidatorAdmissionLimits)
+
 export interface ValidatorPolicyDocument {
 	type: 'auction_validator_policy_v1'
 	relatrMinScore?: number
@@ -331,6 +384,12 @@ export interface ValidatorPolicyDocument {
 	categoryDenylist?: string[]
 	maxAcceptableSkewSec?: number
 	griefingDecayDays?: number
+	/**
+	 * Admission (spam/DoS) limits actually in force. Present on every
+	 * document this validator publishes; `{ enabled: false }` is how a
+	 * validator that runs no admission checks says so out loud.
+	 */
+	admission?: ValidatorAdmissionPolicy
 	notes?: string
 }
 

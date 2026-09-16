@@ -92,6 +92,11 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 			relayPool: options.relayPool,
 			name: options.name ?? 'Plebeian dev validator',
 			policy: options.policy,
+			// The RESOLVED admission limits (same object the subscriber
+			// enforces and the handle exposes) — the published kind-30441
+			// document declares what is actually in force (review
+			// maxime-tt, required change 2).
+			admission: spamPolicy,
 		})
 		logger.info('[validator] policy published')
 	} catch (err) {

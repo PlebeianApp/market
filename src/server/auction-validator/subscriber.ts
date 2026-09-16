@@ -333,6 +333,33 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			activeBidCount: lifetimeBidCount,
 		})
 		if (!spamDecision.ok) {
+			// Refusal reasons are operator-visible ONLY (review maxime-tt,
+			// required change 2 part 2 — deliberately DEFERRED, see the PR
+			// notes).
+			//
+			// The refused bid is never upserted, so there is no bid state to
+			// publish against, and the only per-bid carrier the protocol
+			// defines is a kind-30440 verdict — whose claim would have to be
+			// `bid_invalid`, a CONDEMN claim (VALIDATOR_CONDEMN_CLAIMS):
+			// quorum counts it as a condemn, computeValidatedBids classifies
+			// the bid `invalid`, and the reason feeds bidder reputation
+			// (kind-30442 `bids_invalid`). This validator never evaluated
+			// the bid's rules — it declined to observe the bid at all — so a
+			// condemn would assert a judgement it did not make and would
+			// turn a capacity decision into a negative reputation outcome.
+			// `bid_pending_review` ("waiting on a check", §4.4.3) is not
+			// true either: nothing is pending.
+			//
+			// What the client side would need before this can carry a
+			// reason to the bidder: a NON-condemn per-bid carrier for
+			// non-acceptance — a claim outside VALIDATOR_CONDEMN_CLAIMS
+			// (e.g. a declared `admission_refused`), or a relay-level
+			// rejection — plus quorum and reputation treatment for it. That
+			// is a protocol change, not something to invent at this
+			// boundary. The earlier refusals (envelope limits, pending-
+			// buffer caps, i.e. anything dropped before the auction is
+			// known) are in the same class with even less context: no
+			// auction means no verdict coordinate to publish against at all.
 			logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: ${spamDecision.reason}`)
 			return
 		}

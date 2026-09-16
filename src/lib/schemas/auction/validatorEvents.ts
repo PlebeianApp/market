@@ -30,6 +30,7 @@ import type {
 	ParsedBidderAggregateReputationEvent,
 	ParsedValidatorPolicyEvent,
 	ParsedValidatorVerdictEvent,
+	ValidatorAdmissionPolicy,
 	ValidatorPolicyDocument,
 } from '../../auction/events'
 import type { NostrEventLike } from '../../nostr/eventLike'
@@ -134,6 +135,39 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 // kind 30441 — Validator policy
 // =========================================================================
 
+// Admission limits are integer counts/windows: zero is accepted and
+// means the corresponding check is off, mirroring what the resolver in
+// src/server/auction-validator/spamPolicy.ts accepted. The block is
+// declaration-only — enforcement stays in the resolver — so the schema
+// validates shape (integer, non-negative) rather than re-litigating
+// ranges a resolver already owns.
+const admissionLimitSchema = z.number().int().nonnegative()
+
+export const ValidatorAdmissionPolicySchema = z.discriminatedUnion('enabled', [
+	// Explicit no-limits state: this validator runs no admission checks.
+	// Strict, so a document cannot claim "no admission checks" and list
+	// limits in the same breath — that declaration contradicts itself.
+	z.strictObject({ enabled: z.literal(false) }),
+	// Every limit is required. A reader must never have to fall back to
+	// private defaults to learn what is enforced.
+	z.strictObject({
+		enabled: z.literal(true),
+		maxBidsPerWindow: admissionLimitSchema,
+		rateWindowSec: admissionLimitSchema,
+		maxActiveBidsPerAuction: admissionLimitSchema,
+		maxPendingEventsPerKey: admissionLimitSchema,
+		maxPendingKeys: admissionLimitSchema,
+		maxPendingEvents: admissionLimitSchema,
+		pendingTtlSec: admissionLimitSchema,
+		maxEventBytes: admissionLimitSchema,
+		maxTagCount: admissionLimitSchema,
+		maxSeenEventIds: admissionLimitSchema,
+		maxNonceLength: admissionLimitSchema,
+		maxProofCount: admissionLimitSchema,
+		maxContentBytes: admissionLimitSchema,
+	}),
+]) satisfies z.ZodType<ValidatorAdmissionPolicy>
+
 export const ValidatorPolicyDocumentSchema = z.object({
 	type: z.literal(VALIDATOR_POLICY_SCHEMA_TYPE),
 	relatrMinScore: z.number().optional(),
@@ -146,6 +180,9 @@ export const ValidatorPolicyDocumentSchema = z.object({
 	categoryDenylist: z.array(z.string()).optional(),
 	maxAcceptableSkewSec: z.number().int().nonnegative().optional(),
 	griefingDecayDays: z.number().int().nonnegative().optional(),
+	// Optional on the wire (older documents predate it), but this
+	// validator always publishes it — see publishValidatorPolicy.
+	admission: ValidatorAdmissionPolicySchema.optional(),
 	notes: z.string().optional(),
 }) satisfies z.ZodType<ValidatorPolicyDocument>
 
