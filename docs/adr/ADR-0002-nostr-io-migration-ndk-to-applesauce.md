@@ -255,48 +255,21 @@ Negative / tradeoffs:
   can carry relay-targeting options; Wave A4 and Wave C define the publish
   rollout boundaries.
 
-## Wave 1 addendum (PR #1283) — explicit behavior deltas
+## Wave 1 addendum — behaviour `master` already has
 
-**Status of this section.** This section is **descriptive only**. It records behaviour
-that `master` already has and that wave 1 depends on — the seam's signature
-check (F4), the main-relay pinning discipline and its effect-dependency
-invariant (F5), and deterministic latest-wins for replaceable reads — plus the
-scope boundary for wave 1. It records **no new decision** and leaves the
-`## Status` field of this ADR at `Accepted`. The read-reach question for
-author-scoped reads (F3) is a proposed decision, separated into a PROPOSED addendum PR and
-**deliberately not recorded here**; see the F3 subsection below.
+**Status of this section.** Descriptive only. It records the seam behaviour that
+wave 1 depends on and that `master` already implements: the signature check on
+rehydration (F4), the main-relay pinning discipline and its effect-dependency
+invariant (F5), and the latest-wins ordering rule for replaceable events. It
+records **no new decision** and leaves the `## Status` field of this ADR at
+`Accepted`.
 
-Wave 1 flips the read-path query modules from direct @nostr-dev-kit usage to
-the applesauceIo seam. As a result the following read-topology and validation
-behaviors are now explicit and MUST be treated as canonical until a later wave
-changes them:
+The read-reach question for author-scoped reads (F3) is **not** recorded here.
+It is a proposed decision, separated into its own PR, and the F3 subsection
+below carries only the verified premise so the question is legible without the
+decision being smuggled in with the description.
 
-### F3 — migrated reads pin to the configured relay set (description only)
-
-Production NDK is constructed with `enableOutboxModel: true`
-(`src/lib/stores/ndk.ts:301`, `:317`), so legacy `ndk.fetchEvents` calls on
-author-scoped filters could route to an author's NIP-65 write relays discovered
-via the outbox model. Every wave-1 read pins to the configured relay set
-(`ndkStore.state.explicitRelayUrls`, with zap reads pinning to `ZAP_RELAYS` union
-`explicitRelayUrls`). Outbox discovery is therefore NOT applied to migrated
-reads.
-
-This is a real read-topology change, and the affected reads are user-visible:
-
-- `src/queries/authors.tsx:37` — kind-0 profiles; an author publishing only to
-  their own relays surfaces a false "Author not found".
-- `src/hooks/useNotificationMonitor.ts:59`, `:74`, `:95` — order and `#p` reads;
-  a counterparty publishing off the configured set yields missed order and
-  payment-status notifications.
-- `src/lib/stores/nip60.ts:159` — kind 17375 wallet bootstrap; a wallet event
-  living only on the user's own relays initializes fresh instead of restoring.
-- `src/lib/appSettings.ts:107` — app settings read as absent.
-
-**No decision is recorded here.** Whether production keeps outbox reach for
-author-scoped third-party reads, or gains a bounded author-relay path, is a
-proposed decision held for maintainer discussion (the read-topology proposal PR stacked on this one). Until that is
-settled, migrated reads are pinned-only and the reads listed above are known
-degraded — that is the current behaviour, not a chosen end state.
+### F4 — invalid-signature events are dropped on rehydration
 
 `rehydrateVerifiedNdkEvent` runs `verifyEvent` on every raw event and discards
 those failing. NDK's default subscription path did not verify signatures by
@@ -305,6 +278,13 @@ now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
 validated"). The failure is silent (a relay serving malformed data now reads
 as absence). A debug-level drop counter does not exist today; it is a separate
 follow-up, not a behavior this addendum asserts.
+
+**Scope of this behavior.** It applies where events are rehydrated through
+`rehydrateVerifiedNdkEvent` — the seam fetch path (`src/lib/nostr/ndk-events.ts:46`)
+and `src/queries/orders.tsx:1006`. Reads that call NDK directly without
+rehydration are not covered by it.
+
+### F5 — live-subscribe stays pinned to the main relay once it is known
 
 `useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` subscribe only
 when `getMainRelay()` is defined, and pin that subscription to the main relay.
@@ -319,22 +299,38 @@ leaves the subscription silently absent for the rest of the session. Fetch parit
 is unchanged — both the old and the new fetch paths return null while the relay is
 unknown.
 
-- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
-  This addendum covers reads only.
-- NIP-17 DM relay discovery (kind 10050) is a separate, already deployed
-  external-reach path; it is not governed by F3.
-- Until every read path migrates, the app runs a mixed topology — migrated reads
-  pinned, un-migrated reads still outbox-routed. F3 describes the end state, not
-  the current state.
+### Deterministic latest-wins for replaceable event reads
 
-Conflicting `created_at` versions of a replaceable/parameterized event resolve
-to the highest `created_at`, independent of relay-arrival order. On an equal
-`created_at` tie the lexicographically lowest event id wins (direct string
-comparison, not locale collation). `fetchNdkEventSet` dedupes on the NDK
-coordinate key (`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and
-keeps the latest-wins copy; `fetchNdkEvent` / `fetchLatestNdkEvent` select the
-single winner with the same `created_at DESC, id ASC` ordering. kind-0 `lud16`
-selection (zaps) routes through `fetchLatestNdkEvent` with the pinned relay set.
+Conflicting `created_at` versions of the same deduplication-key event resolve to
+the highest `created_at`, independent of relay-arrival order; on an equal
+timestamp the lexicographically lower event id wins (NIP-01's tie-break). On
+`master` this is `isNewerEvent` (`src/lib/nostr/ndk-events.ts:20-31`), applied by
+`fetchNdkEventSet` (`:33-53`), which dedupes on the NDK coordinate key
+(`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and keeps the newest
+copy. The single-event helper used for app-owned replaceable events is
+`fetchLatestAppEvent` (`src/lib/stores/ndk.ts:163-171`), which selects by
+`created_at`.
+
+### F3 — the read-reach question (premise only)
+
+Production NDK is constructed with `enableOutboxModel: true`
+(`src/lib/stores/ndk.ts:301`, `:317`); outbox discovery is gated off for
+`staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
+reads this wave touches still call NDK directly — `ndk.fetchEvents` at
+`src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`,
+`src/lib/stores/nip60.ts:159` and `src/lib/appSettings.ts:107`, with live
+subscriptions at `src/hooks/useNotificationMonitor.ts:135/161/185`. In production
+those reads are therefore outbox-routed today; no pinning is described here
+because none ships on `master`.
+
+**No decision is recorded.** Whether production keeps that reach for
+author-scoped reads, or gains a bounded author-relay path, is proposed in a
+separate PR and deliberately not decided in this one.
+
+### Out of scope
+
+- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
+  This section covers reads only.
 
 ## References
 
