@@ -28,6 +28,7 @@ interface Harness {
 	warnings: string[]
 	clock: { value: number }
 	dispatch: (event: NostrEvent) => void
+	subscriptions: Array<Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>>
 	settle: () => Promise<void>
 	subscriber: ReturnType<typeof createValidatorSubscriber>
 }
@@ -37,11 +38,29 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 	const publishCalls: string[] = []
 	const warnings: string[] = []
 	const clock = { value: 5_000 }
+	const subscriptions: Array<Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>> = []
+	const history: NostrEvent[] = []
+	const matchesFilter = (event: NostrEvent, filter: { kinds?: number[]; '#a'?: string[]; since?: number }): boolean => {
+		if (filter.kinds && !filter.kinds.includes(event.kind)) return false
+		if (filter.since !== undefined && event.created_at < filter.since) return false
+		if (filter['#a']) {
+			const aTags = event.tags.filter((tag) => tag[0] === 'a').map((tag) => tag[1] ?? '')
+			if (!aTags.some((tag) => filter['#a']?.includes(tag))) return false
+		}
+		return true
+	}
 	const relayPool = {
 		handlers: new Map<number, (event: NostrEvent) => void>(),
-		subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
-			const kind = filters[0]?.kinds?.[0]
-			if (kind !== undefined) (relayPool as any).handlers.set(kind, handler)
+		subscribe: async (filters: Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>, handler: (event: NostrEvent) => void) => {
+			subscriptions.push(filters)
+			for (const kind of filters[0]?.kinds ?? []) {
+				;(relayPool as any).handlers.set(kind, handler)
+			}
+			for (const event of history) {
+				if (filters.some((filter) => matchesFilter(event, filter))) {
+					handler(event)
+				}
+			}
 			return () => undefined
 		},
 		publish: async () => undefined,
@@ -65,9 +84,9 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 	})
 
 	const dispatch = (event: NostrEvent): void => {
+		history.push(event)
 		const handler = (relayPool as any).handlers.get(event.kind) as ((event: NostrEvent) => void) | undefined
-		if (!handler) throw new Error(`no handler for kind ${event.kind}`)
-		handler(event)
+		if (handler) handler(event)
 	}
 
 	return {
@@ -76,6 +95,7 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 		warnings,
 		clock,
 		dispatch,
+		subscriptions,
 		subscriber,
 		settle: () => new Promise((resolve) => setTimeout(resolve, 20)),
 	}
@@ -150,29 +170,22 @@ const buildBidEvent = (input: {
 	)
 
 /**
- * Review 5645059400 finding 1 — `pendingBids` was bounded per auction
- * but unbounded across auctions, so a bidder signing bids against
- * random unknown auction ids grew the map without limit. The buffer now
- * carries a global distinct-key cap and a TTL for keys whose state
- * never arrives.
+ * Review R1 — the subscriber no longer keeps a broad live bid REQ.
+ * Unknown-auction child events stay in relay history until the matching
+ * auction lands and opens a narrow child REQ on the shared `a` tag.
  */
-describe('validator subscriber pending bid buffer bounds (finding 1)', () => {
-	test('stops buffering bids once the distinct-auction cap is reached', async () => {
-		const harness = createHarness({
-			spamPolicy: { maxPendingKeys: 1, maxPendingEventsPerKey: 10, maxPendingEvents: 10, pendingTtlSec: 7_200 },
-		})
+describe('validator subscriber replays child history only for tracked auctions', () => {
+	test('replays stored bids only after the matching auction opens a child REQ', async () => {
+		const harness = createHarness()
 		await harness.subscriber.start()
 
 		const sellerSk = generateSecretKey()
 		const sellerPubkey = getPublicKey(sellerSk)
 		const bidderSk = generateSecretKey()
 
-		// Two auctions the validator has never seen. Only the first one
-		// can be buffered; the second must be refused rather than
-		// minting a fresh key (and a fresh 256-event budget).
 		const auctionA = buildAuctionEvent(sellerSk)
 		const auctionB = buildAuctionEvent(sellerSk, 'auction-test-b')
-		const bidA = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auctionA.id, bidNonce: 'nonce-a' })
+		const bidA = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auctionA.id, auctionDTag: 'auction-test', bidNonce: 'nonce-a' })
 		const bidB = buildBidEvent({
 			bidderSk,
 			sellerPubkey,
@@ -182,67 +195,21 @@ describe('validator subscriber pending bid buffer bounds (finding 1)', () => {
 		})
 
 		harness.dispatch(bidA)
-		await harness.settle()
 		harness.dispatch(bidB)
 		await harness.settle()
 
-		expect(harness.warnings.join('\n')).toContain('key_cap_reached')
+		expect(harness.state.auctions.size).toBe(0)
+		expect(harness.publishCalls).toEqual([])
 
-		// The buffered bid for the first auction is still replayed when
-		// its auction lands — the cap must not break the legitimate
-		// ordering-gap path.
 		harness.dispatch(auctionA)
 		await harness.settle()
 
-		const auctionAState = harness.state.auctions.get(auctionA.id)
-		expect(auctionAState).toBeDefined()
-		expect(auctionAState?.bids.has(bidA.id)).toBe(true)
+		expect(harness.subscriptions[1]).toEqual([
+			{ kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND], '#a': [`30408:${sellerPubkey}:auction-test`] },
+		])
+		expect(harness.state.auctions.get(auctionA.id)?.bids.has(bidA.id)).toBe(true)
 		expect(harness.state.auctions.get(auctionB.id)).toBeUndefined()
-
-		await harness.subscriber.stop()
-	})
-
-	test('drops buffered bids whose auction never arrives within the TTL', async () => {
-		const harness = createHarness({ spamPolicy: { pendingTtlSec: 60 } })
-		await harness.subscriber.start()
-
-		const sellerSk = generateSecretKey()
-		const sellerPubkey = getPublicKey(sellerSk)
-		const bidderSk = generateSecretKey()
-		const auction = buildAuctionEvent(sellerSk)
-		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-a' })
-
-		harness.dispatch(bid)
-		await harness.settle()
-
-		// The auction arrives long after the buffer's TTL: the buffered
-		// raw event (up to 64 KB) must already have been released.
-		harness.clock.value += 600
-		harness.dispatch(auction)
-		await harness.settle()
-
-		expect(harness.state.auctions.get(auction.id)?.bids.has(bid.id)).toBe(false)
-
-		await harness.subscriber.stop()
-	})
-
-	test('replays buffered bids inside the TTL', async () => {
-		const harness = createHarness({ spamPolicy: { pendingTtlSec: 7_200 } })
-		await harness.subscriber.start()
-
-		const sellerSk = generateSecretKey()
-		const sellerPubkey = getPublicKey(sellerSk)
-		const bidderSk = generateSecretKey()
-		const auction = buildAuctionEvent(sellerSk)
-		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-a' })
-
-		harness.dispatch(bid)
-		await harness.settle()
-		harness.clock.value += 600
-		harness.dispatch(auction)
-		await harness.settle()
-
-		expect(harness.state.auctions.get(auction.id)?.bids.has(bid.id)).toBe(true)
+		expect(harness.publishCalls).toEqual([bidA.id])
 
 		await harness.subscriber.stop()
 	})
