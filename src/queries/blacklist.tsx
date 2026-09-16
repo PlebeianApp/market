@@ -72,10 +72,13 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 export const useBlacklistSettings = (appPubkey?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	// Resolved at hook scope so the subscription effect re-runs when the relay
+	// becomes known (F5 in the ADR-0002 wave-1 addendum).
+	const mainRelay = getMainRelay()
 
 	// Set up a live subscription to monitor blacklist changes
 	useEffect(() => {
-		if (!appPubkey || !ndk) return
+		if (!appPubkey || !ndk || !mainRelay) return
 
 		const blacklistFilter = {
 			kinds: [10000], // NIP-51 mute list
@@ -89,8 +92,6 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		// pinned to the app relay so stale copies from other relays in the
 		// pool can't race the canonical answer. The latestEventTime /
 		// receivedEose guards below handle any stale copies that slip through.
-		const mainRelay = getMainRelay()
-		if (!mainRelay) return
 
 		const stop = applesauceIo.subscribe(
 			blacklistFilter,
@@ -114,7 +115,7 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 
 		// Clean up subscription when unmounting
 		return stop
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, ndk, mainRelay, queryClient])
 
 	return useQuery({
 		queryKey: configKeys.blacklist(appPubkey || ''),

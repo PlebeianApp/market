@@ -71,10 +71,13 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 export const useAdminSettings = (appPubkey?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	// Resolved at hook scope so the subscription effect re-runs when the relay
+	// becomes known (F5 in the ADR-0002 wave-1 addendum).
+	const mainRelay = getMainRelay()
 
 	// Set up a live subscription to monitor admin list changes
 	useEffect(() => {
-		if (!appPubkey || !ndk) return
+		if (!appPubkey || !ndk || !mainRelay) return
 
 		const adminListFilter = {
 			kinds: [30000],
@@ -90,8 +93,6 @@ export const useAdminSettings = (appPubkey?: string) => {
 		// pinned to the app relay so stale copies from other relays in the
 		// pool can't race the canonical answer. The guards below handle any
 		// stale copies that slip through.
-		const mainRelay = getMainRelay()
-		if (!mainRelay) return
 
 		const stop = applesauceIo.subscribe(
 			adminListFilter,
@@ -116,7 +117,7 @@ export const useAdminSettings = (appPubkey?: string) => {
 
 		// Clean up subscription when unmounting
 		return stop
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, ndk, mainRelay, queryClient])
 
 	return useQuery({
 		queryKey: configKeys.admins(appPubkey || ''),
@@ -232,10 +233,13 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 export const useEditorSettings = (appPubkey?: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	// Resolved at hook scope so the subscription effect re-runs when the relay
+	// becomes known (F5 in the ADR-0002 wave-1 addendum).
+	const mainRelay = getMainRelay()
 
 	// Set up a live subscription to monitor editor list changes
 	useEffect(() => {
-		if (!appPubkey || !ndk) return
+		if (!appPubkey || !ndk || !mainRelay) return
 
 		const editorListFilter = {
 			kinds: [30000],
@@ -251,8 +255,6 @@ export const useEditorSettings = (appPubkey?: string) => {
 		// pinned to the app relay so stale copies from other relays in the
 		// pool can't race the canonical answer. The guards below handle any
 		// stale copies that slip through.
-		const mainRelay = getMainRelay()
-		if (!mainRelay) return
 
 		const stop = applesauceIo.subscribe(
 			editorListFilter,
@@ -277,7 +279,7 @@ export const useEditorSettings = (appPubkey?: string) => {
 
 		// Clean up subscription when unmounting
 		return stop
-	}, [appPubkey, ndk, queryClient])
+	}, [appPubkey, ndk, mainRelay, queryClient])
 
 	return useQuery({
 		queryKey: configKeys.editors(appPubkey || ''),
