@@ -51,12 +51,16 @@ export const useNotificationMonitor = () => {
 		// Initial fetch to calculate current unseen counts
 		const initializeNotifications = async () => {
 			try {
-				// ADR-0002 F3: these are self-scoped reads — the reader's own
-				// orders, messages and purchase updates. The pinned read is
-				// canonical; a counterparty that publishes off the configured
-				// relay set is reached through the bounded author-relay path
-				// (capped, serial, session-bounded) only when the pinned read
-				// misses and the single /api/config decision is ON.
+				// ADR-0002 F3: these are reads scoped to the reader — the reader's
+				// own orders, messages and purchase updates — so the relays the
+				// bounded path may consult are the READER's own kind-10002
+				// declarations (an inbox read), never a counterparty's: the `#p`
+				// filters below name no author, so a counterparty's relay set is
+				// not knowable before the read. The pinned read is canonical; the
+				// bounded path (capped, serial, session-bounded) runs only when
+				// the pinned read misses and the single /api/config decision is
+				// ON. Residual gap, recorded in the ADR: a counterparty that
+				// publishes only to its own relays is not reached by this read.
 				const authorRelayDeps = createAuthorRelayReadDeps({ ndk, fetchAuthorRelayList: fetchUserRelayListWithPreferences })
 				const readSelfScopedEvents = (filter: NDKFilter) =>
 					readAuthorScopedEvents(filter, { authorPubkey: user.pubkey, purpose: 'self' }, authorRelayDeps).then((result) => result.events)

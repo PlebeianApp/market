@@ -255,6 +255,174 @@ Negative / tradeoffs:
   can carry relay-targeting options; Wave A4 and Wave C define the publish
   rollout boundaries.
 
+## Wave 1 addendum (PR #1283) — explicit behavior deltas
+
+**Status of this section.** It _clarifies_ the accepted ADR-0002 decision for F4,
+F5, and the latest-wins rule — those record behavior `master` already has — and it
+_proposes a narrower new decision_ for F3: the read topology for wave-1 reads, and
+the bounded author-relay path that replaces outbox discovery in production. The
+`## Status` field of this ADR remains `Accepted`. F3's new decision is **decided
+and implemented** (PR #1330, `src/lib/nostr/authorRelayRead.ts`, pending merge):
+the maintainer chose the bounded author-relay path over accepting the
+completeness loss, and the one item that was open for confirmation is recorded as
+resolved in the F3 section below.
+
+Wave 1 flips the read-path query modules from direct @nostr-dev-kit usage to
+the applesauceIo seam. As a result the following read-topology and validation
+behaviors are now explicit and MUST be treated as canonical until a later wave
+changes them:
+
+### F3 — pinned reads replace outbox discovery; a bounded author-relay path covers the gap
+
+Production NDK is constructed with `enableOutboxModel: true`
+(`src/lib/stores/ndk.ts:301`, `:317`), so legacy `ndk.fetchEvents` calls on
+author-scoped filters could route to an author's NIP-65 write relays discovered
+via the outbox model. Every wave-1 read pins to the configured relay set
+(`ndkStore.state.explicitRelayUrls`, with zap reads pinning to `ZAP_RELAYS` union
+`explicitRelayUrls`). Outbox discovery is therefore NOT applied to migrated
+reads.
+
+**The motive is tool-shape plus disclosure control, not leak-avoidance.** The
+outbox-disclosure gating ADR-0002's Context names is already implemented for
+`staging`, `development`, and `LOCAL_RELAY_ONLY` (`ndk.ts:301`), so production is
+the only stage where the outbox model is active — and the only stage this wave
+changes. The applesauce relay pool requires an explicit relay list, and an
+explicit list is also the posture we can state plainly: the client reaches the
+relays the operator named, plus author relays only through the bounded path
+below.
+
+This is a real read-topology change, and the affected reads are user-visible:
+
+- `src/queries/authors.tsx:37` — kind-0 profiles; an author publishing only to
+  their own relays surfaces a false "Author not found".
+- `src/hooks/useNotificationMonitor.ts:59`, `:74`, `:95` — order and `#p` reads.
+  These are _inbox_ reads (`#p: <reader>`), so the relays that can recover them
+  are the **reader's own** declared read relays: a reader whose kind-10002
+  declares relays outside the configured set otherwise sees missed order and
+  payment-status notifications. The authoring counterparty's relay set is not
+  knowable before the read (the filter names no author), so this read cannot
+  reach a counterparty that publishes _only_ to its own relays — the residual gap
+  is recorded in the F3 decision below.
+- `src/lib/stores/nip60.ts:159` — kind 17375 wallet bootstrap; a wallet event
+  living only on the user's own relays initializes fresh instead of restoring.
+- `src/lib/appSettings.ts:107` — app settings read as absent.
+
+**Decision (new: decided by the maintainer, not yet implemented).** Pinned reads
+are canonical, and the blocked-reach cases above are served by an **explicit,
+bounded, per-purpose author-relay path** rather than by the outbox model:
+
+- a single server-computed boolean in `/api/config` enables the path (ON in
+  production; OFF in staging, development, and CI), following the shape ADR-016
+  already uses for external zap-receipt relays;
+- bounded per read — a small fixed cap of author relays (3), a per-relay timeout,
+  and serial execution — so one read cannot fan out to an unbounded relay count;
+- bounded per session — the set of distinct author relays resolved in a session is
+  capped with a TTL and eviction, so N distinct authors cannot accumulate an
+  unbounded relay pool;
+- a cache hit serves the cached result and does not fire an author-relay fetch;
+  the fetch runs only on a miss, and its result enters the same query cache as the
+  pinned result;
+- the list it consults is the author's kind-10002 relay list, read through the
+  existing declaration reader (`fetchUserRelayListWithPreferences` /
+  `useUserRelayList`, `src/queries/relay-list.tsx`). NIP-65 lists are untrusted
+  input: deduplicated, scheme-filtered, and capped before any connection opens;
+- scope — display-only author-scoped third-party reads (kind-0 profiles), plus
+  reads scoped to the reader: the `#p` notification reads above (inbox reads of the
+  reader's own declared relays) and the reader's **own** events. The kind-17375
+  wallet bootstrap at `src/lib/stores/nip60.ts:159` is therefore in scope: the
+  relays consulted are the reader's own declared relays, not a third party's.
+  No counterparty relay set is ever resolved for a read whose filter names no
+  author, so the notification reads recover the reader's declared relays, not an
+  off-pinned-set counterparty. It does NOT apply to authority reads — app config,
+  admin/editor/blacklist, and settlement stay pinned to the configured relay set
+  (verified from code by the cross-family reviewer of PR #1330: no path from those
+  modules reaches the bounded resolver);
+- results merge through the same latest-wins / coordinate-dedup rule as the
+  pinned path, so ordering semantics do not fork per relay class.
+
+**Disclosure consequence, stated plainly.** Pinned reads disclose the reader's
+interest only to the relays the operator named. The bounded path deliberately
+discloses more, inside the bound: to an author's declared relays, the reader's IP
+and a filter naming that author become visible — information the author's relay can
+correlate. The path exists because the alternative costs the operator a false
+"Author not found" and missed order notifications; the per-read cap, the session
+cap, the cache-hit rule, and the display-only scope exist to keep that disclosure
+finite and legible. This is a recorded tradeoff, not an implicit one.
+
+**Implemented (PR #1330, pending merge).** The bounded path is implemented as
+`src/lib/nostr/authorRelayRead.ts`. The relay list it consults is the author's
+kind-10002 declaration, read through the **existing** declaration reader
+(`fetchUserRelayListWithPreferences`) — no second NIP-65 parser. The declaration
+is treated as untrusted input: deduplicated, scheme-filtered (`ws`/`wss` only, no
+`.onion`, no embedded credentials) and hard-capped at 3 relays per read, all
+before any connection opens. Execution is serial with a per-relay timeout; a
+session-level cap bounds the distinct author relays admitted (TTL + eviction); a
+warm cache serves the result with no egress, and **only non-empty results are
+cached** (a miss stays a miss, so an event arriving at the author's relay just
+after a cold miss is reachable on the next read instead of being pinned invisible
+for the whole TTL); concurrent cold-miss callers share one in-flight read
+(single-flight), so overlapping callers cannot multiply the egress the per-read
+cap promises; per-relay results merge through the same latest-wins /
+coordinate-dedup rule as the pinned path.
+
+**Rollout.** The `/api/config` decision is a single server-computed boolean,
+`externalAuthorReadsEnabled`, ON only when the server stage is `production` and
+OFF for `staging`, `development`, `LOCAL_RELAY_ONLY` and CI. It **defaults OFF**:
+the browser treats a missing, unreadable or absent field as OFF, and the server
+arm that cannot read `/api/config` stays pinned independently. The flag is **not
+flipped on in the implementing PR**; the production flip is a separate operator
+decision taken after the mocked-relay e2e evidence and the cross-family review
+land.
+
+This wording also replaces the earlier claim that terminating outbox routing is
+justified by leak-avoidance in production, which is not where that gating applies.
+
+### F4 — invalid-signature events are dropped at the seam
+
+`rehydrateVerifiedNdkEvent` runs `verifyEvent` on every raw event and discards
+those failing. NDK's default subscription path did not verify signatures by
+default, so bad-signature events that previously flowed into query data are
+now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
+validated"). The failure is silent (a relay serving malformed data now reads
+as absence). A debug-level drop counter does not exist today; it is a separate
+follow-up, not a behavior this addendum asserts.
+
+### F5 — live-subscribe stays pinned to the main relay once it is known
+
+`useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` subscribe only
+when `getMainRelay()` is defined, and pin that subscription to the main relay.
+This preserves the pinning discipline `master` already has; the
+`getAppRelaySet()` pool-wide fallback it replaces belongs to the `auctions` line
+that wave 1 is migrating.
+
+The invariant this wave must keep: **the main-relay value is an effect dependency
+of the subscription.** A hook that mounts before config resolves must subscribe as
+soon as the relay becomes known; dropping the value from the dependency array
+leaves the subscription silently absent for the rest of the session. Fetch parity
+is unchanged — both the old and the new fetch paths return null while the relay is
+unknown.
+
+### Out of scope for this addendum
+
+- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
+  This addendum covers reads only.
+- NIP-17 DM relay discovery (kind 10050) is a separate, already deployed
+  external-reach path; it is not governed by F3.
+- Until every read path migrates, the app runs a mixed topology — migrated reads
+  pinned, un-migrated reads still outbox-routed. F3 describes the end state, not
+  the current state.
+
+### Deterministic latest-wins for replaceable event reads
+
+Conflicting `created_at` versions of a replaceable/parameterized event resolve
+to the highest `created_at`, independent of relay-arrival order. On an equal
+`created_at` tie the lexicographically lowest event id wins (direct string
+comparison, not locale collation). `fetchNdkEventSet` dedupes on the NDK
+coordinate key (`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and
+keeps the latest-wins copy; `fetchNdkEvent` / `fetchLatestNdkEvent` select the
+single winner with the same `created_at DESC, id ASC` ordering. kind-0 `lud16`
+selection (zaps) routes through `fetchLatestNdkEvent` with the pinned relay set.
+
 ## References
 
 - Upstream epic: `PlebeianApp/market#1005`

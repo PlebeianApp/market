@@ -521,3 +521,116 @@ describe('readAuthorScopedEvents — pinned first, bounded path only on a miss',
 		expect(pinned.id).toBeTruthy()
 	})
 })
+
+describe('bounded author-relay resolver — a miss stays a miss (no negative caching)', () => {
+	test('an empty author-relay result is not cached, so the next read re-checks', async () => {
+		let attempt = 0
+		const profile = signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))
+		const { deps, calls } = makeDeps({
+			relayList: ['wss://r1.example'],
+			handler: async () => {
+				attempt += 1
+				return attempt === 1 ? [] : [profile]
+			},
+		})
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		const first = await resolveAuthorRelayRead(request, deps)
+		expect(first.source).toBe('author-relays')
+		expect(first.events.size).toBe(0)
+
+		// The profile landed on the author's relay after the cold miss. It must be
+		// reachable on the next read: a cached empty result would pin "absent" for
+		// the whole TTL and this read would answer `cache` with no egress.
+		const second = await resolveAuthorRelayRead(request, deps)
+		expect(second.source).toBe('author-relays')
+		expect(Array.from(second.events).map((event) => event.id)).toEqual([profile.id])
+		expect(calls).toHaveLength(2)
+	})
+
+	test('a warm cache never serves an empty entry', () => {
+		const session = new AuthorRelaySession({ maxDistinctRelays: 12, ttlMs: 60_000, now: () => 1_000_000 })
+
+		session.setCached('display:author:filter', [], 1_000_000)
+
+		expect(session.getCached('display:author:filter', 1_000_000)).toBeUndefined()
+	})
+
+	test('a non-empty result is still cached (positive caching preserved)', async () => {
+		const profile = signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))
+		const { deps, calls } = makeDeps({ relayList: ['wss://r1.example'], handler: async () => [profile] })
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		await resolveAuthorRelayRead(request, deps)
+		const second = await resolveAuthorRelayRead(request, deps)
+
+		expect(second.source).toBe('cache')
+		expect(calls).toHaveLength(1)
+	})
+})
+
+describe('bounded author-relay resolver — single-flight on a cold miss', () => {
+	test('concurrent callers share one bounded read instead of one fan-out each', async () => {
+		const profile = signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))
+		const { deps, calls, maxInFlight } = makeDeps({
+			relayList: ['wss://r1.example', 'wss://r2.example', 'wss://r3.example'],
+			handler: async () => {
+				await new Promise((resolve) => setTimeout(resolve, 5))
+				return [profile]
+			},
+		})
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		const results = await Promise.all([1, 2, 3].map(() => resolveAuthorRelayRead(request, deps)))
+
+		// Three concurrent cold-miss callers cost ONE read's egress (3 cap-bound
+		// relays), never 3 × 3, and the serial rule holds across them.
+		expect(calls).toHaveLength(3)
+		expect(maxInFlight()).toBe(1)
+		for (const result of results) {
+			expect(result.source).toBe('author-relays')
+			expect(Array.from(result.events).map((event) => event.id)).toEqual([profile.id])
+		}
+	})
+
+	test('a caller arriving after the shared read settled is served from the cache', async () => {
+		const profile = signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))
+		const { deps, calls } = makeDeps({ relayList: ['wss://r1.example'], handler: async () => [profile] })
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		await Promise.all([1, 2].map(() => resolveAuthorRelayRead(request, deps)))
+		const later = await resolveAuthorRelayRead(request, deps)
+
+		expect(later.source).toBe('cache')
+		expect(calls).toHaveLength(1)
+	})
+
+	test('an empty shared read leaves no settled in-flight entry behind', async () => {
+		const { deps, calls } = makeDeps({ relayList: ['wss://r1.example'] })
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		await Promise.all([1, 2].map(() => resolveAuthorRelayRead(request, deps)))
+		expect(calls).toHaveLength(1)
+
+		// A stale (settled) in-flight promise would answer this read with no egress.
+		await resolveAuthorRelayRead(request, deps)
+		expect(calls).toHaveLength(2)
+	})
+
+	test('a failed shared read is not replayed from the in-flight map', async () => {
+		const { deps, calls } = makeDeps({
+			relayList: ['wss://r1.example'],
+			fetchAuthorRelayList: async () => {
+				throw new Error('declaration reader unavailable')
+			},
+		})
+
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+		const first = await resolveAuthorRelayRead(request, deps)
+		const second = await resolveAuthorRelayRead(request, deps)
+
+		expect(first.source).toBe('no-declared-relays')
+		expect(second.source).toBe('no-declared-relays')
+		expect(calls).toHaveLength(0)
+	})
+})

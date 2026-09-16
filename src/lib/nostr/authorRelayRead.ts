@@ -21,6 +21,13 @@
  *   fetch runs only on a miss, and the merged result is what the caller caches
  *   under its own query key, so author-relay results land in the same cache
  *   entry as pinned ones.
+ * - **no negative caching**: only a non-empty result is cached. An empty result
+ *   stays a miss, so an event that lands on the author's relay just after a cold
+ *   miss is still reachable on the next read instead of being pinned invisible
+ *   for the whole TTL.
+ * - **single-flight**: concurrent cold-miss callers for the same logical read
+ *   await one shared in-flight run, so N concurrent callers cost the relay
+ *   budget of ONE read, not N serial fan-outs.
  * - **merge**: per-relay results collapse through the seam's coordinate-level
  *   latest-wins rule (`mergeNdkEventSets`), so ordering semantics do not fork
  *   per relay class.
@@ -115,6 +122,7 @@ export interface AuthorRelaySessionOptions {
 export class AuthorRelaySession {
 	private readonly admissions = new Map<string, number>()
 	private readonly cache = new Map<string, { events: NDKEvent[]; at: number }>()
+	private readonly inFlight = new Map<string, Promise<AuthorRelayReadOutcome>>()
 	private readonly maxDistinctRelays: number
 	private readonly ttlMs: number
 	private readonly now: () => number
@@ -159,18 +167,58 @@ export class AuthorRelaySession {
 			this.cache.delete(cacheKey)
 			return undefined
 		}
+		// Defensive: an empty entry is not a served result. Nothing writes one
+		// (see setCached), but a stale entry from an older session shape must not
+		// be able to satisfy a read either.
+		if (entry.events.length === 0) {
+			this.cache.delete(cacheKey)
+			return undefined
+		}
 		return entry.events
 	}
 
+	/**
+	 * Cache a completed read. **Only non-empty results are cached.**
+	 *
+	 * Caching an empty result would pin "absent" for the full TTL: an event
+	 * arriving at the author's relay immediately after a cold miss would stay
+	 * invisible until the entry expired, and every subsequent read would be
+	 * answered from that negative entry without ever re-checking. A miss stays a
+	 * miss — the bounded path may run again on the next read.
+	 */
 	setCached(cacheKey: string, events: NDKEvent[], at: number = this.now()): void {
+		if (events.length === 0) {
+			this.cache.delete(cacheKey)
+			return
+		}
 		this.evictExpired(at)
 		this.cache.set(cacheKey, { events, at })
 	}
 
-	/** Drop every admission and cached result (used by tests and session teardown). */
+	/**
+	 * The in-progress bounded read for this key, if one is running. Concurrent
+	 * cold-miss callers share it instead of each starting their own serial
+	 * fan-out (single-flight): the per-read cap and the serial rule bound the
+	 * *session*, so overlapping callers must not multiply the egress.
+	 */
+	getInFlight(cacheKey: string): Promise<AuthorRelayReadOutcome> | undefined {
+		return this.inFlight.get(cacheKey)
+	}
+
+	setInFlight(cacheKey: string, run: Promise<AuthorRelayReadOutcome>): void {
+		this.inFlight.set(cacheKey, run)
+	}
+
+	/** Clear a finished in-flight read, without clobbering a newer run for the key. */
+	clearInFlight(cacheKey: string, run: Promise<AuthorRelayReadOutcome>): void {
+		if (this.inFlight.get(cacheKey) === run) this.inFlight.delete(cacheKey)
+	}
+
+	/** Drop every admission, cached result, and in-flight read (tests / session teardown). */
 	reset(): void {
 		this.admissions.clear()
 		this.cache.clear()
+		this.inFlight.clear()
 	}
 
 	private evictExpired(at: number): void {
@@ -332,6 +380,33 @@ export async function resolveAuthorRelayRead(request: AuthorRelayReadRequest, de
 		// Cache hit: serve the warm result and fire no author-relay fetch.
 		return { events: mergeNdkEventSets(cached), source: 'cache', consultedRelays: [] }
 	}
+
+	// Single-flight: a cold miss that another caller is already running is joined,
+	// not re-run. Without this, N concurrent callers each walk the serial relay
+	// list and the session sees N× the egress the per-read bound promises.
+	const inFlight = session.getInFlight(cacheKey)
+	if (inFlight) return inFlight
+
+	const run = runBoundedRead(request, deps, session, cacheKey, {
+		now,
+		perRelayTimeoutMs,
+		maxRelaysPerRead,
+	})
+	session.setInFlight(cacheKey, run)
+	const clear = () => session.clearInFlight(cacheKey, run)
+	run.then(clear, clear)
+	return run
+}
+
+/** The serial, bounded single fetch — factored out so it can be shared in-flight. */
+async function runBoundedRead(
+	request: AuthorRelayReadRequest,
+	deps: AuthorRelayReadDeps,
+	session: AuthorRelaySession,
+	cacheKey: string,
+	bounds: { now: () => number; perRelayTimeoutMs: number; maxRelaysPerRead: number },
+): Promise<AuthorRelayReadOutcome> {
+	const { now, perRelayTimeoutMs, maxRelaysPerRead } = bounds
 
 	let preferences: AuthorRelayPreference[] = []
 	try {
