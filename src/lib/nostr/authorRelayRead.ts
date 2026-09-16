@@ -1,5 +1,5 @@
 /**
- * Bounded author-relay read path (ADR-0002 Wave 1 addendum, F3).
+ * Bounded author-relay read path (ADR-0002 Wave 1 read topology (F3, proposed: PR #1333)).
  *
  * Pinned reads — the relays the operator named — stay canonical. When a pinned
  * read misses, the four degraded reads named in F3 may consult the relays the
@@ -35,7 +35,7 @@
  * No new egress happens when the flag is OFF, when the purpose is an authority
  * read, or when the author declared no usable relays: the pinned result stands.
  *
- * Disclosure consequence (recorded in the ADR as a deliberate tradeoff): inside
+ * Disclosure consequence (proposed in PR #1333 as a deliberate tradeoff; NOT yet recorded in the ADR): inside
  * this bound, an author's declared relay learns the reader's IP and that a
  * filter naming that author was requested. The bound exists to keep that
  * disclosure finite and legible.

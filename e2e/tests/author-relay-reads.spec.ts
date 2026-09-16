@@ -1,5 +1,5 @@
 /**
- * ADR-0002 Wave 1 addendum (F3) — bounded author-relay read path, end to end.
+ * ADR-0002 Wave 1 read topology (F3, proposed: PR #1333) — bounded author-relay read path, end to end.
  *
  * Two black-box cases, both with every relay mocked locally:
  *

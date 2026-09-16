@@ -283,7 +283,7 @@ export const server = serve({
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,
 					externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
-					// ADR-0002 Wave 1 addendum, F3: one decision for the bounded
+					// ADR-0002 Wave 1 read topology (F3, proposed: PR #1333): one decision for the bounded
 					// author-relay path (ON in production only, OFF for staging,
 					// development, LOCAL_RELAY_ONLY and CI). The browser consumes
 					// this single value — no client-side stage checks. Server-side

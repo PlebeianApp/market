@@ -159,7 +159,7 @@ export const nip60Actions = {
 		try {
 			// First, try to fetch the existing wallet event (kind 17375).
 			//
-			// ADR-0002 Wave 1 addendum (F3) places this read inside the bounded
+			// ADR-0002 Wave 1 read topology (F3, proposed: PR #1333) places this read inside the bounded
 			// author-relay path as a SELF-SCOPED read: the relays consulted are
 			// the reader's own declared relays (their own kind-10002 list), never
 			// a third party's. The pinned read stays canonical; the bounded path

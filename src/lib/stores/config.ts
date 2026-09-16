@@ -10,7 +10,7 @@ interface ConfigState {
 		cvmServerPubkey?: string
 		needsSetup?: boolean
 		/**
-		 * ADR-0002 Wave 1 addendum (F3): the server's single decision for the
+		 * ADR-0002 Wave 1 read topology (F3, proposed: PR #1333): the server's single decision for the
 		 * bounded author-relay path. Consumed through
 		 * `isExternalAuthorReadsEnabledFromConfig`, which defaults to OFF when
 		 * the field is absent. Never derived client-side.

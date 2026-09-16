@@ -42,7 +42,7 @@ export function selectAuthoritativeAppSettingsEvent(
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
 
-	// ADR-0002 Wave 1 addendum (F3) authority carve-out: app settings is an
+	// ADR-0002 Wave 1 read topology (F3, proposed: PR #1333) authority carve-out: app settings is an
 	// AUTHORITY read, so the bounded author-relay path never applies here — not
 	// even with `externalAuthorReadsEnabled` ON in production, and not even on a
 	// miss. This is also the server-side arm of the F3 policy: this function runs

@@ -54,7 +54,7 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// ADR-0002 F3: the pinned read is canonical. A profile that exists only on
+	// ADR-0002 F3 (proposed: PR #1333): the pinned read is canonical. A profile that exists only on
 	// the author's own declared relay is resolved through the bounded
 	// author-relay path (display-only, capped, session-bounded) instead of the
 	// outbox model. When that path is off, this stays a pinned-only read.

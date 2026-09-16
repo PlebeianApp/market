@@ -1,5 +1,5 @@
 /**
- * Bounded author-relay read path — resolver tests (ADR-0002 Wave 1 addendum, F3).
+ * Bounded author-relay read path — resolver tests (ADR-0002 Wave 1 read topology (F3, proposed: PR #1333)).
  *
  * Pinned reads are canonical. When the pinned read misses, the bounded path may
  * consult the author's own declared relays (`kind 10002`, read through the

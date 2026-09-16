@@ -1,5 +1,5 @@
 /**
- * Bounded author-relay read path — policy tests (ADR-0002 Wave 1 addendum, F3).
+ * Bounded author-relay read path — policy tests (ADR-0002 Wave 1 read topology (F3, proposed: PR #1333)).
  *
  * F3 has exactly one decision point: a server-computed `/api/config` boolean
  * that is ON in production only (OFF in staging, development, `LOCAL_RELAY_ONLY`
