@@ -318,10 +318,15 @@ Production NDK is constructed with `enableOutboxModel: true`
 `staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
 reads this wave touches still call NDK directly — `ndk.fetchEvents` at
 `src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`,
-`src/lib/stores/nip60.ts:159` and `src/lib/appSettings.ts:107`, with live
-subscriptions at `src/hooks/useNotificationMonitor.ts:135/161/185`. In production
-those reads are therefore outbox-routed today; no pinning is described here
-because none ships on `master`.
+`src/lib/stores/nip60.ts:159`, with live subscriptions at
+`src/hooks/useNotificationMonitor.ts:135/161/185`. In production those reads are
+therefore outbox-routed today; no pinning is described here because none ships on
+`master`.
+
+`src/lib/appSettings.ts:107` is **not** a client read: `fetchAppSettings`
+(`:42`) is imported only by the server entry (`src/index.tsx:7`, called at boot
+`:139` and refreshed at `:404`), and the browser consumes the parsed result from
+`/api/config` (`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-282`).
 
 **No decision is recorded.** Whether production keeps that reach for
 author-scoped reads, or gains a bounded author-relay path, is proposed in a
@@ -500,7 +505,22 @@ not a design element.
   "already deployed external-reach path" is **unverified** and has been dropped
   from the descriptive PR pending verification.
 
-### Proposal 4 — scope of this addendum
+### Proposal 4 — correct the read inventory for app settings
+
+The earlier draft listed `src/lib/appSettings.ts:107` among the client reads that
+go pinned-only. That entry is wrong: `fetchAppSettings` (`src/lib/appSettings.ts:42`)
+is imported by the **server** entry only (`src/index.tsx:7`), called at boot
+(`:139`) and refreshed when a kind-31990 event is published (`:404`). The browser
+never performs that read — it consumes the parsed result from `/api/config`
+(`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-282`).
+
+So there is no fourth degraded client read to bound: the app-settings read is
+server-side and stays pinned to the server's relay, and the recommendation is to
+remove it from the degraded-read list rather than to migrate it. (Its own soft
+timeout of 10s, `src/lib/appSettings.ts`, stays as is; a server-side failure
+surfaces as `needsSetup`.)
+
+### Proposal 5 — scope of this addendum
 
 - Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
   This proposal covers reads only. NIP-17 DM relay discovery (kind 10050) is a
