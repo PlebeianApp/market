@@ -261,8 +261,10 @@ Negative / tradeoffs:
 F5, and the latest-wins rule — those record behavior `master` already has — and it
 _proposes a narrower new decision_ for F3: the read topology for wave-1 reads, and
 the bounded author-relay path that replaces outbox discovery in production. The
-`## Status` field of this ADR remains `Accepted`; F3's new decision is recorded
-here and carries the maintainer ruling named at the end of the F3 section.
+`## Status` field of this ADR remains `Accepted`. F3's new decision is **decided,
+not yet implemented**: the maintainer chose the bounded author-relay path over
+accepting the completeness loss, and the one item still open for confirmation is
+marked in the F3 section.
 
 Wave 1 flips the read-path query modules from direct @nostr-dev-kit usage to
 the applesauceIo seam. As a result the following read-topology and validation
@@ -299,30 +301,47 @@ This is a real read-topology change, and the affected reads are user-visible:
   living only on the user's own relays initializes fresh instead of restoring.
 - `src/lib/appSettings.ts:107` — app settings read as absent.
 
-**Decision (new, proposed).** Pinned reads are canonical, and the blocked-reach
-cases above are served by an **explicit, bounded, per-purpose author-relay path**
-rather than by the outbox model:
+**Decision (new: decided by the maintainer, not yet implemented).** Pinned reads
+are canonical, and the blocked-reach cases above are served by an **explicit,
+bounded, per-purpose author-relay path** rather than by the outbox model:
 
 - a single server-computed boolean in `/api/config` enables the path (ON in
   production; OFF in staging, development, and CI), following the shape ADR-016
   already uses for external zap-receipt relays;
-- the path is bounded — a small fixed cap of author relays per read (3), a
-  per-relay timeout, and serial execution on cache miss — so one read cannot fan
-  out to an unbounded relay count;
-- NIP-65 relay lists are untrusted input: deduplicated, scheme-filtered, and
-  capped before any connection is opened;
-- it applies to display-only reads (profiles, notifications). It never applies to
-  authority reads — app config, admin/editor/blacklist, wallet, and settlement
-  stay pinned to the configured relay set;
+- bounded per read — a small fixed cap of author relays (3), a per-relay timeout,
+  and serial execution — so one read cannot fan out to an unbounded relay count;
+- bounded per session — the set of distinct author relays resolved in a session is
+  capped with a TTL and eviction, so N distinct authors cannot accumulate an
+  unbounded relay pool;
+- a cache hit serves the cached result and does not fire an author-relay fetch;
+  the fetch runs only on a miss, and its result enters the same query cache as the
+  pinned result;
+- the list it consults is the author's kind-10002 relay list, read through the
+  existing declaration reader (`fetchUserRelayListWithPreferences` /
+  `useUserRelayList`, `src/queries/relay-list.tsx`). NIP-65 lists are untrusted
+  input: deduplicated, scheme-filtered, and capped before any connection opens;
+- scope — display-only third-party reads (profiles, notifications), plus self-scoped
+  reads of the reader's **own** events. The kind-17375 wallet bootstrap at
+  `src/lib/stores/nip60.ts:159` is therefore in scope: the relays consulted are the
+  reader's own declared relays, not a third party's. _(Maintainer confirmation
+  requested on that inclusion.)_ It does NOT apply to authority reads — app config,
+  admin/editor/blacklist, and settlement stay pinned to the configured relay set;
 - results merge through the same latest-wins / coordinate-dedup rule as the
   pinned path, so ordering semantics do not fork per relay class.
 
+**Disclosure consequence, stated plainly.** Pinned reads disclose the reader's
+interest only to the relays the operator named. The bounded path deliberately
+discloses more, inside the bound: to an author's declared relays, the reader's IP
+and a filter naming that author become visible — information the author's relay can
+correlate. The path exists because the alternative costs the operator a false
+"Author not found" and missed order notifications; the per-read cap, the session
+cap, the cache-hit rule, and the display-only scope exist to keep that disclosure
+finite and legible. This is a recorded tradeoff, not an implicit one.
+
 **Until that path is implemented the reads listed above are pinned-only and
-known degraded for authors who publish off the configured relay set.** The
-maintainer ruling is therefore the choice between accepting that degradation as
-the end state, or implementing the bounded path. Either way this wording replaces
-the earlier claim that terminating outbox routing is justified by leak-avoidance
-in production, which is not where that gating applies.
+known degraded for authors who publish off the configured relay set.** This
+wording also replaces the earlier claim that terminating outbox routing is
+justified by leak-avoidance in production, which is not where that gating applies.
 
 ### F4 — invalid-signature events are dropped at the seam
 
