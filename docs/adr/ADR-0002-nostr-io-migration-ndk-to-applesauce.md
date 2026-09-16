@@ -339,16 +339,47 @@ separate PR and deliberately not decided in this one.
 
 ## Wave 1 read topology — PROPOSED (not accepted)
 
-**Status of this section.** This is a **proposal for maintainer discussion**, not a
-recorded decision. Nothing here is accepted, and no implementation may rely on
-it. It is separated from the descriptive Wave 1 addendum above so the two can be
-reviewed on their own merits. If the proposal is accepted, the text moves into
-the addendum as a decided section; if it is rejected, this section is dropped
-and the descriptive addendum stands unchanged.
+**Status of this section.** A **proposal for maintainer discussion**, not a
+recorded decision. Nothing here is accepted and no implementation may rely on it.
+It is separated from the descriptive addendum above so that what `master`
+already does can be recorded on its own, and this can be argued on its merits.
 
 ### Proposal 1 — a bounded author-relay path for author-scoped reads
 
-**Decision (new: decided by the maintainer, not yet implemented).** Pinned reads
+Production NDK is constructed with `enableOutboxModel: true`
+(`src/lib/stores/ndk.ts:301`, `:317`), so legacy `ndk.fetchEvents` calls on
+author-scoped filters could route to an author's NIP-65 write relays discovered
+via the outbox model. Every wave-1 read pins to the configured relay set
+(`ndkStore.state.explicitRelayUrls`, with zap reads pinning to `ZAP_RELAYS` union
+`explicitRelayUrls`). Outbox discovery is therefore NOT applied to migrated
+reads.
+
+**The motive is tool-shape plus disclosure control, not leak-avoidance.** The
+outbox-disclosure gating ADR-0002's Context names is already implemented for
+`staging`, `development`, and `LOCAL_RELAY_ONLY` (`ndk.ts:301`), so production is
+the only stage where the outbox model is active — and the only stage this wave
+changes. The applesauce relay pool requires an explicit relay list, and an
+explicit list is also the posture we can state plainly: the client reaches the
+relays the operator named, plus author relays only through the bounded path
+below.
+
+This is a real read-topology change, and the affected reads are user-visible:
+
+- `src/queries/authors.tsx:37` — kind-0 profiles; an author publishing only to
+  their own relays surfaces a false "Author not found".
+- `src/hooks/useNotificationMonitor.ts:59`, `:74`, `:95` — order and `#p` reads.
+  These are _inbox_ reads (`#p: <reader>`), so the relays that can recover them
+  are the **reader's own** declared read relays: a reader whose kind-10002
+  declares relays outside the configured set otherwise sees missed order and
+  payment-status notifications. The authoring counterparty's relay set is not
+  knowable before the read (the filter names no author), so this read cannot
+  reach a counterparty that publishes _only_ to its own relays — the residual gap
+  is recorded in the F3 decision below.
+- `src/lib/stores/nip60.ts:159` — kind 17375 wallet bootstrap; a wallet event
+  living only on the user's own relays initializes fresh instead of restoring.
+- `src/lib/appSettings.ts:107` — app settings read as absent.
+
+**Proposed decision.** Pinned reads
 are canonical, and the blocked-reach cases above are served by an **explicit,
 bounded, per-purpose author-relay path** rather than by the outbox model:
 
@@ -367,12 +398,17 @@ bounded, per-purpose author-relay path** rather than by the outbox model:
   existing declaration reader (`fetchUserRelayListWithPreferences` /
   `useUserRelayList`, `src/queries/relay-list.tsx`). NIP-65 lists are untrusted
   input: deduplicated, scheme-filtered, and capped before any connection opens;
-- scope — display-only third-party reads (profiles, notifications), plus self-scoped
-  reads of the reader's **own** events. The kind-17375 wallet bootstrap at
-  `src/lib/stores/nip60.ts:159` is therefore in scope: the relays consulted are the
-  reader's own declared relays, not a third party's. _(Maintainer confirmation
-  requested on that inclusion.)_ It does NOT apply to authority reads — app config,
-  admin/editor/blacklist, and settlement stay pinned to the configured relay set;
+- scope — display-only author-scoped third-party reads (kind-0 profiles), plus
+  reads scoped to the reader: the `#p` notification reads above (inbox reads of the
+  reader's own declared relays) and the reader's **own** events. The kind-17375
+  wallet bootstrap at `src/lib/stores/nip60.ts:159` is therefore in scope: the
+  relays consulted are the reader's own declared relays, not a third party's.
+  No counterparty relay set is ever resolved for a read whose filter names no
+  author, so the notification reads recover the reader's declared relays, not an
+  off-pinned-set counterparty. It does NOT apply to authority reads — app config,
+  admin/editor/blacklist, and settlement stay pinned to the configured relay set
+  (verified from code by the cross-family reviewer of PR #1330: no path from those
+  modules reaches the bounded resolver);
 - results merge through the same latest-wins / coordinate-dedup rule as the
   pinned path, so ordering semantics do not fork per relay class.
 
@@ -385,44 +421,47 @@ correlate. The path exists because the alternative costs the operator a false
 cap, the cache-hit rule, and the display-only scope exist to keep that disclosure
 finite and legible. This is a recorded tradeoff, not an implicit one.
 
-**Until that path is implemented the reads listed above are pinned-only and
-known degraded for authors who publish off the configured relay set.** This
-wording also replaces the earlier claim that terminating outbox routing is
+**Implementation status.** A draft implementation exists as PR #1330
+(branch `pr/bounded-author-relay-reads`, head `416a1349`): 32/32 unit tests green
+at that head, and a cold cross-family review verified all eight declared bounds
+present at file:line. It is **not merged** — it is held until this proposal is
+ruled on — and the copy of this ADR section it currently carries is dropped so
+that this text is the single source.
+
+This wording also replaces the earlier claim that terminating outbox routing is
 justified by leak-avoidance in production, which is not where that gating applies.
 
 ### Proposal 2 — availability of the app-config canonical read
 
-`getAppRelaySet()` currently returns a relay set of exactly one relay (the main
-relay) so that stale copies held by third-party relays cannot race the canonical
-answer, and `fetchLatestAppEvent` reads through it. The question is whether that
-stays, or gains a bounded fallback.
+`getAppRelaySet()` returns a relay set of exactly one relay (the main relay) so
+that stale copies held by third-party relays cannot race the canonical answer, and
+`fetchLatestAppEvent` reads through it. The question is whether that stays, or
+gains a bounded fallback.
 
-Two facts narrow it. First, every authority read already pins the publisher:
-admin (`kinds: [30000]`, `#d: ['admins']`), editor (`kinds: [30000]`,
-`#d: ['editors']`) and blacklist (`kinds: [10000]`) all pass
-`authors: [appPubkey]`, and `selectAuthoritativeAppSettingsEvent` additionally
-checks kind and `d` tag for the app-settings event. A relay therefore cannot
-forge these; it can only serve an **older** copy. Second, `fetchLatestAppEvent`
-already sorts by `created_at` descending and takes the newest.
+Two facts narrow it. Every authority read already pins the publisher — admin
+(`kinds: [30000]`, `#d: ['admins']`), editor (`kinds: [30000]`,
+`#d: ['editors']`) and blacklist (`kinds: [10000]`) all pass `authors:
+[appPubkey]`, and `selectAuthoritativeAppSettingsEvent` additionally checks kind
+and `d` for the app-settings event — so a relay cannot forge these; it can only
+serve an **older** copy. And `fetchLatestAppEvent` already sorts by `created_at`
+descending and takes the newest. The safety of these reads therefore comes from
+the author pin plus latest-wins, both already in the code, not from using a single
+relay. What remains is narrower: two of **our own** relays disagreeing, or a newer
+list signed with a smaller `created_at`.
 
-So the safety of these reads does not come from using one relay — it comes from
-the author pin plus latest-wins, both of which are already in the code. The
-remaining hazard is narrower than it first appears: two of **our own** relays
-disagreeing, or a newer list signed with a smaller `created_at`. The options:
-
-- **(a)** keep one relay and record single-relay availability as an accepted
+- **(a)** keep one relay, and record single-relay availability as an accepted
   tradeoff for app-owned config;
 - **(b)** read the operator relay set (two or more operator-controlled relays)
-  with the existing author pin and latest-wins, and add a monotonic `version`
-  tag to app-owned list events so ordering does not depend on clock accuracy.
+  with the existing author pin and latest-wins, and add a monotonic `version` tag
+  to app-owned list events so ordering does not depend on clock accuracy.
 
-Option (b) is proposed: it gives redundancy without introducing third-party
-relays, and the version tag removes the last ordering ambiguity. Single-relay
-dependency would no longer be an unrecorded side effect of pinning.
+**(b) is proposed.** It gives redundancy without introducing third-party relays,
+and the `version` tag removes the last ordering ambiguity, so single-relay
+dependency stops being an unrecorded side effect of pinning.
 
 ### Proposal 3 — data classification (which facts live where)
 
-The read-reach debate mixes three different kinds of data. They should be
+Three different kinds of data are being argued about as one. They should be
 decided separately:
 
 1. **Client configuration** — `appRelay`, `stage`, `nip46Relay`, `appPublicKey`,
@@ -430,31 +469,50 @@ decided separately:
    Served by the app server through `/api/config`; never resolved through relay
    reads. No staleness question applies.
 2. **App-signed policy lists** — admin, editor, blacklist, and the app-settings
-   event. Relay-borne because they must be updatable without a deploy and are
-   verifiable by the app key, but single-writer: author-pinned, latest-wins,
-   versioned, read from operator relays.
+   event (kind 31990). Relay-borne, because they must be updatable without a
+   deploy and are verifiable by the app key, but single-writer: author-pinned,
+   latest-wins, versioned, read from operator relays.
 3. **User data** — profiles, wallet backups, relay lists, user settings. Read
    from the author's own declared relays (NIP-65) plus ours, bounded as in
-   Proposal 1. Recovery when the data exists only off our relay is a discovery
+   Proposal 1. Recovering data that exists only off our relay is a **discovery**
    problem, not a freshness one.
 
-**Authority for all three is the signing key, not a relay and not a service.**
-If a CVM-held index of "latest event id" is ever added, it can only be an
-**optional** index over signatures and version numbers: a required one would make
-every config read depend on a service being up, which is the failure mode
-pinning exists to avoid.
+**Authority for all three is the signing key — not a relay, and not a service.**
+NIP-01 already gives replaceable and addressable events a total order
+(`created_at`, then the lower event id); what no coordinator can supply is *set
+completeness* — knowing that no newer copy exists anywhere. A CVM-held "latest
+event id" index is therefore only ever usable as an **optional index over signed,
+versioned events**: a data source, never the arbiter of what is latest. As a
+required pre-trust check it would add a service dependency and an RTT in front of
+every read, and it can withhold a newer version while answering with an older one
+that is still perfectly valid — the one defence it would replace is the
+cross-relay comparison itself.
 
-**On negentropy:** `relay.plebeian.market` currently advertises NIP-11
-`supported_nips [1, 9, 11, 40, 42, 45, 70, 86]` — no NIP-77, so relay-side
-negentropy reconciliation is not available on our own relay today. It stays a
-future option, not a design element.
+**On negentropy:** `relay.plebeian.market` advertises NIP-11 `supported_nips [1,
+9, 11, 40, 42, 45, 70, 86]` — no NIP-77 — so relay-side negentropy
+reconciliation is not available on our own relay today. It stays a future option,
+not a design element.
+
+### Residual gaps recorded for the discussion
+
+- The drafted bounded path covers the **cold initial reads**. The live
+  subscriptions at `src/hooks/useNotificationMonitor.ts:135/161/185` remain
+  pinned-only and are not migrated by it.
+- The author-relay e2e spec is not part of the per-PR e2e alternation
+  (`.github/workflows/e2e.yml:139`), so its mocked-relay coverage does not run in
+  the normal PR gate.
+- The earlier draft's claim that NIP-17 DM discovery (kind 10050) is an
+  "already deployed external-reach path" is **unverified** and has been dropped
+  from the descriptive PR pending verification.
 
 ### Proposal 4 — scope of this addendum
 
-Wave 1 changes read paths only. Publish-path relay selection (including
-`writeRelayUrls`) stays with Wave A4 / Wave C and is decided there. NIP-17 DM
-relay discovery (kind 10050) is a separate, deployed external-reach path and is
-not governed by this proposal.
+- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
+  This proposal covers reads only. NIP-17 DM relay discovery (kind 10050) is a
+  separate path and is not governed by it.
+- Until every read path migrates, the app runs a mixed topology — migrated reads
+  pinned, un-migrated reads still outbox-routed. The proposals describe an end
+  state, not the current one.
 
 ## References
 
