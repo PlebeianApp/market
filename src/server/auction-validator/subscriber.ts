@@ -97,25 +97,30 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// prompt/late classification).
 	//
 	// The keys come straight off the relay, so they are attacker-chosen:
-	// a bidder signing bids against invented auction ids must not be
-	// able to grow one of these maps without limit, and a key whose
-	// parent never arrives must not be pinned for the process lifetime
-	// (review 5645059400 findings 1 and 3).
+	// a bidder signing bids against invented auction ids must not be able
+	// to grow one of these maps without limit, and a key whose parent
+	// never arrives must not be pinned for the process lifetime
+	// (review 5645059400 findings 1 and 3). All three buffers carry the
+	// same caps and TTL: `pendingReleases` and `pendingSettlements` were
+	// left as plain Maps when `pendingBids` was bounded, which left the
+	// wider half of finding 3 open on the same attacker-keyed path
+	// (review at 4c665564, and pendingBuffer.ts:13-14 already documents
+	// the bound these two were assumed to have).
 	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
 	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
-	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
-	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // bidEventId → events
+	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const activeBidClaimsNeedingChildWatch = new Set(['valid_bid_placed', 'bid_pending_review', 'won_pending_settlement', 'griefed_pending_fallback'])
 
 	type RelayFilter = { kinds?: number[]; since?: number; '#a'?: string[] }
 
 	const hasAttributablePendingChildren = (auctionRootEventId: string): boolean => {
 		if (pendingBids.keys(now()).includes(auctionRootEventId)) return true
-		if (pendingSettlements.has(auctionRootEventId)) return true
+		if (pendingSettlements.keys(now()).includes(auctionRootEventId)) return true
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
 		for (const bidEventId of Array.from(auctionState.bids.keys())) {
-			if (pendingReleases.has(bidEventId)) return true
+			if (pendingReleases.keys(now()).includes(bidEventId)) return true
 		}
 		return false
 	}
@@ -346,6 +351,19 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		} catch (err) {
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
 		}
+
+		// A path release for this bid may already be stashed: the release
+		// can be observed before the bid it releases, and in the ordinary
+		// order — auction, then release, then bid — the auction is tracked
+		// long before the release arrives, so the auction-insert drain
+		// never reaches the stash and the signed release was lost for the
+		// process lifetime. Key the replay off the bid landing instead
+		// (review at 4c665564). Ordered after the publish above so the
+		// sequence matches what the auction-insert drain used to produce:
+		// bid verdict first, then the release's own republish. The watch is
+		// retired afterwards so a stash this replay just drained cannot
+		// keep the auction's child REQ open.
+		await replayStashedReleases(bid.id)
 		maybeRetireAuctionWatch(bid.auctionRootEventId)
 	}
 
@@ -369,12 +387,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const recordResult = recordPathRelease(deps.state, release, firstObservedAt)
 		if (recordResult.status === 'unknown_bid') {
 			// We don't know about this bid yet (auction or bid event
-			// hasn't arrived). Stash and replay when the bid appears;
-			// authorization is re-applied on replay. Preserve the
-			// first-observed time so prompt/late classification is stable.
-			const existing = pendingReleases.get(release.bidEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingReleases.set(release.bidEventId, existing)
+			// hasn't arrived). Stash and replay when the bid appears
+			// (see replayStashedReleases); authorization is re-applied on
+			// replay. Preserve the first-observed time so prompt/late
+			// classification is stable.
+			const admission = pendingReleases.add(release.bidEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping path release ${release.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_author') {
@@ -419,6 +439,26 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 	}
 
+	/**
+	 * Replay any path releases stashed for a bid that has just been
+	 * accepted, carrying each release's own first-observed time so a
+	 * replay cannot restamp prompt/late classification.
+	 *
+	 * The stash exists because a kind-1025 can be delivered before the
+	 * kind-1023 it references (separate REQs, no ordering guarantee from
+	 * the relay). Replaying it only from the auction-insert drain missed
+	 * the ordinary order — auction already tracked, then release, then
+	 * bid — so the stash was write-only in practice and the signed
+	 * release was dropped for the process lifetime. Authorization is
+	 * re-applied by onPathReleaseEvent (envelope, signature, wrong-author
+	 * drop), so a replayed event cannot gain privileges from replay
+	 * (review at 4c665564).
+	 */
+	const replayStashedReleases = async (bidEventId: string): Promise<void> => {
+		const releases = pendingReleases.take(bidEventId, now())
+		for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
+	}
+
 	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
 		// Envelope first: the size/shape bound must bound the WORK, not
 		// just the admission (review 5645059400 finding 4) — otherwise an
@@ -438,9 +478,16 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 		const recordResult = recordSettlement(deps.state, settlement)
 		if (recordResult.status === 'unknown_auction') {
-			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingSettlements.set(settlement.auctionRootEventId, existing)
+			// Same ordering gap as bids and releases: a settlement can be
+			// observed before the auction it references. Bounded and TTL'd
+			// like the others — a settlement whose auction never arrives
+			// must not be replayed later at unbounded age, where it would
+			// overwrite the validator's terminal-state view (review at
+			// 4c665564).
+			const admission = pendingSettlements.add(settlement.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping settlement ${settlement.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_seller') {
@@ -481,20 +528,16 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const bids = pendingBids.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
-		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
-		pendingSettlements.delete(auctionRootEventId)
+		const settlements = pendingSettlements.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of settlements) await onSettlementEvent(raw, observedAt)
 
-		// Path releases are keyed by bidEventId — after the bids
-		// drained above, try replaying every stash and clean up the
-		// ones that now resolve.
-		for (const [bidEventId, releases] of Array.from(pendingReleases.entries())) {
-			const auctionState = deps.state.auctions.get(auctionRootEventId)
-			if (auctionState && auctionState.bids.has(bidEventId)) {
-				pendingReleases.delete(bidEventId)
-				for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
-			}
-		}
+		// Path releases are keyed by bidEventId rather than by auction
+		// root, so they are drained by `replayStashedReleases` the moment
+		// their bid is accepted — including an acceptance that happens in
+		// the bid drain above. Keying the replay off this auction insert
+		// (as this loop used to) only reached stashes taken before the
+		// insert, and silently dropped every release that arrived between
+		// the auction and its bid (review at 4c665564).
 	}
 
 	const republishAuction = async (auctionRootEventId: string): Promise<void> => {

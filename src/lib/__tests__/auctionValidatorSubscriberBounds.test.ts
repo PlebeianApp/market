@@ -247,6 +247,7 @@ const buildSettlementEvent = (input: {
 	bidEventId: string
 	bidderPubkey: string
 	auctionDTag?: string
+	pathReleaseEventId?: string
 	extraTags?: string[][]
 }): NostrEvent =>
 	finalizeEvent(
@@ -262,7 +263,12 @@ const buildSettlementEvent = (input: {
 				['winning_bid', input.bidEventId],
 				['winner', input.bidderPubkey],
 				['final_amount', '1200'],
-				['path_release', 'path-release-event-id'],
+				// Must be a 64-character hex event id: the schema rejects
+				// anything else, and parseSettlementEvent drops the whole
+				// event *before* recordSettlement — which is why every
+				// kind-1024 in this harness used to vanish silently
+				// (review at 4c665564).
+				['path_release', input.pathReleaseEventId ?? 'b'.repeat(64)],
 				['payout', input.bidEventId, '1200', 'settled'],
 				...(input.extraTags ?? []),
 			],
@@ -367,7 +373,14 @@ describe('validator subscriber event envelope on every ingestion path (finding 3
 		expect(harness.state.auctions.get(auction.id)?.settlement).toBeNull()
 		expect(harness.warnings.join('\n')).toContain('too_many_tags')
 
-		// Control: an envelope-compliant settlement is still recorded.
+		// Control: an envelope-compliant settlement is still recorded, end
+		// to end. An earlier revision of this control was re-scoped to the
+		// gate alone, on the belief that the harness could not get a
+		// kind-1024 recorded. The real cause was this builder emitting a
+		// non-hex `path_release` value, so parseSettlementEvent dropped
+		// every settlement here before recordSettlement ran (review at
+		// 4c665564). With the tag well-formed the recording path is
+		// reachable, so the differential is asserted again.
 		const compliant = buildSettlementEvent({
 			sellerSk,
 			sellerPubkey,
@@ -376,12 +389,199 @@ describe('validator subscriber event envelope on every ingestion path (finding 3
 			bidderPubkey,
 		})
 		expect(checkEventEnvelope(compliant).ok).toBe(true)
-		// Re-scoped from an end-to-end assertion: this harness does not
-		// establish the mint/bid state a settlement needs before it is
-		// recorded, so `settlement` stays undefined here regardless of the
-		// envelope gate. The guarantee under test is the gate itself —
-		// oversized refused, compliant admitted — and the recording path is
-		// covered by auctionValidatorContext.test.ts.
+		harness.dispatch(compliant)
+		await harness.settle()
+		expect(harness.state.auctions.get(auction.id)?.settlement?.id).toBe(compliant.id)
+
+		await harness.subscriber.stop()
+	})
+})
+
+/**
+ * Review at 4c665564 — the other two relay-fed buffers on the same
+ * boundary, and the ordering the release stash was written for.
+ *
+ * (a) `pendingReleases` was only ever replayed from the auction-insert
+ *     drain (subscriber.ts:410-416 of that revision), which needs the
+ *     release to have been stashed *before* the auction was inserted.
+ *     In the ordinary order — auction, release, then its bid — the bid
+ *     lands after that drain, so `recordPathRelease` returned
+ *     `unknown_bid`, the stash was never replayed and the signed
+ *     release (plus its first-observed time) was lost for the process
+ *     lifetime. The replay trigger has to be the bid landing, not the
+ *     auction insert.
+ * (b) `pendingReleases` / `pendingSettlements` were plain Maps with no
+ *     cap and no TTL: the same attacker-keyed unbounded growth finding
+ *     1 closed for `pendingBids`, and what pendingBuffer.ts:13-14
+ *     already documents as fixed.
+ */
+describe('validator subscriber pending release/settlement buffers (review at 4c665564)', () => {
+	test('replays a stashed path release when its bid arrives after the auction', async () => {
+		const harness = createHarness({ spamPolicy: { pendingTtlSec: 7_200 } })
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-a' })
+		const release = buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: bid.id })
+
+		// Ordinary order: the auction is already tracked when the release
+		// arrives (a bidder can only release a path after bidding), and
+		// the separate kind-1025 REQ delivers the release before the
+		// kind-1023 REQ delivers the bid it references.
+		harness.dispatch(auction)
+		await harness.settle()
+		harness.dispatch(release)
+		await harness.settle()
+		harness.dispatch(bid)
+		await harness.settle()
+
+		const auctionState = harness.state.auctions.get(auction.id)
+		expect(auctionState?.bids.has(bid.id)).toBe(true)
+		// The stash must be replayed for this bid, carrying the original
+		// first-observed time (not replay-time now()).
+		expect(auctionState?.pathReleases.get(bid.id)?.map((r) => r.id)).toEqual([release.id])
+		expect(auctionState?.pathReleaseObservedAt.get(release.id)).toBe(5_000)
+
+		await harness.subscriber.stop()
+	})
+
+	test('drops a stashed settlement whose auction never arrives within the TTL', async () => {
+		const harness = createHarness({ spamPolicy: { pendingTtlSec: 60 } })
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const bidderPubkey = getPublicKey(bidderSk)
+		const auction = buildAuctionEvent(sellerSk)
+		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-a' })
+		const settlement = buildSettlementEvent({
+			sellerSk,
+			sellerPubkey,
+			auctionRootEventId: auction.id,
+			bidEventId: bid.id,
+			bidderPubkey,
+		})
+
+		// The settlement lands first (auction unknown) → stashed at 5_000.
+		harness.dispatch(settlement)
+		await harness.settle()
+
+		// The auction only arrives after the buffer's TTL: the stale
+		// settlement must already have been released rather than replayed
+		// at an unbounded age, where it would overwrite the terminal-state
+		// view with arbitrarily old evidence.
+		harness.clock.value += 600
+		harness.dispatch(auction)
+		await harness.settle()
+		harness.dispatch(bid)
+		await harness.settle()
+
+		const auctionState = harness.state.auctions.get(auction.id)
+		expect(auctionState?.bids.has(bid.id)).toBe(true)
+		expect(auctionState?.settlements ?? []).toEqual([])
+		expect(auctionState?.settlement ?? null).toBeNull()
+
+		await harness.subscriber.stop()
+	})
+
+	test('refuses stashed releases and settlements once the distinct-key cap is reached', async () => {
+		const harness = createHarness({
+			spamPolicy: { maxPendingKeys: 1, maxPendingEventsPerKey: 8, maxPendingEvents: 8, pendingTtlSec: 7_200 },
+		})
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const bidderPubkey = getPublicKey(bidderSk)
+		const auctionA = buildAuctionEvent(sellerSk)
+		const auctionB = buildAuctionEvent(sellerSk, 'auction-test-b')
+		const bidA = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auctionA.id, bidNonce: 'nonce-a' })
+		const bidB = buildBidEvent({
+			bidderSk,
+			sellerPubkey,
+			auctionRootEventId: auctionB.id,
+			auctionDTag: 'auction-test-b',
+			bidNonce: 'nonce-b',
+		})
+		const releaseA = buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: bidA.id })
+		const releaseB = buildPathReleaseEvent({
+			bidderSk,
+			sellerPubkey,
+			bidEventId: bidB.id,
+			auctionDTag: 'auction-test-b',
+		})
+		const settlementA = buildSettlementEvent({
+			sellerSk,
+			sellerPubkey,
+			auctionRootEventId: auctionA.id,
+			bidEventId: bidA.id,
+			bidderPubkey,
+		})
+		const settlementB = buildSettlementEvent({
+			sellerSk,
+			sellerPubkey,
+			auctionRootEventId: auctionB.id,
+			bidEventId: bidB.id,
+			bidderPubkey,
+			auctionDTag: 'auction-test-b',
+		})
+
+		// Two releases for two unknown bids, then two settlements for two
+		// unknown auctions: only the first key of each buffer fits.
+		harness.dispatch(releaseA)
+		await harness.settle()
+		harness.dispatch(releaseB)
+		await harness.settle()
+		harness.dispatch(settlementA)
+		await harness.settle()
+		harness.dispatch(settlementB)
+		await harness.settle()
+
+		const joined = harness.warnings.join('\n')
+		expect(joined).toContain('dropping path release')
+		expect(joined).toContain('dropping settlement')
+		expect(joined).toContain('key_cap_reached')
+
+		// The first key is still replayed when its parent lands: the cap
+		// must not break the legitimate ordering-gap path.
+		harness.dispatch(auctionA)
+		await harness.settle()
+		harness.dispatch(bidA)
+		await harness.settle()
+		expect(
+			harness.state.auctions
+				.get(auctionA.id)
+				?.pathReleases.get(bidA.id)
+				?.map((r) => r.id),
+		).toEqual([releaseA.id])
+
+		await harness.subscriber.stop()
+	})
+
+	test('never replays a stashed release whose bid never arrives', async () => {
+		const harness = createHarness({ spamPolicy: { pendingTtlSec: 60 } })
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		// A release for a bid event id we never observe: there is nothing
+		// that can authorize it, so it must expire unread.
+		const orphanRelease = buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: 'f'.repeat(64) })
+
+		harness.dispatch(orphanRelease)
+		await harness.settle()
+		harness.clock.value += 600
+		harness.dispatch(auction)
+		await harness.settle()
+
+		expect(harness.state.auctions.get(auction.id)?.pathReleases.size).toBe(0)
 
 		await harness.subscriber.stop()
 	})
