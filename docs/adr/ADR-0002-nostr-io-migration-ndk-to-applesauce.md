@@ -336,6 +336,125 @@ keeps the latest-wins copy; `fetchNdkEvent` / `fetchLatestNdkEvent` select the
 single winner with the same `created_at DESC, id ASC` ordering. kind-0 `lud16`
 selection (zaps) routes through `fetchLatestNdkEvent` with the pinned relay set.
 
+## Wave 1 read topology — PROPOSED (not accepted)
+
+**Status of this section.** This is a **proposal for maintainer discussion**, not a
+recorded decision. Nothing here is accepted, and no implementation may rely on
+it. It is separated from the descriptive Wave 1 addendum above so the two can be
+reviewed on their own merits. If the proposal is accepted, the text moves into
+the addendum as a decided section; if it is rejected, this section is dropped
+and the descriptive addendum stands unchanged.
+
+### Proposal 1 — a bounded author-relay path for author-scoped reads
+
+**Decision (new: decided by the maintainer, not yet implemented).** Pinned reads
+are canonical, and the blocked-reach cases above are served by an **explicit,
+bounded, per-purpose author-relay path** rather than by the outbox model:
+
+- a single server-computed boolean in `/api/config` enables the path (ON in
+  production; OFF in staging, development, and CI), following the shape ADR-016
+  already uses for external zap-receipt relays;
+- bounded per read — a small fixed cap of author relays (3), a per-relay timeout,
+  and serial execution — so one read cannot fan out to an unbounded relay count;
+- bounded per session — the set of distinct author relays resolved in a session is
+  capped with a TTL and eviction, so N distinct authors cannot accumulate an
+  unbounded relay pool;
+- a cache hit serves the cached result and does not fire an author-relay fetch;
+  the fetch runs only on a miss, and its result enters the same query cache as the
+  pinned result;
+- the list it consults is the author's kind-10002 relay list, read through the
+  existing declaration reader (`fetchUserRelayListWithPreferences` /
+  `useUserRelayList`, `src/queries/relay-list.tsx`). NIP-65 lists are untrusted
+  input: deduplicated, scheme-filtered, and capped before any connection opens;
+- scope — display-only third-party reads (profiles, notifications), plus self-scoped
+  reads of the reader's **own** events. The kind-17375 wallet bootstrap at
+  `src/lib/stores/nip60.ts:159` is therefore in scope: the relays consulted are the
+  reader's own declared relays, not a third party's. _(Maintainer confirmation
+  requested on that inclusion.)_ It does NOT apply to authority reads — app config,
+  admin/editor/blacklist, and settlement stay pinned to the configured relay set;
+- results merge through the same latest-wins / coordinate-dedup rule as the
+  pinned path, so ordering semantics do not fork per relay class.
+
+**Disclosure consequence, stated plainly.** Pinned reads disclose the reader's
+interest only to the relays the operator named. The bounded path deliberately
+discloses more, inside the bound: to an author's declared relays, the reader's IP
+and a filter naming that author become visible — information the author's relay can
+correlate. The path exists because the alternative costs the operator a false
+"Author not found" and missed order notifications; the per-read cap, the session
+cap, the cache-hit rule, and the display-only scope exist to keep that disclosure
+finite and legible. This is a recorded tradeoff, not an implicit one.
+
+**Until that path is implemented the reads listed above are pinned-only and
+known degraded for authors who publish off the configured relay set.** This
+wording also replaces the earlier claim that terminating outbox routing is
+justified by leak-avoidance in production, which is not where that gating applies.
+
+### Proposal 2 — availability of the app-config canonical read
+
+`getAppRelaySet()` currently returns a relay set of exactly one relay (the main
+relay) so that stale copies held by third-party relays cannot race the canonical
+answer, and `fetchLatestAppEvent` reads through it. The question is whether that
+stays, or gains a bounded fallback.
+
+Two facts narrow it. First, every authority read already pins the publisher:
+admin (`kinds: [30000]`, `#d: ['admins']`), editor (`kinds: [30000]`,
+`#d: ['editors']`) and blacklist (`kinds: [10000]`) all pass
+`authors: [appPubkey]`, and `selectAuthoritativeAppSettingsEvent` additionally
+checks kind and `d` tag for the app-settings event. A relay therefore cannot
+forge these; it can only serve an **older** copy. Second, `fetchLatestAppEvent`
+already sorts by `created_at` descending and takes the newest.
+
+So the safety of these reads does not come from using one relay — it comes from
+the author pin plus latest-wins, both of which are already in the code. The
+remaining hazard is narrower than it first appears: two of **our own** relays
+disagreeing, or a newer list signed with a smaller `created_at`. The options:
+
+- **(a)** keep one relay and record single-relay availability as an accepted
+  tradeoff for app-owned config;
+- **(b)** read the operator relay set (two or more operator-controlled relays)
+  with the existing author pin and latest-wins, and add a monotonic `version`
+  tag to app-owned list events so ordering does not depend on clock accuracy.
+
+Option (b) is proposed: it gives redundancy without introducing third-party
+relays, and the version tag removes the last ordering ambiguity. Single-relay
+dependency would no longer be an unrecorded side effect of pinning.
+
+### Proposal 3 — data classification (which facts live where)
+
+The read-reach debate mixes three different kinds of data. They should be
+decided separately:
+
+1. **Client configuration** — `appRelay`, `stage`, `nip46Relay`, `appPublicKey`,
+   `cvmServerPubkey`, `externalZapRelaysEnabled`, `externalAuthorReadsEnabled`.
+   Served by the app server through `/api/config`; never resolved through relay
+   reads. No staleness question applies.
+2. **App-signed policy lists** — admin, editor, blacklist, and the app-settings
+   event. Relay-borne because they must be updatable without a deploy and are
+   verifiable by the app key, but single-writer: author-pinned, latest-wins,
+   versioned, read from operator relays.
+3. **User data** — profiles, wallet backups, relay lists, user settings. Read
+   from the author's own declared relays (NIP-65) plus ours, bounded as in
+   Proposal 1. Recovery when the data exists only off our relay is a discovery
+   problem, not a freshness one.
+
+**Authority for all three is the signing key, not a relay and not a service.**
+If a CVM-held index of "latest event id" is ever added, it can only be an
+**optional** index over signatures and version numbers: a required one would make
+every config read depend on a service being up, which is the failure mode
+pinning exists to avoid.
+
+**On negentropy:** `relay.plebeian.market` currently advertises NIP-11
+`supported_nips [1, 9, 11, 40, 42, 45, 70, 86]` — no NIP-77, so relay-side
+negentropy reconciliation is not available on our own relay today. It stays a
+future option, not a design element.
+
+### Proposal 4 — scope of this addendum
+
+Wave 1 changes read paths only. Publish-path relay selection (including
+`writeRelayUrls`) stays with Wave A4 / Wave C and is decided there. NIP-17 DM
+relay discovery (kind 10050) is a separate, deployed external-reach path and is
+not governed by this proposal.
+
 ## References
 
 - Upstream epic: `PlebeianApp/market#1005`
