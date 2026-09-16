@@ -6,6 +6,7 @@ import { bech32 } from '@scure/base'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
+import { resolveExternalAuthorReadsEnabled } from './lib/nostr/authorRelayPolicy'
 import { resolveCvmServerPubkey } from './lib/cvm-identity'
 import { renderProductPageHtml, resolveServerOrigins, serveProductPageWithOg, type ServerOriginsEnv } from './lib/ogTags'
 import { getProductOgMeta } from './server/ogMeta'
@@ -282,6 +283,17 @@ export const server = serve({
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,
 					externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+					// ADR-0002 Wave 1 addendum, F3: one decision for the bounded
+					// author-relay path (ON in production only, OFF for staging,
+					// development, LOCAL_RELAY_ONLY and CI). The browser consumes
+					// this single value — no client-side stage checks. Server-side
+					// readers that cannot read this response never consult author
+					// relays at all (authority reads stay pinned), so the policy
+					// holds on both arms without a second decision point.
+					externalAuthorReadsEnabled: resolveExternalAuthorReadsEnabled({
+						stage,
+						localRelayOnly: process.env.LOCAL_RELAY_ONLY === 'true',
+					}),
 				})
 			},
 		},

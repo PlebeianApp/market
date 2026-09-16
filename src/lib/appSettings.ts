@@ -42,6 +42,15 @@ export function selectAuthoritativeAppSettingsEvent(
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
 
+	// ADR-0002 Wave 1 addendum (F3) authority carve-out: app settings is an
+	// AUTHORITY read, so the bounded author-relay path never applies here — not
+	// even with `externalAuthorReadsEnabled` ON in production, and not even on a
+	// miss. This is also the server-side arm of the F3 policy: this function runs
+	// during server startup and cannot consume the `/api/config` response the
+	// server itself produces, so it applies the policy independently by staying
+	// pinned to `relayUrl`. Applying the policy requires the same answer on both
+	// arms; see `src/lib/nostr/authorRelayPolicy.ts`.
+	//
 	// Reject a malformed app pubkey before creating an NDK instance or issuing
 	// any relay request. NDK's strict filter validation would also fail closed,
 	// but validating here gives a clear, early failure and guarantees the

@@ -1,9 +1,10 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
+import { createAuthorRelayReadDeps, readAuthorScopedEvents } from '@/lib/nostr/authorRelayRead'
+import { NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import { fetchUserRelayListWithPreferences } from './relay-list'
 
 export type NostrAuthor = {
 	id: string
@@ -13,13 +14,32 @@ export type NostrAuthor = {
 	nip05?: string
 }
 
-const transformEvent = (event: NDKEvent): NostrAuthor => ({
-	id: event.pubkey,
-	name: event.tags.find((t) => t[0] === 'name')?.[1] || JSON.parse(event.content)?.name,
-	about: JSON.parse(event.content)?.about,
-	picture: JSON.parse(event.content)?.picture,
-	nip05: JSON.parse(event.content)?.nip05,
-})
+/**
+ * Parse kind-0 content defensively: relay-supplied metadata is untrusted and
+ * may be absent, empty, or not JSON at all.
+ */
+const parseProfileContent = (content: string | undefined): Record<string, unknown> => {
+	if (!content) return {}
+	try {
+		const parsed: unknown = JSON.parse(content)
+		return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+	} catch {
+		return {}
+	}
+}
+
+const transformEvent = (event: NDKEvent): NostrAuthor => {
+	const content = parseProfileContent(event.content)
+	const nameTag = event.tags.find((t) => t[0] === 'name')?.[1]
+
+	return {
+		id: event.pubkey,
+		name: nameTag || (typeof content.name === 'string' ? content.name : undefined),
+		about: typeof content.about === 'string' ? content.about : undefined,
+		picture: typeof content.picture === 'string' ? content.picture : undefined,
+		nip05: typeof content.nip05 === 'string' ? content.nip05 : undefined,
+	}
+}
 
 export const fetchAuthor = async (pubkey: string) => {
 	// Reject an invalid pubkey before constructing the filter — a malformed
@@ -34,7 +54,15 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents(filter)
+	// ADR-0002 F3: the pinned read is canonical. A profile that exists only on
+	// the author's own declared relay is resolved through the bounded
+	// author-relay path (display-only, capped, session-bounded) instead of the
+	// outbox model. When that path is off, this stays a pinned-only read.
+	const { events } = await readAuthorScopedEvents(
+		filter,
+		{ authorPubkey: pubkey, purpose: 'display' },
+		createAuthorRelayReadDeps({ ndk, fetchAuthorRelayList: fetchUserRelayListWithPreferences }),
+	)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {

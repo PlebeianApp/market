@@ -4,6 +4,8 @@ import { Store } from '@tanstack/store'
 import { CashuMint, CashuWallet, getEncodedToken, getDecodedToken, type Proof } from '@cashu/cashu-ts'
 import { ndkStore } from './ndk'
 import { loadUserData, saveUserData, getProofsForMint, getMintHostname, type PendingToken } from '@/lib/wallet'
+import { createAuthorRelayReadDeps, readAuthorScopedEvents } from '@/lib/nostr/authorRelayRead'
+import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -155,8 +157,20 @@ export const nip60Actions = {
 		}))
 
 		try {
-			// First, try to fetch the existing wallet event (kind 17375)
-			const walletEvent = await ndk.fetchEvent({ kinds: [17375], authors: [pubkey] })
+			// First, try to fetch the existing wallet event (kind 17375).
+			//
+			// ADR-0002 Wave 1 addendum (F3) places this read inside the bounded
+			// author-relay path as a SELF-SCOPED read: the relays consulted are
+			// the reader's own declared relays (their own kind-10002 list), never
+			// a third party's. The pinned read stays canonical; the bounded path
+			// only runs when the pinned read misses and the single /api/config
+			// decision is ON. Authority reads never take this path.
+			const walletRead = await readAuthorScopedEvents(
+				{ kinds: [17375], authors: [pubkey] },
+				{ authorPubkey: pubkey, purpose: 'self' },
+				createAuthorRelayReadDeps({ ndk, fetchAuthorRelayList: fetchUserRelayListWithPreferences }),
+			)
+			const walletEvent = Array.from(walletRead.events).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 			let wallet: NDKCashuWallet
 
