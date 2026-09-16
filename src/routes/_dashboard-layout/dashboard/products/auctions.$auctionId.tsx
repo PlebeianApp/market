@@ -19,6 +19,7 @@ import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { useNut7Polling } from '@/lib/auction/useNut7Polling'
 import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
@@ -288,20 +289,20 @@ function DashboardAuctionDetailRoute() {
 	const latestSettlement = useMemo<(typeof settlements)[0] | null>(() => {
 		if (!auction || settlements.length === 0) return null
 
-		// Parse the auction event (NDKEvent → raw event for NostrEventLike compat).
-		const parsedAuctionResult = parseAuctionEvent(auction.rawEvent())
+		// Parse the auction event (NostrEventLike → raw shape for the parse boundary).
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
 		if (!parsedAuctionResult.ok) return null
 		const parsedAuction = parsedAuctionResult.value
 
-		// Parse bids (NDKEvent → raw event → ParsedBidEvent).
+		// Parse bids (NostrEventLike → raw shape → ParsedBidEvent).
 		const parsedBids = bids
-			.map((b) => parseBidEvent(b.rawEvent()))
+			.map((b) => parseBidEvent(toRawEvent(b)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
 			.map((r) => r.value)
 
 		// Parse verdicts.
 		const parsedVerdicts = verdictsData
-			.map((v) => parseValidatorVerdictEvent(v.rawEvent()))
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 
@@ -311,7 +312,7 @@ function DashboardAuctionDetailRoute() {
 		// `settled` settlement is present (correct seller + auction refs).
 		const settledBidIds = new Set<string>()
 		for (const s of settlements) {
-			const parsedResult = parseSettlementEvent(s.rawEvent())
+			const parsedResult = parseSettlementEvent(toRawEvent(s))
 			if (!parsedResult.ok) continue
 			if (!isStructurallyValidSettledSettlement(parsedResult.value, parsedAuction)) continue
 			if (parsedResult.value.winningBidId) settledBidIds.add(parsedResult.value.winningBidId)
@@ -338,7 +339,7 @@ function DashboardAuctionDetailRoute() {
 			status: string
 		}> = []
 		for (const s of settlements) {
-			const parsedResult = parseSettlementEvent(s.rawEvent())
+			const parsedResult = parseSettlementEvent(toRawEvent(s))
 			if (!parsedResult.ok) continue
 			const parsed = parsedResult.value
 

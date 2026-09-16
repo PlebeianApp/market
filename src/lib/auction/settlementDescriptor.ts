@@ -77,6 +77,13 @@ export interface GetSettlementDescriptorInput {
 	 * keyed by bid event id. When absent, bids fall back to `bid_pending_review`.
 	 */
 	nut7States?: Map<string, Nut7ProofState>
+	/**
+	 * Resolved mint keysets for the winning bid, injected by the caller.
+	 * Unit tests pass deterministic keysets so no HTTP call is made to the
+	 * fixture mint URL. When absent, the descriptor fetches keysets from the
+	 * bid's mint (bounded by a 2s timeout — see `fetchMintKeysets`).
+	 */
+	mintKeysets?: MintKeyset[]
 }
 
 interface DerivedState {
@@ -548,7 +555,11 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 		settledBidIds,
 	})
 	const winnerBid = preValidated.canonicalWinner
-	const mintKeysets = winnerBid ? await fetchMintKeysets(winnerBid.mint) : undefined
+	// Resolve mint keysets deterministically: an injected value short-circuits
+	// the network fetch (unit tests use this so the fixture mint URL is never
+	// contacted). Production falls back to the real fetch, bounded by the
+	// 2s timeout inside `fetchMintKeysets`.
+	const mintKeysets = winnerBid ? (input.mintKeysets ?? (await fetchMintKeysets(winnerBid.mint))) : undefined
 	const d = deriveState(input, mintKeysets, preValidated)
 	const role = classifyRole(input, d)
 	const phase = classifyPhase(d)

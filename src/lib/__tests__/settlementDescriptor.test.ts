@@ -13,7 +13,7 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const BUYER_PUBKEY = 'b'.repeat(64)
@@ -209,6 +209,7 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		hasPlacedBid: false,
 		now: 120,
 		nut7States: undefined,
+		mintKeysets: mockMintKeysets(),
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -222,6 +223,9 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	if (base.nut7States === undefined) {
 		delete base.nut7States
 	}
+	// mintKeysets is ALWAYS injected (empty array) so the descriptor never makes
+	// an HTTP call to the inert fixture mint URL — matching ADR-0005's rule that
+	// test mint URLs are data, not services.
 	return base
 }
 
@@ -231,6 +235,17 @@ function unspentNut7States(bids: ParsedBidEvent[]): Map<string, Nut7ProofState> 
 
 function spentNut7States(bids: ParsedBidEvent[]): Map<string, Nut7ProofState> {
 	return new Map(bids.map((b) => [b.id, 'spent' as Nut7ProofState]))
+}
+
+/**
+ * Deterministic mint-keyset injection for the descriptor seam. Tests inject
+ * this instead of letting the descriptor fetch keysets from the (inert) fixture
+ * mint URL — no HTTP call is ever made. An empty array matches the descriptor's
+ * natural degradation path (see `fetchMintKeysets` catch) so existing test
+ * expectations are preserved.
+ */
+function mockMintKeysets(): MintKeyset[] {
+	return []
 }
 
 const winningBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 50000 })
