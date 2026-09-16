@@ -11,15 +11,20 @@
  *
  * Subscriptions:
  *   1. kind 30408 (auctions): one open REQ, filter on receipt.
- *   2. kind 1023 (bids): scoped to known auction root event ids via
- *      `#e`. We close + reopen this whenever a new auction lands so
- *      bids on the new auction stream in too.
- *   3. kind 1025 (path releases): same pattern as #2.
- *   4. kind 1024 (settlements): same pattern as #2.
+ *   2. kinds 1023/1025/1024 (bids, path releases, settlements): one
+ *      REQ per tracked auction, scoped by `#a` to that auction's
+ *      canonical coordinate (`30408:<seller>:<d>`). `#e` cannot serve
+ *      as the shared child filter here: bids + settlements tag the
+ *      auction root in `e`, but kind-1025 path releases tag the BID id
+ *      there. All three child kinds do share the auction coordinate in
+ *      `a`, so that is the narrow common live filter.
  *
- * Re-subscribing on every new auction is wasteful at scale but easy
- * and correct. A future optimisation is one persistent multi-filter
- * REQ; not worth doing now.
+ * Child REQs stay open until the auction is past the validator's own
+ * close-time skew window (`max_end_at + max_skew_sec`) AND the tracked
+ * bids are terminal AND no buffered children attributable to that
+ * auction remain. We enforce closure by calling the unsubscribe handle,
+ * not by `until`, so the validator never drops a still-replayable child
+ * solely because its local clock advanced.
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
@@ -81,8 +86,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
 	const logger = deps.logger ?? defaultLogger()
 
-	// Active unsubscribe handles, one per REQ we currently have open.
+	// Active unsubscribe handles: one global auction REQ and one child
+	// REQ per tracked auction coordinate.
 	const unsubscribes: Array<() => void> = []
+	const watchedAuctionUnsubscribes = new Map<string, () => void>()
 	// Bounded, TTL'd buffers for events that arrived before we knew
 	// about their parent. Each entry carries the validator's
 	// first-observed time so replay uses the original sighting, not
@@ -98,6 +105,75 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
 	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const activeBidClaimsNeedingChildWatch = new Set(['valid_bid_placed', 'bid_pending_review', 'won_pending_settlement', 'griefed_pending_fallback'])
+
+	type RelayFilter = { kinds?: number[]; since?: number; '#a'?: string[] }
+
+	const hasAttributablePendingChildren = (auctionRootEventId: string): boolean => {
+		if (pendingBids.keys(now()).includes(auctionRootEventId)) return true
+		if (pendingSettlements.has(auctionRootEventId)) return true
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return false
+		for (const bidEventId of Array.from(auctionState.bids.keys())) {
+			if (pendingReleases.has(bidEventId)) return true
+		}
+		return false
+	}
+
+	const auctionNeedsChildWatch = (auctionRootEventId: string): boolean => {
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return false
+		if (hasAttributablePendingChildren(auctionRootEventId)) return true
+		const childWindowClosesAt = auctionState.auction.maxEndAt + auctionState.auction.maxSkewSec
+		if (now() <= childWindowClosesAt) return true
+		for (const bidState of Array.from(auctionState.bids.values())) {
+			if (bidState.currentClaim === null) return true
+			if (activeBidClaimsNeedingChildWatch.has(bidState.currentClaim)) return true
+		}
+		return false
+	}
+
+	const stopWatchingAuction = (auctionRootEventId: string): void => {
+		const unsubscribe = watchedAuctionUnsubscribes.get(auctionRootEventId)
+		if (!unsubscribe) return
+		watchedAuctionUnsubscribes.delete(auctionRootEventId)
+		try {
+			unsubscribe()
+		} catch {
+			// Ignore — pool might already be torn down.
+		}
+	}
+
+	const maybeRetireAuctionWatch = (auctionRootEventId: string): void => {
+		if (auctionNeedsChildWatch(auctionRootEventId)) return
+		stopWatchingAuction(auctionRootEventId)
+		logger.info(`[validator] closed child subscriptions for auction ${auctionRootEventId.slice(0, 8)}`)
+	}
+
+	const startWatchingAuction = async (auctionRootEventId: string): Promise<void> => {
+		if (watchedAuctionUnsubscribes.has(auctionRootEventId)) return
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return
+		const filters: RelayFilter[] = [
+			{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], '#a': [auctionState.auction.coordinate] },
+		]
+		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
+			switch (event.kind) {
+				case AUCTION_BID_KIND:
+					void onBidEvent(event)
+					return
+				case AUCTION_PATH_RELEASE_KIND:
+					void onPathReleaseEvent(event)
+					return
+				case AUCTION_SETTLEMENT_KIND:
+					void onSettlementEvent(event)
+					return
+				default:
+					return
+			}
+		})
+		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)
+	}
 
 	// =========================================================================
 	// Event handlers
@@ -182,11 +258,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const shouldDrain = result.status === 'inserted'
 		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
+			await startWatchingAuction(auction.rootEventId)
 		}
 		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
 		}
+		maybeRetireAuctionWatch(auction.rootEventId)
 	}
 
 	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -267,6 +345,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		} catch (err) {
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
 		}
+		maybeRetireAuctionWatch(bid.auctionRootEventId)
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -335,6 +414,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 				err instanceof Error ? err.message : err,
 			)
 		}
+		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -388,6 +468,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// late-arriving NUT-7 transitions land in the right verdict
 		// (e.g. winner that flipped to spent right as kind-1024 arrived).
 		await republishAuction(auctionState.auction.rootEventId)
+		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 	}
 
 	// =========================================================================
@@ -437,42 +518,25 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const start = async (): Promise<void> => {
+		const since = now() - 60 * 60 * 24 * 30
 		const auctionUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [auctionKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
+			[{ kinds: [auctionKindAsNumber()], since }],
 			(event) => {
 				void onAuctionEvent(event)
 			},
 		)
 		unsubscribes.push(auctionUnsub)
-
-		const bidUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [bidKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onBidEvent(event)
-			},
-		)
-		unsubscribes.push(bidUnsub)
-
-		const releaseUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [pathReleaseKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onPathReleaseEvent(event)
-			},
-		)
-		unsubscribes.push(releaseUnsub)
-
-		const settlementUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [settlementKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onSettlementEvent(event)
-			},
-		)
-		unsubscribes.push(settlementUnsub)
+		for (const auctionState of Array.from(deps.state.auctions.values())) {
+			await startWatchingAuction(auctionState.auction.rootEventId)
+		}
 
 		logger.info('[validator] subscriptions established')
 	}
 
 	const stop = async (): Promise<void> => {
+		for (const auctionRootEventId of Array.from(watchedAuctionUnsubscribes.keys())) {
+			stopWatchingAuction(auctionRootEventId)
+		}
 		while (unsubscribes.length > 0) {
 			const off = unsubscribes.pop()
 			try {
@@ -486,6 +550,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const republishAll = async (): Promise<void> => {
 		for (const auctionState of Array.from(deps.state.auctions.values())) {
 			await republishAuction(auctionState.auction.rootEventId)
+			maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 		}
 	}
 
