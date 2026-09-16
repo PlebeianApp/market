@@ -11,6 +11,10 @@
  *  - per session: a cap on distinct author relays with TTL + eviction;
  *  - on a cache hit the cached result is served and NO author-relay fetch fires;
  *  - results merge through the seam's latest-wins / coordinate-dedup rule;
+ *  - the declaration read is itself deadline-bounded, so a run whose declaration
+ *    read never settles cannot be inherited by later callers for that key;
+ *  - the session TTL pass sweeps cached results, so an entry whose key is never
+ *    read again does not stay resident holding its events;
  *  - authority reads NEVER consult author relays, flag ON or not.
  *
  * Every event here is a real `finalizeEvent`-signed event; the seam port is a
@@ -23,7 +27,7 @@ import { finalizeEvent } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools/pure'
 
 import type { FetchOptions, NostrFilter } from '@/lib/nostr/io'
-import { fetchNdkEventSet } from '@/lib/nostr/ndk-events'
+import { fetchNdkEventSet, type NDKEvent } from '@/lib/nostr/ndk-events'
 import {
 	AUTHOR_RELAY_TIMEOUT_MS,
 	AuthorRelaySession,
@@ -632,5 +636,154 @@ describe('bounded author-relay resolver — single-flight on a cold miss', () =>
 		expect(first.source).toBe('no-declared-relays')
 		expect(second.source).toBe('no-declared-relays')
 		expect(calls).toHaveLength(0)
+	})
+})
+
+/** A declaration reader that never settles, counting how many times it was called. */
+function hangingDeclarationReader() {
+	let reads = 0
+	return {
+		reads: () => reads,
+		read: () => {
+			reads += 1
+			return new Promise<never>(() => {})
+		},
+	}
+}
+
+/**
+ * Fail the assertion instead of stalling the suite when a read never settles.
+ * The guard is a multiple of the configured per-relay deadline: a slow but
+ * genuinely bounded read still passes, a hung one fails here with a named
+ * message.
+ */
+async function settlesWithin<T>(promise: Promise<T>, guardMs: number, label: string): Promise<T> {
+	const timedOut = Symbol('timed-out')
+	const outcome = await Promise.race([promise, new Promise<typeof timedOut>((resolve) => setTimeout(() => resolve(timedOut), guardMs))])
+	if (outcome === timedOut) throw new Error(`${label} did not settle within ${guardMs}ms`)
+	return outcome as T
+}
+
+const DEADLINE_GUARD_MS = 200
+
+describe('bounded author-relay resolver — a stuck read cannot be inherited (single-flight deadline)', () => {
+	test('a later caller for the same key settles within the deadline when the declaration read never settles', async () => {
+		const hanging = hangingDeclarationReader()
+		const { deps, calls } = makeDeps({ relayList: ['wss://r1.example'], fetchAuthorRelayList: hanging.read })
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+
+		const first = resolveAuthorRelayRead(request, deps)
+		const second = resolveAuthorRelayRead(request, deps)
+
+		// The declaration read hangs, so the shared run must still settle at its
+		// deadline. Without a deadline on the declaration read the run never
+		// settles, `clearInFlight` never runs, and the stuck entry is inherited by
+		// every later caller for this cache key — a permanent hang for the key,
+		// not a slow read.
+		const [firstOutcome, secondOutcome] = await settlesWithin(
+			Promise.all([first, second]),
+			DEADLINE_GUARD_MS,
+			'two callers whose declaration read never settles',
+		)
+
+		expect(firstOutcome.source).toBe('no-declared-relays')
+		expect(secondOutcome.source).toBe('no-declared-relays')
+		expect(firstOutcome.events.size).toBe(0)
+		expect(secondOutcome.events.size).toBe(0)
+		// Fail closed: a stuck declaration read costs no egress at all.
+		expect(calls).toHaveLength(0)
+		// Single-flight still holds across the deadline — one shared run, so one
+		// declaration read, not one per caller.
+		expect(hanging.reads()).toBe(1)
+	})
+
+	test('a stuck entry does not block a third caller for the same key', async () => {
+		const hanging = hangingDeclarationReader()
+		const { deps, calls } = makeDeps({ relayList: ['wss://r1.example'], fetchAuthorRelayList: hanging.read })
+		const request = { purpose: 'display' as const, authorPubkey: AUTHOR_PUBKEY, filter: PROFILE_FILTER }
+
+		await settlesWithin(
+			Promise.all([1, 2].map(() => resolveAuthorRelayRead(request, deps))),
+			DEADLINE_GUARD_MS,
+			'two joined callers whose declaration read never settles',
+		)
+		expect(hanging.reads()).toBe(1)
+
+		// The settled-and-cleared run must not be left resident: this caller starts
+		// its own bounded run for the key, and that run has to settle too.
+		const third = await settlesWithin(resolveAuthorRelayRead(request, deps), DEADLINE_GUARD_MS, 'a third caller for the same key')
+
+		expect(third.source).toBe('no-declared-relays')
+		expect(third.events.size).toBe(0)
+		expect(hanging.reads()).toBe(2)
+		expect(calls).toHaveLength(0)
+	})
+})
+
+/**
+ * Cache residence past the TTL is not observable through the public surface —
+ * `getCached` reclaims only the key it is asked about — so the sweep is pinned
+ * from the inside, where the entries actually live.
+ */
+function residentCacheKeys(session: AuthorRelaySession): string[] {
+	return Array.from((session as unknown as { cache: Map<string, unknown> }).cache.keys())
+}
+
+/** Rehydrate signed events into the NDKEvent shape the session caches. */
+async function ndkEvents(events: NostrEvent[]): Promise<NDKEvent[]> {
+	const io = { fetchEvents: async () => events } as unknown as Pick<AuthorRelayReadDeps['io'], 'fetchEvents'>
+	const rehydrated = Array.from(await fetchNdkEventSet(io, stubNdk, PROFILE_FILTER))
+	if (rehydrated.length !== events.length) throw new Error('fixture events did not rehydrate')
+	return rehydrated
+}
+
+describe('bounded author-relay resolver — session cache TTL sweep', () => {
+	test('a TTL pass drops an expired cached result whose key is never read again', async () => {
+		let now = 1_000_000
+		const session = new AuthorRelaySession({ maxDistinctRelays: 12, ttlMs: 10_000, now: () => now })
+		const [cached] = await ndkEvents([signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))])
+
+		session.setCached('display:c1:filter', [cached], now)
+		expect(residentCacheKeys(session)).toEqual(['display:c1:filter'])
+
+		now += 20_000
+		// Unrelated activity runs the TTL pass. An entry whose key is never read
+		// again must not stay resident holding its NDKEvent arrays: lazy eviction
+		// on access does not reclaim it, because that access never comes.
+		session.distinctRelayCount()
+
+		expect(residentCacheKeys(session)).toEqual([])
+	})
+
+	test('a read for a different key sweeps an abandoned cached result on its TTL pass', async () => {
+		let now = 1_000_000
+		const session = new AuthorRelaySession({ maxDistinctRelays: 12, ttlMs: 10_000, now: () => now })
+		const profile = signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))
+		const abandoned = { purpose: 'display' as const, authorPubkey: 'c1'.repeat(32), filter: PROFILE_FILTER }
+
+		const warm = makeDeps({ relayList: ['wss://r1.example'], handler: async () => [profile], now: () => now, session })
+		await resolveAuthorRelayRead(abandoned, warm.deps)
+		const resident = residentCacheKeys(session)
+		expect(resident).toHaveLength(1)
+		expect(resident[0]).toContain(abandoned.authorPubkey)
+
+		now += 20_000
+		const other = makeDeps({ relayList: [], now: () => now, session })
+		await resolveAuthorRelayRead({ purpose: 'display', authorPubkey: 'c2'.repeat(32), filter: PROFILE_FILTER }, other.deps)
+
+		expect(residentCacheKeys(session)).toEqual([])
+	})
+
+	test('the TTL sweep leaves a still-warm cached result alone', async () => {
+		let now = 1_000_000
+		const session = new AuthorRelaySession({ maxDistinctRelays: 12, ttlMs: 10_000, now: () => now })
+		const [cached] = await ndkEvents([signedEvent(0, 1_700_000_000, JSON.stringify({ name: 'Alice' }))])
+
+		session.setCached('display:c1:filter', [cached], now)
+		now += 5_000
+		session.admit(['wss://r1.example'], now)
+
+		expect(residentCacheKeys(session)).toEqual(['display:c1:filter'])
+		expect(session.getCached('display:c1:filter', now)).toEqual([cached])
 	})
 })

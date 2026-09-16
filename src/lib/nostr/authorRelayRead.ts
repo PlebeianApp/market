@@ -9,14 +9,18 @@
  *   deduplicated, scheme-filtered (plain `ws`/`wss` only — no `.onion`, no
  *   non-WebSocket scheme, no embedded credentials), restricted to read-capable
  *   entries, and hard-capped at {@link MAX_AUTHOR_RELAYS_PER_READ} relays.
- * - **per relay**: a timeout ({@link AUTHOR_RELAY_TIMEOUT_MS} by default).
+ * - **per relay**: a timeout ({@link AUTHOR_RELAY_TIMEOUT_MS} by default). The
+ *   kind-10002 declaration read is bounded by the same deadline, so a
+ *   declaration read that never settles cannot keep a run alive indefinitely.
  * - **serial**: relays are contacted one at a time, never in parallel, so a
  *   read cannot fan out and cannot keep more than one author-relay connection
  *   open at a time.
  * - **per session**: a cap on the number of distinct author relays admitted
  *   during a session, with TTL + eviction
  *   ({@link MAX_DISTINCT_AUTHOR_RELAYS_PER_SESSION}), so N distinct authors
- *   cannot accumulate an unbounded relay pool.
+ *   cannot accumulate an unbounded relay pool. Cached read results expire on the
+ *   same TTL pass, so an entry whose key is never read again is reclaimed rather
+ *   than staying resident holding its events.
  * - **cache-hit rule**: a warm cache serves the result and fires no fetch; the
  *   fetch runs only on a miss, and the merged result is what the caller caches
  *   under its own query key, so author-relay results land in the same cache
@@ -27,7 +31,9 @@
  *   for the whole TTL.
  * - **single-flight**: concurrent cold-miss callers for the same logical read
  *   await one shared in-flight run, so N concurrent callers cost the relay
- *   budget of ONE read, not N serial fan-outs.
+ *   budget of ONE read, not N serial fan-outs. Every step of that run — the
+ *   declaration read included — is deadline-bounded, so a stuck run cannot be
+ *   inherited by later callers for the key: it settles and clears.
  * - **merge**: per-relay results collapse through the seam's coordinate-level
  *   latest-wins rule (`mergeNdkEventSets`), so ordering semantics do not fork
  *   per relay class.
@@ -161,12 +167,11 @@ export class AuthorRelaySession {
 	}
 
 	getCached(cacheKey: string, at: number = this.now()): NDKEvent[] | undefined {
+		// Every read runs the TTL pass, so a cached result abandoned by a key that
+		// is never read again is reclaimed here instead of staying resident.
+		this.evictExpired(at)
 		const entry = this.cache.get(cacheKey)
 		if (!entry) return undefined
-		if (at - entry.at >= this.ttlMs) {
-			this.cache.delete(cacheKey)
-			return undefined
-		}
 		// Defensive: an empty entry is not a served result. Nothing writes one
 		// (see setCached), but a stale entry from an older session shape must not
 		// be able to satisfy a read either.
@@ -221,9 +226,23 @@ export class AuthorRelaySession {
 		this.inFlight.clear()
 	}
 
+	/**
+	 * The session TTL pass: drop every expired admission AND every expired cached
+	 * result. Run by every pass trigger — a read (`getCached`), an admission, a
+	 * cache write, and `distinctRelayCount` — so residence cannot outlive the TTL
+	 * by more than one pass.
+	 *
+	 * Sweeping the cache here is what keeps an entry bounded when its key is never
+	 * read again: `getCached` reclaims only the key it is asked about, so an
+	 * abandoned entry would otherwise stay resident past its TTL holding its
+	 * `NDKEvent` arrays for the rest of the page session.
+	 */
 	private evictExpired(at: number): void {
 		for (const [relayUrl, admittedAt] of Array.from(this.admissions.entries())) {
 			if (at - admittedAt >= this.ttlMs) this.admissions.delete(relayUrl)
+		}
+		for (const [cacheKey, entry] of Array.from(this.cache.entries())) {
+			if (at - entry.at >= this.ttlMs) this.cache.delete(cacheKey)
 		}
 	}
 }
@@ -410,7 +429,15 @@ async function runBoundedRead(
 
 	let preferences: AuthorRelayPreference[] = []
 	try {
-		preferences = (await deps.fetchAuthorRelayList(request.authorPubkey)) ?? []
+		// The declaration read is bounded by the same deadline as the relay fetches.
+		// The run's in-flight entry is cleared only when the run settles
+		// (`resolveAuthorRelayRead`), so a declaration read that never settles would
+		// keep the run alive forever and that stuck entry would be inherited by
+		// EVERY later caller for this cache key — a permanent hang for the key, not
+		// a slow read. Bounding it here makes the run's worst case finite:
+		// one declaration read plus `admitted.length` relay fetches, each capped at
+		// the per-relay deadline.
+		preferences = (await withDeadline(deps.fetchAuthorRelayList(request.authorPubkey), perRelayTimeoutMs)) ?? []
 	} catch {
 		// A relay list we cannot read degrades to the pinned result.
 		preferences = []
