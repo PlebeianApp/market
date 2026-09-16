@@ -255,24 +255,74 @@ Negative / tradeoffs:
   can carry relay-targeting options; Wave A4 and Wave C define the publish
   rollout boundaries.
 
-## Wave 1 addendum (PR #1262) — explicit behavior deltas
+## Wave 1 addendum (PR #1283) — explicit behavior deltas
+
+**Status of this section.** It _clarifies_ the accepted ADR-0002 decision for F4,
+F5, and the latest-wins rule — those record behavior `master` already has — and it
+_proposes a narrower new decision_ for F3: the read topology for wave-1 reads, and
+the bounded author-relay path that replaces outbox discovery in production. The
+`## Status` field of this ADR remains `Accepted`; F3's new decision is recorded
+here and carries the maintainer ruling named at the end of the F3 section.
 
 Wave 1 flips the read-path query modules from direct @nostr-dev-kit usage to
 the applesauceIo seam. As a result the following read-topology and validation
 behaviors are now explicit and MUST be treated as canonical until a later wave
 changes them:
 
-### F3 — outbox-model routing is intentionally terminated for migrated reads
+### F3 — pinned reads replace outbox discovery; a bounded author-relay path covers the gap
 
-Production NDK is constructed with `enableOutboxModel: true`, so legacy
-`ndk.fetchEvents` calls on author-scoped filters could route to an author's
-NIP-65 write relays discovered via the outbox model. Every wave-1 read pins to
-the configured relay set (`ndkStore.state.explicitRelayUrls`, with zap reads
-pinning to `ZAP_RELAYS` union `explicitRelayUrls`). Outbox discovery is
-therefore NOT applied to migrated reads. This is aligned with ADR-0002's
-leak-avoidance motivation, but it is a real read-topology change:
-relay-result completeness for third-party reads (user relay lists, message
-`#p` reads, author lookups) can differ from the old outbox-routed behavior.
+Production NDK is constructed with `enableOutboxModel: true`
+(`src/lib/stores/ndk.ts:301`, `:317`), so legacy `ndk.fetchEvents` calls on
+author-scoped filters could route to an author's NIP-65 write relays discovered
+via the outbox model. Every wave-1 read pins to the configured relay set
+(`ndkStore.state.explicitRelayUrls`, with zap reads pinning to `ZAP_RELAYS` union
+`explicitRelayUrls`). Outbox discovery is therefore NOT applied to migrated
+reads.
+
+**The motive is tool-shape plus disclosure control, not leak-avoidance.** The
+outbox-disclosure gating ADR-0002's Context names is already implemented for
+`staging`, `development`, and `LOCAL_RELAY_ONLY` (`ndk.ts:301`), so production is
+the only stage where the outbox model is active — and the only stage this wave
+changes. The applesauce relay pool requires an explicit relay list, and an
+explicit list is also the posture we can state plainly: the client reaches the
+relays the operator named, plus author relays only through the bounded path
+below.
+
+This is a real read-topology change, and the affected reads are user-visible:
+
+- `src/queries/authors.tsx:37` — kind-0 profiles; an author publishing only to
+  their own relays surfaces a false "Author not found".
+- `src/hooks/useNotificationMonitor.ts:59`, `:74`, `:95` — order and `#p` reads;
+  a counterparty publishing off the configured set yields missed order and
+  payment-status notifications.
+- `src/lib/stores/nip60.ts:159` — kind 17375 wallet bootstrap; a wallet event
+  living only on the user's own relays initializes fresh instead of restoring.
+- `src/lib/appSettings.ts:107` — app settings read as absent.
+
+**Decision (new, proposed).** Pinned reads are canonical, and the blocked-reach
+cases above are served by an **explicit, bounded, per-purpose author-relay path**
+rather than by the outbox model:
+
+- a single server-computed boolean in `/api/config` enables the path (ON in
+  production; OFF in staging, development, and CI), following the shape ADR-016
+  already uses for external zap-receipt relays;
+- the path is bounded — a small fixed cap of author relays per read (3), a
+  per-relay timeout, and serial execution on cache miss — so one read cannot fan
+  out to an unbounded relay count;
+- NIP-65 relay lists are untrusted input: deduplicated, scheme-filtered, and
+  capped before any connection is opened;
+- it applies to display-only reads (profiles, notifications). It never applies to
+  authority reads — app config, admin/editor/blacklist, wallet, and settlement
+  stay pinned to the configured relay set;
+- results merge through the same latest-wins / coordinate-dedup rule as the
+  pinned path, so ordering semantics do not fork per relay class.
+
+**Until that path is implemented the reads listed above are pinned-only and
+known degraded for authors who publish off the configured relay set.** The
+maintainer ruling is therefore the choice between accepting that degradation as
+the end state, or implementing the bounded path. Either way this wording replaces
+the earlier claim that terminating outbox routing is justified by leak-avoidance
+in production, which is not where that gating applies.
 
 ### F4 — invalid-signature events are dropped at the seam
 
@@ -281,19 +331,33 @@ those failing. NDK's default subscription path did not verify signatures by
 default, so bad-signature events that previously flowed into query data are
 now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
 validated"). The failure is silent (a relay serving malformed data now reads
-as absence); later waves should add a debug-level drop counter for
-observability.
+as absence). A debug-level drop counter does not exist today; it is a separate
+follow-up, not a behavior this addendum asserts.
 
-### F5 — live-subscribe is disabled until the main relay is known
+### F5 — live-subscribe stays pinned to the main relay once it is known
 
-`useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` return
-without subscribing when `getMainRelay()` is undefined. Previously
-`getAppRelaySet()` returned undefined in that state and `ndk.subscribe` ran
-pool-wide. In the not-yet-configured window (staging, first paint before config
-load) live invalidation is now off where it previously worked on all pool
-relays. Fetch parity is preserved (both old and new fetch paths return null in
-that window); only live invalidation regresses for the edge case, as a
-conscious pinned-relay discipline.
+`useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` subscribe only
+when `getMainRelay()` is defined, and pin that subscription to the main relay.
+This preserves the pinning discipline `master` already has; the
+`getAppRelaySet()` pool-wide fallback it replaces belongs to the `auctions` line
+that wave 1 is migrating.
+
+The invariant this wave must keep: **the main-relay value is an effect dependency
+of the subscription.** A hook that mounts before config resolves must subscribe as
+soon as the relay becomes known; dropping the value from the dependency array
+leaves the subscription silently absent for the rest of the session. Fetch parity
+is unchanged — both the old and the new fetch paths return null while the relay is
+unknown.
+
+### Out of scope for this addendum
+
+- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
+  This addendum covers reads only.
+- NIP-17 DM relay discovery (kind 10050) is a separate, already deployed
+  external-reach path; it is not governed by F3.
+- Until every read path migrates, the app runs a mixed topology — migrated reads
+  pinned, un-migrated reads still outbox-routed. F3 describes the end state, not
+  the current state.
 
 ### Deterministic latest-wins for replaceable event reads
 
