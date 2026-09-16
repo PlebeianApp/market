@@ -4,7 +4,7 @@ import { authStore } from '@/lib/stores/auth'
 import { auctionWonActions } from '@/lib/stores/auctionWon'
 import {
 	getValidatedAuctionBids,
-	hasFinalSettlementForAuctionWin,
+	hasSellerSettlementForAuctionWin,
 	hasValidatedPathReleaseForAuctionWin,
 } from '@/lib/auction/winNotification'
 import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
@@ -103,7 +103,9 @@ export function useAuctionWinMonitor() {
 						fetchAuctionPathReleases(rootEventId, PATH_RELEASE_LIMIT, parsedAuction.coordinate, undefined, true),
 						fetchAuctionSettlements(rootEventId, AUCTION_EVENT_LIMIT, parsedAuction.coordinate, undefined, true),
 					])
-					if (hasFinalSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
+					// Any seller settlement for this auction (not only `status: settled`) is terminal
+					// for the win flow: the publish layer refuses to release a path after any of them.
+					if (hasSellerSettlementForAuctionWin({ auctionRootEventId: rootEventId }, auction, parsedAuction.coordinate, settlementEvents)) {
 						terminalRootEventIds.current.add(rootEventId)
 						announcedBidIdsByRoot.current.delete(rootEventId)
 						auctionWonActions.removeForAuction(rootEventId)
