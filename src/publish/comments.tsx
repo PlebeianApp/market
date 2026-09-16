@@ -1,3 +1,4 @@
+import { getEventAddress } from '@/lib/nostr/eventLike'
 import { type Comment } from '@/queries/comments'
 import { ndkActions } from '@/lib/stores/ndk'
 import { commentKeys } from '@/queries/queryKeyFactory'
@@ -44,7 +45,7 @@ export const publishComment = async ({ content, targetEvent, parentComment }: Pu
 	// === ROOT SCOPE (Uppercase) ===
 	if (isAddressableKind(targetEvent.kind)) {
 		// Addressable Event (e.g., NIP-99 Product 30402)
-		const targetAddress = targetEvent.tagAddress()
+		const targetAddress = getEventAddress(targetEvent)
 
 		tags.push(['A', targetAddress])
 	} else {
@@ -73,7 +74,7 @@ export const publishComment = async ({ content, targetEvent, parentComment }: Pu
 		// Top-level comment on the target
 		if (isAddressableKind(targetEvent.kind)) {
 			// Addressable Target
-			const targetAddress = targetEvent.tagAddress()
+			const targetAddress = getEventAddress(targetEvent)
 
 			tags.push(['a', targetAddress])
 		} else {
@@ -111,7 +112,7 @@ export const usePublishCommentMutation = () => {
 		mutationFn: publishComment,
 		onSuccess: async (event, variables) => {
 			const targetCoordinates = isAddressableKind(variables.targetEvent.kind)
-				? variables.targetEvent.tagAddress()
+				? getEventAddress(variables.targetEvent)
 				: variables.targetEvent.id
 
 			await queryClient.invalidateQueries({

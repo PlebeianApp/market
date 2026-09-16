@@ -11,6 +11,42 @@ const POLL_INTERVAL_MS = 60_000
  */
 export type CheckProofStateFn = (mintUrl: string, proofYs: string[]) => Promise<Map<string, Nut7ProofState>>
 
+export async function fetchBidNut7States(
+	bids: ParsedBidEvent[],
+	trustedMints: string[],
+	checkFn: CheckProofStateFn = checkProofStateBatch,
+): Promise<Map<string, Nut7ProofState>> {
+	const allowedMints = new Set(trustedMints.map((mint) => normalizeMintUrl(mint)))
+	const byMint = new Map<string, { bidId: string; proofYs: string[] }[]>()
+
+	for (const bid of bids) {
+		if (!bid.proofYs.length || !allowedMints.has(normalizeMintUrl(bid.mint))) continue
+		const existing = byMint.get(bid.mint) ?? []
+		existing.push({ bidId: bid.id, proofYs: bid.proofYs })
+		byMint.set(bid.mint, existing)
+	}
+
+	const states = new Map<string, Nut7ProofState>()
+	await Promise.all(
+		Array.from(byMint.entries()).map(async ([mintUrl, bidEntries]) => {
+			try {
+				const proofStates = await checkFn(
+					mintUrl,
+					bidEntries.flatMap((entry) => entry.proofYs),
+				)
+				for (const { bidId, proofYs } of bidEntries) {
+					const aggregate = aggregateBidNut7State(proofStates, proofYs)
+					if (aggregate) states.set(bidId, aggregate)
+				}
+			} catch {
+				for (const { bidId } of bidEntries) states.set(bidId, 'unknown')
+			}
+		}),
+	)
+
+	return states
+}
+
 /**
  * React hook that polls NUT-7 proof states for all bids every ~60 seconds.
  * Returns a Map<bidId, Nut7ProofState> with worst-case aggregate per bid.
@@ -47,44 +83,7 @@ export function useNut7Polling(
 		const poll = async () => {
 			const currentBids = bidsRef.current
 			if (!currentBids.length) return
-
-			const allowedMints = new Set(trustedMintsRef.current.map((m) => normalizeMintUrl(m)))
-			if (allowedMints.size === 0) return
-
-			// Group proofYs by mint URL, allowlisted mints only.
-			const byMint = new Map<string, { bidId: string; proofYs: string[] }[]>()
-			for (const bid of currentBids) {
-				if (!bid.proofYs.length) continue
-				if (!allowedMints.has(normalizeMintUrl(bid.mint))) continue
-				const existing = byMint.get(bid.mint) ?? []
-				existing.push({ bidId: bid.id, proofYs: bid.proofYs })
-				byMint.set(bid.mint, existing)
-			}
-
-			const newStates = new Map<string, Nut7ProofState>()
-
-			await Promise.all(
-				Array.from(byMint.entries()).map(async ([mintUrl, bidEntries]) => {
-					try {
-						const allYs = bidEntries.flatMap((e) => e.proofYs)
-						const proofStates = await checkRef.current(mintUrl, allYs)
-
-						for (const { bidId, proofYs } of bidEntries) {
-							const aggregate = aggregateBidNut7State(proofStates, proofYs)
-							if (aggregate) newStates.set(bidId, aggregate)
-						}
-					} catch {
-						// Mint unreachable/erroring this cycle: previously observed
-						// states for these bids are STALE, not current. Downgrade to
-						// 'unknown' rather than keeping a pre-outage 'unspent' as
-						// fake-current evidence (freshness is part of the payment-state
-						// boundary — NUT-7 can flip spent before a path release).
-						for (const { bidId } of bidEntries) {
-							newStates.set(bidId, 'unknown')
-						}
-					}
-				}),
-			)
+			const newStates = await fetchBidNut7States(currentBids, trustedMintsRef.current, checkRef.current)
 
 			// Always replace the map: bids whose mints failed are 'unknown'
 			// (not silently retained), and bids that vanished from the input

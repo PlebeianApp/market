@@ -1,3 +1,4 @@
+import { getEventAddress } from '@/lib/nostr/eventLike'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -32,7 +33,7 @@ export interface CommentThread extends Comment {
 const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent): Comment => {
 	const parentKind = event.tags.find((t) => t[0] === 'k')?.at(1)
 	const parentId = parentKind === COMMENT_KIND.toString() ? event.tags.find((t) => t[0] === 'e')?.at(1) : undefined
-	const coordinates = isAddressableKind(eventTarget.kind) ? eventTarget.tagAddress() : undefined
+	const coordinates = isAddressableKind(eventTarget.kind) ? getEventAddress(eventTarget) : undefined
 
 	return {
 		id: event.id,
@@ -49,7 +50,7 @@ const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent): Comment 
 }
 
 const commentTargetsEvent = (commentEvent: NDKEvent, eventTarget: NDKEvent): boolean => {
-	const targetAddress = isAddressableKind(eventTarget.kind) ? eventTarget.tagAddress() : undefined
+	const targetAddress = isAddressableKind(eventTarget.kind) ? getEventAddress(eventTarget) : undefined
 
 	return commentEvent.tags.some((tag) => {
 		if (tag[0] === 'E') return tag[1] === eventTarget.id
@@ -92,7 +93,7 @@ export const fetchProductComments = async (event: NDKEvent): Promise<Comment[]> 
 	// Build the filter based on whether the target is addressable or regular
 	if (isAddressableKind(event.kind)) {
 		// Addressable Event
-		const address = event.tagAddress()
+		const address = getEventAddress(event)
 
 		filters.push({
 			kinds: [COMMENT_KIND],
@@ -180,7 +181,7 @@ export const transformCommentsMapIntoThreads = (comments: Comment[]): CommentThr
  * Hook to fetch comments for a product
  */
 export const useComments = (event: NDKEvent) => {
-	const targetCoordinates = isAddressableKind(event.kind) ? event.tagAddress() : event.id
+	const targetCoordinates = isAddressableKind(event.kind) ? getEventAddress(event) : event.id
 
 	return useQuery(
 		queryOptions({

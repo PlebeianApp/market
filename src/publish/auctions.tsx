@@ -1209,6 +1209,7 @@ export const publishBidderPathRelease = async (
 			`No local bidder record for bid ${input.bidEventId}. The bidder client must hold the derivation path to settle; lost record = unsettleable.`,
 		)
 	}
+	const latestLeg = chain[chain.length - 1]
 
 	// Pre-publish sanity for every leg. If any leg's derivation is
 	// corrupted, refuse the whole release — the seller would fail on
@@ -1224,42 +1225,104 @@ export const publishBidderPathRelease = async (
 		}
 	}
 
+	// Re-resolve the canonical winner immediately before publishing the path.
+	// Render-time checks and caller assertions can be stale: a newer bid,
+	// terminal settlement, or the locktime may have changed since the UI read.
+	try {
+		const [
+			{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdicts },
+			{ parseAuctionEvent },
+			{ parseBidEvent },
+			{ parseSettlementEvent },
+			{ parseValidatorVerdictEvent },
+			{ computeValidatedBids },
+		] = await Promise.all([
+			import('@/queries/auctions'),
+			import('@/lib/schemas/auction/auctionEvent'),
+			import('@/lib/schemas/auction/bidEvent'),
+			import('@/lib/schemas/auction/settlementEvents'),
+			import('@/lib/schemas/auction/validatorEvents'),
+			import('@/lib/auction/bidValidation'),
+		])
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId, true)
+		if (!auctionEvent) throw new Error('Auction no longer exists')
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
+		if (!parsedAuctionResult.ok) throw new Error('Auction is malformed')
+		const parsedAuction = parsedAuctionResult.value
+		const now = Math.floor(Date.now() / 1000)
+		const settlementDeadline = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+		if (now >= settlementDeadline) throw new Error('Settlement window has expired')
+
+		const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
+			fetchAuctionBids(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, true),
+			fetchAuctionVerdicts(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors, undefined),
+			fetchAuctionSettlements(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, undefined, true),
+		])
+		const parsedBids = bidEvents
+			.map((event) => parseBidEvent(toRawEvent(event)))
+			.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+			.map((result) => result.value)
+		const parsedVerdicts = verdictEvents
+			.map((event) => parseValidatorVerdictEvent(toRawEvent(event)))
+			.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+			.map((result) => result.value)
+		const validated = computeValidatedBids({ auction: parsedAuction, bids: parsedBids, verdicts: parsedVerdicts, postSettlement: false })
+		if (!validated.canonicalWinner || validated.canonicalWinner.id !== input.bidEventId) {
+			throw new Error('Auction winner changed. Refresh and try again.')
+		}
+		const hasAuctionSettlement = settlementEvents.some((event) => {
+			const parsedSettlementResult = parseSettlementEvent(toRawEvent(event))
+			if (!parsedSettlementResult.ok) return false
+			const settlement = parsedSettlementResult.value
+			return (
+				settlement.sellerPubkey.toLowerCase() === parsedAuction.sellerPubkey.toLowerCase() &&
+				settlement.auctionRootEventId === parsedAuction.rootEventId &&
+				settlement.auctionCoordinate === parsedAuction.coordinate
+			)
+		})
+		if (hasAuctionSettlement) {
+			throw new Error('Auction already has a settlement. Refresh and try again.')
+		}
+	} catch (err) {
+		throw new Error(`Cannot release path: ${err instanceof Error ? err.message : String(err)}`)
+	}
+
 	// Verify won_pending_settlement quorum before releasing the path.
 	// The bidder should not release their locked ecash unless a quorum
 	// of auditors has confirmed that this bid is the canonical winner
 	// and the auction is ready for settlement. This prevents premature
 	// release based on stale or incomplete information.
-	const latestLeg = chain[chain.length - 1]
 	try {
-		const [{ fetchAuctionVerdicts, fetchAuction }, { getAuctionTagValue }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] =
-			await Promise.all([
-				import('@/queries/auctions'),
-				import('@/lib/auctionSettlement'),
-				import('@/lib/schemas/auction/validatorEvents'),
-				import('@/lib/schemas/auction/auctionEvent'),
-			])
-		const verdictEvents = await fetchAuctionVerdicts(latestLeg.auctionRootEventId, 500, latestLeg.auctionCoordinate)
+		const [{ fetchAuctionVerdicts, fetchAuction }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] = await Promise.all([
+			import('@/queries/auctions'),
+			import('@/lib/schemas/auction/validatorEvents'),
+			import('@/lib/schemas/auction/auctionEvent'),
+		])
+		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId, true)
+		if (!auctionEvent) throw new Error('Auction no longer exists')
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
+		if (!parsedAuctionResult.ok) throw new Error('Auction is malformed')
+		const quorumAuction = parsedAuctionResult.value
+		const verdictEvents = await fetchAuctionVerdicts(
+			latestLeg.auctionRootEventId,
+			null,
+			latestLeg.auctionCoordinate,
+			quorumAuction.auditors,
+			undefined,
+		)
 		const parsedVerdicts = verdictEvents
 			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
 			.map((r) => r.value)
 			.filter((v) => v.bidEventId === input.bidEventId && v.claim === 'won_pending_settlement')
 
-		// Fetch the auction to get auditor list + quorum threshold.
-		const auctionEvent = await fetchAuction(latestLeg.auctionRootEventId)
-		if (auctionEvent) {
-			const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
-			if (parsedAuctionResult.ok) {
-				const auction = parsedAuctionResult.value
-				const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
-				const auditorCount = auction.auditors.filter((a) => confirmingAuditors.has(a)).length
-				if (auditorCount < auction.auditorQuorum) {
-					throw new Error(
-						`Cannot release path: only ${auditorCount}/${auction.auditors.length} auditors confirmed ` +
-							`won_pending_settlement (quorum requires ${auction.auditorQuorum}). Wait for more validators.`,
-					)
-				}
-			}
+		const confirmingAuditors = new Set(parsedVerdicts.map((v) => v.validatorPubkey))
+		const auditorCount = quorumAuction.auditors.filter((a) => confirmingAuditors.has(a)).length
+		if (auditorCount < quorumAuction.auditorQuorum) {
+			throw new Error(
+				`Cannot release path: only ${auditorCount}/${quorumAuction.auditors.length} auditors confirmed ` +
+					`won_pending_settlement (quorum requires ${quorumAuction.auditorQuorum}). Wait for more validators.`,
+			)
 		}
 	} catch (err) {
 		// Quorum verification is a hard gate for path release (M2): the
@@ -1462,7 +1525,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	const { checkProofStateBatch, aggregateBidNut7State } = nut7Mod
 
 	// 1. Auction event.
-	const auctionEvent = await fetchAuction(formData.auctionEventId)
+	const auctionEvent = await fetchAuction(formData.auctionEventId, true)
 	if (!auctionEvent) throw new Error(`Auction ${formData.auctionEventId} not found on relay`)
 	const sellerPubkey = auctionEvent.pubkey
 	const signerUser = await signer.user()
@@ -1537,8 +1600,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// canonical winner exists. A seller who has already redeemed a
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
-			fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-			fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+			fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
+			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(toRawEvent(b)))
@@ -1571,7 +1634,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// auction — the seller cannot displace a completed settlement with a
 		// later terminal event. (Structural check only: seller + auction
 		// refs; deeper completeness validation happens on the read path.)
-		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, 100, auctionCoordinate)
+		const existingSettlements = await fetchAuctionSettlements(formData.auctionEventId, null, auctionCoordinate, undefined, true)
 		const hasSettledSettlement = existingSettlements.some((s) => {
 			const parsed = parseSettlementEvent(toRawEvent(s))
 			if (!parsed.ok) return false
@@ -1602,8 +1665,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// does not trust the caller's assertion of who won — it derives the
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
-		fetchAuctionBids(formData.auctionEventId, 1000, auctionCoordinate),
-		fetchAuctionVerdicts(formData.auctionEventId, 1000, auctionCoordinate),
+		fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
+		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
