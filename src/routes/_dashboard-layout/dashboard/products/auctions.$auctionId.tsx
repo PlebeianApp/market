@@ -1,5 +1,9 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { Media } from '@/components/Media'
+import { TestListingNotice } from '@/components/TestListingNotice'
+import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
+import { AUCTION_KIND } from '@/lib/auction/constants'
+import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -557,6 +561,9 @@ function DashboardAuctionDetailRoute() {
 	}
 
 	const perspectiveLabel = isOwner ? 'Seller view' : isWinner ? 'Winner view' : 'Browsing'
+	// ADR-0009: the owner's dashboard keeps a curated auction visible, so this
+	// surface carries the notice; a labeler also gets the mark/unmark action.
+	const testLabelCoordinate = getItemTestLabelCoordinate(auction)
 
 	return (
 		<div className="space-y-4 p-3 lg:p-4">
@@ -604,6 +611,16 @@ function DashboardAuctionDetailRoute() {
 								</Button>
 							</Link>
 						</div>
+
+						{/* ADR-0009: the owner's dashboard shows a curated auction even while
+						    the public feed hides it — say why, and give an authorized labeler
+						    the mark/unmark action. */}
+						{testLabelCoordinate && (
+							<div className="flex flex-wrap items-center gap-3">
+								<TestListingNotice coordinate={testLabelCoordinate} itemLabel="Auction" />
+								<TestLabelButton kind={AUCTION_KIND} pubkey={auction.pubkey} dTag={getAuctionId(auction)} itemLabel="Auction" />
+							</div>
+						)}
 
 						<div className="grid gap-3 sm:grid-cols-2">
 							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />

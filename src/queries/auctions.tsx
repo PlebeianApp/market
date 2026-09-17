@@ -173,8 +173,14 @@ const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: nu
 		'#d': [dTag],
 		limit,
 	})
-	// Filter out test-labeled items (ADR-0009: runs beside the delete and blacklist checks)
-	return excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
+	// NOT test-label gated, deliberately. This read resolves a coordinate's
+	// version set for three callers that must keep a labeled auction reachable:
+	// detail-by-id, detail-by-a-tag, and the Featured carousel's by-a-tag read
+	// (a curation surface, ungated by the ADR-0009 rev 4 taxonomy). ADR-0009
+	// step 3 — "the label never removes the item from direct navigation" — is
+	// only true if this read stays clean. The gate belongs to the discovery
+	// surface that composes it: `fetchAuctions`.
+	return filterDeletedAuctions(filterBlacklistedEvents(events))
 }
 
 export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike[]> => {
@@ -184,7 +190,9 @@ export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike
 	}
 
 	const events = await applesauceIo.fetchEvents(filter)
-	// Filter out blacklisted auctions, locally-deleted auctions, then test-labeled items (ADR-0009)
+	// Discovery surface (the auction feed): blacklist → local deletes → the
+	// test-label gate, then collapse versions. The gate is coordinate-based, so
+	// every version of a labeled auction drops together.
 	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
 	return collapseAuctionVersions(filteredEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }

@@ -7,9 +7,9 @@ import { useStore } from '@tanstack/react-store'
 /**
  * Browsing-surface toggle (ADR-0009 rev 3): reveals test-labeled items in
  * feeds. Visible to all users; defaults to hidden. Changing it invalidates
- * the product/auction browsing query keys so feeds refetch with the new flag.
- * (The 'auctions' prefix is a no-op until the auctions compatibility layer
- * lands, so this component is safe on master and auctions alike.)
+ * the product and auction browsing query keys so both feeds refetch with the
+ * new flag — the auctions feed keys under `auctionKeys.all` (['auctions']) and
+ * is gated by the same `excludeTestLabeledEvents` call.
  */
 export function ShowTestListingsToggle() {
 	const queryClient = useQueryClient()

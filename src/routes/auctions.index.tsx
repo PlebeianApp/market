@@ -1,6 +1,7 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { Media } from '@/components/Media'
 import { AuctionFilters } from '@/components/AuctionFilters'
+import { ShowTestListingsToggle } from '@/components/ShowTestListingsToggle'
 import { AuctionSectionGrid } from '@/components/nostr/AuctionSectionGrid'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Badge } from '@/components/ui/badge'
@@ -353,7 +354,12 @@ function AuctionsRoute() {
 								))}
 						</div>
 					</div>
-					<AuctionFilters filters={filters} onFiltersChange={setFilters} />
+					{/* ADR-0009: browsable by everyone, defaults to hidden — reveals the
+					    test-labeled auctions the feed gates out. */}
+					<div className="flex items-center gap-3">
+						<ShowTestListingsToggle />
+						<AuctionFilters filters={filters} onFiltersChange={setFilters} />
+					</div>
 				</div>
 			</div>
 

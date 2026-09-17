@@ -2,7 +2,9 @@ import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCount
 import { Media } from '@/components/Media'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { TestListingNotice } from '@/components/TestListingNotice'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
+import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
@@ -59,6 +61,9 @@ export function AuctionCard({
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+	// ADR-0009: resolve the item coordinate once; the notice renders nothing
+	// unless that coordinate carries an active test label.
+	const testLabelCoordinate = getItemTestLabelCoordinate(auction)
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	// When a parent (the auctions list) supplies bids in bulk, skip the per-
@@ -134,6 +139,12 @@ export function AuctionCard({
 					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">
 						No image
 					</div>
+				)}
+				{/* ADR-0009: a card reached by direct link, on a profile, or revealed
+				    by the "Show test listings" toggle carries the compact marker.
+				    Top-left — the top-right corner holds the LIVE/ENDED badge. */}
+				{testLabelCoordinate && (
+					<TestListingNotice coordinate={testLabelCoordinate} itemLabel="Auction" variant="icon" className="absolute top-2 left-2 z-10" />
 				)}
 				<div
 					className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded ${

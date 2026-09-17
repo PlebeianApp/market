@@ -70,6 +70,9 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
+import { TestListingNotice } from '@/components/TestListingNotice'
+import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
+import { AUCTION_KIND } from '@/lib/auction/constants'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -775,6 +778,16 @@ function AuctionDetailRoute() {
 										</Tooltip>
 									)}
 								</div>
+							</div>
+
+							{/* ADR-0009: a curated auction is absent from the feed but reachable
+							    through this direct link, so explain the label and offer the appeal
+							    path. The mark/unmark action is the auctions equivalent of the
+							    product page's entity actions menu — a labeler may curate an
+							    auction they do not own. */}
+							<div className="flex flex-wrap items-center gap-2">
+								<TestListingNotice coordinate={auctionCoordinates} itemLabel="Auction" />
+								<TestLabelButton kind={AUCTION_KIND} pubkey={auction.pubkey} dTag={auctionDTag} itemLabel="Auction" />
 							</div>
 
 							<span>Posted by</span>

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (rev 4 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products implemented in this PR, auctions compatibility layer in a follow-up PR)
+Accepted (rev 5 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products on `master`, auctions on `auctions` — both implemented)
 
 ## Date
 
@@ -216,6 +216,44 @@ browsing-only effect. An earlier revision claimed the item was "excluded from
 feeds and detail views", which is wrong — detail views are never gated — and
 misled the labeler about what the action does.
 
+### Auctions — surface map (implemented on the `auctions` branch)
+
+The same taxonomy, resolved against the auction reads. The distinction that
+matters in code is **where** the gate is applied, not only where it is skipped:
+
+- **Gated (discovery):** the auction feed — `fetchAuctions` in
+  `src/queries/auctions.tsx`. It runs blacklist → local deletes → the label
+  check → version collapse, so every version of a labeled coordinate drops
+  together and no older version can resurrect the auction in the feed.
+- **Ungated, by decision:** `fetchAuction` (detail by id — the direct-link
+  promise), `fetchAuctionByATag` (detail by a-tag), `fetchAuctionsByPubkey`
+  (seller profile and owner dashboard). **The gate is never applied inside
+  `fetchAuctionVersionEvents`**, the shared version-resolution helper all three
+  of those reads go through: filtering there would collapse a labeled auction's
+  version set to nothing and leave the item reachable only through the
+  by-a-tag fallback path. Step 3 is a property of the read, not of a hopeful
+  fallback. The Featured carousel (`auctionByATagQueryOptions`) inherits the
+  same ungated read, which is the rev 4 curation default working as intended.
+- **UI:** the `Show test listings` toggle sits beside the auction filters on
+  the feed; the compact card marker renders top-left on `AuctionCard` (the
+  top-right corner carries the LIVE/ENDED badge); the detail-page pill sits
+  under the auction title row; and the mark/unmark action reaches the public
+  auction page and the owner dashboard directly through `TestLabelButton` —
+  auctions have no `EntityActionsMenu`, whose test-label arm is
+  product-scoped, so the shared button _is_ the auctions equivalent of the
+  product page's entity actions menu. The owner's dashboard detail carries the
+  same notice as the product one.
+
+Coverage: `src/queries/__tests__/auctionTestLabelGate.test.ts` (feed gated,
+detail/by-a-tag/by-pubkey ungated, the shared version read issuing no label
+query at all, toggle reveal, fail-open) and
+`e2e/tests/test-labels-auctions.spec.ts` (feed exclusion, direct link + notice
+
+- explainer, toggle reveal with card marker, NIP-09 reappearance, unauthorized
+  label ignored, authorized labeler curating another seller's auction from its
+  public page, owner dashboard keeping the item, non-authorized user seeing no
+  actions).
+
 ## Consequences
 
 **Positive:**
@@ -245,7 +283,7 @@ misled the labeler about what the action does.
 
 1. Label schema + authorized-labeler list.
 2. Query-layer `test`-label check beside the delete and blacklist checks
-   (products on master; auctions on the `auctions` branch).
+   (products on `master`; auctions on the `auctions` branch).
 3. Dashboard actions: **Mark as "Test" Product** / **Unmark as "Test"
    Product** by coordinate, with pre-filled contact reference in `.content`.
 4. e2e: a labeled item is excluded from browsing feeds but still reachable
@@ -263,6 +301,7 @@ misled the labeler about what the action does.
    block-level opt-in. Not a change in this PR.
 9. Auctions: the same taxonomy applies to the auction feed (discovery) and to
    any curated auction surface, via the shared `testLabelFilters` layer.
+   **Implemented** — see _Auctions — surface map_ above.
 
 ## Related
 
