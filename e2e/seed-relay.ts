@@ -12,11 +12,39 @@ import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-con
 
 const skBytes = hexToBytes(TEST_APP_PRIVATE_KEY)
 
+/**
+ * Connect to the local relay, retrying while it is still coming up.
+ *
+ * The relay is a sibling webServer entry, and this script is the first half of
+ * the dev-server command; if the relay is not accepting connections yet (cold
+ * start on a slow machine, a relay that was just restarted, or a hand-started
+ * dev server), a single attempt fails in milliseconds ("connection failed") and
+ * the `&&` chain then never starts the dev server — the run dies with an opaque
+ * "Timed out waiting 60000ms from config.webServer" instead of the real cause.
+ */
+async function connectWithRetry(timeoutMs = 30_000): Promise<Relay> {
+	const deadline = Date.now() + timeoutMs
+
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await Relay.connect(RELAY_URL)
+		} catch (error) {
+			if (Date.now() >= deadline) {
+				throw new Error(`relay ${RELAY_URL} unreachable after ${timeoutMs}ms (attempts: ${attempt}): ${String(error)}`)
+			}
+			if (attempt === 1) {
+				console.log(`  Waiting for relay ${RELAY_URL} to accept connections ...`)
+			}
+			await new Promise((resolve) => setTimeout(resolve, 500))
+		}
+	}
+}
+
 async function main() {
 	console.log('\n--- Seeding relay for e2e tests ---')
 	console.log(`  App pubkey: ${TEST_APP_PUBLIC_KEY.slice(0, 16)}...`)
 
-	const relay = await Relay.connect(RELAY_URL)
+	const relay = await connectWithRetry()
 
 	async function publish(template: EventTemplate) {
 		const event = finalizeEvent(template, skBytes)

@@ -5,10 +5,30 @@ import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import { queryRelayEvents } from '../utils/relay-query'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 test.use({ scenario: 'merchant' })
 
 const RELAY_URL = 'ws://localhost:10547'
+
+// Path to a local image fixture used to intercept external CDN requests.
+// Same pattern (and same file) as `e2e/tests/product-page.spec.ts`.
+const __filename = fileURLToPath(import.meta.url)
+const LOCAL_IMAGE_PATH = path.join(path.dirname(__filename), '..', 'fixtures', 'test-product-image.png')
+
+/**
+ * Test Isolation (e2e/AGENTS.md, ADR-0005): the only allowed services are the
+ * local relay, the local dev server and the local mint. Every auction seeded
+ * here carries a `cdn.satellite.earth` image, so route it to the local fixture
+ * instead of letting the run make real egress (an unreachable CDN also stalls
+ * image loads, which is what `networkidle` waits on).
+ */
+async function interceptCdnImages(page: Page): Promise<void> {
+	await page.route('**/cdn.satellite.earth/**', async (route) => {
+		await route.fulfill({ status: 200, contentType: 'image/png', path: LOCAL_IMAGE_PATH })
+	})
+}
 
 // ---------------------------------------------------------------------------
 // Relay helpers — publish kind 1985 label events and kind 5 deletions
@@ -163,6 +183,8 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		const controlTitle = `Control Auction ${suffix}`
 		const labeledTitle = `Labeled Auction ${suffix}`
 
+		await interceptCdnImages(unauthenticatedPage)
+
 		const control = await seedAuction(devUser1.sk, controlTitle, `test-label-auction-control-${suffix}`)
 		const labeled = await seedAuction(devUser1.sk, labeledTitle, `test-label-auction-labeled-${suffix}`)
 
@@ -187,17 +209,33 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		const noticeDialog = unauthenticatedPage.getByTestId('test-listing-notice-dialog')
 		await expect(noticeDialog).toBeVisible()
 		await expect(noticeDialog).toContainText('hidden from browsing')
+		// The copy regression #1266 had to fix for products: detail views are
+		// never gated, so the notice must not claim the item is hidden there.
+		await expect(noticeDialog).not.toContainText('detail views')
 		await expect(unauthenticatedPage.getByTestId('test-listing-notice-contact')).toBeVisible()
 		await unauthenticatedPage.getByTestId('test-listing-notice-close').click()
 
+		// Negative control: the unlabeled auction reached the same way renders
+		// without any notice — absence asserted, not assumed.
+		await safeGoto(unauthenticatedPage, `/auctions/${control.id}`)
+		await expect(unauthenticatedPage.getByText(controlTitle)).toBeVisible({ timeout: 15_000 })
+		await expect(unauthenticatedPage.getByTestId('test-listing-notice')).toHaveCount(0)
+
 		// The "Show test listings" toggle reveals it in the feed, card marker
-		// included. The flag lives in memory, so the assertions must stay on this
-		// page — navigating would reset it to the hidden default.
+		// included. The flag is a module-level store, so it survives client-side
+		// navigation and is reset only by a full document load — which is what
+		// `safeGoto` performs. Both the reveal and the re-hide are asserted here,
+		// on the page that holds the toggle.
 		await safeGoto(unauthenticatedPage, '/auctions')
 		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
-		await unauthenticatedPage.getByRole('checkbox', { name: 'Show test listings' }).check()
+		const toggle = unauthenticatedPage.getByRole('checkbox', { name: 'Show test listings' })
+		await toggle.check()
 		await expect(unauthenticatedPage.getByText(labeledTitle)).toBeVisible({ timeout: 30_000 })
 		await expect(unauthenticatedPage.getByTestId('test-listing-notice-icon').first()).toBeVisible({ timeout: 15_000 })
+
+		// Switching it back off restores the default (hidden) feed
+		await toggle.uncheck()
+		await expect(unauthenticatedPage.getByText(labeledTitle)).toHaveCount(0, { timeout: 15_000 })
 	})
 
 	// -----------------------------------------------------------------------
@@ -208,6 +246,8 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		const suffix = runSuffix()
 		const controlTitle = `Reappear Control ${suffix}`
 		const title = `Reappear Auction ${suffix}`
+
+		await interceptCdnImages(unauthenticatedPage)
 
 		await seedAuction(devUser1.sk, controlTitle, `test-label-reappear-control-${suffix}`)
 		const auction = await seedAuction(devUser1.sk, title, `test-label-reappear-${suffix}`)
@@ -232,15 +272,22 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 
 	test('a label from an unauthorized key does not hide the auction', async ({ unauthenticatedPage }) => {
 		const suffix = runSuffix()
+		const controlTitle = `Unauthorized Control ${suffix}`
 		const title = `Unauthorized Label Auction ${suffix}`
+
+		await interceptCdnImages(unauthenticatedPage)
 
 		// Auction by devUser2, label also signed by devUser2 — who is NOT in the
 		// authorized set, so the label must be ignored.
+		await seedAuction(devUser2.sk, controlTitle, `test-label-unauthorized-control-${suffix}`)
 		const auction = await seedAuction(devUser2.sk, title, `test-label-unauthorized-${suffix}`)
 		await seedTestLabel(devUser2.sk, auctionCoordinate(auction))
 
+		// The control anchors "the feed has rendered"; the assertion below is the
+		// scenario's own claim, not the wait's.
 		await safeGoto(unauthenticatedPage, '/auctions')
-		await waitForAuctionsFeedLoaded(unauthenticatedPage, title)
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
+		await expect(unauthenticatedPage.getByText(title)).toBeVisible({ timeout: 15_000 })
 	})
 
 	// -----------------------------------------------------------------------
@@ -252,9 +299,16 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		unauthenticatedPage,
 	}) => {
 		const suffix = runSuffix()
+		const controlTitle = `Cross-user Control ${suffix}`
 		const title = `Cross-user Label Auction ${suffix}`
 
+		await interceptCdnImages(merchantPage)
+		await interceptCdnImages(unauthenticatedPage)
+
 		// Seeded by ANOTHER seller (devUser2); merchantPage is devUser1.
+		// The control stays unlabeled, so it can stand in for "the feed has
+		// rendered" while the labeled auction is absent from it.
+		await seedAuction(devUser2.sk, controlTitle, `test-label-cross-user-control-${suffix}`)
 		const auction = await seedAuction(devUser2.sk, title, `test-label-cross-user-${suffix}`)
 		const coordinate = auctionCoordinate(auction)
 
@@ -263,6 +317,9 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		await waitForAuctionsFeedLoaded(unauthenticatedPage, title)
 
 		await safeGoto(merchantPage, `/auctions/${auction.id}`)
+		// The PII exposure warning (root-level dialog for users with seeded
+		// order events) intercepts pointer events — dismiss it before clicking.
+		await dismissPiiWarning(merchantPage)
 		const markButton = merchantPage.getByTestId('mark-test-label-auction-button')
 		await expect(markButton).toBeVisible({ timeout: 30_000 })
 
@@ -285,8 +342,11 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 			labelEventIdOnRelay = labels[0].id
 		}).toPass({ timeout: 15_000 })
 
-		// The feed now hides the auction for a browsing visitor
+		// The feed now hides the auction for a browsing visitor. Wait for the
+		// control first: an absence assertion on a feed that has not rendered
+		// yet proves nothing.
 		await safeGoto(unauthenticatedPage, '/auctions')
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
 		await expect(unauthenticatedPage.getByText(title)).toHaveCount(0)
 
 		// Unmark as test: the label deletion lands on the relay and the auction returns
@@ -306,6 +366,7 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		}).toPass({ timeout: 15_000 })
 
 		await safeGoto(unauthenticatedPage, '/auctions')
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
 		await expect(unauthenticatedPage.getByText(title)).toBeVisible({ timeout: 30_000 })
 	})
 
@@ -313,13 +374,27 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 	// Scenario 5: the owner's dashboard keeps the auction, and says why
 	// -----------------------------------------------------------------------
 
-	test('a labeled auction stays visible in the owner dashboard while hidden from the public feed', async ({ merchantPage }) => {
+	test('a labeled auction stays visible in the owner dashboard while hidden from the public feed', async ({
+		merchantPage,
+		unauthenticatedPage,
+	}) => {
 		const suffix = runSuffix()
+		const controlTitle = `Dashboard Control ${suffix}`
 		const title = `Dashboard Label Auction ${suffix}`
 
+		await interceptCdnImages(merchantPage)
+		await interceptCdnImages(unauthenticatedPage)
+
+		await seedAuction(devUser1.sk, controlTitle, `test-label-dashboard-control-${suffix}`)
 		const auction = await seedAuction(devUser1.sk, title, `test-label-dashboard-${suffix}`)
 		await seedTestLabel(devUser1.sk, auctionCoordinate(auction))
 
+		// Public half of the claim: browsing visitors no longer see it.
+		await safeGoto(unauthenticatedPage, '/auctions')
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
+		await expect(unauthenticatedPage.getByText(title)).toHaveCount(0)
+
+		// Owner half: the seller still reaches it and is told why it is hidden.
 		await safeGoto(merchantPage, `/dashboard/products/auctions/${auction.id}`)
 		await dismissPiiWarning(merchantPage)
 
@@ -337,6 +412,8 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		const suffix = runSuffix()
 		const title = `Non-admin Label Auction ${suffix}`
 
+		await interceptCdnImages(buyerPage)
+
 		// Seeded by devUser2 — the buyer IS the seller of this auction
 		const auction = await seedAuction(devUser2.sk, title, `test-label-non-admin-${suffix}`)
 
@@ -344,5 +421,48 @@ test.describe('Test listing labels — auctions (ADR-0009)', () => {
 		await expect(buyerPage.getByText(title)).toBeVisible({ timeout: 30_000 })
 		await expect(buyerPage.getByTestId('mark-test-label-auction-button')).toHaveCount(0, { timeout: 15_000 })
 		await expect(buyerPage.getByTestId('unmark-test-label-auction-button')).toHaveCount(0)
+
+		// The second surface this PR adds the action to: the owner's dashboard
+		// list. It renders the button unconditionally and relies on the
+		// component's own role gate, so a non-authorized seller visiting their
+		// own list must still see no action. The title assertion anchors the
+		// absence — an empty list would make "no button" meaningless.
+		await safeGoto(buyerPage, '/dashboard/products/auctions')
+		await expect(buyerPage.getByText(title).first()).toBeVisible({ timeout: 30_000 })
+		await expect(buyerPage.getByTestId('mark-test-label-auction-button')).toHaveCount(0)
+		await expect(buyerPage.getByTestId('unmark-test-label-auction-button')).toHaveCount(0)
+	})
+
+	// -----------------------------------------------------------------------
+	// Scenario 7: a deletion from the wrong key cannot un-hide an auction
+	// -----------------------------------------------------------------------
+
+	test('a NIP-09 deletion from a key other than the labeler cannot un-hide the auction', async ({ unauthenticatedPage }) => {
+		const suffix = runSuffix()
+		const controlTitle = `Foreign Deletion Control ${suffix}`
+		const title = `Foreign Deletion Auction ${suffix}`
+
+		await interceptCdnImages(unauthenticatedPage)
+
+		await seedAuction(devUser1.sk, controlTitle, `test-label-foreign-delete-control-${suffix}`)
+		const auction = await seedAuction(devUser1.sk, title, `test-label-foreign-delete-${suffix}`)
+		const labelEvent = await seedTestLabel(devUser1.sk, auctionCoordinate(auction))
+
+		await safeGoto(unauthenticatedPage, '/auctions')
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
+		await expect(unauthenticatedPage.getByText(title)).toHaveCount(0)
+
+		// NIP-09 says only the referenced event's own author may delete it, and
+		// the local relay enforces that: a foreign kind-5 is refused at publish
+		// time ("blocked: you are not the author of this event"), so nothing
+		// ever reaches readers to lift the label. The scenario therefore asserts
+		// the refusal and then that the label is still standing. The app-side
+		// rule for a relay that *does* accept such a deletion is a pure-function
+		// test (testLabels.test.ts, auctionTestLabelGate.test.ts).
+		await expect(seedTestLabelDeletion(devUser2.sk, labelEvent.id)).rejects.toThrow(/not the author/)
+
+		await safeGoto(unauthenticatedPage, '/auctions')
+		await waitForAuctionsFeedLoaded(unauthenticatedPage, controlTitle)
+		await expect(unauthenticatedPage.getByText(title)).toHaveCount(0)
 	})
 })
