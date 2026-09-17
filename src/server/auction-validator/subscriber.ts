@@ -30,7 +30,7 @@ import { AUCTION_BID_KIND, AUCTION_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETT
 import { parseAuctionEvent } from '../../lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
-import { currentTopValidBidAmount } from './lifecycle'
+
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
@@ -195,7 +195,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await deps.publisher.publishIfChanged({
 				auctionState: result.auctionState,
 				bidState: result.bidState,
-				currentTopBid: currentTopValidBidAmount(result.auctionState, result.bidState.bid.id),
 			})
 		} catch (err) {
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
@@ -254,7 +253,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await deps.publisher.publishIfChanged({
 				auctionState,
 				bidState,
-				currentTopBid: currentTopValidBidAmount(auctionState, bidState.bid.id),
 			})
 		} catch (err) {
 			logger.error(
@@ -343,7 +341,6 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 				await deps.publisher.publishIfChanged({
 					auctionState,
 					bidState,
-					currentTopBid: currentTopValidBidAmount(auctionState, bidState.bid.id),
 				})
 			} catch (err) {
 				logger.error(

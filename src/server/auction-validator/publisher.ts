@@ -46,8 +46,6 @@ export interface VerdictPublisherDeps {
 export interface PublishVerdictInput {
 	auctionState: ValidatorAuctionState
 	bidState: ValidatorBidState
-	/** Pre-computed current top valid bid amount for floor checks. */
-	currentTopBid: number
 }
 
 export interface PublishVerdictResult {
@@ -84,7 +82,6 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 			auctionState: input.auctionState,
 			bidState: input.bidState,
 			now: nowUnix,
-			currentTopBid: input.currentTopBid,
 		})
 
 		// Snapshot semantics: a bid that only reached valid_bid_placed
@@ -101,7 +98,6 @@ export const createVerdictPublisher = (deps: VerdictPublisherDeps) => {
 				auctionState: input.auctionState,
 				bidState: input.bidState,
 				now: nowUnix,
-				currentTopBid: input.currentTopBid,
 			})
 		}
 

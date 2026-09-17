@@ -33,7 +33,6 @@ import {
 	type ValidatorBidState,
 	type ValidatorState,
 } from './state'
-import { currentTopValidBidAmount } from './lifecycle'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 

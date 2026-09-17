@@ -43,7 +43,13 @@ export interface AuctionEventTagsInput {
 	maxEndAt: number
 	settlementGrace: number
 	reserve: number
-	startingBid?: number
+	/**
+	 * REQUIRED (AUCTIONS.md §3, ADR-0012 Phase 1). The auction's absolute bid
+	 * floor — the only amount-based check a validator makes — so it is emitted
+	 * unconditionally. `0` is legal: there is no protocol-fixed minimum sat
+	 * value, and fee coverage is the seller's decision.
+	 */
+	startingBid: number
 	bidIncrement: number
 	mints: string[]
 	p2pkXpub: string
@@ -69,6 +75,9 @@ export const buildAuctionEventTags = (input: AuctionEventTagsInput): string[][] 
 	if (!input.mints.length) throw new Error('buildAuctionEventTags: at least one mint required')
 	if (!input.auditors.length) throw new Error('buildAuctionEventTags: at least one auditor required')
 	if (!input.p2pkXpub) throw new Error('buildAuctionEventTags: p2pk_xpub required')
+	if (!Number.isSafeInteger(input.startingBid) || input.startingBid < 0) {
+		throw new Error('buildAuctionEventTags: startingBid required (non-negative safe integer, sats)')
+	}
 
 	const tags: string[][] = [
 		['d', input.dTag],
@@ -80,14 +89,13 @@ export const buildAuctionEventTags = (input: AuctionEventTagsInput): string[][] 
 		['settlement_grace', String(input.settlementGrace)],
 		['currency', AUCTION_CURRENCY_SAT],
 		['reserve', String(input.reserve)],
+		['starting_bid', String(input.startingBid)],
 		['bid_increment', String(input.bidIncrement)],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
 		['key_scheme', AUCTION_KEY_SCHEME],
 		['p2pk_xpub', input.p2pkXpub],
 		['schema', AUCTION_SCHEMA_TAG],
 	]
-
-	if (input.startingBid !== undefined) tags.push(['starting_bid', String(input.startingBid)])
 
 	for (const mint of input.mints) tags.push(['mint', mint])
 	for (const auditor of input.auditors) tags.push(['auditors', auditor])

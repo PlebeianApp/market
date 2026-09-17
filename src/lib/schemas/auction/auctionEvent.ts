@@ -124,7 +124,8 @@ export type ParseAuctionEventResult =
  *
  * Failure modes:
  *   - Wrong kind on the event → `wrong_kind`
- *   - Missing required tag → ZodError with field path
+ *   - Missing REQUIRED tag (`d`, `title`, `mint`, `auditors`, `p2pk_xpub`,
+ *     `starting_bid`) → `missing_required_tag`, or a ZodError with field path
  *   - Tag value fails format / range constraint → ZodError
  */
 export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResult => {
@@ -147,7 +148,31 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	const maxEndAt = readIntegerTag(event, 'max_end_at') ?? endAt
 	const settlementGrace = readIntegerTag(event, 'settlement_grace') ?? 0
 	const reserve = readIntegerTag(event, 'reserve') ?? 0
-	const startingBid = readIntegerTag(event, 'starting_bid') ?? 0
+
+	// `starting_bid` is REQUIRED (AUCTIONS.md §3, ADR-0012 Phase 1). It is the
+	// auction's absolute bid floor and the only amount-based check a validator
+	// makes, so it may not be inferred. The old `?? 0` fallback silently turned
+	// tag omission into a floor of `max(0, AUCTION_MIN_BID_SATS)` = 10 sats —
+	// the spec/implementation contradiction tracked as #1315. Omission is now a
+	// hard, structured parse failure: a loud error is strictly better than a
+	// silently wrong floor.
+	//
+	// Presence and well-formedness are checked separately on purpose. An absent
+	// tag is `missing_required_tag`; a present-but-unparseable value falls
+	// through as NaN and is rejected by the schema's `nonNegativeInt`, which
+	// keeps the two failures distinguishable for the caller. `starting_bid` may
+	// legitimately be `0` — there is no protocol-fixed minimum sat value, so
+	// the seller's declared floor is authoritative (ADR-0012 Phase 1).
+	if (readSingleTag(event, 'starting_bid') === undefined) {
+		return {
+			ok: false,
+			error: {
+				code: 'missing_required_tag',
+				message: 'auction is missing the required `starting_bid` tag (AUCTIONS.md §3)',
+			},
+		}
+	}
+	const startingBid = readIntegerTag(event, 'starting_bid') ?? Number.NaN
 	const bidIncrement = readIntegerTag(event, 'bid_increment') ?? 0
 
 	const minBidCurve = parseMinBidCurve(readSingleTag(event, 'min_bid_curve'))

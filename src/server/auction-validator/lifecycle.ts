@@ -83,17 +83,15 @@ export interface DeriveVerdictInput {
 	bidState: ValidatorBidState
 	/** Validator's own latest local timestamp. Drives close/grace transitions. */
 	now: number
-	/** Current top valid bid amount on this auction, used by the floor check. */
-	currentTopBid?: number
 }
 
 export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
-	const { auctionState, bidState, now, currentTopBid = 0 } = input
+	const { auctionState, bidState, now } = input
 
 	// --- Phase 1: pre-close --------------------------------------------------
 
 	if (now <= auctionState.auction.maxEndAt) {
-		return derivePreCloseVerdict(auctionState, bidState, currentTopBid)
+		return derivePreCloseVerdict(auctionState, bidState)
 	}
 
 	// Auction has closed. From here on, only valid_bid_placed bids
@@ -103,11 +101,11 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 	const wasValid = bidState.currentClaim === 'valid_bid_placed' || bidState.postCloseDecision !== null
 
 	if (!wasValid) {
-		// Bid never reached valid_bid_placed → keep its current invalid
-		// verdict; re-derive the pre-close verdict so a late-arriving
-		// NUT-7 result that came in during the close window still flips
-		// it correctly.
-		return derivePreCloseVerdict(auctionState, bidState, currentTopBid)
+		// Bid never reached valid_bid_placed → re-derive the pre-close
+		// verdict for a stable, deterministic result (ADR-0012 Phase 1:
+		// the verdict is a pure function of the bid, the auction and
+		// `observed_at`, so re-deriving is idempotent by construction).
+		return derivePreCloseVerdict(auctionState, bidState)
 	}
 
 	// --- Phase 2: close & settlement ----------------------------------------
@@ -164,76 +162,38 @@ export const deriveVerdict = (input: DeriveVerdictInput): DerivedVerdict => {
 // Pre-close verdict — wraps the §7.1 pipeline
 // ============================================================================
 
-const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState, currentTopBid: number): DerivedVerdict => {
-	// B1 (ADR-0004): The NUT-7 poller has been removed — validators no
-	// longer query the mint for proof state; a validator's verdict asserts
-	// structural/rules validity only, and on-mint proof state is client-side
-	// evidence. The NUT-7 step is therefore SKIPPED explicitly rather than
-	// bypassed with a fabricated state: an unconfirmed NUT-7 state is never
-	// defaulted to 'unspent' (or 'spent') — it is 'pending' by definition,
-	// and only a mint response may convert it.
+/**
+ * ADR-0012 Phase 1: the pre-close verdict is a pure function of the bid, the
+ * auction and the validator's `observed_at`, plus the validator's published
+ * policy. No leading-bid position, no chain graph, no mint evidence.
+ *
+ * Three pieces of mutable local state used to be threaded in here and are all
+ * deliberately gone:
+ *
+ * - `currentTopBid` fed the leading-bid minimum-increment check. The top bid
+ *   depends on which bids a validator happened to observe, so two honest
+ *   validators could derive different verdicts for the same bid.
+ * - the `prev_bid` chain walk (`deriveBidChainValidation`) condemned a bid
+ *   whose parent it had not seen. The chain is the bidder's own replacement
+ *   history and a selection/settlement concern (ADR-0012 Phase 2).
+ * - a NUT-7 poll of the mint (removed earlier under ADR-0004 and still
+ *   bypassed here until Phase 1 deleted the step outright). Proof-state
+ *   ownership is the client's; the seller's settlement path applies it over
+ *   the winning chain before an irreversible redemption
+ *   (`validateBidChainNut7PrePublish`).
+ *
+ * Re-deriving is therefore idempotent: same inputs, same verdict, every time.
+ */
+const derivePreCloseVerdict = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): DerivedVerdict => {
 	const verdict: BidValidationVerdict = validateBid({
 		auction: auctionState.auction,
 		bid: bidState.bid,
 		observedAt: bidState.observedAt,
-		skipNut7Check: true,
-		currentTopBid,
-		bidChainValidation: deriveBidChainValidation(auctionState, bidState),
 	})
 
 	// validateBid returns a strict union; widen it for the publisher.
 	if (verdict.claim === 'valid_bid_placed') return { claim: 'valid_bid_placed' }
-	if (verdict.claim === 'bid_pending_review') return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
 	return { claim: 'bid_invalid', reason: verdict.reason, detail: verdict.detail }
-}
-
-const deriveBidChainValidation = (auctionState: ValidatorAuctionState, bidState: ValidatorBidState): BidChainValidation | undefined => {
-	const prevBidId = bidState.bid.prevBidId?.trim()
-	if (!prevBidId) return undefined
-
-	const seen = new Set<string>([bidState.bid.id])
-	let currentBidState: ValidatorBidState = bidState
-
-	while (true) {
-		const parentId = currentBidState.bid.prevBidId?.trim()
-		if (!parentId) break
-		if (seen.has(parentId)) {
-			return { ok: false, detail: `replacement-chain cycle detected at prev_bid=${parentId}` }
-		}
-		if (seen.size >= MAX_REPLACEMENT_CHAIN_DEPTH) {
-			return { ok: false, detail: `replacement-chain depth exceeded (${MAX_REPLACEMENT_CHAIN_DEPTH})` }
-		}
-		seen.add(parentId)
-
-		const parentBidState = auctionState.bids.get(parentId)
-		if (!parentBidState) {
-			return { ok: false, detail: `prev_bid=${parentId} context unavailable for replacement-chain validation` }
-		}
-		if (parentBidState.bid.auctionRootEventId !== bidState.bid.auctionRootEventId) {
-			return { ok: false, detail: `prev_bid=${parentId} references a different auction root` }
-		}
-		if (parentBidState.bid.auctionCoordinate !== bidState.bid.auctionCoordinate) {
-			return { ok: false, detail: `prev_bid=${parentId} references a different auction coordinate` }
-		}
-		if (parentBidState.bid.bidderPubkey.toLowerCase() !== bidState.bid.bidderPubkey.toLowerCase()) {
-			return { ok: false, detail: `prev_bid=${parentId} belongs to a different bidder` }
-		}
-		if (currentBidState.bid.amount <= parentBidState.bid.amount) {
-			return {
-				ok: false,
-				detail: `replacement-chain amount must strictly increase (${currentBidState.bid.amount} <= ${parentBidState.bid.amount})`,
-			}
-		}
-
-		currentBidState = parentBidState
-	}
-
-	const immediateParent = auctionState.bids.get(prevBidId)
-	if (!immediateParent) {
-		return { ok: false, detail: `prev_bid=${prevBidId} context unavailable for replacement-chain validation` }
-	}
-
-	return { ok: true, legAmount: bidState.bid.amount - immediateParent.bid.amount }
 }
 
 // ============================================================================
@@ -534,8 +494,8 @@ export const assignCloseRoles = (auctionState: ValidatorAuctionState): Validator
  * Assign a close role to a bid that only reached `valid_bid_placed` AFTER the
  * close snapshot ran (`assignCloseRoles` found no valid bids at close time →
  * no winner was picked). This happens on validator restart when relay
- * replay ordering + `replacement_chain_invalid` transients delay a bid's
- * validation past the close moment.
+ * replay ordering delays a bid's observation past the close moment, or when a
+ * bid arrives from a relay that only the restarted validator can see.
  *
  * Rather than unconditionally marking the bid 'loser' (the old behavior,
  * which prevented the highest valid bid from ever becoming the winner),
@@ -568,29 +528,11 @@ export const assignLateValidLoserRole = (auctionState: ValidatorAuctionState, bi
 	return true
 }
 
-/**
- * Recompute the current top valid bid amount for an auction. Used by
- * pre-close floor checks. Walks live bids and picks the max amount on
- * any that has reached `valid_bid_placed`.
- */
-/**
- * Recompute the current top valid bid amount for an auction. Used by
- * pre-close floor checks. Walks live bids and picks the max amount on
- * any that has reached `valid_bid_placed`.
- *
- * `excludeBidId` (optional): the bid currently being derived. A bid
- * must never be checked against ITSELF as the top — `amount < amount +
- * increment` is always true, so a valid bid would condemn itself as
- * `under_increment` on every re-derivation. Excluding the bid being
- * validated mirrors the client's `computeValidatedBids` accumulation
- * (each bid checked against the top as it stood when the bid arrived).
- */
-export const currentTopValidBidAmount = (auctionState: ValidatorAuctionState, excludeBidId?: string): number => {
-	let top = 0
-	for (const bidState of Array.from(auctionState.bids.values())) {
-		if (bidState.currentClaim !== 'valid_bid_placed') continue
-		if (excludeBidId !== undefined && bidState.bid.id === excludeBidId) continue
-		if (bidState.bid.amount > top) top = bidState.bid.amount
-	}
-	return top
-}
+// ADR-0012 Phase 1 removed `currentTopValidBidAmount` from this module. Its
+// only purpose was to feed `currentTopBid` into the pre-close verdict so the
+// leading-bid minimum-increment check had a reference point — a validity rule
+// derived from mutable leading-bid state, which is exactly what made two
+// honest validators disagree. It also needed an `excludeBidId` workaround so a
+// bid was not compared against itself and condemned as `under_increment`.
+// Both the rule and the workaround are gone. The running top is a *selection*
+// value (ADR-0012 Phase 2, `select()`), not a verdict input.

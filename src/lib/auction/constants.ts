@@ -190,9 +190,11 @@ export const VALIDATOR_REASONS = [
 	'post_end',
 	'late_arrival',
 	'timestamp_skew',
-	// amount/curve
-	'under_increment',
-	'under_curve',
+	// amount — ADR-0012 Phase 1: the absolute floor is the ONLY
+	// amount-based validity check. `under_increment` and `under_curve`
+	// are retired: the minimum increment and the anti-snipe curve are
+	// selection-time / advisory concerns, never verdict inputs.
+	'below_starting_bid',
 	// mint / token
 	'unsupported_mint',
 	'bad_lock',
@@ -201,7 +203,6 @@ export const VALIDATOR_REASONS = [
 	'proof_missing',
 	// signature / structure
 	'signature_invalid',
-	'replacement_chain_invalid',
 	// policy (validator-subjective)
 	'relatr_below_threshold',
 	'on_blacklist',

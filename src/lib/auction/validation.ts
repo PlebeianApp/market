@@ -1,24 +1,35 @@
 /**
  * Pure validation pipeline for kind-1023 bids under
- * `cashu_p2pk_bidder_path_v1` — implements AUCTIONS.md §7.1.
+ * `cashu_p2pk_bidder_path_v1` — implements AUCTIONS.md §7.1 as amended by
+ * ADR-0012 Phase 1.
  *
  * "Pure" in two senses:
  *
- * 1. Side-effect-free. {@link validateBid} returns a verdict; the
- *    caller does the network I/O (NUT-7 against the mint, fetching the
- *    auction event, etc.) and feeds the results in.
+ * 1. Side-effect-free **and self-contained**. {@link validateBid} derives a
+ *    verdict from its own arguments alone: the bid event, the auction event,
+ *    the validator's `observed_at`, and (optionally) the validator's
+ *    published policy. It performs **no** external state queries — no mint
+ *    calls, no NUT-7 spend-state lookups, no relay fetches — and it consults
+ *    **no other bid's state**. A verdict that depended on fetching or on a
+ *    mutable leading-bid position could not be reproduced by a second honest
+ *    validator, which is what the quorum is built on.
  *
  * 2. Decoupled from event publishing. The validator process turns the
  *    returned verdict into a kind-30440 event; this module only
  *    decides what the verdict *is*.
  *
  * The pipeline runs in the order specified in §7.1's flowchart and
- * **short-circuits at the first failure** — a bid that's both
- * past-end-window and below-the-curve gets reported as
- * `post_end` (the first check that fails). That keeps the verdict
- * stable: rerunning validation with the same inputs always yields
- * the same verdict, and validators sweeping the bid set produce
- * deterministic results across runs.
+ * **short-circuits at the first failure** — a bid that's both outside the
+ * time window and below the floor gets reported as `post_end` (the first
+ * check that fails). That keeps the verdict stable: rerunning validation
+ * with the same inputs always yields the same verdict, and validators
+ * sweeping the bid set produce deterministic results across runs.
+ *
+ * The one amount-based check is the absolute floor, `amount ≥ starting_bid`.
+ * The minimum increment and the anti-snipe curve are **not** validity rules
+ * (ADR-0012 Phase 1): they are selection-time rules applied over the valid
+ * bid set, and advisory hints in the client. `prev_bid` is linkage metadata
+ * only — an unresolvable parent is never grounds for condemnation.
  *
  * Failure verdicts always carry a {@link ValidatorReason} via the
  * `reason` field. Successful verdicts carry no reason. Both shapes
@@ -29,7 +40,6 @@
 import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
-	BID_FLOOR_TIME_GRACE_SECONDS,
 	type PathReleaseReason,
 	type Nut7ProofState,
 	type ValidatorClaim,
@@ -129,14 +139,19 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 /**
  * Output of {@link validateBid}. Discriminated by {@link claim}:
  *
- * - `valid_bid_placed`     → bid passes all checks; no `reason`.
- * - `bid_pending_review`   → NUT-7 hadn't returned yet; transient.
- * - `bid_invalid`          → `reason` carries the specific cause.
+ * - `valid_bid_placed` → the bid passes every structural check. No `reason`,
+ *   and deliberately **no ranking marker**: a structurally valid bid is
+ *   reported as valid whether or not it currently leads (ADR-0012 Phase 1).
+ * - `bid_invalid`      → `reason` carries the specific cause.
+ *
+ * ADR-0012 Phase 1 removed the `bid_pending_review` variant from this union.
+ * A verdict is now a pure function of the bid, the auction and `observed_at`,
+ * so there is no external state whose absence could leave a verdict pending.
+ * (`bid_pending_review` remains a valid protocol *claim* — the validator
+ * service still uses it while a quorum-confirmed verdict is being observed —
+ * it is simply no longer derivable from structure alone.)
  */
-export type BidValidationVerdict =
-	| { claim: 'valid_bid_placed' }
-	| { claim: 'bid_pending_review'; reason: 'nut7_unknown' }
-	| { claim: 'bid_invalid'; reason: ValidatorReason; detail?: string }
+export type BidValidationVerdict = { claim: 'valid_bid_placed' } | { claim: 'bid_invalid'; reason: ValidatorReason; detail?: string }
 
 /**
  * Hook for validator-specific policy decisions (relatr score,
@@ -164,49 +179,11 @@ export interface ValidateBidInput {
 	/** Validator's own observation timestamp in unix seconds. NOT the bidder's `created_at`. */
 	observedAt: number
 	/**
-	 * Latest NUT-7 result the validator has for this bid's proof.
-	 * `undefined` ≡ the validator hasn't queried yet — pipeline returns
-	 * `bid_pending_review`.
-	 *
-	 * Note: `nut7State === 'spent'` here means EVERY expected proof is
-	 * spent (the settlement-completeness aggregate). Pre-settlement
-	 * fraud — ANY single proof spent — is detected from `nut7ProofStates`
-	 * below when available, so a partially-spent bid is still rejected.
+	 * Optional validator policy hook. Policy is attributable, published
+	 * opinion (kind-30441) and deterministic per policy — it is distinct
+	 * from structure, and it is the ONLY per-validator input to a verdict.
 	 */
-	nut7State?: Nut7ProofState
-	/**
-	 * Per-proof NUT-7 states keyed by lowercased `proof_y`. When present,
-	 * `validateBid` detects pre-settlement fraud (any expected proof
-	 * spent) directly, independent of the all-spent aggregate.
-	 */
-	nut7ProofStates?: ReadonlyMap<string, Nut7ProofState>
-	/**
-	 * Current top valid bid amount on the auction at the moment of
-	 * validation. Used by the floor computation. `undefined` means
-	 * "no prior bid" → starting_bid is the baseline.
-	 */
-	currentTopBid?: number
-	/**
-	 * For a `prev_bid` continuation, the bidder's own replacement-chain
-	 * delta (`bid.amount - previous bid amount`). Supplied by callers
-	 * that hold the per-auction bid graph.
-	 */
-	bidChainLegAmount?: number
-	/** Richer replacement-chain validation result from callers that hold the full bid graph. */
-	bidChainValidation?: BidChainValidation
-	/** Optional validator policy hook. */
 	policy?: PolicyHook
-	/**
-	 * Skip step 6 (NUT-7 proof state) entirely. For callers that do NOT own
-	 * NUT-7 evidence — post-ADR-0004 validators, whose verdicts assert
-	 * structural/rules validity only while on-mint proof state is the
-	 * client's responsibility. An unconfirmed NUT-7 state must never be
-	 * FABRICATED as `unspent` (or `spent`) to bypass this step: callers that
-	 * own the check pass the truthful mint-reported state (or nothing, which
-	 * yields `bid_pending_review`), and callers that don't own it set this
-	 * flag instead.
-	 */
-	skipNut7Check?: boolean
 }
 
 export type ReleaseTiming = 'prompt' | 'late'
@@ -262,7 +239,10 @@ export interface ValidatePathReleaseInput {
 	 * cashu token validation is the SELLER's job at redemption time. An
 	 * undecodable token must not condemn a bid as fraudulent. The
 	 * derivation path + child_pubkey + release timing checks still run.
-	 * Mirrors the `skipNut7Check` pattern in `validateBid`.
+	 *
+	 * Note: `validateBid` no longer has an analogous bypass flag. ADR-0012
+	 * Phase 1 deleted the NUT-7 step from the verdict path outright rather
+	 * than leaving a switch that callers must remember to set.
 	 */
 	skipCashuTokenCheck?: boolean
 }
@@ -343,13 +323,24 @@ const computeFloorMultiplier = (
 }
 
 /**
- * Per AUCTIONS.md §6.1. `Math.ceil` so a fractional multiplier still
- * requires the bidder to pay AT LEAST the floor — never less.
+ * Per AUCTIONS.md §6.1 — the anti-snipe curve floor, `baseline × multiplier(t)`,
+ * with `baseline(top_bid) = top_bid === 0 ? starting_bid : top_bid + bid_increment`.
+ * `Math.ceil` so a fractional multiplier still requires the bidder to pay AT
+ * LEAST the floor — never less.
+ *
+ * **This is not a validity gate.** ADR-0012 Phase 1 removed the curve from the
+ * verdict path: a bid below this floor is *valid but not leading*. The floor is
+ * consumed by the selection algorithm (ADR-0012 Phase 2) and by the advisory
+ * `current price` shown in the UI. Nothing here may be reintroduced into
+ * {@link validateBid}.
+ *
+ * Note the baseline falls back to `starting_bid`, never `reserve`: `reserve` is
+ * a close-time winner gate only (AUCTIONS.md §8), and using it here was a
+ * documentation-vs-code contradiction tracked as issue #1315.
  */
 export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: number; atSeconds: number }): number => {
 	const { auction, topBid, atSeconds } = input
-	const baseline =
-		topBid > 0 ? topBid + Math.max(auction.bidIncrement, AUCTION_MIN_BID_LEG_SATS) : Math.max(auction.startingBid, AUCTION_MIN_BID_SATS)
+	const baseline = topBid > 0 ? topBid + auction.bidIncrement : auction.startingBid
 	const multiplier = computeFloorMultiplier(
 		atSeconds,
 		auction.endAt,
@@ -370,7 +361,7 @@ export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: nu
  * module docstring on short-circuiting.
  */
 export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
-	const { auction, bid, observedAt, nut7State, currentTopBid = 0, bidChainLegAmount, bidChainValidation, policy } = input
+	const { auction, bid, observedAt, policy } = input
 
 	// --- Step 1: cross-event reference integrity -----------------------------
 
@@ -500,95 +491,43 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 
-	// --- Step 5: amount + curve floor ---------------------------------------
+	// --- Step 5: the absolute bid floor -------------------------------------
+	//
+	// ADR-0012 Phase 1: this is the ONLY amount-based validity check, and it
+	// is a pure function of the bid and the auction. Deliberately absent:
+	// the leading-bid minimum increment, the anti-snipe curve floor, and the
+	// `prev_bid` chain walk. Each depends on state two honest validators can
+	// legitimately hold differently — which bids each observed, which bid
+	// currently leads, whether a referenced parent is resolvable — so
+	// conditioning a verdict on them makes verdicts non-deterministic,
+	// retro-condemns funded bids, and breaks quorum. Increment, curve and
+	// chain integrity are selection- and settlement-time concerns
+	// (ADR-0012 Phase 2), never validity rules.
+	//
+	// `starting_bid` is REQUIRED on the auction (AUCTIONS.md §3) and is the
+	// seller's declared absolute floor. There is no protocol-fixed minimum
+	// sat value in the verdict path: fee coverage is mint- and
+	// network-dependent, so it is the seller's decision, with fee-aware
+	// client form defaults and validator policy MAY as the remaining
+	// enforcement surfaces.
 
-	const effectiveT = clamp(observedAt - BID_FLOOR_TIME_GRACE_SECONDS, auction.endAt, auction.maxEndAt)
-	const minRequired = computeBidFloor({ auction, topBid: currentTopBid, atSeconds: effectiveT })
-
-	if (bid.amount < minRequired) {
-		// Two distinct reasons depending on whether the curve was active.
-		const inCurveWindow = observedAt > auction.endAt && auction.minBidCurve.shape !== 'none'
+	if (bid.amount < auction.startingBid) {
 		return {
 			claim: 'bid_invalid',
-			reason: inCurveWindow ? 'under_curve' : 'under_increment',
-			detail: `amount=${bid.amount} < required=${minRequired} (top_bid=${currentTopBid}, t=${effectiveT})`,
-		}
-	}
-	if (bid.prevBidId) {
-		const chainValidationResult = normaliseBidChainValidation({ bid, bidChainLegAmount, bidChainValidation })
-		if (!chainValidationResult.ok) {
-			return {
-				claim: 'bid_invalid',
-				reason: 'replacement_chain_invalid',
-				detail: chainValidationResult.detail,
-			}
-		}
-		if (!Number.isSafeInteger(chainValidationResult.legAmount) || chainValidationResult.legAmount < AUCTION_MIN_BID_LEG_SATS) {
-			return {
-				claim: 'bid_invalid',
-				reason: 'under_increment',
-				detail: `replacement-chain delta=${chainValidationResult.legAmount} must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`,
-			}
+			reason: 'below_starting_bid',
+			detail: `amount=${bid.amount} < starting_bid=${auction.startingBid}`,
 		}
 	}
 
-	// --- Step 6: NUT-7 proof state ------------------------------------------
+	// `prev_bid` is declared linkage metadata (Phase 1). An unresolvable,
+	// missing or cyclic parent is NEVER, by itself, grounds for
+	// condemnation. The reference is walked at selection and settlement
+	// time, where the chain is the bidder's own replacement history and the
+	// caller holds the bid graph. Falling through to the policy check below
+	// is the intended behaviour for a structurally valid bid whose parent
+	// this validator has not seen — or never will.
 
-	// Pre-settlement fraud: ANY expected proof spent invalidates the bid,
-	// independent of the all-spent aggregate (which only reports 'spent'
-	// when EVERY proof is spent — that is the settlement-completeness
-	// signal, not the fraud signal). Detected from the per-proof map so a
-	// partially-spent bid is still rejected before the aggregate switch.
-	//
-	// Skipped entirely when the caller does not own NUT-7 evidence
-	// (`skipNut7Check`, e.g. post-ADR-0004 validators) — the check is never
-	// bypassed with a fabricated state.
-	if (!input.skipNut7Check) {
-		const { nut7ProofStates } = input
-		if (nut7ProofStates) {
-			for (const proofY of bid.proofYs) {
-				if (readProofState(nut7ProofStates, proofY) === 'spent') {
-					return {
-						claim: 'bid_invalid',
-						reason: 'proof_spent',
-						detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
-					}
-				}
-			}
-		}
-
-		switch (nut7State) {
-			case undefined:
-			case 'unknown':
-				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-			case 'missing':
-				return {
-					claim: 'bid_invalid',
-					reason: 'proof_missing',
-					detail: `mint omitted at least one of ${bid.proofYs.length} proof(s) from a successful NUT-7 response`,
-				}
-			case 'pending':
-				return { claim: 'bid_pending_review', reason: 'nut7_unknown' }
-			case 'spent':
-				// Pre-settlement spent = fake / fraudulent bid. The bidder either
-				// controlled the lock pubkey themselves and drained behind the
-				// scenes, or the bid was already redeemed somehow. Either way it's
-				// invalid for the auction. Reason `proof_spent` covers the
-				// not-yet-deemed-fraudulent variant; the fraudulent_bid claim is
-				// raised at settlement time when a kind-1025 reveals a path that
-				// doesn't derive to the lock pubkey.
-				return {
-					claim: 'bid_invalid',
-					reason: 'proof_spent',
-					detail: `mint reports at least one of ${bid.proofYs.length} proof(s) as SPENT (any spent proof invalidates the bid)`,
-				}
-			case 'unspent':
-				// Proceed to policy.
-				break
-		}
-	}
-
-	// --- Step 7: validator-specific policy ----------------------------------
+	// --- Step 6: validator-specific policy ----------------------------------
 
 	if (policy) {
 		const verdict = policy({ auction, bid, observedAt })
@@ -597,7 +536,7 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 
-	// --- Step 8: success ----------------------------------------------------
+	// --- Step 7: success ----------------------------------------------------
 
 	return { claim: 'valid_bid_placed' }
 }
@@ -1130,31 +1069,18 @@ const consumeCounterValue = (counter: Map<string, number>, value: string): boole
 
 const counterIsEmpty = (counter: Map<string, number>): boolean => counter.size === 0
 
-const clamp = (value: number, min: number, max: number): number => {
-	if (value < min) return min
-	if (value > max) return max
-	return value
-}
-
-const normaliseBidChainValidation = (input: {
-	bid: ParsedBidEvent
-	bidChainLegAmount?: number
-	bidChainValidation?: BidChainValidation
-}): BidChainValidation => {
-	if (input.bidChainValidation) return input.bidChainValidation
-	if (input.bidChainLegAmount !== undefined) {
-		return { ok: true, legAmount: input.bidChainLegAmount }
-	}
-	return {
-		ok: false,
-		detail: `prev_bid=${input.bid.prevBidId} context unavailable for replacement-chain validation`,
-	}
-}
-
 /**
  * The set of {@link ValidatorClaim} values produced by {@link validateBid}.
  * Validators may later transition these to post-close claims
  * (`won_pending_settlement`, etc.) — that lifecycle is handled by the
  * validator service rather than this module.
+ *
+ * ADR-0012 Phase 1 narrowed what {@link validateBid} can itself return to
+ * `valid_bid_placed` and `bid_invalid`: with no external state queried at
+ * verdict time there is no longer any such thing as a verdict "pending"
+ * mint confirmation. `bid_pending_review` remains a valid *protocol* claim
+ * — the validator service still uses it for bids whose quorum-confirmed
+ * verdict has not yet been observed — it is simply no longer derivable
+ * from structure alone.
  */
 export const VALIDATE_BID_CLAIMS: readonly ValidatorClaim[] = ['valid_bid_placed', 'bid_invalid', 'bid_pending_review']
