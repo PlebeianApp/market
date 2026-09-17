@@ -246,14 +246,23 @@ matters in code is **where** the gate is applied, not only where it is skipped:
 
 Coverage:
 
-- `src/queries/__tests__/auctionTestLabelGate.test.ts` — feed gated,
-  detail/by-a-tag/by-pubkey ungated, the shared version read issuing no label
-  query at all, toggle reveal, fail-open.
+- `src/queries/__tests__/auctionTestLabelGate.test.ts` — the feed gate (a
+  labeled coordinate drops as a whole, versions included), the toggle
+  revealed _and_ re-hidden, the fail-open invariant (no load at all, and the
+  optimistic window where a coordinate is labeled but no load has completed),
+  and the detail reads: by-id / by-a-tag / by-pubkey still return a labeled
+  auction and issue no label query — asserted on
+  `ndkActions.fetchEventsWithTimeout`, the port label reads actually use, with
+  authorization determinable so the absence means something. What that file does
+  _not_ establish: label authorization and NIP-09 reconciliation — those rest on
+  `testLabels.test.ts` (pure primitives) and on the e2e family below.
 - `e2e/tests/test-labels-auctions.spec.ts` — feed exclusion, direct link with
-  the notice and explainer, toggle reveal with the card marker, NIP-09
-  reappearance, unauthorized label ignored, authorized labeler curating another
-  seller's auction from its public page, owner dashboard keeping the item,
-  non-authorized user seeing no actions.
+  the notice and explainer (and the unlabeled control rendering without one),
+  toggle reveal with the card marker and re-hide, NIP-09 reappearance, a NIP-09
+  deletion from a _different_ key not un-hiding the item, unauthorized label
+  ignored, authorized labeler curating another seller's auction from its public
+  page, owner dashboard keeping the item, non-authorized user seeing no actions
+  on the public page or on the dashboard list.
 
 Gate: that e2e family is locked into the per-PR `e2e-grep` alternation
 (`.github/workflows/e2e.yml`, `|Test listing labels — auctions`), so the feed
