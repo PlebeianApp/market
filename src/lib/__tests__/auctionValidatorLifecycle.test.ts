@@ -13,6 +13,7 @@ import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent } from '../auction/events'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { deriveVerdict, assignCloseRoles, pickWinningBid, verdictChanged } from '../../server/auction-validator/lifecycle'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
@@ -82,7 +83,6 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 	maxSkewSec: 60,
 	fallbackDelaySec: 1_800,
 	vadiumRatioBps: 10_000,
-	dleqRequired: false,
 	schema: 'auction_v1',
 	...overrides,
 })
@@ -121,6 +121,11 @@ const buildBid = (
 		childPubkey,
 		lockSecrets,
 		proofYs,
+		// DLEQ is unconditional (ADR-0011): the validator's structural pipeline
+		// requires one dleq_proof per locked proof. These tests never
+		// crypto-verify (that is the client read path), so structurally-honest
+		// proofs are sufficient.
+		dleqProofs: overrides.dleqProofs ?? lockSecrets.map((secret) => makeHonestDleqProof(overrides.amount ?? 1_100, secret)),
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',

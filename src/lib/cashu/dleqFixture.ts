@@ -200,6 +200,29 @@ export const makeHonestDleqFixture = (amount = 1, secret: string = DEFAULT_FIXTU
 	return { keyset, secret, proof }
 }
 
+/**
+ * Build a self-consistent set of honest DLEQ proofs for parallel `secrets` /
+ * `amounts`, plus ONE keyset covering every distinct amount. Fixtures that
+ * need an arbitrary committed proof set (e.g. a bid with several locked
+ * secrets, each with its own denomination) can then supply the proofs as
+ * `dleqProofs` and the keyset under `${mint}:${proof.id}`.
+ *
+ * Distinct secrets must yield distinct `C` values; callers sharing secrets
+ * across bids must account for the M5 duplicate-collateral screen.
+ */
+export const makeHonestDleqProofs = (
+	secrets: readonly string[],
+	amounts: readonly number[],
+	opts: DleqFixtureKeysetOptions = {},
+): { proofs: DleqProofWithSecret[]; keyset: MintKeys } => {
+	if (secrets.length !== amounts.length) {
+		throw new Error(`makeHonestDleqProofs: secrets (${secrets.length}) and amounts (${amounts.length}) must be parallel`)
+	}
+	const keyset = makeDleqKeyset(Array.from(new Set(amounts)), opts)
+	const proofs = secrets.map((secret, index) => makeHonestDleqProof(amounts[index], secret, opts))
+	return { proofs, keyset }
+}
+
 // ---------- Corruption helpers ----------------------------------------------
 
 /** Compressed generator point — a valid point, but not `a·Y` for our proof. */

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
-import { APP_AUCTION_DLEQ_ROLLOUT_START_AT, type Nut7ProofState } from '../auction/constants'
+import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { MintKeys } from '@cashu/cashu-ts'
@@ -31,6 +31,11 @@ const COMPRESSED_PK = '02' + 'd'.repeat(64)
 const REFUND_PK = '03' + 'e'.repeat(64)
 
 const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
+
+// Arbitrary epoch used by the DLEQ fixtures below. DLEQ is now unconditional,
+// so this is just a stable in-window start_at for these bids (the retired
+// rollout boundary no longer exists).
+const DLEQ_EPOCH = 1_700_000_000
 
 const stubRawEvent = (kind: number, pubkey: string): NDKEvent =>
 	({
@@ -75,7 +80,6 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
-		dleqRequired: overrides.dleqRequired ?? false,
 		...overrides,
 	}
 }
@@ -103,6 +107,12 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: Partial<ParsedBidEvent
 	const refundPubkey = overrides.refundPubkey ?? REFUND_PK
 	const lockSecrets = overrides.lockSecrets ?? [buildLockSecret(childPubkey, locktime, refundPubkey, `nonce-${bidCounter}`)]
 	const proofYs = overrides.proofYs ?? lockSecrets.map((s) => hashToCurveHexFromString(s))
+	// DLEQ is unconditional: attach an honest proof per locked proof unless a
+	// test deliberately supplies its own (including `[]`). The proof amount is
+	// the leg delta the client verification path uses (`legLockedAmount` when a
+	// test sets it explicitly, otherwise the bid amount).
+	const dleqProofs =
+		overrides.dleqProofs ?? lockSecrets.map((secret) => makeHonestDleqProof(overrides.legLockedAmount ?? overrides.amount ?? 5_000, secret))
 	return {
 		rawEvent: stubRawEvent(1023, BIDDER_PK),
 		id: overrides.id ?? `${bidCounter}`.padStart(64, '0'),
@@ -119,13 +129,29 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: Partial<ParsedBidEvent
 		childPubkey,
 		lockSecrets,
 		proofYs,
-		dleqProofs: overrides.dleqProofs,
+		legLockedAmount: overrides.legLockedAmount ?? overrides.amount ?? 5_000,
+		dleqProofs,
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
 		status: 'locked',
 		prevBidId: overrides.prevBidId,
 	}
+}
+
+/**
+ * Keyset evidence for `computeValidatedBids`'s DLEQ crypto step, covering
+ * every proof amount committed by `bids` and keyed `${mint}:${proof.id}`.
+ * One keyset holding the union of amounts is sufficient — the fixture proofs
+ * all resolve their keyset by `(mint, id)`.
+ */
+const dleqKeysetsFor = (...bids: ParsedBidEvent[]): Map<string, MintKeys> => {
+	const amounts = new Set<number>()
+	for (const bid of bids) for (const proof of bid.dleqProofs ?? []) amounts.add(proof.amount)
+	const keyset = makeFixtureKeyset(Array.from(amounts))
+	const map = new Map<string, MintKeys>()
+	for (const bid of bids) for (const proof of bid.dleqProofs ?? []) map.set(`${bid.mint}:${proof.id}`, keyset)
+	return map
 }
 
 let verdictCounter = 0
@@ -159,7 +185,7 @@ describe('computeValidatedBids — quorum-timing eligibility', () => {
 			buildVerdict(bid, { validatorPubkey: V1 }),
 			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 		expect(result.validBids).toHaveLength(1)
 	})
@@ -174,7 +200,7 @@ describe('computeValidatedBids — quorum-timing eligibility', () => {
 			// were able to influence the validation timestamp it would veto the bid.
 			buildVerdict(bid, { validatorPubkey: V3, observedAt: auction.maxEndAt + 99_999 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 
@@ -185,7 +211,7 @@ describe('computeValidatedBids — quorum-timing eligibility', () => {
 			buildVerdict(bid, { validatorPubkey: V1, observedAt: auction.maxEndAt + 10_000 }),
 			buildVerdict(bid, { validatorPubkey: V2, observedAt: auction.maxEndAt + 20_000 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.validBids).toHaveLength(0)
 		expect(result.pendingBids).toHaveLength(1)
@@ -199,7 +225,7 @@ describe('computeValidatedBids — quorum-timing eligibility', () => {
 			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + auction.maxSkewSec + 1 }),
 			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt - auction.maxSkewSec - 1 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.pendingBids).toHaveLength(1)
 	})
@@ -236,7 +262,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, dleqKeysets: dleqKeysetsFor(bid) })
 		// ADR-0004: NUT-7 is client-side evidence for pre-settlement fraud
 		// detection, not a validity gate. A quorum-confirmed bid with no
 		// NUT-7 evidence is valid — the validators already asserted
@@ -250,7 +276,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 
@@ -264,6 +290,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			verdicts,
 			nut7States: new Map([[bid.id, 'spent' as Nut7ProofState]]),
 			postSettlement: false,
+			dleqKeysets: dleqKeysetsFor(bid),
 		})
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.invalidBids).toHaveLength(1)
@@ -282,6 +309,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			// settledBidIds is REQUIRED when postSettlement is true — a bid NOT
 			// recorded in the settlement keeps proof_spent as an invalidation.
 			settledBidIds: new Set([bid.id]),
+			dleqKeysets: dleqKeysetsFor(bid),
 		})
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 		// The NUT-7 value itself is never rewritten: classified still reports
@@ -311,6 +339,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			]),
 			postSettlement: true,
 			settledBidIds: new Set([realWinner.id]),
+			dleqKeysets: dleqKeysetsFor(realWinner, fakeHighBid),
 		})
 		expect(result.canonicalWinner?.id).toBe(realWinner.id)
 		expect(result.invalidBids).toContainEqual(expect.objectContaining({ id: fakeHighBid.id }))
@@ -325,6 +354,7 @@ describe('computeValidatedBids — NUT-7 truthfulness (no defaults, no remaps)',
 			bids: [bid],
 			verdicts,
 			nut7States: new Map([[bid.id, 'pending' as Nut7ProofState]]),
+			dleqKeysets: dleqKeysetsFor(bid),
 		})
 		// A pending NUT-7 state means the mint hasn't confirmed yet. The bid
 		// is quorum-confirmed → valid. Only `spent` pre-settlement invalidates.
@@ -344,7 +374,7 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 			// it neither condemns the bid nor blocks the honest confirm quorum.
 			buildVerdict(bid, { validatorPubkey: V2, claim: 'bid_invalid', reason: 'timestamp_skew' }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner?.id).toBe(bid.id)
 		expect(result.invalidBids).toHaveLength(0)
 	})
@@ -356,7 +386,7 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 			buildVerdict(bid, { validatorPubkey: V1, claim: 'bid_invalid', reason: 'timestamp_skew' }),
 			buildVerdict(bid, { validatorPubkey: V2, claim: 'bid_invalid', reason: 'timestamp_skew' }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.invalidBids).toHaveLength(1)
 	})
@@ -368,7 +398,7 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 			buildVerdict(bid, { validatorPubkey: V1, claim: 'bid_invalid', reason: 'timestamp_skew', observedAt: auction.maxEndAt + 99_999 }),
 			buildVerdict(bid, { validatorPubkey: V2, claim: 'bid_invalid', reason: 'timestamp_skew', observedAt: auction.maxEndAt + 99_999 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		// Same anti-poisoning as confirms: the screened condemn verdicts drop
 		// below quorum, so the bid stays pending rather than invalid.
 		expect(result.canonicalWinner).toBeNull()
@@ -380,8 +410,16 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 describe('computeValidatedBids — rebid chain verdict propagation', () => {
 	test('latest-leg quorum verdicts confirm earlier legs (belt-and-braces propagation)', () => {
 		const auction = buildAuction()
-		const leg1 = buildBid(auction, { id: 'a'.repeat(63) + '1', amount: 5_000, createdAt: 1_500 })
-		const leg2 = buildBid(auction, { id: 'a'.repeat(63) + '2', amount: 5_300, createdAt: 1_510, prevBidId: leg1.id })
+		const leg1 = buildBid(auction, { id: 'a'.repeat(63) + '1', amount: 5_000, createdAt: 1_500, legLockedAmount: 5_000 })
+		// Leg 2's own delta is 5_300 - 5_000 = 300, so its DLEQ proof must be
+		// minted for 300 (the leg delta the client verifies).
+		const leg2 = buildBid(auction, {
+			id: 'a'.repeat(63) + '2',
+			amount: 5_300,
+			createdAt: 1_510,
+			prevBidId: leg1.id,
+			legLockedAmount: 300,
+		})
 		// Only the latest leg has direct verdicts. Under the per-bid d-tag
 		// scheme (ADR-0003 §4.4.1 amendment) each leg has its own replaceable
 		// address so the earlier leg's verdict would normally survive on the
@@ -391,7 +429,13 @@ describe('computeValidatedBids — rebid chain verdict propagation', () => {
 			buildVerdict(leg2, { validatorPubkey: V1, claim: 'won_pending_settlement' }),
 			buildVerdict(leg2, { validatorPubkey: V2, claim: 'won_pending_settlement' }),
 		]
-		const result = computeValidatedBids({ auction, bids: [leg1, leg2], verdicts, nut7States: unspent([leg1, leg2]) })
+		const result = computeValidatedBids({
+			auction,
+			bids: [leg1, leg2],
+			verdicts,
+			nut7States: unspent([leg1, leg2]),
+			dleqKeysets: dleqKeysetsFor(leg1, leg2),
+		})
 		expect(result.validBids).toHaveLength(2)
 		expect(result.canonicalWinner?.id).toBe(leg2.id)
 	})
@@ -404,7 +448,7 @@ describe('computeValidatedBids — rebid chain verdict propagation', () => {
 			// Same validator, newer replaceable copy — must not double-count.
 			buildVerdict(bid, { validatorPubkey: V1, createdAt: 1_506 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
+		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]), dleqKeysets: dleqKeysetsFor(bid) })
 		// quorum = 2, one validator → pending
 		expect(result.canonicalWinner).toBeNull()
 		expect(result.pendingBids).toHaveLength(1)
@@ -424,6 +468,7 @@ describe('computeValidatedBids — canonical winner ordering', () => {
 			bids: [bidLate, bidEarly],
 			verdicts,
 			nut7States: unspent([bidEarly, bidLate]),
+			dleqKeysets: dleqKeysetsFor(bidEarly, bidLate),
 		})
 		expect(result.canonicalWinner?.id).toBe(bidEarly.id)
 	})
@@ -518,9 +563,11 @@ describe('validateBidChainNut7PrePublish — pre-publish NUT-7 gate', () => {
 describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
 	test("a bid reusing another bid's dleq_proof C is marked invalid (fabricated collateral)", () => {
 		const auction = buildAuction()
-		const sharedDleq = { id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }
-		const bid1 = buildBid(auction, { dleqProofs: [sharedDleq] })
-		const bid2 = buildBid(auction, { dleqProofs: [sharedDleq] }) // distinct lock_secret (nonce-N), same C
+		// bid1 holds an honest proof; bid2 (distinct lock_secret, same proof
+		// object → same C) republishes it. bid1 must crypto-verify, so its own
+		// proof has to be honest; bid2 is condemned by the C-dedup before crypto.
+		const bid1 = buildBid(auction)
+		const bid2 = buildBid(auction, { dleqProofs: [bid1.dleqProofs![0]!] })
 		// Prove the fixture's two bids differ on secret/Y and share ONLY the
 		// DLEQ `C`, so the C-dedup is the sole discriminator (not the legacy
 		// secret/Y dedup) and this test cannot pass vacuously.
@@ -539,6 +586,7 @@ describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
 			bids: [bid1, bid2],
 			verdicts,
 			nut7States: unspent([bid1, bid2]),
+			dleqKeysets: dleqKeysetsFor(bid1),
 		})
 
 		// Earliest observed bid keeps the C; the reuser is invalid.
@@ -548,11 +596,9 @@ describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
 
 	test('two bids with distinct dleq_proof C values both stay valid', () => {
 		const auction = buildAuction()
-		const bid1 = buildBid(auction, { dleqProofs: [{ id: '00deadbeef', amount: 100, C: COMPRESSED_PK, e: 'aa', s: 'bb', r: 'cc' }] })
-		const bid2 = buildBid(auction, {
-			amount: 6_000,
-			dleqProofs: [{ id: '00deadbeef', amount: 100, C: '02' + '7'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
-		})
+		const bid1 = buildBid(auction)
+		const bid2 = buildBid(auction, { amount: 6_000 })
+		expect(bid1.dleqProofs?.[0]?.C).not.toBe(bid2.dleqProofs?.[0]?.C)
 		const verdicts = [
 			buildVerdict(bid1, { validatorPubkey: V1 }),
 			buildVerdict(bid1, { validatorPubkey: V2, observedAt: bid1.createdAt + 30 }),
@@ -565,6 +611,7 @@ describe('computeValidatedBids — M5 duplicate dleq_proof C', () => {
 			bids: [bid1, bid2],
 			verdicts,
 			nut7States: unspent([bid1, bid2]),
+			dleqKeysets: dleqKeysetsFor(bid1, bid2),
 		})
 
 		expect(result.invalidBids).toHaveLength(0)
@@ -595,17 +642,16 @@ const garbageDleq = { id: '00deadbeef', amount: 100, C: GENERATOR_HEX, e: '00', 
 const buildPostRolloutAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctionEvent =>
 	buildAuction({
 		...overrides,
-		startAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT,
-		endAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_000,
-		maxEndAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 1_100,
-		dleqRequired: true,
+		startAt: DLEQ_EPOCH,
+		endAt: DLEQ_EPOCH + 1_000,
+		maxEndAt: DLEQ_EPOCH + 1_100,
 	})
 
 describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () => {
 	test('dleq_invalid: post-rollout bid with garbage DLEQ fails crypto verification and is invalid', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			dleqProofs: [garbageDleq],
 		})
 		const verdicts = [
@@ -635,7 +681,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
 			amount: 5_000,
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			dleqProofs: [{ id: '00deadbeef', amount: 100, C: GENERATOR_HEX, e: 'aa', s: 'bb', r: 'cc' }],
 		})
 		const verdicts = [
@@ -660,19 +706,20 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(invalidClassified?.invalidReason).toBe('dleq_invalid')
 	})
 
-	test('grandfathered pre-rollout bid without dleqKeysets stays valid (no DLEQ check)', () => {
+	test('no grandfathered exemption: a bid with no dleq_proof is dleq_invalid (DLEQ is unconditional)', () => {
 		const auction = buildAuction()
-		const bid = buildBid(auction)
+		const bid = buildBid(auction, { dleqProofs: [] })
 		const verdicts = [buildVerdict(bid, { validatorPubkey: V1 }), buildVerdict(bid, { validatorPubkey: V2 })]
 		const result = computeValidatedBids({ auction, bids: [bid], verdicts, nut7States: unspent([bid]) })
-		expect(result.canonicalWinner?.id).toBe(bid.id)
-		expect(result.validBids).toHaveLength(1)
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.validBids).toHaveLength(0)
+		expect(result.invalidBids.map((b) => b.id)).toEqual([bid.id])
 	})
 
 	test('post-rollout bid without dleqKeysets is PENDING (DLEQ evidence not yet gathered, non-authoritative)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			dleqProofs: [garbageDleq],
 		})
 		const verdicts = [
@@ -701,7 +748,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 	test('post-rollout bid whose keyset is not in a SUPPLIED dleqKeysets map is PENDING (evidence unavailable, not fraud)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			dleqProofs: [garbageDleq],
 		})
 		const verdicts = [
@@ -746,7 +793,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		const secret0 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-0')
 		const secret1 = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'mixed-evidence-1')
 		const bid = buildBid(auction, {
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			lockSecrets: [secret0, secret1],
 			// Proof amounts sum to the default 5_000 leg so the ONLY thing
 			// blocking verification is the absent keyset. Distinct C values —
@@ -777,7 +824,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 	test('post-rollout bid with no dleqProofs is invalid via structural check (validateBid Step 3.5)', () => {
 		const auction = buildPostRolloutAuction()
 		const bid = buildBid(auction, {
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			dleqProofs: [],
 		})
 		const verdicts = [
@@ -818,7 +865,7 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		const proofB = makeHonestDleqProof(500, secretB, { keysetId: ksBId, basePrivKey: 900 })
 		const bid = buildBid(auction, {
 			amount: 1_000,
-			createdAt: APP_AUCTION_DLEQ_ROLLOUT_START_AT + 500,
+			createdAt: DLEQ_EPOCH + 500,
 			lockSecrets: [secretA, secretB],
 			dleqProofs: [proofA, proofB],
 		})
@@ -880,7 +927,10 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			amount: 6_000,
 			createdAt: 1_600,
 			lockSecrets: bid1.lockSecrets,
-			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: '02' + '7'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
+			// Honest for bid2's own (copied) secret and 6_000 delta, so that in
+			// isolation bid2 would be a valid winner; a different amount yields a
+			// different C than bid1's, keeping the C-dedup from being the cause.
+			dleqProofs: [makeHonestDleqProof(6_000, bid1.lockSecrets[0]!)],
 		})
 		expect(bid2.bidderPubkey).not.toBe(bid1.bidderPubkey)
 		expect(bid2.lockSecrets).toEqual(bid1.lockSecrets)
@@ -894,7 +944,13 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
 		]
 
-		const both = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		const both = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+			dleqKeysets: dleqKeysetsFor(bid1, bid2),
+		})
 		expect(both.invalidBids.map((b) => b.id)).toContain(bid2.id)
 		expect(both.validBids.map((b) => b.id)).toEqual([bid1.id])
 		expect(both.canonicalWinner?.id).toBe(bid1.id)
@@ -907,25 +963,23 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			bids: [bid2],
 			verdicts: verdicts.filter((v) => v.bidEventId === bid2.id),
 			nut7States: unspent([bid2]),
+			dleqKeysets: dleqKeysetsFor(bid2),
 		})
 		expect(alone.canonicalWinner?.id).toBe(bid2.id)
 	})
 
 	test("a DIFFERENT author reusing another bid's DLEQ `C` (fabricated collateral) is invalid", () => {
 		const auction = buildAuction()
-		const sharedC = '02' + 'c'.repeat(64)
-		const bid1 = buildBid(auction, {
-			id: 'c'.repeat(64),
-			amount: 5_000,
-			createdAt: 1_450,
-			dleqProofs: [{ id: '00deadbeef', amount: 5_000, C: sharedC, e: 'aa', s: 'bb', r: 'cc' }],
-		})
+		const bid1 = buildBid(auction, { id: 'c'.repeat(64), amount: 5_000, createdAt: 1_450 })
+		// bid2 reuses bid1's DLEQ `C` verbatim while publishing a different
+		// secret/Y. A same-C proof cannot verify for two secrets, so bid2 is
+		// caught by the cross-author C-dedup before crypto verification.
 		const bid2 = buildBid(auction, {
 			id: 'd'.repeat(64),
 			bidderPubkey: OTHER_BIDDER_PK,
 			amount: 6_000,
 			createdAt: 1_600,
-			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: sharedC, e: 'aa', s: 'bb', r: 'cc' }],
+			dleqProofs: [bid1.dleqProofs![0]!],
 		})
 		// C is the sole shared value: distinct authors, secrets, Ys.
 		expect(bid2.lockSecrets).not.toEqual(bid1.lockSecrets)
@@ -938,7 +992,13 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			buildVerdict(bid2, { validatorPubkey: V1 }),
 			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+			dleqKeysets: dleqKeysetsFor(bid1),
+		})
 		expect(result.validBids.map((b) => b.id)).toEqual([bid1.id])
 		expect(result.invalidBids.map((b) => b.id)).toContain(bid2.id)
 	})
@@ -951,7 +1011,6 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			bidderPubkey: OTHER_BIDDER_PK,
 			amount: 6_000,
 			createdAt: 1_600,
-			dleqProofs: [{ id: '00deadbeef', amount: 6_000, C: '02' + '8'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
 		})
 		const verdicts = [
 			buildVerdict(bid1, { validatorPubkey: V1 }),
@@ -959,7 +1018,13 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 			buildVerdict(bid2, { validatorPubkey: V1 }),
 			buildVerdict(bid2, { validatorPubkey: V2, observedAt: bid2.createdAt + 30 }),
 		]
-		const result = computeValidatedBids({ auction, bids: [bid1, bid2], verdicts, nut7States: unspent([bid1, bid2]) })
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid1, bid2],
+			verdicts,
+			nut7States: unspent([bid1, bid2]),
+			dleqKeysets: dleqKeysetsFor(bid1, bid2),
+		})
 		expect(result.invalidBids).toHaveLength(0)
 		expect(result.validBids.map((b) => b.id).sort()).toEqual([bid1.id, bid2.id].sort())
 	})

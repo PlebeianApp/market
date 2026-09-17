@@ -5,7 +5,8 @@ import { computeValidatedBids, type ValidatedBidSet } from '@/lib/auction/bidVal
 import type { Nut7ProofState } from '@/lib/auction/constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { fetchMintKeysets, validatePathRelease } from '@/lib/auction/validation'
-import type { MintKeyset } from '@cashu/cashu-ts'
+import { fetchDleqKeysetsForBids } from '@/lib/cashu/dleq'
+import type { MintKeys, MintKeyset } from '@cashu/cashu-ts'
 import { fetchBidNut7States } from './useNut7Polling'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
@@ -27,14 +28,21 @@ export const selectValidatedAuctionWinner = (
 	bids: ParsedBidEvent[],
 	verdicts: ParsedValidatorVerdictEvent[],
 	nut7States: Map<string, Nut7ProofState>,
-): ParsedBidEvent | null => getValidatedAuctionBids(auction, bids, verdicts, nut7States).canonicalWinner
+	dleqKeysets?: Map<string, MintKeys>,
+): ParsedBidEvent | null => getValidatedAuctionBids(auction, bids, verdicts, nut7States, dleqKeysets).canonicalWinner
 
 export const getValidatedAuctionBids = (
 	auction: ParsedAuctionEvent,
 	bids: ParsedBidEvent[],
 	verdicts: ParsedValidatorVerdictEvent[],
 	nut7States: Map<string, Nut7ProofState>,
-): ValidatedBidSet => computeValidatedBids({ auction, bids, verdicts, nut7States, postSettlement: false })
+	/**
+	 * DLEQ keysets (keyed `${mint}:${keysetId}`) for the unconditional DLEQ
+	 * crypto check. Without them every DLEQ-bearing bid is `pending`
+	 * (`dlequ_evidence_unavailable`) and no canonical winner can be derived.
+	 */
+	dleqKeysets?: Map<string, MintKeys>,
+): ValidatedBidSet => computeValidatedBids({ auction, bids, verdicts, nut7States, dleqKeysets, postSettlement: false })
 
 export interface AuctionWinResolution {
 	canonicalWinner: ParsedBidEvent | null
@@ -66,7 +74,10 @@ export const resolveAuctionWinFromEvents = async (
 		.filter((result): result is { ok: true; value: ParsedPathReleaseEvent } => result.ok)
 		.map((result) => result.value)
 	const nut7States = await fetchBidNut7States(parsedBids, auction.mints)
-	return resolveAuctionWin(win, auction, parsedBids, parsedVerdicts, parsedPathReleases, nut7States, now)
+	// DLEQ is unconditional: gather the keysets needed to crypto-verify the
+	// bids before deriving a winner, otherwise every bid is pending.
+	const dleqKeysets = await fetchDleqKeysetsForBids(parsedBids, auction.mints)
+	return resolveAuctionWin(win, auction, parsedBids, parsedVerdicts, parsedPathReleases, nut7States, now, undefined, dleqKeysets)
 }
 
 export async function resolveAuctionWin(
@@ -78,8 +89,10 @@ export async function resolveAuctionWin(
 	nut7States: Map<string, Nut7ProofState>,
 	now: number,
 	mintKeysetsByMint?: Map<string, MintKeyset[]>,
+	/** DLEQ keysets (keyed `${mint}:${keysetId}`) for the unconditional DLEQ check. */
+	dleqKeysets?: Map<string, MintKeys>,
 ): Promise<AuctionWinResolution> {
-	const validatedBids = getValidatedAuctionBids(auction, bids, verdicts, nut7States)
+	const validatedBids = getValidatedAuctionBids(auction, bids, verdicts, nut7States, dleqKeysets)
 	const canonicalWinner = validatedBids.canonicalWinner
 	const isActiveWinner = canonicalWinner?.id === win.bidEventId
 	const hasReleasedPath = isActiveWinner
