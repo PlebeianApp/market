@@ -3,7 +3,6 @@ import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import {
 	AUCTION_PATH_RELEASE_KIND,
 	DEFAULT_AUDITOR_QUORUM,
-	resolveDleqRequired,
 	VALIDATOR_VERDICT_KIND,
 } from '@/lib/auction/constants'
 import {
@@ -839,26 +838,6 @@ export const getAuctionBiddingCutoffAt = (event: NostrEventLike | null): number 
 export const getAuctionSettlementGrace = (event: NostrEventLike | null): number => (event ? getAuctionSettlementGraceValue(event) : 0)
 
 export const getAuctionExtensionRule = (event: NostrEventLike | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
-
-/**
- * ADR-0011 Decision 8 — the auction's canonical DLEQ activation, read from the
- * signed `dleq_required` tag on the kind-30408 event.
- *
- * Delegates to the shared `resolveDleqRequired` predicate, which reads the tag
- * through the single strict parser (`readDleqRequiredTag`): a lone
- * `["dleq_required","1"|"0"]` is canonical and authoritative in both
- * directions, any malformed/duplicate form fails closed to "required" (review
- * A1), and the `start_at` rollout boundary is consulted ONLY for legacy events
- * published before the tag existed.
- *
- * The bid form MUST put this value on `AuctionBidFormData.dleqRequired`: the
- * publish path derives both the Cashu lock's output requirement and the
- * published `dleq_proof` tags from it (review N1), so omitting it silently
- * falls back to the deploy-time boundary and the lock and the published bid
- * can disagree for an auction whose signed tag differs from the boundary.
- */
-export const getAuctionDleqRequired = (event: NDKEvent | null): boolean =>
-	event ? resolveDleqRequired(event.tags, getAuctionStartAt(event)) : false
 
 /**
  * Display-side bid floor. Reads `starting_bid` and nothing else.
