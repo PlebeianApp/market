@@ -51,6 +51,11 @@ CF_ZONE="$(echo -n "${PREVIEW_CLOUDFLARE_ZONE_ID:?PREVIEW_CLOUDFLARE_ZONE_ID is 
 # is exactly the previous behaviour — the secret is purely additive.
 PORT="$(echo -n "${PREVIEW_VPS_SSH_PORT:-22}" | tr -d '[:space:]')"
 [ -z "$PORT" ] && PORT=22
+# Optional co-located nsite gateway (step 3). OFF by default: it is legacy
+# from when the preview host was a shared box, previews do not need it, and
+# its upstream source is no longer publicly cloneable. Enable with
+# PREVIEW_NSITE_GATEWAY=1 on a host that actually serves nsite.
+NSITE_GATEWAY="$(echo -n "${PREVIEW_NSITE_GATEWAY:-0}" | tr -d '[:space:]')"
 
 # ── Pinned host-key verification (no MITM window, no TOFU) ──────────────
 # Scan the host key, compare its SHA256 fingerprint against the pinned
@@ -186,12 +191,18 @@ echo "==> Copying preview_manager.py + preview_gateway.py to VPS"
   "${SCRIPT_DIR}/preview_gateway.py" \
   "${_VPS_USER}@${HOST}:/home/${_VPS_USER}/preview-infra/"
 
-# ── 3. Ensure nsite-gateway Docker container is running ──
-# Uses locally-built image nsite-gateway-nsite:latest (built from
-# the nsite-gateway Dockerfile in the tollgate infra). If the image
-# doesn't exist, clone and build it. If container is already running,
-# skip entirely.
+# ── 3. nsite-gateway Docker container (OPTIONAL, off by default) ──
+# Legacy from when the preview host was a shared box: it serves
+# nsite.orangesync.tech via a locally-built image, and previews do NOT need
+# it. Off unless PREVIEW_NSITE_GATEWAY=1. Its upstream source
+# (github.com/fiatjaf/nsite) is no longer publicly cloneable (404 as of
+# 2026-09-17), so on a fresh host the build cannot succeed; a failed build is
+# therefore a warning, never an abort — a missing nsite gateway must not block
+# preview provisioning. An already-running container is left untouched.
 echo "==> Checking nsite-gateway container"
+if [ "${NSITE_GATEWAY}" != "1" ]; then
+  echo "  nsite-gateway disabled (set PREVIEW_NSITE_GATEWAY=1 to enable) — skipping"
+else
 "${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" bash -s <<'REMOTE'
 set -euo pipefail
 
@@ -202,17 +213,20 @@ if docker ps --filter name=tollgate-nsite-gateway --format '{{.Names}}' | grep -
   exit 0
 fi
 
-# Check if image exists locally
+# Build the image if it is absent. The clone/build is best-effort: warn and
+# continue when upstream is unreachable instead of failing the whole deploy.
 if ! docker images --format '{{.Repository}}:{{.Tag}}' | grep -q 'nsite-gateway-nsite:latest'; then
   echo "  Image not found — building from source"
-  cd /tmp
-  if [ -d nsite-gateway ]; then
-    cd nsite-gateway && git pull --quiet
-  else
+  if ! (
+    cd /tmp
+    rm -rf nsite-gateway
     git clone --quiet https://github.com/fiatjaf/nsite.git nsite-gateway
     cd nsite-gateway
+    docker build -t nsite-gateway-nsite:latest .
+  ); then
+    echo "  WARNING: nsite-gateway unavailable (upstream repo no longer cloneable) — continuing without it"
+    exit 0
   fi
-  docker build -t nsite-gateway-nsite:latest .
   echo "  Image built"
 fi
 
@@ -234,6 +248,7 @@ docker run -d \
 echo "  Container started"
 docker ps --filter name=tollgate-nsite-gateway --format '  {{.Names}} {{.Status}} {{.Ports}}'
 REMOTE
+fi
 
 # ── 4. Ship manager.env (Cloudflare credentials for DNS cleanup) ─────────
 # Written remotely with umask 077 via stdin, so the token never appears in
@@ -301,6 +316,9 @@ UNIT
 if [ ! -f /etc/systemd/system/preview-gateway.service ] \
   || ! diff -q "${TMP_UNIT}" /etc/systemd/system/preview-gateway.service > /dev/null; then
   sudo cp "${TMP_UNIT}" /etc/systemd/system/preview-gateway.service
+  # `cp` keeps the mktemp mode (0600), which the deploy user then cannot
+  # `diff` against on the next run — making every re-provision "changed".
+  sudo chmod 0644 /etc/systemd/system/preview-gateway.service
   sudo systemctl daemon-reload
   sudo systemctl enable preview-gateway
   RESTART=1
@@ -364,11 +382,15 @@ CHANGED=0
 if [ ! -f /etc/systemd/system/preview-manager.service ] \
   || ! diff -q "${TMP_UNIT}" /etc/systemd/system/preview-manager.service > /dev/null; then
   sudo cp "${TMP_UNIT}" /etc/systemd/system/preview-manager.service
+  # `cp` keeps the mktemp mode (0600); normalise so the next run's `diff`
+  # (as the deploy user) can read it and stay a no-op.
+  sudo chmod 0644 /etc/systemd/system/preview-manager.service
   CHANGED=1
 fi
 if [ ! -f /etc/systemd/system/preview-manager.timer ] \
   || ! diff -q "${TMP_TIMER}" /etc/systemd/system/preview-manager.timer > /dev/null; then
   sudo cp "${TMP_TIMER}" /etc/systemd/system/preview-manager.timer
+  sudo chmod 0644 /etc/systemd/system/preview-manager.timer
   CHANGED=1
 fi
 rm -f "${TMP_UNIT}" "${TMP_TIMER}"
@@ -485,6 +507,15 @@ else
   echo "  test-market.orangesync.tech route already present"
 fi
 REMOTE
+
+# ── 10b. Normalise the Caddyfile ownership/permissions ──
+# Section 8 rewrites the Caddyfile from a `mktemp` (0600, owned by the deploy
+# user). On a host whose Caddyfile did not exist yet, `sudo mv` then installs
+# that mode, and Caddy (running as the `caddy` user) cannot read its own
+# config: "reading config from file: open /etc/caddy/Caddyfile: permission
+# denied". Normalise to root:root 0644 before validate/reload.
+echo "==> Normalising Caddyfile ownership/permissions"
+"${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" "sudo chown root:root /etc/caddy/Caddyfile && sudo chmod 0644 /etc/caddy/Caddyfile && ls -l /etc/caddy/Caddyfile"
 
 # ── 11. Validate and reload Caddy ──
 echo "==> Validating Caddy config"
