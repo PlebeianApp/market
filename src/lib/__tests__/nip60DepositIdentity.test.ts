@@ -22,7 +22,18 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+// Bun applies `mock.module()` across every test file in a single run, and
+// `auctionBidPublishRetry.test.ts` registers a PARTIAL mock for
+// `@/lib/stores/nip60` (only lockAuctionBidFunds / updatePendingTokenContext).
+// A plain `@/lib/stores/nip60` alias import here can therefore bind to that
+// mock and lose `startDeposit`/`cancelDeposit` entirely. Import the REAL store
+// through a UNIQUE query-string specifier — no other file can have mocked it —
+// so this test is self-consistent and independent of file order or of which
+// worker process bun assigns it to (same pattern as
+// nip60LockAuctionBidFunds.test.ts). This file drives the store instance it
+// loads here, so a fresh module body is exactly what it wants.
+const realNip60: typeof import('@/lib/stores/nip60') = await import(`${import.meta.dir}/../stores/nip60.ts?deposit-identity-real=1`)
+const { nip60Actions, nip60Store } = realNip60
 
 const TEST_MINT = 'https://mint.example.test'
 /** Checksum-valid bolt11 invoice encoding a 2,000 sat amount. */
