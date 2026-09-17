@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test'
 import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
-import { encrypt as nip44Encrypt, decrypt as nip44Decrypt, getConversationKey } from 'nostr-tools/nip44'
+import { v2 as nip44 } from 'nostr-tools/nip44'
 import { hexToBytes, bytesToHex } from '@noble/hashes/utils.js'
 
 export interface TestUser {
@@ -22,13 +22,13 @@ export async function setupAuthContext(context: BrowserContext, user: TestUser):
 
 	const skBytes = hexToBytes(user.sk)
 	await context.exposeFunction('__nostrNip44Encrypt', (pubkey: string, plaintext: string): string => {
-		const convKey = getConversationKey(skBytes, pubkey)
-		return nip44Encrypt(plaintext, convKey)
+		const convKey = nip44.utils.getConversationKey(skBytes, pubkey)
+		return nip44.encrypt(plaintext, convKey)
 	})
 
 	await context.exposeFunction('__nostrNip44Decrypt', (pubkey: string, ciphertext: string): string => {
-		const convKey = getConversationKey(skBytes, pubkey)
-		return nip44Decrypt(ciphertext, convKey)
+		const convKey = nip44.utils.getConversationKey(skBytes, pubkey)
+		return nip44.decrypt(ciphertext, convKey)
 	})
 
 	await context.addInitScript(() => {

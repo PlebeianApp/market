@@ -39,6 +39,8 @@ async function dismissToasts(page: Page) {
 test.describe('Shipping Special Cases', () => {
 	test.describe.configure({ timeout: 120_000 })
 
+	// Skipped: checkout/payment flow has deeper CI failures beyond this PR's scope.
+	// Selector fixes are kept so the tests pass once the checkout flow is stable.
 	test.skip('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
@@ -46,10 +48,8 @@ test.describe('Shipping Special Cases', () => {
 		// ─── 1. Add digital-only product to cart ──────────────────────
 		await addProductAndOpenCart(buyerPage, 'Bitcoin E-Book')
 
-		// Shipping should auto-select "Digital Delivery" (only option)
-		await expect(buyerPage.getByText(/Digital Delivery/)).toBeVisible({ timeout: 10_000 })
-
-		// Proceed to checkout
+		// Proceed to checkout — ShippingSelector is hidden in the cart sheet
+		// (hideShipping=true) and only renders on the checkout page.
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()
@@ -120,6 +120,8 @@ test.describe('Shipping Special Cases', () => {
 		}
 	})
 
+	// Skipped: checkout/payment flow has deeper CI failures beyond this PR's scope.
+	// Selector fixes are kept so the tests pass once the checkout flow is stable.
 	test.skip('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
@@ -127,10 +129,8 @@ test.describe('Shipping Special Cases', () => {
 		// ─── 1. Add pickup-only product to cart ──────────────────────
 		await addProductAndOpenCart(buyerPage, 'Bitcoin Conference Ticket')
 
-		// Shipping should auto-select "Local Pickup - Bitcoin Store" (only option)
-		await expect(buyerPage.getByText(/Local Pickup/)).toBeVisible({ timeout: 10_000 })
-
-		// Proceed to checkout
+		// Proceed to checkout — ShippingSelector is hidden in the cart sheet
+		// (hideShipping=true) and only renders on the checkout page.
 		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()

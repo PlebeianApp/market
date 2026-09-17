@@ -11,6 +11,11 @@ on:
         description: 'Optional grep filter (runs only matching tests). Empty = default full run.'
         required: false
         default: ''
+      repeat_each:
+        description: 'Repeat each test N times for flake detection (0/1 = normal run)'
+        required: false
+        default: 1
+        type: number
   schedule:
     - cron: '0 6 * * 1'
 
@@ -143,7 +148,24 @@ jobs:
           APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
 
       - name: Run E2E tests
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client'
+        # Deterministic families gate every PR/push, each test run twice to
+        # surface obvious flakiness. Retries come from playwright.config.ts so
+        # failures still produce traces. Flaky families (Cart, Product Page
+        # Interactions incl. the reaction test, ...) are not gated here; they
+        # run in the scheduled/manual e2e-full job instead.
+        #
+        # `OG Meta Tags` (e2e/tests/og-meta-tags.spec.ts, issue #459) is gated
+        # here so server-rendered product previews are exercised on every PR.
+        # It runs on the local relay/dev server like every other family in this
+        # job: no new triggers, permissions, secrets, or env are introduced.
+        # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
+        # describe in that spec stops matching this pattern.
+        #
+        # The auction families (`Auction Bidding`, `Direct Lightning Bid
+        # Funding`, `Auction Settlement Descriptor`, `publish events to relay`,
+        # `Cross-client`) are the `auctions` branch's deterministic set; they
+        # were already gated there before this merge.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
@@ -170,7 +192,9 @@ jobs:
     # remain in the scheduled e2e-full job.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Flake-detection runs (repeat_each > 1) disable retries, so allow the
+    # job more headroom than the weekly default run.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.repeat_each > 1) && 360 || 120 }}
 
     steps:
       - name: Checkout code
@@ -274,11 +298,22 @@ jobs:
       - name: Run remaining E2E tests
         env:
           TEST_GREP: ${{ inputs.test_grep }}
+          REPEAT_EACH: ${{ inputs.repeat_each }}
         run: |
+          REPEAT_FLAG=""
+          # Empty, non-numeric, 0, or 1 mean a normal run; anything else
+          # repeats each test N times with retries disabled (flake hunting).
+          case "${REPEAT_EACH:-}" in
+            ''|*[!0-9]*|0|1) ;;
+            *) REPEAT_FLAG="--repeat-each=$REPEAT_EACH --retries=0" ;;
+          esac
+          if [ -n "$REPEAT_FLAG" ]; then
+            echo "Flake detection mode: $REPEAT_EACH runs per test, retries disabled"
+          fi
           if [ -n "$TEST_GREP" ]; then
-            bun run test:e2e -- --grep "$TEST_GREP"
+            bun run test:e2e -- --grep "$TEST_GREP" $REPEAT_FLAG
           else
-            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Auction Bidding|Auction Settlement Descriptor|publish events to relay|Cross-client|Collection Management'
+            bun run test:e2e -- --grep-invert 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client' $REPEAT_FLAG
           fi
 
       - name: Show server logs on failure

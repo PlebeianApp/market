@@ -7,7 +7,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { EntityPermissions } from '@/hooks/useEntityPermissions'
-import { Ban, Edit, MoreVertical, Star, StarOff } from 'lucide-react'
+import { Ban, Edit, FlaskConical, MoreVertical, Star, StarOff } from 'lucide-react'
 
 export interface EntityActionsMenuProps {
 	permissions: EntityPermissions
@@ -16,11 +16,22 @@ export interface EntityActionsMenuProps {
 	entityCoords?: string // For blacklisting products/collections
 	isBlacklisted?: boolean
 	isFeatured?: boolean
+	/**
+	 * ADR-0009 test-label moderation. The authorized labeler set is editors
+	 * UNION admins (plus the app owner), so this mirrors the
+	 * blacklist/featured role gate. Kept as a separate flag so the label
+	 * contract can diverge without silently changing those features.
+	 */
+	canManageTestLabel?: boolean
+	/** Whether an active authorized test label exists for this item. */
+	testLabelActive?: boolean
 	onEdit?: () => void
 	onBlacklist?: () => void
 	onUnblacklist?: () => void
 	onSetFeatured?: () => void
 	onUnsetFeatured?: () => void
+	onMarkTestLabel?: () => void
+	onUnmarkTestLabel?: () => void
 }
 
 /**
@@ -34,16 +45,24 @@ export function EntityActionsMenu({
 	entityCoords,
 	isBlacklisted = false,
 	isFeatured = false,
+	canManageTestLabel = false,
+	testLabelActive = false,
 	onEdit,
 	onBlacklist,
 	onUnblacklist,
 	onSetFeatured,
 	onUnsetFeatured,
+	onMarkTestLabel,
+	onUnmarkTestLabel,
 }: EntityActionsMenuProps) {
 	const { canEdit, canBlacklist, canSetFeatured } = permissions
 
+	// Test-label moderation is its own gate (admin set), not the editor-inclusive
+	// blacklist/featured gate — see the prop docs.
+	const showTestLabelAction = canManageTestLabel && entityType === 'product' && (!!onMarkTestLabel || !!onUnmarkTestLabel)
+
 	// Don't show menu if user has no actions available
-	const hasAnyAction = canEdit || canBlacklist || canSetFeatured
+	const hasAnyAction = canEdit || canBlacklist || canSetFeatured || showTestLabelAction
 	if (!hasAnyAction) {
 		return null
 	}
@@ -118,6 +137,22 @@ export function EntityActionsMenu({
 							</DropdownMenuItem>
 						)}
 					</>
+				)}
+
+				{/* ADR-0009 test-label moderation — authorized labelers are
+				    editors ∪ admins (the curation role set). */}
+				{showTestLabelAction && <DropdownMenuSeparator />}
+				{showTestLabelAction && !testLabelActive && onMarkTestLabel && (
+					<DropdownMenuItem onClick={onMarkTestLabel} data-testid="mark-test-label-menu-item">
+						<FlaskConical className="mr-2 h-4 w-4" />
+						<span>Mark as test listing</span>
+					</DropdownMenuItem>
+				)}
+				{showTestLabelAction && testLabelActive && onUnmarkTestLabel && (
+					<DropdownMenuItem onClick={onUnmarkTestLabel} data-testid="unmark-test-label-menu-item">
+						<FlaskConical className="mr-2 h-4 w-4" />
+						<span>Unmark as test listing</span>
+					</DropdownMenuItem>
 				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
