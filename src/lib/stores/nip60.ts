@@ -15,7 +15,7 @@ import {
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
-import { AUCTION_MIN_BID_LEG_SATS, resolveDleqRequired } from '@/lib/auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
@@ -131,15 +131,6 @@ export interface LockAuctionBidFundsParams {
 	 * auction's p2pk_xpub before calling lockAuctionBidFunds.
 	 */
 	lockPubkey: string
-	/**
-	 * ADR-0011 Blocker 2/3: true when the auction requires NUT-12 DLEQ on
-	 * the locked output proofs (i.e. `auction.dleqRequired`). When true the
-	 * lock swaps all eligible inputs and then validates the freshly issued
-	 * P2PK output proofs carry a DLEQ proof (fail-closed). When false
-	 * (grandfathered/pre-rollout auction), no such output requirement is
-	 * enforced, so a legacy non-DLEQ balance can still lock.
-	 */
-	dleqRequired?: boolean
 	auctionEventId?: string
 	auctionCoordinates?: string
 	sellerPubkey?: string
@@ -2160,9 +2151,8 @@ export const nip60Actions = {
 			// ADR-0011 Blocker 2: the DLEQ security property lives on the NEWLY
 			// ISSUED P2PK swap outputs, not on the input proofs. `lockAuctionBidProofs`
 			// swaps ALL eligible inputs (no input DLEQ filter) and we validate the
-			// output proofs' DLEQ below. Blocker 3: `requireDleqOnOutput` is derived
-			// from the auction's canonical `dleqRequired`, so legacy non-DLEQ balances
-			// can still bid on grandfathered auctions.
+			// output proofs' DLEQ below. `requireDleqOnOutput` is unconditional:
+			// DLEQ is required for every auction bid.
 			const result = await lockAuctionBidProofs(cashuWallet, amount, selectedProofs, {
 				lockPubkey,
 				locktime,
@@ -2186,7 +2176,7 @@ export const nip60Actions = {
 			// `dleq_proof` tags otherwise. Fail closed (buildDleqProofs throws on
 			// a missing DLEQ proof), but do this AFTER the strict pending-token
 			// persist so a check failure leaves a reclaim-eligible leg.
-			const requireDleqOnOutput = params.dleqRequired === true
+			const requireDleqOnOutput = true
 
 			const token = getEncodedToken({
 				mint: targetMint,
@@ -2653,12 +2643,6 @@ export const nip60Actions = {
 			sellerPubkey: selected.pubkey,
 			p2pkXpub,
 			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
-			// ADR-0011 Decision 8 (review N1) — carry the auction's canonical
-			// DLEQ activation so the lock and the published `dleq_proof` tags
-			// come from the signed decision, not the deploy-time boundary.
-			// Read strictly (review A1): duplicates/malformed forms fail
-			// closed to required.
-			dleqRequired: resolveDleqRequired(selected.tags, startAt),
 		}
 
 		const bidEventId = await publishAuctionBid(formData)

@@ -40,8 +40,6 @@
 import {
 	AUCTION_MIN_BID_LEG_SATS,
 	AUCTION_MIN_BID_SATS,
-	BID_FLOOR_TIME_GRACE_SECONDS,
-	requiresDleqForAuction,
 	type PathReleaseReason,
 	type Nut7ProofState,
 	type ValidatorClaim,
@@ -148,25 +146,18 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 export { mintSupportsDleq, type MintDleqSupportOptions }
 
 /**
- * Enforce the DLEQ publish gate (ADR-0011, Decision 6: migration by `start_at`).
- *
- * When `startAt` is at or after {@link APP_AUCTION_DLEQ_ROLLOUT_START_AT}, every
- * allowlisted mint must advertise NUT-12 DLEQ support. Any mint that fails the
- * probe is a hard reject with a clear error naming each offending mint; the
- * auction is not created. Auctions starting before the boundary (or with an
- * empty mint allowlist) pass without any network probes — live auctions are
- * grandfathered under the legacy non-DLEQ path.
+ * Enforce the DLEQ publish gate (ADR-0011): every allowlisted mint must
+ * advertise NUT-12 DLEQ support. Any mint that fails the probe is a hard reject
+ * with a clear error naming each offending mint; the auction is not created.
+ * An empty mint allowlist passes without any network probes.
  *
  * @param supportsDleq injectable probe (defaults to {@link mintSupportsDleq}) —
  *   lets callers and tests substitute a policy-enforcing or fake transport.
  */
 export async function assertAuctionMintsSupportDleq(
-	startAt: number,
 	mints: readonly string[],
 	supportsDleq: (mintUrl: string) => Promise<boolean> = mintSupportsDleq,
 ): Promise<void> {
-	if (!requiresDleqForAuction(startAt)) return
-
 	const unsupported: string[] = []
 	for (const mint of mints) {
 		let ok = false
@@ -180,9 +171,7 @@ export async function assertAuctionMintsSupportDleq(
 
 	if (unsupported.length > 0) {
 		throw new Error(
-			`This auction starts after the DLEQ rollout boundary (ADR-0011), but the following trusted ` +
-				`mint(s) do not advertise NUT-12 DLEQ support: ${unsupported.join(', ')}. ` +
-				`Use NUT-12-capable mints or set an earlier start time.`,
+			`The following trusted mint(s) do not advertise NUT-12 DLEQ support: ${unsupported.join(', ')}. ` + `Use NUT-12-capable mints.`,
 		)
 	}
 }
@@ -529,41 +518,38 @@ export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
 		}
 	}
 
-	// --- Step 3.5: NUT-12 DLEQ collateral presence (ADR-0011 Decision 6/7) --
-	// Auctions starting at/after the rollout boundary require every bid to
-	// publish one DLEQ proof per locked proof. Missing or mismatched DLEQ
-	// collateral fails closed (`dleq_invalid`) rather than grandfathering the
-	// economic-verification gap. Pre-rollout auctions are grandfathered.
+	// --- Step 3.5: NUT-12 DLEQ collateral presence (ADR-0011) ----------------
+	// DLEQ is unconditionally required: every bid must publish one DLEQ proof
+	// per locked proof. Missing or mismatched collateral fails closed
+	// (`dleq_invalid`); there is no non-DLEQ or grandfathered path.
 	// NOTE: a partial-count mismatch (0 < dleqProofs.length < lockSecrets.length)
 	// is rejected earlier at parse time by the schema's triple-parallel refine,
 	// so through the real parse→validate path this branch fires primarily for
 	// the fully-absent (0 proofs) case; the count check remains here as
 	// defense-in-depth for hand-built `ParsedBidEvent`s.
-	if (auction.dleqRequired) {
-		const dleqProofs = bid.dleqProofs ?? []
-		if (dleqProofs.length !== bid.lockSecrets.length) {
-			return {
-				claim: 'bid_invalid',
-				reason: 'dleq_invalid',
-				detail: `DLEQ-required auction (dleq_required=1) requires ${bid.lockSecrets.length} dleq_proof tag(s) but bid carries ${dleqProofs.length}`,
-			}
+	const dleqProofs = bid.dleqProofs ?? []
+	if (dleqProofs.length !== bid.lockSecrets.length) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'dleq_invalid',
+			detail: `a bid requires ${bid.lockSecrets.length} dleq_proof tag(s) but carries ${dleqProofs.length}`,
 		}
-		// B4 (ADR-0011): structural field validation of every dleq_proof entry.
-		// Each proof must carry the complete NUT-12 DLEQ tuple — keyset id,
-		// amount, unblinded signature `C`, challenge `e`, response `s`, and the
-		// blinding factor `r`. A malformed or field-omitted proof fails closed
-		// (`dleq_invalid`) the same way a missing proof would: the bidder's
-		// `dleq_proof` tag is untrusted input, and a structurally-broken proof
-		// cannot be verified cryptographically downstream. This is
-		// defense-in-depth for hand-built `ParsedBidEvent`s (the Zod schema
-		// already rejects most malformed tags at parse time), and it pins the
-		// `r`-is-required contract that `verifyProofDleq` also enforces
-		// fail-closed (NUT-12 needs the blinding factor to reblind offline).
-		for (let i = 0; i < dleqProofs.length; i++) {
-			const structuralError = validateDleqProofStructure(dleqProofs[i], i)
-			if (structuralError) {
-				return { claim: 'bid_invalid', reason: 'dleq_invalid', detail: structuralError }
-			}
+	}
+	// B4 (ADR-0011): structural field validation of every dleq_proof entry.
+	// Each proof must carry the complete NUT-12 DLEQ tuple — keyset id,
+	// amount, unblinded signature `C`, challenge `e`, response `s`, and the
+	// blinding factor `r`. A malformed or field-omitted proof fails closed
+	// (`dleq_invalid`) the same way a missing proof would: the bidder's
+	// `dleq_proof` tag is untrusted input, and a structurally-broken proof
+	// cannot be verified cryptographically downstream. This is
+	// defense-in-depth for hand-built `ParsedBidEvent`s (the Zod schema
+	// already rejects most malformed tags at parse time), and it pins the
+	// `r`-is-required contract that `verifyProofDleq` also enforces
+	// fail-closed (NUT-12 needs the blinding factor to reblind offline).
+	for (let i = 0; i < dleqProofs.length; i++) {
+		const structuralError = validateDleqProofStructure(dleqProofs[i], i)
+		if (structuralError) {
+			return { claim: 'bid_invalid', reason: 'dleq_invalid', detail: structuralError }
 		}
 	}
 

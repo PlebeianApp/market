@@ -530,73 +530,74 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			// model as NUT-7 (Decision 6) — when evidence is unavailable the
 			// bid stays quorum-valid; when evidence IS available and DLEQ
 			// fails, the bid is invalidated (Decision 4: dleq_invalid).
-			if (auction.dleqRequired) {
-				const dleqProofs = c.bid.dleqProofs
-				if (dleqProofs && dleqProofs.length > 0) {
-					const dleqKeysetMap = input.dleqKeysets
-					// Unavailable DLEQ evidence is NON-AUTHORITATIVE (Blocker 1):
-					// a bid we cannot crypto-verify must never be treated as
-					// valid. When the caller has not gathered keysets, the bid
-					// is PENDING (like an unconfirmed NUT-7 poll), not valid —
-					// otherwise structurally-valid garbage DLEQ stays
-					// authoritative merely because the map was omitted.
-					if (!dleqKeysetMap) {
-						c.classification = 'pending'
-						c.pendingReason = 'dlequ_evidence_unavailable'
-						finalPending.push(c.bid)
+			// DLEQ is required for every bid — there is no non-DLEQ path.
+			const dleqProofs = c.bid.dleqProofs
+			if (dleqProofs && dleqProofs.length > 0) {
+				const dleqKeysetMap = input.dleqKeysets
+				// Unavailable DLEQ evidence is NON-AUTHORITATIVE (Blocker 1):
+				// a bid we cannot crypto-verify must never be treated as
+				// valid. When the caller has not gathered keysets, the bid
+				// is PENDING (like an unconfirmed NUT-7 poll), not valid —
+				// otherwise structurally-valid garbage DLEQ stays
+				// authoritative merely because the map was omitted.
+				if (!dleqKeysetMap) {
+					c.classification = 'pending'
+					c.pendingReason = 'dlequ_evidence_unavailable'
+					finalPending.push(c.bid)
+					continue
+				}
+				// PR #1280 round 3: an entry ABSENT from a supplied map is
+				// also evidence-unavailable, not fraud. fetchDleqKeysetsForBids
+				// leaves a (mint, keyset) entry out precisely when its fetch
+				// failed (temporary mint/network failure), so a lookup miss
+				// here defers the bid to PENDING (ADR-0011 Decision 6a:
+				// "a DLEQ-required bid whose keyset cannot be gathered is
+				// classified pending, never valid") rather than condemning
+				// it as dleq_invalid. Fail-safe holds: pending is not a
+				// pass — the bid is excluded from validBids and the winner
+				// — and dleqProofs[].id being bidder-controlled still
+				// cannot skip verification, because a miss never verifies.
+				const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
+				if (missingKeysetIds.length > 0) {
+					c.classification = 'pending'
+					c.pendingReason = 'dlequ_evidence_unavailable'
+					finalPending.push(c.bid)
+					continue
+				}
+				{
+					const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
+						...dp,
+						secret: c.bid.lockSecrets[i] ?? '',
+					}))
+					// Verify each proof against the keyset named by its OWN `id`
+					// (multi-keyset fix): a rebid leg may be funded by proofs from
+					// more than one keyset after a mint keyset rotation. This
+					// function is non-throwing and fail-closed; every keyset is
+					// known-present at this point (pre-checked above), so a
+					// failure here is a POSITIVE verification failure over
+					// complete evidence → dleq_invalid.
+					const dleqResult = verifyBidDleqWithKeysets(
+						{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
+						dleqKeysetMap,
+					)
+					if (!dleqResult.ok) {
+						// Record the reason on the classified entry so
+						// downstream consumers can distinguish DLEQ
+						// failure from NUT-7 `spent` (reason=dleq_invalid,
+						// ADR-0011 Decision 4).
+						c.classification = 'invalid'
+						c.invalidReason = 'dleq_invalid'
+						finalInvalid.push(c.bid)
 						continue
-					}
-					// PR #1280 round 3: an entry ABSENT from a supplied map is
-					// also evidence-unavailable, not fraud. fetchDleqKeysetsForBids
-					// leaves a (mint, keyset) entry out precisely when its fetch
-					// failed (temporary mint/network failure), so a lookup miss
-					// here defers the bid to PENDING (ADR-0011 Decision 6a:
-					// "a DLEQ-required bid whose keyset cannot be gathered is
-					// classified pending, never valid") rather than condemning
-					// it as dleq_invalid. Fail-safe holds: pending is not a
-					// pass — the bid is excluded from validBids and the winner
-					// — and dleqProofs[].id being bidder-controlled still
-					// cannot skip verification, because a miss never verifies.
-					const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
-					if (missingKeysetIds.length > 0) {
-						c.classification = 'pending'
-						c.pendingReason = 'dlequ_evidence_unavailable'
-						finalPending.push(c.bid)
-						continue
-					}
-					{
-						const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
-							...dp,
-							secret: c.bid.lockSecrets[i] ?? '',
-						}))
-						// Verify each proof against the keyset named by its OWN `id`
-						// (multi-keyset fix): a rebid leg may be funded by proofs from
-						// more than one keyset after a mint keyset rotation. This
-						// function is non-throwing and fail-closed; every keyset is
-						// known-present at this point (pre-checked above), so a
-						// failure here is a POSITIVE verification failure over
-						// complete evidence → dleq_invalid.
-						const dleqResult = verifyBidDleqWithKeysets(
-							{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
-							dleqKeysetMap,
-						)
-						if (!dleqResult.ok) {
-							// Record the reason on the classified entry so
-							// downstream consumers can distinguish DLEQ
-							// failure from NUT-7 `spent` (reason=dleq_invalid,
-							// ADR-0011 Decision 4).
-							c.classification = 'invalid'
-							c.invalidReason = 'dleq_invalid'
-							finalInvalid.push(c.bid)
-							continue
-						}
 					}
 				}
-				// No dleqProofs on a post-rollout bid → already caught by
-				// validateBid Step 3.5 (dleq_invalid structural check).
 			}
+			// A bid with no `dleq_proof` is already rejected by validateBid
+			// Step 3.5 (`dleq_invalid`), so this path only runs with proofs.
 
-			// Now apply NUT-7 evidence separately.
+			// NUT-7 is applied here as
+			// fraud-detection evidence over the valid set — never as a
+			// validity gate, and never inside the verdict (ADR-0004).
 			// - `spent` pre-settlement = double-spend fraud → invalid.
 			// - `spent` post-settlement (recorded in the settlement) = expected
 			//   terminal redemption → valid (see spendExcusable below).
