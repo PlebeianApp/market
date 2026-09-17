@@ -244,15 +244,24 @@ matters in code is **where** the gate is applied, not only where it is skipped:
   product page's entity actions menu. The owner's dashboard detail carries the
   same notice as the product one.
 
-Coverage: `src/queries/__tests__/auctionTestLabelGate.test.ts` (feed gated,
-detail/by-a-tag/by-pubkey ungated, the shared version read issuing no label
-query at all, toggle reveal, fail-open) and
-`e2e/tests/test-labels-auctions.spec.ts` (feed exclusion, direct link + notice
+Coverage:
 
-- explainer, toggle reveal with card marker, NIP-09 reappearance, unauthorized
-  label ignored, authorized labeler curating another seller's auction from its
-  public page, owner dashboard keeping the item, non-authorized user seeing no
-  actions).
+- `src/queries/__tests__/auctionTestLabelGate.test.ts` — feed gated,
+  detail/by-a-tag/by-pubkey ungated, the shared version read issuing no label
+  query at all, toggle reveal, fail-open.
+- `e2e/tests/test-labels-auctions.spec.ts` — feed exclusion, direct link with
+  the notice and explainer, toggle reveal with the card marker, NIP-09
+  reappearance, unauthorized label ignored, authorized labeler curating another
+  seller's auction from its public page, owner dashboard keeping the item,
+  non-authorized user seeing no actions.
+
+Gate: that e2e family is locked into the per-PR `e2e-grep` alternation
+(`.github/workflows/e2e.yml`, `|Test listing labels — auctions`), so the feed
+exclusion is exercised on every pull request instead of only in the scheduled
+`e2e-full` job.
+`src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a describe in
+the spec stops matching the gate pattern, the same guard the `OG Meta Tags`
+family carries.
 
 ## Consequences
 
