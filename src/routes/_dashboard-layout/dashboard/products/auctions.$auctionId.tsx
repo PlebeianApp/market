@@ -266,6 +266,16 @@ function DashboardAuctionDetailRoute() {
 	const now = countdown.now
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
+	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
+	// configured auditors (relay authors filter) — null-safe; an unloaded or
+	// auditor-less auction fails closed (no verdicts authorized).
+	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
+	const verdictsData = verdictsQuery.data ?? []
+
+	// Compute validated bid set unconditionally for display (no postSettlement).
+	// This is separate from the latestSettlement memo's validated set, which uses
+	// postSettlement semantics and is settlement-scoped.
 	const validatedBidSet = useMemo(() => {
 		if (!auction) return null
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
@@ -292,17 +302,6 @@ function DashboardAuctionDetailRoute() {
 
 	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
 	const settlements = settlementsQuery.data ?? []
-	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
-	// configured auditors (relay authors filter) — null-safe; an unloaded or
-	// auditor-less auction fails closed (no verdicts authorized).
-	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
-	const verdictsData = verdictsQuery.data ?? []
-
-	// Compute validated bid set unconditionally for display (no postSettlement).
-	// This is separate from the latestSettlement memo's validated set, which uses
-	// postSettlement semantics and is settlement-scoped.
-
 	// B4: Validate settlements before using them. The previous code read
 	// `settlements[0]` (newest by created_at) with NO validation, allowing
 	// a malicious settlement to surface claim-order/shipping UI. We now:

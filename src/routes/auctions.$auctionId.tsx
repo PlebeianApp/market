@@ -445,26 +445,6 @@ function AuctionDetailRoute() {
 			.map((r) => r.value)
 	}, [verdictsQuery.data])
 
-	const parsedSettlementsForSettlement = useMemo(
-		() =>
-			(settlementsQuery.data ?? [])
-				.map((s) => parseSettlementEvent(toRawEvent(s)))
-				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
-				.map((r) => r.value),
-		[settlementsQuery.data],
-	)
-
-	const parsedPathReleasesForSettlement = useMemo(
-		() =>
-			(pathReleasesQuery.data ?? [])
-				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
-				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
-				.map((r) => r.value),
-		[pathReleasesQuery.data],
-	)
-
-	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => toRawEvent(o)), [claimOrdersQuery.data])
-
 	const validatedSet = useMemo(() => {
 		if (!auction || !(verdictsQuery.data ?? []).length) return null
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
@@ -535,6 +515,26 @@ function AuctionDetailRoute() {
 	// (no kind-1025 from them on this auction yet).
 	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
 	const pathReleases = pathReleasesQuery.data ?? []
+	const parsedSettlementsForSettlement = useMemo(
+		() =>
+			(settlementsQuery.data ?? [])
+				.map((s) => parseSettlementEvent(toRawEvent(s)))
+				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
+				.map((r) => r.value),
+		[settlementsQuery.data],
+	)
+
+	const parsedPathReleasesForSettlement = useMemo(
+		() =>
+			(pathReleasesQuery.data ?? [])
+				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
+				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
+				.map((r) => r.value),
+		[pathReleasesQuery.data],
+	)
+
+	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => toRawEvent(o)), [claimOrdersQuery.data])
+
 	const queryClient = useQueryClient()
 
 	// Parse raw NDK events into typed structs for the settlement descriptor.
