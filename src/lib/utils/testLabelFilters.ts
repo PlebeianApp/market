@@ -1,4 +1,4 @@
-import type { NDKEvent } from '@/lib/nostr/ndk-events'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { TEST_LABEL_AUCTION_KIND, TEST_LABEL_PRODUCT_KIND } from '@/lib/constants/testLabels'
 import { testLabelActions } from '@/lib/stores/testLabels'
 import { getATagFromCoords } from './coords'
@@ -15,9 +15,9 @@ import { getATagFromCoords } from './coords'
  * Item coordinate ("kind:pubkey:identifier") of a product/auction event,
  * or null for events that cannot carry a test label.
  */
-export const getItemTestLabelCoordinate = (event: NDKEvent): string | null => {
+export const getItemTestLabelCoordinate = (event: NostrEventLike): string | null => {
 	if (event.kind !== TEST_LABEL_PRODUCT_KIND && event.kind !== TEST_LABEL_AUCTION_KIND) return null
-	const dTag = event.tagValue('d')
+	const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
 	if (!dTag) return null
 	return getATagFromCoords({ kind: event.kind, pubkey: event.pubkey, identifier: dTag })
 }
@@ -26,7 +26,7 @@ export const getItemTestLabelCoordinate = (event: NDKEvent): string | null => {
  * Collect the unique item coordinates referenced by an array of events.
  * Used to batch the label fetch for a page of items before filtering.
  */
-export const collectTestLabelCoordinates = (events: NDKEvent[]): string[] => {
+export const collectTestLabelCoordinates = (events: NostrEventLike[]): string[] => {
 	const coordinates = new Set<string>()
 	for (const event of events) {
 		const coordinate = getItemTestLabelCoordinate(event)
@@ -45,7 +45,7 @@ export const collectTestLabelCoordinates = (events: NDKEvent[]): string[] => {
  * Synchronous store read — if labels have not been loaded yet the filter
  * fails open and returns all events.
  */
-export const filterTestLabeledEvents = <T extends NDKEvent>(events: T[]): T[] => {
+export const filterTestLabeledEvents = <T extends NostrEventLike>(events: T[]): T[] => {
 	if (!testLabelActions.areLabelsLoaded()) {
 		return events // Return all if labels not loaded yet
 	}
@@ -56,7 +56,7 @@ export const filterTestLabeledEvents = <T extends NDKEvent>(events: T[]): T[] =>
 /**
  * Check if any item event (product or auction) carries an active test label
  */
-export const isItemEventTestLabeled = (event: NDKEvent): boolean => {
+export const isItemEventTestLabeled = (event: NostrEventLike): boolean => {
 	const coordinate = getItemTestLabelCoordinate(event)
 	if (!coordinate) return false
 	return testLabelActions.isTestLabeled(coordinate)
@@ -65,7 +65,7 @@ export const isItemEventTestLabeled = (event: NDKEvent): boolean => {
 /**
  * Check if a product event carries an active test label
  */
-export const isProductTestLabeled = (event: NDKEvent): boolean => {
+export const isProductTestLabeled = (event: NostrEventLike): boolean => {
 	if (event.kind !== TEST_LABEL_PRODUCT_KIND) return false
 	return isItemEventTestLabeled(event)
 }
@@ -73,7 +73,7 @@ export const isProductTestLabeled = (event: NDKEvent): boolean => {
 /**
  * Check if an auction event carries an active test label
  */
-export const isAuctionTestLabeled = (event: NDKEvent): boolean => {
+export const isAuctionTestLabeled = (event: NostrEventLike): boolean => {
 	if (event.kind !== TEST_LABEL_AUCTION_KIND) return false
 	return isItemEventTestLabeled(event)
 }

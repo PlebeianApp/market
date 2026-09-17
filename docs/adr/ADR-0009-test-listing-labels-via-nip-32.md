@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (rev 4 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products implemented in this PR, auctions compatibility layer in a follow-up PR)
+Accepted (rev 5 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products on `master`, auctions on `auctions` — both implemented)
 
 ## Date
 
@@ -216,6 +216,62 @@ browsing-only effect. An earlier revision claimed the item was "excluded from
 feeds and detail views", which is wrong — detail views are never gated — and
 misled the labeler about what the action does.
 
+### Auctions — surface map (implemented on the `auctions` branch)
+
+The same taxonomy, resolved against the auction reads. The distinction that
+matters in code is **where** the gate is applied, not only where it is skipped:
+
+- **Gated (discovery):** the auction feed — `fetchAuctions` in
+  `src/queries/auctions.tsx`. It runs blacklist → local deletes → the label
+  check → version collapse, so every version of a labeled coordinate drops
+  together and no older version can resurrect the auction in the feed.
+- **Ungated, by decision:** `fetchAuction` (detail by id — the direct-link
+  promise), `fetchAuctionByATag` (detail by a-tag), `fetchAuctionsByPubkey`
+  (seller profile and owner dashboard). **The gate is never applied inside
+  `fetchAuctionVersionEvents`**, the shared version-resolution helper all three
+  of those reads go through: filtering there would collapse a labeled auction's
+  version set to nothing and leave the item reachable only through the
+  by-a-tag fallback path. Step 3 is a property of the read, not of a hopeful
+  fallback. The Featured carousel (`auctionByATagQueryOptions`) inherits the
+  same ungated read, which is the rev 4 curation default working as intended.
+- **UI:** the `Show test listings` toggle sits beside the auction filters on
+  the feed; the compact card marker renders top-left on `AuctionCard` (the
+  top-right corner carries the LIVE/ENDED badge); the detail-page pill sits
+  under the auction title row; and the mark/unmark action reaches the public
+  auction page and the owner dashboard directly through `TestLabelButton` —
+  auctions have no `EntityActionsMenu`, whose test-label arm is
+  product-scoped, so the shared button _is_ the auctions equivalent of the
+  product page's entity actions menu. The owner's dashboard detail carries the
+  same notice as the product one.
+
+Coverage:
+
+- `src/queries/__tests__/auctionTestLabelGate.test.ts` — the feed gate (a
+  labeled coordinate drops as a whole, versions included), the toggle
+  revealed _and_ re-hidden, the fail-open invariant (no load at all, and the
+  optimistic window where a coordinate is labeled but no load has completed),
+  and the detail reads: by-id / by-a-tag / by-pubkey still return a labeled
+  auction and issue no label query — asserted on
+  `ndkActions.fetchEventsWithTimeout`, the port label reads actually use, with
+  authorization determinable so the absence means something. What that file does
+  _not_ establish: label authorization and NIP-09 reconciliation — those rest on
+  `testLabels.test.ts` (pure primitives) and on the e2e family below.
+- `e2e/tests/test-labels-auctions.spec.ts` — feed exclusion, direct link with
+  the notice and explainer (and the unlabeled control rendering without one),
+  toggle reveal with the card marker and re-hide, NIP-09 reappearance, a NIP-09
+  deletion from a _different_ key not un-hiding the item, unauthorized label
+  ignored, authorized labeler curating another seller's auction from its public
+  page, owner dashboard keeping the item, non-authorized user seeing no actions
+  on the public page or on the dashboard list.
+
+Gate: that e2e family is locked into the per-PR `e2e-grep` alternation
+(`.github/workflows/e2e.yml`, `|Test listing labels — auctions`), so the feed
+exclusion is exercised on every pull request instead of only in the scheduled
+`e2e-full` job.
+`src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a describe in
+the spec stops matching the gate pattern, the same guard the `OG Meta Tags`
+family carries.
+
 ## Consequences
 
 **Positive:**
@@ -245,7 +301,7 @@ misled the labeler about what the action does.
 
 1. Label schema + authorized-labeler list.
 2. Query-layer `test`-label check beside the delete and blacklist checks
-   (products on master; auctions on the `auctions` branch).
+   (products on `master`; auctions on the `auctions` branch).
 3. Dashboard actions: **Mark as "Test" Product** / **Unmark as "Test"
    Product** by coordinate, with pre-filled contact reference in `.content`.
 4. e2e: a labeled item is excluded from browsing feeds but still reachable
@@ -263,6 +319,7 @@ misled the labeler about what the action does.
    block-level opt-in. Not a change in this PR.
 9. Auctions: the same taxonomy applies to the auction feed (discovery) and to
    any curated auction surface, via the shared `testLabelFilters` layer.
+   **Implemented** — see _Auctions — surface map_ above.
 
 ## Related
 
