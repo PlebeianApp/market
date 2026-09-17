@@ -232,14 +232,11 @@ ids that `@cashu/cashu-ts` 2.9.0 cannot verify, which breaks the deposit round
 trip. `src/lib/__tests__/auctionDLEQ.mint.integration.test.ts` locks the
 DLEQ-on-swap property in CI.
 
-`e2e/tests/auction-bidding-mints.spec.ts` seeds its auctions with an explicit
-`dleq_required=1` tag (rather than relying on the deploy-time
-`APP_AUCTION_DLEQ_ROLLOUT_START_AT` boundary) so the payment-path scenarios
-keep exercising that path — lock the P2PK outputs, require a NUT-12 proof on
-each output, and publish one `dleq_proof` tag per `lock_secret` — and the
-happy-path test asserts the resulting `dleq_proof` tags. The suite also carries
-a grandfathered counterpart (seeded `dleq_required=0`) that funds and publishes
-a bid with NO `dleq_proof` tags, covering the legacy non-DLEQ cohort.
+`e2e/tests/auction-bidding-mints.spec.ts` exercises the unconditional DLEQ path
+(ADR-0011): the lock requires a NUT-12 proof on each freshly issued output and
+the published kind-1023 carries one `dleq_proof` tag per `lock_secret`. DLEQ is
+required for every auction — there is no non-DLEQ or grandfathered cohort. The
+suite seeds a stray `dleq_required=0` tag to prove it is ignored.
 
 **Deprecation of mock mint fixtures (ADR-0006):** this real mint
 supersedes the previous mock approach for mint flows. Inert mint URLs
