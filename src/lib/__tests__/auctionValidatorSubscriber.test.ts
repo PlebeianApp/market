@@ -361,10 +361,10 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
-	test('auction-triggered child replay drains a buffered release after its bid arrives', async () => {
-		// The auction handler opens the child REQ before drainPending(). If
-		// relay history replays a release before its bid, drainPending()
-		// must still replay that buffered release once the bid is known.
+	test('startup child replay preserves first-observed time for later auction discovery', async () => {
+		// Historical child events already on the relay at startup are
+		// captured with the startup observation time, so a later auction
+		// discovery does not re-stamp them to replay-time now().
 		const sellerSk = generateSecretKey()
 		const sellerPub = getPublicKey(sellerSk)
 		const bidderSk = generateSecretKey()
@@ -403,7 +403,6 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
 			now,
 		})
-		await subscriber.start()
 
 		// A non-https mint so the reachability probe is rejected by the
 		// destination policy without any network contact (offline test).
@@ -479,21 +478,22 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			],
 		} as unknown as EventTemplate)
 
-		// 1. Release then bid reach relay history before the auction is known.
+		// 1. Release then bid are already on relay history when the
+		// subscriber starts; startup replay stamps both at t=5000.
 		history.push(releaseEvent)
 		history.push(bidEvent)
-		// 2. Clock advances; auction arrival opens the child REQ and the relay
-		// replays release-before-bid ordering from history.
+		await subscriber.start()
+		// 2. Clock advances; the auction is only discovered later.
 		t = 9_000
 		dispatch(relayPool, auctionEvent)
 		await new Promise((resolve) => setTimeout(resolve, 20))
 
-		// The replay order was release first, bid second. drainPending()
-		// must still connect the buffered release to the replayed bid.
+		// The later auction discovery must preserve the startup observation
+		// time rather than re-stamp the bid/release to 9000.
 		const auctionState = state.auctions.get(auctionRootId)!
 		const bidState = auctionState.bids.get(bidEvent.id)!
-		expect(bidState.observedAt).toBe(9_000)
-		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(9_000)
+		expect(bidState.observedAt).toBe(5_000)
+		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
 		await subscriber.stop()
 	})
 })
@@ -527,9 +527,11 @@ describe('auction validator subscriber subscription contract', () => {
 		})
 
 		await subscriber.start()
-		expect(subscriptions).toHaveLength(1)
-		expect(subscriptions[0]?.[0]).toMatchObject({ kinds: [AUCTION_KIND] })
+		expect(subscriptions).toHaveLength(2)
+		expect(subscriptions[0]?.[0]).toMatchObject({ kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND] })
 		expect(subscriptions[0]?.[0]).toHaveProperty('since')
+		expect(subscriptions[1]?.[0]).toMatchObject({ kinds: [AUCTION_KIND] })
+		expect(subscriptions[1]?.[0]).toHaveProperty('since')
 
 		const auctionEvent = createSignedEvent(sellerSk, {
 			kind: AUCTION_KIND,
@@ -564,8 +566,8 @@ describe('auction validator subscriber subscription contract', () => {
 		auctionHandler(auctionEvent)
 		await flush()
 
-		expect(subscriptions).toHaveLength(2)
-		expect(subscriptions[1]).toEqual([
+		expect(subscriptions).toHaveLength(3)
+		expect(subscriptions[2]).toEqual([
 			{
 				kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND],
 				'#a': [`30408:${sellerPubkey}:auction-test`],

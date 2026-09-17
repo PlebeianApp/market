@@ -11,7 +11,11 @@
  *
  * Subscriptions:
  *   1. kind 30408 (auctions): one open REQ, filter on receipt.
- *   2. kinds 1023/1025/1024 (bids, path releases, settlements): one
+ *   2. kinds 1023/1025/1024 startup replay: one bounded historical REQ
+ *      at process start, used only to preserve stable first-observation
+ *      timestamps for child events that were already on the relay before
+ *      their auction is discovered.
+ *   3. kinds 1023/1025/1024 (bids, path releases, settlements): one
  *      REQ per tracked auction, scoped by `#a` to that auction's
  *      canonical coordinate (`30408:<seller>:<d>`). `#e` cannot serve
  *      as the shared child filter here: bids + settlements tag the
@@ -160,6 +164,22 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		logger.info(`[validator] closed child subscriptions for auction ${auctionRootEventId.slice(0, 8)}`)
 	}
 
+	const dispatchChildEvent = (event: NostrEvent, observedAt?: number): void => {
+		switch (event.kind) {
+			case AUCTION_BID_KIND:
+				void onBidEvent(event, observedAt)
+				return
+			case AUCTION_PATH_RELEASE_KIND:
+				void onPathReleaseEvent(event, observedAt)
+				return
+			case AUCTION_SETTLEMENT_KIND:
+				void onSettlementEvent(event, observedAt)
+				return
+			default:
+				return
+		}
+	}
+
 	const startWatchingAuction = async (auctionRootEventId: string): Promise<void> => {
 		if (watchedAuctionUnsubscribes.has(auctionRootEventId)) return
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
@@ -168,19 +188,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], '#a': [auctionState.auction.coordinate] },
 		]
 		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
-			switch (event.kind) {
-				case AUCTION_BID_KIND:
-					void onBidEvent(event)
-					return
-				case AUCTION_PATH_RELEASE_KIND:
-					void onPathReleaseEvent(event)
-					return
-				case AUCTION_SETTLEMENT_KIND:
-					void onSettlementEvent(event)
-					return
-				default:
-					return
-			}
+			dispatchChildEvent(event)
 		})
 		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)
 	}
@@ -268,10 +276,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const shouldDrain = result.status === 'inserted'
 		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
-			await startWatchingAuction(auction.rootEventId)
 		}
 		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
+			await drainPending(auction.rootEventId)
+			await startWatchingAuction(auction.rootEventId)
+			// The scoped REQ may replay release-before-bid history for this
+			// auction; drain again so those freshly buffered children resolve.
 			await drainPending(auction.rootEventId)
 		}
 		maybeRetireAuctionWatch(auction.rootEventId)
@@ -530,6 +541,34 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	const start = async (): Promise<void> => {
 		const since = now() - 60 * 60 * 24 * 30
+		const startupObservedAt = now()
+		let startupChildReplayDone = false
+		let startupChildReplayUnsub: (() => void) | null = null
+		const stopStartupChildReplay = (): void => {
+			const off = startupChildReplayUnsub
+			startupChildReplayUnsub = null
+			if (!off) return
+			try {
+				off()
+			} catch {
+				// Ignore — pool might already be torn down.
+			}
+		}
+		startupChildReplayUnsub = await deps.relayPool.subscribe(
+			[{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], since }],
+			(event) => {
+				dispatchChildEvent(event, startupObservedAt)
+			},
+			() => {
+				startupChildReplayDone = true
+				stopStartupChildReplay()
+			},
+		)
+		if (startupChildReplayDone) {
+			stopStartupChildReplay()
+		} else {
+			unsubscribes.push(stopStartupChildReplay)
+		}
 		const auctionUnsub = await deps.relayPool.subscribe([{ kinds: [auctionKindAsNumber()], since }], (event) => {
 			void onAuctionEvent(event)
 		})
