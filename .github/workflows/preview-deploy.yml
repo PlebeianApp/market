@@ -108,6 +108,9 @@ jobs:
           cp package.json bun.lock tsconfig.json deploy-package/
           cp -r public styles deploy-package/
           cp bunfig.toml deploy-package/
+          # Baked into the image built on the VPS (deps pre-installed) so a
+          # lazy-woken preview boots in seconds.
+          cp infra/preview-vps/app.Dockerfile deploy-package/Dockerfile
 
       - name: Compute per-PR ports
         id: ports
@@ -272,6 +275,27 @@ jobs:
           docker build -t market-nak:b6568388 .
           REMOTE_EOF
 
+      - name: Build app image on VPS (prebuilt deps)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # Build market-app:<sha> from the uploaded deploy package so the
+          # container starts in seconds (dependencies baked in) instead of
+          # running `bun install` on every wake. Cached by commit SHA, so a
+          # redeploy of the same commit skips the build. Mirrors the nak
+          # host-build above: the pinned-OpenSSH helper, never a Go action.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SHA="${{ github.sha }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          cd "$APP_DIR/deploy-package"
+          if docker image inspect "market-app:$SHA" >/dev/null 2>&1; then
+            echo "app image market-app:$SHA already present — skipping build"
+            exit 0
+          fi
+          docker build -t "market-app:$SHA" .
+          REMOTE_EOF
+
       - name: Claim host-port offset (M6) then bring up services
         if: steps.secrets.outputs.previews_ready == 'true'
         run: |
@@ -301,25 +325,16 @@ jobs:
           cat > docker-compose.yml <<EOF
           services:
             market-app:
-              image: oven/bun:latest
+              # Built on the VPS by "Build app image on VPS (prebuilt deps)":
+              # dependencies are baked into the image, so a lazy wake starts in
+              # seconds instead of running `bun install` per container start
+              # (~5 min cold start that exceeded the gateway's boot budget).
+              # The Dockerfile runs a FULL `bun install` (not `--production`),
+              # so the tailwindcss devDependency the request-time HTML bundle
+              # needs is present.
+              image: market-app:${{ github.sha }}
               working_dir: /app
-              volumes:
-                - ./deploy-package:/app
-              # Install the FULL dependency set — not `--production`.
-              # bun-plugin-tailwind is a normal dependency, but the Tailwind
-              # framework it drives is a devDependency, and the app's own
-              # stylesheet opens with `@import 'tailwindcss'`. Under
-              # `bun install --production` the plugin loads and the framework
-              # it needs is gone, so the request-time HTML bundle for `/`
-              # cannot be built: the route answers an empty body while
-              # /api/config stays healthy. Measured on the PR #1271 preview
-              # container (oven/bun:1.4.1):
-              #   bun install --production -> `error: Could not resolve:
-              #     "tailwindcss"` at /app/styles/globals.css:1:1, GET / =
-              #     HTTP 500 "Build Failed", 0 body bytes
-              #   bun install              -> Bundled 1589 modules, GET / =
-              #     HTTP 200 text/html, 891 body bytes starting "<!doctype html>"
-              command: sh -c "bun install && bun run start:production"
+              command: sh -c "bun run start:production"
               ports:
                 - "${APP_PORT}:3000"
               environment:

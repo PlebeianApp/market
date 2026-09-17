@@ -248,14 +248,42 @@ describe('preview app serves a real document', () => {
 		// bunfig.toml carries `[serve.static] plugins = ["bun-plugin-tailwind"]`,
 		// the plugin that resolves the stylesheet's tailwind import.
 		expect(body).toContain('cp bunfig.toml deploy-package/')
+		// The Dockerfile is baked into the uploaded package and built into the
+		// prebuilt app image on the host.
+		expect(body).toContain('app.Dockerfile deploy-package/Dockerfile')
 	})
 
-	test('the app container installs dev dependencies too', () => {
-		// Comments are stripped so the prose explaining WHY `--production` is
-		// wrong is not read as a use of it.
+	test('the app container starts the prebuilt image (no install at container start)', () => {
+		// Deps are baked into market-app:<sha> by the VPS build step, so the
+		// compose must not install anything when the container starts (that was
+		// the ~5 min cold start). Comments are stripped so prose explaining the
+		// history is not read as a use.
 		const body = stripComments(runBody(stepNamed(deployJob, CLAIM_STEP)))
-		expect(body).not.toContain('bun install --production')
-		expect(body).toContain('bun install && bun run start:production')
+		expect(body).not.toContain('bun install')
+		expect(body).toContain('image: market-app:${{ github.sha }}')
+		expect(body).toContain('bun run start:production')
+	})
+
+	test('the app image is built on the host, gated on secrets, and before compose up', () => {
+		const BUILD_APP_STEP = 'Build app image on VPS (prebuilt deps)'
+		const build = stepNamed(deployJob, BUILD_APP_STEP)
+		expect(build).toContain('steps.secrets.outputs.previews_ready == ')
+		expect(build).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(build).not.toMatch(/^\s+uses:/m)
+		expect(build).toContain('docker build -t "market-app:$SHA"')
+		expect(build).toContain('docker image inspect "market-app:$SHA"')
+
+		const stepOrder = stepsOf(deployJob).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
+		expect(stepOrder.indexOf(BUILD_APP_STEP)).toBeGreaterThanOrEqual(0)
+		expect(stepOrder.indexOf(BUILD_APP_STEP)).toBeLessThan(stepOrder.indexOf(CLAIM_STEP))
+	})
+
+	test('the image Dockerfile installs the full dependency set', () => {
+		// Full `bun install` (not `--production`) so the tailwindcss
+		// devDependency the request-time HTML bundle needs is present.
+		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
+		expect(dockerfile).toContain('bun install')
+		expect(dockerfile).not.toContain('bun install --production')
 	})
 
 	test('the health check requires a non-empty HTML body, not merely a status', () => {

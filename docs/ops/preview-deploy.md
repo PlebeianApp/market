@@ -157,6 +157,23 @@ only the preview depends on request-time bundling.
 To diagnose, run `docker compose logs market-app` in `~/previews/pr-<N>/` —
 Bun's bundler prints the exact path it could not resolve.
 
+## The app image is prebuilt on the host (no install at container start)
+
+The generated `docker-compose.yml` runs a **prebuilt image**, `market-app:<sha>`,
+not `oven/bun:latest` with `bun install` at container start. A step named
+**Build app image on VPS (prebuilt deps)** builds it on the preview host from the
+uploaded `deploy-package` — which ships `infra/preview-vps/app.Dockerfile` as
+`deploy-package/Dockerfile`, and that Dockerfile runs the full `bun install`
+once, at deploy time. Compose then only runs `bun run start:production`.
+
+This removes the ~5 minute cold start that made the first visitor to a woken
+preview see the "preview is starting" page: the dependencies are already in the
+image, so the container serves in seconds and fits the gateway's 15 s wake
+budget. The build is cached by commit SHA
+(`docker image inspect market-app:<sha>`), so redeploying the same commit skips
+it, and the step is ordered before the claim/compose step that resolves the tag
+— the same ordering rule as the nak host-build.
+
 ## Why the check skips (missing preview secrets)
 
 The deploy path consumes **six** secrets — the four VPS ones plus the two
