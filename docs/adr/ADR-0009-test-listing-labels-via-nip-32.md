@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (rev 3 — browsing-only gating + inspectability toggle; products implemented in this PR, auctions compatibility layer in a follow-up PR)
+Accepted (rev 4 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products implemented in this PR, auctions compatibility layer in a follow-up PR)
 
 ## Date
 
@@ -53,6 +53,20 @@ Use **NIP-32 labeling events** (kind 1985) to tag items as tests.
   discovery surfaces only (home feed, paginated browse, search, collections,
   auction feed). The item remains reachable via direct link, the seller's
   profile, and the owner's dashboard.
+- **Discovery vs curation surfaces (rev 4)** — filtering is a property of
+  _organic discovery_ surfaces, not of every surface that happens to render an
+  item. A **discovery surface** answers "what is for sale?" using selection
+  criteria the viewer did not choose: home feed, paginated browse, NIP-50
+  search _including its seller-name expansion_, collections, and the auction
+  feed. A **curation surface** shows what a human explicitly chose: the
+  app-configured Featured sections (products, collections, users) and, later,
+  CMS-authored pages and blocks. Curation surfaces are **ungated by default** —
+  the curator sees exactly what they picked. Opting a curation block into
+  filtering is a per-block configuration decision reserved for the CMS work,
+  never an ambient default. The label mechanism itself remains available on
+  every surface; what this taxonomy fixes is the _default_, so a stale or
+  accidental label can never silently empty a surface an operator believes they
+  control.
 
 ### Label event example
 
@@ -131,13 +145,30 @@ blacklist checks, before queries return data**:
    discovery feeds only. Detail-by-id, detail-by-a-tag, and by-pubkey
    (seller profile / owner dashboard) read paths return the item regardless
    of label — the label never removes the item from direct navigation.
-4. Un-labeling is a NIP-09 deletion event (kind 5) signed by the same
+4. **A discovery surface that composes an ungated read re-applies the gate on
+   its own result set.** The gate belongs to the _surface_, not to the read
+   path it borrows. Search is the worked example: its seller-name expansion
+   fetches each matching seller's catalogue through the by-pubkey read (which
+   must stay ungated, per step 3), so search gates the merged result set —
+   otherwise a labeled item whose seller name matches would still surface and
+   the promise made to the viewer and to the labeler ("hidden from browsing,
+   search and collections") would be false for that path.
+5. **Curation surfaces are ungated, by decision — not by omission.** The
+   app-configured Featured sections resolve items through the by-a-tag detail
+   read, so a labeled item an operator has featured stays visible in the
+   carousel. This is the rev 4 taxonomy default: a curated surface shows what
+   it was told to show, and the operator is not overridden by an ambient
+   filter. Recording it here is the point — the gap is a documented decision
+   rather than a fix waiting to be noticed. Whether a CMS block can opt _into_
+   filtering is deferred to a follow-up proposal covering the taxonomy's
+   naming, per-surface defaults, and block-level configuration.
+6. Un-labeling is a NIP-09 deletion event (kind 5) signed by the same
    labeler, referencing the original label event's `id` in an `e` tag with
    a `k`-tag of `1985`. Clients MUST validate that the deletion event's
    pubkey matches the label event's pubkey before treating the label as
    deleted. The query layer treats a deleted label as absent — the item
    reappears without further action.
-5. The label check runs only on browsing/discovery read paths, so a freshly
+7. The label check runs only on browsing/discovery read paths, so a freshly
    un-labeled item reappears in those feeds without further action (it was
    never hidden from direct-link, profile, or dashboard views).
 
@@ -203,6 +234,12 @@ misled the labeler about what the action does.
   query-layer filter (mirrors existing blacklist plumbing).
 - One more check on read paths (batchable for feeds).
 - NIP-32 currently has draft/optional status in the NIPs repo.
+- **Curated surfaces stay ungated (rev 4), so a labeled item an operator has
+  featured remains visible in the Featured carousel.** Accepted deliberately
+  over the alternative — a curated surface silently dropping an item a human
+  explicitly chose, which would get worse once CMS page authors inherit an
+  ambient filter they cannot see. The surface taxonomy and the CMS block-level
+  opt-in are a follow-up proposal.
 
 ## Roadmap
 
@@ -220,10 +257,22 @@ misled the labeler about what the action does.
    use during launch phases.
 7. User-facing notice on labeled items (detail page, profile, dashboard,
    toggle-revealed cards) with an appeal contact.
+8. **Discovery/curation surface taxonomy as a first-class concept** — rev 4
+   records the default (discovery gated, curation unrestricted); a follow-up
+   proposal covers the taxonomy's naming, per-surface defaults, and CMS
+   block-level opt-in. Not a change in this PR.
+9. Auctions: the same taxonomy applies to the auction feed (discovery) and to
+   any curated auction surface, via the shared `testLabelFilters` layer.
 
 ## Related
 
 - Existing moderation (unchanged, spam-only, whole-pubkey):
   `src/server/BlacklistManager.ts`, `src/lib/utils/blacklistFilters.ts`.
+- Current curation surface (ungated by the rev 4 default):
+  `src/components/FeaturedSections.tsx` — resolves featured products through
+  the by-a-tag detail read.
+- Query-layer gate and its ADR-0009 tests:
+  `src/lib/utils/testLabelFilters.ts`, `src/queries/testLabels.tsx`,
+  `src/queries/products.tsx`.
 - Rev 1 of this ADR (blacklist-based) lives in this branch's history.
 - Parked proposals from #1240 in the fork backlog.
