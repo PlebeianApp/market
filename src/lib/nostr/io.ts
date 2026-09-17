@@ -55,10 +55,19 @@ export interface PublishOptions {
 	relayUrls?: string[]
 }
 
+/**
+ * Result of a publish. `publishedRelays` holds only the relay URLs that
+ * acknowledged (ACKed) the event — an empty set means no relay accepted it,
+ * which callers must treat as a publish failure rather than a success.
+ */
+export interface PublishResult {
+	publishedRelays: ReadonlySet<string>
+}
+
 export interface NostrIo {
 	fetchEvents(filter: NostrFilter | NostrFilter[], opts?: FetchOptions): Promise<NostrEvent[]>
 	subscribe(filter: NostrFilter | NostrFilter[], onEvent: (event: NostrEvent) => void, opts?: SubscribeOptions): () => void
-	publish(event: NostrEvent, opts?: PublishOptions): Promise<void>
+	publish(event: NostrEvent, opts?: PublishOptions): Promise<PublishResult>
 	sign(template: EventTemplate): Promise<NostrEvent>
 	getUser(): Promise<NostrUser | null>
 }

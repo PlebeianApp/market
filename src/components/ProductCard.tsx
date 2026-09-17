@@ -20,6 +20,8 @@ import { Button } from './ui/button'
 import { authStore, useAuth } from '@/lib/stores/auth'
 import { ZapButton } from './social/ZapButton'
 import { cn } from '@/lib/utils'
+import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
+import { TestListingNotice } from './TestListingNotice'
 
 export interface ProductCardProps extends React.HTMLAttributes<HTMLDivElement> {
 	product: NDKEvent
@@ -44,6 +46,11 @@ export function ProductCard({ product, className }: ProductCardProps) {
 	const { user, isAuthenticated } = useAuth()
 
 	const isOwnProduct = isAuthenticated && user?.pubkey === product.author.pubkey
+
+	// ADR-0009: coordinate used by the test-listing indicator. Cards normally
+	// only carry test-labeled items when the viewer revealed them or is on the
+	// seller's profile, so the marker explains what they are looking at.
+	const testLabelCoordinate = getItemTestLabelCoordinate(product)
 
 	// Check if product is already in cart
 	const isInCart = !!cart.cart.products[product.id]
@@ -105,6 +112,8 @@ export function ProductCard({ product, className }: ProductCardProps) {
 				)}
 				{/* NSFW badge */}
 				{isNSFW && <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">NSFW</div>}
+				{/* ADR-0009 test-listing marker (icon-only: card clicks navigate) */}
+				{testLabelCoordinate && <TestListingNotice coordinate={testLabelCoordinate} variant="icon" className="absolute top-2 right-2" />}
 			</div>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
