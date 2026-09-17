@@ -1159,8 +1159,18 @@ export const fetchProductsBySearchWithSellers = async (
 		}
 	}
 
-	// Return up to the limit
-	return mergedResults.slice(0, limit)
+	// ADR-0009: search is a browsing/discovery surface, so the test-label gate
+	// applies to the WHOLE merged set, not just the direct NIP-50 hits.
+	// `fetchProductsBySearch` already gates its own results, but the
+	// seller-expansion half arrives through `fetchProductsByPubkey`, which is
+	// deliberately ungated — that path also serves the seller profile and the
+	// owner's dashboard, where a labeled item MUST stay visible. Re-applying the
+	// gate here is what keeps "hidden from browsing, search and collections"
+	// true for a seller-name match instead of only for a title match.
+	const nonTestLabeledResults = await excludeTestLabeledEvents(mergedResults)
+
+	// Return up to the limit (after gating, so excluded items never consume slots)
+	return nonTestLabeledResults.slice(0, limit)
 }
 
 /** React Query options for searching products by text (includes seller name search) */
