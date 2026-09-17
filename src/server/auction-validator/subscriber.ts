@@ -110,7 +110,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // bidEventId → events
 	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
-	const activeBidClaimsNeedingChildWatch = new Set(['valid_bid_placed', 'bid_pending_review', 'won_pending_settlement', 'griefed_pending_fallback'])
+	const activeBidClaimsNeedingChildWatch = new Set([
+		'valid_bid_placed',
+		'bid_pending_review',
+		'won_pending_settlement',
+		'griefed_pending_fallback',
+	])
 
 	type RelayFilter = { kinds?: number[]; since?: number; '#a'?: string[] }
 
@@ -592,12 +597,9 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	const start = async (): Promise<void> => {
 		const since = now() - 60 * 60 * 24 * 30
-		const auctionUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [auctionKindAsNumber()], since }],
-			(event) => {
-				void onAuctionEvent(event)
-			},
-		)
+		const auctionUnsub = await deps.relayPool.subscribe([{ kinds: [auctionKindAsNumber()], since }], (event) => {
+			void onAuctionEvent(event)
+		})
 		unsubscribes.push(auctionUnsub)
 		for (const auctionState of Array.from(deps.state.auctions.values())) {
 			await startWatchingAuction(auctionState.auction.rootEventId)
