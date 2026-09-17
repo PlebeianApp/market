@@ -1,0 +1,10 @@
+[Unit]
+Description=Preview lazy-start manager (idle stop + recency cleanup)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ preview_host_base_dir }}/preview_manager.py --cron --preview-root {{ preview_host_root }} --access-log {{ preview_host_access_log }}
+Environment=GITHUB_REPO={{ preview_host_github_repo }}
+EnvironmentFile={{ preview_host_base_dir }}/manager.env

@@ -116,28 +116,53 @@ echo "==> Provisioning VPS ${_VPS_USER}@${HOST} (ssh port ${PORT}, host key pinn
 
 # ── 0. Install base tooling (Docker + Caddy) if missing ──
 # The target VPS may be a bare Debian box with neither Docker nor Caddy
-# installed. This step is idempotent: it only installs what's missing and
-# never touches an existing install. Docker is needed for the per-PR
-# compose services and the nsite gateway; Caddy is the on-demand TLS
-# reverse proxy that serves the pr{N}.test-market.orangesync.tech
-# subdomains.
+# installed. This step installs what is missing and is idempotent: once Docker
+# with the compose plugin and Caddy are present it does nothing. Docker is
+# needed for the per-PR compose services; Caddy is the on-demand TLS reverse
+# proxy that serves the pr{N}.test-market.orangesync.tech subdomains.
 echo "==> Ensuring Docker + Caddy are installed"
 "${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" bash -s <<'REMOTE'
 set -euo pipefail
 
-# --- Docker ---
-if ! command -v docker >/dev/null 2>&1; then
-  echo "  Installing Docker (docker.io)"
+# --- Docker: the Docker Inc stack (docker-ce + the compose v2 plugin) ---
+# The workflow runs `docker compose` (the v2 plugin). Debian's `docker.io`
+# package does NOT ship that plugin and the Debian repo has no plugin package,
+# so a host provisioned with docker.io fails at
+#   docker: 'compose' is not a docker command   (exit 125)
+# Install the Docker Inc stack (what the known-good host runs). Guarded on
+# `docker compose version`, so it is a no-op once satisfied and safe to run on
+# every deploy. On a host that already has docker.io, apt replaces it (the
+# packages conflict) -- one-time, during provisioning.
+if ! docker compose version >/dev/null 2>&1; then
+  echo "  Installing Docker (docker-ce + docker-compose-plugin)"
   export DEBIAN_FRONTEND=noninteractive
   sudo apt-get update -qq
-  sudo apt-get install -y -qq docker.io
-  sudo systemctl enable --now docker
-  # Allow the deploy user to run docker without sudo.
-  sudo usermod -aG docker "${USER}"
+  sudo apt-get install -y -qq ca-certificates curl gnupg
+  sudo install -m 0755 -d /etc/apt/keyrings
+  if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
+    curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+  fi
+  DOCKER_ARCH="$(dpkg --print-architecture)"
+  DOCKER_CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
+  echo "deb [arch=${DOCKER_ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${DOCKER_CODENAME} stable" \
+    | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  sudo apt-get update -qq
+  # Remove Debian's docker packages first: `docker-buildx` owns the same
+  # cli-plugin path as the Docker Inc `docker-buildx-plugin`, so dpkg aborts
+  # the install with "trying to overwrite ... docker-buildx". No-op on a host
+  # that never had them.
+  sudo apt-get remove -y -qq docker.io docker-cli docker-buildx containerd 2>/dev/null || true
+  sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin
   echo "  Docker installed"
 else
-  echo "  Docker already installed"
+  echo "  Docker + compose plugin already available"
 fi
+# The deploy user must be able to run docker (idempotent; also covers a host
+# that already had docker but not the group membership).
+sudo usermod -aG docker "${USER}"
+sudo systemctl enable --now docker
 
 # --- Caddy ---
 if ! command -v caddy >/dev/null 2>&1; then

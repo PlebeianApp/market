@@ -2,3 +2,6 @@ node_modules
 dist
 src/components/ui
 build
+
+# Ansible/Jinja templates have no Prettier parser.
+*.j2

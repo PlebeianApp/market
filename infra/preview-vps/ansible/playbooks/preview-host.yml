@@ -1,0 +1,17 @@
+---
+# Provision a Plebeian Market per-PR preview host.
+#
+# This is the reproducible, declarative counterpart to
+# `infra/preview-vps/provision.sh` (which the Preview Deploy workflow runs over
+# SSH on every deploy). Run it against a fresh box:
+#
+#   PREVIEW_VPS_HOST=203.0.113.10 \
+#   PREVIEW_VPS_SSH_KEY_FILE=~/.ssh/preview_vps_deploy \
+#   PREVIEW_CLOUDFLARE_API_TOKEN=… PREVIEW_CLOUDFLARE_ZONE_ID=… \
+#     ansible-playbook playbooks/preview-host.yml
+- name: Provision the Plebeian Market preview host
+  hosts: preview
+  become: true
+  gather_facts: true
+  roles:
+    - preview_host

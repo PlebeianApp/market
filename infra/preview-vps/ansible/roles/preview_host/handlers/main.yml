@@ -1,0 +1,26 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: reload caddy
+  systemd:
+    name: caddy
+    state: reloaded
+
+- name: restart preview-gateway
+  systemd:
+    name: preview-gateway
+    state: restarted
+    daemon_reload: true
+
+- name: restart preview-manager.timer
+  systemd:
+    name: preview-manager.timer
+    state: restarted
+    daemon_reload: true
+
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted

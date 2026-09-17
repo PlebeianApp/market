@@ -1,0 +1,14 @@
+[Unit]
+Description=Preview gateway (on-demand TLS ask endpoint + preview subdomain router)
+After=network.target
+
+[Service]
+Type=simple
+User={{ preview_host_user }}
+Environment=HOME=/home/{{ preview_host_user }}
+ExecStart=/usr/bin/python3 {{ preview_host_base_dir }}/preview_gateway.py --listen-port {{ preview_host_gateway_port }} --manager-path {{ preview_host_base_dir }}/preview_manager.py --python-bin /usr/bin/python3
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

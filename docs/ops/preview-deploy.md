@@ -26,7 +26,13 @@ marker.
 The provision script is idempotent and safe to re-run from CI: it compares
 unit-file content and shipped-file hashes before restarting anything, so a
 re-run with no changes never bounces a live service. On a bare Debian box it
-installs Docker and Caddy, then sets up:
+installs **Docker (the Docker Inc stack — `docker-ce` + `docker-compose-plugin`,
+not Debian's `docker.io`, which does not ship the Compose v2 plugin the workflow
+needs)** and Caddy, then sets up:
+
+> **`docker: 'compose' is not a docker command`** (exit 125) means the host has
+> `docker.io` without the Compose plugin. `provision.sh` migrates it to the
+> Docker Inc stack on its next run; the role below does the same.
 
 - **`preview_gateway.py`** (`preview-gateway.service`, running as the
   provisioned user, not root): the single front door for
@@ -62,6 +68,26 @@ GitHub API query fails, rate-limits, or returns a truncated list, the cycle
 makes **no** destructive decisions for that run — it logs a `skip_reason`
 line (visible in `journalctl`) instead. Teardown failures are recorded in
 the cycle summary and the preview is kept for retry rather than deleted.
+
+## Reproducible host setup (Ansible)
+
+`infra/preview-vps/provision.sh` is what the workflow runs over SSH. For a
+**fresh** box (or to converge a drifted one), the same setup is available as an
+Ansible role at `infra/preview-vps/ansible/`:
+
+```bash
+cd infra/preview-vps/ansible
+PREVIEW_VPS_HOST=<host> \
+PREVIEW_VPS_SSH_KEY_FILE=~/.ssh/preview_vps_deploy \
+PREVIEW_CLOUDFLARE_API_TOKEN=… PREVIEW_CLOUDFLARE_ZONE_ID=… \
+  ansible-playbook playbooks/preview-host.yml
+```
+
+It installs the Docker Inc stack + Caddy, ships the gateway/manager scripts
+straight from this repo, installs the systemd units/timer, and writes the
+Caddyfile. Keep it in lockstep with `provision.sh`: the workflow still runs the
+script on every deploy, so a change to ports, units, or the Caddy route must
+land in **both** places or the next deploy will drift the host back.
 
 ## The gateway is a tolerant HTTP client on purpose
 
@@ -555,26 +581,34 @@ mutated upstream tag could turn into a key exfiltration. Re-adding
 `uses: appleboy/…` (or any other Go/drone-ssh action) is a regression:
 `infra/preview-vps/test_pinned_openssh.sh` fails if it reappears.
 
-**`pull_request_target` (do not switch blindly).** To get real previews from
-**fork** PR branches you would need the secrets in the runner, which
-`pull_request` does not allow. The typical workaround is
-`pull_request_target`, which runs the workflow with the **base branch's**
-workflow file and grants repository secrets. That is a privilege escalation
-vector: a malicious PR can alter the base-branch workflow to exfiltrate
-secrets. If you adopt it, you MUST:
+**`pull_request_target` — documented, NOT enabled.** Under the current
+`pull_request` trigger, fork PRs get **no preview and no comment**: they receive
+no repository secrets (the deploy is skipped) and a **read-only `GITHUB_TOKEN`**,
+so the comment step dies with `GraphQL: Resource not accessible by integration
+(addComment)` and is `continue-on-error` (silent). This is deliberate for now —
+everyone should expect fork PRs to show no preview comment.
 
-1. Pin the checkout to a trusted ref (never `actions/checkout` on the
-   untrusted PR merge ref with default settings), and
-2. Never interpolate PR-controlled content (e.g. `github.event.pull_request.*`)
-   into shell strings or actions that touch secrets, and
-3. Review the workflow every time the pinned ref is bumped.
+To get real previews (and comments) from **fork** PR branches you would need the
+secrets in the runner, which `pull_request` does not allow. The workaround is
+`pull_request_target`, which runs the **base branch's** workflow file and grants
+repository secrets. That is a privilege-escalation vector, so if adopted the
+agreed design is a **two-job split**:
 
-Given the added risk and that previews are explicitly not a merge gate
-(Layer G of the PR trust pipeline), the safer long-term option is for the
-maintainer to push the preview-deploy workflow changes onto `master` and run
-the preview deploy there via `pull_request` with `if:` guards on
-`github.head_ref` / `github.repository`, keeping the fork-PR case as a loud
-skip. Revisit only if maintainer wants live fork-PR previews.
+1. **`build`** — no secrets, `permissions: contents: read`; checks out the
+   **PR head SHA** only, builds the app image, and uploads it as an **artifact**.
+   It runs untrusted code with nothing to steal.
+2. **`deploy`** — `needs: build`; holds the secrets + write token, checks out the
+   **base** ref (trusted `infra/preview-vps/*` helpers only), downloads the
+   artifact, `docker load`s it, and runs the existing bootstrap/ship/compose/DNS/
+   health/comment steps. It never executes PR code.
+
+Plus: gate `deploy` on a protected **`preview` environment with required
+reviewers** (a repo-settings change), so a maintainer approves before secrets are
+used; never interpolate `github.event.pull_request.*` into shell strings that
+touch secrets; review the workflow whenever the pinned ref is bumped. Residual
+risk: the prebuilt container is untrusted and runs on the VPS (inherent to
+previewing untrusted code — mitigate with resource limits/isolation). This is a
+separate, security-reviewed change; do not switch blindly.
 
 ## Status handling (why the run is no longer masked)
 
