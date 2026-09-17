@@ -1,0 +1,9 @@
+[Unit]
+Description=Run preview-manager cycle periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target
