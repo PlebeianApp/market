@@ -61,7 +61,7 @@ test.beforeEach(async ({ buyerPage }) => {
 	await interceptPlaceholdImages(buyerPage)
 })
 
-async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string; dleqRequired?: boolean }) {
+async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: string; strayDleqRequired?: string }) {
 	const skBytes = hexToBytes(devUser1.sk)
 	const now = Math.floor(Date.now() / 1000)
 	// Live auction (post-DLEQ-rollout path). The local Cashu mint (nutshell
@@ -111,12 +111,10 @@ async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: st
 				['settlement_grace', '7200'],
 				['extension_rule', 'none'],
 				['schema', 'auction_v1'],
-				// ADR-0011 Decision 8 — emit the canonical DLEQ activation tag
-				// explicitly instead of relying on the deploy-time `start_at`
-				// boundary, so these scenarios keep exercising the DLEQ-required
-				// lock path if the boundary ever moves. Scenario 4 below passes
-				// `dleqRequired: false` for the grandfathered legacy path.
-				['dleq_required', (overrides.dleqRequired ?? true) ? '1' : '0'],
+				// A stray `dleq_required` tag must be ignored and never read
+				// (the tag is retired). Scenario 4 seeds one to prove it does
+				// not opt the auction out of the unconditional DLEQ requirement.
+				...(overrides.strayDleqRequired !== undefined ? [['dleq_required', overrides.strayDleqRequired]] : []),
 				...overrides.mints.map((mint) => ['mint', mint]),
 				['image', 'https://placehold.co/600x600', '600x600', '0'],
 			],
@@ -509,12 +507,9 @@ test.describe('Auction Bidding — Wallet-Funded Mint Selection', () => {
 // property in CI: the P2PK lock-path swap issues output proofs carrying
 // verifiable DLEQ (ADR-0011 Blocker 2).
 //
-// The scenarios therefore run on the REAL DLEQ-required lock path: the
-// seeded auction carries an explicit signed `dleq_required=1` tag, so the
-// payment path AND the DLEQ lock path are exercised together, per the
-// round-3 review (legacy payment-path coverage must not be disabled).
-// Scenario 4 is the grandfathered counterpart (`dleq_required=0`) — the
-// legacy non-DLEQ cohort keeps its own end-to-end payment-path coverage.
+// The scenarios therefore run on the REAL DLEQ-required lock path: DLEQ is
+// required for every auction, so the payment path AND the DLEQ lock path are
+// exercised together. There is no non-DLEQ or grandfathered cohort.
 //
 // These tests exercise the full bid → deposit → mint → lock → publish
 // lifecycle against the REAL local Cashu mint. The invoice the app creates
@@ -706,8 +701,7 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// The bid event must reference the auction root event id via 'e' tag.
 			expect(bidEvent!.tags.some((t) => t[0] === 'e' && t[1] === auctionEvent.id)).toBe(true)
 
-			// ADR-0011 — DLEQ-required lock coverage, end to end. The seeded
-			// auction carries `dleq_required=1`, so the lock validated the
+			// ADR-0011 — DLEQ lock coverage, end to end. The lock validated the
 			// freshly issued P2PK outputs carry NUT-12 proofs and the published
 			// kind-1023 must carry one `dleq_proof` tag per `lock_secret`, in
 			// parallel order. Without this the bid would be unverifiable
@@ -1087,24 +1081,20 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 		}
 	})
 
-	// ── Scenario 4: grandfathered (non-DLEQ) auction ───────────────────
+	// ── Scenario 4: a stray `dleq_required` tag is ignored ─────────────
 
-	test('legacy auction (dleq_required=0): bid funds and publishes WITHOUT dleq_proof tags', async ({ buyerPage }) => {
+	test('stray dleq_required=0 is ignored: the bid still publishes dleq_proof tags', async ({ buyerPage }) => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
-			// ADR-0011 Decision 7/8 — a grandfathered auction opts out of the
-			// DLEQ requirement with the canonical signed tag. The legacy
-			// non-DLEQ collateral path must stay fully usable for that cohort,
-			// so this scenario is the non-DLEQ counterpart of the happy path
-			// above: same payment funnel, no `dleq_proof` tags on the result.
-			// It also covers the bid FORM's canonical threading end to end:
-			// with the form omitting `dleqRequired`, the publish path fell back
-			// to the `start_at` boundary and this bid carried two `dleq_proof`
-			// tags (RED) instead of none.
+			// ADR-0011 — `dleq_required` is retired; DLEQ is unconditional. A
+			// stray tag on the auction event must be ignored and never read, so
+			// this auction still requires DLEQ collateral: same payment funnel
+			// as the happy path, and the published bid carries `dleq_proof`
+			// tags despite the `dleq_required=0` tag.
 			const auctionEvent = await seedAuction(relay, {
 				mints: [MINT_A],
-				dTag: 'e2e-ln-bid-funding-legacy-auction',
-				dleqRequired: false,
+				dTag: 'e2e-ln-bid-funding-stray-dleq-tag',
+				strayDleqRequired: '0',
 			})
 
 			await acknowledgeAuctionRules(buyerPage)
@@ -1148,12 +1138,12 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			expect(bidEvent!.pubkey).toBe(devUser2.pk)
 			expect(bidEvent!.tags.some((t) => t[0] === 'e' && t[1] === auctionEvent.id)).toBe(true)
 
-			// The legacy path still publishes its lock collateral...
+			// The bid publishes its lock collateral...
 			expect(bidEvent!.tags.filter((t) => t[0] === 'lock_secret').length).toBeGreaterThan(0)
-			// ...and must NOT publish `dleq_proof` tags: the lock ran without
-			// the output DLEQ requirement (N1 — the tag decision follows the
-			// same signed `dleq_required=0` the lock was given).
-			expect(bidEvent!.tags.filter((t) => t[0] === 'dleq_proof')).toHaveLength(0)
+			// ...and DLEQ is unconditional, so the stray `dleq_required=0` did
+			// not opt the auction out: the published bid carries `dleq_proof`
+			// tags, one per lock_secret.
+			expect(bidEvent!.tags.filter((t) => t[0] === 'dleq_proof').length).toBe(bidEvent!.tags.filter((t) => t[0] === 'lock_secret').length)
 		} finally {
 			relay.close()
 		}
