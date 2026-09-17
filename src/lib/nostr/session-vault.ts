@@ -61,6 +61,9 @@ export interface WrapOptions {
 	iterations?: number
 }
 
+/** Synchronous ownership assertion run immediately before storage mutation. */
+export type SessionMutationGuard = () => void
+
 /**
  * Options for {@link unlockVault}. `minIterations` lowers the tamper floor —
  * tests wrapping at a low cost must pass the matching floor explicitly.
@@ -137,10 +140,15 @@ export async function wrapSession(nbunksec: string, passphrase: string, options:
 }
 
 /** Serialize + persist an envelope under {@link VAULT_STORAGE_KEY}. */
-export function saveVaultedSession(nbunksec: string, passphrase: string, options: WrapOptions = {}): Promise<void> {
-	return wrapSession(nbunksec, passphrase, options).then((envelope) => {
-		localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope))
-	})
+export async function saveVaultedSession(
+	nbunksec: string,
+	passphrase: string,
+	options: WrapOptions = {},
+	assertMutationAllowed?: SessionMutationGuard,
+): Promise<void> {
+	const envelope = await wrapSession(nbunksec, passphrase, options)
+	assertMutationAllowed?.()
+	localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope))
 }
 
 function readEnvelope(envelope?: SessionVaultEnvelope | string, options: UnlockOptions = {}): SessionVaultEnvelope {
@@ -220,7 +228,11 @@ export function hasLegacyPlaintextSession(): boolean {
  * then DELETE both legacy keys. Throws (fail-closed, nothing migrated) when
  * the legacy pair is absent or the bunker URL does not parse.
  */
-export async function migrateLegacySessionToVault(passphrase: string, options: WrapOptions = {}): Promise<{ nbunksec: string }> {
+export async function migrateLegacySessionToVault(
+	passphrase: string,
+	options: WrapOptions = {},
+	assertMutationAllowed?: SessionMutationGuard,
+): Promise<{ nbunksec: string }> {
 	const clientKeyHex = localStorage.getItem(LEGACY_LOCAL_SIGNER_KEY)
 	const bunkerUrl = localStorage.getItem(LEGACY_CONNECT_URL_KEY)
 	if (!clientKeyHex || !bunkerUrl) {
@@ -236,6 +248,7 @@ export async function migrateLegacySessionToVault(passphrase: string, options: W
 	}
 	const nbunksec = encodeNbunksec({ pubkey: remote, local_key: clientKeyHex, relays, secret: bunkerSecret })
 	const envelope = await wrapSession(nbunksec, passphrase, options)
+	assertMutationAllowed?.()
 	localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(envelope))
 	// Only after the vault write succeeded, purge the plaintext pair.
 	localStorage.removeItem(LEGACY_LOCAL_SIGNER_KEY)

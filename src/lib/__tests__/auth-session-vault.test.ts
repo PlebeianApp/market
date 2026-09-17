@@ -25,6 +25,7 @@ const USER_PUBKEY = 'aa'.repeat(32)
 
 const mockNdkActions = {
 	getNDK: mock(() => ({ getUser: () => ({ pubkey: USER_PUBKEY }) })),
+	publishSigner: mock(() => {}),
 	setSigner: mock(() => {}),
 	removeSigner: mock(() => {}),
 }

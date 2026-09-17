@@ -21,6 +21,7 @@ import {
 	hasLegacyPlaintextSession,
 	hasVaultedSession,
 	migrateLegacySessionToVault,
+	saveVaultedSession,
 	unlockVault,
 	wrapSession,
 } from '@/lib/nostr/session-vault'
@@ -147,6 +148,19 @@ describe('vaulted session storage lifecycle', () => {
 		memoryStorage.set(VAULT_STORAGE_KEY, 'not-json{')
 		await expect(unlockVault(undefined, 'pass')).rejects.toThrow(SessionVaultError)
 	})
+
+	test('a mutation-time ownership guard can cancel a completed wrap before vault storage', async () => {
+		const cancelled = new Error('auth attempt cancelled')
+		let guardCalls = 0
+		await expect(
+			saveVaultedSession('nbunksec1stale', 'pass', { iterations: TEST_ITERATIONS }, () => {
+				guardCalls++
+				throw cancelled
+			}),
+		).rejects.toBe(cancelled)
+		expect(guardCalls).toBe(1)
+		expect(memoryStorage.has(VAULT_STORAGE_KEY)).toBe(false)
+	})
 })
 
 describe('legacy plaintext migration (read ONCE policy)', () => {
@@ -189,5 +203,23 @@ describe('legacy plaintext migration (read ONCE policy)', () => {
 	test('migration without a legacy session fails closed', async () => {
 		await expect(migrateLegacySessionToVault('pass', { iterations: TEST_ITERATIONS })).rejects.toThrow(SessionVaultError)
 		expect(hasVaultedSession()).toBe(false)
+	})
+
+	test('a mutation-time ownership guard cancels migration before vault write or plaintext deletion', async () => {
+		memoryStorage.set(LEGACY_LOCAL_SIGNER_KEY, LEGACY_CLIENT_KEY)
+		memoryStorage.set(LEGACY_CONNECT_URL_KEY, LEGACY_BUNKER_URL)
+		const cancelled = new Error('auth attempt cancelled')
+		let guardCalls = 0
+
+		await expect(
+			migrateLegacySessionToVault('migration-pass', { iterations: TEST_ITERATIONS }, () => {
+				guardCalls++
+				throw cancelled
+			}),
+		).rejects.toBe(cancelled)
+		expect(guardCalls).toBe(1)
+		expect(memoryStorage.has(VAULT_STORAGE_KEY)).toBe(false)
+		expect(memoryStorage.get(LEGACY_LOCAL_SIGNER_KEY)).toBe(LEGACY_CLIENT_KEY)
+		expect(memoryStorage.get(LEGACY_CONNECT_URL_KEY)).toBe(LEGACY_BUNKER_URL)
 	})
 })

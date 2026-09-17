@@ -34,6 +34,7 @@ const BUNKER_SECRET = 'bunkersecret'
 
 const mockNdkActions = {
 	getNDK: mock(() => ({ getUser: () => ({ pubkey: USER_PUBKEY }) })),
+	publishSigner: mock(() => {}),
 	setSigner: mock(() => {}),
 	removeSigner: mock(() => {}),
 }
