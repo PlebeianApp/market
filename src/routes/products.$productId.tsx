@@ -24,8 +24,13 @@ import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/fea
 import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
+import { useAmIAdmin } from '@/queries/app-settings'
+import { useTestLabelForCoordinate } from '@/queries/testLabels'
+import { TestLabelDialog } from '@/components/dashboard/TestLabelDialog'
+import { TestListingNotice } from '@/components/TestListingNotice'
 import {
 	getProductCoordinates,
+	getProductId,
 	getProductCategories,
 	getProductCreatedAt,
 	getProductDescription,
@@ -462,6 +467,16 @@ function RouteComponent() {
 	const isBlacklisted = blacklistSettings?.blacklistedProducts.includes(productCoords) || false
 	const isFeatured = featuredData?.featuredProducts.includes(productCoords) || false
 
+	// ADR-0009 test-label moderation from the public product page, so an
+	// authorized labeler can curate a listing they do not own. The authorized
+	// set is editors UNION admins (ADR-0009), exposed here as
+	// `permissions.canManageTestLabel`. `currentUserPubkey` is only used to
+	// build the appeal contact reference in the label content.
+	const productDTag = product ? getProductId(product) : ''
+	const { currentUserPubkey } = useAmIAdmin(appPubkey)
+	const { isLabeled: hasActiveTestLabel } = useTestLabelForCoordinate(productCoords || undefined)
+	const [testLabelDialogMode, setTestLabelDialogMode] = useState<'mark' | 'unmark' | null>(null)
+
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
@@ -721,7 +736,32 @@ function RouteComponent() {
 										onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
 										onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
 										onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
+										canManageTestLabel={permissions.canManageTestLabel && !!productDTag}
+										testLabelActive={hasActiveTestLabel}
+										onMarkTestLabel={
+											permissions.canManageTestLabel && !hasActiveTestLabel ? () => setTestLabelDialogMode('mark') : undefined
+										}
+										onUnmarkTestLabel={
+											permissions.canManageTestLabel && hasActiveTestLabel ? () => setTestLabelDialogMode('unmark') : undefined
+										}
 									/>
+
+									{/* ADR-0009: shared test-label dialog, driven from the actions menu
+									    so an admin can curate a listing they do not own. */}
+									{testLabelDialogMode && productDTag && (
+										<TestLabelDialog
+											kind={30402}
+											pubkey={pubkey}
+											dTag={productDTag}
+											itemLabel="Product"
+											open={true}
+											onOpenChange={(next) => {
+												if (!next) setTestLabelDialogMode(null)
+											}}
+											mode={testLabelDialogMode}
+											contactPubkey={currentUserPubkey}
+										/>
+									)}
 								</div>
 							</div>
 
@@ -739,6 +779,10 @@ function RouteComponent() {
 							) : (
 								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 							)}
+
+							{/* ADR-0009: a curated item is absent from the feed but reachable here
+							    by direct link, so explain the label and offer an appeal path. */}
+							<TestListingNotice coordinate={productCoords} itemLabel="Product" />
 
 							{(() => {
 								switch (productType?.product) {

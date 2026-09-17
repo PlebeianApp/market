@@ -9,7 +9,7 @@ import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io'
 
 /** Convert an NDKEvent into a raw nostr-tools event. */
 function toRaw(event: NDKEvent): NostrEvent {
@@ -43,12 +43,15 @@ export const ndkIo: NostrIo = {
 		}
 	},
 
-	async publish(event, opts?: PublishOptions) {
+	async publish(event, opts?: PublishOptions): Promise<PublishResult> {
 		const ndk = ndkStore.state.ndk
 		if (!ndk) throw new Error('NDK not initialized')
 		const relaySet = opts?.relayUrls?.length ? NDKRelaySet.fromRelayUrls(opts.relayUrls, ndk) : undefined
 		const ndkEvent = new NDKEvent(ndk, event)
-		await ndkActions.publishEvent(ndkEvent, relaySet)
+		// ndkActions.publishEvent resolves with the set of relays that ACKed the
+		// event (NDKRelay), so the seam can surface truthful relay URLs.
+		const published = await ndkActions.publishEvent(ndkEvent, relaySet)
+		return { publishedRelays: new Set(Array.from(published, (relay) => (relay as { url: string }).url)) }
 	},
 
 	async sign(template: EventTemplate) {

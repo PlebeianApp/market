@@ -1,4 +1,7 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
+import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
+import { TestListingNotice } from '@/components/TestListingNotice'
+import { getATagFromCoords } from '@/lib/utils/coords'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
@@ -138,5 +141,21 @@ function EditProductComponent() {
 	}
 
 	// Ready to show the form - pass productDTag for draft checking and productId for reloading
-	return <ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} workflow={workflow} />
+	return (
+		<div className="space-y-4">
+			{/* ADR-0009: authorized labelers can mark / unmark this item as a test listing */}
+			{productDTag && (
+				<div className="flex justify-end items-center gap-3">
+					{/* ADR-0009: the owner sees the item in their dashboard even when it is
+					    curated out of the public feed — say why. */}
+					<TestListingNotice
+						coordinate={getATagFromCoords({ kind: 30402, pubkey: product.pubkey, identifier: productDTag })}
+						itemLabel="Product"
+					/>
+					<TestLabelButton kind={30402} pubkey={product.pubkey} dTag={productDTag} itemLabel="Product" />
+				</div>
+			)}
+			<ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} workflow={workflow} />
+		</div>
+	)
 }

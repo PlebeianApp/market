@@ -57,7 +57,7 @@ const mockNdkStore = {
 }
 const mockNdkActions = {
 	fetchEventsWithTimeout: mock(async () => new Set([stubNdkEvent])),
-	publishEvent: mock(async () => new Set(['wss://relay.example'])),
+	publishEvent: mock(async () => new Set([{ url: 'wss://relay.example' }])),
 	getSigner: () => undefined,
 	getUser: mock(async () => null as { pubkey: string } | null),
 }
@@ -83,7 +83,7 @@ let poolSubscriptionController = (
 	_filters: unknown,
 	_opts: unknown,
 ): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
-let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => undefined
+let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => []
 
 // Sentinel returned by the RelayGroup.completeOnAllEose() stub — the adapter
 // must forward it as request()'s `complete` option so fetchEvents waits for
@@ -111,7 +111,7 @@ import { generateSecretKey, getEventHash, getPublicKey, verifyEvent } from 'nost
 import { createPrivateKeySigner, setSignerCapability } from '../nostr/signer-registry'
 import { applesauceIo } from '../nostr/io-applesauce'
 import { ndkIo } from '../nostr/io-ndk'
-import { type NostrIo, fetchEvents, getNostrIo, getUser, publish, setNostrIo, sign, subscribe } from '../nostr/io'
+import { type NostrIo, type PublishResult, fetchEvents, getNostrIo, getUser, publish, setNostrIo, sign, subscribe } from '../nostr/io'
 
 const IO_METHODS = ['fetchEvents', 'subscribe', 'publish', 'sign', 'getUser'] as const
 
@@ -119,7 +119,7 @@ function makeStubIo(overrides: Partial<NostrIo> = {}): NostrIo {
 	return {
 		fetchEvents: mock(async () => []),
 		subscribe: mock(() => () => {}),
-		publish: mock(async () => {}),
+		publish: mock(async () => ({ publishedRelays: new Set<string>() })),
 		sign: mock(async () => ({}) as never),
 		getUser: mock(async () => null),
 		...overrides,
@@ -163,7 +163,7 @@ describe('nostr io seam', () => {
 		const stub = makeStubIo({
 			fetchEvents: mock(async () => [stubRawEvent]),
 			subscribe: mock(() => () => {}),
-			publish: mock(async () => {}),
+			publish: mock(async () => ({ publishedRelays: new Set(['wss://ack.example']) })),
 			sign: mock(async () => stubRawEvent as never),
 			getUser: mock(async () => ({ pubkey: 'pk-stub' })),
 		})
@@ -176,7 +176,7 @@ describe('nostr io seam', () => {
 		expect(stub.subscribe).toHaveBeenCalledTimes(1)
 		stop()
 
-		await publish(stubRawEvent as never)
+		await expect(publish(stubRawEvent as never)).resolves.toEqual({ publishedRelays: new Set(['wss://ack.example']) })
 		expect(stub.publish).toHaveBeenCalledTimes(1)
 
 		await expect(sign({ kind: 1, content: 'c', tags: [], created_at: 1 })).resolves.toBe(stubRawEvent)
@@ -270,6 +270,26 @@ describe('ndk bridge adapter (io-ndk)', () => {
 		const [[event, relaySet]] = mockNdkActions.publishEvent.mock.calls
 		expect((event as { rawEvent(): unknown }).rawEvent()).toEqual(stubRawEvent)
 		expect(relaySet).toBeUndefined()
+	})
+
+	test('publish returns the relay URLs that ACKed the event', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+		mockNdkActions.publishEvent.mockImplementationOnce(
+			async () => new Set([{ url: 'wss://ack-a.example' }, { url: 'wss://ack-b.example' }]),
+		)
+
+		const result = await ndkIo.publish(stubRawEvent as never)
+
+		expect(result.publishedRelays).toEqual(new Set(['wss://ack-a.example', 'wss://ack-b.example']))
+	})
+
+	test('publish returns an empty set when no relay ACKed', async () => {
+		mockNdkStore.state.ndk = makeMockNdk()
+		mockNdkActions.publishEvent.mockImplementationOnce(async () => new Set())
+
+		const result = await ndkIo.publish(stubRawEvent as never)
+
+		expect(result.publishedRelays.size).toBe(0)
 	})
 
 	test('publish treats empty relayUrls as no override', async () => {
@@ -445,16 +465,26 @@ describe('applesauce adapter (io-applesauce)', () => {
 
 	test('publish forwards the event to the relay pool using write relays by default', async () => {
 		mockNdkStore.state.writeRelayUrls = ['wss://write.example']
-		poolPublishController = mock(async () => undefined)
-		await applesauceIo.publish(stubRawEvent as never)
+		poolPublishController = mock(async () => [
+			{ ok: true, from: 'wss://write.example' },
+			{ ok: false, from: 'wss://down.example', message: 'relay error' },
+		])
+
+		const result = await applesauceIo.publish(stubRawEvent as never)
+
 		expect(poolPublishController).toHaveBeenCalledWith(['wss://write.example'], stubRawEvent)
+		// Only ok responses are ACKs; a relay that rejected the event is not published.
+		expect(result.publishedRelays).toEqual(new Set(['wss://write.example']))
 	})
 
 	test('publish honors explicit relayUrls over write relays', async () => {
 		mockNdkStore.state.writeRelayUrls = ['wss://write.example']
-		poolPublishController = mock(async () => undefined)
-		await applesauceIo.publish(stubRawEvent as never, { relayUrls: ['wss://override.example'] })
+		poolPublishController = mock(async () => [{ ok: true, from: 'wss://override.example' }])
+
+		const result = await applesauceIo.publish(stubRawEvent as never, { relayUrls: ['wss://override.example'] })
+
 		expect(poolPublishController).toHaveBeenCalledWith(['wss://override.example'], stubRawEvent)
+		expect(result.publishedRelays).toEqual(new Set(['wss://override.example']))
 	})
 
 	test('sign throws when no signer capability is attached (logged out)', async () => {
@@ -601,9 +631,10 @@ describe('seam pass-through option forwarding', () => {
 	})
 
 	test('publish forwards the event and opts to the active adapter', async () => {
-		const pubFn = mock(async () => {})
+		const result: PublishResult = { publishedRelays: new Set(['wss://ack.example']) }
+		const pubFn = mock(async () => result)
 		setNostrIo(makeStubIo({ publish: pubFn }))
-		await publish(stubRawEvent as never, { relayUrls: ['wss://x'] })
+		await expect(publish(stubRawEvent as never, { relayUrls: ['wss://x'] })).resolves.toBe(result)
 		expect(pubFn).toHaveBeenCalledWith(stubRawEvent, { relayUrls: ['wss://x'] })
 	})
 })
