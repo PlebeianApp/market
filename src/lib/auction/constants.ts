@@ -198,7 +198,7 @@ export const VALIDATOR_REASONS = [
 	'invalid_bid_nonce',
 	'duplicate_bid_nonce',
 	'rate_limited',
-	'too_many_active_bids',
+	'too_many_tracked_bids',
 	// Forward-declared for relay-side admission rules that this app boundary
 	// does not emit yet (review 5645059400 finding 5). Kept so consumers can
 	// narrow on a fixed vocabulary; nothing produces them today.

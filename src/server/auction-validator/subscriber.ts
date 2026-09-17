@@ -332,7 +332,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			now: firstObservedAt,
 			state: deps.state.spam,
 			policy: deps.spamPolicy,
-			activeBidCount: lifetimeBidCount,
+			trackedBidCount: lifetimeBidCount,
 		})
 		if (!spamDecision.ok) {
 			logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: ${spamDecision.reason}`)

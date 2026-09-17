@@ -7,11 +7,10 @@ export interface BidSpamPolicy {
 	maxBidsPerWindow: number
 	/** Rolling window length in seconds. */
 	rateWindowSec: number
-	/** Maximum tracked bids from one bidder in one auction. */
 	/** LIFETIME cap per (auction, bidder) — bids are append-only and the
 	 *  count includes bids that later became invalid. See subscriber.ts
 	 *  (review 5645059400 finding 2). */
-	maxActiveBidsPerAuction: number
+	maxTrackedBidsPerAuction: number
 	/**
 	 * Maximum number of events retained per key in a pending buffer —
 	 * bids per unknown auction, path releases per unknown bid,
@@ -50,7 +49,7 @@ export interface BidSpamPolicy {
 export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 	maxBidsPerWindow: 20,
 	rateWindowSec: 60,
-	maxActiveBidsPerAuction: 100,
+	maxTrackedBidsPerAuction: 100,
 	maxPendingEventsPerKey: 256,
 	// Worst case per buffer: maxPendingEvents × maxEventBytes
 	// (1024 × 64 KB = 64 MB) and in practice ~1 MB, since buffering only
@@ -88,7 +87,7 @@ export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): 
 	const entries: Array<[keyof BidSpamPolicy, string]> = [
 		['maxBidsPerWindow', 'AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW'],
 		['rateWindowSec', 'AUCTION_VALIDATOR_RATE_WINDOW_SEC'],
-		['maxActiveBidsPerAuction', 'AUCTION_VALIDATOR_MAX_ACTIVE_BIDS_PER_AUCTION'],
+		['maxTrackedBidsPerAuction', 'AUCTION_VALIDATOR_MAX_TRACKED_BIDS_PER_AUCTION'],
 		['maxPendingEventsPerKey', 'AUCTION_VALIDATOR_MAX_PENDING_EVENTS_PER_KEY'],
 		['maxPendingKeys', 'AUCTION_VALIDATOR_MAX_PENDING_KEYS'],
 		['maxPendingEvents', 'AUCTION_VALIDATOR_MAX_PENDING_EVENTS'],
@@ -102,6 +101,8 @@ export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): 
 	]
 
 	const policy: Partial<BidSpamPolicy> = {}
+	const legacyTrackedBidCap = readNonNegativeIntegerEnv(env, 'AUCTION_VALIDATOR_MAX_ACTIVE_BIDS_PER_AUCTION')
+	if (legacyTrackedBidCap !== undefined) policy.maxTrackedBidsPerAuction = legacyTrackedBidCap
 	for (const [field, envName] of entries) {
 		const value = readNonNegativeIntegerEnv(env, envName)
 		if (value !== undefined) policy[field] = value as never
@@ -144,7 +145,7 @@ export type BidSpamDecision =
 				| 'duplicate_event'
 				| 'duplicate_bid_nonce'
 				| 'rate_limited'
-				| 'too_many_active_bids'
+				| 'too_many_tracked_bids'
 				| 'invalid_bid_nonce'
 				| 'too_many_lock_secrets'
 				| 'bid_payload_too_large'
@@ -185,7 +186,7 @@ export const checkBidSpamPolicy = (input: {
 	now: number
 	state: BidSpamState
 	policy?: Partial<BidSpamPolicy>
-	activeBidCount: number
+	trackedBidCount: number
 }): BidSpamDecision => {
 	const policy = resolveBidSpamPolicy(input.policy)
 	const eventId = input.bid.id.toLowerCase()
@@ -207,11 +208,11 @@ export const checkBidSpamPolicy = (input: {
 		return { ok: false, reason: 'duplicate_bid_nonce', detail: `bid_nonce ${input.bid.bidNonce} is already bound to another event` }
 	}
 
-	if (input.activeBidCount >= policy.maxActiveBidsPerAuction) {
+	if (input.trackedBidCount >= policy.maxTrackedBidsPerAuction) {
 		return {
 			ok: false,
-			reason: 'too_many_active_bids',
-			detail: `bidder has reached max_active_bids_per_auction=${policy.maxActiveBidsPerAuction}`,
+			reason: 'too_many_tracked_bids',
+			detail: `bidder has reached max_tracked_bids_per_auction=${policy.maxTrackedBidsPerAuction}`,
 		}
 	}
 

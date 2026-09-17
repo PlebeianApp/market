@@ -35,7 +35,7 @@ describe('validator policy publication', () => {
 			enabled: true,
 			maxBidsPerWindow: DEFAULT_BID_SPAM_POLICY.maxBidsPerWindow,
 			rateWindowSec: DEFAULT_BID_SPAM_POLICY.rateWindowSec,
-			maxActiveBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxActiveBidsPerAuction,
+			maxTrackedBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxTrackedBidsPerAuction,
 			maxPendingEventsPerKey: DEFAULT_BID_SPAM_POLICY.maxPendingEventsPerKey,
 			maxPendingKeys: DEFAULT_BID_SPAM_POLICY.maxPendingKeys,
 			maxPendingEvents: DEFAULT_BID_SPAM_POLICY.maxPendingEvents,
