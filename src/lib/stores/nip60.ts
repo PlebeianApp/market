@@ -2563,9 +2563,7 @@ export const nip60Actions = {
 			throw new Error('NIP-60 wallet not ready')
 		}
 
-		const ndk = ndkActions.getNDK()
 		const signer = ndkActions.getSigner()
-		if (!ndk) throw new Error('NDK not initialised')
 		if (!signer) throw new Error('No signer available')
 		const bidder = await signer.user()
 
@@ -2641,7 +2639,7 @@ export const nip60Actions = {
 			mintCandidates: trustedMints.length ? trustedMints : [mintForLock],
 		}
 
-		const bidEventId = await publishAuctionBid(formData, signer, ndk)
+		const bidEventId = await publishAuctionBid(formData)
 
 		return {
 			bidEventId,
@@ -2667,16 +2665,12 @@ export const nip60Actions = {
 		releaseReason?: 'settlement' | 'fallback_settlement' | 'voluntary_late'
 		note?: string
 	}): Promise<{ pathReleaseEventId: string }> => {
-		const ndk = ndkActions.getNDK()
-		const signer = ndkActions.getSigner()
-		if (!ndk) throw new Error('NDK not initialised')
-		if (!signer) throw new Error('No signer available')
 		const { publishBidderPathRelease } = await import('@/publish/auctions')
-		const result = await publishBidderPathRelease(
-			{ bidEventId: params.bidEventId, releaseReason: params.releaseReason, note: params.note },
-			signer,
-			ndk,
-		)
+		const result = await publishBidderPathRelease({
+			bidEventId: params.bidEventId,
+			releaseReason: params.releaseReason,
+			note: params.note,
+		})
 		return { pathReleaseEventId: result.pathReleaseEventId }
 	},
 

@@ -14,7 +14,7 @@ import {
 } from 'recharts'
 import type { LabelPosition } from 'recharts/types/component/Label'
 import { UserCard } from './UserCard'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getBidAmount } from '@/queries/auctions'
 import {
 	getAuctionStartAt,

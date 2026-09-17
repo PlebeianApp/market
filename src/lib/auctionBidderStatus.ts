@@ -4,7 +4,7 @@ import {
 	getAuctionWindowValidBids,
 	type AuctionBidChainGroup,
 } from '@/lib/auctionSettlement'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
 import { getValidatedBidderState } from '@/lib/auction/validatedBidView'
 

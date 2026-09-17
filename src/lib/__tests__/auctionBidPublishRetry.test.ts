@@ -147,6 +147,11 @@ const publishEventMock = mock(async (event: NDKEvent) => {
 	return new Set(['wss://relay.test'])
 })
 
+// The publish layer now signs + publishes through the first-party I/O seam,
+// whose default `ndkIo` adapter reads the active signer (and NDK instance)
+// from the store singleton. Tests drive the seam by swapping `currentSigner`.
+let currentSigner: NDKSigner = signer
+
 mock.module('@/lib/stores/nip60', () => ({
 	nip60Actions: {
 		lockAuctionBidFunds: lockAuctionBidFundsMock,
@@ -158,7 +163,14 @@ mock.module('@/lib/stores/ndk', () => ({
 	ndkActions: {
 		publishEvent: publishEventMock,
 		getNDK: () => ndkInstance,
-		getSigner: () => signer,
+		getSigner: () => currentSigner,
+		getUser: async () => {
+			const user = await currentSigner.user()
+			return user?.pubkey ? { pubkey: user.pubkey } : null
+		},
+	},
+	ndkStore: {
+		state: { ndk: ndkInstance },
 	},
 }))
 
@@ -199,11 +211,23 @@ const setAuthUser = () =>
 		isAuthenticated: true,
 	}))
 
+/** Run `publishAuctionBid` through the I/O seam with `publishSigner` active. */
+const publishWithSigner = (amount: number, publishSigner: NDKSigner = signer) => {
+	currentSigner = publishSigner
+	return publishAuctionBid(buildFormData(amount))
+}
+
+/** Run `republishAuctionBid` through the I/O seam with `publishSigner` active. */
+const republishWithSigner = (bidEventId: string, publishSigner: NDKSigner = signer) => {
+	currentSigner = publishSigner
+	return republishAuctionBid(bidEventId)
+}
+
 /** Attempt a publish and return the AuctionBidPublishFailedError it throws. */
 const publishAndExpectBroadcastFailure = async (amount: number, publishSigner: NDKSigner = signer) => {
 	let caught: unknown
 	try {
-		await publishAuctionBid(buildFormData(amount), publishSigner, ndkInstance)
+		await publishWithSigner(amount, publishSigner)
 	} catch (error) {
 		caught = error
 	}
@@ -214,6 +238,7 @@ const publishAndExpectBroadcastFailure = async (amount: number, publishSigner: N
 beforeEach(() => {
 	localStorage.clear()
 	setAuthUser()
+	currentSigner = signer
 	publishedPayloads.length = 0
 	publishShouldFail = false
 	lockShouldThrow = null
@@ -264,7 +289,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		// Retry: relay is back up. The retry must rebroadcast the cached
 		// event verbatim — no re-lock, no re-sign, no new event id.
 		publishShouldFail = false
-		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		const retriedId = await republishWithSigner(bidEventId)
 
 		expect(retriedId).toBe(bidEventId) // same event id
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1) // ZERO additional Cashu swap/lock
@@ -289,7 +314,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		// Retry with a working signer: re-sign the cached (unsigned) event —
 		// the event id is unaffected by the signature, and the mint is not
 		// touched again.
-		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		const retriedId = await republishWithSigner(bidEventId)
 		expect(retriedId).toBe(bidEventId)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
 		expect(publishedPayloads).toHaveLength(1)
@@ -298,7 +323,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 	})
 
 	test('successful publish discards the rebroadcast cache — a later republish of the same id refuses', async () => {
-		const bidEventId = await publishAuctionBid(buildFormData(900), signer, ndkInstance)
+		const bidEventId = await publishWithSigner(900)
 		expect(bidEventId).toHaveLength(64)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
 
@@ -306,7 +331,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		// rather than silently re-running the (re-locking) pipeline.
 		let caught: unknown
 		try {
-			await republishAuctionBid(bidEventId, signer, ndkInstance)
+			await republishWithSigner(bidEventId)
 		} catch (error) {
 			caught = error
 		}
@@ -320,7 +345,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		const unknownId = 'f'.repeat(64)
 		let caught: unknown
 		try {
-			await republishAuctionBid(unknownId, signer, ndkInstance)
+			await republishWithSigner(unknownId)
 		} catch (error) {
 			caught = error
 		}
@@ -339,7 +364,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 		// stays retryable, and no re-lock happened.
 		let retryCaught: unknown
 		try {
-			await republishAuctionBid(bidEventId, signer, ndkInstance)
+			await republishWithSigner(bidEventId)
 		} catch (error) {
 			retryCaught = error
 		}
@@ -349,7 +374,7 @@ describe('republishAuctionBid idempotent retry (#1235 Blocking 1)', () => {
 
 		// Third time's the charm — still the exact same event.
 		publishShouldFail = false
-		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		const retriedId = await republishWithSigner(bidEventId)
 		expect(retriedId).toBe(bidEventId)
 		expect(publishedPayloads[2].sig).toBe(publishedPayloads[0].sig)
 	})
@@ -378,7 +403,7 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 		const signerB = new NDKPrivateKeySigner('5'.repeat(64))
 		let caught: unknown
 		try {
-			await republishAuctionBid(bidEventId, signerB, ndkInstance)
+			await republishWithSigner(bidEventId, signerB)
 		} catch (error) {
 			caught = error
 		}
@@ -399,7 +424,7 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 		// The ORIGINAL cache entry survived the refusal (never discarded on
 		// failure) — retrying with the original bidder's signer still
 		// rebroadcasts the SAME event id.
-		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		const retriedId = await republishWithSigner(bidEventId)
 		expect(retriedId).toBe(bidEventId)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1) // still no re-lock
 		expect(publishedPayloads).toHaveLength(1)
@@ -426,7 +451,7 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 
 		let caught: unknown
 		try {
-			await republishAuctionBid(bidEventId, driftingSigner, ndkInstance)
+			await republishWithSigner(bidEventId, driftingSigner)
 		} catch (error) {
 			caught = error
 		}
@@ -440,7 +465,7 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 
 		// Cache preserved: the original unsigned A event is still retryable
 		// with the original bidder's real signer — same event id.
-		const retriedId = await republishAuctionBid(bidEventId, signer, ndkInstance)
+		const retriedId = await republishWithSigner(bidEventId)
 		expect(retriedId).toBe(bidEventId)
 		expect(publishedPayloads).toHaveLength(1)
 		expect(publishedPayloads[0].id).toBe(bidEventId)
@@ -462,23 +487,19 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 // =============================================================================
 
 describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
-	test('(i) event finalization failure surfaces the DISTINCT locked error carrying the lock tokenId — never a bare error', async () => {
-		// Inject a throw at toNostrEvent (real NDKEvent class, prototype-level
-		// stub, restored immediately) — the failure happens AFTER
-		// lockAuctionBidFunds but BEFORE the event id exists.
-		const originalToNostrEvent = NDKEvent.prototype.toNostrEvent
+	test('(i) post-lock failure before event finalization surfaces the DISTINCT locked error carrying the lock tokenId — never a bare error', async () => {
+		// Inject a post-lock, pre-id failure: the mint lock returns no proofs, so
+		// the pipeline aborts AFTER lockAuctionBidFunds but BEFORE the kind-1023
+		// event id is finalized.
+		lockAuctionBidFundsMock.mockImplementationOnce(async (input: { amount: number; locktime?: number }) => ({
+			...buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length),
+			proofs: [],
+		}))
 		let caught: unknown
 		try {
-			NDKEvent.prototype.toNostrEvent = async function () {
-				throw new Error('toNostrEvent exploded')
-			}
-			try {
-				await publishAuctionBid(buildFormData(500), signer, ndkInstance)
-			} catch (error) {
-				caught = error
-			}
-		} finally {
-			NDKEvent.prototype.toNostrEvent = originalToNostrEvent
+			await publishWithSigner(500)
+		} catch (error) {
+			caught = error
 		}
 
 		// Distinct, identifiable error class — NOT a bare Error, and NOT
@@ -490,7 +511,7 @@ describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
 		// locked proofs live on, reclaimable after the refund timelock.
 		expect(lockedError.lockTokenId).toBe('pending-token-1')
 		expect(lockedError.bidEventId).toBeNull() // id never finalized
-		expect((lockedError.cause as Error).message).toBe('toNostrEvent exploded')
+		expect((lockedError.cause as Error).message).toBe('Lock result contained no proofs')
 
 		// The lock ran EXACTLY once; the bid was never built or broadcast.
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
@@ -517,7 +538,7 @@ describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
 				originalSetItem(key, _value)
 			}
 			try {
-				await publishAuctionBid(buildFormData(600), signer, ndkInstance)
+				await publishWithSigner(600)
 			} catch (error) {
 				caught = error
 			}
@@ -586,7 +607,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 			}
 			let caught: unknown
 			try {
-				await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+				await publishWithSigner(500)
 			} catch (error) {
 				caught = error
 			}
@@ -620,7 +641,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 
 		let caught: unknown
 		try {
-			await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+			await publishWithSigner(500)
 		} catch (error) {
 			caught = error
 		}
@@ -654,7 +675,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 
 		let caught: unknown
 		try {
-			await publishAuctionBid(buildFormData(500), signer, ndkInstance)
+			await publishWithSigner(500)
 		} catch (error) {
 			caught = error
 		}
@@ -673,7 +694,7 @@ describe('pre-lock recovery record (#1235 round-3 B1)', () => {
 	})
 
 	test('successful publish supersedes the pre-lock record (no residue once the full bidder record exists)', async () => {
-		const bidEventId = await publishAuctionBid(buildFormData(900), signer, ndkInstance)
+		const bidEventId = await publishWithSigner(900)
 		expect(bidEventId).toHaveLength(64)
 		// The full bidder record exists and the pre-lock record is gone.
 		expect(findBidderRecord(bidEventId)).toBeDefined()

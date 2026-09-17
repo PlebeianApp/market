@@ -574,6 +574,37 @@ describe('applesauce adapter (io-applesauce)', () => {
 		// stop() after group teardown is idempotent.
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
+
+	test('onEose fires exactly once, and only after every relay settles', () => {
+		// Callers that buffer events until the initial page arrives (the auction
+		// bid stream) need a single EOSE boundary. It must not fire on the first
+		// relay's EOSE while a slower relay is still pending, and must not fire
+		// again on a duplicate/late EOSE.
+		const unsubscribe = mock(() => {})
+		let emit: ((msg: unknown) => void) | undefined
+		poolSubscriptionController = (cb) => {
+			emit = cb
+			return { unsubscribe }
+		}
+
+		const onEose = mock(() => {})
+		applesauceIo.subscribe({ kinds: [1] }, () => {}, {
+			onEose,
+			relayUrls: ['wss://relay-a.example', 'wss://relay-b.example'],
+		})
+
+		// First relay settles — the group is incomplete: no boundary yet.
+		emit?.({ type: 'EOSE', from: 'wss://relay-a.example/', id: 'sub-1' })
+		expect(onEose).toHaveBeenCalledTimes(0)
+
+		// Second relay settles — the boundary fires exactly once.
+		emit?.({ type: 'EOSE', from: 'wss://relay-b.example/', id: 'sub-1' })
+		expect(onEose).toHaveBeenCalledTimes(1)
+
+		// A duplicate/late EOSE must not fire it again.
+		emit?.({ type: 'EOSE', from: 'wss://relay-b.example/', id: 'sub-1' })
+		expect(onEose).toHaveBeenCalledTimes(1)
+	})
 })
 
 describe('seam pass-through option forwarding', () => {

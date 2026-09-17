@@ -6,7 +6,7 @@ import { TestListingNotice } from '@/components/TestListingNotice'
 import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getItemTestLabelCoordinate } from '@/lib/utils/testLabelFilters'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { applesauceIo } from '@/lib/nostr/io'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
@@ -106,7 +106,7 @@ export function AuctionCard({
 
 	useEffect(() => {
 		const checkIfOwnAuction = async () => {
-			const user = await ndkActions.getUser()
+			const user = await applesauceIo.getUser()
 			if (!user?.pubkey) return
 			setIsOwnAuction(user.pubkey === auction.pubkey)
 		}

@@ -23,3 +23,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check NDK footprint
         run: bash scripts/check-ndk-footprint.sh
+
+  auctions-surface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check auctions NDK surface
+        run: bash scripts/check-auctions-ndk-surface.sh

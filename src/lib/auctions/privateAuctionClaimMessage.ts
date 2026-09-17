@@ -1,6 +1,7 @@
 import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import type { Event } from 'nostr-tools'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
+import { ndkActions } from '@/lib/stores/ndk'
 import {
 	createNip59GiftWrap,
 	createNip59GiftWrapWithSigner,
@@ -121,6 +122,22 @@ export function createPrivateAuctionClaimMessage(params: CreatePrivateAuctionCla
 	}
 }
 
+/**
+ * #1252-gated: NIP-59 private-claim creation needs the raw active signer
+ * (NIP-44 encryption + event signing), which the library-agnostic I/O seam
+ * (`@/lib/nostr/io`) does not expose. This module is allowlisted by
+ * `scripts/check-auctions-ndk-surface.sh` so the signer capability is acquired
+ * in ONE audited place instead of leaking `ndkActions` into the publish/query
+ * lanes. Replaced by the signer capability from PR #1252 (`signer-registry`).
+ */
+export async function createPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<CreatePrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimGiftWrap> {
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active signer available for the private auction claim')
+	return createPrivateAuctionClaimMessageWithSigner({ ...params, signer })
+}
+
 export async function createPrivateAuctionClaimMessageWithSigner(
 	params: CreatePrivateAuctionClaimMessageWithSignerParams,
 ): Promise<PrivateAuctionClaimGiftWrap> {
@@ -148,6 +165,15 @@ export function decryptPrivateAuctionClaimMessage(params: DecryptPrivateAuctionC
 	})
 
 	return parseUnwrappedAuctionClaim(unwrapped, params)
+}
+
+/** #1252-gated counterpart to {@link createPrivateAuctionClaimMessageForActiveSigner}. */
+export async function decryptPrivateAuctionClaimMessageForActiveSigner(
+	params: Omit<DecryptPrivateAuctionClaimMessageWithSignerParams, 'signer'>,
+): Promise<PrivateAuctionClaimMessage> {
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active signer available for the private auction claim')
+	return decryptPrivateAuctionClaimMessageWithSigner({ ...params, signer })
 }
 
 export async function decryptPrivateAuctionClaimMessageWithSigner(
