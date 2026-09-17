@@ -2,11 +2,21 @@
 
 ## Status
 
-Proposed — open for review on PR #1212.
+Proposed
 
 ## Date
 
 2026-08-05
+
+## Related
+
+- Issue: #1153 (original upstream ADR — this ADR formalizes it)
+- Issue: c03rad0r/market#20 (staged refinement copy)
+- ADR-0001 (AGENTS.md / ADR governance model — enforcement mechanism)
+- ADR-0002 (NDK → Applesauce migration — data layer dependency)
+- ADR-0006 (Nostr-Native Page Building System / CMS — primary consumer of migrated components)
+- PR: `franchovy/pr1/foundation-styles-review-fixes` (original foundation work — philosophy adopted, branch not depended on)
+- ADR Proposal: `docs/adr/proposals/v4v-ui-agnostic-audit-and-plan.md` (first migration slice applying this ADR's philosophy)
 
 ## Context
 
@@ -165,7 +175,7 @@ The foundation creates a new stylesheet pattern, but for backwards compatibility
 
 The expected outcome is a clean stylesheet containing only tokens and generic utilities, with all component-specific styling moved into component files. The `.theme-new` scope and `ThemeMigrationWrapper` placement serve as the migration tracker: as components migrate, their corresponding legacy utilities are extracted into component files using `cn()` + semantic tokens.
 
-:**2c. Compliance and Maintanance**
+**2c. Compliance and Maintenance**
 In order to keep the work of each PR over time, every migrated or created component must satisfy the following conditions before being considered complete:
 
 1. **Standardization:** It must adhere to the API contracts and prop standards defined in its parent subdirectory's AGENTS.md and the root `src/components/AGENTS.md`.
@@ -174,6 +184,61 @@ In order to keep the work of each PR over time, every migrated or created compon
 **Note:** PR 1 (foundation) contains no migrated components, so the §2c
 compliance gate does not apply. Coverage begins with the first migration PR
 (PR 3+) per §1e/§2c.
+
+### Part 3: CMS Coherence (Cross-ADR with ADR-0006)
+
+> **Amendment added 2026-08-03.** This section defines how the migration interfaces with ADR-0006 (CMS). It is normative for both ADRs. The CMS (ADR-0006) builds on top of this ADR's foundation — it does not create a parallel component set or a parallel theme system.
+
+#### 3a. The Component Contract
+
+Every migrated component that enters the CMS component registry must additionally declare:
+
+- **CMS metadata** (data contract): A declarative description of what Nostr data the component needs — e.g., "kind 30402 feed with optional `#t` filter" — attached as a sidecar file or co-located export, not embedded in the component's render logic.
+- **Puck field schema**: The set of configurable props the CMS editor exposes for this component, mapped to Puck field types (text, select, custom).
+- **Data binding interface**: The component must accept data via props (not fetch internally) when used in CMS context. The CMS runtime executes the query and passes results as props. Components in `nostr/` that fetch internally (the sanctioned exception) are used directly by routes; the CMS wrapper extracts the fetching into the query layer and passes data as props.
+
+This means each CMS-eligible component has three layers:
+
+```
+src/components/nostr/ProductCard.tsx          ← migrated, standardized (this ADR)
+src/components/cms/product-card.cms.tsx       ← CMS metadata: data contract + Puck fields (ADR-0006)
+widget-book/nostr/ProductCard.spec.ts          ← test coverage (this ADR)
+```
+
+The `.cms.tsx` sidecar is the **only** CMS-specific code. The base component is unaware of the CMS.
+
+#### 3b. Sequencing Rule
+
+This ADR's PR 1 (Foundation: Styles) and PR 2 (Foundation: Test Harness) **must land before** CMS component work resumes. The existing Puck components on `feat/plebeian-cms-puck` are re-integrated on top of the new foundation — not merged as-is.
+
+Migration slices that overlap with CMS needs (PR 3: Home Page & User Profile) are prioritized. Each migrated component in these slices gets its CMS sidecar as part of the same PR, so the CMS registry grows as the migration progresses.
+
+#### 3c. Theme Integration with CMS
+
+The CMS theme system **overrides the standard token names** (`--primary`, `--card`, `--background`, `--foreground`, etc.) on a wrapper element. This is the correct design — components are agnostic to whether they're in the main app or inside a custom-themed CMS page. They use the same token-based classes (`text-primary`, `bg-card`, `text-muted-foreground`) everywhere, and the browser resolves the CSS custom property cascade from whichever ancestor defines the values.
+
+**The `ThemeMigrationWrapper` (§1a) is NOT part of the CMS theme system.** It is the app's migration mechanism for transitioning from legacy `:root` tokens to new `.theme-new` tokens. CMS theming is independent — it overrides the same token names at a wrapper element, and components resolve the cascade regardless of where the default values come from.
+
+**How it works:**
+
+1. **CMS themes override the same standard token names.** A CMS theme file (e.g., `public/themes/caffeine.css`) defines the same tokens (`--primary`, `--card`, `--background`, etc.) using `oklch` values, plus `.dark` variants. It does not define a parallel variable set — it overrides the existing token names.
+
+2. **The mechanism is a wrapper element with inline CSS variables.** The CMS fetches the theme CSS, parses the variables, and sets them as inline styles on a wrapper div. Because CSS custom properties cascade through the DOM, all child components pick up the overridden values automatically:
+
+   ```
+   <div ref={themeRoot} style="--primary: oklch(...); --card: oklch(...); ...">
+     <ProductCard ... />            ← reads --primary, --card from nearest scope
+     <ProductGrid ... />           ← same — agnostic to where tokens are defined
+   </div>
+   ```
+
+3. **Components are agnostic.** A migrated component uses `text-primary`, `bg-card`, etc. It doesn't know whether `--primary` is defined at `:root` (pre-migration), at `.theme-new` (post-migration), or as an inline style on a CMS wrapper div. The browser resolves the cascade — the closest ancestor wins.
+
+4. **This works before and after the migration.** Before ADR-0007's foundation lands, CMS themes override the legacy `:root` tokens. After the migration, CMS themes override the `.theme-new` tokens. In both cases, the CMS override takes precedence at a closer DOM scope. No coordination between `ThemeMigrationWrapper` and the CMS theme system is required.
+
+5. **Dark mode is preserved.** CMS theme files include `.dark` variants. The `applyLocalTheme` mechanism (or its evolved equivalent) applies both light and dark token sets, scoped to the wrapper element.
+
+The existing Puck branch's `src/lib/utils/theme.ts` and `public/themes/*.css` already implement this pattern correctly. The theme files use `oklch` (matching this ADR's color standard) and define the same token names. The `applyLocalTheme` function is the right mechanism — it may be simplified during integration, but the core approach (override standard tokens on a wrapper element) stays.
 
 ## Consequences
 
@@ -188,15 +253,27 @@ compliance gate does not apply. Coverage begins with the first migration PR
   isolation effective for all UI, not just non-portalled content.
 - Enforcement is lean: CI catches structural violations, while AGENTS.md handles nuanced judgment calls.
 - The `.theme-new` scope + `ThemeMigrationWrapper` placement creates a self-documenting migration progress indicator: migrated subtrees are visibly opted into the new theme, and the legacy `globals.css` shrinks as consumers migrate.
+- **CMS integration:** The component architecture defined here is the foundation ADR-0006's CMS component registry builds on. CMS themes override the same standard token names on a wrapper element — components are agnostic to whether they're in the main app or a CMS page. Without this ADR's foundation PRs landing first, CMS component work would create a parallel, non-compliant component set that would need to be migrated again.
 
 ## PR Strategy
 
 A suggested PR strategy is as follows:
 
 - **PR 1 - Foundation - Styles:** Defines the new `.theme-new` scoped stylesheet (`styles/globals-new.css`) and the `ThemeMigrationWrapper` component (including the portal container for portalled content), wiring it in without yet opting in any subtree. Creates new directories and AGENTS.md files where appropriate, such as `ui-wrappers`, `shared`, `nostr`, `layout`, `dialogs`, and `theme-migration`. This PR is **foundation-only** — example components from the _"Modify"_ strategy of 2a are intentionally deferred to the first migration PR (PR 3) to keep the foundation review focused. Validation of the `.theme-new` scope will come with the first migration that wraps a real component.
+  - **CMS cross-ref:** Creates the `cms/` directory (empty, with AGENTS.md defining CMS sidecar conventions). Does not populate it yet.
+
 - **PR 2 - Foundation - Test Harness:** Implement the test harness app that can run on modular widget libraries. Include the ability to run on all libs (LIBRARY=\*) or on specific ones only. Include the Playwright configuration to define and run tests on specific components, and provide test coverage for the existing components in the newly migrated subdirectories.
+  - **CMS cross-ref:** Adds `LIBRARY=cms` mode (renders CMS sidecar-wrapped components with mock data). Empty on landing — populated as migration slices add CMS sidecars.
+
 - **PR 3 - Migration: Home Page & User Profile Components:** - Create a migration for components found in the home page. This coincides with the CMS work which will use many of the same components.
+  - **CMS cross-ref:** This is the first PR that populates the CMS component registry. Each migrated component gets its `.cms.tsx` sidecar in the same PR. After this PR, the CMS editor can offer Hero, Product Grid, Product Card, Author Bio, and Feature Banner blocks.
+
 - **PR 4 - Migration: Layout Components:** - Create a migration for the commonly used app layout components (header, footer, sidebar) to ensure they are compliant with the new styling.
+  - **CMS cross-ref:** Adds CMS sidecars for Header, Footer, and Grid layout blocks.
+
 - **PR 5 - Migration: UX Components:** - Ensure UX components such as forms, dialogs, and other interactive pieces of the app UX are compliant with the new guidelines.
+  - **CMS cross-ref:** Adds CMS sidecars for form and dialog components that the CMS editor itself uses (Puck field widgets migrate to `ui-wrappers/`).
+
 - **PR 6 - Migration: Dashboard Components:** - Move remaining dashboard components to the new guidelines.
+
   ...A few more migrations will be needed for specific features, such as: Wallet, Checkout, etc., which can be taken on at this point.

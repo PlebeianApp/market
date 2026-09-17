@@ -36,7 +36,15 @@ export interface FetchOptions {
 }
 
 export interface SubscribeOptions {
-	/** Close the subscription once relays reach EOSE. Default: false. */
+	/**
+	 * Close the subscription once relays reach EOSE. Default: false.
+	 *
+	 * Caveat (applesauce adapter): applesauce 5.2's req() emitted a virtual
+	 * EOSE after ~10s as a backstop when a relay never sent one; 6.x only
+	 * surfaces the relay's own EOSE. A closeOnEose: true subscription can
+	 * therefore hang open on a never-EOSE relay — callers that need bounded
+	 * lifetime should add their own timeout.
+	 */
 	closeOnEose?: boolean
 	/** Restrict the subscription to these relay URLs. Default: adapter's configured relays. */
 	relayUrls?: string[]
@@ -45,6 +53,15 @@ export interface SubscribeOptions {
 export interface PublishOptions {
 	/** Restrict publishing to these relay URLs. Default: adapter's write relays. */
 	relayUrls?: string[]
+}
+
+/**
+ * Result of a publish. `publishedRelays` holds only the relay URLs that
+ * acknowledged (ACKed) the event — an empty set means no relay accepted it,
+ * which callers must treat as a publish failure rather than a success.
+ */
+export interface PublishResult {
+	publishedRelays: ReadonlySet<string>
 }
 
 export interface NostrIo {
@@ -63,7 +80,7 @@ export interface NostrIo {
 	 */
 	fetchEvents(filter: NostrFilter | NostrFilter[], opts?: FetchOptions): Promise<NostrEvent[]>
 	subscribe(filter: NostrFilter | NostrFilter[], onEvent: (event: NostrEvent) => void, opts?: SubscribeOptions): () => void
-	publish(event: NostrEvent, opts?: PublishOptions): Promise<void>
+	publish(event: NostrEvent, opts?: PublishOptions): Promise<PublishResult>
 	sign(template: EventTemplate): Promise<NostrEvent>
 	getUser(): Promise<NostrUser | null>
 }

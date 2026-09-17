@@ -49,6 +49,17 @@ already exists.
   seed material, wallet files, or sensitive local configuration.
 - Do not commit, push, deploy, trigger workflows, mutate GitHub metadata, or
   change secrets unless explicitly authorized.
+- **Review-only exception:** posting review text to a pull request is
+  authorized without per-instance approval. Review text means review comments,
+  review submissions carrying findings/evidence/questions, and replies inside
+  an existing review thread. The exception is text-only: it does not authorize
+  pushing to a branch, merging, closing or reopening, labeling, assigning,
+  setting milestones, rerunning CI, deleting branches, force-pushing, or any
+  other metadata mutation. Because a posting account may be a bot, a review
+  submission is never maintainer approval; where a formal review state is
+  required, use `COMMENT` and state the verdict in the text. Every posted
+  review must identify the reviewer and, for agent reviewers, the model and
+  family it ran as, and must label unverified claims as unverified.
 - No new event kinds, payment semantics, relay assumptions, or network egress
   paths without code, tests, and documentation that make the decision explicit.
 - An outbox-style publisher is an architectural option for future server-side
@@ -115,6 +126,25 @@ See ADR-0005 for the full decision and established mock patterns.
   URLs in seeded Nostr events).
 - Starting local services that are part of the CI workflow.
 
+## Feature Quality Gate
+
+Every feature PR must include a targeted Playwright E2E test proving the new
+functionality works, with video evidence published to the PR before it is
+considered complete. This applies to all feature work — cashu wallet, auctions,
+signer, marketplace, and any new module.
+
+Requirements:
+
+- Write a targeted spec in e2e/ covering the feature's primary user flow
+- Run with video recording enabled (video: 'on' for gate specs)
+- Video must show the feature working end-to-end
+- Publish video to the PR (CI artifact link, Blossom URL, or GitHub release)
+- Link the test code path in the PR description so others can reproduce
+- The spec must follow Test Isolation rules above (mocked mints, local relays)
+
+Docs-only PRs are exempt. Infrastructure-only PRs (CI, tooling) are exempt
+if they don't change user-facing behavior.
+
 ## Safe Checks
 
 For docs-only changes:
@@ -129,6 +159,20 @@ For behavior changes, when relevant and authorized by the task:
 
 Commands that build, start services, seed data, run generators, deploy, or run
 full e2e suites require explicit approval before execution.
+
+## PR Review Documentation
+
+- `docs/REVIEWER_SYSTEM_PROMPT.md` and `docs/PR_REVIEW_CHECKLIST.md`
+  document the repository's review doctrine and the blocking criteria for PR
+  review. They are distilled from a review-profile audit of this repository
+  and describe intended review behavior, not verified code behavior; code,
+  tests, accepted ADRs, and maintainer direction still win.
+- Review-related agent work should consult `docs/PR_REVIEW_CHECKLIST.md`
+  for pass/fail criteria and `docs/REVIEWER_SYSTEM_PROMPT.md` for process,
+  voice, and known failure modes. Do not treat these
+  files as authorization to push, merge, rerun CI, or mutate GitHub
+  metadata beyond posting review text (see the review-only exception under
+  Constraints).
 
 ## Subdirectory AGENTS.md Template
 

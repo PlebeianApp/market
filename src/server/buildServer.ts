@@ -1,6 +1,7 @@
 import { serve, type Server } from 'bun'
 import { configRoutes } from './http/config'
 import { nip05Routes } from './http/nip05'
+import { ogRoutes } from './http/og'
 import { staticRoutes } from './http/static'
 import { zapPurchaseRoutes } from './http/zapPurchase'
 import { PORT } from './runtime'
@@ -35,6 +36,9 @@ export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined
 		...zapPurchaseRoutes,
 		...nip05Routes,
 		...staticRoutes,
+		// Product pages get og: meta tags server-rendered into the initial
+		// HTML (issue #459) — must beat the catch-all below.
+		...ogRoutes(indexHtml),
 		// Catch-all for the SPA — must be registered last so explicit
 		// routes above take precedence.
 		'/*': indexHtml as BunRoutes[string],

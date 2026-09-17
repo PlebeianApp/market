@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (rev 2 — supersedes the blacklist-based rev 1 discussed in #1243; docs-only portion extracted from #1260)
+Accepted (rev 4 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products implemented in this PR, auctions compatibility layer in a follow-up PR)
 
 ## Date
 
@@ -23,7 +23,7 @@ discretion during the launch phase.
 The mechanism should be:
 
 - **Reusable** — one mechanism covering products and auctions, wherever
-  official feeds or detail views are rendered.
+  browsing and discovery surfaces are rendered.
 - **Flexible** — applicable at our discretion, before, during, or after any
   launch phase, without schema changes.
 - **Implementation-independent** — a Nostr-native signal any client or
@@ -39,14 +39,34 @@ Use **NIP-32 labeling events** (kind 1985) to tag items as tests.
   reason and a **contact reference** — an npub or nip05 the labeled item's
   author can reach if they believe the label was applied in error.
 - **Authorized labelers only** — labels count only when signed by keys the
-  app authorizes (initially the existing admin set; a dedicated moderator
-  role or an automated labeler can be enrolled later without protocol
-  change).
+  app authorizes. The authorized set is the app's **editors union its
+  admins** (plus the app owner): editors are the day-to-day curation role
+  and admins are curated content authorities, so both may curate. A
+  dedicated moderator role or an automated labeler can be enrolled later
+  without protocol change.
 - **Scope: products and auctions only.** Labels attach to item coordinates,
   never to users. A valid, active user may post test items; the user's
   presence (shop, products, community) is unaffected while the item is
   curated. Whole-pubkey hiding remains the job of the existing spam
   blacklist and is explicitly out of scope here.
+- **Browsing-only gating** — a test label hides an item from browsing and
+  discovery surfaces only (home feed, paginated browse, search, collections,
+  auction feed). The item remains reachable via direct link, the seller's
+  profile, and the owner's dashboard.
+- **Discovery vs curation surfaces (rev 4)** — filtering is a property of
+  _organic discovery_ surfaces, not of every surface that happens to render an
+  item. A **discovery surface** answers "what is for sale?" using selection
+  criteria the viewer did not choose: home feed, paginated browse, NIP-50
+  search _including its seller-name expansion_, collections, and the auction
+  feed. A **curation surface** shows what a human explicitly chose: the
+  app-configured Featured sections (products, collections, users) and, later,
+  CMS-authored pages and blocks. Curation surfaces are **ungated by default** —
+  the curator sees exactly what they picked. Opting a curation block into
+  filtering is a per-block configuration decision reserved for the CMS work,
+  never an ambient default. The label mechanism itself remains available on
+  every surface; what this taxonomy fixes is the _default_, so a stale or
+  accidental label can never silently empty a surface an operator believes they
+  control.
 
 ### Label event example
 
@@ -96,8 +116,8 @@ Per NIP-09, the `e`-tag references the specific label event by id, and the
 are not replaceable (NIP-32 explicitly rejects a `d`-tag for this reason).
 Clients MUST validate that the deletion event's pubkey matches the label
 event's pubkey before treating the label as deleted. Once a valid deletion
-is seen, the item reappears in feeds and detail views without further
-action.
+is seen, the item reappears in browsing feeds without further action (it
+was never hidden from direct-link, profile, or dashboard views).
 
 ### Why NIP-32 labels, not NIP-51 blacklists
 
@@ -115,33 +135,53 @@ action.
 The label check runs in the query layer **alongside the existing delete and
 blacklist checks, before queries return data**:
 
-1. When listing or resolving products/auctions, after delete-status and
-   blacklist filtering, check each item coordinate for an active `test`
-   label.
+1. When listing products/auctions on browsing and discovery read paths —
+   home feed, paginated browse, search (NIP-50), collections, and the
+   auction feed — after delete-status and blacklist filtering, check each
+   item coordinate for an active `test` label.
 2. Labels are fetched per coordinate (kind 1985 filtered by `#a`); feeds
    batch the check for the page's items.
-3. Items carrying an authorized `test` label are excluded from feeds and
-   resolve to nothing in detail views — the same depth of gating as
-   blacklisted items.
-4. Un-labeling is a NIP-09 deletion event (kind 5) signed by the same
+3. Items carrying an authorized `test` label are excluded from browsing and
+   discovery feeds only. Detail-by-id, detail-by-a-tag, and by-pubkey
+   (seller profile / owner dashboard) read paths return the item regardless
+   of label — the label never removes the item from direct navigation.
+4. **A discovery surface that composes an ungated read re-applies the gate on
+   its own result set.** The gate belongs to the _surface_, not to the read
+   path it borrows. Search is the worked example: its seller-name expansion
+   fetches each matching seller's catalogue through the by-pubkey read (which
+   must stay ungated, per step 3), so search gates the merged result set —
+   otherwise a labeled item whose seller name matches would still surface and
+   the promise made to the viewer and to the labeler ("hidden from browsing,
+   search and collections") would be false for that path.
+5. **Curation surfaces are ungated, by decision — not by omission.** The
+   app-configured Featured sections resolve items through the by-a-tag detail
+   read, so a labeled item an operator has featured stays visible in the
+   carousel. This is the rev 4 taxonomy default: a curated surface shows what
+   it was told to show, and the operator is not overridden by an ambient
+   filter. Recording it here is the point — the gap is a documented decision
+   rather than a fix waiting to be noticed. Whether a CMS block can opt _into_
+   filtering is deferred to a follow-up proposal covering the taxonomy's
+   naming, per-surface defaults, and block-level configuration.
+6. Un-labeling is a NIP-09 deletion event (kind 5) signed by the same
    labeler, referencing the original label event's `id` in an `e` tag with
    a `k`-tag of `1985`. Clients MUST validate that the deletion event's
    pubkey matches the label event's pubkey before treating the label as
    deleted. The query layer treats a deleted label as absent — the item
    reappears without further action.
-5. When resolving a single item (detail view), the label check also looks
-   for a matching deletion event so that a freshly un-labeled item does
-   not appear hidden due to a stale cached label.
+7. The label check runs only on browsing/discovery read paths, so a freshly
+   un-labeled item reappears in those feeds without further action (it was
+   never hidden from direct-link, profile, or dashboard views).
 
 ### UI
 
-Dashboard actions for authorized labelers on product and auction admin
-pages:
+Dashboard / moderation actions for authorized labelers (editors ∪ admins):
 
 - **Mark as "Test" Product** — publishes the kind 1985 label event.
-  Visible only to authorized labelers (admin/moderator). The `.content`
-  is pre-filled with a contact reference (the labeler's npub or a shared
-  moderation nip05) so the item author can appeal.
+  Reachable from the product's own dashboard edit page and, so a labeler can
+  curate a listing they do not own, from the product's public page via the
+  entity actions menu. The `.content` is pre-filled with a contact reference
+  (the labeler's npub or a shared moderation nip05) so the item author can
+  appeal.
 - **Unmark as "Test" Product** — publishes the NIP-09 deletion event for
   the existing label. Visible only when an active `test` label is present
   on the item. Confirm dialog before publishing.
@@ -149,6 +189,32 @@ pages:
 Both actions provide immediate UI feedback (optimistic state update),
 then reconcile with the relay round-trip. Non-authorized users never see
 these controls.
+
+A **"Show test listings"** toggle is available to all users (admins and
+regular users alike) on the browsing surface. It defaults to **hidden**
+(labeled items are filtered out of browsing feeds); turning it on reveals
+test-labeled items in those feeds. The toggle only affects
+browsing/discovery read paths — direct links, seller profiles, and owner
+dashboards always show the item.
+
+Because gating is browsing-only, a labeled item stays visible on surfaces
+where the viewer has no way to know it is curated — a direct link, the
+seller's profile, the owner's dashboard. Every such surface therefore carries
+a **user-facing notice** (`TestListingNotice`):
+
+- **Detail page** — an amber "Test listing" pill beside the stock badge, next
+  to the entity actions menu. Clicking it opens the explainer dialog.
+- **Seller profile, owner dashboard, and toggle-revealed cards** — the same
+  component in its compact icon-only variant (an eye-with-slash marker). On
+  cards the marker must not trigger the surrounding link's navigation.
+- **Explainer dialog** — states the exact effect (hidden from browsing and
+  discovery, reachable by direct link) and gives an appeal path: the labeler's
+  npub, falling back to the Plebeian team when the labeler is unknown.
+
+**Copy invariant:** the mark/unmark confirmation dialogs MUST describe the
+browsing-only effect. An earlier revision claimed the item was "excluded from
+feeds and detail views", which is wrong — detail views are never gated — and
+misled the labeler about what the action does.
 
 ## Consequences
 
@@ -168,6 +234,12 @@ these controls.
   query-layer filter (mirrors existing blacklist plumbing).
 - One more check on read paths (batchable for feeds).
 - NIP-32 currently has draft/optional status in the NIPs repo.
+- **Curated surfaces stay ungated (rev 4), so a labeled item an operator has
+  featured remains visible in the Featured carousel.** Accepted deliberately
+  over the alternative — a curated surface silently dropping an item a human
+  explicitly chose, which would get worse once CMS page authors inherit an
+  ambient filter they cannot see. The surface taxonomy and the CMS block-level
+  opt-in are a follow-up proposal.
 
 ## Roadmap
 
@@ -176,14 +248,31 @@ these controls.
    (products on master; auctions on the `auctions` branch).
 3. Dashboard actions: **Mark as "Test" Product** / **Unmark as "Test"
    Product** by coordinate, with pre-filled contact reference in `.content`.
-4. e2e: a labeled item is excluded from feeds and resolves to `null`; an
-   un-labeled item reappears after the NIP-09 deletion event is processed.
-5. Optional automation (e.g. an automated labeler key) for discretionary
+4. e2e: a labeled item is excluded from browsing feeds but still reachable
+   by direct link, seller profile, and dashboard; an un-labeled item
+   reappears after the NIP-09 deletion event is processed.
+5. "Show test listings" toggle (all users, default hidden) to reveal
+   test-labeled items in browsing feeds.
+6. Optional automation (e.g. an automated labeler key) for discretionary
    use during launch phases.
+7. User-facing notice on labeled items (detail page, profile, dashboard,
+   toggle-revealed cards) with an appeal contact.
+8. **Discovery/curation surface taxonomy as a first-class concept** — rev 4
+   records the default (discovery gated, curation unrestricted); a follow-up
+   proposal covers the taxonomy's naming, per-surface defaults, and CMS
+   block-level opt-in. Not a change in this PR.
+9. Auctions: the same taxonomy applies to the auction feed (discovery) and to
+   any curated auction surface, via the shared `testLabelFilters` layer.
 
 ## Related
 
 - Existing moderation (unchanged, spam-only, whole-pubkey):
   `src/server/BlacklistManager.ts`, `src/lib/utils/blacklistFilters.ts`.
+- Current curation surface (ungated by the rev 4 default):
+  `src/components/FeaturedSections.tsx` — resolves featured products through
+  the by-a-tag detail read.
+- Query-layer gate and its ADR-0009 tests:
+  `src/lib/utils/testLabelFilters.ts`, `src/queries/testLabels.tsx`,
+  `src/queries/products.tsx`.
 - Rev 1 of this ADR (blacklist-based) lives in this branch's history.
 - Parked proposals from #1240 in the fork backlog.

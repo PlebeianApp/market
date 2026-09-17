@@ -140,7 +140,7 @@ async function deleteAllKind16Events(userSk: string, userPk: string) {
 // Helper function to check for PII exposure modal by looking for header text
 async function waitForPIIModal(page: Page, timeout: number = 5000) {
 	try {
-		await expect(page.getByRole('heading').filter({ hasText: 'Personal Information Leak Detected' })).toBeVisible({ timeout })
+		await expect(page.getByRole('heading').filter({ hasText: 'personal data may be exposed' })).toBeVisible({ timeout })
 
 		return true
 	} catch {
@@ -150,7 +150,7 @@ async function waitForPIIModal(page: Page, timeout: number = 5000) {
 
 // Helper function to check if PII modal is visible
 async function isPIIModalVisible(page: Page) {
-	const headerText = await page.locator('h2').filter({ hasText: 'Personal Information Leak Detected' }).count()
+	const headerText = await page.locator('h2').filter({ hasText: 'personal data may be exposed' }).count()
 	return headerText > 0
 }
 
@@ -164,14 +164,18 @@ async function findDeletionEvent(originalEventId: string) {
 }
 
 test.describe('PII Exposure Remediation Workflow', () => {
-	test.beforeEach(async ({ merchantPage }) => {
+	test.beforeEach(async () => {
 		// Ensure clean state before each test - delete all kind 16 events
 		await deleteAllKind16Events(devUser1.sk, devUser1.pk)
+		await deleteAllKind16Events(devUser2.sk, devUser2.pk)
 	})
 
 	test.afterEach(async () => {
-		// Clean up after each test
+		// Clean up after each test - delete ALL kind 16 events from both test
+		// users so PII events don't leak into subsequent test runs and trigger
+		// the PII exposure modal in unrelated tests.
 		await deleteAllKind16Events(devUser1.sk, devUser1.pk)
+		await deleteAllKind16Events(devUser2.sk, devUser2.pk)
 	})
 
 	test('scanner flags affected kind 16 order events with sensitive delivery/contact fields', async ({ merchantPage }) => {
@@ -181,7 +185,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to dashboard where scanner would run
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait for potential PII exposure modal using header text detection
 		const modalVisible = await waitForPIIModal(merchantPage)
@@ -222,7 +226,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to the app
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait a bit to let scanner potentially run
 		await merchantPage.waitForTimeout(2000)
@@ -259,7 +263,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to dashboard
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait for PII modal to appear using header text detection
 		const modalVisible = await waitForPIIModal(merchantPage, 10000)
@@ -301,7 +305,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to dashboard
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// The unauthorized events should not appear in the current user's modal
 		// Check that the unauthorized event exists on relay
@@ -325,7 +329,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to the app
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait for PII modal to appear using header text detection
 		const modalVisible = await waitForPIIModal(merchantPage, 10000)
@@ -344,14 +348,16 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to the app
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait for PII modal to appear using header text detection
 		const modalVisible = await waitForPIIModal(merchantPage, 10000)
 		expect(modalVisible).toBe(true)
 
 		// Get modal content
-		const modalContent = await (await merchantPage.getByRole('dialog', { name: 'Personal Information Leak' }).allTextContents()).join('')
+		const modalContent = (
+			await merchantPage.getByRole('dialog', { name: 'Some of your personal data may be exposed' }).allTextContents()
+		).join('')
 
 		// Should show field names but not raw values
 		if (modalContent) {
@@ -383,7 +389,7 @@ test.describe('PII Exposure Remediation Workflow', () => {
 
 		// Navigate to dashboard
 		await merchantPage.goto('/dashboard')
-		await merchantPage.waitForLoadState('networkidle')
+		await merchantPage.waitForLoadState('domcontentloaded')
 
 		// Wait for PII modal to appear
 		const modalVisible = await waitForPIIModal(merchantPage, 10000)
