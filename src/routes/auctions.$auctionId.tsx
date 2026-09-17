@@ -479,7 +479,7 @@ function AuctionDetailRoute() {
 				isEnded: ended,
 				validatedBidSet: validatedSet,
 			}),
-		[activeUserPubkey, auction, bids, ended],
+		[activeUserPubkey, auction, bids, ended, validatedSet],
 	)
 
 	const { data: oracleName } = useProfileName(pathIssuerPubkey || '')
@@ -923,6 +923,7 @@ function AuctionDetailRoute() {
 									auctionCoordinates={auctionCoordinates}
 									currentUserPubkey={activeUserPubkey}
 									isEnded={ended}
+									validatedBidSet={validatedSet}
 									className="max-h-[500px]"
 								/>
 
