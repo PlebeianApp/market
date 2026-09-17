@@ -91,6 +91,9 @@ class StubbedCashuWallet extends actualCashu.CashuWallet {
 			amount,
 			secret: p2pkSecret(effectiveLockPubkey),
 			C: '02' + '7'.repeat(64),
+			// DLEQ is unconditional (ADR-0011): the freshly issued P2PK outputs
+			// must carry NUT-12 metadata or the lock fails closed.
+			dleq: { e: 'aa', s: 'bb', r: 'cc' },
 		}
 		return { send: [sendProof], keep: [] }
 	}

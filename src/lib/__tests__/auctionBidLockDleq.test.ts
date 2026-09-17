@@ -150,7 +150,8 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			keep: [noDleqProof(3000)],
 		}
 
-		// Not a DLEQ-required auction (default false) → no output requirement.
+		// DLEQ is unconditional: the lock always validates the freshly issued
+		// P2PK OUTPUT proofs, which here carry DLEQ → the lock succeeds.
 		await expect(nip60Actions.lockAuctionBidFunds(baseParams)).resolves.toMatchObject({ amount: 1000 })
 		// The swap WAS attempted exactly once with the full input set (no
 		// input-side DLEQ filter).
@@ -167,9 +168,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			keep: [noDleqProof(3000)],
 		}
 
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).rejects.toThrow(
-			/locked proof at index 0 lacks a NUT-12 DLEQ proof/i,
-		)
+		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/locked proof at index 0 lacks a NUT-12 DLEQ proof/i)
 
 		// The swap was attempted (output validation happens after swap + after
 		// the pending-token persist).
@@ -183,7 +182,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 			send: [lockedOutputProof(1000, true)],
 			keep: [noDleqProof(3000)],
 		}
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).resolves.toMatchObject({
+		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).resolves.toMatchObject({
 			amount: 1000,
 		})
 		expect(swapCalls).toBe(1)
@@ -193,7 +192,7 @@ describe('lockAuctionBidFunds ADR-0011 Blocker 2 — DLEQ applies to swap OUTPUT
 		const proofsWithoutDleq: FakeProof[] = [noDleqProof(2000)]
 		installWallet(proofsWithoutDleq)
 		nextSwapResult = { send: [], keep: [] }
-		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams, dleqRequired: true })).rejects.toThrow(/outcome is uncertain/i)
+		await expect(nip60Actions.lockAuctionBidFunds({ ...baseParams })).rejects.toThrow(/outcome is uncertain/i)
 		expect(swapCalls).toBe(1)
 	})
 })

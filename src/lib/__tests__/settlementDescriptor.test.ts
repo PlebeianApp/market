@@ -13,7 +13,8 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
+import { getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
+import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const BUYER_PUBKEY = 'b'.repeat(64)
@@ -100,13 +101,19 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 		maxSkewSec: 30,
 		fallbackDelaySec: 25,
 		vadiumRatioBps: 0,
-		dleqRequired: false,
 		schema: '',
 		...overrides,
 	} as ParsedAuctionEvent
 }
 
 function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
+	const amount = overrides.amount ?? 50000
+	const legLockedAmount = overrides.legLockedAmount ?? amount
+	const lockSecrets = overrides.lockSecrets ?? [LOCK_SECRET]
+	// DLEQ is unconditional (ADR-0011): every locked proof needs a matching
+	// honest proof, minted against the leg's own delta (the amount the client
+	// verification path uses as `legDelta`).
+	const dleqProofs = overrides.dleqProofs ?? lockSecrets.map((secret) => makeHonestDleqProof(legLockedAmount, secret))
 	return {
 		rawEvent: { id: 'bid-1', pubkey: BUYER_PUBKEY, kind: 1024, tags: [], content: '', created_at: 100 },
 		id: 'bid-1',
@@ -122,8 +129,9 @@ function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
 		locktime: AUCTION_LOCKTIME,
 		refundPubkey: REFUND_PUBKEY,
 		childPubkey: CHILD_PUBKEY,
-		lockSecrets: [LOCK_SECRET],
+		lockSecrets,
 		proofYs: [PROOF_Y],
+		dleqProofs,
 		createdForEndAt: AUCTION_END,
 		bidNonce: 'nonce-1',
 		keyScheme: 'hd_p2pk',
@@ -230,6 +238,7 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		now: 120,
 		nut7States: undefined,
 		mintKeysets: mockMintKeysets(),
+		dleqKeysets: undefined,
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -242,6 +251,20 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	// explicitly (mirroring `spentNut7States`).
 	if (base.nut7States === undefined) {
 		delete base.nut7States
+	}
+	// DLEQ is unconditional (ADR-0011): the descriptor crypto-verifies every
+	// quorum-confirmed bid, so supply a keyset covering every proof amount the
+	// fixtures commit (keyed `${mint}:${proof.id}`). Tests that exercise the
+	// evidence-unavailable path can override `dleqKeysets` explicitly.
+	if (base.dleqKeysets === undefined && base.bids.length > 0) {
+		const amounts = new Set<number>()
+		for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) amounts.add(proof.amount)
+		if (amounts.size > 0) {
+			const keyset = makeDleqKeyset(Array.from(amounts))
+			const map = new Map<string, MintKeys>()
+			for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) map.set(`${bid.mint}:${proof.id}`, keyset)
+			base.dleqKeysets = map
+		}
 	}
 	// mintKeysets is ALWAYS injected (empty array) so the descriptor never makes
 	// an HTTP call to the inert fixture mint URL — matching ADR-0005's rule that

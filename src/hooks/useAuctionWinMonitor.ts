@@ -8,6 +8,7 @@ import {
 	hasValidatedPathReleaseForAuctionWin,
 } from '@/lib/auction/winNotification'
 import { fetchBidNut7States } from '@/lib/auction/useNut7Polling'
+import { fetchDleqKeysetsForBids } from '@/lib/cashu/dleq'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent } from '@/lib/schemas/auction/settlementEvents'
@@ -121,8 +122,13 @@ export function useAuctionWinMonitor() {
 						.map((release) => parsePathReleaseEvent(toRawEvent(release)))
 						.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedPathReleaseEvent } => result.ok)
 						.map((result) => result.value)
-					const nut7States = await fetchBidNut7States(parsedBids, parsedAuction.mints)
-					const validatedBids = getValidatedAuctionBids(parsedAuction, parsedBids, parsedVerdicts, nut7States)
+					const [nut7States, dleqKeysets] = await Promise.all([
+						fetchBidNut7States(parsedBids, parsedAuction.mints),
+						// DLEQ is unconditional: without the keysets every
+						// DLEQ-bearing bid is pending and no winner surfaces.
+						fetchDleqKeysetsForBids(parsedBids, parsedAuction.mints),
+					])
+					const validatedBids = getValidatedAuctionBids(parsedAuction, parsedBids, parsedVerdicts, nut7States, dleqKeysets)
 					const canonicalWinner = validatedBids.canonicalWinner
 
 					const previouslyAnnouncedBidId = announcedBidIdsByRoot.current.get(rootEventId)

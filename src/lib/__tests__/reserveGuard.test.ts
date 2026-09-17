@@ -20,6 +20,7 @@ import { computeValidatedBids } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 import { evaluateReserveNotMetGuard } from '../auction/reserveGuard'
 import type { MintKeys } from '@cashu/cashu-ts'
 
@@ -67,7 +68,6 @@ const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctio
 		fallbackDelaySec: 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
-		dleqRequired: overrides.dleqRequired ?? true,
 		...overrides,
 	}
 }
@@ -181,13 +181,18 @@ describe('reserve_not_met guard — unresolved DLEQ evidence blocks a terminal p
 	})
 
 	test('complete DLEQ evidence that verifies keeps the bid a canonical winner → blocked', () => {
-		const auction = buildAuction({ dleqRequired: false })
-		const bid = buildBid(auction, { dleqProofs: undefined })
+		const auction = buildAuction()
+		const bid = buildBid(auction)
+		// DLEQ is unconditional: give the bid an honest proof + the matching
+		// keyset so the crypto verification succeeds and the bid is authoritative.
+		const proof = makeHonestDleqProof(bid.amount, bid.lockSecrets[0])
+		bid.dleqProofs = [proof]
 		const result = computeValidatedBids({
 			auction,
 			bids: [bid],
 			verdicts: quorumFor(bid),
 			nut7States: unspent([bid]),
+			dleqKeysets: new Map([[`https://mint.test:${proof.id}`, makeDleqKeyset([bid.amount])]]),
 		})
 		expect(evaluateReserveNotMetGuard(result, auction.reserve)).toEqual({
 			kind: 'blocked',

@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { computeBidFloor, validateBid } from '../auction/validation'
 import type { ParsedAuctionEvent, ParsedBidEvent, MinBidCurve } from '../auction/events'
-import { VALIDATOR_REASONS, APP_AUCTION_DLEQ_ROLLOUT_START_AT, AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
+import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS, VALIDATOR_REASONS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { DleqProof } from '../cashu/dleq'
 
 // =============================================================================
@@ -29,6 +30,11 @@ const DEFAULT_COORDINATE = `30408:${SELLER_PK}:${DEFAULT_AUCTION_D}`
 
 const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 
+// Arbitrary in-window start_at for the DLEQ fixtures. DLEQ is unconditional, so
+// the retired rollout boundary no longer exists; this just gives those tests a
+// stable timestamp.
+const DLEQ_EPOCH = 1_700_000_000
+
 const stubRawEvent = (kind: number, pubkey: string, content = ''): NDKEvent =>
 	({
 		kind,
@@ -53,7 +59,6 @@ interface AuctionOverrides {
 	maxSkewSec?: number
 	fallbackDelaySec?: number
 	minBidCurve?: MinBidCurve
-	dleqRequired?: boolean
 }
 
 const buildAuction = (overrides: AuctionOverrides = {}): ParsedAuctionEvent => {
@@ -89,7 +94,6 @@ const buildAuction = (overrides: AuctionOverrides = {}): ParsedAuctionEvent => {
 		fallbackDelaySec: overrides.fallbackDelaySec ?? 1_800,
 		vadiumRatioBps: 10_000,
 		schema: 'auction_v1',
-		dleqRequired: overrides.dleqRequired ?? false,
 	}
 }
 
@@ -162,7 +166,11 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: BidOverrides = {}): Pa
 		childPubkey,
 		lockSecrets: effectiveLockSecrets,
 		proofYs,
-		dleqProofs: overrides.dleqProofs ?? [],
+		// DLEQ is unconditional (ADR-0011): one structurally-well-formed
+		// dleq_proof per locked proof unless a test deliberately supplies its
+		// own set (including `[]`). `validateBid` does not crypto-verify, so
+		// these only need the full NUT-12 tuple.
+		dleqProofs: overrides.dleqProofs ?? effectiveLockSecrets.map((secret) => makeHonestDleqProof(1, secret)),
 		createdForEndAt: auction.endAt,
 		bidNonce: 'test-bid-nonce',
 		keyScheme: 'hd_p2pk',
@@ -695,7 +703,7 @@ describe('validateBid — short-circuit ordering', () => {
 // =============================================================================
 
 describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
-	const POST = APP_AUCTION_DLEQ_ROLLOUT_START_AT
+	const POST = DLEQ_EPOCH
 
 	const makeDleqProof = (overrides: Partial<DleqProof> = {}): DleqProof => ({
 		id: '00deadbeef',
@@ -712,7 +720,6 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 			startAt: POST,
 			endAt: POST + 1_000,
 			maxEndAt: POST + 2_000,
-			dleqRequired: true,
 		})
 
 	// A lock secret with a caller-supplied nonce so we can build two DISTINCT
@@ -733,16 +740,19 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 			},
 		])
 
-	test('grandfathered pre-rollout bid with no dleq_proof still validates', () => {
-		const auction = buildAuction() // start_at=1000 < boundary
-		const bid = buildBid(auction)
+	test('no DLEQ exemption: a bid with no dleq_proof is dleq_invalid regardless of start_at', () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction, { dleqProofs: [] })
 		const verdict = validateBid({ auction, bid, observedAt: bid.createdAt, nut7State: 'unspent' })
-		expect(verdict).toEqual({ claim: 'valid_bid_placed' })
+		expect(verdict.claim).toBe('bid_invalid')
+		if (verdict.claim === 'bid_invalid') {
+			expect(verdict.reason).toBe('dleq_invalid')
+		}
 	})
 
-	test('dleq_invalid when a post-rollout bid carries no dleq_proof tags', () => {
+	test('dleq_invalid when a bid carries no dleq_proof tags', () => {
 		const auction = buildPostRolloutAuction()
-		const bid = buildBid(auction, { createdAt: POST + 500 })
+		const bid = buildBid(auction, { createdAt: POST + 500, dleqProofs: [] })
 		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
 		if (verdict.claim === 'bid_invalid') {
@@ -790,9 +800,9 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 
 	test('dleq_invalid (Step 3.5) reported before amount/floor (Step 5) failures', () => {
 		const auction = buildPostRolloutAuction()
-		// amount=1 is below the floor → would be `under_increment`, but the
+		// amount=1 is below the floor → would be `below_starting_bid`, but the
 		// missing DLEQ collateral is checked earlier (Step 3.5 < Step 5).
-		const bid = buildBid(auction, { createdAt: POST + 500, amount: 1 })
+		const bid = buildBid(auction, { createdAt: POST + 500, amount: 1, dleqProofs: [] })
 		const verdict = validateBid({ auction, bid, observedAt: POST + 500, nut7State: 'unspent' })
 		expect(verdict.claim).toBe('bid_invalid')
 		if (verdict.claim === 'bid_invalid') {
@@ -806,7 +816,7 @@ describe('validateBid — DLEQ collateral checks (ADR-0011)', () => {
 // =============================================================================
 
 describe('validateBid — DLEQ proof structural fields (ADR-0011 B4)', () => {
-	const POST = APP_AUCTION_DLEQ_ROLLOUT_START_AT
+	const POST = DLEQ_EPOCH
 
 	const makeDleqProof = (overrides: Partial<DleqProof> = {}): DleqProof => ({
 		id: '00deadbeef',
@@ -823,7 +833,6 @@ describe('validateBid — DLEQ proof structural fields (ADR-0011 B4)', () => {
 			startAt: POST,
 			endAt: POST + 1_000,
 			maxEndAt: POST + 2_000,
-			dleqRequired: true,
 		})
 
 	test('dleq_invalid when dleq_proof is missing the required id field', () => {
