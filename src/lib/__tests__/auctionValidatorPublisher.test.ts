@@ -138,7 +138,6 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		await publisher.publishIfChanged({
 			auctionState,
 			bidState: highState.bidState,
-			currentTopBid: highBid.amount,
 		})
 
 		const winnerDecision = auctionState.bids.get(highBid.id)?.postCloseDecision
@@ -205,7 +204,6 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		const result = await publisher.publishIfChanged({
 			auctionState,
 			bidState: pending.bidState,
-			currentTopBid: 0,
 		})
 
 		expect(auctionState.closeHandled).toBe(true)
@@ -250,7 +248,6 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		await publisher.publishIfChanged({
 			auctionState,
 			bidState: bidState.bidState,
-			currentTopBid: bid.amount,
 		})
 
 		if (!capturedTemplate) throw new Error('expected a verdict publish')
@@ -290,7 +287,6 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		const result = await publisher.publishIfChanged({
 			auctionState,
 			bidState: bidState.bidState,
-			currentTopBid: bid.amount,
 		})
 
 		// Fix 3: the late_arrival condemn is suppressed — the relay keeps any
@@ -332,7 +328,6 @@ describe('auction validator publisher close-role runtime wiring', () => {
 		await publisher.publishIfChanged({
 			auctionState,
 			bidState: bidState.bidState,
-			currentTopBid: bid.amount,
 		})
 
 		expect(published).toBe(true)

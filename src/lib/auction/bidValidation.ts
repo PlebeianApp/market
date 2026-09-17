@@ -385,9 +385,12 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			seenProofYsByBidder.set(bidder, bidderSeenProofYs)
 		}
 	}
-	// Step 4: Run validateBid for each quorum-confirmed bid, accumulating
-	// currentTopBid from previously-validated bids.
-	let currentTopValidAmount = 0
+	// Step 4: run the structural verdict for each quorum-confirmed bid.
+	//
+	// ADR-0012 Phase 1: `validateBid` is a pure function of the bid, the
+	// auction and `observed_at`. It is deliberately NOT fed the current top
+	// valid amount (which made the amount check depend on which other bids had
+	// been seen, and in what order), the `prev_bid` chain, or any NUT-7 state.
 	const finalValid: ParsedBidEvent[] = []
 	const finalPending: ParsedBidEvent[] = []
 	const finalInvalid: ParsedBidEvent[] = []
@@ -418,51 +421,40 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			auction,
 			bid: c.bid,
 			observedAt: c.observedAt,
-			nut7State: c.nut7State,
-			// ADR-0004: NUT-7 is client-side evidence for pre-settlement fraud
-			// detection. A quorum-confirmed bid (validators asserted
-			// structural validity) must NOT be blocked by a missing NUT-7
-			// poll — the bid is pending REVIEW by validators, not by the
-			// mint. Skip the NUT-7 gate here; the actual NUT-7 state is
-			// applied separately below for the pre-settlement fraud /
-			// post-settlement redemption interpretation.
-			skipNut7Check: true,
-			currentTopBid: currentTopValidAmount,
-			bidChainLegAmount: c.bid.legLockedAmount,
 		})
 
 		if (verdict.claim === 'valid_bid_placed') {
-			// Structural checks passed. Now apply NUT-7 evidence separately.
+			// Structural checks passed. NUT-7 is applied here as
+			// fraud-detection evidence over the valid set — never as a
+			// validity gate, and never inside the verdict (ADR-0004).
 			// - `spent` pre-settlement = double-spend fraud → invalid.
 			// - `spent` post-settlement (recorded in the settlement) = expected
 			//   terminal redemption → valid (see spendExcusable below).
-			// - `undefined`/`pending`/`unknown` = no NUT-7 evidence yet → the bid
-			//   stays VALID (quorum-confirmed); NUT-7 is fraud-detection evidence,
-			//   not a validity gate for a quorum-confirmed bid.
+			// - `undefined`/`pending`/`unknown` = no NUT-7 evidence yet → the
+			//   bid stays VALID (quorum-confirmed).
 			if (c.nut7State === 'spent') {
 				const spendExcusable = postSettlement && input.settledBidIds !== undefined && input.settledBidIds.has(c.bid.id)
-				if (spendExcusable) {
-					finalValid.push(c.bid)
-					if (c.bid.amount > currentTopValidAmount) currentTopValidAmount = c.bid.amount
-				} else {
-					finalInvalid.push(c.bid)
-				}
+				if (spendExcusable) finalValid.push(c.bid)
+				else finalInvalid.push(c.bid)
 				continue
 			}
 			// No NUT-7 evidence, or unspent → valid.
 			finalValid.push(c.bid)
-			if (c.bid.amount > currentTopValidAmount) {
-				currentTopValidAmount = c.bid.amount
-			}
 			continue
 		}
 
-		if (verdict.claim === 'bid_invalid') {
-			finalInvalid.push(c.bid)
-		} else {
-			finalPending.push(c.bid)
-		}
+		// The only remaining claim is `bid_invalid`: ADR-0012 Phase 1 removed the
+		// NUT-7-derived `bid_pending_review` variant from the verdict union, so a
+		// quorum-confirmed candidate can no longer come back "pending".
+		finalInvalid.push(c.bid)
 	}
+
+	// The running top must NOT be derived during validation: the verdict no
+	// longer depends on it, so the only definition consistent with the new
+	// pipeline is "the highest amount among the bids that ended up valid".
+	// Turning this into leadership / current price / a winner is selection's
+	// job (ADR-0012 Phase 2, `select()`).
+	const currentTopValidAmount = finalValid.reduce((top, bid) => Math.max(top, bid.amount), 0)
 
 	const canonicalWinner = computeCanonicalWinner(finalValid)
 

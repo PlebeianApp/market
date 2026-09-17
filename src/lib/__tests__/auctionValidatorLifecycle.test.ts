@@ -14,13 +14,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, Parsed
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import type { NostrEventLike } from '../nostr/eventLike'
-import {
-	deriveVerdict,
-	assignCloseRoles,
-	pickWinningBid,
-	verdictChanged,
-	currentTopValidBidAmount,
-} from '../../server/auction-validator/lifecycle'
+import { deriveVerdict, assignCloseRoles, pickWinningBid, verdictChanged } from '../../server/auction-validator/lifecycle'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
 import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '../../server/auction-validator/state'
 
@@ -239,7 +233,10 @@ describe('deriveVerdict — pre-close', () => {
 		expect(v.claim).toBe('valid_bid_placed')
 	})
 
-	test('rejects replacement-chain cycles before mint state can validate the bid', () => {
+	test('a replacement-chain cycle does NOT condemn the bid (ADR-0012 Phase 1)', () => {
+		// `prev_bid` is declared linkage metadata: an unresolvable or cyclic
+		// reference is never, by itself, grounds for condemnation. The chain is
+		// walked at selection/settlement time, not in a verdict.
 		const auction = buildAuction()
 		const firstBid = buildBid(auction, { id: '2'.repeat(64), amount: 1_100 })
 		const secondBid = buildBid(auction, { id: '3'.repeat(64), amount: 1_200, prevBidId: firstBid.id })
@@ -257,15 +254,12 @@ describe('deriveVerdict — pre-close', () => {
 			]),
 		})
 
-		const verdict = deriveVerdict({ auctionState, bidState: secondBidState, now: secondBidState.observedAt, currentTopBid: 0 })
-		expect(verdict.claim).toBe('bid_invalid')
-		if (verdict.claim === 'bid_invalid') {
-			expect(verdict.reason).toBe('replacement_chain_invalid')
-			expect(verdict.detail).toMatch(/cycle detected/)
-		}
+		const verdict = deriveVerdict({ auctionState, bidState: secondBidState, now: secondBidState.observedAt })
+		expect(verdict.claim).toBe('valid_bid_placed')
 	})
 
-	test('rejects replacement chains deeper than MAX_REPLACEMENT_CHAIN_DEPTH', () => {
+	test('a replacement chain deeper than MAX_REPLACEMENT_CHAIN_DEPTH does NOT condemn the bid', () => {
+		// The depth bound is a settlement-time walk guard, not a validity rule.
 		const auction = buildAuction()
 		// Build a chain longer than the depth bound. Each leg has a
 		// strictly increasing amount (so the only failure is depth).
@@ -293,16 +287,11 @@ describe('deriveVerdict — pre-close', () => {
 			auctionState,
 			bidState: bidMap.get(head.id)!,
 			now: head.createdAt,
-			currentTopBid: 0,
 		})
-		expect(verdict.claim).toBe('bid_invalid')
-		if (verdict.claim === 'bid_invalid') {
-			expect(verdict.reason).toBe('replacement_chain_invalid')
-			expect(verdict.detail).toMatch(/depth exceeded/)
-		}
+		expect(verdict.claim).toBe('valid_bid_placed')
 	})
 
-	test('no NUT-7 signal → valid_bid_placed (NUT-7 step explicitly skipped)', () => {
+	test('no NUT-7 signal → valid_bid_placed (the verdict path consults no mint state)', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -315,10 +304,11 @@ describe('deriveVerdict — pre-close', () => {
 
 	test('NUT-7 evidence is skipped by the validator (client-owned per ADR-0004)', () => {
 		// Validators no longer query the mint; their pre-close verdict asserts
-		// structural/rules validity only (validateBid with skipNut7Check).
-		// Even recorded NUT-7 spent evidence does not invalidate via this path —
-		// the CLIENT-side winner derivation (computeValidatedBids → validateBid
-		// without skipNut7Check) enforces proof_spent from mint-truthful data.
+		// structural/rules validity only. ADR-0012 Phase 1 deleted the NUT-7
+		// step from `validateBid` outright, so the validator has no path to it
+		// at all. Even recorded NUT-7 spent evidence does not invalidate via
+		// this path — the CLIENT-side read path (computeValidatedBids) applies
+		// spend state as fraud evidence over the valid set.
 		const auction = buildAuction()
 		const bid = buildBid(auction)
 		const auctionState = buildAuctionState(auction)
@@ -404,7 +394,9 @@ describe('deriveVerdict — pre-close', () => {
 		expect(v.claim).toBe('won_pending_settlement')
 	})
 
-	test('rebid with sub-minimum own delta cannot become valid_bid_placed', () => {
+	test('rebid with a sub-minimum own delta still becomes valid_bid_placed (ADR-0012 Phase 1)', () => {
+		// The chain-leg minimum was a verdict-time rule; it is retired. The bid
+		// clears `starting_bid`, which is the only amount-based check.
 		const auction = buildAuction({ startingBid: AUCTION_MIN_BID_SATS, bidIncrement: 1 })
 		const previousBid = buildBid(auction, { id: 'a'.repeat(64), amount: AUCTION_MIN_BID_SATS })
 		const rebidAmount = AUCTION_MIN_BID_SATS + AUCTION_MIN_BID_LEG_SATS - 1
@@ -415,9 +407,8 @@ describe('deriveVerdict — pre-close', () => {
 		auctionState.bids.set(rebid.id, rebidState)
 		recordNut7State(rebidState, rebid.proofYs[0], 'unspent', rebid.createdAt)
 
-		const v = deriveVerdict({ auctionState, bidState: rebidState, now: rebid.createdAt, currentTopBid: 0 })
-		expect(v.claim).toBe('bid_invalid')
-		expect(v.reason).toBe('under_increment')
+		const v = deriveVerdict({ auctionState, bidState: rebidState, now: rebid.createdAt })
+		expect(v.claim).toBe('valid_bid_placed')
 	})
 })
 
@@ -1292,31 +1283,5 @@ describe('verdictChanged', () => {
 	test('detail-only difference → false (detail is informational only)', () => {
 		const a = { claim: 'bid_invalid' as const, reason: 'pre_start' as const, detail: 'created_at=500' }
 		expect(verdictChanged(a, 'bid_invalid', 'pre_start')).toBe(false)
-	})
-})
-
-// ============================================================================
-// currentTopValidBidAmount
-// ============================================================================
-
-describe('currentTopValidBidAmount', () => {
-	test('returns highest amount among valid_bid_placed bids', () => {
-		const auction = buildAuction()
-		const auctionState = buildAuctionState(auction)
-		const valid1 = buildBid(auction, { id: 'a'.repeat(64), amount: 1_500 })
-		const valid2 = buildBid(auction, { id: 'b'.repeat(64), bidderPubkey: BIDDER_B, amount: 2_500 })
-		const pending = buildBid(auction, { id: 'c'.repeat(64), amount: 9_999 })
-		auctionState.bids.set(valid1.id, buildBidState(valid1, valid1.createdAt, { currentClaim: 'valid_bid_placed' }))
-		auctionState.bids.set(valid2.id, buildBidState(valid2, valid2.createdAt, { currentClaim: 'valid_bid_placed' }))
-		auctionState.bids.set(pending.id, buildBidState(pending, pending.createdAt, { currentClaim: 'bid_pending_review' }))
-
-		// pending bid not counted even though its amount is highest.
-		expect(currentTopValidBidAmount(auctionState)).toBe(2_500)
-	})
-
-	test('returns 0 when no valid bids', () => {
-		const auction = buildAuction()
-		const auctionState = buildAuctionState(auction)
-		expect(currentTopValidBidAmount(auctionState)).toBe(0)
 	})
 })
