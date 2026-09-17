@@ -342,3 +342,57 @@ describe('duplicate-proof bid excluded', () => {
 		expect(getBidClassification(set, 'bid_fake')).toBe('invalid')
 	})
 })
+
+// ---------------------------------------------------------------------------
+// All-pending (verdicts present, no quorum) — the fallback path
+//
+// This is the state right after a bid is published: the bid is on the relay and
+// parses fine, but no validator quorum has confirmed it yet. Nothing about it
+// may be promoted to a display amount, a leader, or a "you're winning" badge —
+// that is the whole point of the validated-set migration. The selectors must
+// therefore fall back to the startingBid baseline and report no winner.
+// ---------------------------------------------------------------------------
+
+describe('all-pending set (verdicts present, no quorum)', () => {
+	const pendingBid = () => makeParsedBid('bid_pending', ALICE, 5_000, 1_000)
+
+	const makePendingOnlySet = (): ValidatedBidSet =>
+		makeEmptySet({
+			validBids: [],
+			pendingBids: [pendingBid()],
+			invalidBids: [],
+			canonicalWinner: null,
+			currentTopValidAmount: 0,
+			classified: [{ bid: pendingBid(), classification: 'pending', observedAt: 1_000 }],
+		})
+
+	test('top amount falls back to startingBid, not the pending bid amount', () => {
+		expect(getValidatedTopAmount(makePendingOnlySet(), 1_000)).toBe(1_000)
+	})
+
+	test('top amount is 0 when there is no startingBid floor', () => {
+		expect(getValidatedTopAmount(makePendingOnlySet())).toBe(0)
+	})
+
+	test('no canonical winner, so no top bidder pubkey', () => {
+		expect(getValidatedTopBidderPubkey(makePendingOnlySet())).toBeNull()
+	})
+
+	test('the pending bidder is NOT reported as winning or outbid', () => {
+		const set = makePendingOnlySet()
+		// ALICE owns the only bid and it is pending — she must see no badge at
+		// all rather than "You're winning" while validators are still deciding.
+		expect(getValidatedBidderState(set, ALICE, false)).toBe('none')
+		expect(getValidatedBidderState(set, ALICE, true)).toBe('none')
+	})
+
+	test('the pending bid is classified pending and is not validated', () => {
+		const set = makePendingOnlySet()
+		expect(getBidClassification(set, 'bid_pending')).toBe('pending')
+		expect(isBidValidated(set, 'bid_pending')).toBe(false)
+	})
+
+	test('a pubkey with no bid at all is still "none"', () => {
+		expect(getValidatedBidderState(makePendingOnlySet(), BOB, false)).toBe('none')
+	})
+})
