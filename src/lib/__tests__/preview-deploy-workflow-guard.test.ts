@@ -264,18 +264,69 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('bun run start:production')
 	})
 
-	test('the app image is built on the host, gated on secrets, and before compose up', () => {
-		const BUILD_APP_STEP = 'Build app image on VPS (prebuilt deps)'
-		const build = stepNamed(deployJob, BUILD_APP_STEP)
+	test('the app image is built on the CI runner with a PR-scoped label', () => {
+		const CI_BUILD_STEP = 'Build app image on CI runner'
+		const build = stepNamed(deployJob, CI_BUILD_STEP)
+		// Gated with the rest of the deploy path, so a fork PR that skips the
+		// VPS steps does not build an image it cannot ship.
 		expect(build).toContain('steps.secrets.outputs.previews_ready == ')
-		expect(build).toContain('infra/preview-vps/remote-ssh.sh')
+		// Built with the runner's own Docker, not an action and not over SSH.
+		expect(build).toContain('docker build')
+		expect(build).not.toContain('infra/preview-vps/remote-ssh.sh')
 		expect(build).not.toMatch(/^\s+uses:/m)
-		expect(build).toContain('docker build -t "market-app:$SHA"')
-		expect(build).toContain('docker image inspect "market-app:$SHA"')
+		// The label is what lets deploy/teardown garbage-collect this PR's
+		// images without touching other previews.
+		expect(build).toContain('--label "preview.pr=${{ github.event.pull_request.number }}"')
+		expect(build).toContain('market-app:${{ github.sha }}')
+		// The deploy package (assembled above) is the build context, the last
+		// argument of the `docker build` invocation.
+		expect(runBody(build)).toMatch(/\n\s+deploy-package\n/)
+	})
+
+	test('the VPS no longer builds the app image', () => {
+		// Regression guard for the disk-starved on-host build that pushed the
+		// job past its timeout (run 35265465544, "Build app image on VPS"
+		// cancelled at 10m09s). The image is built on the runner and shipped.
+		// Assert on the step definition, not the phrase: the workflow comments
+		// still name the removed step when explaining the history.
+		expect(workflow).not.toContain('- name: Build app image on VPS')
+	})
+
+	test('the image is shipped over the pinned OpenSSH helper before compose up', () => {
+		const SHIP_STEP = 'Ship app image to VPS'
+		const ship = stepNamed(deployJob, SHIP_STEP)
+		expect(ship).toContain('steps.secrets.outputs.previews_ready == ')
+		expect(ship).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(ship).not.toMatch(/^\s+uses:/m)
+		// Streamed `docker save | gzip | … 'gunzip | docker load'`, so no temp
+		// file is written on either side.
+		expect(ship).toContain('docker save')
+		expect(ship).toContain('gzip')
+		expect(ship).toContain('docker load')
 
 		const stepOrder = stepsOf(deployJob).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
-		expect(stepOrder.indexOf(BUILD_APP_STEP)).toBeGreaterThanOrEqual(0)
-		expect(stepOrder.indexOf(BUILD_APP_STEP)).toBeLessThan(stepOrder.indexOf(CLAIM_STEP))
+		expect(stepOrder.indexOf(SHIP_STEP)).toBeGreaterThanOrEqual(0)
+		expect(stepOrder.indexOf(SHIP_STEP)).toBeLessThan(stepOrder.indexOf(CLAIM_STEP))
+	})
+
+	test('deploy prunes older same-PR images by label after shipping', () => {
+		const prune = stepNamed(deployJob, 'Prune older app images for this PR')
+		expect(prune).toContain('steps.secrets.outputs.previews_ready == ')
+		expect(prune).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(prune).toContain('label=preview.pr=$PR_NUMBER')
+		expect(prune).toContain('docker image rm')
+	})
+
+	test('teardown removes every image the PR shipped, scoped by label', () => {
+		const clean = stepNamed(teardownJob, 'Release port offset, stop containers, clean up VPS directory')
+		expect(clean).toContain('label=preview.pr=$PR_NUMBER')
+		expect(clean).toContain('docker image rm')
+		expect(clean).toContain('docker image prune')
+	})
+
+	test('the deploy job allows enough time to build and stream the image', () => {
+		const minutes = Number(/timeout-minutes:\s*(\d+)/.exec(deployJob)?.[1])
+		expect(minutes).toBeGreaterThanOrEqual(20)
 	})
 
 	test('the image Dockerfile installs the full dependency set', () => {
