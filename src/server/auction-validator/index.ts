@@ -72,6 +72,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 			relayPool: options.relayPool,
 			name: options.name ?? 'Plebeian dev validator',
 			policy: options.policy,
+			spamPolicy: options.spamPolicy,
 		})
 		logger.info('[validator] policy published')
 	} catch (err) {

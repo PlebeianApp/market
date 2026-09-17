@@ -15,9 +15,10 @@
 
 import type { NostrSigner } from '@contextvm/sdk'
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
-import { VALIDATOR_POLICY_KIND, VALIDATOR_POLICY_SCHEMA_TYPE } from '../../lib/auction/constants'
+import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND, VALIDATOR_POLICY_SCHEMA_TYPE } from '../../lib/auction/constants'
 import { buildValidatorPolicyContent, buildValidatorPolicyTags } from '../../lib/auction/tagBuilders'
-import type { ValidatorPolicyDocument } from '../../lib/auction/events'
+import type { ValidatorAdmissionPolicy, ValidatorPolicyDocument } from '../../lib/auction/events'
+import { DEFAULT_BID_SPAM_POLICY, type BidSpamPolicy } from './spamPolicy'
 
 export interface PublishValidatorPolicyDeps {
 	signer: NostrSigner
@@ -26,17 +27,42 @@ export interface PublishValidatorPolicyDeps {
 	name: string
 	/** Optional policy overrides. v1 default is fully permissive. */
 	policy?: Partial<ValidatorPolicyDocument>
+	/** Effective relay-admission limits to publish in the policy document. */
+	spamPolicy?: Partial<BidSpamPolicy>
 }
+
+export const resolvePublishedAdmissionPolicy = (policy?: Partial<BidSpamPolicy>): ValidatorAdmissionPolicy => {
+	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
+	return {
+		enabled: true,
+		maxBidsPerWindow: resolved.maxBidsPerWindow,
+		rateWindowSec: resolved.rateWindowSec,
+		maxActiveBidsPerAuction: resolved.maxActiveBidsPerAuction,
+		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
+		maxPendingKeys: resolved.maxPendingKeys,
+		maxPendingEvents: resolved.maxPendingEvents,
+		pendingTtlSec: resolved.pendingTtlSec,
+		maxEventBytes: resolved.maxEventBytes,
+		maxTagCount: resolved.maxTagCount,
+		maxNonceLength: resolved.maxNonceLength,
+		maxProofCount: resolved.maxProofCount,
+		maxContentBytes: resolved.maxContentBytes,
+	}
+}
+
+export const resolvePublishedValidatorPolicyDocument = (deps: {
+	policy?: Partial<ValidatorPolicyDocument>
+	spamPolicy?: Partial<BidSpamPolicy>
+}): ValidatorPolicyDocument => ({
+	...deps.policy,
+	type: VALIDATOR_POLICY_SCHEMA_TYPE,
+	maxAcceptableSkewSec: deps.policy?.maxAcceptableSkewSec ?? DEFAULT_MAX_SKEW_SECONDS,
+	admission: resolvePublishedAdmissionPolicy(deps.spamPolicy),
+})
 
 export const publishValidatorPolicy = async (deps: PublishValidatorPolicyDeps): Promise<void> => {
 	const tags = buildValidatorPolicyTags({ name: deps.name })
-	const content = buildValidatorPolicyContent({
-		...deps.policy,
-		// Always pin the type literal — the policy doc's `type` field
-		// is how parsers identify it. Putting it after the spread means
-		// the caller can't accidentally override it with a wrong value.
-		type: VALIDATOR_POLICY_SCHEMA_TYPE,
-	} as Partial<ValidatorPolicyDocument> & { type: typeof VALIDATOR_POLICY_SCHEMA_TYPE })
+	const content = buildValidatorPolicyContent(resolvePublishedValidatorPolicyDocument({ policy: deps.policy, spamPolicy: deps.spamPolicy }))
 
 	const template = {
 		kind: VALIDATOR_POLICY_KIND as unknown as number,

@@ -319,6 +319,24 @@ export interface ParsedValidatorVerdictEvent {
 // kind 30441 — Validator policy declaration — §4.4.2
 // =========================================================================
 
+export type ValidatorAdmissionPolicy =
+	| { enabled: false }
+	| {
+			enabled: true
+			maxBidsPerWindow: number
+			rateWindowSec: number
+			maxActiveBidsPerAuction: number
+			maxPendingEventsPerKey: number
+			maxPendingKeys: number
+			maxPendingEvents: number
+			pendingTtlSec: number
+			maxEventBytes: number
+			maxTagCount: number
+			maxNonceLength: number
+			maxProofCount: number
+			maxContentBytes: number
+	  }
+
 export interface ValidatorPolicyDocument {
 	type: 'auction_validator_policy_v1'
 	relatrMinScore?: number
@@ -330,6 +348,7 @@ export interface ValidatorPolicyDocument {
 	categoryAllowlist?: string[]
 	categoryDenylist?: string[]
 	maxAcceptableSkewSec?: number
+	admission?: ValidatorAdmissionPolicy
 	griefingDecayDays?: number
 	notes?: string
 }
