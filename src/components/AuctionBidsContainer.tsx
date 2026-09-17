@@ -1,6 +1,6 @@
 // src/components/auction/LatestBidsContainer.tsx
 import { getBidAmount, getBidMint, useStreamingAuctionBids } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { cn } from '@/lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
 import { formatSats, getMintHostname } from '@/lib/wallet'
@@ -58,7 +58,7 @@ const toneLabelClassName: Record<BidTone, string> = {
 	white: 'text-zinc-500',
 }
 
-function formatBidRecordedAt(bidEvent: NDKEvent): string {
+function formatBidRecordedAt(bidEvent: NostrEventLike): string {
 	return bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'Unknown time'
 }
 
@@ -76,7 +76,7 @@ function BidMintRow({ mint }: { mint: string }) {
 	)
 }
 
-function BidEventDetails({ bidEvent }: { bidEvent: NDKEvent }) {
+function BidEventDetails({ bidEvent }: { bidEvent: NostrEventLike }) {
 	const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
 	const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 
@@ -108,16 +108,22 @@ export function AuctionBidsContainer({
 
 	// Determine top bid — use the validated canonicalWinner when available,
 	// otherwise fall back to raw bid sort (legacy behaviour).
-	let topBid: NDKEvent | null
+	//
+	// Both branches yield a raw nostr event shape: `bids` comes from
+	// `useStreamingAuctionBids` (which returns `NostrEventLike[]`, not NDKEvent)
+	// and `canonicalWinner.rawEvent` is `NostrEventLike` too. Keep the local
+	// helpers on `NostrEventLike` rather than widening to NDKEvent — nothing
+	// here uses NDK-only members.
+	let topBid: NostrEventLike | null
 	let topBidPubkey: string | null
 	let topAmount: number
 
 	if (validatedBidSet) {
-		topBid = (validatedBidSet.canonicalWinner?.rawEvent as NDKEvent | null) ?? null
+		topBid = validatedBidSet.canonicalWinner?.rawEvent ?? null
 		topBidPubkey = getValidatedTopBidderPubkey(validatedBidSet)
 		topAmount = getValidatedTopAmount(validatedBidSet)
 	} else {
-		topBid = bids.reduce<NDKEvent | null>((best, bid) => {
+		topBid = bids.reduce<NostrEventLike | null>((best, bid) => {
 			if (!best) return bid
 
 			const amountDiff = getBidAmount(bid) - getBidAmount(best)

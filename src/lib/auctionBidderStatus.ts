@@ -38,18 +38,31 @@ const STATUS_LABELS: Record<AuctionBidderStatusKind, string> = {
 const getTopBidChain = (chains: AuctionBidChainGroup[]): AuctionBidChainGroup | null =>
 	[...chains].sort(compareAuctionBidChainPriority)[0] ?? null
 
+/**
+ * Derive the bidder status straight from a validated bid set, skipping the raw
+ * bid-chain computation entirely. Returns `null` when the pubkey has no valid
+ * bid in the set (`'none'`).
+ *
+ * This is the validated half of `getAuctionBidderStatus`; it is declared above
+ * it so the delegation reads top-down and the `'none'` → `null` mapping exists
+ * exactly once.
+ */
+export function getValidatedBidderStatus(pubkey: string, set: ValidatedBidSet, isEnded: boolean): AuctionBidderStatus | null {
+	const state = getValidatedBidderState(set, pubkey, isEnded)
+	if (state === 'none') return null
+	return {
+		status: state,
+		label: STATUS_LABELS[state],
+	}
+}
+
 export function getAuctionBidderStatus(input: AuctionBidderStatusInput): AuctionBidderStatus | null {
 	const currentUserPubkey = input.currentUserPubkey?.trim()
 	if (!currentUserPubkey || !input.auction) return null
 
 	// When a validated bid set is provided, use the validated path.
 	if (input.validatedBidSet) {
-		const state = getValidatedBidderState(input.validatedBidSet, currentUserPubkey, input.isEnded)
-		if (state === 'none') return null
-		return {
-			status: state,
-			label: STATUS_LABELS[state],
-		}
+		return getValidatedBidderStatus(currentUserPubkey, input.validatedBidSet, input.isEnded)
 	}
 
 	// Legacy path: derive from raw bid chains (fallback).
@@ -72,21 +85,5 @@ export function getAuctionBidderStatus(input: AuctionBidderStatusInput): Auction
 	return {
 		status,
 		label: STATUS_LABELS[status],
-	}
-}
-
-/**
- * Convenience export that explicitly derives the bidder status from a
- * validated bid set. Skips the raw chain computation entirely.
- *
- * Callers that already have a `ValidatedBidSet` should use this instead
- * of `getAuctionBidderStatus` with `bids` to avoid double computation.
- */
-export function getValidatedBidderStatus(pubkey: string, set: ValidatedBidSet, isEnded: boolean): AuctionBidderStatus | null {
-	const state = getValidatedBidderState(set, pubkey, isEnded)
-	if (state === 'none') return null
-	return {
-		status: state,
-		label: STATUS_LABELS[state],
 	}
 }

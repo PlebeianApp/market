@@ -920,23 +920,36 @@ export const getAuctionTopBidFromBids = (auction: NostrEventLike | null, bids: N
 	return validBids.reduce((top, bid) => (getBidAmount(bid) > getBidAmount(top) ? bid : top), validBids[0])
 }
 
+/**
+ * Result of the raw-event → validated-bid pipeline. Carries only what a
+ * consumer needs: the two bid partitions and the two display amounts.
+ *
+ * Deliberately no `count` (ambiguous — valid only, or valid + pending? — and
+ * both lengths are already on the arrays it would sit next to) and no `status`
+ * discriminator (`validBids.length === 0` is the pending-only case).
+ */
 interface ValidatedCurrentPriceResult {
 	currentTopValidAmount: number
 	validBids: ParsedBidEvent[]
 	pendingBids: ParsedBidEvent[]
-	count: number
 	validatedTopBidAmount: number
-	status: 'has_valid_bids' | 'pending_only' | 'no_bids'
 }
 
 /**
  * Validated variant of `getAuctionCurrentPriceFromBids`. Parses the raw
  * events through schema parsers, runs `computeValidatedBids`, and returns
- * the validated top amount plus metadata.
+ * the validated top amount plus the bid partitions.
  *
- * When verdicts or nut7States are empty/missing, the result will have
- * zero `currentTopValidAmount` and a `'pending_only'` status — this is
- * correct behaviour per the quorum requirement.
+ * When verdicts or nut7States are empty/missing the result has a zero
+ * `currentTopValidAmount` and empty `validBids`, while `pendingBids` holds the
+ * un-verdicted bids — correct behaviour per the quorum requirement.
+ *
+ * NOTE: no call sites yet. Consumers that already hold a `ValidatedBidSet`
+ * should prefer the pure selectors in `@/lib/auction/validatedBidView`
+ * (`getValidatedTopAmount`, `getValidatedBidderState`, `getBidClassification`);
+ * this wrapper exists for surfaces that still receive raw events and therefore
+ * need the parse step too (the deferred AuctionCard verdict-fetch work). If
+ * that lands as a query hook instead, delete this.
  *
  * @param startingBid - Floor value from the auction's `starting_bid` tag.
  *   The returned `validatedTopBidAmount` is `Math.max(currentTopValidAmount, startingBid)`.
@@ -953,9 +966,7 @@ export function getValidatedCurrentPriceFromBids(
 			currentTopValidAmount: 0,
 			validBids: [],
 			pendingBids: [],
-			count: 0,
 			validatedTopBidAmount: startingBid,
-			status: 'no_bids',
 		}
 	}
 
@@ -965,9 +976,7 @@ export function getValidatedCurrentPriceFromBids(
 			currentTopValidAmount: 0,
 			validBids: [],
 			pendingBids: [],
-			count: 0,
 			validatedTopBidAmount: startingBid,
-			status: 'no_bids',
 		}
 	}
 
@@ -990,15 +999,11 @@ export function getValidatedCurrentPriceFromBids(
 		nut7States,
 	})
 
-	const status = validatedSet.validBids.length > 0 ? 'has_valid_bids' : validatedSet.pendingBids.length > 0 ? 'pending_only' : 'no_bids'
-
 	return {
 		currentTopValidAmount: validatedSet.currentTopValidAmount,
 		validBids: validatedSet.validBids,
 		pendingBids: validatedSet.pendingBids,
-		count: validatedSet.validBids.length + validatedSet.pendingBids.length,
 		validatedTopBidAmount: Math.max(validatedSet.currentTopValidAmount, startingBid),
-		status,
 	}
 }
 
