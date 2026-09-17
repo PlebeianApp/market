@@ -98,13 +98,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	//
 	// The keys come straight off the relay, so they are attacker-chosen:
 	// a bidder signing bids against invented auction ids must not be
-	// able to grow one of these maps without limit, and a key whose
+	// able to grow one of these buffers without limit, and a key whose
 	// parent never arrives must not be pinned for the process lifetime
-	// (review 5645059400 findings 1 and 3).
+	// (review 5645059400 findings 1 and 3). Eviction is fail-closed: a
+	// dropped buffered event is never replayed, so no verdict is emitted.
 	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
 	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
-	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
-	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // bidEventId → events
+	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
 	const activeBidClaimsNeedingChildWatch = new Set([
 		'valid_bid_placed',
 		'bid_pending_review',
@@ -116,11 +117,12 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	const hasAttributablePendingChildren = (auctionRootEventId: string): boolean => {
 		if (pendingBids.keys(now()).includes(auctionRootEventId)) return true
-		if (pendingSettlements.has(auctionRootEventId)) return true
+		if (pendingSettlements.keys(now()).includes(auctionRootEventId)) return true
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
+		const pendingReleaseKeys = new Set(pendingReleases.keys(now()))
 		for (const bidEventId of Array.from(auctionState.bids.keys())) {
-			if (pendingReleases.has(bidEventId)) return true
+			if (pendingReleaseKeys.has(bidEventId)) return true
 		}
 		return false
 	}
@@ -376,9 +378,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			// hasn't arrived). Stash and replay when the bid appears;
 			// authorization is re-applied on replay. Preserve the
 			// first-observed time so prompt/late classification is stable.
-			const existing = pendingReleases.get(release.bidEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingReleases.set(release.bidEventId, existing)
+			const admission = pendingReleases.add(release.bidEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping kind-1025 ${release.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_author') {
@@ -441,9 +444,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 		const recordResult = recordSettlement(deps.state, settlement)
 		if (recordResult.status === 'unknown_auction') {
-			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingSettlements.set(settlement.auctionRootEventId, existing)
+			const admission = pendingSettlements.add(settlement.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping kind-1024 ${settlement.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_seller') {
@@ -484,19 +488,18 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const bids = pendingBids.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
-		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
-		pendingSettlements.delete(auctionRootEventId)
+		const settlements = pendingSettlements.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of settlements) await onSettlementEvent(raw, observedAt)
 
 		// Path releases are keyed by bidEventId — after the bids
 		// drained above, try replaying every stash and clean up the
 		// ones that now resolve.
-		for (const [bidEventId, releases] of Array.from(pendingReleases.entries())) {
-			const auctionState = deps.state.auctions.get(auctionRootEventId)
-			if (auctionState && auctionState.bids.has(bidEventId)) {
-				pendingReleases.delete(bidEventId)
-				for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
-			}
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return
+		for (const bidEventId of pendingReleases.keys(now())) {
+			if (!auctionState.bids.has(bidEventId)) continue
+			const releases = pendingReleases.take(bidEventId, now())
+			for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
 		}
 	}
 

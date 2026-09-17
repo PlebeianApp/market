@@ -221,6 +221,72 @@ describe('validator subscriber replays child history only for tracked auctions',
 	})
 })
 
+describe('validator subscriber bounds every pending child buffer', () => {
+	test('release buffering reuses a TTL-expired key and refuses the next distinct unknown bid id', async () => {
+		const harness = createHarness({
+			spamPolicy: { maxPendingKeys: 1, maxPendingEventsPerKey: 10, maxPendingEvents: 10, pendingTtlSec: 60 },
+		})
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		harness.dispatch(auction)
+		await harness.settle()
+
+		const unknownBidA = '1'.repeat(64)
+		const unknownBidB = '2'.repeat(64)
+		const unknownBidC = '3'.repeat(64)
+		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: unknownBidA }))
+		await harness.settle()
+
+		harness.clock.value += 61
+		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: unknownBidB }))
+		await harness.settle()
+		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: unknownBidC }))
+		await harness.settle()
+
+		expect(harness.warnings.join('\n')).toContain('dropping kind-1025')
+		expect(harness.warnings.join('\n')).toContain('key_cap_reached')
+
+		await harness.subscriber.stop()
+	})
+
+	test('settlement buffering reuses a TTL-expired key and refuses the next distinct unknown auction id', async () => {
+		const harness = createHarness({
+			spamPolicy: { maxPendingKeys: 1, maxPendingEventsPerKey: 10, maxPendingEvents: 10, pendingTtlSec: 60 },
+		})
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const bidderPubkey = getPublicKey(bidderSk)
+		const auction = buildAuctionEvent(sellerSk)
+		harness.dispatch(auction)
+		await harness.settle()
+
+		const unknownAuctionA = '4'.repeat(64)
+		const unknownAuctionB = '5'.repeat(64)
+		const unknownAuctionC = '6'.repeat(64)
+		const bidEventId = '7'.repeat(64)
+		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionA, bidEventId, bidderPubkey }))
+		await harness.settle()
+
+		harness.clock.value += 61
+		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionB, bidEventId, bidderPubkey }))
+		await harness.settle()
+		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionC, bidEventId, bidderPubkey }))
+		await harness.settle()
+
+		expect(harness.warnings.join('\n')).toContain('dropping kind-1024')
+		expect(harness.warnings.join('\n')).toContain('key_cap_reached')
+
+		await harness.subscriber.stop()
+	})
+})
+
 const buildPathReleaseEvent = (input: {
 	bidderSk: Uint8Array
 	sellerPubkey: string
@@ -268,7 +334,7 @@ const buildSettlementEvent = (input: {
 				['winning_bid', input.bidEventId],
 				['winner', input.bidderPubkey],
 				['final_amount', '1200'],
-				['path_release', 'path-release-event-id'],
+				['path_release', '8'.repeat(64)],
 				['payout', input.bidEventId, '1200', 'settled'],
 				...(input.extraTags ?? []),
 			],

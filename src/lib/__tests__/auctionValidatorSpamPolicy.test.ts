@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { checkBidSpamPolicy, createBidSpamState, readBidSpamPolicyFromEnv, recordAcceptedBid, resolveBidSpamPolicy } from '../../server/auction-validator/spamPolicy'
+import {
+	checkBidSpamPolicy,
+	createBidSpamState,
+	readBidSpamPolicyFromEnv,
+	recordAcceptedBid,
+	resolveBidSpamPolicy,
+} from '../../server/auction-validator/spamPolicy'
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 
 const auction = { rootEventId: 'a'.repeat(64) } as ParsedAuctionEvent
