@@ -9,6 +9,7 @@ import {
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 
 const auction = { rootEventId: 'a'.repeat(64) } as ParsedAuctionEvent
+const otherAuction = { rootEventId: 'b'.repeat(64) } as ParsedAuctionEvent
 
 const buildBid = (overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent =>
 	({
@@ -76,6 +77,36 @@ describe('auction validator bid spam policy', () => {
 				policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
 			}),
 		).toEqual({ ok: true })
+	})
+
+	test('enforces the rolling rate limit across auctions for the same bidder', () => {
+		const state = createBidSpamState()
+		recordAcceptedBid({
+			auction,
+			bid: buildBid({ id: '1'.repeat(64), bidNonce: 'nonce-1' }),
+			now: 100,
+			state,
+			policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
+		})
+		recordAcceptedBid({
+			auction: otherAuction,
+			bid: buildBid({ id: '2'.repeat(64), bidNonce: 'nonce-2' }),
+			now: 101,
+			state,
+			policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
+		})
+
+		const blocked = buildBid({ id: '3'.repeat(64), bidNonce: 'nonce-3' })
+		expect(
+			checkBidSpamPolicy({
+				auction,
+				bid: blocked,
+				now: 105,
+				state,
+				trackedBidCount: 0,
+				policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
+			}),
+		).toMatchObject({ ok: false, reason: 'rate_limited' })
 	})
 
 	test('enforces the tracked bid cap independently of rate limiting', () => {

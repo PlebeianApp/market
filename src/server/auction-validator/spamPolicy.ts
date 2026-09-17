@@ -174,6 +174,8 @@ export const checkEventEnvelope = (event: NostrEvent, policy?: Partial<BidSpamPo
 const bidderAuctionKey = (auctionRootEventId: string, bidderPubkey: string): string =>
 	`${auctionRootEventId.toLowerCase()}:${bidderPubkey.toLowerCase()}`
 
+const bidderKey = (bidderPubkey: string): string => bidderPubkey.toLowerCase()
+
 const nonceKey = (auctionRootEventId: string, bidderPubkey: string, bidNonce: string): string =>
 	`${bidderAuctionKey(auctionRootEventId, bidderPubkey)}:${bidNonce}`
 
@@ -215,7 +217,7 @@ export const checkBidSpamPolicy = (input: {
 		}
 	}
 
-	const key = bidderAuctionKey(input.auction.rootEventId, input.bid.bidderPubkey)
+	const key = bidderKey(input.bid.bidderPubkey)
 	const recent = pruneTimes(input.state.bidderBidTimes.get(key) ?? [], input.now, policy.rateWindowSec)
 	if (recent.length >= policy.maxBidsPerWindow) {
 		return {
@@ -237,9 +239,9 @@ export const recordAcceptedBid = (input: {
 }): void => {
 	const policy = resolveBidSpamPolicy(input.policy)
 	const eventId = input.bid.id.toLowerCase()
-	const bidderKey = bidderAuctionKey(input.auction.rootEventId, input.bid.bidderPubkey)
+	const bidRateKey = bidderKey(input.bid.bidderPubkey)
 	const nonce = nonceKey(input.auction.rootEventId, input.bid.bidderPubkey, input.bid.bidNonce)
-	const recent = pruneTimes(input.state.bidderBidTimes.get(bidderKey) ?? [], input.now, policy.rateWindowSec)
+	const recent = pruneTimes(input.state.bidderBidTimes.get(bidRateKey) ?? [], input.now, policy.rateWindowSec)
 
 	while (input.state.seenEventIds.size >= policy.maxSeenEventIds) {
 		const oldest = input.state.seenEventIds.values().next().value
@@ -258,5 +260,5 @@ export const recordAcceptedBid = (input: {
 		input.state.bidderBidTimes.delete(oldest)
 	}
 	input.state.nonceOwners.set(nonce, eventId)
-	input.state.bidderBidTimes.set(bidderKey, [...recent, input.now])
+		input.state.bidderBidTimes.set(bidRateKey, [...recent, input.now])
 }
