@@ -31,7 +31,6 @@ export const testLabelKeys = {
 	forCoordinate: (coord: string) => [...testLabelKeys.all, 'coord', coord] as const,
 } as const
 
-
 export const orderKeys = {
 	all: ['orders'] as const,
 	details: (id: string) => [...orderKeys.all, id] as const,
