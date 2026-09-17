@@ -185,7 +185,13 @@ describe('validator subscriber replays child history only for tracked auctions',
 
 		const auctionA = buildAuctionEvent(sellerSk)
 		const auctionB = buildAuctionEvent(sellerSk, 'auction-test-b')
-		const bidA = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auctionA.id, auctionDTag: 'auction-test', bidNonce: 'nonce-a' })
+		const bidA = buildBidEvent({
+			bidderSk,
+			sellerPubkey,
+			auctionRootEventId: auctionA.id,
+			auctionDTag: 'auction-test',
+			bidNonce: 'nonce-a',
+		})
 		const bidB = buildBidEvent({
 			bidderSk,
 			sellerPubkey,
