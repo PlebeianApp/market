@@ -723,7 +723,9 @@ def test_start_preview_returncode_propagates(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pm.subprocess, "run", fake_run)
     assert pm.start_preview(pm.Preview(42, compose.parent, None, False)) is False
-    assert calls == [["docker", "compose", "-f", str(compose), "start"]]
+    # Wake must use `up -d` (recreate-or-start), not `start`: `start` is a no-op
+    # when the containers were removed, so a preview in that state never boots.
+    assert calls == [["docker", "compose", "-f", str(compose), "up", "-d"]]
 
 
 def test_run_cycle_stop_failure_recorded(tmp_path, monkeypatch):

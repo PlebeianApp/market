@@ -6,9 +6,11 @@ the finite set of live previews in check:
 
   1. IDLE STOP — running containers for a preview whose subdomain has not been
      accessed (Caddy access log) for IDLE_HOURS are stopped with
-     `docker compose stop` (containers + volumes retained, DNS kept). This is
-     why a stopped preview can be woken cheaply with `docker compose start`.
-     Unknown last access is NOT idle (see `idle_decision`): a preview with no
+     `docker compose stop` (containers + volumes retained, DNS kept). Waking
+     runs `docker compose up -d`, which starts retained containers AND recreates
+     them if they were removed (a stopped-but-existing preview and one whose
+     containers are gone both come up). Unknown last access is NOT idle (see
+     `idle_decision`): a preview with no
      recorded access is skipped with a loud log — misconfiguring (or forgetting)
      the access log must not stop every preview on the VPS.
 
@@ -305,8 +307,8 @@ def stop_preview(preview: Preview) -> bool:
     """Stop a preview's containers WITHOUT removing them or their volumes.
 
     Uses `docker compose stop` (not `down`): containers and volumes are retained
-    so `docker compose start` can wake the preview later (B2). Returns True only
-    when the subprocess exited 0 (m2).
+    so the wake path can bring the preview back. Returns True only when the
+    subprocess exited 0 (m2).
     """
     compose = preview.directory / "docker-compose.yml"
     if not compose.is_file():
@@ -331,13 +333,22 @@ def stop_preview(preview: Preview) -> bool:
 
 
 def start_preview(preview: Preview) -> bool:
-    """`docker compose start` for a stopped preview (wake). True only on rc==0."""
+    """Wake a stopped OR absent preview. True only on rc==0.
+
+    Runs `docker compose up -d`, not `docker compose start`: `start` is a no-op
+    when the containers were removed (e.g. a prior `down`, a reaped preview, or
+    a host restart that did not retain them), so a preview in that state could
+    never boot and the gateway served `503` forever. `up -d` starts retained
+    containers and recreates missing ones from the deploy package that is still
+    on disk. It is detached, so it returns before the app finishes booting —
+    the gateway's own boot budget governs the first request.
+    """
     compose = preview.directory / "docker-compose.yml"
     if not compose.is_file():
         return False
     try:
         proc = subprocess.run(
-            ["docker", "compose", "-f", str(compose), "start"],
+            ["docker", "compose", "-f", str(compose), "up", "-d"],
             capture_output=True,
             text=True,
             timeout=DOCKER_START_TIMEOUT,
