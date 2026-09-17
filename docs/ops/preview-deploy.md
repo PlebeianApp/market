@@ -157,22 +157,47 @@ only the preview depends on request-time bundling.
 To diagnose, run `docker compose logs market-app` in `~/previews/pr-<N>/` —
 Bun's bundler prints the exact path it could not resolve.
 
-## The app image is prebuilt on the host (no install at container start)
+## The app image is built on the CI runner and shipped to the host
 
 The generated `docker-compose.yml` runs a **prebuilt image**, `market-app:<sha>`,
 not `oven/bun:latest` with `bun install` at container start. A step named
-**Build app image on VPS (prebuilt deps)** builds it on the preview host from the
-uploaded `deploy-package` — which ships `infra/preview-vps/app.Dockerfile` as
-`deploy-package/Dockerfile`, and that Dockerfile runs the full `bun install`
-once, at deploy time. Compose then only runs `bun run start:production`.
+**Build app image on CI runner** builds it on the GitHub runner from the
+assembled `deploy-package` (which carries `infra/preview-vps/app.Dockerfile` as
+`deploy-package/Dockerfile`), and **Ship app image to VPS** then streams it to
+the host:
+
+```
+docker save market-app:<sha> | gzip -1 | remote-ssh.sh 'gunzip | docker load'
+```
+
+Compose then only runs `bun run start:production`.
 
 This removes the ~5 minute cold start that made the first visitor to a woken
 preview see the "preview is starting" page: the dependencies are already in the
 image, so the container serves in seconds and fits the gateway's 15 s wake
-budget. The build is cached by commit SHA
-(`docker image inspect market-app:<sha>`), so redeploying the same commit skips
-it, and the step is ordered before the claim/compose step that resolves the tag
-— the same ordering rule as the nak host-build.
+budget.
+
+Building on the **runner**, not the host, is deliberate. The earlier on-host
+build (#1344) left a full build context, Docker build cache and dangling layers
+on the preview host for every commit; on a disk-starved box that pushed the
+deploy job past its limit (run `35265465544`: "Build app image on VPS" cancelled
+at 10m09s, every later step skipped). The runner now does the build and the host
+only `docker load`s the finished image.
+
+### Image lifecycle (label-scoped cleanup)
+
+The image is built with `--label preview.pr=<N>`, which is what makes cleanup
+safe and automatic:
+
+- **On every deploy**, `Prune older app images for this PR` removes every
+  `market-app:<tag>` this PR previously shipped except the current commit
+  (`docker images --filter label=preview.pr=<N>`), so a PR that is pushed to
+  repeatedly does not leave one ~1.8 GB image per commit behind.
+- **On teardown**, the cleanup step removes every image labelled
+  `preview.pr=<N>` and prunes dangling layers and build cache.
+
+The shared `market-nak:*` image is intentionally **not** labelled, so it
+survives both sweeps.
 
 ## Why the check skips (missing preview secrets)
 
@@ -338,6 +363,13 @@ A host key belongs to the **host**, so the same fingerprint comes back from any
 port that reaches _that host's_ sshd. It is not, however, a property of the IP:
 on this box port 2222 reaches a different machine entirely (see the socat
 warning below), so always verify against the port you are actually pinning.
+
+**Host migration (2026-09).** Previews move from `23.182.128.51` to
+`23.182.128.219` (`hermes`). Its ed25519 fingerprint is
+`SHA256:9ruFJG1tVUqM1yUCxU4rw/3OKpw8B2iGaOVdjYNvqU4`; when `PREVIEW_VPS_HOST`
+points at `.219`, `PREVIEW_VPS_HOST_FINGERPRINT` must be that value. A stale pin
+fails closed in `ssh-prepare.sh` with `host key fingerprint mismatch` **before**
+any key material is exchanged — that is the intended behavior, not a bug.
 
 So changing `PREVIEW_VPS_SSH_PORT` never requires re-issuing
 `PREVIEW_VPS_HOST_FINGERPRINT`.

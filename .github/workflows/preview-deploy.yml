@@ -2,11 +2,16 @@ name: Preview Deploy
 
 # Per-PR Docker-based preview deployment on the shared test VPS (Layer G of
 # docs/plans/pr-trust-pipeline.md):
-#   - PR opened/synchronize: build, ship a deploy package to the VPS, bring up
+#   - PR opened/synchronize: build the app image ON THE CI RUNNER, ship it to
+#     the VPS (`docker save | gzip | ssh 'gunzip | docker load'`), bring up
 #     per-PR `docker compose` services (market app + nak relay on offset ports),
 #     create the Cloudflare A record pr{N}.test-market.orangesync.tech → VPS IP,
 #     wait for Caddy to pick up the new subdomain, health-check, and post an
-#     idempotent PR comment with the live URL.
+#     idempotent PR comment with the live URL. Building on the runner — not on
+#     the host — keeps the preview VPS free of build contexts, build cache and
+#     dangling layers (which previously filled its disk and pushed this job past
+#     its timeout); images are labelled `preview.pr=<N>` so deploy and teardown
+#     garbage-collect everything a PR shipped.
 #   - PR closed: `docker compose down`, delete the DNS A record, update the
 #     comment to "Preview torn down".
 #   - Lazy-start: a preview_gateway.py router on the VPS fronts Caddy for
@@ -50,7 +55,11 @@ jobs:
     name: Deploy preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 25 min: the image is now built on the runner and streamed to the VPS, so
+    # the job covers a `bun install` + Docker build + a ~1.8 GB image transfer.
+    # The old 10 min limit was hit by the on-host build (run 35265465544,
+    # "Build app image on VPS" cancelled at 10m09s).
+    timeout-minutes: 25
     # Preview Deploy is a follow-up enhancement (Layer G), not a trust-pipeline
     # blocker. The PR Trust Pipeline merge gate (Layer H) does not require this
     # check. NOTE: job-level continue-on-error here masks the RUN conclusion to
@@ -108,8 +117,9 @@ jobs:
           cp package.json bun.lock tsconfig.json deploy-package/
           cp -r public styles deploy-package/
           cp bunfig.toml deploy-package/
-          # Baked into the image built on the VPS (deps pre-installed) so a
-          # lazy-woken preview boots in seconds.
+          # The deploy package is the build context for the app image, built on
+          # the CI runner with deps pre-installed so a lazy-woken preview boots
+          # in seconds.
           cp infra/preview-vps/app.Dockerfile deploy-package/Dockerfile
 
       - name: Compute per-PR ports
@@ -172,6 +182,23 @@ jobs:
             echo "::warning title=Preview deploy skipped::Missing preview secrets:$MISSING. Fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding. Skipping the VPS/DNS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
           fi
 
+      # Build market-app:<sha> on the RUNNER, not on the VPS. The on-host build
+      # (added in #1344) ran a full `docker build` against the uploaded package
+      # and, on a disk-starved host, pushed the job past its timeout (see run
+      # 35265465544). Building here also means the preview host never carries a
+      # build context, build cache, or dangling layers. The `preview.pr` label
+      # is what makes the deploy/teardown garbage collection below PR-scoped.
+      # Gated with the rest of the deploy path: a fork PR that will skip the
+      # VPS steps must not spend runner minutes on an image it cannot ship.
+      - name: Build app image on CI runner
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          set -euo pipefail
+          docker build \
+            --label "preview.pr=${{ github.event.pull_request.number }}" \
+            -t "market-app:${{ github.sha }}" \
+            deploy-package
+
       # ── OpenSSH only ────────────────────────────────────────────────────────
       # Every VPS connection in this workflow runs through the OpenSSH helpers in
       # infra/preview-vps/ (ssh-prepare.sh, remote-ssh.sh, remote-scp.sh).
@@ -229,22 +256,42 @@ jobs:
         if: steps.secrets.outputs.previews_ready == 'true'
         run: |
           set -euo pipefail
-          # Absolute path, because modern scp speaks SFTP and does NOT expand
-          # $HOME on the remote side — the scp step below cannot rely on it.
-          # Identical to the previous appleboy target.
+          # The compose file is written here in the claim/up step. Absolute
+          # path, because the remote shell does not expand $HOME for us.
           bash infra/preview-vps/remote-ssh.sh \
-            mkdir -p "/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package"
+            mkdir -p "/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}"
 
-      - name: Upload deploy package to VPS
+      - name: Ship app image to VPS
         if: steps.secrets.outputs.previews_ready == 'true'
         run: |
           set -euo pipefail
-          # `deploy-package/*` expands locally to the entries INSIDE the package
-          # directory, which is what the previous appleboy/scp-action produced
-          # with `source: deploy-package/*` plus `strip_components: 1`.
-          bash infra/preview-vps/remote-scp.sh \
-            deploy-package/* \
-            "$PREVIEW_SSH_TARGET:/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}/deploy-package"
+          # Stream the finished image over the pinned OpenSSH helper:
+          # `docker save | gzip -1` on the runner, `gunzip | docker load` on the
+          # VPS. remote-ssh.sh forwards stdin, so no temp file is written on
+          # either side. gzip -1 because the link, not the CPU, is the
+          # bottleneck; the image is ~1.8 GB.
+          docker save "market-app:${{ github.sha }}" \
+            | gzip -1 \
+            | bash infra/preview-vps/remote-ssh.sh 'gunzip | docker load'
+
+      - name: Prune older app images for this PR
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # Each new commit ships another market-app:<sha>. Keep only the one
+          # this run just loaded, scoped by the `preview.pr` label so other
+          # previews' images are never touched, then drop the dangling layers
+          # the replaced images left behind.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -uo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SHA="${{ github.sha }}"
+          docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.Tag}} {{.ID}}' \
+            | while read -r tag id; do
+                [ "$tag" = "$SHA" ] && continue
+                docker image rm -f "$id" >/dev/null 2>&1 || true
+              done
+          docker image prune -f >/dev/null 2>&1 || true
+          REMOTE_EOF
 
       # Upstream's nak image on ghcr.io is gone: the registry now denies
       # anonymous pulls (the token endpoint returns no token and the manifest
@@ -273,27 +320,6 @@ jobs:
           cd nak-build
           git checkout b65683886b58382890888fbdda90e5c2129df488
           docker build -t market-nak:b6568388 .
-          REMOTE_EOF
-
-      - name: Build app image on VPS (prebuilt deps)
-        if: steps.secrets.outputs.previews_ready == 'true'
-        run: |
-          # Build market-app:<sha> from the uploaded deploy package so the
-          # container starts in seconds (dependencies baked in) instead of
-          # running `bun install` on every wake. Cached by commit SHA, so a
-          # redeploy of the same commit skips the build. Mirrors the nak
-          # host-build above: the pinned-OpenSSH helper, never a Go action.
-          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
-          set -euo pipefail
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          SHA="${{ github.sha }}"
-          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
-          cd "$APP_DIR/deploy-package"
-          if docker image inspect "market-app:$SHA" >/dev/null 2>&1; then
-            echo "app image market-app:$SHA already present — skipping build"
-            exit 0
-          fi
-          docker build -t "market-app:$SHA" .
           REMOTE_EOF
 
       - name: Claim host-port offset (M6) then bring up services
@@ -325,13 +351,13 @@ jobs:
           cat > docker-compose.yml <<EOF
           services:
             market-app:
-              # Built on the VPS by "Build app image on VPS (prebuilt deps)":
-              # dependencies are baked into the image, so a lazy wake starts in
-              # seconds instead of running `bun install` per container start
-              # (~5 min cold start that exceeded the gateway's boot budget).
-              # The Dockerfile runs a FULL `bun install` (not `--production`),
-              # so the tailwindcss devDependency the request-time HTML bundle
-              # needs is present.
+              # Built on the CI runner ("Build app image on CI runner") and
+              # shipped here: dependencies are baked into the image, so a lazy
+              # wake starts in seconds instead of running `bun install` per
+              # container start (~5 min cold start that exceeded the gateway's
+              # boot budget). The Dockerfile runs a FULL `bun install` (not
+              # `--production`), so the tailwindcss devDependency the
+              # request-time HTML bundle needs is present.
               image: market-app:${{ github.sha }}
               working_dir: /app
               command: sh -c "bun run start:production"
@@ -514,7 +540,7 @@ jobs:
     name: Tear down preview
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
@@ -586,6 +612,14 @@ jobs:
             cd "$APP_DIR"
             docker compose down --remove-orphans --volumes || true
           fi
+          # Remove every image this PR shipped, scoped by the `preview.pr`
+          # label, then reclaim the dangling layers and build cache so the
+          # preview host does not accumulate a full imageset per merged/closed
+          # PR. The nak image is intentionally NOT labelled and is shared.
+          docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.ID}}' \
+            | sort -u | xargs -r docker image rm -f >/dev/null 2>&1 || true
+          docker image prune -f >/dev/null 2>&1 || true
+          docker builder prune -f >/dev/null 2>&1 || true
           rm -rf "$APP_DIR"
           REMOTE_EOF
 

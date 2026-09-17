@@ -82,8 +82,13 @@ check_not "the workflow does not call ssh/scp directly (helpers only)" \
 check "the workflow routes through remote-ssh.sh" \
   grep -qF 'infra/preview-vps/remote-ssh.sh' "$WORKFLOW"
 
-check "the workflow routes through remote-scp.sh" \
+# The app image is streamed over remote-ssh.sh stdin (`docker save | gzip |
+# … 'gunzip | docker load'`), so the workflow no longer scp's a deploy package.
+check_not "the workflow no longer scp's a deploy package" \
   grep -qF 'infra/preview-vps/remote-scp.sh' "$WORKFLOW"
+
+check "the workflow streams the app image through remote-ssh.sh" \
+  grep -qF 'docker save' "$WORKFLOW"
 
 # Both jobs need the pinned key + known_hosts. Before, only the deploy job had
 # any secrets handling at all, and the teardown job ran unguarded.
