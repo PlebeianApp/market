@@ -37,7 +37,7 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
-import { createPendingBuffer } from './pendingBuffer'
+import { createPendingBuffer, createPendingBufferBudget } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
@@ -102,10 +102,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// parent never arrives must not be pinned for the process lifetime
 	// (review 5645059400 findings 1 and 3). Eviction is fail-closed: a
 	// dropped buffered event is never replayed, so no verdict is emitted.
+	// The three buffers share one aggregate event budget, so the worst
+	// case is bounded across the combined ordering-gap surface.
 	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
-	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
-	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // bidEventId → events
-	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits) // auctionRootEventId → events
+	const pendingBudget = createPendingBufferBudget(pendingLimits.maxPendingEvents)
+	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // auctionRootEventId → events
+	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // bidEventId → events
+	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // auctionRootEventId → events
 	const activeBidClaimsNeedingChildWatch = new Set([
 		'valid_bid_placed',
 		'bid_pending_review',

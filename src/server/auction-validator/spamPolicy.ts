@@ -51,9 +51,8 @@ export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 	rateWindowSec: 60,
 	maxTrackedBidsPerAuction: 100,
 	maxPendingEventsPerKey: 256,
-	// Worst case per buffer: maxPendingEvents × maxEventBytes
-	// (1024 × 64 KB = 64 MB) and in practice ~1 MB, since buffering only
-	// happens in the ordering gap between an event and its parent.
+	// Worst case across all three pending buffers combined:
+	// maxPendingEvents × maxEventBytes (1024 × 64 KB = 64 MB).
 	maxPendingKeys: 512,
 	maxPendingEvents: 1_024,
 	// Two hours: far longer than any relay ordering gap that can still

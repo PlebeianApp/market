@@ -222,6 +222,34 @@ describe('validator subscriber replays child history only for tracked auctions',
 })
 
 describe('validator subscriber bounds every pending child buffer', () => {
+	test('shares one aggregate pending-event cap across release and settlement buffers', async () => {
+		const harness = createHarness({
+			spamPolicy: { maxPendingKeys: 10, maxPendingEventsPerKey: 10, maxPendingEvents: 2, pendingTtlSec: 60 },
+		})
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const bidderPubkey = getPublicKey(bidderSk)
+		const auction = buildAuctionEvent(sellerSk)
+		harness.dispatch(auction)
+		await harness.settle()
+
+		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: '1'.repeat(64) }))
+		await harness.settle()
+		harness.dispatch(
+			buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: '2'.repeat(64), bidEventId: '3'.repeat(64), bidderPubkey }),
+		)
+		await harness.settle()
+		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: '4'.repeat(64) }))
+		await harness.settle()
+
+		expect(harness.warnings.join('\n')).toContain('event_cap_reached')
+
+		await harness.subscriber.stop()
+	})
+
 	test('release buffering reuses a TTL-expired key and refuses the next distinct unknown bid id', async () => {
 		const harness = createHarness({
 			spamPolicy: { maxPendingKeys: 1, maxPendingEventsPerKey: 10, maxPendingEvents: 10, pendingTtlSec: 60 },

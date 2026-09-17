@@ -31,7 +31,7 @@ export interface PendingBufferLimits {
 	maxPendingKeys: number
 	/** Maximum number of items retained per key. */
 	maxPendingEventsPerKey: number
-	/** Maximum number of items retained across every key in one buffer. */
+	/** Maximum number of items retained across the shared pending budget. */
 	maxPendingEvents: number
 	/** Seconds after which a key that never resolved is evicted. */
 	pendingTtlSec: number
@@ -66,7 +66,30 @@ interface PendingBucket<T> {
 	firstAddedAt: number
 }
 
-export const createPendingBuffer = <T>(limits: PendingBufferLimits): PendingBuffer<T> => {
+export interface PendingBufferBudget {
+	tryReserve: (count: number) => boolean
+	release: (count: number) => void
+	size: () => number
+	capacity: () => number
+}
+
+export const createPendingBufferBudget = (maxPendingEvents: number): PendingBufferBudget => {
+	let reserved = 0
+	return {
+		tryReserve: (count: number) => {
+			if (reserved + count > maxPendingEvents) return false
+			reserved += count
+			return true
+		},
+		release: (count: number) => {
+			reserved = Math.max(0, reserved - count)
+		},
+		size: () => reserved,
+		capacity: () => maxPendingEvents,
+	}
+}
+
+export const createPendingBuffer = <T>(limits: PendingBufferLimits, budget = createPendingBufferBudget(limits.maxPendingEvents)): PendingBuffer<T> => {
 	const buckets = new Map<string, PendingBucket<T>>()
 	let itemCount = 0
 
@@ -75,6 +98,7 @@ export const createPendingBuffer = <T>(limits: PendingBufferLimits): PendingBuff
 		for (const [key, bucket] of Array.from(buckets.entries())) {
 			if (now - bucket.firstAddedAt <= limits.pendingTtlSec) continue
 			itemCount -= bucket.items.length
+			budget.release(bucket.items.length)
 			buckets.delete(key)
 		}
 	}
@@ -85,14 +109,14 @@ export const createPendingBuffer = <T>(limits: PendingBufferLimits): PendingBuff
 		const existing = buckets.get(key)
 		if (existing) {
 			if (existing.items.length >= limits.maxPendingEventsPerKey) return 'key_full'
-			if (itemCount >= limits.maxPendingEvents) return 'event_cap_reached'
+			if (!budget.tryReserve(1)) return 'event_cap_reached'
 			existing.items.push(item)
 			itemCount += 1
 			return 'buffered'
 		}
 
 		if (buckets.size >= limits.maxPendingKeys) return 'key_cap_reached'
-		if (itemCount >= limits.maxPendingEvents) return 'event_cap_reached'
+		if (!budget.tryReserve(1)) return 'event_cap_reached'
 		buckets.set(key, { items: [item], firstAddedAt: now })
 		itemCount += 1
 		return 'buffered'
@@ -103,6 +127,7 @@ export const createPendingBuffer = <T>(limits: PendingBufferLimits): PendingBuff
 		const bucket = buckets.get(key)
 		if (!bucket) return []
 		itemCount -= bucket.items.length
+		budget.release(bucket.items.length)
 		buckets.delete(key)
 		return bucket.items
 	}

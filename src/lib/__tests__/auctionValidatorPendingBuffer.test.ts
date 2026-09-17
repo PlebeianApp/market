@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { createPendingBuffer, type PendingBufferLimits } from '../../server/auction-validator/pendingBuffer'
+import { createPendingBuffer, createPendingBufferBudget, type PendingBufferLimits } from '../../server/auction-validator/pendingBuffer'
 
 const limits = (overrides: Partial<PendingBufferLimits> = {}): PendingBufferLimits => ({
 	maxPendingKeys: 100,
@@ -102,5 +102,21 @@ describe('pending event buffer', () => {
 		expect(buffer.take('key-a', 1_000)).toEqual(['a'])
 		expect(buffer.keys(1_000)).toEqual(['key-b'])
 		expect(buffer.size()).toBe(1)
+	})
+
+	test('can share one global event budget across multiple buffers', () => {
+		const budget = createPendingBufferBudget(3)
+		const bids = createPendingBuffer<string>(limits({ maxPendingKeys: 10, maxPendingEventsPerKey: 10, maxPendingEvents: 3 }), budget)
+		const releases = createPendingBuffer<string>(limits({ maxPendingKeys: 10, maxPendingEventsPerKey: 10, maxPendingEvents: 3 }), budget)
+
+		expect(bids.add('auction-a', 'bid-a', 1_000)).toBe('buffered')
+		expect(releases.add('bid-a', 'release-a', 1_000)).toBe('buffered')
+		expect(releases.add('bid-b', 'release-b', 1_000)).toBe('buffered')
+		expect(bids.add('auction-b', 'bid-b', 1_000)).toBe('event_cap_reached')
+		expect(budget.size()).toBe(3)
+
+		expect(releases.take('bid-a', 1_000)).toEqual(['release-a'])
+		expect(bids.add('auction-b', 'bid-b', 1_000)).toBe('buffered')
+		expect(budget.size()).toBe(3)
 	})
 })
