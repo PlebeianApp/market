@@ -575,9 +575,10 @@ describe('auction validator subscriber subscription contract', () => {
 		await subscriber.stop()
 	})
 
-	test('retires a child REQ after the skew window when the auction has no active verdict work left', async () => {
+	test('keeps a child REQ through settlement grace and retires it afterward when no verdict work remains', async () => {
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		buildAuctionState(state)
+		let t = 2_161
 		let childUnsubscribeCalls = 0
 		const relayPool = {
 			handlers: new Map<number, (event: NostrEvent) => void>(),
@@ -596,10 +597,14 @@ describe('auction validator subscriber subscription contract', () => {
 			state,
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
-			now: () => 2_161,
+			now: () => t,
 		})
 
 		await subscriber.start()
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(0)
+		t = 5_701
 		await subscriber.republishAll()
 
 		expect(childUnsubscribeCalls).toBe(1)

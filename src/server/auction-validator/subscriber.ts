@@ -134,7 +134,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
 		if (hasAttributablePendingChildren(auctionRootEventId)) return true
-		const childWindowClosesAt = auctionState.auction.maxEndAt + auctionState.auction.maxSkewSec
+		const childWindowClosesAt = auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
 		if (now() <= childWindowClosesAt) return true
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (bidState.currentClaim === null) return true
