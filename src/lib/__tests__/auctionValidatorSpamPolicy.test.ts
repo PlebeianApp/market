@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { checkBidSpamPolicy, createBidSpamState, recordAcceptedBid } from '../../server/auction-validator/spamPolicy'
+import { checkBidSpamPolicy, createBidSpamState, readBidSpamPolicyFromEnv, recordAcceptedBid, resolveBidSpamPolicy } from '../../server/auction-validator/spamPolicy'
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 
 const auction = { rootEventId: 'a'.repeat(64) } as ParsedAuctionEvent
@@ -87,6 +87,26 @@ describe('auction validator bid spam policy', () => {
 		expect(checkBidSpamPolicy({ auction, bid, now: 100, state, activeBidCount: 0, policy: { maxNonceLength: 4 } })).toMatchObject({
 			ok: false,
 			reason: 'invalid_bid_nonce',
+		})
+	})
+
+	test('resolves defaults with partial overrides once', () => {
+		const resolved = resolveBidSpamPolicy({ maxBidsPerWindow: 3, maxTagCount: 9 })
+		expect(resolved.maxBidsPerWindow).toBe(3)
+		expect(resolved.maxTagCount).toBe(9)
+		expect(resolved.rateWindowSec).toBe(60)
+	})
+
+	test('reads spam policy overrides from env', () => {
+		const policy = readBidSpamPolicyFromEnv({
+			AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW: '7',
+			AUCTION_VALIDATOR_MAX_PENDING_EVENTS: '99',
+			AUCTION_VALIDATOR_MAX_TAG_COUNT: '11',
+		} as NodeJS.ProcessEnv)
+		expect(policy).toEqual({
+			maxBidsPerWindow: 7,
+			maxPendingEvents: 99,
+			maxTagCount: 11,
 		})
 	})
 })

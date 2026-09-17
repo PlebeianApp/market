@@ -4,6 +4,7 @@ import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } 
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
 import { RatesCache } from './tools/rates-cache'
 import { startAuctionValidator } from '../src/server/auction-validator'
+import { readBidSpamPolicyFromEnv } from '../src/server/auction-validator/spamPolicy'
 import { startLiveActivityWorker, stopLiveActivityWorker } from './tools/live-activity-worker'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -298,6 +299,7 @@ async function main() {
 		signer,
 		relayPool,
 		name: `Plebeian validator (${STAGE})`,
+		spamPolicy: readBidSpamPolicyFromEnv(),
 	})
 
 	startLiveActivityWorker({ relayPool, signer, issuerPubkey: serverPubkey })

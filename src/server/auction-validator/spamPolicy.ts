@@ -69,13 +69,53 @@ export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 	maxContentBytes: 16 * 1024,
 }
 
+export const resolveBidSpamPolicy = (policy?: Partial<BidSpamPolicy>): BidSpamPolicy => ({
+	...DEFAULT_BID_SPAM_POLICY,
+	...policy,
+})
+
+const readNonNegativeIntegerEnv = (env: NodeJS.ProcessEnv, name: string): number | undefined => {
+	const raw = env[name]?.trim()
+	if (!raw) return undefined
+	const parsed = Number.parseInt(raw, 10)
+	if (!Number.isFinite(parsed) || parsed < 0 || String(parsed) !== raw) {
+		throw new Error(`${name} must be a non-negative integer, got ${raw}`)
+	}
+	return parsed
+}
+
+export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): Partial<BidSpamPolicy> => {
+	const entries: Array<[keyof BidSpamPolicy, string]> = [
+		['maxBidsPerWindow', 'AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW'],
+		['rateWindowSec', 'AUCTION_VALIDATOR_RATE_WINDOW_SEC'],
+		['maxActiveBidsPerAuction', 'AUCTION_VALIDATOR_MAX_ACTIVE_BIDS_PER_AUCTION'],
+		['maxPendingEventsPerKey', 'AUCTION_VALIDATOR_MAX_PENDING_EVENTS_PER_KEY'],
+		['maxPendingKeys', 'AUCTION_VALIDATOR_MAX_PENDING_KEYS'],
+		['maxPendingEvents', 'AUCTION_VALIDATOR_MAX_PENDING_EVENTS'],
+		['pendingTtlSec', 'AUCTION_VALIDATOR_PENDING_TTL_SEC'],
+		['maxSeenEventIds', 'AUCTION_VALIDATOR_MAX_SEEN_EVENT_IDS'],
+		['maxEventBytes', 'AUCTION_VALIDATOR_MAX_EVENT_BYTES'],
+		['maxTagCount', 'AUCTION_VALIDATOR_MAX_TAG_COUNT'],
+		['maxNonceLength', 'AUCTION_VALIDATOR_MAX_NONCE_LENGTH'],
+		['maxProofCount', 'AUCTION_VALIDATOR_MAX_PROOF_COUNT'],
+		['maxContentBytes', 'AUCTION_VALIDATOR_MAX_CONTENT_BYTES'],
+	]
+
+	const policy: Partial<BidSpamPolicy> = {}
+	for (const [field, envName] of entries) {
+		const value = readNonNegativeIntegerEnv(env, envName)
+		if (value !== undefined) policy[field] = value as never
+	}
+	return policy
+}
+
 /**
  * Project the operator policy onto the bounds enforced by
  * {@link createPendingBuffer}. Kept here so every pending buffer in the
  * subscriber is bounded by the same resolved policy.
  */
 export const resolvePendingBufferLimits = (policy?: Partial<BidSpamPolicy>): PendingBufferLimits => {
-	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
+	const resolved = resolveBidSpamPolicy(policy)
 	return {
 		maxPendingKeys: resolved.maxPendingKeys,
 		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
@@ -120,7 +160,7 @@ export type EventEnvelopeDecision = { ok: true } | { ok: false; reason: 'event_t
  * each (review 5645059400 finding 3). Parsing is what is kind-specific.
  */
 export const checkEventEnvelope = (event: NostrEvent, policy?: Partial<BidSpamPolicy>): EventEnvelopeDecision => {
-	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
+	const resolved = resolveBidSpamPolicy(policy)
 	const eventBytes = Buffer.byteLength(JSON.stringify(event), 'utf8')
 	if (eventBytes > resolved.maxEventBytes) {
 		return { ok: false, reason: 'event_too_large', detail: `event size ${eventBytes} exceeds max_event_bytes=${resolved.maxEventBytes}` }
@@ -147,7 +187,7 @@ export const checkBidSpamPolicy = (input: {
 	policy?: Partial<BidSpamPolicy>
 	activeBidCount: number
 }): BidSpamDecision => {
-	const policy = { ...DEFAULT_BID_SPAM_POLICY, ...input.policy }
+	const policy = resolveBidSpamPolicy(input.policy)
 	const eventId = input.bid.id.toLowerCase()
 	if (input.bid.bidNonce.length > policy.maxNonceLength) {
 		return { ok: false, reason: 'invalid_bid_nonce', detail: `bid_nonce exceeds max_nonce_length=${policy.maxNonceLength}` }
@@ -195,7 +235,7 @@ export const recordAcceptedBid = (input: {
 	state: BidSpamState
 	policy?: Partial<BidSpamPolicy>
 }): void => {
-	const policy = { ...DEFAULT_BID_SPAM_POLICY, ...input.policy }
+	const policy = resolveBidSpamPolicy(input.policy)
 	const eventId = input.bid.id.toLowerCase()
 	const bidderKey = bidderAuctionKey(input.auction.rootEventId, input.bid.bidderPubkey)
 	const nonce = nonceKey(input.auction.rootEventId, input.bid.bidderPubkey, input.bid.bidNonce)

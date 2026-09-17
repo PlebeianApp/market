@@ -18,7 +18,7 @@ import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND, VALIDATOR_POLICY_SCHEMA_TYPE } from '../../lib/auction/constants'
 import { buildValidatorPolicyContent, buildValidatorPolicyTags } from '../../lib/auction/tagBuilders'
 import type { ValidatorAdmissionPolicy, ValidatorPolicyDocument } from '../../lib/auction/events'
-import { DEFAULT_BID_SPAM_POLICY, type BidSpamPolicy } from './spamPolicy'
+import { resolveBidSpamPolicy, type BidSpamPolicy } from './spamPolicy'
 
 export interface PublishValidatorPolicyDeps {
 	signer: NostrSigner
@@ -28,11 +28,11 @@ export interface PublishValidatorPolicyDeps {
 	/** Optional policy overrides. v1 default is fully permissive. */
 	policy?: Partial<ValidatorPolicyDocument>
 	/** Effective relay-admission limits to publish in the policy document. */
-	spamPolicy?: Partial<BidSpamPolicy>
+	spamPolicy?: BidSpamPolicy
 }
 
-export const resolvePublishedAdmissionPolicy = (policy?: Partial<BidSpamPolicy>): ValidatorAdmissionPolicy => {
-	const resolved = { ...DEFAULT_BID_SPAM_POLICY, ...policy }
+export const resolvePublishedAdmissionPolicy = (policy?: BidSpamPolicy): ValidatorAdmissionPolicy => {
+	const resolved = resolveBidSpamPolicy(policy)
 	return {
 		enabled: true,
 		maxBidsPerWindow: resolved.maxBidsPerWindow,
@@ -52,7 +52,7 @@ export const resolvePublishedAdmissionPolicy = (policy?: Partial<BidSpamPolicy>)
 
 export const resolvePublishedValidatorPolicyDocument = (deps: {
 	policy?: Partial<ValidatorPolicyDocument>
-	spamPolicy?: Partial<BidSpamPolicy>
+	spamPolicy?: BidSpamPolicy
 }): ValidatorPolicyDocument => ({
 	...deps.policy,
 	type: VALIDATOR_POLICY_SCHEMA_TYPE,
