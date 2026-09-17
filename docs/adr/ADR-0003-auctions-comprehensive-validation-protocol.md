@@ -30,16 +30,51 @@ We adopt a Comprehensive Validation Protocol for the Auctions module, structured
 - Atomic Verification Checklists: Detailed, binary-pass/fail conditions for every property, including:
 - Structural Integrity: Tag presence, format, and cryptographic validity.
 - Temporal Constraints: Window adherence, skew limits, and grace periods.
-- Financial Logic: Reserve checks, increment rules, and anti-snipe curve calculations.
+- Financial Logic: the **absolute bid floor** (`amount >= starting_bid`) as a
+  validity rule, plus the reserve gate and the increment / anti-snipe curve
+  calculations as **selection-time** rules (see the ADR-0012 Phase 1
+  amendment below).
 - Cross-Reference Consistency: Ensuring events reference valid predecessors and successors.
-- External State: NUT-7 mint state verification (unspent vs spent).
+- External State: NUT-7 mint state verification (unspent vs spent) —
+  **client-side since ADR-0004**, and never a validator verdict input
+  (ADR-0012 Phase 1).
 
-This protocol mandates that no bid is considered valid unless it passes all structural and external state checks, and no settlement is considered complete until the derivation path is cryptographically verified and the mint confirms proof spending.
+This protocol mandates that no bid is considered valid unless it passes all
+structural checks and the validator's published policy, and no settlement is
+considered complete until the derivation path is cryptographically verified and
+the mint confirms proof spending.
+
+> **Amendment (ADR-0012 Phase 1 — structural-only validity).** The validator's
+> verdict is a **pure function of (kind-1023 bid, kind-30408 auction,
+> `observed_at`)** plus the validator's published policy (kind-30441). It
+> performs **no external state query** — no mint call, no NUT-7 lookup, no relay
+> fetch — and consults **no other bid's state**. Concretely:
+>
+> - The **only** amount-based validity check is `amount >= starting_bid`,
+>   reported as `below_starting_bid`. `starting_bid` is a REQUIRED auction tag.
+> - `prev_bid` is **declared linkage metadata**: a verdict MUST NOT be
+>   conditioned on the reference, and an unresolvable parent is never, by
+>   itself, grounds for condemnation.
+> - Verdicts carry **no ranking markers**: any structurally valid bid is
+>   published as `valid_bid_placed`, whether or not it leads.
+> - **Retired** from the verdict path: `under_increment`, `under_curve`,
+>   `replacement_chain_invalid` (including the chain-leg minimum check),
+>   `below_reserve` (see §2.4 — it was never implemented), and the validator-side
+>   NUT-7 step (§2.6).
+>
+> Validity and **selection** are separate concerns. The minimum increment, the
+> anti-snipe curve, and chain integrity are applied over the valid bid set by
+> one shared deterministic algorithm (ADR-0012 Phase 2; AUCTIONS.md §6.1, §8.0).
+> This matters because a verdict conditioned on mutable leading-bid state is not
+> reproducible: two honest validators could derive different verdicts for the
+> same bid, which is exactly what the condemn quorum assumes cannot happen.
+> Historical verdict events carrying a retired label keep their original
+> meaning.
 
 ## Consequences
 
 - Modular Validation Architecture: The codebase will implement granular helper functions (e.g., validateBidStructure, verifyDerivationPath) rather than monolithic validators, allowing independent testing and reuse.
-- Deterministic Outcome: All participants (bidders, sellers, validators, observers) will reach the same conclusion regarding the validity of a bid or settlement, reducing disputes. App-level client moderation (the NIP-51 mute list, bounded by AUCTIONS.md §7.2) is not an input to bid validity or outcome determination, and compliant clients MUST NOT let it remove bids or outcome-relevant events from the data they surface and rank.
+- Deterministic Outcome: All participants (bidders, sellers, validators, observers) will reach the same conclusion regarding the validity of a bid or settlement, reducing disputes. Since ADR-0012 Phase 1 this is a property of the _design_, not an aspiration: a verdict is a pure function of (bid, auction, `observed_at`) plus the validator's published policy, with no external query and no other bid's state, so two honest validators over the same inputs agree by construction. App-level client moderation (the NIP-51 mute list, bounded by AUCTIONS.md §7.2) is not an input to bid validity or outcome determination, and compliant clients MUST NOT let it remove bids or outcome-relevant events from the data they surface and rank.
 - Enhanced Security: Cryptographic fraud (e.g., fake paths, spent-behind-lock) will be detected immediately upon event ingestion, preventing wasted redemption attempts.
 - Clear Failure Modes: Every validation failure will map to a specific error code (e.g., proof_spent, derivation_mismatch), enabling precise UI feedback and automated retry logic.
 - Documentation Obligation: Any future modification to the auction protocol (e.g., new settlement policies, curve shapes) must update this validation specification and the corresponding atomic checklists before implementation.
@@ -128,6 +163,16 @@ Critical Checks:
 | C1.10 | Negative       | derivation_path tag is present.                            | false (Reject)  | early_path_exposure      |
 | C1.11 | Negative       | path_issuer or path_grant_id tags present.                 | false (Reject)  | legacy_tag_present       |
 | C1.12 | Negative       | Immutable tags (start_at, end_at) differ from pinned root. | false (Reject)  | immutable_tag_changed    |
+| C1.13 | Positive       | `starting_bid` tag present and a non-negative integer.     | true            | missing_starting_bid     |
+
+> **Amendment (ADR-0012 Phase 1):** C1.13 is added. `starting_bid` is a
+> **REQUIRED** kind-30408 tag (AUCTIONS.md §3) and the absolute bid floor — the
+> only amount-based check a validator makes. Tag omission is a hard parse
+> failure, not a defaulted floor: the previous silent `?? 0` fallback ran the
+> auction on an undeclared floor (issue #1315). `starting_bid` MAY be `0` —
+> there is no protocol-fixed minimum sat value, since fee coverage is the
+> seller's decision. C1.7's `reserve` is a close-time winner gate only
+> (AUCTIONS.md §8.1) and never a bid-time floor.
 
 #### 1.2 validateMintReachability(mintUrl)
 
@@ -196,8 +241,10 @@ Critical Checks:
 > which is deterministic across clients and never rejects an in-window bid on
 > timing grounds. Condemn claims (`bid_invalid`/`fraudulent_bid`) are gated
 > by the same quorum: a single condemning validator cannot veto a bid —
-> structural invalidity is deterministic, so honest validators converge and
-> quorum forms independently. Validators MUST stamp `observed_at` as
+> structural invalidity is deterministic — a pure function of the bid, the
+> auction and `observed_at`, with no external query and no other bid's state
+> (ADR-0012 Phase 1) — so honest validators converge and quorum forms
+> independently. Validators MUST stamp `observed_at` as
 > their own first-observation time on EVERY verdict (AUCTIONS.md §4.4.1) —
 > including `won_pending_settlement` upgrades — and the verdict publisher
 > enforces this (`src/server/auction-validator/publisher.ts`). Without
@@ -253,16 +300,39 @@ Critical Checks:
 > recovers nothing. Together they restore `won_pending_settlement`
 > publication after a validator restart that straddles auction close.
 
-#### 2.4 validateBidAmount(bidEvent, auctionContext, topBid, observedTime)
+#### 2.4 validateBidAmount(bidEvent, auctionContext) — amended per ADR-0012 Phase 1
 
-| ID   | Condition Type | Check Description                        | Expected Result | Failure Label        |
-| ---- | -------------- | ---------------------------------------- | --------------- | -------------------- |
-| F2.1 | Positive       | amount >= reserve.                       | true            | below_reserve        |
-| F2.2 | Positive       | amount > topBid.amount + bid_increment.  | true            | under_increment      |
-| F2.3 | Positive       | If t > end_at, amount >= curve_floor(t). | true            | under_curve          |
-| F2.4 | Positive       | Lag tolerance applied (5s grace).        | true            | lag_tolerance_failed |
+> **Amendment (ADR-0012 Phase 1):** the signature loses `topBid` and
+> `observedTime`. The function is pure in (bid, auction) — there is no leading
+> bid to compare against, so there is no mutable-state input to pass. The lag
+> tolerance (`BID_FLOOR_TIME_GRACE_SECONDS = 5`) moves with the curve maths to
+> the selection-time floor computation (AUCTIONS.md §6.1) and is no longer part
+> of a validity check.
 
-#### 2.5 validateRebidChain(bidEvent, prevBidEvent)
+| ID   | Condition Type | Check Description       | Expected Result | Failure Label      |
+| ---- | -------------- | ----------------------- | --------------- | ------------------ |
+| F2.1 | Positive       | amount >= starting_bid. | true            | below_starting_bid |
+
+**Retired rows.** F2.1 as originally written was `amount >= reserve` →
+`below_reserve`. `below_reserve` appears **nowhere in `src/`** — it was never
+implemented, and `reserve` is a **close-time winner gate** (AUCTIONS.md §8.1),
+never a bid-time check. F2.2 (`under_increment`) and F2.3 (`under_curve`) are
+retired: they are selection-time rules over the valid bid set (AUCTIONS.md
+§6.1, §8.0), and a bid that fails one is _valid but not leading_. F2.4 (lag
+tolerance) likewise leaves the validity path.
+
+#### 2.5 validateRebidChain(bidEvent, prevBidEvent) — moved to selection/settlement
+
+> **Amendment (ADR-0012 Phase 1):** this is **no longer a verdict-time
+> validator**. `prev_bid` is declared linkage metadata: a verdict MUST NOT be
+> conditioned on the reference, and an unresolvable, cyclic, cross-bidder or
+> absent parent is never, by itself, grounds for condemnation. The checks below
+> are retained as **selection- and settlement-time** invariants, enforced where
+> the caller holds the bid graph (the shared selection algorithm of ADR-0012
+> Phase 2, and the seller's settlement walk in AUCTIONS.md §8.1). A violation
+> makes the bid non-leading, or blocks the specific walk that needs the chain —
+> it does not condemn the bid. The failure label `replacement_chain_invalid` is
+> retired.
 
 | ID   | Condition Type | Check Description                            | Expected Result | Failure Label             |
 | ---- | -------------- | -------------------------------------------- | --------------- | ------------------------- |
@@ -273,14 +343,22 @@ Critical Checks:
 | R2.5 | Positive       | Chain terminates (no cycles).                | true            | replacement_chain_invalid |
 | R2.6 | Positive       | Delta amount = sum(proof amounts in leg).    | true            | delta_mismatch            |
 
-#### 2.6 validateBidMintState(bidEvent, mintClient) — amended per ADR-0004
+#### 2.6 validateBidMintState(bidEvent, mintClient) — retired from the verdict path
 
-> **Amendment (ADR-0004):** NUT-7 ownership has moved from validators to the
-> client. The function signature and checks remain the same; the caller
-> changes from the server-side validator process to the client-side
-> descriptor/publisher. Validators no longer query the mint for proof state.
+> **Amendment (ADR-0004):** NUT-7 ownership moved from validators to the client.
 > The client queries the mint directly via `checkProofStateBatch`
 > (`src/lib/cashu/nut7.ts`) using `proof_y` values from the bid event.
+>
+> **Amendment (ADR-0012 Phase 1):** the step is **deleted from the validator
+> verdict path entirely**, not merely bypassed. A validator issuing a bid
+> verdict performs no external state query of any kind — this is a stated,
+> tested invariant, because a verdict that depends on fetching anything is a
+> convergence failure by another route. Proof-state evidence lives in the
+> client's read path (applied over the valid set as fraud evidence, never as a
+> validity gate) and in the seller's settlement-window checks before an
+> irreversible redemption. `proof_spent` / `proof_missing` remain valid labels
+> for historical events and for that client-side evidence, but a structural
+> verdict no longer emits them.
 
 | ID   | Condition Type | Check Description                      | Expected Result | Failure Label |
 | ---- | -------------- | -------------------------------------- | --------------- | ------------- |

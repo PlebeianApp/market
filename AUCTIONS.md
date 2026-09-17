@@ -149,8 +149,19 @@ There is intentionally no product reference (`a` tag) in v1.
 - `start_at`: unix seconds.
 - `end_at`: unix seconds.
 - `currency`: `SAT` (v1 required).
+- `starting_bid`: the auction's **absolute bid floor**, in sats. Every
+  kind-1023 bid MUST satisfy `amount ≥ starting_bid`; a bid below it is
+  rejected with `below_starting_bid` (§4.4.3). REQUIRED in v1 — an auction
+  without the tag is malformed, not an auction with a defaulted floor.
+  MAY be `0`: there is no protocol-fixed minimum sat value, because fee
+  coverage is mint- and network-dependent, so the floor is the seller's
+  decision (see ADR-0012 Phase 1). This tag — **not** `reserve` — is the
+  zero-top `baseline` in the floor formula (§4.1, §6.1).
 - `reserve`: minimum acceptable final price (may be `0`, but tag required in
-  v1 for explicitness).
+  v1 for explicitness). `reserve` is a **close-time winner gate only**: a
+  winning bid must clear it for the auction to settle (§8.1). It is never a
+  bid-time check, and it is not the zero-top floor baseline — that is
+  `starting_bid`.
 - `bid_increment`: minimum step in sats.
 - `mint`: trusted mint URL. MAY repeat.
 - `settlement_policy`: `cashu_p2pk_bidder_path_v1`.
@@ -193,7 +204,7 @@ There is intentionally no product reference (`a` tag) in v1.
   Format `<shape>:<peak_multiplier>` where `shape ∈ {none, linear,
 exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   Floor computed as `baseline × multiplier(t)`:
-  - `baseline = top_bid === 0 ? reserve : top_bid + bid_increment`
+  - `baseline = top_bid === 0 ? starting_bid : top_bid + bid_increment`
   - `multiplier(t) = 1` when `t ≤ end_at` or `shape = none`
   - `multiplier(t) = peak_multiplier` when `t ≥ max_end_at`
   - In `(end_at, max_end_at)` with `t_norm = (t - end_at) / (max_end_at - end_at)`:
@@ -201,10 +212,15 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
     - `shape = exponential` → `peak_multiplier ^ t_norm`
       v1 form presets for `peak_multiplier`: `2.0` / `5.0` / `10.0`. Default
       when tag is missing: `none:1.0` (no curve, flat floor through the
-      whole bidding window). Validators enforce this floor when emitting
-      kind-30440 verdicts (a bid below the curve floor is marked
-      `bid_invalid` with `reason=under_curve`); compliant bidder clients
-      apply the same computation locally to warn before publishing.
+      whole bidding window).
+
+  This floor is a **selection-time rule**, not a validity rule. A bid below
+  the curve floor is **valid but not leading**: it stays in the valid set,
+  holds its locked e-cash, ranks by amount, and refunds through the loser
+  path if it never leads. It is not a ground to condemn a bid. A compliant
+  client MUST NOT hard-reject a bid for sitting below the curve floor — the
+  computed value is a warning. See §6.1 and ADR-0012 Phase 1.
+
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
 - `auditor_quorum`: integer N. When present and ≥2, a bid is considered
@@ -389,9 +405,13 @@ in the signature, which only `derive(seller_xpriv, path)` can produce.
 
 - `prev_bid`: previous bid event id from the same bidder on this
   auction. Drives the additive rebid chain (§4.2.1) — REQUIRED on every
-  rebid leg, absent on the chain's first leg. Compliant validators
-  refuse a bid whose `amount` is at or below its `prev_bid`'s `amount`
-  (`replacement_chain_invalid`).
+  rebid leg, absent on the chain's first leg.
+  **Linkage metadata only (ADR-0012 Phase 1):** a validator MUST NOT
+  condition a verdict on this reference, and an unresolvable, cyclic,
+  cross-bidder or absent parent is never, by itself, grounds for
+  condemnation. The chain's monotonicity and integrity are enforced at
+  selection and settlement time (§4.2.1, §8.0), where the caller holds the
+  bid graph.
 - `note`: short human text.
 
 ### Forbidden tags
@@ -470,8 +490,12 @@ references the _latest_ leg's kind-1025 via `path_release` but must
 redeem every leg in the chain (one `payout` tag each) to recover the
 full bid amount. See §8.1.
 
-**Compliant validator invariants.** A validator MAY emit
-`replacement_chain_invalid` when any of these break:
+**Compliant validator invariants.** These are **selection- and
+settlement-time** invariants, not verdict-time rules. `prev_bid` is declared
+linkage metadata: a validator MUST NOT condition a verdict on the reference, and
+an unresolvable, cyclic, absent, or cross-bidder parent is never, by itself,
+grounds for condemnation (ADR-0012 Phase 1). They are enforced by the selection
+algorithm (§6.1, ADR-0012 Phase 2) and by the seller's settlement walk (§8.1):
 
 - `new_leg.amount > prev_leg.amount` (strict, no equality)
 - `new_leg.bidder == prev_leg.bidder` (same author)
@@ -479,6 +503,10 @@ full bid amount. See §8.1.
 - `new_leg.auction == prev_leg.auction` (same auction)
 - No cycle: walking `prev_bid` terminates at a leg with no
   `prev_bid` tag.
+
+A violation makes the bid **non-leading** — or blocks the specific settlement
+walk that needs the chain — it does not make the bid invalid. The verdict reason
+`replacement_chain_invalid` is retired; see §4.4.3.
 
 ### Bidder local state per leg (extended)
 
@@ -695,9 +723,10 @@ Required tags:
 Conditional tags (depending on `claim`):
 
 - `reason`: machine code clarifying a negative `claim` (e.g.
-  `pre_start`, `under_increment`, `bad_lock`, `timestamp_skew`,
+  `pre_start`, `below_starting_bid`, `bad_lock`, `timestamp_skew`,
   `relatr_below_threshold`, `on_blacklist`, `fraudulent_bid`,
   `griefed`, etc.). REQUIRED for any `bid_invalid` / negative claim.
+  The full set is defined in §4.4.3.
 
 > **Amendment (ADR-0004):** `nut7_state` and `nut7_observed_at` tags are
 > removed from kind-30440 events. Validators no longer query the mint for
@@ -770,12 +799,18 @@ event. Ordered roughly by bid lifecycle.
 
 Bid-time (transient — replaced as the bid progresses):
 
-- `valid_bid_placed` — passes all rule and policy checks; NUT-7
-  state is `unspent`.
+- `valid_bid_placed` — passes every structural rule check and the
+  validator's published policy. **Carries no ranking marker**: a
+  structurally valid bid is published as `valid_bid_placed` whether or
+  not it currently leads. Being outbid is not a defect — the bid stays
+  in the valid set so it can lead again later or refund cleanly.
 - `bid_invalid` — fails a rule or policy. MUST be accompanied by a
   `reason` tag (see below).
-- `bid_pending_review` — validator has seen the bid but is still
-  waiting on a check to complete (e.g. NUT-7 in flight). Transient.
+- `bid_pending_review` — the validator service has seen the bid but a
+  quorum-confirmed verdict is not yet observable to it. Transient, and
+  **not derivable from structure**: since ADR-0012 Phase 1 a verdict
+  consults no external state, so nothing inside the validity pipeline
+  can produce this claim.
 
 Post-close (terminal):
 
@@ -819,17 +854,17 @@ Common `reason` values for `bid_invalid`:
   in-window range (the validator simply didn't see the bid in time,
   regardless of what the bidder claimed)
 - `timestamp_skew` — `|created_at - observed_at| > max_skew_sec`
-- `under_increment` — `bid.amount < current_high + bid_increment`
-- `under_curve` — bid in `(end_at, max_end_at]` below the
-  `min_bid_curve` floor
+- `below_starting_bid` — `bid.amount < auction.starting_bid`. The
+  **only** amount-based validity check (ADR-0012 Phase 1).
 - `bad_lock` — lock secret structure doesn't match auction rules
   (wrong locktime, wrong refund key, malformed P2PK condition)
 - `unsupported_mint` — `bid.mint` not in the auction's `mint` set
-- `proof_spent` — NUT-7 reports the proof as `spent` despite the
-  bid being live (clear fake-bid signal)
-- `proof_missing` — mint returns no record of the proof
 - `signature_invalid` — bid event signature doesn't verify
-- `replacement_chain_invalid` — `prev_bid` chain inconsistent
+- `proof_spent` / `proof_missing` — retained for **readability of
+  historical verdicts** and for client-side fraud evidence. A
+  validator's structural verdict no longer emits them: proof state is
+  the client's evidence (ADR-0004) and no mint is queried at verdict
+  time (ADR-0012 Phase 1).
 - Policy-driven (subjective):
   - `relatr_below_threshold` — bidder relatr score below this
     validator's threshold (with a `score` tag for the actual value)
@@ -843,6 +878,25 @@ Common `reason` values for `bid_invalid`:
 Validators MAY emit additional implementation-specific reasons.
 Compliant clients SHOULD show unknown reasons verbatim in UI rather
 than ignoring the verdict.
+
+**Retired reasons (ADR-0012 Phase 1).** `under_increment`,
+`under_curve`, and `replacement_chain_invalid` are **removed**. They MUST
+NOT appear in any new verdict event, in a validation code path, or in UI
+copy. Each depended on state two honest validators can legitimately hold
+differently — which bid currently leads, whether the anti-snipe window is
+active, whether a referenced `prev_bid` is resolvable — so a verdict
+conditioned on them was not reproducible, and an outbid or
+partially-observed bid could be retro-condemned.
+
+The minimum increment, the anti-snipe curve, and `prev_bid` chain
+integrity are now **selection-time** rules over the valid bid set
+(§6.1; ADR-0012 Phase 2) and advisory client hints. A bid that breaks one
+is _valid but not leading_.
+
+**Historical compatibility.** Verdict events carrying a retired reason
+keep their original meaning. Emission stops; readability does not —
+compliant clients MUST still render a retired reason verbatim on a
+historical event rather than treating it as malformed.
 
 ### 4.4.4 Aggregate validator output (optional)
 
@@ -1086,17 +1140,27 @@ computation. The bidder MUST:
 > re-query) are removed from validator responsibilities. Validators verify
 > structural integrity and auction rules only.
 
+> **Amendment (ADR-0012 Phase 1):** the amount rule is the **absolute floor
+> only** — `amount ≥ starting_bid`. The leading-bid minimum increment and
+> the anti-snipe curve floor are no longer validator rules: they are
+> selection-time rules over the valid bid set (§6.1, §8.0) and advisory
+> client hints. A bid below either is _valid but not leading_, not invalid.
+> A validator MUST perform **no external state query** when issuing a
+> verdict — no mint call, no NUT-7 lookup, no relay fetch to resolve a
+> reference. `prev_bid` is linkage metadata: an unresolvable parent is not
+> grounds for condemnation.
+
 Validators cannot verify the derivation without the path (and the
 bidder doesn't reveal the path until settlement). What they CAN do:
 
 1. Parse the published `lock_secret` and verify it has the correct
    NUT-11 structure (single pubkey, correct locktime, correct refund
    key matching the bidder's signing identity).
-2. Verify auction rules — `created_at` within auction window _AND_
-   `observed_at` within auction window _AND_ amount ≥ current high +
-   `bid_increment` (and ≥ `min_bid_curve` floor in the anti-snipe
-   window); `mint` in the auction's allowlist; `locktime` equals
-   `max_end_at + settlement_grace`.
+2. Verify the structural auction rules — `created_at` within the auction
+   window _AND_ `observed_at` within the auction window _AND_ `amount ≥
+starting_bid` (`below_starting_bid`); `mint` in the auction's allowlist;
+   `locktime` equals `max_end_at + settlement_grace`. Nothing beyond this:
+   the validator consults no other bid's state and no external source.
 3. Apply policy — the validator's own published kind-30441 policy.
 4. Publish verdict — kind-30440 with `claim`, `observed_at`, and any
    `reason`.
@@ -1256,13 +1320,22 @@ velocity, not as a design example.
 v1 retires the dynamic `extension_rule` model. There is no
 `effective_end_at` that shifts as bids land — `max_end_at` is fixed at
 publish time. Instead, the **bid floor rises** in `(end_at, max_end_at]`
-per the `min_bid_curve` tag (see §4.1). Validators enforce the floor
-when they assess each kind-1023 bid (rejecting `under_curve`); compliant
-bidder clients run the same formula locally to warn the user before
-publishing.
+per the `min_bid_curve` tag (see §4.1).
+
+**This is a selection-time rule, not a validity rule (ADR-0012 Phase 1).**
+The floor is applied over the **valid bid set** by the shared selection
+algorithm (ADR-0012 Phase 2; §8.0), which derives leadership, current price
+and the winner. A bid below the floor is _valid but not leading_: it keeps
+its place in the valid set, holds its locked e-cash, ranks by amount, and
+refunds through the loser path if it never leads. A validator MUST NOT
+reject a bid for sitting below the floor, and a compliant client MUST NOT
+hard-reject one either — the computed value is an advisory hint
+(`current price` / minimum next bid). The normative algorithm lives in
+ADR-0012 §2; this section anchors the formula and its parameters so the two
+cannot drift.
 
 ```text
-baseline(top_bid)      = top_bid === 0 ? reserve : top_bid + bid_increment
+baseline(top_bid)      = top_bid === 0 ? starting_bid : top_bid + bid_increment
 multiplier(t):
   if t ≤ end_at OR shape = none:   return 1
   if t ≥ max_end_at:                return peak_multiplier
@@ -1273,21 +1346,23 @@ floor(top_bid, t)      = baseline(top_bid) × multiplier(t)
 ```
 
 **Lag tolerance.** A protocol constant `BID_FLOOR_TIME_GRACE_SECONDS = 5`
-applies in the validator's floor computation:
+applies in the floor computation used by selection and by the advisory
+display (it no longer gates a verdict):
 
-- The validator computes the floor at
+- The floor is computed at
   `effective_t = clamp(bid.observed_at - GRACE, end_at, max_end_at)`.
   This gives bidders ~5 s of relay-propagation latency budget between
-  clicking "Bid" and the validator receiving the event. A bidder who
-  delays publishing for > 5 s pays the curve at the actual `observed_at`.
-- Validators MAY also clamp `effective_t` to `min(bid.created_at,
+  clicking "Bid" and the event being observed. A bidder who delays
+  publishing for > 5 s is evaluated at the actual `observed_at`.
+- Implementations MAY also clamp `effective_t` to `min(bid.created_at,
 observed_at) - GRACE` if the two are within `max_skew_sec` of each
   other, so honest bidders don't get penalised by their own slightly-
   slow clock.
 
-The bidder client displays the floor at `client_now` (no inflation) —
-the server is more lenient than the displayed value, so a click at
-the displayed price is always accepted within the GRACE window.
+The bidder client displays the floor at `client_now` (no inflation) — the
+selection computation is more lenient than the displayed value, so a click
+at the displayed price is always treated as leading within the GRACE
+window.
 
 Critical policy:
 
@@ -1379,6 +1454,16 @@ compliant clients re-running the rules):
 > runs NUT-7 independently after confirming quorum of `valid_bid_placed`
 > verdicts. See §5.6 Client responsibilities.
 
+> **Amendment (ADR-0012 Phase 1):** the amount branch is a **single absolute
+> floor check**, `amount ≥ starting_bid` → `below_starting_bid`. The
+> `under_increment` and `under_curve` reject nodes are removed: the minimum
+> increment and the anti-snipe curve are selection-time rules over the valid
+> bid set (§6.1, §8.0) and advisory client hints, never grounds for
+> condemnation. `prev_bid` is likewise not consulted — it is linkage
+> metadata, and an unresolvable parent is never grounds for condemnation.
+> The pipeline is a pure function of (bid, auction, `observed_at`) plus the
+> validator's published policy, and performs no external query.
+
 ```mermaid
 flowchart TD
     A[Bid event observed] --> B{Pinned auction root exists?}
@@ -1389,8 +1474,8 @@ flowchart TD
     C2 -->|No| R2a[Reject: pre_start / post_end]
     C2 -->|Yes| C3{|created_at - observed_at| ≤ max_skew?}
     C3 -->|No| R2b[Reject: timestamp_skew]
-    C3 -->|Yes| D{Bid amount ≥ floor + increment?}
-    D -->|No| R3[Reject: under_increment / under_curve]
+    C3 -->|Yes| D{Bid amount ≥ starting_bid?}
+    D -->|No| R3[Reject: below_starting_bid]
     D -->|Yes| E{Mint in allowlist?}
     E -->|No| R4[Reject: unsupported_mint]
     E -->|Yes| F{lock_secret well-formed?<br/>locktime + refund + n_sigs correct?}
@@ -1419,7 +1504,13 @@ Operational notes:
 - Each listed validator runs the pipeline independently. Compliant
   clients consult the `auditor_quorum` count of agreeing
   `valid_bid_placed` verdicts before treating the bid as a real
-  bid for tie-breaking and floor computation.
+  bid for selection — ranking, current price and winner derivation
+  (§6.1, §8.0; ADR-0012 Phase 2).
+- The pipeline consults **no other bid and no external state**. Two honest
+  validators given the same bid, auction and `observed_at` MUST derive the
+  same verdict; that is what makes the quorum meaningful. A verdict that
+  depended on which bids a validator happened to observe, or on a fetch,
+  would break it (ADR-0012 Phase 1).
 
 ## 7.2 App mute lists and auctions (normative)
 
@@ -1606,11 +1697,27 @@ Tie-break rule (v1, unchanged from prior drafts):
 Unlike the oracle scheme there is no privileged party with a
 canonical view of the bid set. Every participant — sellers,
 bidders, validators, and onlookers — independently runs the same
-winner-selection rule against:
+**selection algorithm** against:
 
 - The bids that the auction's `auditors` (per the `auditor_quorum`
   policy) have marked `valid_bid_placed`, and
-- The auction's tie-break rules.
+- The auction's selection rules: canonical ordering, the flat-window
+  increment as a display hint, the anti-snipe curve floor in
+  `(end_at, max_end_at]` (§6.1), `prev_bid` chain handling, and the
+  tie-break rules.
+
+**Normative pointer.** The selection algorithm is specified in
+**ADR-0012 §2 (Phase 2)** as a single pure function
+`select(auction, bids, instant) → Selection` with a defined input/output
+contract. It is deliberately **not restated here**: this section and §6.1
+anchor the parameters it consumes so the two documents cannot drift. Until
+Phase 2 lands, the coarse rules above are the interim behaviour.
+
+Selection is **not** validity (ADR-0012 Phase 1). Being outbid, or sitting
+below the increment or the curve floor, changes which bid leads — never
+whether a bid is valid. Every structurally valid bid stays in the valid
+set until close, so it can lead again, win on a later elimination, or
+refund cleanly.
 
 The _seller_'s computation is the one that determines who they
 attempt to settle with. Bidders should reach the same answer.
@@ -1654,6 +1761,9 @@ Validators publish their answer as a `won_pending_settlement` /
 - **`reserve_not_met`**: seller publishes kind-1024 with
   `status=reserve_not_met`. All bids follow the locktime refund
   path. Validators update all bids to `lost_pending_refund`.
+  **`reserve` is checked here and only here** — at close, against the
+  selected winner. It is never a bid-time floor: the bid-time floor is
+  `starting_bid` (§4.1, §6.1; ADR-0012 Phase 1).
   **Network-consensus** (ADR-0004): the seller follows the quorum —
   they check that no valid bid met the reserve based on validator
   verdicts. The descriptor cross-checks `won_pending_settlement`
@@ -1831,16 +1941,25 @@ sell). See §14 for the full threat analysis.
 >
 > Consequently, a bidder can lock a small amount (e.g. 1 sat) at the
 > mint and publish a bid claiming a much larger cumulative `amount`
-> (e.g. 100,000 sats). The bid passes all current bid-time checks
-> (NUT-7 shows `UNSPENT`, lock structure is valid, `amount` >
-> `prev_bid` + increment). The mismatch is only caught at settlement
+> (e.g. 100,000 sats). The bid passes every bid-time check (lock
+> structure is valid, within the time window, `amount ≥ starting_bid`,
+> mint allowlisted). The mismatch is only caught at settlement
 > when the kind-1025 reveals the full `cashu_token` and
 > `validatePathRelease` checks `sum(proofs.amount) == expectedDelta`.
 >
 > This is a **griefing vector**, not a theft vector: the malicious
 > bidder locks real funds (even if tiny) and the fraud is caught at
 > settlement. But during the auction, the fake bid affects winner
-> selection, min-increment floor, and reserve-met determination.
+> selection (leadership and current price) and the reserve-met
+> determination.
+>
+> **Status under ADR-0012.** Phase 1 does **not** close this gap — it
+> removes the _validity_ rules the gap's impact was described in terms of
+> (the minimum increment and the curve floor), which narrows the blast
+> radius to selection only but leaves the gap itself open. ADR-0011
+> (bid-time collateral verification via NUT-12 DLEQ proofs) is the ADR that
+> closes it for DLEQ-verifiable mints. See ADR-0011 and ADR-0004's known
+> limitations.
 >
 > The `content.leg_locked` field in the kind-1023 event body is
 > UNSIGNED and MUST NOT be used to verify the locked amount. The delta
@@ -2110,11 +2229,28 @@ field semantics. Unchanged from prior drafts:
    - loser pull/claim endpoint
    - locktime self-redeem only
 4. Whether v1 allows seller cancel after first valid bid (recommended: no).
-5. Mint outage policy:
-   - strict reject vs tentative accept for unverified bids.
+5. ~~Mint outage policy: strict reject vs tentative accept for unverified
+   bids.~~ **Closed (ADR-0012 Phase 1).** There is no "unverified bid" at
+   verdict time: a validator queries no mint when issuing a verdict, so the
+   policy question does not arise on the validity path. Mint availability is
+   a client-side evidence question (§5.6, ADR-0004) that affects whether a
+   bid is _settleable_, not whether it is _valid_.
 6. Cross-mint bids:
    - single mint per bid (simpler) vs multi-mint per bid (complex).
 7. Minimum auction duration and anti-spam defaults.
+
+Deferred by ADR-0012 and **not** settled here (Phase 3 — the
+fallback/elimination protocol):
+
+- The exact **evidence standard** for eliminating a winner (settlement-window
+  evidence only) and the closed set of elimination triggers.
+- The event-by-event **cascade surfaces** coordinating timing, seller, bidder
+  and validator duties during elimination.
+- The **termination bound** and documented end state of the elimination loop.
+
+Nothing in Phases 1–2 depends on these; until they are specified, the
+existing settlement cascade (§8.2, §8.3; ADR-0004) remains the coarse
+fallback.
 
 ---
 
@@ -2127,7 +2263,9 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 - Publishes kind `30408` with the required tag set in §4.1 including
   `settlement_policy=cashu_p2pk_bidder_path_v1`, at least one
   `auditors` entry, immutable `p2pk_xpub`, `max_end_at`, and
-  `settlement_grace`.
+  `settlement_grace`, and an explicit **`starting_bid`** (REQUIRED; the
+  absolute bid floor — never defaulted, and never inferred from
+  `reserve`).
 - Pins and stores the first event ID (`auction_root_event_id`).
 - Rejects local updates that change any immutable tag.
 
@@ -2150,8 +2288,15 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 
 - Subscribes to relays for auction, bid, and settlement events
   involving auctions where its pubkey appears in `auditors`.
-- Runs the §7.1 validation pipeline for every observed bid,
-  including NUT-7 state checks against the bid's mint.
+- Runs the §7.1 validation pipeline for every observed bid. The pipeline is
+  a pure function of (bid, auction, `observed_at`) plus the validator's
+  published policy: it performs **no** external query — no mint call, no
+  NUT-7 lookup, no relay fetch — and consults **no other bid's state**
+  (ADR-0012 Phase 1). NUT-7 proof-state evidence is the client's (ADR-0004).
+- Does **not** condition a verdict on the leading-bid minimum increment, the
+  anti-snipe curve floor, or the `prev_bid` chain: those are selection- and
+  settlement-time rules (§6.1, §8.0). A bid that fails one is _valid but not
+  leading_, not `bid_invalid`.
 - Publishes kind `30440` verdicts with `observed_at`, `claim`, and
   `reason` per §4.4.
 - (Optional) Publishes kind `30441` policy declaration.
@@ -2177,24 +2322,27 @@ A client/service is compliant with `cashu_p2pk_bidder_path_v1` iff it:
 - Deterministic close + tie-break (§8).
 - Uses `validator.observed_at` (not bidder-claimed `created_at`)
   for in-window determination when emitting verdicts.
+- Keeps **validity** and **selection** separate: any structurally valid bid
+  publishes `valid_bid_placed` whether or not it leads, and no funded bid is
+  dropped from the valid set by a selection result (ADR-0012 Phase 1).
 
 ## 14. Security model summary
 
-| Threat                                                   | Mitigation                                                                                                                                                                                  | Residual risk                                                                                                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fake bid (unbacked)                                      | Public `lock_secret` + `proof_y` in bid event; **client** NUT-7 checks proof state (ADR-0004)                                                                                               | Mint downtime delays detection (bid marked `bid_pending_review`)                                                                                                                 |
-| Fake lock (bidder-controlled pubkey, spends behind lock) | Client NUT-7 catches the spend → `fraudulent_bid` reputation event (ADR-0004)                                                                                                               | Detection depends on client polling frequency                                                                                                                                    |
-| Fake lock (bidder-controlled pubkey, silent grief)       | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid`                                                                                          | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost               |
-| End-time tampering                                       | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at`                                                                           | Single dishonest validator's clock — mitigated by `auditor_quorum > 1`                                                                                                           |
-| Sniping                                                  | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]`                                                                                                                    | None if curve enforced by all listed validators                                                                                                                                  |
-| Double-spend (lock vs refund)                            | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal                                                                                                   | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund                                                   |
-| Seller fraud (early redeem)                              | Seller cannot derive child privkey without path; path is bidder-held secret; client MUST NOT publish kind-1025 before `max_end_at` AND MUST have `won_pending_settlement` quorum (ADR-0004) | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`, and MUST wait for validator quorum approval. |
-| Validator fraud (false verdicts)                         | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost                                                                                            | A single-validator auction with a dishonest validator is at the seller's risk by choice                                                                                          |
-| Validator rug-pull / offline                             | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode.                                                                                                           | Liveness only: missing kind-30440 verdicts force the seller to make their own determination                                                                                      |
-| Bidder griefing (winner withholds path)                  | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss                                                                                           | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit.            |
-| Seller offline at settlement                             | Bidder eventually refunds at locktime; no funds lost; sale fails                                                                                                                            | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller                                                                  |
-| Mint outage                                              | Settlement retries with backoff; both seller and bidder may race once mint recovers                                                                                                         | Race favors whoever acts first post-recovery; aligned with timing of locktime                                                                                                    |
-| Bidder loses path (wallet destruction)                   | Bidder still has refund key → refunds at locktime                                                                                                                                           | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup.                                                                     |
+| Threat                                                   | Mitigation                                                                                                                                                                                  | Residual risk                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fake bid (unbacked)                                      | Public `lock_secret` + `proof_y` in bid event; **client** NUT-7 checks proof state (ADR-0004)                                                                                               | Mint downtime delays detection (bid marked `bid_pending_review`)                                                                                                                                                                                                                                                                           |
+| Fake lock (bidder-controlled pubkey, spends behind lock) | Client NUT-7 catches the spend → `fraudulent_bid` reputation event (ADR-0004)                                                                                                               | Detection depends on client polling frequency                                                                                                                                                                                                                                                                                              |
+| Fake lock (bidder-controlled pubkey, silent grief)       | Settlement-time kind-1025 verification: `derive(p2pk_xpub, path) ≠ lock_pubkey` → `fraudulent_bid`                                                                                          | If bidder never publishes kind-1025, indistinguishable from honest grief — both produce `griefed` / `fraudulent_bid` records, bidder pays the same reputation cost                                                                                                                                                                         |
+| End-time tampering                                       | Root ID pinning + immutable tag list (§4.1); validators use their own `observed_at` not the bidder's `created_at`                                                                           | Single dishonest validator's clock — mitigated by `auditor_quorum > 1`                                                                                                                                                                                                                                                                     |
+| Sniping                                                  | Deterministic anti-snipe via `min_bid_curve` over `(end_at, max_end_at]`, applied by the shared **selection** algorithm (§6.1, §8.0). A sub-curve bid is valid but not leadership-eligible  | Bounded by the interim window between ADR-0012 Phase 1 and Phase 2: with the curve out of the verdict path, a sub-curve bid can still be _placed_, and until Phase 2 lands no selection-side gate runs either. Pre-public-release only; sellers can also raise `starting_bid`, and a sub-curve bid still locks real capital until locktime |
+| Double-spend (lock vs refund)                            | Cashu mint is single-source-of-truth on proof state; first-to-mint wins after path reveal                                                                                                   | Tiny race window when path is revealed near `locktime`; bidder SHOULD wait until well past `locktime` before triggering refund                                                                                                                                                                                                             |
+| Seller fraud (early redeem)                              | Seller cannot derive child privkey without path; path is bidder-held secret; client MUST NOT publish kind-1025 before `max_end_at` AND MUST have `won_pending_settlement` quorum (ADR-0004) | Bidder leaks path before auction close → seller can settle early. Compliant clients MUST NOT publish kind-1025 before `max_end_at`, and MUST wait for validator quorum approval.                                                                                                                                                           |
+| Validator fraud (false verdicts)                         | Multiple validators per auction (`auditor_quorum`); other validators contradict; reputation lost                                                                                            | A single-validator auction with a dishonest validator is at the seller's risk by choice                                                                                                                                                                                                                                                    |
+| Validator rug-pull / offline                             | Validator holds no keys, no path, no proofs. Cannot steal under any failure mode.                                                                                                           | Liveness only: missing kind-30440 verdicts force the seller to make their own determination                                                                                                                                                                                                                                                |
+| Bidder griefing (winner withholds path)                  | Reputation system (`griefed`), seller fallback to 2nd-highest, locktime refund prevents fund loss                                                                                           | Auction sale price reduced or auction fails; griefer loses reputation + opportunity cost. Shill-griefing requires reputation-bond policy or future slashable deposit.                                                                                                                                                                      |
+| Seller offline at settlement                             | Bidder eventually refunds at locktime; no funds lost; sale fails                                                                                                                            | Bidder reputation may show `won_pending_settlement` indefinitely → optional `griefed_seller` mark on the seller                                                                                                                                                                                                                            |
+| Mint outage                                              | Settlement retries with backoff; both seller and bidder may race once mint recovers                                                                                                         | Race favors whoever acts first post-recovery; aligned with timing of locktime                                                                                                                                                                                                                                                              |
+| Bidder loses path (wallet destruction)                   | Bidder still has refund key → refunds at locktime                                                                                                                                           | Cannot settle even if they want to; bid effectively becomes a refund-only outcome. UX MUST emphasise backup.                                                                                                                                                                                                                               |
 
 ### What this scheme guarantees, cryptographically
 
