@@ -136,6 +136,15 @@ export const applesauceIo: NostrIo = {
 		const settled = new Set<string>()
 		const settledTarget = urls.length
 		const groupSettled = () => settled.size >= settledTarget
+		// Fire the caller's EOSE boundary exactly once, when the whole group has
+		// settled. Without this, a caller that buffers events until the initial
+		// page arrives has no seam-level signal and must fall back to a timeout.
+		let eoseFired = false
+		const fireEose = () => {
+			if (eoseFired || !groupSettled()) return
+			eoseFired = true
+			opts?.onEose?.()
+		}
 		// Emitted before the observable is assigned; unsubscribes right after subscribe() returns.
 		const stopIfCloseOnEose = () => {
 			if (!opts?.closeOnEose || stopped || !groupSettled()) return
@@ -155,6 +164,7 @@ export const applesauceIo: NostrIo = {
 			.subscribe((message) => {
 				if (message.type === 'EOSE') {
 					settled.add(message.from)
+					fireEose()
 					stopIfCloseOnEose()
 					return
 				}
@@ -165,6 +175,7 @@ export const applesauceIo: NostrIo = {
 				if (message.type === 'CLOSED' || message.type === 'ERROR') {
 					console.warn('[nostr:subscribe] relay subscription issue:', message)
 					settled.add(message.from)
+					fireEose()
 					stopIfCloseOnEose()
 					return
 				}

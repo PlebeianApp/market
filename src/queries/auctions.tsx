@@ -26,7 +26,7 @@ import {
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter } from '@/lib/nostr/ndk-events'
 import { applesauceIo } from '@/lib/nostr/io'
 import type { NostrFilter } from '@/lib/nostr/io'
 import type { NostrEventLike } from '@/lib/nostr/eventLike'
@@ -1022,20 +1022,6 @@ export function useStreamingAuctionBids(
 		setIsStreaming(true)
 
 		const filters = buildAuctionBidFilters(auctionRootEventId, auctionCoordinates, limit)
-		const sub = ndk.subscribe(filters.length === 1 ? filters[0] : filters, { closeOnEose: false })
-
-		sub.on('event', (event: NostrEventLike) => {
-			if (seenIds.current.has(event.id)) return
-			seenIds.current.add(event.id)
-			const [filtered] = filterBlacklistedEvents([event])
-			if (!filtered) return
-
-			if (!eoseReceived.current) {
-				pendingBids.current.push(filtered)
-			} else {
-				setBids((prev) => mergeAndSortBids(prev, [filtered]))
-			}
-		})
 
 		// Merge pending buffer into state without clearing existing bids — prevents
 		// a flash of empty state when the effect re-runs as auctionCoordinates resolves.
@@ -1045,22 +1031,38 @@ export function useStreamingAuctionBids(
 			setBids((prev) => mergeAndSortBids(prev, incoming))
 		}
 
-		sub.on('eose', () => {
+		const settle = () => {
 			eoseReceived.current = true
 			flushPending()
 			setIsStreaming(false)
-		})
+		}
+
+		const unsubscribe = applesauceIo.subscribe(
+			(filters.length === 1 ? filters[0] : filters) as NostrFilter | NostrFilter[],
+			(rawEvent) => {
+				const event = rawEvent as NostrEventLike
+				if (seenIds.current.has(event.id)) return
+				seenIds.current.add(event.id)
+				const [filtered] = filterBlacklistedEvents([event])
+				if (!filtered) return
+
+				if (!eoseReceived.current) {
+					pendingBids.current.push(filtered)
+				} else {
+					setBids((prev) => mergeAndSortBids(prev, [filtered]))
+				}
+			},
+			{ onEose: settle },
+		)
 
 		const timeoutId = setTimeout(() => {
 			if (eoseReceived.current) return
-			eoseReceived.current = true
-			flushPending()
-			setIsStreaming(false)
+			settle()
 		}, 10000)
 
 		return () => {
 			clearTimeout(timeoutId)
-			sub.stop()
+			unsubscribe()
 		}
 	}, [auctionRootEventId, auctionCoordinates, limit])
 
@@ -1173,7 +1175,7 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 			...(until !== undefined ? { until } : {}),
 		}
 
-		const events = Array.from(await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 }))
+		const events = await applesauceIo.fetchEvents(filter as NostrFilter, { timeoutMs: 6000 })
 		if (events.length === 0) break
 
 		let oldestCreatedAt: number | undefined
@@ -1187,7 +1189,7 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NDKEvent):
 
 			try {
 				const claim = await decryptPrivateAuctionClaimMessageWithSigner({
-					giftWrap: giftWrap.rawEvent(),
+					giftWrap,
 					signer,
 					expectedBuyerPubkey: markerFields.buyerPubkey,
 					expectedSellerPubkey: markerFields.sellerPubkey,
