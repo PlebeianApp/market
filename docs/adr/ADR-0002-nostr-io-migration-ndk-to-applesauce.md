@@ -314,3 +314,41 @@ The fix is a semantics-preserving patch of rxjs's two ESM index files, applied t
 ### NIP-46 QR lane: bounded connect for the listener
 
 The nostrconnect (`QR code`) lane kept its own NDK instance for the scan subscription and awaited `ndk.connect()` with no bound. NDK only settles that promise once **every** relay in the instance's pool reaches `CONNECTED`, so a single slow or unreachable relay — the default `wss://relay.plebeian.market` pick, or a user-typed relay — left the kind-24133 subscription unstarted and the signer's `connect` request unanswered (the relay answered the signer with `mute: no one was listening for this`, which is what the e2e QR spec saw). `NostrConnectQR` bounds the connect at 3s: the socket keeps connecting in the background and the listener starts, so a slow relay degrades to a retry instead of a dead scan.
+
+## Amendment (2026-09): Auctions route through the io seam (auctions line only)
+
+Scope: the auctions release line (`auctions`), not `master`. This amendment
+moves no wave above and claims no additional wave has landed.
+
+Decision: the auctions surface is seam-first. Every production file in the
+auctions file set routes relay I/O, signing, and identity through the
+first-party port at `src/lib/nostr/io.ts`; none of them imports
+`@nostr-dev-kit` (runtime or type) or touches the NDK store singleton
+(`ndkActions` / `ndkStore`). Auction-specific capabilities — the bid stream
+including its `onEose` page boundary, the private-claim read, bid publish and
+sign, and bidder identity — are port contract, not NDK-bridge-only behavior.
+The read path is included: the bid stream and the private-claim read go through
+the seam.
+
+Enforcement: `scripts/check-auctions-ndk-surface.sh`, run as the
+`auctions-surface` job in `.github/workflows/ci-ndk-guard.yml`. The guard's
+scanned file set is the operational definition of "auctions file set" for this
+gate: adding auction production code outside that set, or letting auction code
+reach NDK under another name, is a gate regression, not a scope choice.
+
+Adapter state (Wave 0, explicit): the seam's active adapter still defaults to
+the NDK bridge (`io-ndk.ts`) for the rest of the app, and Wave D still deletes
+it on schedule. This amendment constrains where auction code calls, and
+requires the applesauce adapter to serve every auction capability the app uses;
+it does not assert that auctions already run on the applesauce adapter at
+runtime.
+
+Allowlisted exception: `src/lib/auctions/privateAuctionClaimMessage.ts` —
+NIP-59 private-claim encrypt/decrypt needs the raw active signer, which the
+port does not expose. Gated on the signer-capability seam (`#1252`, Waves
+A3/A3b, amended above); the allowlist disappears when that lands.
+
+Relationship to the wave roadmap: unchanged for `master`. The auctions line
+lands its own production set on the seam ahead of Wave C, which is the ordering
+the "Auctions coordination" section above already anticipates (auctions work
+lands first; Wave C stays at the top of the stack).

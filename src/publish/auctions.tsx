@@ -43,7 +43,7 @@ import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
-import type { EventTemplate, NostrEvent } from '@/lib/nostr/io'
+import type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
 import { getEventHash } from 'nostr-tools'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -342,7 +342,7 @@ export const publishAuction = async (formData: AuctionFormData, auctionId?: stri
 
 	const template = await createAuctionEvent(formData, auctionId)
 	const event = await signNostrEvent(template)
-	await publishNostrEvent(event)
+	await publishRequired(event)
 	return event.id
 }
 
@@ -379,7 +379,7 @@ export const deleteAuction = async (auctionDTag: string): Promise<boolean> => {
 	}
 
 	const event = await signNostrEvent(template)
-	await publishNostrEvent(event)
+	await publishRequired(event)
 	return true
 }
 
@@ -649,6 +649,17 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
 		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
 
+		// Stamp the bid at signing time, NOT at pre-flight. `now` above was
+		// captured before `lockAuctionBidFunds` (a Cashu mint swap); reusing it
+		// here would spend the bid's own `max_skew_sec` budget on the lock
+		// latency. A lock+sign round trip slower than the configured skew makes
+		// `created_at` stale relative to every validator's `observed_at`, so the
+		// verdicts the bid needs for quorum become ineligible and the funded bid
+		// can never be confirmed. Base filled `created_at` in at finalization
+		// (i.e. post-lock); the seam preserves whatever the template carries, so
+		// the timestamp must be taken here (review 2026-09-18, item 1).
+		const publishedAt = Math.floor(Date.now() / 1000)
+
 		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
 		// (what the validator uses for the min-increment check); the lock
 		// itself is only the delta. `prev_bid` chains the leg to the
@@ -676,7 +687,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 				bidNonce,
 				prevBidId: prevLeg?.bidEventId,
 			}),
-			created_at: now,
+			created_at: publishedAt,
 		}
 
 		// Step 7a — finalize the event fields WITHOUT signing. The NIP-01 event
@@ -688,7 +699,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		const unsignedBidEvent: NostrEvent = {
 			...bidTemplate,
 			pubkey: bidderPubkey,
-			created_at: bidTemplate.created_at ?? now,
+			created_at: bidTemplate.created_at ?? publishedAt,
 			id: '',
 			sig: '',
 		}
@@ -771,7 +782,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 				)
 			}
 			cacheAuctionBidEventForRepublish(signedBidEvent)
-			await publishNostrEvent(signedBidEvent)
+			await publishRequired(signedBidEvent)
 		} catch (error) {
 			// The recovery record and the signed (or signable) event are already
 			// persisted — surface the event id so the funding lifecycle retries
@@ -1118,7 +1129,7 @@ export const republishAuctionBid = async (bidEventId: string): Promise<string> =
 	}
 
 	try {
-		await publishNostrEvent(bidEvent)
+		await publishRequired(bidEvent)
 	} catch (error) {
 		throw new AuctionBidPublishFailedError(bidEventId, error)
 	}
@@ -1384,7 +1395,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 		}
 
 		const event = await signNostrEvent(template)
-		await publishNostrEvent(event)
+		await publishRequired(event)
 
 		updateBidderRecordStatus(leg.bidEventId, 'settled')
 
@@ -1643,7 +1654,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			created_at: Math.floor(Date.now() / 1000),
 		}
 		const event = await signNostrEvent(template)
-		await publishNostrEvent(event)
+		await publishRequired(event)
 		return event.id
 	}
 
@@ -2036,7 +2047,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		created_at: Math.floor(Date.now() / 1000),
 	}
 	const event = await signNostrEvent(template)
-	await publishNostrEvent(event)
+	await publishRequired(event)
 	return event.id
 }
 
@@ -2124,6 +2135,26 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 	return event.id
 }
 
+/**
+ * Publish through the seam and fail closed on zero relay ACKs.
+ *
+ * `io.ts` documents an empty `publishedRelays` as "no relay accepted it, which
+ * callers must treat as a publish failure". That is enforced for free by the
+ * NDK bridge (it throws `NDKPublishError` below `requiredRelayCount = 1`), but
+ * the applesauce adapter RESOLVES with the ACK-filtered set
+ * (`io-applesauce.ts`), so an unchecked call reports a zero-ACK publish as a
+ * success. This wrapper makes the contract adapter-independent (review
+ * 2026-09-18, item 4). `publishRequiredPrivateGiftWrap` /
+ * `publishAuctionClaimMarkerToPrivateRelays` keep their own checks because they
+ * need the accepted relay URLs.
+ */
+async function publishRequired(event: NostrEvent, options?: PublishOptions): Promise<void> {
+	const result = await publishNostrEvent(event, options)
+	if (result.publishedRelays.size === 0) {
+		throw new Error(`No relay accepted the event (kind ${event.kind}, id ${event.id}) — treating as a publish failure`)
+	}
+}
+
 async function publishRequiredPrivateGiftWrap(event: NostrEvent): Promise<string[]> {
 	const result = await publishNostrEvent(event)
 	if (result.publishedRelays.size === 0) {
@@ -2139,6 +2170,22 @@ async function publishAuctionClaimMarkerToPrivateRelays(event: NostrEvent, priva
 	}
 }
 
+/**
+ * Resolve the buyer identity written into the public claim marker.
+ *
+ * The base implementation compared `ndk.activeUser?.pubkey` against the active
+ * signer's pubkey and threw "Active user does not match active signer."; the
+ * seam exposes identity only through `getUser()`, which is itself
+ * signer-derived (`@/lib/stores/ndk` `getUser()` → the active signer's user).
+ * The two values therefore cannot diverge through the seam today, so the
+ * comparison is vacuous here rather than removed. The identity property that
+ * actually matters — the pubkey written into the public marker is the identity
+ * that encrypted the private claim — holds because
+ * `privateAuctionClaimMessage.ts` produces the gift wrap from the same active
+ * signer. The #1252 signer migration re-points `getUser()`; if it ever makes
+ * identity independent of the signer, that migration MUST re-establish the
+ * cross-account assertion (review 2026-09-18, item 5).
+ */
 async function resolveAuctionClaimBuyerPubkey(): Promise<string> {
 	const user = await getUser()
 	const signerPubkey = user?.pubkey ?? ''

@@ -15,7 +15,7 @@
  * calls — the mint lock and the relay publish are both in-process mocks.
  */
 
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import type { Proof } from '@cashu/cashu-ts'
@@ -138,11 +138,11 @@ let lockShouldThrow: unknown = null
 const updatePendingTokenContextMock = mock(() => ({ tokenId: 'pending-token-1', context: {} }))
 
 /** Raw payloads passed to the relay publish surface, in call order. */
-const publishedPayloads: Array<{ id: string; sig?: string; kind: number }> = []
+const publishedPayloads: Array<{ id: string; sig?: string; kind: number; created_at?: number }> = []
 let publishShouldFail = false
 
 const publishEventMock = mock(async (event: NDKEvent) => {
-	publishedPayloads.push({ id: event.id, sig: event.sig, kind: event.kind })
+	publishedPayloads.push({ id: event.id, sig: event.sig, kind: event.kind, created_at: event.created_at })
 	if (publishShouldFail) throw new Error('relay down')
 	return new Set(['wss://relay.test'])
 })
@@ -273,6 +273,29 @@ describe('publishAuctionBid durable recovery state (#1235 Blocking 1)', () => {
 		publishShouldFail = true
 		await publishAndExpectBroadcastFailure(500)
 		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+	})
+})
+
+describe('publishAuctionBid timestamps the bid at signing time (review 2026-09-18 item 1)', () => {
+	test('created_at is captured after lockAuctionBidFunds, not at pre-flight', async () => {
+		const preLockSeconds = 1_700_000_000
+		const lockSeconds = 60
+		const nowSpy = spyOn(Date, 'now').mockReturnValue(preLockSeconds * 1000)
+
+		// The mint lock is the expensive step; advance the wall clock while it is
+		// in flight so the pre-flight `now` differs from signing time.
+		lockAuctionBidFundsMock.mockImplementationOnce(async (input: { amount: number; locktime?: number }) => {
+			nowSpy.mockReturnValue((preLockSeconds + lockSeconds) * 1000)
+			return buildLockResult(input, 1)
+		})
+
+		try {
+			await publishWithSigner(500)
+			expect(publishedPayloads).toHaveLength(1)
+			expect(publishedPayloads[0].created_at).toBe(preLockSeconds + lockSeconds)
+		} finally {
+			nowSpy.mockRestore()
+		}
 	})
 })
 
@@ -478,8 +501,13 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 // lifecycle never falls back to the full re-locking pipeline for a leg whose
 // funds are already locked. Two injection points, both AFTER the lock:
 //
-//   (i)  `toNostrEvent` throws — no event id exists yet, no recovery record,
-//        no cache entry. Funds locked.
+//   (i)  A post-lock step BEFORE event finalization throws — the injected case
+//        is a lock result with no proofs, which aborts the pipeline before the
+//        kind-1023 id exists. No event id, no recovery record, no cache entry.
+//        Funds locked. (Base injected a `toNostrEvent` throw here; the seam
+//        finalizes the unsigned event locally rather than via NDK's
+//        `toNostrEvent`, so the public equivalent of "no id yet" is a pre-build
+//        failure like this one — review 2026-09-18, item 3.)
 //   (ii) The STRICT bidder-record write fails (storage quota/disabled) — the
 //        refund private key is NOT durably persisted, so the publish must
 //        fail CLOSED instead of broadcasting a locked leg with no recoverable

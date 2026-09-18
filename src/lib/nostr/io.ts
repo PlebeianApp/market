@@ -49,10 +49,20 @@ export interface SubscribeOptions {
 	/** Restrict the subscription to these relay URLs. Default: adapter's configured relays. */
 	relayUrls?: string[]
 	/**
-	 * Boundary notification fired once, when the subscription's relays have all
-	 * settled (EOSE, or a terminal CLOSED/ERROR for a relay). NOT a stop signal —
-	 * the subscription stays open unless `closeOnEose` is set. Used by callers
-	 * that buffer events until the initial page has arrived.
+	 * Boundary notification, fired once. NOT a stop signal — the subscription
+	 * stays open unless `closeOnEose` is set. Used by callers that buffer events
+	 * until the initial page has arrived.
+	 *
+	 * Adapter-scoped semantics (review 2026-09-18, item 6):
+	 *   - applesauce adapter: fires when the subscription's relays have all
+	 *     settled (their own EOSE).
+	 *   - NDK bridge (`io-ndk.ts`): forwards NDK's own `eose`, which is a QUORUM
+	 *     heuristic (`eosesSeen.size >= 2 && >=50% of relays EOSE`, plus a ~1s
+	 *     quiet timer) and does not count a terminal CLOSED relay as settled, so
+	 *     it can fire with relays still pending — or never fire when a relay
+	 *     closes. Callers that need a hard "every relay settled" boundary must
+	 *     not rely on the NDK bridge and should add their own timeout (as the
+	 *     auctions bid stream does).
 	 */
 	onEose?: () => void
 }
