@@ -67,6 +67,15 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 
 	logger.info(`[validator] starting — pubkey: ${validatorPubkey.slice(0, 16)}…`)
 	logger.info('[validator] resolved admission policy', resolvedSpamPolicy)
+	if (!resolvedSpamPolicy.admissionEnabled) {
+		// Declared-off admission is a deliberate operator choice, and the
+		// kind-30441 document says `{ enabled: false }` to match. Say out
+		// loud what that costs: no bid admission limits, and the
+		// pre-parent buffers grow unbounded (review 5242945675 Required 3).
+		logger.warn(
+			'[validator] ADMISSION DISABLED — no envelope, spam-policy or pending-buffer limits are enforced; the published policy declares { enabled: false }',
+		)
+	}
 
 	// Publish the policy declaration first so any bidder reading kind-
 	// 30441 events while we're booting sees us right away.
