@@ -51,6 +51,18 @@ PREVIEW_CLOUDFLARE_API_TOKEN=<token> PREVIEW_CLOUDFLARE_ZONE_ID=<zone-id> \
 
 ## Relationship to `provision.sh`
 
-Keep the two in lockstep: the workflow still runs `provision.sh` on every
-deploy, so a change to ports, units, or the Caddy route must land in **both**
-places, or the next deploy will drift the host back.
+**`provision.sh` is authoritative at deploy time.** The Preview Deploy workflow
+runs it over SSH on every deploy; this role is the reproducible path for
+standing up a fresh box (and converging a drifted one). A change to ports,
+systemd units, or the Caddy route must land in **both** places, or the next
+deploy will silently drift the host back — the role's own `tests`/`--check`
+cannot catch that, so review both files together.
+
+## Host-key policy
+
+The role pins the host key, fail-closed: the playbook's first play scans the
+host's ed25519 key, verifies it against `PREVIEW_VPS_HOST_FINGERPRINT`, and
+writes a private `known_hosts`; the second play connects with
+`StrictHostKeyChecking=yes` and `HostKeyAlgorithms=ssh-ed25519` against it.
+There is no TOFU (`accept-new`) path — an unknown or changed key is a hard
+failure, exactly like `provision.sh`.

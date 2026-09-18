@@ -1,0 +1,50 @@
+name: Preview Infra Tests
+
+# Runs the preview-infrastructure tests that no workflow executed before:
+# `infra/preview-vps/test_preview_manager.py` + `test_preview_gateway.py`
+# (pytest) and the shell guards (pinned OpenSSH, SSH port, key materialisation).
+# They ship with the preview stack but were previously only ever run by hand,
+# so a regression in the gateway, the manager, or the pinned-helpers could merge
+# green. Triggered only for changes under `infra/preview-vps/`.
+on:
+  pull_request:
+    paths:
+      - 'infra/preview-vps/**'
+      - '.github/workflows/preview-infra-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Preview infra (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run the preview infra unit tests
+        run: python -m pytest infra/preview-vps/ -q
+
+  shell:
+    name: Preview infra (shell)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run the pinned-OpenSSH, SSH-port and key-materialisation guards
+        run: |
+          bash infra/preview-vps/test_pinned_openssh.sh
+          bash infra/preview-vps/test_ssh_port.sh
+          bash infra/preview-vps/test_key_materialisation.sh
