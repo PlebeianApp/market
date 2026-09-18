@@ -52,7 +52,7 @@ class FakeNdkSignerAdapter {
 	}
 	async user() {
 		if (userError) throw userError
-		return { pubkey: USER_PUBKEY }
+		return ndkActions.getNDK()?.getUser({ pubkey: USER_PUBKEY }) ?? { pubkey: USER_PUBKEY }
 	}
 }
 mock.module('@/lib/nostr/ndk-signer-adapter', () => ({ NdkSignerAdapter: FakeNdkSignerAdapter }))
@@ -142,7 +142,8 @@ const realLocalStorage = globalThis.localStorage
 const realConsoleError = console.error
 const originalLoadRelays = ndkActions.loadRelaysFromNostr
 const originalSelectWallet = ndkActions.selectAndSetInitialNwcWallet
-const originalPublishSigner = (ndkActions as typeof ndkActions & { publishSigner?: (signer: unknown) => void }).publishSigner
+const originalPublishSigner = (ndkActions as typeof ndkActions & { publishSigner?: (signer: unknown, user?: unknown) => void })
+	.publishSigner
 const storage = new Map<string, string>()
 
 function expectDetached() {
@@ -157,7 +158,9 @@ function expectFullyDetached() {
 	expect(authStore.state.user).toBeNull()
 	expect(ndkStore.state.signer).toBeUndefined()
 	expect(ndkStore.state.ndk?.signer).toBeUndefined()
+	expect(ndkStore.state.ndk?.activeUser).toBeUndefined()
 	expect(ndkStore.state.zapNdk?.signer).toBeUndefined()
+	expect(ndkStore.state.zapNdk?.activeUser).toBeUndefined()
 }
 
 async function flushPostCommitWork(): Promise<void> {
@@ -208,8 +211,20 @@ beforeEach(async () => {
 		needsMigration: false,
 		needsSessionUnlock: true,
 	}))
-	const ndk = { signer: undefined } as never
-	const zapNdk = { signer: undefined } as never
+	const ndk = {
+		signer: undefined,
+		activeUser: undefined,
+		getUser({ pubkey }: { pubkey: string }) {
+			return { pubkey, ndk }
+		},
+	} as never
+	const zapNdk = {
+		signer: undefined,
+		activeUser: undefined,
+		getUser({ pubkey }: { pubkey: string }) {
+			return { pubkey, ndk: zapNdk }
+		},
+	} as never
 	ndkStore.setState((state) => ({ ...state, ndk, zapNdk, signer: undefined, activeNwcWalletUri: null }))
 	ndkActions.loadRelaysFromNostr = mock(async () => {})
 	ndkActions.selectAndSetInitialNwcWallet = mock(async () => {})
@@ -231,7 +246,7 @@ afterEach(async () => {
 	ndkActions.loadRelaysFromNostr = originalLoadRelays
 	ndkActions.selectAndSetInitialNwcWallet = originalSelectWallet
 	if (originalPublishSigner) {
-		;(ndkActions as typeof ndkActions & { publishSigner: (signer: unknown) => void }).publishSigner = originalPublishSigner
+		;(ndkActions as typeof ndkActions & { publishSigner: (signer: unknown, user?: unknown) => void }).publishSigner = originalPublishSigner
 	}
 	setSignerCapability(undefined)
 	await runSignerTeardown()
@@ -611,6 +626,56 @@ describe('transactional signer authority attachment', () => {
 		expect(ndkActions.getSigner()).toBeDefined()
 	})
 
+	test('NIP-07 authority commit synchronously projects the authenticated user to every NDK surface', async () => {
+		let publicationSnapshot:
+			| {
+					authenticated: boolean
+					authPubkey: string | undefined
+					mainActivePubkey: string | undefined
+					zapActivePubkey: string | undefined
+					mainSigner: unknown
+					zapSigner: unknown
+					storeSigner: unknown
+			  }
+			| undefined
+		ndkActions.loadRelaysFromNostr = mock(async () => {
+			publicationSnapshot ??= {
+				authenticated: authStore.state.isAuthenticated,
+				authPubkey: authStore.state.user?.pubkey,
+				mainActivePubkey: ndkStore.state.ndk?.activeUser?.pubkey,
+				zapActivePubkey: ndkStore.state.zapNdk?.activeUser?.pubkey,
+				mainSigner: ndkStore.state.ndk?.signer,
+				zapSigner: ndkStore.state.zapNdk?.signer,
+				storeSigner: ndkStore.state.signer,
+			}
+		})
+
+		await authActions.loginWithExtension()
+
+		expect(publicationSnapshot).toBeDefined()
+		expect(publicationSnapshot?.authenticated).toBe(true)
+		expect(publicationSnapshot?.authPubkey).toBe(USER_PUBKEY)
+		expect(publicationSnapshot?.mainActivePubkey).toBe(USER_PUBKEY)
+		expect(publicationSnapshot?.zapActivePubkey).toBe(USER_PUBKEY)
+		expect(publicationSnapshot?.mainSigner).toBe(publicationSnapshot?.storeSigner)
+		expect(publicationSnapshot?.zapSigner).toBe(publicationSnapshot?.storeSigner)
+		const mainNdk = ndkStore.state.ndk!
+		const zapNdk = ndkStore.state.zapNdk!
+		expect(authStore.state.user?.ndk).toBe(mainNdk)
+		expect(mainNdk.activeUser?.ndk).toBe(mainNdk)
+		expect(zapNdk.activeUser?.ndk).toBe(zapNdk)
+	})
+
+	test('logout synchronously clears main and zap active-user compatibility identity', async () => {
+		const user = await authActions.loginWithExtension()
+		ndkStore.state.ndk!.activeUser = user
+		ndkStore.state.zapNdk!.activeUser = user
+
+		authActions.logout()
+
+		expectFullyDetached()
+	})
+
 	test('post-commit signer-service failure does not roll back a valid login', async () => {
 		const serviceError = new Error('ancillary signer service failed')
 		ndkActions.loadRelaysFromNostr = mock(async () => {
@@ -699,8 +764,8 @@ describe('transactional signer authority attachment', () => {
 	test('synchronous publication failure restores detached state and cleans NIP-46 exactly once', async () => {
 		if (!originalPublishSigner) throw new Error('publishSigner production seam is missing')
 		let failPublication = true
-		;(ndkActions as typeof ndkActions & { publishSigner: (signer: unknown) => void }).publishSigner = (signer) => {
-			originalPublishSigner(signer)
+		;(ndkActions as typeof ndkActions & { publishSigner: (signer: unknown, user?: unknown) => void }).publishSigner = (signer, user) => {
+			originalPublishSigner(signer, user)
 			if (signer && failPublication) {
 				failPublication = false
 				throw new Error('synchronous publication failed')
@@ -708,6 +773,29 @@ describe('transactional signer authority attachment', () => {
 		}
 
 		await expect(authActions.loginWithNip46('bunker://test')).rejects.toThrow('synchronous publication failed')
+		expectDetached()
+		expect(freshLogout).toHaveBeenCalledTimes(1)
+	})
+
+	test('synchronous publication failure restores previous main and zap compatibility identities', async () => {
+		if (!originalPublishSigner) throw new Error('publishSigner production seam is missing')
+		const previousMainUser = { pubkey: PRIOR_USER_PUBKEY } as never
+		const previousZapUser = { pubkey: PRIOR_USER_PUBKEY } as never
+		ndkStore.state.ndk!.activeUser = previousMainUser
+		ndkStore.state.zapNdk!.activeUser = previousZapUser
+		let failPublication = true
+		;(ndkActions as typeof ndkActions & { publishSigner: (signer: unknown, user?: unknown) => void }).publishSigner = (signer, user) => {
+			originalPublishSigner(signer, user)
+			if (signer && failPublication) {
+				failPublication = false
+				throw new Error('synchronous publication failed')
+			}
+		}
+
+		await expect(authActions.loginWithNip46('bunker://test')).rejects.toThrow('synchronous publication failed')
+
+		expect(ndkStore.state.ndk?.activeUser).toBe(previousMainUser)
+		expect(ndkStore.state.zapNdk?.activeUser).toBe(previousZapUser)
 		expectDetached()
 		expect(freshLogout).toHaveBeenCalledTimes(1)
 	})

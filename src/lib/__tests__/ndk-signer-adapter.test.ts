@@ -6,7 +6,7 @@
  * prove the adapter preserves local-lane NIP-04 parity + explicit NIP-44.
  * Fixture identities are always derived keys (never fake pubkeys).
  */
-import { describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { PrivateKeySigner } from 'applesauce-signers'
 import { getEventHash, verifyEvent } from 'nostr-tools'
 
@@ -26,6 +26,12 @@ import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 import type { SignerCapability } from '@/lib/nostr/signer-capability'
 
 const CREATED_AT = 1_700_000_000
+const USER_PUBKEY = 'aa'.repeat(32)
+
+beforeEach(() => {
+	mockNdkActions.getNDK.mockClear()
+	mockNdkActions.getNDK.mockImplementation(() => null)
+})
 
 /** Wrap a concrete applesauce local signer as the app's capability. */
 function capabilityFor(signer: PrivateKeySigner): SignerCapability {
@@ -86,6 +92,76 @@ describe('NdkSignerAdapter', () => {
 		expect(adapter.pubkey).toBe(pubkey)
 		// user() must be fetch-free: with NDK absent it still resolves.
 		expect(mockNdkActions.getNDK).toHaveBeenCalled()
+	})
+
+	test('concurrent and later user calls share identity resolution but return fresh main-NDK views', async () => {
+		let resolvePubkey!: (pubkey: string) => void
+		const pubkeyPromise = new Promise<string>((resolve) => {
+			resolvePubkey = resolve
+		})
+		const getPublicKey = mock(() => pubkeyPromise)
+		const mainNdk = {
+			getUser({ pubkey }: { pubkey: string }) {
+				const user = new NDKUser({ pubkey })
+				user.ndk = mainNdk as never
+				return user
+			},
+		}
+		mockNdkActions.getNDK.mockImplementation(() => mainNdk as never)
+		const adapter = new NdkSignerAdapter({
+			getPublicKey,
+			signEvent: async () => {
+				throw new Error('not used')
+			},
+		})
+
+		const firstPromise = adapter.user()
+		const secondPromise = adapter.user()
+		expect(getPublicKey).toHaveBeenCalledTimes(1)
+		resolvePubkey(USER_PUBKEY)
+		const [first, second] = await Promise.all([firstPromise, secondPromise])
+		const later = await adapter.user()
+
+		expect(getPublicKey).toHaveBeenCalledTimes(1)
+		expect([first.pubkey, second.pubkey, later.pubkey]).toEqual([USER_PUBKEY, USER_PUBKEY, USER_PUBKEY])
+		expect(first).not.toBe(second)
+		expect(second).not.toBe(later)
+		expect(first.ndk).toBe(mainNdk as never)
+		expect(second.ndk).toBe(mainNdk as never)
+		expect(later.ndk).toBe(mainNdk as never)
+		expect(adapter.userSync).not.toBe(later)
+		expect(adapter.userSync.ndk).toBe(mainNdk as never)
+	})
+
+	test('rejected and malformed identity lookups are not cached and can retry', async () => {
+		let rejectionCalls = 0
+		const rejectingAdapter = new NdkSignerAdapter({
+			getPublicKey: async () => {
+				rejectionCalls += 1
+				if (rejectionCalls === 1) throw new Error('extension unavailable')
+				return USER_PUBKEY
+			},
+			signEvent: async () => {
+				throw new Error('not used')
+			},
+		})
+		await expect(rejectingAdapter.user()).rejects.toThrow('extension unavailable')
+		expect((await rejectingAdapter.user()).pubkey).toBe(USER_PUBKEY)
+		expect(rejectionCalls).toBe(2)
+
+		let malformedCalls = 0
+		const malformedAdapter = new NdkSignerAdapter({
+			getPublicKey: async () => {
+				malformedCalls += 1
+				return malformedCalls === 1 ? 'malformed' : USER_PUBKEY
+			},
+			signEvent: async () => {
+				throw new Error('not used')
+			},
+		})
+		await expect(malformedAdapter.user()).rejects.toThrow(/invalid public key/)
+		expect((await malformedAdapter.user()).pubkey).toBe(USER_PUBKEY)
+		expect(malformedCalls).toBe(2)
 	})
 
 	test('NIP-04 wallet round-trip through the adapter (local lane, parity default)', async () => {

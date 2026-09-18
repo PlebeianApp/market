@@ -29,7 +29,7 @@ type NdkSignableEvent = Parameters<NDKSigner['sign']>[0]
 export class NdkSignerAdapter implements NDKSigner {
 	private readonly capability: SignerCapability
 	private cachedPubkey?: string
-	private cachedUser?: NDKUser
+	private pubkeyPromise?: Promise<string>
 
 	constructor(capability: SignerCapability) {
 		if (!capability) throw new Error('Cannot build a signer adapter without a signer capability')
@@ -55,24 +55,42 @@ export class NdkSignerAdapter implements NDKSigner {
 	}
 
 	get userSync(): NDKUser {
-		if (!this.cachedUser) throw new Error('Not ready')
-		return this.cachedUser
+		if (!this.cachedPubkey) throw new Error('Not ready')
+		return this.createUserView(this.cachedPubkey)
 	}
 
 	async blockUntilReady(): Promise<NDKUser> {
 		return this.user()
 	}
 
-	async user(): Promise<NDKUser> {
-		const pubkey = await this.capability.getPublicKey()
-		this.assertValidPubkey(pubkey)
-		this.cachedPubkey = pubkey
+	user(): Promise<NDKUser> {
+		return this.resolvePubkey().then((pubkey) => this.createUserView(pubkey))
+	}
+
+	private createUserView(pubkey: string): NDKUser {
 		// Fetch-free: resolve an NDKUser from the capability pubkey without any
 		// relay round-trip. Consumers that need a profile fetch keep their own
 		// fetch ordering (see codebase-audit.md §2).
 		const ndk = ndkActions.getNDK()
-		this.cachedUser = ndk ? ndk.getUser({ pubkey }) : new NDKUser({ pubkey })
-		return this.cachedUser
+		return ndk ? ndk.getUser({ pubkey }) : new NDKUser({ pubkey })
+	}
+
+	private resolvePubkey(): Promise<string> {
+		if (this.cachedPubkey) return Promise.resolve(this.cachedPubkey)
+		if (!this.pubkeyPromise) {
+			this.pubkeyPromise = (async () => {
+				try {
+					const pubkey = await this.capability.getPublicKey()
+					this.assertValidPubkey(pubkey)
+					this.cachedPubkey = pubkey
+					return pubkey
+				} catch (error) {
+					this.pubkeyPromise = undefined
+					throw error
+				}
+			})()
+		}
+		return this.pubkeyPromise
 	}
 
 	async sign(event: NdkSignableEvent): Promise<string> {

@@ -122,6 +122,9 @@ function commitSignerAuthority(
 	assertAttemptCurrent(attempt)
 	assertGlobalAuthorityDetached()
 	const previousAuthState = authStore.state
+	const previousCapability = getSignerCapability()
+	const previousTeardown = getSignerTeardown()
+	const previousNdkAuthority = ndkActions.captureSignerAuthority?.()
 	try {
 		// This authority commit is intentionally non-yielding. auth=true is
 		// published first, so auth=false can never coexist with either usable
@@ -129,15 +132,19 @@ function commitSignerAuthority(
 		authStore.setState((state) => ({ ...state, ...authState, user, isAuthenticated: true }))
 		setSignerCapability(capability)
 		setSignerTeardown(teardown)
-		ndkActions.publishSigner(signer)
+		ndkActions.publishSigner(signer, user)
 	} catch (error) {
 		try {
-			ndkActions.publishSigner(undefined)
+			if (previousNdkAuthority && ndkActions.restoreSignerAuthority) {
+				ndkActions.restoreSignerAuthority(previousNdkAuthority)
+			} else {
+				ndkActions.publishSigner(undefined)
+			}
 		} catch (cleanupError) {
 			console.error('Failed to roll back synchronous NDK signer publication:', cleanupError)
 		}
-		setSignerCapability(undefined)
-		setSignerTeardown(undefined)
+		setSignerCapability(previousCapability)
+		setSignerTeardown(previousTeardown)
 		authStore.setState(() => previousAuthState)
 		throw error
 	}

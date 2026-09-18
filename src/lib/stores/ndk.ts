@@ -55,6 +55,66 @@ let signerServiceGeneration = 0
 let activeSignerServiceLease: SignerServiceLease | undefined
 let activeNwcLoadingLease: SignerServiceLease | undefined
 
+interface PublishedSignerAuthoritySnapshot {
+	readonly mainSigner: NDKSigner | undefined
+	readonly zapSigner: NDKSigner | undefined
+	readonly storeSigner: NDKSigner | undefined
+	readonly mainActiveUser: NDKUser | undefined
+	readonly zapActiveUser: NDKUser | undefined
+}
+
+const projectedActiveUsers = new WeakMap<NDK, NDKUser | undefined>()
+const activeUserProjectionGuards = new WeakSet<NDK>()
+
+function setProjectedActiveUser(ndk: NDK, user: NDKUser | undefined): void {
+	projectedActiveUsers.set(ndk, user)
+	if (!activeUserProjectionGuards.has(ndk) && typeof ndk.on === 'function') {
+		activeUserProjectionGuards.add(ndk)
+		ndk.on('activeUser:change', (changedUser) => {
+			if (!projectedActiveUsers.has(ndk)) return
+			const expectedUser = projectedActiveUsers.get(ndk)
+			if (changedUser?.pubkey !== expectedUser?.pubkey) ndk.activeUser = expectedUser
+		})
+	}
+	ndk.activeUser = user
+}
+
+function releaseActiveUserProjection(ndk: NDK): void {
+	projectedActiveUsers.delete(ndk)
+}
+
+function createActiveUserView(ndk: NDK, user: NDKUser): NDKUser {
+	return ndk.getUser({ pubkey: user.pubkey })
+}
+
+function capturePublishedSignerAuthority(): PublishedSignerAuthoritySnapshot {
+	const state = ndkStore.state
+	return {
+		mainSigner: state.ndk?.signer,
+		zapSigner: state.zapNdk?.signer,
+		storeSigner: state.signer,
+		mainActiveUser: state.ndk?.activeUser,
+		zapActiveUser: state.zapNdk?.activeUser,
+	}
+}
+
+function restorePublishedSignerAuthority(snapshot: PublishedSignerAuthoritySnapshot): void {
+	invalidateSignerServices()
+	const state = ndkStore.state
+	if (state.zapNdk) state.zapNdk.signer = snapshot.zapSigner
+	if (state.ndk) state.ndk.signer = snapshot.mainSigner
+	if (state.zapNdk) setProjectedActiveUser(state.zapNdk, snapshot.zapActiveUser)
+	if (state.ndk) setProjectedActiveUser(state.ndk, snapshot.mainActiveUser)
+	ndkStore.setState((current) => ({ ...current, signer: snapshot.storeSigner }))
+	if (
+		snapshot.storeSigner &&
+		snapshot.mainSigner === snapshot.storeSigner &&
+		(!state.zapNdk || snapshot.zapSigner === snapshot.storeSigner)
+	) {
+		activateSignerServices(snapshot.storeSigner)
+	}
+}
+
 function invalidateSignerServices(): void {
 	signerServiceGeneration += 1
 	activeSignerServiceLease = undefined
@@ -375,6 +435,9 @@ export const ndkActions = {
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: enableOutbox,
+			// Plebeian explicitly loads user relay preferences through the
+			// session-scoped initializeSignerServices/loadRelaysFromNostr path.
+			autoConnectUserRelays: false,
 			aiGuardrails: enableGuardrails ? { skip: new Set(['ndk-no-cache', 'fetch-events-usage']) } : false,
 		})
 
@@ -385,7 +448,9 @@ export const ndkActions = {
 		// and sends it to the browser — one decision point, no client/server
 		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
 		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
-		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] }) : null
+		const zapNdk = externalZapRelaysEnabled
+			? new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])], autoConnectUserRelays: false })
+			: null
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
@@ -552,7 +617,7 @@ export const ndkActions = {
 	 * state. Relay discovery and wallet initialization belong to
 	 * initializeSignerServices(), after that commit has completed.
 	 */
-	publishSigner: (signer: NDKSigner | undefined): void => {
+	publishSigner: (signer: NDKSigner | undefined, user?: NDKUser): void => {
 		// Detach invalidates every signer-scoped continuation before any authority
 		// or ancillary state is cleared. A late network response may still finish,
 		// but it no longer owns permission to mutate state.
@@ -566,24 +631,33 @@ export const ndkActions = {
 		}
 		if (!state.ndk) throw new Error('NDK initialization failed. Cannot publish signer.')
 
-		const previousMainSigner = state.ndk.signer
-		const previousZapSigner = state.zapNdk?.signer
-		const previousStoreSigner = state.signer
+		const previousAuthority = capturePublishedSignerAuthority()
 		try {
-			state.ndk.signer = signer
 			if (state.zapNdk) state.zapNdk.signer = signer
+			state.ndk.signer = signer
+			if (signer && !user) {
+				releaseActiveUserProjection(state.ndk)
+				if (state.zapNdk) releaseActiveUserProjection(state.zapNdk)
+			} else {
+				if (state.zapNdk) setProjectedActiveUser(state.zapNdk, user ? createActiveUserView(state.zapNdk, user) : undefined)
+				setProjectedActiveUser(state.ndk, user ? createActiveUserView(state.ndk, user) : undefined)
+			}
 			ndkStore.setState((current) => ({ ...current, signer }))
 			if (signer) activateSignerServices(signer)
 		} catch (error) {
 			try {
-				state.ndk.signer = previousMainSigner
-				if (state.zapNdk) state.zapNdk.signer = previousZapSigner
-				ndkStore.setState((current) => ({ ...current, signer: previousStoreSigner }))
+				restorePublishedSignerAuthority(previousAuthority)
 			} catch (rollbackError) {
 				console.error('Failed to roll back synchronous signer publication:', rollbackError)
 			}
 			throw error
 		}
+	},
+
+	captureSignerAuthority: (): PublishedSignerAuthoritySnapshot => capturePublishedSignerAuthority(),
+
+	restoreSignerAuthority: (snapshot: PublishedSignerAuthoritySnapshot): void => {
+		restorePublishedSignerAuthority(snapshot)
 	},
 
 	/** Run signer-dependent relay and wallet setup after authority publication. */
