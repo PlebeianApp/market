@@ -754,11 +754,15 @@ describe('auction validator subscriber subscription contract', () => {
 		let childUnsubscribeCalls = 0
 		const relayPool = {
 			handlers: new Map<number, (event: NostrEvent) => void>(),
-			subscribe: async (filters: Array<Record<string, unknown>>, handler: (event: NostrEvent) => void) => {
+			subscribe: async (filters: Array<Record<string, unknown>>, handler: (event: NostrEvent) => void, onEose?: () => void) => {
 				subscriptions.push(filters)
 				for (const kind of (filters[0]?.kinds as number[] | undefined) ?? []) {
 					;(relayPool as any).handlers.set(kind, handler)
 				}
+				// A compliant relay answers a stored-event REQ with EOSE; the
+				// subscriber needs it to know the replay is complete before it
+				// may retire the REQ (review 5242945675 Required 2).
+				onEose?.()
 				const isChildSubscription = Array.isArray(filters[0]?.['#a'])
 				return () => {
 					if (isChildSubscription) childUnsubscribeCalls += 1
@@ -794,11 +798,14 @@ describe('auction validator subscriber subscription contract', () => {
 		let childUnsubscribeCalls = 0
 		const relayPool = {
 			handlers: new Map<number, (event: NostrEvent) => void>(),
-			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
+			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void, onEose?: () => void) => {
 				for (const kind of filters[0]?.kinds ?? []) {
 					;(relayPool as any).handlers.set(kind, handler)
 				}
-				const isChildSubscription = (filters[0]?.kinds?.length ?? 0) > 1
+				onEose?.()
+				// The startup replay REQ also carries the three child kinds; only
+				// the per-auction REQ is scoped by `#a`.
+				const isChildSubscription = Array.isArray((filters[0] as Record<string, unknown>)?.['#a'])
 				return () => {
 					if (isChildSubscription) childUnsubscribeCalls += 1
 				}

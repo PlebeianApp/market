@@ -319,6 +319,17 @@ export interface ParsedValidatorVerdictEvent {
 // kind 30441 — Validator policy declaration — §4.4.2
 // =========================================================================
 
+/**
+ * Relay-facing admission declaration on the kind-30441 policy document.
+ *
+ * `{ enabled: false }` is a declared choice, not an absence: it means this
+ * validator applies no admission limits at all (envelope, spam policy and
+ * pending-buffer caps all pass), and it is reachable through
+ * `AUCTION_VALIDATOR_ADMISSION_ENABLED=false`. The child-subscription
+ * fan-out cap is a validator-resource bound rather than an admission rule
+ * and stays in force in both states. `{ enabled: true }` publishes every
+ * limit the validator enforces.
+ */
 export type ValidatorAdmissionPolicy =
 	| { enabled: false }
 	| {
@@ -327,6 +338,15 @@ export type ValidatorAdmissionPolicy =
 			rateWindowSec: number
 			maxTrackedChildSubscriptions: number
 			childReplayLookbackSec: number
+			/** Bounded lifetime, in seconds, of a child REQ's historical replay. */
+			childReplayCompletionTimeoutSec: number
+			/**
+			 * How long past the auction's settlement window this validator
+			 * keeps observing a closed auction's children. The arrival bound
+			 * within which a voluntary late path release is still seen;
+			 * beyond it the terminal verdict stands.
+			 */
+			lateSettlementObservationSec: number
 			maxTrackedBidsPerAuction: number
 			maxSeenEventIds: number
 			maxPendingEventsPerKey: number

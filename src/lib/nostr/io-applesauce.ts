@@ -10,7 +10,7 @@
  * signer (NIP-07 / nsec) is migrated off NDK. Until then, callers that need
  * signing keep routing through the NDK bridge (NIP-46 stays there longest).
  */
-import { RelayGroup, RelayPool } from 'applesauce-relay'
+import { RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
@@ -39,7 +39,7 @@ function asFilters(filter: NostrFilter | NostrFilter[]): NostrFilter[] {
 }
 
 /**
- * Bounded connection-retry policy for raw `req()` subscriptions.
+ * Bounded connection-retry policy for `subscription()` relay streams.
  *
  * Restores the applesauce 5.2 `subscription()` default of retrying connection
  * errors up to 3 times with a ~1s linear backoff. Two v6 subtleties make the
@@ -48,7 +48,7 @@ function asFilters(filter: NostrFilter | NostrFilter[]): NostrFilter[] {
  * - `reconnect: true` maps to RxJS `retry()` with NO count, i.e. unbounded.
  *   A relay that stays down would retry forever, keeping the subscription
  *   (and its WebSocket reconnect timer) alive with no give-up path.
- * - `resetOnSuccess: true` (5.2's default) must be dropped: v6's `req()`
+ * - `resetOnSuccess: true` (5.2's default) must be dropped: v6's relay stream
  *   emits an OPEN message per relay on every resubscribe attempt, which the
  *   retry operator would treat as "success" and re-arm the counter, making
  *   the bound unreachable for a relay that fails right after opening.
@@ -86,13 +86,7 @@ export const applesauceIo: NostrIo = {
 				resolve(collected)
 			}, opts?.timeoutMs ?? 8000)
 			subscription = getPool()
-				.request(urls, filters, {
-					// v6 request() defaults to completeOnAny(completeAfterFirstRelay(5s), completeOnAllEose()):
-					// the FIRST relay's EOSE starts a 5s fuse that can end the request before slower relays
-					// deliver their events. Pin all-EOSE completion so every relay's events are collected
-					// within our own timeoutMs window instead.
-					complete: RelayGroup.completeOnAllEose(),
-				})
+				.request(urls, filters)
 				.subscribe({
 					next: (event) => {
 						const raw = event as NostrEvent
@@ -127,18 +121,10 @@ export const applesauceIo: NostrIo = {
 			stopped = true
 			subscription?.unsubscribe()
 		}
-		// Track per-relay EOSE so closeOnEose only stops the GROUP once every
-		// relay has finished sending — the first relay's EOSE must not tear
-		// down subscriptions that still have events incoming from other relays.
-		// CLOSED/ERROR are terminal for that relay (resubscribe: false), so they
-		// settle it too — this matches 5.2, which surfaced a failed relay as a
-		// virtual EOSE instead of letting it hold the group open forever.
-		const settled = new Set<string>()
-		const settledTarget = urls.length
-		const groupSettled = () => settled.size >= settledTarget
-		// Emitted before the observable is assigned; unsubscribes right after subscribe() returns.
+		// Group subscription emits a single EOSE only after every relay has
+		// settled, so closeOnEose should stop on that group-level marker.
 		const stopIfCloseOnEose = () => {
-			if (!opts?.closeOnEose || stopped || !groupSettled()) return
+			if (!opts?.closeOnEose || stopped) return
 			if (subscription) stop()
 			else {
 				stopped = true
@@ -146,29 +132,18 @@ export const applesauceIo: NostrIo = {
 			}
 		}
 		subscription = getPool()
-			.req(urls, filters, {
+			.subscription(urls, filters, {
 				resubscribe: false,
 				// Bounded 3-retry policy (see SUBSCRIBE_RECONNECT) — NOT the unbounded
-				// `reconnect: true` that v6's raw req() would otherwise expand to.
+				// `reconnect: true` that v6's subscription stream would otherwise expand to.
 				reconnect: SUBSCRIBE_RECONNECT,
 			})
 			.subscribe((message) => {
-				if (message.type === 'EOSE') {
-					settled.add(message.from)
+				if (message === 'EOSE') {
 					stopIfCloseOnEose()
 					return
 				}
-				// Surface per-relay failures instead of dropping them silently:
-				// with resubscribe: false a CLOSED or ERROR permanently removes
-				// that relay from this subscription, and there is no other trace
-				// of why its events stopped arriving.
-				if (message.type === 'CLOSED' || message.type === 'ERROR') {
-					console.warn('[nostr:subscribe] relay subscription issue:', message)
-					settled.add(message.from)
-					stopIfCloseOnEose()
-					return
-				}
-				if (message.type === 'EVENT' && !stopped) onEvent(message.event as NostrEvent)
+				if (!stopped) onEvent(message as NostrEvent)
 			})
 		if (stopAfterSubscribe) subscription.unsubscribe()
 		return stop

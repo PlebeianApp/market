@@ -3,6 +3,17 @@ import type { NostrEvent } from 'nostr-tools'
 import type { PendingBufferLimits } from './pendingBuffer'
 
 export interface BidSpamPolicy {
+	/**
+	 * Master switch for the relay-facing admission layer. `true` (default)
+	 * enforces every admission gate and publishes `admission.enabled=true`
+	 * in kind-30441. `false` declares and applies **no admission limits**
+	 * — the envelope gate, the spam policy and the pending-buffer caps all
+	 * pass unconditionally — and publishes `{ enabled: false }` so the
+	 * declaration matches the behaviour (review 5242945675 Required 3).
+	 * The child-subscription fan-out cap is a validator-resource bound,
+	 * not an admission rule, and stays in force either way.
+	 */
+	admissionEnabled: boolean
 	/** Maximum accepted bids from one bidder during the rolling window. */
 	maxBidsPerWindow: number
 	/** Rolling window length in seconds. */
@@ -11,6 +22,27 @@ export interface BidSpamPolicy {
 	maxTrackedChildSubscriptions: number
 	/** Historical replay lookback applied to child subscriptions. */
 	childReplayLookbackSec: number
+	/**
+	 * Bounded lifetime, in seconds, for a child REQ's historical replay.
+	 * The REQ is closed on EOSE **or** after this long, whichever fires
+	 * first (review 5242945675 Required 2): `@contextvm/sdk` only surfaces
+	 * the relay's own EOSE, and this repo documents that a relay may never
+	 * reach it (`src/lib/nostr/io.ts`, `observedAtRecovery.ts`). Without
+	 * the timeout a never-EOSE relay leaves the replay open for the
+	 * process lifetime.
+	 */
+	childReplayCompletionTimeoutSec: number
+	/**
+	 * How long past the auction's own settlement window
+	 * (`max_end_at + max(max_skew_sec, settlement_grace)`) the validator
+	 * keeps observing that auction's children. AUCTIONS.md §8.4 keeps
+	 * `settled_late` reachable for a voluntary release published after
+	 * `settlement_grace`, so the ingestion window must outlive the window
+	 * the verdict layer reasons about; this is the stated arrival bound
+	 * (review 5242945675 Required 1). A release observed after it is not
+	 * seen at all, and the auction's terminal verdict stands.
+	 */
+	lateSettlementObservationSec: number
 	/** LIFETIME cap per (auction, bidder) — bids are append-only and the
 	 *  count includes bids that later became invalid. See subscriber.ts
 	 *  (review 5645059400 finding 2). */
@@ -51,10 +83,19 @@ export interface BidSpamPolicy {
 }
 
 export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
+	admissionEnabled: true,
 	maxBidsPerWindow: 20,
 	rateWindowSec: 60,
 	maxTrackedChildSubscriptions: 512,
 	childReplayLookbackSec: 60 * 60 * 24 * 30,
+	// 30 s: comfortably inside the default `max_skew_sec` (120 s), so a
+	// child delivered live during the replay window can never be pushed
+	// past the skew bound by the replay's own duration.
+	childReplayCompletionTimeoutSec: 30,
+	// 1 h past the settlement window. AUCTIONS.md §8.4 allows a voluntary
+	// late release at any point before the bidder refunds, which the
+	// protocol does not bound — so the validator declares its own bound.
+	lateSettlementObservationSec: 60 * 60,
 	maxTrackedBidsPerAuction: 100,
 	maxPendingEventsPerKey: 256,
 	// Worst case across all three pending buffers combined:
@@ -88,8 +129,23 @@ const readNonNegativeIntegerEnv = (env: NodeJS.ProcessEnv, name: string): number
 	return parsed
 }
 
+/**
+ * Boolean reader for the admission master switch. Fails loudly on a
+ * malformed value for the same reason the integer reader does: a
+ * mistyped security control must not silently fall back to a default.
+ */
+const readBooleanEnv = (env: NodeJS.ProcessEnv, name: string): boolean | undefined => {
+	const raw = env[name]?.trim().toLowerCase()
+	if (!raw) return undefined
+	if (raw === 'true' || raw === '1') return true
+	if (raw === 'false' || raw === '0') return false
+	throw new Error(`${name} must be true or false, got ${raw}`)
+}
+
 export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): Partial<BidSpamPolicy> => {
 	const entries: Array<[keyof BidSpamPolicy, string]> = [
+		['childReplayCompletionTimeoutSec', 'AUCTION_VALIDATOR_CHILD_REPLAY_COMPLETION_TIMEOUT_SEC'],
+		['lateSettlementObservationSec', 'AUCTION_VALIDATOR_LATE_SETTLEMENT_OBSERVATION_SEC'],
 		['maxBidsPerWindow', 'AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW'],
 		['rateWindowSec', 'AUCTION_VALIDATOR_RATE_WINDOW_SEC'],
 		['maxTrackedChildSubscriptions', 'AUCTION_VALIDATOR_MAX_TRACKED_CHILD_SUBSCRIPTIONS'],
@@ -108,6 +164,8 @@ export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): 
 	]
 
 	const policy: Partial<BidSpamPolicy> = {}
+	const admissionEnabled = readBooleanEnv(env, 'AUCTION_VALIDATOR_ADMISSION_ENABLED')
+	if (admissionEnabled !== undefined) policy.admissionEnabled = admissionEnabled
 	const legacyTrackedBidCap = readNonNegativeIntegerEnv(env, 'AUCTION_VALIDATOR_MAX_ACTIVE_BIDS_PER_AUCTION')
 	if (legacyTrackedBidCap !== undefined) policy.maxTrackedBidsPerAuction = legacyTrackedBidCap
 	for (const [field, envName] of entries) {
@@ -124,6 +182,18 @@ export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): 
  */
 export const resolvePendingBufferLimits = (policy?: Partial<BidSpamPolicy>): PendingBufferLimits => {
 	const resolved = resolveBidSpamPolicy(policy)
+	// Admission off means admission off: a declaration of "no limits"
+	// that still enforced buffer caps would be a published lie
+	// (review 5242945675 Required 3). Operators who disable admission
+	// accept unbounded buffering; index.ts logs it at startup.
+	if (!resolved.admissionEnabled) {
+		return {
+			maxPendingKeys: Number.MAX_SAFE_INTEGER,
+			maxPendingEventsPerKey: Number.MAX_SAFE_INTEGER,
+			maxPendingEvents: Number.MAX_SAFE_INTEGER,
+			pendingTtlSec: Number.MAX_SAFE_INTEGER,
+		}
+	}
 	return {
 		maxPendingKeys: resolved.maxPendingKeys,
 		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
@@ -169,6 +239,7 @@ export type EventEnvelopeDecision = { ok: true } | { ok: false; reason: 'event_t
  */
 export const checkEventEnvelope = (event: NostrEvent, policy?: Partial<BidSpamPolicy>): EventEnvelopeDecision => {
 	const resolved = resolveBidSpamPolicy(policy)
+	if (!resolved.admissionEnabled) return { ok: true }
 	const eventBytes = Buffer.byteLength(JSON.stringify(event), 'utf8')
 	if (eventBytes > resolved.maxEventBytes) {
 		return { ok: false, reason: 'event_too_large', detail: `event size ${eventBytes} exceeds max_event_bytes=${resolved.maxEventBytes}` }
@@ -198,6 +269,9 @@ export const checkBidSpamPolicy = (input: {
 	trackedBidCount: number
 }): BidSpamDecision => {
 	const policy = resolveBidSpamPolicy(input.policy)
+	// Declared-off admission passes everything. Resolved here rather
+	// than at the call sites so no ingestion path can forget it.
+	if (!policy.admissionEnabled) return { ok: true }
 	const eventId = input.bid.id.toLowerCase()
 	if (input.bid.bidNonce.length > policy.maxNonceLength) {
 		return { ok: false, reason: 'invalid_bid_nonce', detail: `bid_nonce exceeds max_nonce_length=${policy.maxNonceLength}` }
@@ -251,22 +325,37 @@ export const recordAcceptedBid = (input: {
 	const nonce = nonceKey(input.auction.rootEventId, input.bid.bidderPubkey, input.bid.bidNonce)
 	const recent = pruneTimes(input.state.bidderBidTimes.get(bidRateKey) ?? [], input.now, policy.rateWindowSec)
 
+	// `seenEventIds` is a freshness window for deduplication, not a
+	// recency cache: the oldest-inserted id is the one whose replay
+	// window has aged out, so FIFO eviction is the correct policy there.
 	while (input.state.seenEventIds.size >= policy.maxSeenEventIds) {
 		const oldest = input.state.seenEventIds.values().next().value
 		if (oldest === undefined) break
 		input.state.seenEventIds.delete(oldest)
 	}
 	input.state.seenEventIds.add(eventId)
-	while (input.state.nonceOwners.size >= policy.maxSeenEventIds) {
-		const oldest = input.state.nonceOwners.keys().next().value
+	// The other two maps are LRU, not FIFO (review 5242945675,
+	// non-blocking): `Map.set` on an existing key does not move it, so
+	// oldest-inserted eviction would drop an ACTIVE bidder's rate history
+	// first and reset the documented 20-per-60 s window once the map
+	// filled. Re-inserting on write makes the retained entries the most
+	// recently active ones.
+	touchLru(input.state.nonceOwners, nonce, eventId, policy.maxSeenEventIds)
+	touchLru(input.state.bidderBidTimes, bidRateKey, [...recent, input.now], policy.maxSeenEventIds)
+}
+
+/**
+ * Insert `key`, treating it as the most recently used entry. The existing
+ * entry (if any) is removed first so re-touching an active key neither
+ * counts against the cap nor evicts the key being written, then the map is
+ * trimmed to `cap` from the oldest end.
+ */
+const touchLru = <T>(map: Map<string, T>, key: string, value: T, cap: number): void => {
+	map.delete(key)
+	while (map.size >= cap) {
+		const oldest = map.keys().next().value
 		if (oldest === undefined) break
-		input.state.nonceOwners.delete(oldest)
+		map.delete(oldest)
 	}
-	while (input.state.bidderBidTimes.size >= policy.maxSeenEventIds) {
-		const oldest = input.state.bidderBidTimes.keys().next().value
-		if (oldest === undefined) break
-		input.state.bidderBidTimes.delete(oldest)
-	}
-	input.state.nonceOwners.set(nonce, eventId)
-	input.state.bidderBidTimes.set(bidRateKey, [...recent, input.now])
+	map.set(key, value)
 }

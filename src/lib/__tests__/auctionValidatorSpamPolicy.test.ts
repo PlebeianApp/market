@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	checkBidSpamPolicy,
+	checkEventEnvelope,
 	createBidSpamState,
 	readBidSpamPolicyFromEnv,
 	recordAcceptedBid,
 	resolveBidSpamPolicy,
+	resolvePendingBufferLimits,
 } from '../../server/auction-validator/spamPolicy'
 import type { ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 
@@ -160,5 +162,92 @@ describe('auction validator bid spam policy', () => {
 			AUCTION_VALIDATOR_MAX_ACTIVE_BIDS_PER_AUCTION: '4',
 		} as NodeJS.ProcessEnv)
 		expect(policy).toEqual({ maxTrackedBidsPerAuction: 4 })
+	})
+
+	test('reads the admission master switch and the observation bounds from env', () => {
+		expect(
+			readBidSpamPolicyFromEnv({
+				AUCTION_VALIDATOR_ADMISSION_ENABLED: 'false',
+				AUCTION_VALIDATOR_CHILD_REPLAY_COMPLETION_TIMEOUT_SEC: '15',
+				AUCTION_VALIDATOR_LATE_SETTLEMENT_OBSERVATION_SEC: '900',
+			} as NodeJS.ProcessEnv),
+		).toEqual({
+			admissionEnabled: false,
+			childReplayCompletionTimeoutSec: 15,
+			lateSettlementObservationSec: 900,
+		})
+		expect(readBidSpamPolicyFromEnv({ AUCTION_VALIDATOR_ADMISSION_ENABLED: 'TRUE' } as NodeJS.ProcessEnv)).toEqual({
+			admissionEnabled: true,
+		})
+		// A mistyped security control must fail loudly, not fall back to a
+		// default (review 5242945675 Required 3).
+		expect(() => readBidSpamPolicyFromEnv({ AUCTION_VALIDATOR_ADMISSION_ENABLED: 'maybe' } as NodeJS.ProcessEnv)).toThrow(
+			'AUCTION_VALIDATOR_ADMISSION_ENABLED must be true or false',
+		)
+	})
+
+	test('passes every admission gate when admission is declared off', () => {
+		const state = createBidSpamState()
+		const bid = buildBid({ bidNonce: 'x'.repeat(64) })
+		const policy = {
+			admissionEnabled: false,
+			maxEventBytes: 8,
+			maxTagCount: 1,
+			maxNonceLength: 1,
+			maxProofCount: 0,
+			maxBidsPerWindow: 0,
+			maxTrackedBidsPerAuction: 0,
+		}
+
+		expect(
+			checkEventEnvelope(
+				{
+					tags: [
+						['a', 'b'],
+						['c', 'd'],
+					],
+				} as any,
+				policy,
+			),
+		).toEqual({ ok: true })
+		expect(checkBidSpamPolicy({ auction, bid, now: 100, state, trackedBidCount: 999, policy })).toEqual({ ok: true })
+		// The pre-parent buffers lose their caps with it: a declaration of
+		// "no limits" that still enforced them would be a published lie.
+		expect(resolvePendingBufferLimits(policy)).toEqual({
+			maxPendingKeys: Number.MAX_SAFE_INTEGER,
+			maxPendingEventsPerKey: Number.MAX_SAFE_INTEGER,
+			maxPendingEvents: Number.MAX_SAFE_INTEGER,
+			pendingTtlSec: Number.MAX_SAFE_INTEGER,
+		})
+	})
+
+	test('evicts the least recently active bidder, not the earliest inserted', () => {
+		// `maxSeenEventIds` is the shared retention cap. Under the old
+		// oldest-inserted eviction the first bidder's rate history was the
+		// first thing dropped, which silently reset their documented
+		// 20-per-60 s window (review 5242945675, non-blocking).
+		const state = createBidSpamState()
+		const policy = { maxSeenEventIds: 3, rateWindowSec: 100, maxBidsPerWindow: 20 }
+		const bidderA = 'a'.repeat(64)
+		const bidderB = 'b'.repeat(64)
+		const record = (bidderPubkey: string, id: string, nonce: string, now: number) =>
+			recordAcceptedBid({
+				auction,
+				bid: buildBid({ id, bidNonce: nonce, bidderPubkey }),
+				now,
+				state,
+				policy,
+			})
+
+		record(bidderA, '1'.repeat(64), 'nonce-1', 100)
+		record(bidderB, '2'.repeat(64), 'nonce-2', 101)
+		record('c'.repeat(64), '3'.repeat(64), 'nonce-3', 102)
+		record(bidderA, '4'.repeat(64), 'nonce-4', 103) // A is active again
+		record('d'.repeat(64), '5'.repeat(64), 'nonce-5', 104)
+
+		expect(state.bidderBidTimes.has(bidderA)).toBe(true)
+		expect(state.bidderBidTimes.get(bidderA)).toEqual([100, 103])
+		expect(state.bidderBidTimes.has(bidderB)).toBe(false)
+		expect(state.bidderBidTimes.size).toBe(3)
 	})
 })

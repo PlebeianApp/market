@@ -190,7 +190,19 @@ export const VALIDATOR_REASONS = [
 	'post_end',
 	'late_arrival',
 	'timestamp_skew',
-	// relay/admission abuse controls
+	// Forward-declared admission-refusal vocabulary. NOTHING in this repo
+	// produces these ten codes: every admission refusal on the validator's
+	// relay-facing boundary is a `logger.warn` + `return`, so no refusal
+	// reason ever reaches a relay and a refused event is indistinguishable
+	// from an unobserved one (review 5242945675 Required 4 — see the
+	// subscriber module docstring, which owns that statement, and the
+	// published kind-30441 `notes`, which repeats it to consumers). They
+	// are kept as a fixed vocabulary so a consumer can narrow on them
+	// without them ever appearing, and so a future relay-visible carrier
+	// has the vocabulary already defined. `event_too_large` and
+	// `too_many_tags` are the envelope gate, the other six the kind-1023
+	// admission policy, and the last two are relay-side rules this app
+	// boundary does not implement at all (review 5645059400 finding 5).
 	'event_too_large',
 	'too_many_tags',
 	'bid_payload_too_large',
@@ -199,9 +211,6 @@ export const VALIDATOR_REASONS = [
 	'duplicate_bid_nonce',
 	'rate_limited',
 	'too_many_tracked_bids',
-	// Forward-declared for relay-side admission rules that this app boundary
-	// does not emit yet (review 5645059400 finding 5). Kept so consumers can
-	// narrow on a fixed vocabulary; nothing produces them today.
 	'too_many_invalid_attempts',
 	'validator_policy_rejected',
 	// amount — ADR-0012 Phase 1: the absolute floor is the ONLY

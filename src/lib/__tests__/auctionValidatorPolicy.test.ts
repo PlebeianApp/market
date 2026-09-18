@@ -37,6 +37,8 @@ describe('validator policy publication', () => {
 			rateWindowSec: DEFAULT_BID_SPAM_POLICY.rateWindowSec,
 			maxTrackedChildSubscriptions: DEFAULT_BID_SPAM_POLICY.maxTrackedChildSubscriptions,
 			childReplayLookbackSec: DEFAULT_BID_SPAM_POLICY.childReplayLookbackSec,
+			childReplayCompletionTimeoutSec: DEFAULT_BID_SPAM_POLICY.childReplayCompletionTimeoutSec,
+			lateSettlementObservationSec: DEFAULT_BID_SPAM_POLICY.lateSettlementObservationSec,
 			maxTrackedBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxTrackedBidsPerAuction,
 			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxPendingEventsPerKey: DEFAULT_BID_SPAM_POLICY.maxPendingEventsPerKey,
@@ -76,7 +78,12 @@ describe('validator policy publication', () => {
 		expect(parsed.ok).toBe(true)
 		if (!parsed.ok) return
 		expect(parsed.value.policy.maxAcceptableSkewSec).toBe(45)
-		expect(parsed.value.policy.notes).toBe('tight caps')
+		// The operator's note is preserved and the boundary's own disclosure is
+		// appended to it (review 5242945675 Required 4 — the published policy
+		// has to say that refusals are log-only).
+		expect(parsed.value.policy.notes).toStartWith('tight caps ')
+		expect(parsed.value.policy.notes).toContain('refusals are log-only')
+		expect(parsed.value.policy.notes).toContain('fail-closed cliff')
 		expect(parsed.value.policy.admission).toMatchObject({
 			enabled: true,
 			maxBidsPerWindow: 3,
@@ -86,5 +93,34 @@ describe('validator policy publication', () => {
 			maxTagCount: 9,
 			pendingTtlSec: 30,
 		})
+	})
+
+	test('declares { enabled: false } when the admission master switch is off, and the document still parses', async () => {
+		let published: any
+		await publishValidatorPolicy({
+			signer: {
+				signEvent: async (template: any) => ({
+					...template,
+					id: '5'.repeat(64),
+					pubkey: VALIDATOR_PUBKEY,
+					sig: '6'.repeat(128),
+				}),
+			} as any,
+			relayPool: {
+				publish: async (event: any) => {
+					published = event
+				},
+			} as any,
+			name: 'Local validator',
+			spamPolicy: { ...DEFAULT_BID_SPAM_POLICY, admissionEnabled: false },
+		})
+
+		const parsed = parseValidatorPolicyEvent(published)
+		expect(parsed.ok).toBe(true)
+		if (!parsed.ok) return
+		// The union member is a declared choice, not dead code: this is the
+		// shape a reader gets from a validator that enforces no admission
+		// limits (review 5242945675 Required 3).
+		expect(parsed.value.policy.admission).toEqual({ enabled: false })
 	})
 })
