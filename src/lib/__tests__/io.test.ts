@@ -33,7 +33,7 @@ function makeMockNdk(relayUrls: string[] = []) {
 		}),
 	)
 	return {
-		subscribe: mock(() => ({ stop: mock(() => {}) })),
+		subscribe: mock((_filter: unknown, _opts?: unknown, _relaySet?: unknown) => ({ stop: mock(() => {}) })),
 		pool: {
 			relays,
 			useTemporaryRelay: mock((relay: { url: string }) => {
@@ -48,6 +48,9 @@ function relaySetUrls(relaySet: unknown): string[] {
 	return Array.from((relaySet as { relays: Set<{ url: string }> }).relays).map((relay) => relay.url)
 }
 
+type FetchEventsOpts = { timeoutMs?: number; relaySet?: unknown }
+type PublishEventInput = { rawEvent(): unknown }
+
 const mockNdkStore = {
 	state: {
 		ndk: null as ReturnType<typeof makeMockNdk> | null,
@@ -56,8 +59,8 @@ const mockNdkStore = {
 	},
 }
 const mockNdkActions = {
-	fetchEventsWithTimeout: mock(async () => new Set([stubNdkEvent])),
-	publishEvent: mock(async () => new Set([{ url: 'wss://relay.example' }])),
+	fetchEventsWithTimeout: mock(async (_filter: unknown, _opts?: FetchEventsOpts) => new Set([stubNdkEvent])),
+	publishEvent: mock(async (_event: PublishEventInput, _relaySet?: unknown) => new Set([{ url: 'wss://relay.example' }])),
 	getSigner: () => undefined,
 	getUser: mock(async () => null as { pubkey: string } | null),
 }
@@ -85,23 +88,15 @@ let poolSubscriptionController = (
 ): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
 let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => []
 
-// Sentinel returned by the RelayGroup.completeOnAllEose() stub — the adapter
-// must forward it as request()'s `complete` option so fetchEvents waits for
-// every relay's EOSE instead of applesauce 6.2's first-relay-EOSE default.
-const completeOnAllEoseOperator = { marker: 'completeOnAllEose' }
-
 mock.module('applesauce-relay', () => ({
 	RelayPool: class MockRelayPool {
 		request = (urls: string[], filters: unknown, opts?: unknown) => ({
 			subscribe: (h: ReqHandlers) => poolRequestController(h, urls, filters, opts),
 		})
-		req = (urls: string[], filters: unknown, opts: unknown) => ({
+		subscription = (urls: string[], filters: unknown, opts: unknown) => ({
 			subscribe: (cb: (msg: unknown) => void) => poolSubscriptionController(cb, urls, filters, opts),
 		})
 		publish = async (urls: string[], event: unknown) => poolPublishController(urls, event)
-	},
-	RelayGroup: {
-		completeOnAllEose: () => completeOnAllEoseOperator,
 	},
 }))
 
@@ -204,7 +199,7 @@ describe('ndk bridge adapter (io-ndk)', () => {
 	test('subscribe relays converted raw events and closeOnEose defaults to false', () => {
 		const stopFn = mock(() => {})
 		const ndk = makeMockNdk()
-		ndk.subscribe.mockImplementation((filter, opts) => {
+		ndk.subscribe.mockImplementation((_filter: unknown, opts?: unknown) => {
 			// Default closeOnEose must be false per the SubscribeOptions contract.
 			expect((opts as { closeOnEose: boolean }).closeOnEose).toBe(false)
 			;(opts as { onEvent: (e: unknown) => void }).onEvent(stubNdkEvent)
@@ -370,9 +365,9 @@ describe('applesauce adapter (io-applesauce)', () => {
 	test('subscribe forwards relay events, skips EOSE markers, and stop() unsubscribes', () => {
 		const unsubscribe = mock(() => {})
 		poolSubscriptionController = (cb) => {
-			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
-			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' }) // control marker — must be filtered out, not handed to onEvent
-			cb({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent2 })
+			cb(stubRawEvent)
+			cb('EOSE') // control marker — must be filtered out, not handed to onEvent
+			cb(stubRawEvent2)
 			return { unsubscribe }
 		}
 		const seen: unknown[] = []
@@ -401,7 +396,7 @@ describe('applesauce adapter (io-applesauce)', () => {
 			relayUrls: ['wss://relay.example'],
 		})
 
-		emit?.({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+		emit?.('EOSE')
 
 		expect(onEvent).not.toHaveBeenCalled()
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
@@ -413,7 +408,7 @@ describe('applesauce adapter (io-applesauce)', () => {
 		const unsubscribe = mock(() => {})
 		const onEvent = mock(() => {})
 		poolSubscriptionController = (cb) => {
-			cb({ type: 'EOSE', from: 'wss://relay.example', id: 'sub-1' })
+			cb('EOSE')
 			return { unsubscribe }
 		}
 
@@ -425,30 +420,21 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
 
-	test('subscribe warns on per-relay CLOSED and ERROR messages without forwarding them', () => {
+	test('subscribe forwards events and ignores only the group EOSE marker', () => {
 		const unsubscribe = mock(() => {})
 		const onEvent = mock(() => {})
-		const warns: unknown[][] = []
-		const warn = console.warn
-		console.warn = (...args: unknown[]) => warns.push(args)
-		try {
-			let emit: ((msg: unknown) => void) | undefined
-			poolSubscriptionController = (cb) => {
-				emit = cb
-				return { unsubscribe }
-			}
-			const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, { relayUrls: ['wss://relay.example'] })
-			// CLOSED/ERROR are surfaced but never forwarded to onEvent; events still flow.
-			emit?.({ type: 'CLOSED', from: 'wss://relay.example', id: 'sub-1', reason: 'rate-limited' })
-			emit?.({ type: 'ERROR', from: 'wss://relay.example', id: 'sub-1', error: new Error('conn fail') })
-			emit?.({ type: 'EVENT', from: 'wss://relay.example', id: 'sub-1', event: stubRawEvent })
-			expect(warns.length).toBe(2)
-			expect(onEvent).toHaveBeenCalledTimes(1)
-			stop()
-			expect(unsubscribe).toHaveBeenCalledTimes(1)
-		} finally {
-			console.warn = warn
+		let emit: ((msg: unknown) => void) | undefined
+		poolSubscriptionController = (cb) => {
+			emit = cb
+			return { unsubscribe }
 		}
+		const stop = applesauceIo.subscribe({ kinds: [1] }, onEvent, { relayUrls: ['wss://relay.example'] })
+		emit?.(stubRawEvent)
+		emit?.('EOSE')
+		emit?.(stubRawEvent2)
+		expect(onEvent).toHaveBeenCalledTimes(2)
+		stop()
+		expect(unsubscribe).toHaveBeenCalledTimes(1)
 	})
 
 	test('publish throws when no relays are configured', async () => {
@@ -508,23 +494,18 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(captured).toEqual(['wss://from-store'])
 	})
 
-	test('fetchEvents pins request() to all-relay EOSE completion (not the 6.2 first-EOSE default)', async () => {
-		// applesauce-relay 6.2's request() default completes via
-		// completeOnAny(completeAfterFirstRelay(5s), completeOnAllEose()) — the
-		// first relay's EOSE starts a 5s fuse that can end the fetch before
-		// slower relays deliver. The adapter must pass the group-completion
-		// operator explicitly.
-		let capturedOpts: { complete?: unknown } | undefined
+	test('fetchEvents relies on RelayPool.request() default completion semantics', async () => {
+		let capturedOpts: unknown
 		poolRequestController = (h, _urls, _filters, opts) => {
-			capturedOpts = opts as { complete?: unknown }
+			capturedOpts = opts
 			h.complete()
 			return { unsubscribe: () => {} }
 		}
 		await applesauceIo.fetchEvents({ kinds: [1] }, { relayUrls: ['wss://relay.example'] })
-		expect(capturedOpts?.complete).toBe(completeOnAllEoseOperator)
+		expect(capturedOpts).toBeUndefined()
 	})
 
-	test('subscribe passes a bounded reconnect policy to req() (1 initial + 3 retries, no resetOnSuccess)', () => {
+	test('subscribe passes a bounded reconnect policy to subscription() (1 initial + 3 retries, no resetOnSuccess)', () => {
 		// 6.2's `reconnect: true` maps to RxJS retry() with NO count (unbounded)
 		// and its synthetic OPEN markers (relay.js:537-541) would reset a
 		// `resetOnSuccess` counter on every resubscribe. The adapter must pin
@@ -539,12 +520,9 @@ describe('applesauce adapter (io-applesauce)', () => {
 		stop()
 	})
 
-	test('closeOnEose waits for every relay to settle before unsubscribing (not just the first EOSE)', () => {
-		// The maximotodev review scenario, at the adapter wiring level: with two
-		// relays, the FIRST relay's EOSE must not unsubscribe the group — only
-		// once both relays have settled (EOSE or terminal CLOSED/ERROR) may
-		// stop() run. Relay URL comparison is by normalized `from` count, so
-		// both stubs below use distinct relay URLs.
+	test('closeOnEose unsubscribes on the group EOSE marker', () => {
+		// applesauce-relay's group subscription emits a single EOSE only after
+		// all relays have settled, so the adapter should stop on that marker.
 		const unsubscribe = mock(() => {})
 		let emit: ((msg: unknown) => void) | undefined
 		poolSubscriptionController = (cb) => {
@@ -558,16 +536,11 @@ describe('applesauce adapter (io-applesauce)', () => {
 			relayUrls: ['wss://relay-a.example', 'wss://relay-b.example'],
 		})
 
-		// First relay EOSEs — the group is NOT settled yet: no teardown.
-		emit?.({ type: 'EOSE', from: 'wss://relay-a.example/', id: 'sub-1' })
+		emit?.(stubRawEvent)
 		expect(unsubscribe).toHaveBeenCalledTimes(0)
-
-		// A late event from the second relay still arrives.
-		emit?.({ type: 'EVENT', from: 'wss://relay-b.example/', id: 'sub-1', event: stubRawEvent })
 		expect(onEvent).toHaveBeenCalledTimes(1)
 
-		// Second relay settles via terminal CLOSED — NOW the group stops.
-		emit?.({ type: 'CLOSED', from: 'wss://relay-b.example/', id: 'sub-1', reason: 'rate-limited: no' })
+		emit?.('EOSE')
 		expect(unsubscribe).toHaveBeenCalledTimes(1)
 
 		stop()
