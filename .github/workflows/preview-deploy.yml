@@ -755,7 +755,7 @@ jobs:
       # existed — the exit-127 defect lived exactly here.
       - name: Probe VPS state (dry run, removes nothing)
         id: probe
-        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outputs.mode != 'execute'
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode != 'execute'
         run: |
           infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
           set -uo pipefail
@@ -779,7 +779,7 @@ jobs:
 
       - name: Release port offset, stop containers, clean up VPS directory
         id: cleanup
-        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outputs.mode == 'execute'
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
         run: |
           bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
           set -uo pipefail
@@ -815,7 +815,7 @@ jobs:
 
       - name: Delete Cloudflare DNS record
         id: dns
-        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outputs.mode == 'execute'
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -843,7 +843,7 @@ jobs:
       # cannot diverge again.
       - name: Verify teardown (fail loudly when resources remain)
         id: verify
-        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outputs.mode == 'execute'
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
@@ -866,23 +866,33 @@ jobs:
             -H "Content-Type: application/json" | jq -r '(.result // []) | length' 2>/dev/null || true)"
           if [ "$REMAINING" = "0" ]; then
             echo "Verified: the Cloudflare zone holds no A record for $SUBDOMAIN."
+          elif [ -n "$REMAINING" ]; then
+            echo "::error::$SUBDOMAIN still has $REMAINING A record(s) in the Cloudflare zone after the DNS delete step."
+            FAILED=1
           else
-            echo "::error::$SUBDOMAIN still has ${REMAINING:-unknown} A record(s) in the Cloudflare zone after the DNS delete step."
+            # An unreadable answer is NOT an empty zone. Never report "verified"
+            # for a question that was not answered.
+            echo "::error::Could not read the Cloudflare zone record list for $SUBDOMAIN (empty or non-JSON answer from the API), so DNS teardown is unverified."
             FAILED=1
           fi
-          DOH="$(curl -sS --max-time 20 -H 'accept: application/dns-json' \
-            "https://cloudflare-dns.com/dns-query?name=$SUBDOMAIN&type=A" \
-            | jq -r '((.Answer // []) | map(.data) | join(","))' 2>/dev/null || true)"
-          if [ -n "$DOH" ]; then
-            echo "::warning title=DNS still answering::$SUBDOMAIN still answers over DoH with $DOH while the zone holds no such record — a cached answer (ttl=60), not a failure."
+          DOH_JSON="$(curl -sS --max-time 20 -H 'accept: application/dns-json' \
+            "https://cloudflare-dns.com/dns-query?name=$SUBDOMAIN&type=A" 2>/dev/null || true)"
+          DOH_STATUS="$(printf '%s' "$DOH_JSON" | jq -r '.Status // empty' 2>/dev/null || true)"
+          DOH_ANSWERS="$(printf '%s' "$DOH_JSON" | jq -r '(.Answer // []) | map(.data) | join(",")' 2>/dev/null || true)"
+          if [ "$DOH_STATUS" = "3" ]; then
+            echo "Verified: $SUBDOMAIN does not resolve (Cloudflare DoH, NXDOMAIN)."
+          elif [ -n "$DOH_ANSWERS" ]; then
+            echo "::warning title=DNS still answering::$SUBDOMAIN still answers over DoH with $DOH_ANSWERS while the zone holds no such record — a cached answer (ttl=60), not a failure."
+          elif [ -n "$DOH_STATUS" ]; then
+            echo "Note: $SUBDOMAIN returns DoH status $DOH_STATUS with no A answer — not NXDOMAIN, but no address either."
           else
-            echo "Verified: $SUBDOMAIN does not resolve (Cloudflare DoH)."
+            echo "::warning title=DNS observation unavailable::The Cloudflare DoH lookup returned no usable answer, so resolution was not observed. The zone-API check above is the authoritative gate and passed."
           fi
 
           # 2. The VPS app directory and this PR's port marker, read in one
           #    round trip. A remote failure must count as "not verified", never
-          #    as "gone": `SSH_FAILED` matches neither `app_dir=absent` nor the
-          #    marker check below, so it fails the step instead of passing it.
+          #    as "gone": the SSH_FAILED branch comes FIRST, so a partial answer
+          #    followed by a failed connection cannot be read as absence.
           REMOTE_STATE="$(infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF' || echo "SSH_FAILED"
           set -uo pipefail
           PR_NUMBER="${{ steps.target.outputs.pr_number }}"
@@ -893,6 +903,10 @@ jobs:
           REMOTE_EOF
           )"
           case "$REMOTE_STATE" in
+            *SSH_FAILED*)
+              echo "::error::SSH to the preview VPS failed, so the VPS side of the teardown is unverified. Remote state: ${REMOTE_STATE:-<no answer>}"
+              FAILED=1
+              ;;
             *app_dir=absent*)
               echo "Verified: the VPS app directory \$HOME/previews/pr-$PR is gone."
               ;;
@@ -903,8 +917,9 @@ jobs:
           esac
           # A marker held by a DIFFERENT PR (congruent mod 100) is legitimate —
           # --release-port-offset is owner-checked — so only this PR's own marker
-          # counts as a failure.
+          # counts as a failure. Skipped when the SSH check already failed.
           case "$REMOTE_STATE" in
+            *SSH_FAILED*) ;;
             *"port_marker=$PR"*)
               echo "::error::PR #$PR still holds the host-port offset marker $OFFSET."
               FAILED=1
@@ -949,6 +964,7 @@ jobs:
           # resource it owns. `skipped` and `failure` both mean "not removed".
           NOT_DONE=""
           for ENTRY in \
+            "resolve-target:${{ steps.target.outcome }}" \
             "prepare-ssh:${{ steps.ssh.outcome }}" \
             "vps-cleanup:${{ steps.cleanup.outcome }}" \
             "dns-delete:${{ steps.dns.outcome }}" \
@@ -960,13 +976,17 @@ jobs:
               *) NOT_DONE="$NOT_DONE $NAME=${OUTCOME:-did-not-run}" ;;
             esac
           done
+          # The branches are exclusive and ordered so that a claim of removal is
+          # reachable only from an `execute` run in which nothing is left undone.
+          # An unresolvable target leaves MODE empty and lands in the
+          # "incomplete" branch, never in the dry-run one.
           if [ "$READY" != "true" ]; then
             HEADLINE="## 🧹 Preview teardown skipped"
             DETAIL="No preview secrets are configured for this repository, so nothing was ever provisioned for PR #$PR. No VPS or DNS resources were created and none were removed."
-          elif [ "$MODE" != "execute" ]; then
+          elif [ "$MODE" = "dry-run" ]; then
             HEADLINE="## 🔎 Preview teardown probe (dry run)"
             DETAIL="Nothing was changed. This run proved the teardown job can reach its scripts and the preview VPS over the pinned SSH helper, and reported the host state. Re-dispatch with \`execute: true\` to remove a closed PR's resources."
-          elif [ -z "$NOT_DONE" ]; then
+          elif [ "$MODE" = "execute" ] && [ -z "$NOT_DONE" ]; then
             HEADLINE="## 🧹 Preview torn down"
             DETAIL="The preview deployment for this PR has been removed and its DNS record deleted — and this job verified it: the Cloudflare zone holds no A record for \`$SUBDOMAIN\`, the VPS app directory is gone and the host-port offset marker is released."
           else
@@ -980,8 +1000,11 @@ jobs:
           $DETAIL
           EOF
           )
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "--- teardown report (workflow_dispatch probe — not posted to a PR) ---"
+          # A probe reports to the job log. So does a run whose target never
+          # resolved: without a PR number there is nothing to post to, and
+          # guessing one is exactly the failure mode this step exists to stop.
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.target.outcome }}" != "success" ]; then
+            echo "--- teardown report (not posted to the PR) ---"
             printf '%s\n' "$BODY"
             exit 0
           fi

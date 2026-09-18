@@ -44,6 +44,18 @@ const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows')
  */
 const REPO_SCRIPT_REF = /(?:^|[\s'"=(])(?:\.\/)?(?:infra|scripts|e2e|\.github)\/[\w./-]+/
 
+/**
+ * Second, directory-agnostic rule: a repo-relative path with an executable
+ * extension. Without it a new `tools/thing.sh` or a root-level `./tool.sh` would
+ * slip past the four prefixes above — and a hand-maintained path list silently
+ * narrowing the claim is the exact failure this file exists to prevent.
+ * Build outputs (`deploy-package/`, `dist/`, `node_modules/`) are excluded
+ * because they are produced by the job, not checked out. URLs are excluded by
+ * the scheme guard, so a link in a log message is not read as an execution.
+ */
+const REPO_SCRIPT_FILE =
+	/(?:^|[\s'"=(])(?!https?:\/\/)(?:\.\/)?(?!deploy-package\/|dist\/|node_modules\/)[\w.-]+\/[\w./-]+\.(?:sh|bash|py|ts|tsx|js|mjs|cjs)/
+
 type Job = { file: string; name: string; body: string }
 
 /** Every top-level job of a workflow, sliced out by its 2-space key. */
@@ -105,7 +117,9 @@ function runBodies(step: string): string {
 
 /** Does this job depend on files that only exist after a checkout? */
 function needsRepoFiles(job: Job): boolean {
-	return stepsOf(job).some((step) => REPO_SCRIPT_REF.test(runBodies(step)) || /^\s*(?:-\s+)?uses: \.\//m.test(step))
+	return stepsOf(job).some(
+		(step) => REPO_SCRIPT_REF.test(runBodies(step)) || REPO_SCRIPT_FILE.test(runBodies(step)) || /^\s*(?:-\s+)?uses: \.\//m.test(step),
+	)
 }
 
 /** Jobs that run repo-local files without a checkout — the #1358 shape. */
@@ -149,6 +163,16 @@ jobs:
     steps:
       - name: Inline
         run: python3 infra/preview-vps/helper.py
+  unrouted-directory-without-checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: A directory the prefix list does not name
+        run: bash tools/thing.sh
+  root-level-script-without-checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: A root-level script
+        run: ./tool.sh
   comment-only-mention:
     runs-on: ubuntu-latest
     steps:
@@ -156,6 +180,16 @@ jobs:
         run: |
           # see scripts/thing.sh for the history
           echo hello
+  url-only-mention:
+    runs-on: ubuntu-latest
+    steps:
+      - name: A link in a log line
+        run: echo "see https://example.com/docs/thing.js"
+  build-output-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: A path the job produced itself
+        run: cp deploy-package/ecosystem.config.cjs /tmp/
   local-action-without-checkout:
     runs-on: ubuntu-latest
     steps:
@@ -191,14 +225,20 @@ describe('workflow job checkout guard', () => {
 		expect(jobsMissingCheckout('fixture.yml', FIXTURE)).toEqual([
 			'runs-script-without-checkout',
 			'inline-run-without-checkout',
+			'unrouted-directory-without-checkout',
+			'root-level-script-without-checkout',
 			'local-action-without-checkout',
 		])
 	})
 
-	test('a checkout in the job clears it, and comments are not evidence', () => {
+	test('a checkout in the job clears it, and prose is not evidence', () => {
 		const found = jobsMissingCheckout('fixture.yml', FIXTURE)
 		expect(found).not.toContain('runs-script-with-checkout')
+		// A path in a comment, a path in a URL, and a path the job itself
+		// produced are all NOT reasons to demand a checkout.
 		expect(found).not.toContain('comment-only-mention')
+		expect(found).not.toContain('url-only-mention')
+		expect(found).not.toContain('build-output-only')
 		expect(found).not.toContain('nothing-repo-local')
 	})
 

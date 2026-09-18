@@ -253,7 +253,36 @@ describe('preview teardown job (issue #1358)', () => {
 	test('the notification derives the verdict but never posts on a manual probe', () => {
 		const report = stepNamed(teardownJob, REPORT_STEP)
 		expect(report).toContain('!= "pull_request"')
-		expect(report).toContain('not posted to a PR')
+		expect(report).toContain('not posted to the PR')
+	})
+
+	test('the dry-run/execute switch fails closed when the target never resolves', () => {
+		// A target step that failed (a probe refused because the PR is still
+		// open, say) leaves `mode` empty. Every destructive step must be gated
+		// on the target having succeeded, and the dry-run verdict must require
+		// `mode == 'dry-run'` explicitly — otherwise an unresolved target would
+		// be reported as a harmless probe.
+		for (const name of [PROBE_STEP, CLEANUP_STEP, DNS_STEP, VERIFY_STEP]) {
+			expect(stepNamed(teardownJob, name)).toContain("steps.target.outcome == 'success'")
+		}
+		const report = stepNamed(teardownJob, REPORT_STEP)
+		expect(report).toContain('[ "$MODE" = "dry-run" ]')
+		expect(report).toContain('[ "$MODE" = "execute" ] && [ -z "$NOT_DONE" ]')
+		expect(report).not.toContain('[ "$MODE" != "execute" ]')
+		// The target's own outcome is part of the verdict, so a failed target is
+		// named in the "incomplete" message instead of being invisible.
+		expect(report).toContain('resolve-target:${{ steps.target.outcome }}')
+	})
+
+	test('an unanswered question is never reported as verified', () => {
+		const verify = stepNamed(teardownJob, VERIFY_STEP)
+		// DNS: an unreadable zone answer is a failure, not an empty zone.
+		expect(verify).toContain('so DNS teardown is unverified')
+		expect(verify).toContain('DOH_STATUS')
+		// VPS: the SSH-failure branch is matched before the absence branch, so a
+		// partial answer followed by a failed connection cannot read as "gone".
+		expect(verify.indexOf('*SSH_FAILED*)')).toBeGreaterThanOrEqual(0)
+		expect(verify.indexOf('*SSH_FAILED*)')).toBeLessThan(verify.indexOf('*app_dir=absent*)'))
 	})
 })
 
