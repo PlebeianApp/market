@@ -543,8 +543,11 @@ echo "==> Normalising Caddyfile ownership/permissions"
 "${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" "sudo chown root:root /etc/caddy/Caddyfile && sudo chmod 0644 /etc/caddy/Caddyfile && ls -l /etc/caddy/Caddyfile"
 
 # ── 11. Validate and reload Caddy ──
+# Validate FAILS CLOSED: `|| true` here would let an invalid Caddyfile through
+# to the reload/restart below, which on a shared host can take Caddy down for
+# every site it fronts. A non-zero validate aborts provision.sh (set -e).
 echo "==> Validating Caddy config"
-"${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" "sudo caddy validate --config /etc/caddy/Caddyfile 2>&1 || true"
+"${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" "sudo caddy validate --config /etc/caddy/Caddyfile 2>&1"
 
 echo "==> Reloading Caddy"
 "${SSH_BASE[@]}" "${_VPS_USER}@${HOST}" "sudo systemctl reload caddy 2>/dev/null || sudo systemctl restart caddy"

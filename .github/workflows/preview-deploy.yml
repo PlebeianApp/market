@@ -201,7 +201,7 @@ jobs:
 
       # ── OpenSSH only ────────────────────────────────────────────────────────
       # Every VPS connection in this workflow runs through the OpenSSH helpers in
-      # infra/preview-vps/ (ssh-prepare.sh, remote-ssh.sh, remote-scp.sh).
+      # infra/preview-vps/ (ssh-prepare.sh, remote-ssh.sh).
       #
       # GitHub's appleboy/* actions are Go programs (drone-ssh on
       # golang.org/x/crypto/ssh) and their DEFAULT HostKeyAlgorithms negotiate a
@@ -288,8 +288,15 @@ jobs:
           docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.Tag}} {{.ID}}' \
             | while read -r tag id; do
                 [ "$tag" = "$SHA" ] && continue
-                docker image rm -f "$id" >/dev/null 2>&1 || true
+                if docker image rm -f "$id" >/dev/null 2>&1; then
+                  echo "  pruned market-app:$tag ($id)"
+                fi
               done
+          # Echo what is left under the label: this is the proof that
+          # `preview.pr` survived `docker save | docker load` (the whole
+          # label-based GC depends on it) instead of swallowing the result.
+          echo "  images still labelled preview.pr=$PR_NUMBER:"
+          docker images --filter "label=preview.pr=$PR_NUMBER" --format '    {{.Repository}}:{{.Tag}} {{.ID}}' || true
           docker image prune -f >/dev/null 2>&1 || true
           REMOTE_EOF
 
@@ -353,10 +360,10 @@ jobs:
             market-app:
               # Built on the CI runner ("Build app image on CI runner") and
               # shipped here: dependencies are baked into the image, so a lazy
-              # wake starts in seconds instead of running `bun install` per
+              # wake starts in seconds instead of running bun install per
               # container start (~5 min cold start that exceeded the gateway's
-              # boot budget). The Dockerfile runs a FULL `bun install` (not
-              # `--production`), so the tailwindcss devDependency the
+              # boot budget). The Dockerfile runs a FULL bun install (not
+              # --production), so the tailwindcss devDependency the
               # request-time HTML bundle needs is present.
               image: market-app:${{ github.sha }}
               working_dir: /app
@@ -366,7 +373,12 @@ jobs:
               environment:
                 - NODE_ENV=production
                 - PORT=3000
-                - APP_RELAY_URL=ws://nak-relay:10547
+                # Browser-reachable relay: the gateway splices this host's
+                # /relay path to the PR's relay port, so the value the app hands
+                # the browser on /api/config is wss (not the internal
+                # nak-relay:10547, which no browser can resolve, and not a
+                # plain ws:// which an https page would block as mixed content).
+                - APP_RELAY_URL=wss://${{ steps.ports.outputs.subdomain }}/relay
                 - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
                 - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
               restart: unless-stopped
@@ -455,9 +467,11 @@ jobs:
           # Individual failed attempts inside this loop are TRANSIENT warm-up
           # (preview booting, DNS propagating, Caddy issuing the cert). Only
           # after all 12 attempts (~3 min) are exhausted is this a FINAL
-          # failure — at that point exit nonzero (continue-on-error keeps
-          # the job green) so the comment step posts the explicit degraded
-          # state instead of an open-ended "give it a minute".
+          # failure — at that point exit nonzero. continue-on-error keeps this
+          # step from aborting the job so the comment step still posts the
+          # explicit degraded state; the later "Fail the check when the preview
+          # did not serve" step turns the check red so a green Deploy preview
+          # always means a preview served.
           for _ in $(seq 1 12); do
             STATUS="$(curl -s -o "$BODY_FILE" -w '%{http_code}' --max-time 10 "$PREVIEW_URL" 2>/dev/null || true)"
             SIZE=0
@@ -465,15 +479,31 @@ jobs:
               SIZE="$(wc -c < "$BODY_FILE" | tr -d ' ')"
             fi
             DOCTYPE="$(grep -ci '<!doctype html' "$BODY_FILE" 2>/dev/null || true)"
+            RELAY_NOTE=""
             if [ "${STATUS:-000}" = "200" ] && [ "${SIZE:-0}" -gt 0 ] && [ "${DOCTYPE:-0}" -gt 0 ]; then
-              echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present)"
-              echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
-              exit 0
+              # The app serves HTML. Now prove the browser-reachable relay
+              # works: the app advertises wss://<subdomain>/relay (which the
+              # gateway splices to the PR's relay port), so a WebSocket
+              # handshake plus one Nostr REQ must complete there. An app that is
+              # up but cannot reach its relay is not a preview of this app.
+              if RELAY_URL="wss://${{ steps.ports.outputs.subdomain }}/relay" bun -e '
+                  const url = process.env.RELAY_URL
+                  const ws = new WebSocket(url)
+                  const timer = setTimeout(() => { console.error("relay handshake timeout"); process.exit(1) }, 15000)
+                  ws.onopen = () => ws.send(JSON.stringify(["REQ", "preview-health", { kinds: [0], limit: 0 }]))
+                  ws.onmessage = () => { clearTimeout(timer); console.log("relay ok"); process.exit(0) }
+                  ws.onerror = () => { clearTimeout(timer); console.error("relay handshake failed"); process.exit(1) }
+                ' 2>/dev/null; then
+                echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present, relay reachable)"
+                echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              RELAY_NOTE=" (app served HTML but the relay WebSocket was not reachable)"
             fi
-            echo "attempt: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s), doctype matches: ${DOCTYPE:-0} — not a servable HTML document yet"
+            echo "attempt: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s), doctype matches: ${DOCTYPE:-0}${RELAY_NOTE} — not a complete preview yet"
             sleep 5
           done
-          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app process is up but its request-time HTML bundle does not build (on the preview host: docker compose logs market-app)."
+          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document with a reachable relay. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app is up but its request-time HTML bundle does not build; a served page with a failed relay handshake means APP_RELAY_URL (wss://<subdomain>/relay) is not reachable through the gateway."
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           exit 1
 
@@ -515,7 +545,7 @@ jobs:
 
           - URL: $PREVIEW_URL
           - App host port: \`$APP_PORT\` · Relay host port: \`$RELAY_PORT\`
-          - Commit: \`${{ github.sha }}\`
+          - Commit: \`${{ github.event.pull_request.head.sha }}\`
 
           The preview is torn down automatically when this PR is closed.
           Idle previews are stopped after a few hours; the gateway on the VPS
@@ -531,6 +561,18 @@ jobs:
           else
             gh pr comment "$PR" --body "$BODY"
           fi
+
+      # The health step is continue-on-error so the comment always posts, but a
+      # failed health check must not leave `Deploy preview` green: a green check
+      # has to mean a preview serves. Without this step the job reports success
+      # even when the health check failed (its *outcome* is failure while its
+      # *conclusion* stays green), which is exactly the misleading green this
+      # addresses. Only runs when a preview was actually attempted.
+      - name: Fail the check when the preview did not serve
+        if: ${{ !cancelled() && steps.secrets.outputs.previews_ready == 'true' && steps.health.outcome == 'failure' }}
+        run: |
+          echo "::error::Preview deployment failed its health check (app HTML and/or relay WebSocket). A green Deploy preview now means a preview served; see the run log and the PR comment."
+          exit 1
 
       - name: Remove the materialised SSH key
         if: always()
@@ -616,10 +658,19 @@ jobs:
           # label, then reclaim the dangling layers and build cache so the
           # preview host does not accumulate a full imageset per merged/closed
           # PR. The nak image is intentionally NOT labelled and is shared.
-          docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.ID}}' \
-            | sort -u | xargs -r docker image rm -f >/dev/null 2>&1 || true
+          # Echo what was removed so the GC effect is visible, not swallowed.
+          PR_IMAGE_IDS="$(docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.ID}}' | sort -u)"
+          if [ -n "$PR_IMAGE_IDS" ]; then
+            echo "$PR_IMAGE_IDS" | xargs -r docker image rm -f || true
+            echo "  removed $(printf '%s\n' "$PR_IMAGE_IDS" | grep -c . || true) image(s) labelled preview.pr=$PR_NUMBER"
+          else
+            echo "  no images labelled preview.pr=$PR_NUMBER found"
+          fi
           docker image prune -f >/dev/null 2>&1 || true
-          docker builder prune -f >/dev/null 2>&1 || true
+          # Scope the build-cache sweep: an unfiltered `builder prune` on a
+          # shared host cold-builds the (unlabelled, shared) nak image for the
+          # next deploy of any PR. Only drop cache older than a day.
+          docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
           rm -rf "$APP_DIR"
           REMOTE_EOF
 

@@ -132,6 +132,24 @@ which quotes `detail`. Both variants carry `Retry-After: 5`, and the technical
 `detail` is HTML-escaped before it is rendered (it is text from an untrusted
 upstream).
 
+## The preview's relay is reachable from the browser
+
+The app hands the browser its relay URL on `/api/config`. Previously that was
+`ws://nak-relay:10547` — a compose-internal DNS name no browser can resolve
+(and plain `ws://` would be mixed-content blocked on the https preview anyway),
+so the preview's client could never reach its relay.
+
+The app now advertises `wss://<prN>.test-market.orangesync.tech/relay`.
+`preview_gateway.py` recognises the `/relay` path on a `prN` host and **splices
+it raw** to the PR's relay port (`10547 + (N % 100) * 10`): HTTP-level proxying
+cannot carry a WebSocket upgrade, so the request line + headers are forwarded
+verbatim and bytes are copied both ways until either side closes.
+
+The health check therefore asserts **both** that `/` serves a non-empty HTML
+document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
+Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
+of this application, so it is a failed health check.
+
 ## The nak relay image is built from source on the host
 
 The preview's `nak-relay` service used to pull `ghcr.io/fiatjaf/nak:latest`.
@@ -275,15 +293,15 @@ add these as **repository secrets** (the `deploy` job currently has no
 trigger is switched to `pull_request_target`, as secrets scoped to that
 environment:
 
-| Secret                         | Value                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                                                                                              |
-| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                                                                                             |
-| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                                                                                                          |
-| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). `ssh-prepare.sh` verifies the materialised key against it, and `provision.sh` compares it against the scanned key and aborts before any private-key material is exchanged. A host-key fingerprint is per-**host**, not per-**port**, so it stays valid when the SSH port changes.       |
-| `PREVIEW_VPS_SSH_PORT`         | **OPTIONAL** — sshd port on the preview VPS. Leave unset (or empty) for the default **22**, which is what the current box uses. Set it only when the host is fronted by a non-standard ingress (NAT/port-forward, different sshd port). `ssh-prepare.sh` publishes it to `$GITHUB_ENV`, `remote-ssh.sh`/`remote-scp.sh` use it for `-p`/`-P`, and `provision.sh` uses it for `ssh-keyscan -p`, `ssh -p` and `scp -P`. |
-| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Zone → DNS → Edit** on the `orangesync.tech` zone (the manager deletes preview records; the deploy upserts them)                                                                                                                                                                                                                                                                          |
-| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for the zone that holds `test-market.orangesync.tech` (currently `orangesync.tech`)                                                                                                                                                                                                                                                                                                                |
+| Secret                         | Value                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PREVIEW_VPS_HOST`             | Hostname or public IP of the preview VPS                                                                                                                                                                                                                                                                                                                                                                        |
+| `PREVIEW_VPS_USER`             | SSH user on that VPS (typically `debian`)                                                                                                                                                                                                                                                                                                                                                                       |
+| `PREVIEW_VPS_SSH_KEY`          | PEM private key for SSH/scp (multiline; must be a valid key)                                                                                                                                                                                                                                                                                                                                                    |
+| `PREVIEW_VPS_HOST_FINGERPRINT` | SSH **host**-key SHA256 fingerprint of the VPS, format `SHA256:…` (from `ssh-keyscan -t ed25519 <host> \| ssh-keygen -lf -`). `ssh-prepare.sh` verifies the materialised key against it, and `provision.sh` compares it against the scanned key and aborts before any private-key material is exchanged. A host-key fingerprint is per-**host**, not per-**port**, so it stays valid when the SSH port changes. |
+| `PREVIEW_VPS_SSH_PORT`         | **OPTIONAL** — sshd port on the preview VPS. Leave unset (or empty) for the default **22**, which is what the current box uses. Set it only when the host is fronted by a non-standard ingress (NAT/port-forward, different sshd port). `ssh-prepare.sh` publishes it to `$GITHUB_ENV`, `remote-ssh.sh` uses it for `-p`, and `provision.sh` uses it for `ssh-keyscan -p` and `ssh -p`.                         |
+| `PREVIEW_CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Zone → DNS → Edit** on the `orangesync.tech` zone (the manager deletes preview records; the deploy upserts them)                                                                                                                                                                                                                                                                    |
+| `PREVIEW_CLOUDFLARE_ZONE_ID`   | Cloudflare zone id for the zone that holds `test-market.orangesync.tech` (currently `orangesync.tech`)                                                                                                                                                                                                                                                                                                          |
 
 If any required secret is missing the workflow skips loudly instead of failing
 opaque — do not treat a green "skipped" check as proof previews are live.
@@ -474,11 +492,10 @@ gh secret set PREVIEW_VPS_SSH_KEY --repo PlebeianApp/market < ~/.ssh/<key>
 **Rule: no `appleboy/*` (or any other Go/drone-ssh) action may reach the preview
 VPS.** All VPS access goes through the OpenSSH helpers in `infra/preview-vps/`:
 
-| Helper                       | Role                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ssh-prepare.sh <workdir>`   | materialises the private key from `PREVIEW_VPS_SSH_KEY`, applies the trailing-newline guard (§ f), writes a private `known_hosts` pinned to the **ed25519** host key, verifies it against `PREVIEW_VPS_HOST_FINGERPRINT`, and publishes `PREVIEW_KEY_FILE` / `PREVIEW_KNOWN_HOSTS` / `PREVIEW_SSH_PORT` / `PREVIEW_SSH_TARGET` to `$GITHUB_ENV`. Called by **both** the deploy and the teardown job. |
-| `remote-ssh.sh <cmd…>`       | runs a command — or, with `bash -s`, a script fed on stdin — with the single pinned option set (`StrictHostKeyChecking=yes`, private `UserKnownHostsFile`, `HostKeyAlgorithms=ssh-ed25519`, `BatchMode=yes`).                                                                                                                                                                                        |
-| `remote-scp.sh <src…> <dst>` | copies files with the same pin. Note the UPPERCASE `-P` for the port; `scp`'s lowercase `-p` means "preserve mtime".                                                                                                                                                                                                                                                                                 |
+| Helper                     | Role                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ssh-prepare.sh <workdir>` | materialises the private key from `PREVIEW_VPS_SSH_KEY`, applies the trailing-newline guard (§ f), writes a private `known_hosts` pinned to the **ed25519** host key, verifies it against `PREVIEW_VPS_HOST_FINGERPRINT`, and publishes `PREVIEW_KEY_FILE` / `PREVIEW_KNOWN_HOSTS` / `PREVIEW_SSH_PORT` / `PREVIEW_SSH_TARGET` to `$GITHUB_ENV`. Called by **both** the deploy and the teardown job. |
+| `remote-ssh.sh <cmd…>`     | runs a command — or, with `bash -s`, a script fed on stdin — with the single pinned option set (`StrictHostKeyChecking=yes`, private `UserKnownHostsFile`, `HostKeyAlgorithms=ssh-ed25519`, `BatchMode=yes`). The app image is streamed through this script's stdin, so no `scp` helper exists.                                                                                                      |
 
 **Why.** `appleboy/ssh-action` is not OpenSSH — it is a Go program (drone-ssh on
 `golang.org/x/crypto/ssh`), and its **default** `HostKeyAlgorithms` negotiate a
@@ -567,8 +584,8 @@ the pinned fingerprint before deploying.
 SSH/scp connection — the pinned OpenSSH helpers and `provision.sh` — verifies
 the VPS host key against `PREVIEW_VPS_HOST_FINGERPRINT` before the deploy key is
 used. `ssh-prepare.sh` writes a private `known_hosts` and checks the scanned key
-against the pinned fingerprint before any connection; `remote-ssh.sh` and
-`remote-scp.sh` then run with `StrictHostKeyChecking=yes`,
+against the pinned fingerprint before any connection; `remote-ssh.sh` then runs
+with `StrictHostKeyChecking=yes`,
 `HostKeyAlgorithms=ssh-ed25519` and that private `known_hosts`. `provision.sh`
 scans the host key, compares its SHA256 fingerprint to the pinned secret, and
 aborts on mismatch before any authentication, pinning the negotiation to the
@@ -626,3 +643,10 @@ step exits nonzero and the PR comment flips to an explicit 🔴 degraded/failed
 state with a link to the workflow run — never an open-ended "still warming up"
 message. A deploy-step failure before the health check (e.g. a port-offset
 collision) posts the same explicit 🔴 failed state.
+
+**A green `Deploy preview` means a preview served.** The health step stays
+`continue-on-error` so the comment always posts, but the
+`Fail the check when the preview did not serve` step turns the check red when
+`steps.health.outcome == 'failure'`. Before it, the step's _outcome_ was
+`failure` while the job/check _conclusion_ stayed `success`, so a head whose
+preview failed its own health check could still show a green check.

@@ -601,3 +601,48 @@ def test_route_handler_answers_503_json_on_garbage_upstream_response(monkeypatch
     assert payload["pr"] == 42
     assert "malformed" in payload["detail"]
     assert any("malformed" in line for line in logged)
+
+
+# ── relay: the app advertises wss://<sub>/relay; the gateway splices it ───────
+
+
+def test_relay_port_math():
+    assert gw.relay_port_for_pr(42) == 10547 + (42 % 100) * 10
+    assert gw.relay_port_for_pr(0) == 10547
+    assert gw.relay_port_for_pr(100) == 10547
+    assert gw.relay_port_for_pr(99) == 11537
+    assert gw.relay_port_for_pr(1257) == gw.relay_port_for_pr(1157)
+
+
+def test_is_relay_path_accepts_the_relay_path_only():
+    assert gw.is_relay_path("/relay")
+    assert gw.is_relay_path("/relay?since=0")
+    assert not gw.is_relay_path("/relay/")
+    assert not gw.is_relay_path("/")
+    assert not gw.is_relay_path("/api/config")
+    assert not gw.is_relay_path("/relays")
+
+
+def test_relay_path_tunnels_instead_of_http_proxying():
+    # A /relay request on a preview host must go to the raw tunnel (the HTTP
+    # proxy cannot carry a WebSocket upgrade). If the code proxied instead, the
+    # AssertionError proxy would fail the test.
+    pokes: list[int] = []
+    state = _route_state(
+        pokes, True, AssertionError("HTTP proxy must not be used for /relay")
+    )
+    handler_cls = gw.make_handler(state)
+    FakeHandler = _make_fake_handler(handler_cls, f"pr42.{BASE}")
+
+    h = FakeHandler()
+    h.path = "/relay"
+    tunnelled: dict = {}
+
+    def fake_tunnel(pr):
+        tunnelled["pr"] = pr
+
+    h._tunnel_relay = fake_tunnel  # type: ignore[method-assign]
+    h._answer_route()
+
+    assert pokes == [42]  # wake still fires for the relay path
+    assert tunnelled == {"pr": 42}

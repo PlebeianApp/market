@@ -38,7 +38,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/preview-deploy.yml"
 PREPARE="${SCRIPT_DIR}/ssh-prepare.sh"
 SSH_HELPER="${SCRIPT_DIR}/remote-ssh.sh"
-SCP_HELPER="${SCRIPT_DIR}/remote-scp.sh"
 
 CHECKS=0
 FAILURES=0
@@ -108,18 +107,11 @@ check "remote-ssh.sh pins the negotiated algorithm to ed25519" \
 check "remote-ssh.sh never prompts (BatchMode, IdentitiesOnly)" \
   bash -c 'grep -qF "BatchMode=yes" "$1" && grep -qF "IdentitiesOnly=yes" "$1"' _ "$SSH_HELPER"
 
-check "remote-scp.sh pins the negotiated algorithm to ed25519" \
-  grep -qF 'HostKeyAlgorithms=ssh-ed25519' "$SCP_HELPER"
-
-check "remote-scp.sh refuses to trust an unknown host key" \
-  grep -qF 'StrictHostKeyChecking=yes' "$SCP_HELPER"
-
-# scp takes -P (port); ssh takes -p. Mixing them silently copies on port 22.
-check "remote-scp.sh uses the uppercase scp port flag (-P)" \
-  grep -qE '^[[:space:]]+-P[[:space:]]' "$SCP_HELPER"
-
-check_not "remote-scp.sh does not use ssh's lowercase -p port flag" \
-  grep -qE '^[[:space:]]+-p[[:space:]]' "$SCP_HELPER"
+# scp was removed: the app image is streamed over remote-ssh.sh stdin
+# (`docker save | gzip | … 'gunzip | docker load'`), so the separate scp helper
+# is dead. Guard against reintroducing it.
+check_not "the removed remote-scp.sh helper stays gone" \
+  test -e "${SCRIPT_DIR}/remote-scp.sh"
 
 # ── 3. The preparation script verifies the pin it is given ──────────────────
 check "ssh-prepare.sh pins the ed25519 key type when scanning" \

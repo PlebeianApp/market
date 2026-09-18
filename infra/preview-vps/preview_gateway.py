@@ -46,6 +46,7 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -56,7 +57,9 @@ from typing import Dict, Optional, Sequence, Tuple
 DEFAULT_BASE_DOMAIN = "test-market.orangesync.tech"
 DEFAULT_GATEWAY_PORT = 6799
 PREVIEW_APP_BASE_PORT = 3000
+PREVIEW_RELAY_BASE_PORT = 10547  # mirrors the workflow: relay = 10547 + (PR % 100) * 10
 PREVIEW_PORT_OFFSET = 10  # mirrors the workflow: offset = (PR % 100) * 10
+RELAY_PATH = "/relay"
 WAKE_TIMEOUT_SECONDS = 15.0
 ASK_PATH = "/ask"
 WAKE_POLL_SECONDS = 0.3
@@ -120,6 +123,21 @@ def parse_preview_host(host: str, base_domain: str) -> RouteDecision:
 def app_port_for_pr(pr_number: int) -> int:
     """Host app port for a PR — mirrors the workflow: 3000 + (PR % 100) * 10."""
     return PREVIEW_APP_BASE_PORT + (pr_number % 100) * PREVIEW_PORT_OFFSET
+
+
+def relay_port_for_pr(pr_number: int) -> int:
+    """Host relay port for a PR — mirrors the workflow: 10547 + (PR % 100) * 10."""
+    return PREVIEW_RELAY_BASE_PORT + (pr_number % 100) * PREVIEW_PORT_OFFSET
+
+
+def is_relay_path(path: str) -> bool:
+    """True for the relay WebSocket path (`/relay`), ignoring any query string.
+
+    The preview app advertises `wss://<subdomain>/relay` (APP_RELAY_URL) so the
+    browser has a relay URL it can resolve and that is not mixed-content
+    blocked; Caddy forwards the whole host here and this gateway splices it.
+    """
+    return urllib.parse.urlparse(path).path == RELAY_PATH
 
 
 def ask_decision(domain: str, allowed_suffixes: Sequence[str] = TLS_ASK_ALLOWED_SUFFIXES) -> bool:
@@ -450,6 +468,11 @@ def make_handler(state: GatewayState) -> type:
             port = int(decision.port or 0)
             # Wake on EVERY request (m3): cached-cert repeat visits wake too.
             state.poke(pr_number, state.manager_path, state.python_bin)
+            # The relay WebSocket shares this host under /relay; splice it to
+            # the PR's relay port before any HTTP-body handling.
+            if is_relay_path(self.path):
+                self._tunnel_relay(pr_number)
+                return
             length = int(self.headers.get("Content-Length") or 0)
             body = self.rfile.read(length) if length else b""
             if hasattr(self.headers, "items"):
@@ -488,6 +511,78 @@ def make_handler(state: GatewayState) -> type:
             self.send_header("Content-Length", str(len(resp_body)))
             self.end_headers()
             self.wfile.write(resp_body)
+
+        def _tunnel_relay(self, pr_number: int) -> None:
+            """Raw TCP splice for the preview relay WebSocket (`/relay`).
+
+            HTTP-level proxying (urllib) cannot carry a WebSocket upgrade, so we
+            forward the request line + headers verbatim to the PR's relay port
+            and then copy bytes in both directions until either side closes.
+            The connection is not reused (close_connection) because after the
+            splice there is no further HTTP framing.
+            """
+            self.close_connection = True
+            relay_port = relay_port_for_pr(pr_number)
+            if not wait_for_port(
+                relay_port, budget_seconds=state.boot_budget, probe=state.prober
+            ):
+                self._send_503(pr_number, detail="relay did not accept connections")
+                return
+            try:
+                upstream = socket.create_connection(("127.0.0.1", relay_port), timeout=10)
+            except OSError as e:
+                self._send_503(pr_number, detail=f"relay connect failed: {e}")
+                return
+            try:
+                raw = self.raw_requestline
+                for key, value in self.headers.items():
+                    raw += f"{key}: {value}\r\n".encode("latin-1")
+                raw += b"\r\n"
+                upstream.sendall(raw)
+
+                done = threading.Event()
+
+                def client_to_relay() -> None:
+                    try:
+                        while not done.is_set():
+                            reader = getattr(self.rfile, "read1", self.rfile.read)
+                            chunk = reader(65536)
+                            if not chunk:
+                                break
+                            upstream.sendall(chunk)
+                    except OSError:
+                        pass
+                    finally:
+                        done.set()
+                        try:
+                            upstream.shutdown(socket.SHUT_WR)
+                        except OSError:
+                            pass
+
+                def relay_to_client() -> None:
+                    try:
+                        while not done.is_set():
+                            chunk = upstream.recv(65536)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                    except OSError:
+                        pass
+                    finally:
+                        done.set()
+
+                client_thread = threading.Thread(target=client_to_relay, daemon=True)
+                relay_thread = threading.Thread(target=relay_to_client, daemon=True)
+                client_thread.start()
+                relay_thread.start()
+                client_thread.join()
+                relay_thread.join()
+            finally:
+                try:
+                    upstream.close()
+                except OSError:
+                    pass
 
         def _send_503(self, pr_number: int, detail: str = "") -> None:
             """Answer "not ready yet".
