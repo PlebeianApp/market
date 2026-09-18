@@ -507,3 +507,65 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('commit == the built SHA')
 	})
 })
+
+/**
+ * A fifth incident motivated this block: the PR #1271 preview deployed green
+ * but its relay started empty, so the app served `/setup — no app settings
+ * found` and there was no data to exercise. The deploy now seeds the minimum
+ * app settings (and, opt-in, the dev fixture data), then restarts the app
+ * because it caches app settings and the admin list at startup.
+ */
+describe('preview relay seeding', () => {
+	const SEED_STEP = 'Seed preview relay (app settings, optional dev data)'
+	const CADDY_STEP = 'Wait for Caddy auto-discovery'
+	const HEALTH_STEP = 'Health check'
+
+	const script = readFileSync(join(REPO_ROOT, 'scripts/seed-preview-settings.ts'), 'utf8')
+
+	test('the seed script is env-driven and never hardcodes a relay', () => {
+		expect(script).toContain('process.env.APP_RELAY_URL')
+		expect(script).toContain('process.env.APP_PRIVATE_KEY')
+		expect(script).not.toContain('ws://localhost:10547')
+		expect(script).not.toContain('TEST_APP_PRIVATE_KEY')
+	})
+
+	test('the seed script publishes the settings the app boots from', () => {
+		expect(script).toContain('31990')
+		expect(script).toContain('30000')
+		expect(script).toContain('10002')
+		expect(script).toContain("'plebeian-market-handler'")
+	})
+
+	test('the seed script is idempotent', () => {
+		expect(script).toContain('appSettingsExist')
+		expect(script).toContain('already-seeded')
+	})
+
+	test('the deploy seeds the relay through the browser-reachable wss URL', () => {
+		const seed = stepNamed(deployJob, SEED_STEP)
+		expect(seed).toContain('steps.secrets.outputs.previews_ready == ')
+		// The browser-reachable relay URL is injected via the step's `env:` so
+		// both the minimal script and the optional full seed share it.
+		expect(seed).toContain('wss://${{ steps.ports.outputs.subdomain }}/relay')
+		expect(runBody(seed)).toContain('bun run scripts/seed-preview-settings.ts')
+	})
+
+	test('the full dev seed is opt-in and runs only on the first seed', () => {
+		const body = runBody(stepNamed(deployJob, SEED_STEP))
+		expect(body).toContain('vars.PREVIEW_SEED_FULL')
+		expect(body).toContain('bun run scripts/seed.ts')
+		expect(body).toContain("grep -q '^seeded$'")
+	})
+
+	test('the app is restarted after seeding so the startup cache refreshes', () => {
+		const body = runBody(stepNamed(deployJob, SEED_STEP))
+		expect(body).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(body).toContain('docker compose restart market-app')
+	})
+
+	test('seeding runs after Caddy converges and before the health check', () => {
+		const stepOrder = stepsOf(deployJob).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
+		expect(stepOrder.indexOf(SEED_STEP)).toBeGreaterThan(stepOrder.indexOf(CADDY_STEP))
+		expect(stepOrder.indexOf(SEED_STEP)).toBeLessThan(stepOrder.indexOf(HEALTH_STEP))
+	})
+})
