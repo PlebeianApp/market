@@ -13,7 +13,7 @@
 #
 # This is the SINGLE place the preview SSH options are defined. Every VPS
 # connection in .github/workflows/preview-deploy.yml goes through this script
-# or remote-scp.sh — never through a Go-based action (appleboy/*), whose default
+# — never through a Go-based action (appleboy/*), whose default
 # HostKeyAlgorithms negotiate a different host key than OpenSSH against this
 # VPS and therefore cannot share the PREVIEW_VPS_HOST_FINGERPRINT pin. See
 # ssh-prepare.sh for the measured fingerprints.

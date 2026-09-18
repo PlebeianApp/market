@@ -322,6 +322,9 @@ describe('preview app serves a real document', () => {
 		expect(clean).toContain('label=preview.pr=$PR_NUMBER')
 		expect(clean).toContain('docker image rm')
 		expect(clean).toContain('docker image prune')
+		// The build-cache sweep is scoped so it does not cold-build the shared
+		// nak image for the next deploy.
+		expect(clean).toContain('--filter until=24h')
 	})
 
 	test('the deploy job allows enough time to build and stream the image', () => {
@@ -347,5 +350,32 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('wc -c')
 		expect(body).toContain('-gt 0')
 		expect(body).toContain('<!doctype html')
+	})
+
+	test('the app advertises a browser-reachable wss relay URL', () => {
+		// The browser cannot resolve the compose-internal nak-relay:10547, and
+		// a plain ws:// relay on the https preview is mixed-content blocked.
+		// The app must advertise the same host's /relay path over wss.
+		const body = stripComments(runBody(stepNamed(deployJob, CLAIM_STEP)))
+		expect(body).toContain('APP_RELAY_URL=wss://${{ steps.ports.outputs.subdomain }}/relay')
+		expect(body).not.toContain('APP_RELAY_URL=ws://nak-relay:10547')
+	})
+
+	test('the health check also proves the relay WebSocket is reachable', () => {
+		// An app that serves HTML but cannot reach its relay is not a preview
+		// of this application (review finding 2, 2026-09-17).
+		const body = stripComments(runBody(stepNamed(deployJob, HEALTH_STEP)))
+		expect(body).toContain('wss://${{ steps.ports.outputs.subdomain }}/relay')
+		expect(body).toContain('new WebSocket')
+		expect(body).toContain('REQ')
+	})
+
+	test('a failed health check turns the Deploy preview check red', () => {
+		// continue-on-error keeps the comment posting, but the check must not
+		// stay green when the preview did not serve.
+		const fail = stepNamed(deployJob, 'Fail the check when the preview did not serve')
+		expect(fail).toContain("steps.health.outcome == 'failure'")
+		expect(fail).toContain('previews_ready == ')
+		expect(fail).toContain('exit 1')
 	})
 })
