@@ -390,7 +390,7 @@ function AuctionDetailRoute() {
 	const currency = getAuctionCurrency(auction)
 	const auctionType = getAuctionType(auction)
 	const categories = getAuctionCategories(auction)
-	const trustedMints = getAuctionMints(auction)
+	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const pathIssuerPubkey = getAuctionPathIssuer(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
