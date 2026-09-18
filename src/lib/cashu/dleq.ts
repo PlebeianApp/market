@@ -360,6 +360,12 @@ export type DleqKeysetFetcher = (mintUrl: string, keysetId: string) => Promise<M
 export interface DleqKeysetBidLike {
 	mint: string
 	dleqProofs?: Array<{ id: string }>
+	/**
+	 * Cumulative bid amount, when known. Only used for cap prioritisation:
+	 * higher-amount bids are gathered first so a keyset flood degrades secondary
+	 * bids rather than a reserve-meeting one (review 2026-09-18).
+	 */
+	amount?: number
 }
 
 /**
@@ -423,7 +429,15 @@ export const fetchDleqKeysetsForBidsDetailed = async (
 	const maxKeysets = options?.maxKeysets ?? DEFAULT_MAX_DLEQ_KEYSETS
 	let fetched = 0
 
-	for (const bid of bids) {
+	// Cap prioritisation (review 2026-09-18): the budget is consumed in iteration
+	// order, so a flood of crafted keyset ids from a trusted mint could exhaust it
+	// before a reserve-meeting (higher-amount) bid's evidence is gathered — that
+	// bid would sit `pending`, forcing the seller to the override. Process
+	// higher-amount bids first so the cap degrades secondary bids. Stable for
+	// equal amounts.
+	const orderedBids = [...bids].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
+
+	for (const bid of orderedBids) {
 		if (fetched >= maxKeysets) break
 		if (!bid.dleqProofs || bid.dleqProofs.length === 0) continue
 		if (!allowedMints.has(normalizeMintUrlForKey(bid.mint))) continue

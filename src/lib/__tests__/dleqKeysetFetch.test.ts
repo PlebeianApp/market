@@ -10,10 +10,11 @@ const KEYSET_2 = '11cafebabe'
 
 const makeKeyset = (id: string): MintKeys => ({ id, unit: 'sat', keys: { 1: '02' + 'a'.repeat(64) } }) as MintKeys
 
-const makeBid = (mint: string, keysetId: string): ParsedBidEvent =>
+const makeBid = (mint: string, keysetId: string, amount: number = 0): ParsedBidEvent =>
 	({
 		id: '1'.repeat(64),
 		mint,
+		amount,
 		dleqProofs: [{ id: keysetId, amount: 100, C: '02' + 'b'.repeat(64), e: 'aa', s: 'bb', r: 'cc' }],
 	}) as unknown as ParsedBidEvent
 
@@ -86,6 +87,22 @@ describe('fetchDleqKeysetsForBidsDetailed — terminal vs transient (ADR-0011 re
 		const acq = await fetchDleqKeysetsForBidsDetailed([makeBid(MINT_A, KEYSET_1)], [MINT_A], fetcher)
 		expect(acq.keysets.size).toBe(0)
 		expect(acq.unknownKeysets.size).toBe(0)
+	})
+
+	test('cap prioritisation: higher-amount (reserve-meeting) bids are gathered before lower-amount ones', async () => {
+		const fetched: string[] = []
+		const fetcher: DleqKeysetFetcher = async (mintUrl, keysetId) => {
+			fetched.push(`${mintUrl}:${keysetId}`)
+			return makeKeyset(keysetId)
+		}
+		// Low-amount bid FIRST in the array; high-amount second. With a cap of 1,
+		// the high-amount bid must win the single fetch slot so a keyset flood
+		// cannot starve a reserve-meeting bid (review 2026-09-18).
+		const bids = [makeBid(MINT_A, KEYSET_1, 100), makeBid(MINT_A, KEYSET_2, 50000)]
+		const acq = await fetchDleqKeysetsForBidsDetailed(bids, [MINT_A], fetcher, { maxKeysets: 1 })
+		expect(fetched).toEqual([`${MINT_A}:${KEYSET_2}`])
+		expect(acq.keysets.has(`${MINT_A}:${KEYSET_2}`)).toBe(true)
+		expect(acq.keysets.has(`${MINT_A}:${KEYSET_1}`)).toBe(false)
 	})
 
 	test('caps the number of distinct keysets fetched (unbounded crafted bids cannot fan out)', async () => {

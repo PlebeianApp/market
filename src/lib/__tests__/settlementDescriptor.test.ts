@@ -239,6 +239,7 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		nut7States: undefined,
 		mintKeysets: mockMintKeysets(),
 		dleqKeysets: undefined,
+		dleqUnknownKeysets: undefined,
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -377,6 +378,41 @@ describe('getSettlementDescriptor', () => {
 				}),
 			)
 			expect(d?.role).toBe('seller')
+		})
+	})
+
+	describe('terminal keyset miss (ADR-0011 R3, review 2026-09-18 N2)', () => {
+		test('a reserve-meeting bid whose keyset is terminally unknown yields no canonical winner and no valid bids', async () => {
+			const topBid = makeBid({ amount: 50000 })
+			const terminalKeysetKey = `${topBid.mint}:${topBid.dleqProofs![0].id}`
+			const d = await getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 40000 }),
+					bids: [topBid],
+					verdicts: [verdictForBid(topBid.id)],
+					nut7States: unspentNut7States([topBid]),
+					currentUserPubkey: SELLER_PUBKEY,
+					// Empty keyset map + a TERMINAL miss for this proof's keyset. The
+					// descriptor's early pre-pass must thread `dleqUnknownKeysets` so the
+					// bid is `dleq_invalid` (never valid) rather than `pending`; the
+					// resulting classification feeds the reserve guard in the publish
+					// path (review 2026-09-18 N2).
+					dleqKeysets: new Map(),
+					dleqUnknownKeysets: new Set([terminalKeysetKey]),
+					now: 120,
+				}),
+			)
+			// With a terminal keyset miss and no other valid bid, there is no
+			// canonical winner, so the seller sees Reserve Not Met (close allowed).
+			// The descriptor result exposes only `validatedTopBid`/`validatedBids`
+			// (empty for both `pending` and `dleq_invalid`), so the invalid-vs-pending
+			// classification itself is pinned directly in
+			// `computeValidatedBids.test.ts`; this test drives the descriptor path
+			// with `dleqUnknownKeysets` supplied, covering the pre-pass threading
+			// (review 2026-09-18 N2).
+			expect(d?.title).toBe('Reserve Not Met')
+			expect(d?.validatedTopBid ?? null).toBeNull()
+			expect(d?.validatedBids ?? []).toHaveLength(0)
 		})
 	})
 

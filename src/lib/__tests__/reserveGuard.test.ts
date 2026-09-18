@@ -21,7 +21,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, M
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
-import { evaluateReserveNotMetGuard } from '../auction/reserveGuard'
+import { evaluateReserveNotMetGuard, resolveReserveNotMetPublish } from '../auction/reserveGuard'
 import type { MintKeys } from '@cashu/cashu-ts'
 
 const SELLER_PK = 'a'.repeat(64)
@@ -244,5 +244,37 @@ describe('reserve_not_met guard — unresolved DLEQ evidence blocks a terminal p
 		// expected to be condemned as dleq_invalid here — the point is that
 		// resolved evidence NEVER yields 'evidence-unavailable'.
 		expect(evaluateReserveNotMetGuard(result, auction.reserve).kind).not.toBe('evidence-unavailable')
+	})
+})
+
+/**
+ * `resolveReserveNotMetPublish` — the seller-override decision (ADR-0011 review
+ * R3, review 2026-09-18 N3). Pure: given the guard decision and whether the
+ * caller set `dlequEvidenceOverride`, it either throws or yields the publish
+ * reason. The `blocked` case is never overridable.
+ */
+describe('resolveReserveNotMetPublish (seller override)', () => {
+	test('blocked → throw, even with the override set', () => {
+		const decision = resolveReserveNotMetPublish({ kind: 'blocked', winnerBidId: 'bid-1', winnerAmount: 50000 }, true)
+		expect(decision.action).toBe('throw')
+	})
+
+	test('evidence-unavailable without the override → throw', () => {
+		const decision = resolveReserveNotMetPublish({ kind: 'evidence-unavailable', bidIds: ['b1', 'b2'], maxPendingAmount: 50000 }, false)
+		expect(decision.action).toBe('throw')
+	})
+
+	test('evidence-unavailable with the override → publish, recording the unresolved bid ids', () => {
+		const decision = resolveReserveNotMetPublish({ kind: 'evidence-unavailable', bidIds: ['b1', 'b2'], maxPendingAmount: 50000 }, true)
+		expect(decision.action).toBe('publish')
+		if (decision.action !== 'publish') throw new Error('unreachable')
+		expect(decision.overrideReason).toBe('dlequ_evidence_unavailable:b1,b2')
+	})
+
+	test('clear → publish with no override reason', () => {
+		const decision = resolveReserveNotMetPublish({ kind: 'clear' }, true)
+		expect(decision.action).toBe('publish')
+		if (decision.action !== 'publish') throw new Error('unreachable')
+		expect(decision.overrideReason).toBeUndefined()
 	})
 })

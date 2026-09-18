@@ -13,7 +13,7 @@ import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingS
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
 import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
-import { evaluateReserveNotMetGuard } from '@/lib/auction/reserveGuard'
+import { evaluateReserveNotMetGuard, resolveReserveNotMetPublish } from '@/lib/auction/reserveGuard'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
@@ -1685,31 +1685,16 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// that contradicts a bid which may still become valid. Evidence
 		// unavailability is a RETRY signal, never a licence to publish.
 		const rnmGuard = evaluateReserveNotMetGuard(rnmValidated, parsedAuction.reserve)
-		if (rnmGuard.kind === 'blocked') {
-			throw new Error(
-				'Cannot publish reserve_not_met: a validated bid meeting the reserve exists. ' +
-					`Canonical winner: ${rnmGuard.winnerBidId} ` +
-					`(${rnmGuard.winnerAmount} sats).`,
-			)
-		}
 		// ADR-0011 review R3: a permanently-`pending` reserve-meeting bid (mint
 		// outage, or a crafted bid naming an unadvertised keyset) must not hold
 		// the seller hostage forever. The seller can opt into publishing the
 		// terminal state; the reason is recorded on the event so the override is
-		// auditable. This never bypasses the `blocked` case above (a validated
-		// reserve-meeting winner), only `evidence-unavailable`.
-		let rnmOverrideReason: string | undefined
-		if (rnmGuard.kind === 'evidence-unavailable') {
-			if (formData.dlequEvidenceOverride !== true) {
-				throw new Error(
-					'Cannot publish reserve_not_met: DLEQ evidence is unavailable for reserve-meeting ' +
-						`bid(s) ${rnmGuard.bidIds.join(', ')} (up to ${rnmGuard.maxPendingAmount} sats). ` +
-						'Retry once the mint keyset fetch succeeds, or publish anyway with the seller override ' +
-						'(dlequEvidenceOverride) to record the unresolved evidence on the terminal event.',
-				)
-			}
-			rnmOverrideReason = `dlequ_evidence_unavailable:${rnmGuard.bidIds.join(',')}`
-		}
+		// auditable. This never bypasses the `blocked` case (a validated
+		// reserve-meeting winner), only `evidence-unavailable`. The decision is a
+		// pure helper (`resolveReserveNotMetPublish`) so it is unit-tested.
+		const rnmDecision = resolveReserveNotMetPublish(rnmGuard, formData.dlequEvidenceOverride === true)
+		if (rnmDecision.action === 'throw') throw new Error(rnmDecision.message)
+		const rnmOverrideReason = rnmDecision.overrideReason
 
 		// Terminal-event consistency: refuse reserve_not_met when a
 		// structurally-valid `settled` settlement already exists for this

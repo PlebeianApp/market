@@ -402,12 +402,11 @@ no DOM, no side effects) and reusable.
 > **Resolved by [ADR-0011](ADR-0011-bid-time-collateral-verification-via-nut12-dleq.md).**
 > The kind-1023 bid event is specified to publish one `dleq_proof` tag per
 > locked proof (carrying the keyset `id`, `amount`, mint signature `C`, and
-> the NUT-12 `e`/`s`/`r` values), which will enable offline reblind
-> verification of the locked proof's amount against the mint's public keys at
-> bid time once deployed. Combined with the existing NUT-7 `unspent` check,
-> this closes the gap on rollout where a bidder could lock a small amount and
-> claim a larger bid. See ADR-0011 for the accepted specification and rollout
-> plan.
+> the NUT-12 `e`/`s`/`r` values), so the locked proof's amount is verified
+> offline against the mint's public keys at bid time — shipped and enforced
+> unconditionally (the rollout boundary was retired). Combined with the existing
+> NUT-7 `unspent` check, this closes the gap where a bidder could lock a small
+> amount and claim a larger bid. See ADR-0011 for the accepted specification.
 
 Previously documented in AUCTIONS.md §9.1.1 as a known gap.
 

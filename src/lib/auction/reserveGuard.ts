@@ -67,3 +67,42 @@ const isEvidenceUnavailableReserveBid =
 	(reserve: number) =>
 	(c: ClassifiedBid): boolean =>
 		c.classification === 'pending' && c.pendingReason === 'dlequ_evidence_unavailable' && c.bid.amount >= reserve
+
+/** Outcome of the `reserve_not_met` publish guard + seller-override decision. */
+export type ReserveNotMetPublishDecision = { action: 'throw'; message: string } | { action: 'publish'; overrideReason?: string }
+
+/**
+ * Resolve whether `reserve_not_met` may publish, applying the ADR-0011 review R3
+ * seller override (review 2026-09-18 N3). Pure so the publish path and its
+ * tests share one decision:
+ *
+ *   - `blocked` (a validated reserve-meeting winner exists)  → always throw;
+ *   - `evidence-unavailable` without the override            → throw;
+ *   - `evidence-unavailable` with `allowOverride`            → publish, recording
+ *     the unresolved reserve-meeting bids in the terminal event's reason;
+ *   - `clear`                                                → publish.
+ */
+export function resolveReserveNotMetPublish(guard: ReserveNotMetGuardDecision, allowOverride: boolean): ReserveNotMetPublishDecision {
+	if (guard.kind === 'blocked') {
+		return {
+			action: 'throw',
+			message:
+				'Cannot publish reserve_not_met: a validated bid meeting the reserve exists. ' +
+				`Canonical winner: ${guard.winnerBidId} (${guard.winnerAmount} sats).`,
+		}
+	}
+	if (guard.kind === 'evidence-unavailable') {
+		if (!allowOverride) {
+			return {
+				action: 'throw',
+				message:
+					'Cannot publish reserve_not_met: DLEQ evidence is unavailable for reserve-meeting ' +
+					`bid(s) ${guard.bidIds.join(', ')} (up to ${guard.maxPendingAmount} sats). ` +
+					'Retry once the mint keyset fetch succeeds, or publish anyway with the seller override ' +
+					'(dlequEvidenceOverride) to record the unresolved evidence on the terminal event.',
+			}
+		}
+		return { action: 'publish', overrideReason: `dlequ_evidence_unavailable:${guard.bidIds.join(',')}` }
+	}
+	return { action: 'publish' }
+}

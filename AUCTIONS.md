@@ -1070,11 +1070,12 @@ can audit; the bidder MUST persist the full proofs (including `C`)
 locally so they can refund if the auction griefs.
 
 **Mint NUT-12 capability.** ADR-0011 (Decisions 4 & 5) requires NUT-12
-DLEQ-capable mints for post-rollout auctions. The `mintSupportsDleq`
-helper in `src/lib/cashu/mintCapability.ts` probes a mint's `/v1/info`
-endpoint via `CashuMint.getInfo()` (`nuts["12"].supported`) and returns `false`
-on any error (fail-closed), so a mint whose DLEQ capability cannot be
-confirmed is treated as non-DLEQ.
+DLEQ-capable mints unconditionally — the `dleq_required` activation tag and
+the rollout boundary have been retired. The `mintSupportsDleq` helper in
+`src/lib/cashu/mintCapability.ts` probes a mint's `/v1/info` endpoint via
+`CashuMint.getInfo()` (`nuts["12"].supported`) and returns `false` on any
+error (fail-closed), so a mint whose DLEQ capability cannot be confirmed is
+treated as unsupported and the bid-lock path fails closed.
 
 ## 5.5 Bidder-held HD path model
 
@@ -1532,20 +1533,20 @@ Operational notes:
   bid's `proof_y` values.
 - **ADR-0011 C1 — DLEQ crypto verification:** the client also runs
   `verifyBidDleq` against a pre-fetched mint keyset (`dleqKeysets`
-  parameter in `computeValidatedBids`). A post-rollout bid whose
-  DLEQ proofs fail cryptographic verification is classified
-  `bid_invalid` with `reason=dleq_invalid`. When the keyset is not
-  yet available — including an entry missing from a SUPPLIED map
-  because its `fetchDleqKeysetsForBids` fetch failed (temporary
-  mint/network failure) — the bid stays `pending`, never valid and
-  never condemned (mirrors the NUT-7 evidence-deferred pattern —
-  Decision 6a: `dleq_invalid` requires a positive verification
-  failure over complete evidence). Pre-rollout auctions are
-  grandfathered and skip DLEQ verification (Decision 7).
+  parameter in `computeValidatedBids`). A bid whose DLEQ proofs fail
+  cryptographic verification is classified `bid_invalid` with
+  `reason=dleq_invalid`. When the keyset is not yet available —
+  including an entry missing from a SUPPLIED map because its
+  `fetchDleqKeysetsForBids` fetch failed (temporary mint/network
+  failure) — the bid stays `pending`, never valid and never condemned
+  (mirrors the NUT-7 evidence-deferred pattern — Decision 6a:
+  `dleq_invalid` requires a positive verification failure over complete
+  evidence). DLEQ is required for every auction; there is no
+  grandfathered cohort and no rollout boundary (Decision 7 retired).
 - **ADR-0011 B4 — Structural DLEQ field validation:** the validator
   pipeline (Step 3.5 in `validateBid`) now also performs structural
-  field validation on every `dleq_proof` entry for post-rollout
-  auctions: the keyset `id`, `C` (compressed pubkey), `e`, `s`, and
+  field validation on every `dleq_proof` entry: the keyset `id`,
+  `C` (compressed pubkey), `e`, `s`, and
   `r` must all be non-empty hex strings, and `amount` must be a
   positive safe integer. A structurally malformed proof is rejected
   as `dleq_invalid` — fail-closed defense-in-depth (the Zod schema

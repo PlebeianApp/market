@@ -70,10 +70,10 @@ kind-1025 path release already publishes full proofs at settlement.
    settlement CTAs" only when **both** pass; NUT-7 failure →
    `bid_pending_review`/`proof_spent`, DLEQ failure → `bid_invalid`/`fraudulent_bid`
    (`reason=dleq_invalid`).
-5. **Fail-closed mint compatibility.** Auctions starting after rollout REQUIRE
-   NUT-12 capable mints (checked via `CashuMint.getInfo().isSupported(12)`).
-   Non-DLEQ bids are **hard rejected** — the `nip60.ts` non-DLEQ silent fallback is
-   removed for post-rollout auctions.
+5. **Fail-closed mint compatibility.** Auctions REQUIRE NUT-12 capable mints
+   (checked via `CashuMint.getInfo().isSupported(12)`); this applies to **every**
+   auction — the rollout boundary was retired (see Decision 7). Non-DLEQ bids are
+   **hard rejected** — the `nip60.ts` non-DLEQ silent fallback is removed.
 6. **Client-side ownership at ingestion.** DLEQ verification is owned by the client
    (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
    verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps

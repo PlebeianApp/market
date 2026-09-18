@@ -1184,10 +1184,6 @@ export const nip60Actions = {
 					getP2pk: () => wallet.getP2pk(),
 					privkeys: wallet.privkeys,
 				}
-				// Expose nip60Actions so e2e tests can stub mint-dependent methods
-				// (e.g. receiveLockedEcash) when running against the CashuMintMock,
-				// which cannot produce valid blind signatures. Same dev/test gate.
-				;(window as any).__nip60Actions = nip60Actions
 			}
 
 			// Subscribe to balance updates
