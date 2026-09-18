@@ -325,6 +325,8 @@ export type ValidatorAdmissionPolicy =
 			enabled: true
 			maxBidsPerWindow: number
 			rateWindowSec: number
+			maxTrackedChildSubscriptions: number
+			childReplayLookbackSec: number
 			maxTrackedBidsPerAuction: number
 			maxSeenEventIds: number
 			maxPendingEventsPerKey: number

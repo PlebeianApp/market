@@ -137,12 +137,16 @@ describe('auction validator bid spam policy', () => {
 	test('reads spam policy overrides from env', () => {
 		const policy = readBidSpamPolicyFromEnv({
 			AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW: '7',
+			AUCTION_VALIDATOR_MAX_TRACKED_CHILD_SUBSCRIPTIONS: '12',
+			AUCTION_VALIDATOR_CHILD_REPLAY_LOOKBACK_SEC: '345',
 			AUCTION_VALIDATOR_MAX_TRACKED_BIDS_PER_AUCTION: '5',
 			AUCTION_VALIDATOR_MAX_PENDING_EVENTS: '99',
 			AUCTION_VALIDATOR_MAX_TAG_COUNT: '11',
 		} as NodeJS.ProcessEnv)
 		expect(policy).toEqual({
 			maxBidsPerWindow: 7,
+			maxTrackedChildSubscriptions: 12,
+			childReplayLookbackSec: 345,
 			maxTrackedBidsPerAuction: 5,
 			maxPendingEvents: 99,
 			maxTagCount: 11,

@@ -35,6 +35,8 @@ describe('validator policy publication', () => {
 			enabled: true,
 			maxBidsPerWindow: DEFAULT_BID_SPAM_POLICY.maxBidsPerWindow,
 			rateWindowSec: DEFAULT_BID_SPAM_POLICY.rateWindowSec,
+			maxTrackedChildSubscriptions: DEFAULT_BID_SPAM_POLICY.maxTrackedChildSubscriptions,
+			childReplayLookbackSec: DEFAULT_BID_SPAM_POLICY.childReplayLookbackSec,
 			maxTrackedBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxTrackedBidsPerAuction,
 			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxPendingEventsPerKey: DEFAULT_BID_SPAM_POLICY.maxPendingEventsPerKey,
@@ -79,6 +81,8 @@ describe('validator policy publication', () => {
 			enabled: true,
 			maxBidsPerWindow: 3,
 			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
+			maxTrackedChildSubscriptions: DEFAULT_BID_SPAM_POLICY.maxTrackedChildSubscriptions,
+			childReplayLookbackSec: DEFAULT_BID_SPAM_POLICY.childReplayLookbackSec,
 			maxTagCount: 9,
 			pendingTtlSec: 30,
 		})

@@ -3,6 +3,7 @@ import { finalizeEvent, generateSecretKey, getPublicKey, type EventTemplate, typ
 import { AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_KIND } from '../auction/constants'
 import { createValidatorState, setAuctionMintReachability, upsertAuction, type ValidatorState } from '../../server/auction-validator/state'
 import { createValidatorSubscriber } from '../../server/auction-validator/subscriber'
+import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
 
 const VALIDATOR_PUBKEY = 'a'.repeat(64)
 const SELLER_PUBKEY = 'b'.repeat(64)
@@ -659,6 +660,7 @@ describe('auction validator subscriber subscription contract', () => {
 			state: createValidatorState(VALIDATOR_PUBKEY),
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
+			now: () => 2_000,
 		})
 
 		await subscriber.start()
@@ -706,9 +708,82 @@ describe('auction validator subscriber subscription contract', () => {
 			{
 				kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND],
 				'#a': [`30408:${sellerPubkey}:auction-test`],
+				since: 1_000,
 			},
 		])
 
+		await subscriber.stop()
+	})
+
+	test('caps live child subscriptions and backfills once a slot frees up', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		const auctionA = buildAuctionState(state)
+		const sellerSk = generateSecretKey()
+		const otherAuctionEvent = createSignedEvent(sellerSk, {
+			kind: AUCTION_KIND,
+			created_at: 1_000,
+			content: '',
+			tags: [
+				['d', 'auction-two'],
+				['title', 'Auction Two'],
+				['auction_type', 'english'],
+				['start_at', '5000'],
+				['end_at', '6000'],
+				['max_end_at', '9000'],
+				['settlement_grace', '3600'],
+				['currency', 'SAT'],
+				['reserve', '0'],
+				['starting_bid', '1000'],
+				['bid_increment', '100'],
+				['min_bid_curve', 'none'],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', 'xpub-root'],
+				['auditors', VALIDATOR_PUBKEY],
+				['auditor_quorum', '1'],
+				['max_skew_sec', '60'],
+				['fallback_delay_sec', '1800'],
+				['mint', 'http://mint.test'],
+			],
+		} as unknown as EventTemplate)
+		const parsedOtherAuction = parseAuctionEvent(otherAuctionEvent)
+		if (!parsedOtherAuction.ok) throw new Error('failed to parse second auction')
+		const otherAuctionState = upsertAuction(state, parsedOtherAuction.value).auctionState
+		let t = 2_000
+		const subscriptions: Array<Array<Record<string, unknown>>> = []
+		let childUnsubscribeCalls = 0
+		const relayPool = {
+			handlers: new Map<number, (event: NostrEvent) => void>(),
+			subscribe: async (filters: Array<Record<string, unknown>>, handler: (event: NostrEvent) => void) => {
+				subscriptions.push(filters)
+				for (const kind of (filters[0]?.kinds as number[] | undefined) ?? []) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				const isChildSubscription = Array.isArray(filters[0]?.['#a'])
+				return () => {
+					if (isChildSubscription) childUnsubscribeCalls += 1
+				}
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+			now: () => t,
+			spamPolicy: { maxTrackedChildSubscriptions: 1 },
+		})
+
+		await subscriber.start()
+		expect(subscriptions).toHaveLength(3)
+		expect(subscriptions[2]?.[0]).toMatchObject({ '#a': [auctionA.auction.coordinate] })
+
+		t = 6_000
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(1)
+		expect(subscriptions).toHaveLength(4)
+		expect(subscriptions[3]?.[0]).toMatchObject({ '#a': [otherAuctionState.auction.coordinate] })
 		await subscriber.stop()
 	})
 

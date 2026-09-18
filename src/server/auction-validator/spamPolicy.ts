@@ -7,6 +7,10 @@ export interface BidSpamPolicy {
 	maxBidsPerWindow: number
 	/** Rolling window length in seconds. */
 	rateWindowSec: number
+	/** Maximum live per-auction child subscriptions kept open at once. */
+	maxTrackedChildSubscriptions: number
+	/** Historical replay lookback applied to child subscriptions. */
+	childReplayLookbackSec: number
 	/** LIFETIME cap per (auction, bidder) — bids are append-only and the
 	 *  count includes bids that later became invalid. See subscriber.ts
 	 *  (review 5645059400 finding 2). */
@@ -49,6 +53,8 @@ export interface BidSpamPolicy {
 export const DEFAULT_BID_SPAM_POLICY: Readonly<BidSpamPolicy> = {
 	maxBidsPerWindow: 20,
 	rateWindowSec: 60,
+	maxTrackedChildSubscriptions: 512,
+	childReplayLookbackSec: 60 * 60 * 24 * 30,
 	maxTrackedBidsPerAuction: 100,
 	maxPendingEventsPerKey: 256,
 	// Worst case across all three pending buffers combined:
@@ -86,6 +92,8 @@ export const readBidSpamPolicyFromEnv = (env: NodeJS.ProcessEnv = process.env): 
 	const entries: Array<[keyof BidSpamPolicy, string]> = [
 		['maxBidsPerWindow', 'AUCTION_VALIDATOR_MAX_BIDS_PER_WINDOW'],
 		['rateWindowSec', 'AUCTION_VALIDATOR_RATE_WINDOW_SEC'],
+		['maxTrackedChildSubscriptions', 'AUCTION_VALIDATOR_MAX_TRACKED_CHILD_SUBSCRIPTIONS'],
+		['childReplayLookbackSec', 'AUCTION_VALIDATOR_CHILD_REPLAY_LOOKBACK_SEC'],
 		['maxTrackedBidsPerAuction', 'AUCTION_VALIDATOR_MAX_TRACKED_BIDS_PER_AUCTION'],
 		['maxPendingEventsPerKey', 'AUCTION_VALIDATOR_MAX_PENDING_EVENTS_PER_KEY'],
 		['maxPendingKeys', 'AUCTION_VALIDATOR_MAX_PENDING_KEYS'],

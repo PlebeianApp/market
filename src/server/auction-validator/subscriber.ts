@@ -45,7 +45,7 @@ import { createPendingBuffer, createPendingBufferBudget } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
-import { checkBidSpamPolicy, checkEventEnvelope, recordAcceptedBid, resolvePendingBufferLimits, type BidSpamPolicy } from './spamPolicy'
+import { checkBidSpamPolicy, checkEventEnvelope, recordAcceptedBid, resolveBidSpamPolicy, resolvePendingBufferLimits, type BidSpamPolicy } from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -89,6 +89,7 @@ export interface ValidatorSubscriber {
 export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): ValidatorSubscriber => {
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
 	const logger = deps.logger ?? defaultLogger()
+	const resolvedPolicy = resolveBidSpamPolicy(deps.spamPolicy)
 
 	// Active unsubscribe handles: one global auction REQ and one child
 	// REQ per tracked auction coordinate.
@@ -108,7 +109,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// dropped buffered event is never replayed, so no verdict is emitted.
 	// The three buffers share one aggregate event budget, so the worst
 	// case is bounded across the combined ordering-gap surface.
-	const pendingLimits = resolvePendingBufferLimits(deps.spamPolicy)
+	const pendingLimits = resolvePendingBufferLimits(resolvedPolicy)
 	const pendingBudget = createPendingBufferBudget(pendingLimits.maxPendingEvents)
 	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // auctionRootEventId → events
 	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // bidEventId → events
@@ -164,6 +165,21 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		logger.info(`[validator] closed child subscriptions for auction ${auctionRootEventId.slice(0, 8)}`)
 	}
 
+	const childReplaySince = (auctionStartedAt?: number): number => {
+		const lookbackFloor = now() - resolvedPolicy.childReplayLookbackSec
+		if (auctionStartedAt === undefined) return lookbackFloor
+		return Math.max(lookbackFloor, auctionStartedAt)
+	}
+
+	const reconcileAuctionWatches = async (): Promise<void> => {
+		for (const auctionState of Array.from(deps.state.auctions.values())) {
+			if (watchedAuctionUnsubscribes.size >= resolvedPolicy.maxTrackedChildSubscriptions) return
+			if (watchedAuctionUnsubscribes.has(auctionState.auction.rootEventId)) continue
+			if (!auctionNeedsChildWatch(auctionState.auction.rootEventId)) continue
+			await startWatchingAuction(auctionState.auction.rootEventId)
+		}
+	}
+
 	const drainPendingReleasesForBid = async (auctionRootEventId: string, bidEventId: string): Promise<void> => {
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState || !auctionState.bids.has(bidEventId)) return
@@ -191,9 +207,17 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (watchedAuctionUnsubscribes.has(auctionRootEventId)) return
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return
+		if (watchedAuctionUnsubscribes.size >= resolvedPolicy.maxTrackedChildSubscriptions) {
+			logger.warn(`[validator] child subscription cap reached for auction ${auctionRootEventId.slice(0, 8)}`)
+			return
+		}
 		const watchedCoordinate = auctionState.auction.coordinate
 		const filters: RelayFilter[] = [
-			{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], '#a': [watchedCoordinate] },
+			{
+				kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()],
+				'#a': [watchedCoordinate],
+				since: childReplaySince(auctionState.auction.startAt),
+			},
 		]
 		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
 			switch (event.kind) {
@@ -328,6 +352,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await drainPending(auction.rootEventId)
 		}
 		maybeRetireAuctionWatch(auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -387,7 +412,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			bid,
 			now: firstObservedAt,
 			state: deps.state.spam,
-			policy: deps.spamPolicy,
+			policy: resolvedPolicy,
 			trackedBidCount: lifetimeBidCount,
 		})
 		if (!spamDecision.ok) {
@@ -397,7 +422,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
-		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: deps.spamPolicy })
+		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: resolvedPolicy })
 		await drainPendingReleasesForBid(bid.auctionRootEventId, bid.id)
 
 		// Run derive + publish.
@@ -410,6 +435,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
 		}
 		maybeRetireAuctionWatch(bid.auctionRootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -480,6 +506,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			)
 		}
 		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
@@ -535,6 +562,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// (e.g. winner that flipped to spent right as kind-1024 arrived).
 		await republishAuction(auctionState.auction.rootEventId)
 		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	// =========================================================================
@@ -582,7 +610,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const start = async (): Promise<void> => {
-		const since = now() - 60 * 60 * 24 * 30
+		const since = childReplaySince()
 		const startupObservedAt = now()
 		let startupChildReplayDone = false
 		let startupChildReplayUnsub: (() => void) | null = null
@@ -641,6 +669,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			await republishAuction(auctionState.auction.rootEventId)
 			maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 		}
+		await reconcileAuctionWatches()
 	}
 
 	return { start, stop, republishAll }
