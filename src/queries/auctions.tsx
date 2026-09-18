@@ -39,6 +39,7 @@ import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
+import type { MintKeys } from '@cashu/cashu-ts'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
@@ -1023,6 +1024,12 @@ export function getValidatedCurrentPriceFromBids(
 	verdicts: NostrEventLike[],
 	nut7States?: Map<string, Nut7ProofState>,
 	startingBid: number = 0,
+	// ADR-0011 review R1: callers MUST pass the map gathered via
+	// `fetchDleqKeysetsForBids` (one-shot) or `useDleqKeysetPolling` (React
+	// surfaces). This helper is synchronous and performs no network I/O, so it
+	// cannot acquire evidence itself; omitting the map leaves every DLEQ-bearing
+	// bid PENDING (non-authoritative) by contract, not a wrong-but-valid price.
+	dleqKeysets?: Map<string, MintKeys>,
 ): ValidatedCurrentPriceResult {
 	if (!auction || bids.length === 0) {
 		return {
@@ -1060,6 +1067,7 @@ export function getValidatedCurrentPriceFromBids(
 		bids: parsedBids,
 		verdicts: parsedVerdicts,
 		nut7States,
+		dleqKeysets,
 	})
 
 	return {

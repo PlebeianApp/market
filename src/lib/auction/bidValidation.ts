@@ -152,6 +152,15 @@ export interface ComputeValidatedBidsInput {
 	 * exactly.
 	 */
 	dleqKeysets?: Map<string, MintKeys>
+	/**
+	 * `${mintUrl}:${keysetId}` pairs whose keyset fetch failed TERMINALLY — the
+	 * mint answered but does not advertise that keyset id (ADR-0011 review R3,
+	 * `fetchDleqKeysetsForBidsDetailed`). A bid whose only missing keyset is in
+	 * this set names fabricated/foreign collateral, so it is `dleq_invalid`
+	 * rather than `pending`. Absent set ⇒ every miss is treated as transient
+	 * (`pending`), the pre-R3 behavior.
+	 */
+	dleqUnknownKeysets?: ReadonlySet<string>
 }
 
 /** Verdict claims that confirm a bid as valid (per AUCTIONS.md §4.4.3). Re-exported from constants so the client quorum screen and the validator publisher agree. */
@@ -557,11 +566,24 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 				// pass — the bid is excluded from validBids and the winner
 				// — and dleqProofs[].id being bidder-controlled still
 				// cannot skip verification, because a miss never verifies.
-				const missingKeysetIds = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`)).map((dp) => dp.id)
-				if (missingKeysetIds.length > 0) {
-					c.classification = 'pending'
-					c.pendingReason = 'dlequ_evidence_unavailable'
-					finalPending.push(c.bid)
+				const missingProofs = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`))
+				if (missingProofs.length > 0) {
+					const unknown = input.dleqUnknownKeysets
+					const terminalMiss = unknown ? missingProofs.some((dp) => unknown.has(`${c.bid.mint}:${dp.id}`)) : false
+					if (terminalMiss) {
+						// ADR-0011 review R3: the reachable mint does not advertise
+						// this keyset id, so the proof names fabricated/foreign
+						// collateral — invalid, not merely "evidence unavailable".
+						// This is what stops a crafted bid from blocking
+						// reserve_not_met forever.
+						c.classification = 'invalid'
+						c.invalidReason = 'dleq_invalid'
+						finalInvalid.push(c.bid)
+					} else {
+						c.classification = 'pending'
+						c.pendingReason = 'dlequ_evidence_unavailable'
+						finalPending.push(c.bid)
+					}
 					continue
 				}
 				{

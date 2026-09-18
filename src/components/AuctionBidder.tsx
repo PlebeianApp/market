@@ -31,6 +31,7 @@ import {
 	useAuctionVerdicts,
 } from '@/queries/auctions'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
@@ -147,15 +148,25 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const verdictsData = verdictsQuery.data ?? []
 
+	// ADR-0011 review R1: parse bids once and feed the DLEQ keyset polling hook.
+	// `computeValidatedBids` treats a DLEQ-bearing bid as PENDING (non-authoritative)
+	// when no keysets are supplied, so the bid form's own price/count/status would
+	// ignore every valid bid without this.
+	const parsedBids = useMemo(
+		() =>
+			bids
+				.map((b) => parseBidEvent(toRawEvent(b)))
+				.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+				.map((r) => r.value),
+		[bids],
+	)
+	const { keysets: dleqKeysets, unknownKeysets: dleqUnknownKeysets } = useDleqKeysetPolling(parsedBids, trustedMints)
+
 	// Compute validated bid set when verdicts are available
 	const validatedSet = useMemo(() => {
 		if (!auction || verdictsData.length === 0) return null
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
 		if (!parsedAuctionResult.ok) return null
-		const parsedBids = bids
-			.map((b) => parseBidEvent(toRawEvent(b)))
-			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
-			.map((r) => r.value)
 		const parsedVerdicts = verdictsData
 			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
 			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
@@ -164,8 +175,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			auction: parsedAuctionResult.value,
 			bids: parsedBids,
 			verdicts: parsedVerdicts,
+			dleqKeysets,
+			dleqUnknownKeysets,
 		})
-	}, [auction, bids, verdictsData])
+	}, [auction, parsedBids, verdictsData, dleqKeysets, dleqUnknownKeysets])
 
 	const endAt = getAuctionEndAt(auction)
 	const startAt = getAuctionStartAt(auction)

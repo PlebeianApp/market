@@ -782,6 +782,38 @@ describe('computeValidatedBids — DLEQ crypto verification (ADR-0011 C1)', () =
 		expect(pendingClassified?.invalidReason).toBeUndefined()
 	})
 
+	test('post-rollout bid whose absent keyset is reported TERMINAL (dleqUnknownKeysets) is INVALID, not pending (ADR-0011 R3)', () => {
+		// The counterpart to the test above: when acquisition learned the mint
+		// ANSWERED and does not advertise this keyset id, the proof names
+		// fabricated/foreign collateral — `dleq_invalid`, which does NOT block
+		// reserve_not_met. A transient miss (unknownKeysets absent) stays pending.
+		const auction = buildPostRolloutAuction()
+		const bid = buildBid(auction, {
+			createdAt: DLEQ_EPOCH + 500,
+			dleqProofs: [garbageDleq],
+		})
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1, observedAt: bid.createdAt + 5 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets: new Map(),
+			dleqUnknownKeysets: new Set([`${bid.mint}:${garbageDleq.id}`]),
+		})
+
+		expect(result.validBids).toHaveLength(0)
+		expect(result.pendingBids).toHaveLength(0)
+		expect(result.invalidBids).toHaveLength(1)
+		const classified = result.classified.find((cl) => cl.bid.id === bid.id)
+		expect(classified?.classification).toBe('invalid')
+		expect(classified?.invalidReason).toBe('dleq_invalid')
+	})
+
 	test('multi-proof leg with one absent keyset is PENDING even when another proof has garbage DLEQ (no condemning on incomplete evidence)', () => {
 		const auction = buildPostRolloutAuction()
 		// Proof 0: garbage DLEQ under a keyset that IS in the map (would be

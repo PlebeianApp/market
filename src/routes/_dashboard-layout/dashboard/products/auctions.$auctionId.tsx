@@ -295,7 +295,7 @@ function DashboardAuctionDetailRoute() {
 	// bids (bounded to the auction's trusted mints). Without this, DLEQ-required
 	// bids are correctly treated as pending (non-authoritative) — but then the
 	// seller could never settle, so the ingestion path must actually feed evidence.
-	const dleqKeysets = useDleqKeysetPolling(parsedBids, trustedMints)
+	const { keysets: dleqKeysets, unknownKeysets: dleqUnknownKeysets } = useDleqKeysetPolling(parsedBids, trustedMints)
 
 	// Compute validated bid set unconditionally for display (no postSettlement).
 	// This is separate from the latestSettlement memo's validated set, which uses
@@ -314,8 +314,9 @@ function DashboardAuctionDetailRoute() {
 			verdicts: parsedVerdicts,
 			nut7States,
 			dleqKeysets,
+			dleqUnknownKeysets,
 		})
-	}, [auction, parsedBids, verdictsData, nut7States, dleqKeysets])
+	}, [auction, parsedBids, verdictsData, nut7States, dleqKeysets, dleqUnknownKeysets])
 	const currentPrice = validatedBidSet
 		? Math.max(validatedBidSet.currentTopValidAmount, startingBid)
 		: getAuctionCurrentPriceFromBids(auction, bids, startingBid)
@@ -375,6 +376,7 @@ function DashboardAuctionDetailRoute() {
 			postSettlement: hasSettledSettlement,
 			settledBidIds,
 			dleqKeysets,
+			dleqUnknownKeysets,
 		})
 		const validatedBidderPubkeys = new Set(validatedBidSet.validBids.map((b) => b.bidderPubkey.toLowerCase()))
 		const hasReserveMeetingBid = validatedBidSet.validBids.some((b) => b.amount >= parsedAuction.reserve)
@@ -420,7 +422,7 @@ function DashboardAuctionDetailRoute() {
 		})
 
 		return validSettlements[0]?.ndkEvent ?? null
-	}, [auction, settlements, parsedBids, verdictsData, nut7States, dleqKeysets])
+	}, [auction, settlements, parsedBids, verdictsData, nut7States, dleqKeysets, dleqUnknownKeysets])
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {

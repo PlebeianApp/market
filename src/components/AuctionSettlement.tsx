@@ -208,7 +208,7 @@ export function AuctionSettlement({
 	// ADR-0011 Blocker 1: gather DLEQ keysets (bounded to the auction's
 	// allowlisted mints) so `computeValidatedBids` inside the descriptor can
 	// actually verify DLEQ-required bids instead of leaving them all pending.
-	const dleqKeysets = useDleqKeysetPolling(bids, auction.mints)
+	const { keysets: dleqKeysets, unknownKeysets: dleqUnknownKeysets } = useDleqKeysetPolling(bids, auction.mints)
 
 	const descriptorInput = useMemo<GetSettlementDescriptorInput>(
 		() => ({
@@ -217,6 +217,7 @@ export function AuctionSettlement({
 			verdicts,
 			nut7States,
 			dleqKeysets,
+			dleqUnknownKeysets,
 			settlements,
 			pathReleases: pathReleasesForDescriptor,
 			claimOrders,
@@ -232,6 +233,7 @@ export function AuctionSettlement({
 			verdicts,
 			nut7States,
 			dleqKeysets,
+			dleqUnknownKeysets,
 			settlements,
 			pathReleasesForDescriptor,
 			claimOrders,

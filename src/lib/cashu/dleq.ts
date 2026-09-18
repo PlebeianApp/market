@@ -73,6 +73,44 @@ export interface GetMintKeysetOptions {
 	 * shape also used by `nut7.ts`. Useful for destination allowlisting.
 	 */
 	customRequest?: CashuCustomRequest
+	/**
+	 * Bound on the mint HTTP call. ADR-0011 review R3: the keyset fetch is now
+	 * called per tick by the client win monitor, so an unbounded mint must not
+	 * hang the caller. Defaults to {@link DEFAULT_DLEQ_KEYSET_TIMEOUT_MS}.
+	 */
+	timeoutMs?: number
+}
+
+/** Default per-keyset fetch timeout (ADR-0011 review R3). */
+export const DEFAULT_DLEQ_KEYSET_TIMEOUT_MS = 4000
+
+/**
+ * A keyset fetch that failed TERMINALLY: the mint answered, but it has no keyset
+ * for the requested id (or the id/unit does not match). Distinct from a
+ * transient network/timeout failure (ADR-0011 review R3): a terminal miss means
+ * the bid's `dleq_proof[].id` names a keyset the mint does not advertise — i.e.
+ * fabricated/foreign collateral — so the bid is `dleq_invalid`, not `pending`.
+ */
+export class DleqKeysetTerminalError extends Error {
+	public readonly terminal = true
+	constructor(message: string) {
+		super(message)
+		this.name = 'DleqKeysetTerminalError'
+	}
+}
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+	let timer: ReturnType<typeof setTimeout> | undefined
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+			}),
+		])
+	} finally {
+		if (timer) clearTimeout(timer)
+	}
 }
 
 // ---------- buildDleqProofs -------------------------------------------------
@@ -270,13 +308,22 @@ export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Ma
  */
 export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: GetMintKeysetOptions): Promise<MintKeys> => {
 	const mint = new CashuMint(mintUrl, opts?.customRequest as never)
-	const response = await mint.getKeys(keysetId)
+	const timeoutMs = opts?.timeoutMs ?? DEFAULT_DLEQ_KEYSET_TIMEOUT_MS
+	// Bound the mint call (R3): a reachable-but-slow mint must not hang, and a
+	// timeout is TRANSIENT (evidence may arrive later), not terminal.
+	const response = await withTimeout(
+		mint.getKeys(keysetId),
+		timeoutMs,
+		`getMintKeyset: mint ${mintUrl} timed out after ${timeoutMs}ms fetching keyset ${keysetId}`,
+	)
 	const keyset = response.keysets?.[0]
 	if (!keyset) {
-		throw new Error(`getMintKeyset: mint ${mintUrl} returned no keyset for keyset id ${keysetId}`)
+		// The mint answered but has no such keyset: a terminal miss (fabricated
+		// or foreign keyset id), not a transient outage.
+		throw new DleqKeysetTerminalError(`getMintKeyset: mint ${mintUrl} returned no keyset for keyset id ${keysetId}`)
 	}
 	if (keyset.id !== keysetId) {
-		throw new Error(`getMintKeyset: mint ${mintUrl} returned keyset ${keyset.id}, expected ${keysetId}`)
+		throw new DleqKeysetTerminalError(`getMintKeyset: mint ${mintUrl} returned keyset ${keyset.id}, expected ${keysetId}`)
 	}
 	// ADR-0011 review A4 (PR #1280, src/lib/cashu/dleq.ts:280): bind the DLEQ
 	// collateral to the SAT unit. `unit` is part of a keyset's identity, not a
@@ -287,7 +334,8 @@ export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: Ge
 	// so a proof verified against a non-sat keyset would be counted as sat
 	// collateral. Fail loudly, exactly as for an id mismatch.
 	if (keyset.unit !== 'sat') {
-		throw new Error(
+		// Terminal: the mint does not publish a sat keyset under this id.
+		throw new DleqKeysetTerminalError(
 			`getMintKeyset: mint ${mintUrl} returned keyset ${keysetId} in unit '${keyset.unit}', expected 'sat' — refusing to DLEQ-verify auction collateral against a non-sat keyset`,
 		)
 	}
@@ -338,16 +386,45 @@ export interface DleqKeysetBidLike {
  * @param fetcher - Keyset fetcher (defaults to {@link getMintKeyset}).
  * @returns Map keyed by `${mintUrl}:${keysetId}`.
  */
-export const fetchDleqKeysetsForBids = async (
+export interface DleqKeysetAcquisition {
+	/** `${mintUrl}:${keysetId}` → keyset, for every pair fetched successfully. */
+	keysets: Map<string, MintKeys>
+	/**
+	 * Pairs whose fetch failed TERMINALLY: the mint answered but has no such
+	 * keyset (or a mismatched/token-unit id). Such a proof names fabricated or
+	 * foreign collateral, so the bid is `dleq_invalid`, not `pending`.
+	 */
+	unknownKeysets: Set<string>
+}
+
+/** Max distinct `(mint, keysetId)` pairs fetched per call (ADR-0011 review R3). */
+export const DEFAULT_MAX_DLEQ_KEYSETS = 32
+
+/**
+ * Detailed variant of {@link fetchDleqKeysetsForBids} that reports WHY an entry
+ * is absent (ADR-0011 review R3). A transient failure (network/timeout) leaves
+ * the pair absent from both collections — the bid stays `pending`. A terminal
+ * failure lands in `unknownKeysets` — the bid is `dleq_invalid`.
+ *
+ * Bounded: a hand-crafted bid can name an unbounded number of keyset ids, so at
+ * most `maxKeysets` distinct pairs are fetched per call; pairs beyond the cap
+ * are left absent (pending), never a beacon for attacker-chosen mints.
+ */
+export const fetchDleqKeysetsForBidsDetailed = async (
 	bids: readonly DleqKeysetBidLike[],
 	trustedMints: readonly string[],
 	fetcher: DleqKeysetFetcher = getMintKeyset,
-): Promise<Map<string, MintKeys>> => {
+	options?: { maxKeysets?: number },
+): Promise<DleqKeysetAcquisition> => {
 	const allowedMints = new Set(trustedMints.map((m) => normalizeMintUrlForKey(m)))
-	const map = new Map<string, MintKeys>()
+	const keysets = new Map<string, MintKeys>()
+	const unknownKeysets = new Set<string>()
 	const seen = new Set<string>()
+	const maxKeysets = options?.maxKeysets ?? DEFAULT_MAX_DLEQ_KEYSETS
+	let fetched = 0
 
 	for (const bid of bids) {
+		if (fetched >= maxKeysets) break
 		if (!bid.dleqProofs || bid.dleqProofs.length === 0) continue
 		if (!allowedMints.has(normalizeMintUrlForKey(bid.mint))) continue
 		for (const proof of bid.dleqProofs) {
@@ -355,19 +432,36 @@ export const fetchDleqKeysetsForBids = async (
 			if (!keysetId) continue
 			const key = `${bid.mint}:${keysetId}`
 			if (seen.has(key)) continue
+			if (fetched >= maxKeysets) break
 			seen.add(key)
+			fetched++
 			try {
 				const keyset = await fetcher(bid.mint, keysetId)
-				if (keyset) map.set(key, keyset)
-			} catch {
-				// Evidence unavailable for this keyset — leave it absent so a
-				// DLEQ-required bid stays pending (fail-safe, not fail-open).
+				if (keyset) keysets.set(key, keyset)
+				else unknownKeysets.add(key)
+			} catch (error) {
+				if (error instanceof DleqKeysetTerminalError) {
+					unknownKeysets.add(key)
+				}
+				// Transient (network/timeout): leave the pair absent so the bid
+				// stays pending — fail-safe, not fail-open.
 			}
 		}
 	}
 
-	return map
+	return { keysets, unknownKeysets }
 }
+
+/**
+ * Back-compat wrapper returning only the keyset map. Prefer
+ * {@link fetchDleqKeysetsForBidsDetailed} on paths that must distinguish a
+ * terminal keyset miss (`dleq_invalid`) from a transient one (`pending`).
+ */
+export const fetchDleqKeysetsForBids = async (
+	bids: readonly DleqKeysetBidLike[],
+	trustedMints: readonly string[],
+	fetcher: DleqKeysetFetcher = getMintKeyset,
+): Promise<Map<string, MintKeys>> => (await fetchDleqKeysetsForBidsDetailed(bids, trustedMints, fetcher)).keysets
 
 /**
  * Normalize a mint URL for key comparison. Mirrors `normalizeMintUrl` from
