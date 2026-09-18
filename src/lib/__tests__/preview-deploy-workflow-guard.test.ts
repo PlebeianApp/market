@@ -364,6 +364,15 @@ describe('preview app serves a real document', () => {
 		expect(body).not.toContain('APP_RELAY_URL=ws://nak-relay:10547')
 	})
 
+	test('the app advertises a reachable NIP-46 relay, not nsec.app', () => {
+		// wss://relay.nsec.app (the NIP46_RELAY_URL fallback) is unreachable,
+		// which breaks the Nostr Connect / remote-signer lane. The preview must
+		// advertise the project relay, which answers.
+		const body = stripComments(runBody(stepNamed(deployJob, CLAIM_STEP)))
+		expect(body).toContain('NIP46_RELAY_URL=wss://relay.plebeian.market')
+		expect(body).not.toContain('NIP46_RELAY_URL=wss://relay.nsec.app')
+	})
+
 	test('the health check also proves the relay WebSocket is reachable', () => {
 		// An app that serves HTML but cannot reach its relay is not a preview
 		// of this application (review finding 2, 2026-09-17).

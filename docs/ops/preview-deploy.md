@@ -155,6 +155,14 @@ browser silently fails the upgrade. `submitAppSettings` likewise publishes to
 the configured app relay (`getMainRelay()`), not the page origin, so it goes
 through the same `/relay` route.
 
+**NIP-46 relay.** The compose service pins `NIP46_RELAY_URL` to
+`wss://relay.plebeian.market` instead of the upstream default
+`wss://relay.nsec.app`, which is unreachable and silently breaks the Nostr
+Connect / remote-signer lane. The app surfaces the value as `nip46Relay` on
+`/api/config`, and `NostrConnectQR` now defaults to it (it previously ignored
+the config and used a hardcoded list). Extension (NIP-07) and private-key logins
+do not use this relay at all.
+
 The health check therefore asserts **both** that `/` serves a non-empty HTML
 document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
 Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
