@@ -102,6 +102,22 @@ interface DerivedState {
 	settlementNamesMe: boolean
 	isSettlementPending: boolean
 	/**
+	 * Validity classification of the latest retained settlement
+	 * (`isSettlementStructurallyValid`): `'valid'` only when the settlement's own
+	 * chain validated — correct seller/root/coordinate, a canonical winning bid,
+	 * a *validated* matching path release, and a complete payout chain.
+	 *
+	 * `'pending'` means the settlement was retained but its required matching
+	 * path release has not been validated/observed yet, so the settlement is not
+	 * (yet) a settlement this module validated. `'invalid'` settlements are
+	 * filtered out before this state is derived, and `null` means there is no
+	 * retained settlement at all.
+	 *
+	 * Fulfillment is a settlement decision: authority fails closed on anything
+	 * other than `'valid'` (see `getAuctionFulfillmentAuthority`).
+	 */
+	latestSettlementValidity: SettlementValidity | null
+	/**
 	 * True when the settlement is structurally valid but the winning bid's
 	 * proofs are NOT confirmed `spent` at the mint (the seller hasn't
 	 * redeemed yet). The settlement is accepted but redemption is pending.
@@ -434,6 +450,12 @@ function deriveState(
 	const settlementFinalAmount = latestSettlement?.finalAmount ?? 0
 	const settlementNamesMe = !!currentUserPubkey && !!settlementWinner && settlementWinner === currentUserPubkey
 	const isSettlementPending = latestSettlement ? settlementValidities.get(latestSettlement.id) === 'pending' : false
+	// The settlement's own validity classification, carried out of `deriveState`
+	// so fulfillment authority can fail closed on `pending` (a settlement whose
+	// required matching path release has not been validated/observed yet).
+	const latestSettlementValidity: SettlementValidity | null = latestSettlement
+		? (settlementValidities.get(latestSettlement.id) ?? null)
+		: null
 
 	// Whether the winning bid's proofs are confirmed `spent` at the mint.
 	// When the settlement is valid but proofs aren't spent yet (the seller
@@ -471,6 +493,7 @@ function deriveState(
 		settlementFinalAmount,
 		settlementNamesMe,
 		isSettlementPending,
+		latestSettlementValidity,
 		isSettlementPendingRedemption,
 		isMyBidTop,
 		myAlreadyReleased,
@@ -519,12 +542,17 @@ function classifyPhase(d: DerivedState): SettlementPhase {
  *
  * Fulfillment is a settlement decision, not a display decision, so it is never
  * granted by a broad auction detector or by the buyer-authored claim marker
- * alone. It requires BOTH:
+ * alone. It requires ALL of:
  *
- *   1. a settlement this module validated — correct seller/root/coordinate,
- *      a canonical winning bid, a valid path release, and a complete payout
- *      chain (see `deriveState` / `classifyPhase`), and
- *   2. a claim order that passes the 8-point `validateClaimOrder` check
+ *   1. a settlement this module validated **as valid** — correct
+ *      seller/root/coordinate, a canonical winning bid, a *validated* matching
+ *      path release, and a complete payout chain
+ *      (`latestSettlementValidity === 'valid'`). A settlement that is merely
+ *      `pending` — retained, but whose required matching path release has not
+ *      been validated/observed yet — is NOT a settlement this module validated,
+ *      so authority fails closed on it,
+ *   2. the settled phase (`classifyPhase`), and
+ *   3. a claim order that passes the 8-point `validateClaimOrder` check
  *      *against that exact settlement* (referenced settlement resolved from the
  *      validated set, buyer === settlement winner, amount === final amount).
  *
@@ -532,13 +560,19 @@ function classifyPhase(d: DerivedState): SettlementPhase {
  * that resolves to nothing — therefore grants no authority: the referenced
  * settlement is resolved here, never taken on faith from the marker.
  *
+ * The result carries identity (`claimOrderId`), and callers that mutate an order
+ * must bind it with `claimOrderAuthorizesFulfillment()` rather than collapsing
+ * the object to a boolean — one auction coordinate can carry more than one
+ * kind-16 order event, so a bare boolean would let authority earned by claim A
+ * unlock order B.
+ *
  * Synchronous on purpose: it reuses the same derived state
  * `getSettlementDescriptor` builds. The mint-keyset fetch that descriptor
  * performs only affects path-release proof decoding, which is not part of the
  * fulfillment transition.
  */
 export interface AuctionFulfillmentAuthority {
-	/** True only for validated settled settlement + canonical claim order. */
+	/** True only for a *valid* settled settlement + canonical claim order. */
 	fulfillmentReady: boolean
 	/** The validated settlement event the claim is bound to (when one exists). */
 	settlementEventId?: string
@@ -548,11 +582,40 @@ export interface AuctionFulfillmentAuthority {
 
 export function getAuctionFulfillmentAuthority(input: GetSettlementDescriptorInput): AuctionFulfillmentAuthority {
 	const derived = deriveState(input)
+	// Fail closed on `pending`: only a settlement whose own chain validated
+	// (validity === 'valid', which includes a validated matching path release)
+	// may authorize fulfillment. `isSettlementPending` is the same condition
+	// stated the other way round; requiring the positive classification keeps a
+	// future third validity value from silently unlocking authority.
+	const settlementIsValid = derived.latestSettlementValidity === 'valid'
 	return {
-		fulfillmentReady: classifyPhase(derived) === 'settled' && derived.hasMatchedClaimOrder,
+		fulfillmentReady: settlementIsValid && classifyPhase(derived) === 'settled' && derived.hasMatchedClaimOrder,
 		settlementEventId: derived.latestSettlement?.id,
 		claimOrderId: derived.matchedClaimOrderId,
 	}
+}
+
+/**
+ * Bind identity-bearing fulfillment authority to the exact order being mutated.
+ *
+ * `getAuctionFulfillmentAuthority()` answers "does this auction's validated
+ * settlement have a canonical claim order?" — it does not answer "may THIS order
+ * be processed?". An auction coordinate can carry more than one kind-16 order
+ * event, so collapsing the authority object to a bare boolean at the action
+ * boundary would let authority earned by claim A unlock any auction-associated
+ * order B for the same coordinate, mutating an order that never earned it.
+ *
+ * Order surfaces that mutate an order must therefore pass the authority object
+ * together with the id of the order they are about to mutate and require this
+ * predicate to hold. It fails closed on a missing or partial authority.
+ */
+export function claimOrderAuthorizesFulfillment(
+	authority: AuctionFulfillmentAuthority | null | undefined,
+	orderEventId: string | null | undefined,
+): boolean {
+	if (!authority?.fulfillmentReady) return false
+	if (!orderEventId) return false
+	return authority.claimOrderId === orderEventId
 }
 
 function build(

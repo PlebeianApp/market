@@ -2,6 +2,7 @@ import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAuctionClaimPublicMarkerFields, type PrivateAuctionClaimPayload } from '@/lib/auctions/privateAuctionClaimMessage'
+import { toRawEvent } from '@/lib/nostr/eventLike'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
@@ -467,14 +468,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	const parsedAuctionForSettlement = useMemo(() => {
 		if (!auctionData) return null
-		const result = parseAuctionEvent(auctionData.rawEvent())
+		const result = parseAuctionEvent(toRawEvent(auctionData))
 		return result.ok ? result.value : null
 	}, [auctionData])
 
 	const parsedBidsForSettlement = useMemo(
 		() =>
 			auctionBids
-				.map((b) => parseBidEvent(b.rawEvent()))
+				.map((b) => parseBidEvent(toRawEvent(b)))
 				.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok)
 				.map((r) => r.value),
 		[auctionBids],
@@ -483,11 +484,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const parsedVerdictsForSettlement = useMemo(
 		() =>
 			auctionVerdicts
-				.map((e) =>
-					parseValidatorVerdictEvent(
-						e as unknown as { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number },
-					),
-				)
+				.map((e) => parseValidatorVerdictEvent(toRawEvent(e)))
 				.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
 				.map((r) => r.value),
 		[auctionVerdicts],
@@ -496,7 +493,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const parsedSettlementsForSettlement = useMemo(
 		() =>
 			auctionSettlements
-				.map((s) => parseSettlementEvent(s.rawEvent()))
+				.map((s) => parseSettlementEvent(toRawEvent(s)))
 				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
 				.map((r) => r.value),
 		[auctionSettlements],
@@ -505,7 +502,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const parsedPathReleasesForSettlement = useMemo(
 		() =>
 			auctionPathReleases
-				.map((pr) => parsePathReleaseEvent(pr.rawEvent()))
+				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
 				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
 				.map((r) => r.value),
 		[auctionPathReleases],
@@ -531,7 +528,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			verdicts: parsedVerdictsForSettlement,
 			settlements: parsedSettlementsForSettlement,
 			pathReleases: parsedPathReleasesForSettlement,
-			claimOrders: auctionClaimOrders.map((o) => o.rawEvent()),
+			claimOrders: auctionClaimOrders.map((o) => toRawEvent(o)),
 			currentUserPubkey: user?.pubkey || undefined,
 			myTopBidEvent,
 			hasBidderRecord: !!(myTopBidEvent && findBidderRecord(myTopBidEvent.id)),
@@ -573,8 +570,13 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	// Fulfillment authority (ADR-0003 / ADR-0004) for the action buttons. It is
 	// derived from the SAME validated descriptor input the settlement card uses
 	// — the referenced settlement must resolve out of the validated settlement
-	// set and a canonical claim order must bind to it — never from the order's
-	// own buyer-authored claim marker.
+	// set *as valid* and a canonical claim order must bind to it — never from the
+	// order's own buyer-authored claim marker.
+	//
+	// The whole authority object is handed to OrderActions (not a boolean), so
+	// the action boundary can bind it to the exact order id being mutated: an
+	// auction coordinate can carry more than one order event, and authority
+	// earned by the canonical claim must not unlock a sibling order.
 	const auctionFulfillmentAuthority = useMemo(
 		() => (descriptorInput ? getAuctionFulfillmentAuthority(descriptorInput) : null),
 		[descriptorInput],
@@ -636,11 +638,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</div>
 
 						{/* ORDER ACTIONS - Now at the bottom with labels */}
-						<OrderActions
-							order={order}
-							userPubkey={user?.pubkey || ''}
-							auctionFulfillmentReady={auctionFulfillmentAuthority?.fulfillmentReady ?? false}
-						/>
+						<OrderActions order={order} userPubkey={user?.pubkey || ''} auctionAuthority={auctionFulfillmentAuthority} />
 					</CardContent>
 				</Card>
 
