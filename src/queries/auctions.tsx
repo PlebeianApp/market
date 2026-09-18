@@ -61,7 +61,7 @@ export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled
 export type PrivateAuctionClaimLookupResult =
 	| { status: 'found'; claim: PrivateAuctionClaimMessage }
 	| { status: 'not_found' }
-	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_ndk' | 'no_signer' | 'not_seller' }
+	| { status: 'unavailable'; reason: 'missing_marker_fields' | 'no_signer' | 'not_seller' | 'relay_error' }
 
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 const PRIVATE_AUCTION_CLAIM_GIFT_WRAP_PAGE_LIMIT = 100
@@ -1301,7 +1301,16 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NostrEvent
 			...(until !== undefined ? { until } : {}),
 		}
 
-		const events = await applesauceIo.fetchEvents(filter, { timeoutMs: 6000 })
+		let events: Awaited<ReturnType<typeof applesauceIo.fetchEvents>>
+		try {
+			events = await applesauceIo.fetchEvents(filter, { timeoutMs: 6000 })
+		} catch {
+			// The applesauce adapter REJECTS on a subscription error (the NDK helper
+			// this replaced resolved). Left uncaught, a relay error would throw out
+			// of the query instead of the `unavailable` result the UI handles.
+			// (review 2026-09-18)
+			return { status: 'unavailable', reason: 'relay_error' }
+		}
 		if (events.length === 0) break
 
 		let oldestCreatedAt: number | undefined

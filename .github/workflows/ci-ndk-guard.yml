@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - master
+      - auctions
       - 'feature/**'
       - 'chore/**'
       - 'fix/**'

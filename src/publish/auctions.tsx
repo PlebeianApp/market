@@ -696,6 +696,17 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		// signed event keeps. Finalizing before the publish attempt lets us
 		// persist the durable recovery record and the retry cache ahead of any
 		// sign/broadcast failure (#1235 Blocking 1).
+		//
+		// Latent, fail-closed (review 2026-09-18): the frozen id is computed from
+		// the template via nostr-tools `getEventHash`, but signing goes through
+		// NDK (`signNostrEvent` → `NDKEvent.sign`), whose `toNostrEvent` runs
+		// `generateTags()` first and appends a `["client", …]` tag when
+		// `ndk.clientName`/`clientNip89` is set. If either were ever set on the
+		// singleton, the signed id would differ from this frozen id and the
+		// post-sign drift guard below would refuse every bid (fail-closed, never
+		// wrong). `clientName` is unset everywhere under `src/` today, so the ids
+		// match; derive the id from the signed event, or assert the client tag is
+		// absent, if that invariant is ever weakened.
 		const unsignedBidEvent: NostrEvent = {
 			...bidTemplate,
 			pubkey: bidderPubkey,

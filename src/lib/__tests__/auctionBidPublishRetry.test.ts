@@ -504,10 +504,17 @@ describe('republishAuctionBid retry identity binding (#1235 round-3 B2)', () => 
 //   (i)  A post-lock step BEFORE event finalization throws — the injected case
 //        is a lock result with no proofs, which aborts the pipeline before the
 //        kind-1023 id exists. No event id, no recovery record, no cache entry.
-//        Funds locked. (Base injected a `toNostrEvent` throw here; the seam
-//        finalizes the unsigned event locally rather than via NDK's
-//        `toNostrEvent`, so the public equivalent of "no id yet" is a pre-build
-//        failure like this one — review 2026-09-18, item 3.)
+//        Funds locked.
+//        Note (review 2026-09-18, R1): the finalization path is NOT unreachable.
+//        `signNostrEvent` builds `new NDKEvent(ndk, template)` and calls
+//        `NDKEvent.sign(signer)`, whose `toNostrEvent` runs on every bid. At base
+//        a finalization throw surfaced `AuctionBidLockedButUnpublishedError`
+//        (reclaim-only, `bidEventId: null`); at head the unsigned event is
+//        finalized AND cached BEFORE signing, so the same throw now surfaces
+//        `AuctionBidPublishFailedError` with the finalized id — retryable by
+//        rebroadcast (pinned by "(i-b)" below and by "retry after a sign failure
+//        re-signs the SAME event id"). (i) here is the distinct case where no id
+//        was finalized at all.
 //   (ii) The STRICT bidder-record write fails (storage quota/disabled) — the
 //        refund private key is NOT durably persisted, so the publish must
 //        fail CLOSED instead of broadcasting a locked leg with no recoverable
@@ -547,6 +554,39 @@ describe('publishAuctionBid post-lock error model (#1235 follow-up 3)', () => {
 		// No recovery record could exist (id never finalized) — the leg's
 		// ONLY durable trace is the wallet's pending token (tokenId above).
 		expect(updatePendingTokenContextMock).not.toHaveBeenCalled()
+	})
+
+	test('(i-b) a finalization (toNostrEvent) throw AFTER the lock is retryable — AuctionBidPublishFailedError with the finalized id (review 2026-09-18 R1)', async () => {
+		// NDK's `NDKEvent.sign` calls `toNostrEvent`; a throw there propagates out
+		// of `signNostrEvent` after the lock. At head the unsigned event is
+		// finalized + cached before signing, so this must surface the RETRYABLE
+		// class (not the reclaim-only one) with the finalized id.
+		const originalToNostrEvent = NDKEvent.prototype.toNostrEvent
+		NDKEvent.prototype.toNostrEvent = function () {
+			throw new Error('toNostrEvent exploded')
+		}
+		let caught: unknown
+		try {
+			await publishWithSigner(500)
+		} catch (error) {
+			caught = error
+		} finally {
+			NDKEvent.prototype.toNostrEvent = originalToNostrEvent
+		}
+
+		expect(caught).toBeInstanceOf(AuctionBidPublishFailedError)
+		const failure = caught as AuctionBidPublishFailedError
+		expect(failure.bidEventId).toHaveLength(64)
+		expect((failure.cause as Error).message).toBe('toNostrEvent exploded')
+		expect(publishEventMock).not.toHaveBeenCalled()
+		// The unsigned event was finalized + cached pre-sign → the leg is
+		// rebroadcast-retryable with the SAME id and no second mint lock.
+		expect(findBidderRecord(failure.bidEventId)).toBeDefined()
+		const retriedId = await republishWithSigner(failure.bidEventId)
+		expect(retriedId).toBe(failure.bidEventId)
+		expect(lockAuctionBidFundsMock).toHaveBeenCalledTimes(1)
+		expect(publishedPayloads).toHaveLength(1)
+		expect(publishedPayloads[0].id).toBe(failure.bidEventId)
 	})
 
 	test('(ii) storage failure at the bidder-record write fails CLOSED — surfaced as the distinct locked error, never a silent success', async () => {

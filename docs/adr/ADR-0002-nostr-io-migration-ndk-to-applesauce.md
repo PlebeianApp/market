@@ -324,7 +324,9 @@ Decision: the auctions surface is seam-first. Every production file in the
 auctions file set routes relay I/O, signing, and identity through the
 first-party port at `src/lib/nostr/io.ts`; none of them imports
 `@nostr-dev-kit` (runtime or type) or touches the NDK store singleton
-(`ndkActions` / `ndkStore`). Auction-specific capabilities — the bid stream
+(`ndkActions` / `ndkStore`). The first-party wrapper
+`src/lib/nostr/ndk-events.ts` (which re-exports NDK types) is part of the seam,
+not an auction file; auction files may import it. Auction-specific capabilities — the bid stream
 including its `onEose` page boundary, the private-claim read, bid publish and
 sign, and bidder identity — are port contract, not NDK-bridge-only behavior.
 The read path is included: the bid stream and the private-claim read go through
@@ -343,10 +345,25 @@ requires the applesauce adapter to serve every auction capability the app uses;
 it does not assert that auctions already run on the applesauce adapter at
 runtime.
 
+Outstanding Wave-A3 exception: the applesauce adapter's `sign` is intentionally
+not wired until Wave A3 (`src/lib/nostr/io-applesauce.ts` throws
+`applesauceIo.sign is not wired until Wave A3 (auth/signer migration)`). The
+auctions **write** path therefore still runs through the NDK bridge for
+sign/publish today, even though auction code calls only the seam. This amendment
+constrains where auction code calls; it does not claim the applesauce adapter can
+serve the write path yet.
+
 Allowlisted exception: `src/lib/auctions/privateAuctionClaimMessage.ts` —
 NIP-59 private-claim encrypt/decrypt needs the raw active signer, which the
 port does not expose. Gated on the signer-capability seam (`#1252`, Waves
 A3/A3b, amended above); the allowlist disappears when that lands.
+
+Superseded ownership: the earlier assignment of `src/lib/stores/nip60.ts` to the
+auctions team (`:141`, `:197`) is **superseded** by this amendment. Migrating the
+shared NIP-60 wallet store (`NDKCashuWallet` / `NDKZapper`) is **explicitly out of
+scope for the auctions-line migration**; it is not part of this gate's scanned set
+and is tracked separately. `scripts/check-auctions-ndk-surface.sh` names it as a
+documented, deliberate gap rather than a silent omission.
 
 Relationship to the wave roadmap: unchanged for `master`. The auctions line
 lands its own production set on the seam ahead of Wave C, which is the ordering

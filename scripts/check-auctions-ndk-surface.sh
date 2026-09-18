@@ -18,10 +18,18 @@
 # always runs strict.
 #
 # Out of scope (named, not silently ignored): `src/lib/stores/nip60.ts` carries
-# 13 NDK-surface hits and is imported by six auction production files, but it is
-# the shared NIP-60 wallet store (NDKCashuWallet / NDKZapper), not auctions-owned
-# code. Moving it onto the seam is a separate wallet-migration follow-up; it is
-# deliberately NOT in the scanned set and NOT in the #1252 allowlist below.
+# 13 NDK-surface hits and is imported by nine auction production files, but it is
+# the shared NIP-60 wallet store (NDKCashuWallet / NDKZapper). The earlier ADR-0002
+# assignment of this file to the auctions team is SUPERSEDED: migrating the shared
+# NIP-60 wallet store is explicitly OUT OF SCOPE for the auctions-line migration
+# and is tracked separately. It is deliberately NOT in the scanned set and NOT in
+# the #1252 allowlist below.
+#
+# First-party wrapper: `src/lib/nostr/ndk-events.ts` re-exports NDK types and is
+# part of the seam, not an auction file — auction files may import it. Six scanned
+# files use it. This gate's literal `@nostr-dev-kit` grep cannot distinguish the
+# wrapper from a direct import; the wrapper lives outside the scanned set and is
+# the sanctioned pattern.
 #
 # Allowlist: NIP-59 / private-claim encryption needs the raw active signer
 # object, which the library-agnostic I/O seam does not expose. Such files are
@@ -58,11 +66,14 @@ GLOBS=(
 	"$ROOT"/src/lib/auction*.ts
 	"$ROOT"/src/lib/auction/*.ts
 	"$ROOT"/src/lib/auctions/*.ts
+	"$ROOT"/src/lib/utils/auction*.ts
+	"$ROOT"/src/lib/stores/auction*.ts
 	"$ROOT"/src/hooks/useAuction*.ts
 	"$ROOT"/src/lib/schemas/auction/*.ts
 	"$ROOT"/src/server/auction-validator/*.ts
 	"$ROOT"/src/components/nostr/AuctionSectionGrid.tsx
 	"$ROOT"/src/components/sheet-contents/auctions/*.tsx
+	"$ROOT"/src/components/sheet-contents/NewAuction*.tsx
 	"$ROOT"/src/routes/_dashboard-layout/dashboard/products/auctions*.tsx
 )
 
