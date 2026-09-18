@@ -164,6 +164,13 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		logger.info(`[validator] closed child subscriptions for auction ${auctionRootEventId.slice(0, 8)}`)
 	}
 
+	const drainPendingReleasesForBid = async (auctionRootEventId: string, bidEventId: string): Promise<void> => {
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState || !auctionState.bids.has(bidEventId)) return
+		const releases = pendingReleases.take(bidEventId, now())
+		for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
+	}
+
 	const dispatchChildEvent = (event: NostrEvent, observedAt?: number): void => {
 		switch (event.kind) {
 			case AUCTION_BID_KIND:
@@ -391,6 +398,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
 		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: deps.spamPolicy })
+		await drainPendingReleasesForBid(bid.auctionRootEventId, bid.id)
 
 		// Run derive + publish.
 		try {
@@ -547,8 +555,7 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (!auctionState) return
 		for (const bidEventId of pendingReleases.keys(now())) {
 			if (!auctionState.bids.has(bidEventId)) continue
-			const releases = pendingReleases.take(bidEventId, now())
-			for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
+			await drainPendingReleasesForBid(auctionRootEventId, bidEventId)
 		}
 	}
 

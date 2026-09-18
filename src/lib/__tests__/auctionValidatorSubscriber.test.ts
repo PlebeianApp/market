@@ -431,6 +431,41 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
+	test('a release that arrives after the auction but before its bid is replayed when the bid lands', async () => {
+		let t = 5_000
+		const { auctionState, relayPool, publishCalls, subscriber } = buildHarness({ now: () => t })
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const bidEvent = buildSignedBid(bidderSk)
+		const releaseEvent = createSignedEvent(bidderSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_600,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, releaseEvent)
+		await flush()
+		expect(auctionState.pathReleases.get(bidEvent.id) ?? []).toEqual([])
+
+		t = 5_100
+		dispatch(relayPool, bidEvent)
+		await flush()
+
+		expect(auctionState.pathReleases.get(bidEvent.id)?.[0]?.id).toBe(releaseEvent.id)
+		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
+		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
+		await subscriber.stop()
+	})
+
 	test('a child-subscribed settlement with a mismatched auction coordinate does not mutate the tracked auction', async () => {
 		const { state, auctionState, relayPool, subscriber } = buildHarness()
 		await subscriber.start()
