@@ -2,13 +2,97 @@
 # Provision a Plebeian Market per-PR preview host.
 #
 # This is the reproducible, declarative counterpart to
-# `infra/preview-vps/provision.sh` (which the Preview Deploy workflow runs over
-# SSH on every deploy). Run it against a fresh box:
+# `infra/preview-vps/provision.sh`. `provision.sh` is AUTHORITATIVE at deploy
+# time — the Preview Deploy workflow runs it over SSH on every deploy — so keep
+# the role in lockstep with it (ports, systemd units, Caddy route). The role is
+# for standing up a fresh box (and converging a drifted one), not a second
+# source of truth.
+#
+# The host key is pinned, fail-closed, from PREVIEW_VPS_HOST_FINGERPRINT —
+# play 1 scans and verifies it into a private known_hosts; play 2 connects with
+# StrictHostKeyChecking=yes against that file. This matches provision.sh, which
+# also refuses to proceed on a fingerprint mismatch. (It does NOT use TOFU.)
 #
 #   PREVIEW_VPS_HOST=203.0.113.10 \
+#   PREVIEW_VPS_HOST_FINGERPRINT=SHA256:… \
 #   PREVIEW_VPS_SSH_KEY_FILE=~/.ssh/preview_vps_deploy \
 #   PREVIEW_CLOUDFLARE_API_TOKEN=… PREVIEW_CLOUDFLARE_ZONE_ID=… \
 #     ansible-playbook playbooks/preview-host.yml
+
+- name: Pin the preview host key (fail closed on mismatch)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    preview_host: "{{ hostvars['preview'].ansible_host }}"
+    preview_port: "{{ lookup('env', 'PREVIEW_VPS_SSH_PORT') | default('22', true) }}"
+    preview_fingerprint: "{{ lookup('env', 'PREVIEW_VPS_HOST_FINGERPRINT') | default('', true) }}"
+    preview_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/preview_known_hosts"
+  tasks:
+    - name: Require the pinned fingerprint
+      ansible.builtin.assert:
+        that:
+          - preview_fingerprint | length > 0
+        fail_msg: >-
+          Set PREVIEW_VPS_HOST_FINGERPRINT to the host's ssh-keyscan SHA256
+          before provisioning (ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -).
+
+    - name: Scan the ed25519 host key
+      ansible.builtin.command:
+        argv:
+          - ssh-keyscan
+          - -T
+          - '10'
+          - -p
+          - '{{ preview_port }}'
+          - -t
+          - ed25519
+          - '{{ preview_host }}'
+      register: preview_scan
+      changed_when: false
+
+    - name: Keep the first real key line
+      ansible.builtin.set_fact:
+        preview_scan_line: >-
+          {{
+            (preview_scan.stdout_lines
+              | reject('match', '^#')
+              | select('search', 'ssh-ed25519')
+              | list | first) | default('')
+          }}
+
+    - name: Fail when the host returned no ed25519 key
+      ansible.builtin.assert:
+        that:
+          - preview_scan_line | length > 0
+        fail_msg: >-
+          Could not read an ed25519 host key from {{ preview_host }}:{{ preview_port }}.
+          The host is unreachable, or its sshd offers no ed25519 key. This is
+          NOT a fingerprint mismatch.
+
+    - name: Compute the host key fingerprint
+      ansible.builtin.shell: |
+        set -euo pipefail
+        printf '%s\n' {{ preview_scan_line | quote }} | ssh-keygen -lf -
+      register: preview_actual
+      changed_when: false
+
+    - name: Fail on fingerprint mismatch
+      ansible.builtin.assert:
+        that:
+          - (preview_actual.stdout | regex_search('SHA256:[A-Za-z0-9+/=]+'))
+            == (preview_fingerprint | regex_search('SHA256:[A-Za-z0-9+/=]+'))
+        fail_msg: >-
+          Host key fingerprint mismatch for {{ preview_host }}: pinned
+          {{ preview_fingerprint }}, host presents {{ preview_actual.stdout | trim }}.
+
+    - name: Write the private, pinned known_hosts
+      ansible.builtin.copy:
+        content: "{{ preview_scan_line }}\n"
+        dest: '{{ preview_known_hosts }}'
+        mode: '0600'
+
 - name: Provision the Plebeian Market preview host
   hosts: preview
   become: true
