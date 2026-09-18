@@ -150,6 +150,19 @@ document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
 Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
 of this application, so it is a failed health check.
 
+## Proof the preview serves the built commit
+
+The preview image bakes the commit it was built from (`ARG APP_COMMIT_SHA` →
+`ENV`, set from `github.sha`) and the app surfaces it on `/api/config` as
+`commit`. The deploy health check requires the live value to equal the built
+`github.sha`, and the PR comment then reports
+`Commit: <sha> (served, verified) · PR head: <head.sha>`.
+
+So a green `Deploy preview` means the preview is serving exactly the artifact CI
+built — not a stale image and not merely a pipeline that finished.
+(`github.sha` is the `pull_request` **merge ref** the image is built from; the
+PR head is shown alongside for orientation.)
+
 ## The nak relay image is built from source on the host
 
 The preview's `nak-relay` service used to pull `ghcr.io/fiatjaf/nak:latest`.
