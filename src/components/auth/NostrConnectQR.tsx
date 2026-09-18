@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
+import { nip46RelayOptions } from '@/lib/nostr/nip46-relays'
 import { authActions } from '@/lib/stores/auth'
 import { buildNostrConnectUri, isMatchingConnectSecret } from '@/lib/nostr/nostr-connect-uri'
 import { copyToClipboard } from '@/lib/utils'
@@ -24,10 +24,19 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const [listening, setListening] = useState(false)
 	const [generatingConnectionUrl, setGeneratingConnectionUrl] = useState(false)
 	const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-	const [selectedRelay, setSelectedRelay] = useState(DEFAULT_NIP46_RELAYS[0].value)
+	const relayOptions = useMemo(() => nip46RelayOptions(config?.nip46Relay), [config?.nip46Relay])
+	const [selectedRelay, setSelectedRelay] = useState(relayOptions[0]?.value ?? '')
+	const userSelectedRelayRef = useRef(false)
 	const [customRelay, setCustomRelay] = useState('')
 	const isCustomRelay = selectedRelay === 'custom'
 	const activeRelay = isCustomRelay ? customRelay : selectedRelay
+
+	// Prefer the server-advertised NIP-46 relay (config.nip46Relay) until the
+	// user explicitly picks a different one from the dropdown.
+	useEffect(() => {
+		if (userSelectedRelayRef.current) return
+		if (config?.nip46Relay) setSelectedRelay(config.nip46Relay)
+	}, [config?.nip46Relay])
 
 	// Generate secret once and keep it stable
 	const tempSecretRef = useRef<string>(Math.random().toString(36).substring(2, 15))
@@ -326,12 +335,18 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			<div className="w-full space-y-2">
 				<label className="text-sm font-medium">Relay</label>
-				<Select value={selectedRelay} onValueChange={setSelectedRelay}>
+				<Select
+					value={selectedRelay}
+					onValueChange={(value) => {
+						userSelectedRelayRef.current = true
+						setSelectedRelay(value)
+					}}
+				>
 					<SelectTrigger className="w-full">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{DEFAULT_NIP46_RELAYS.map((relay) => (
+						{relayOptions.map((relay) => (
 							<SelectItem key={relay.value} value={relay.value}>
 								{relay.label}
 							</SelectItem>
