@@ -568,6 +568,12 @@ jobs:
           Idle previews are stopped after a few hours; the gateway on the VPS
           wakes them on the next visit to the preview URL (first load may
           take up to ~15 s while the preview boots).
+
+          **What green guarantees:** this build is being served — \`/\` served real
+          HTML, \`wss://${{ steps.ports.outputs.subdomain }}/relay\` completed a
+          WebSocket handshake, and \`/api/config\` reports \`commit == the built SHA\`.
+          \`Commit:\` is the PR's merge ref; \`PR head:\` is shown alongside.
+          Details: \`docs/ops/preview-deploy.md\`.
           EOF
           )
           CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \

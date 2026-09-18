@@ -407,4 +407,14 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('PR head:')
 		expect(body).toContain('${{ github.event.pull_request.head.sha }}')
 	})
+
+	test('the preview comment explains what a green check guarantees', () => {
+		// The comment must state the guarantee (and point at how to verify), so
+		// a maintainer reading only the PR comment knows a green check means the
+		// build is being served, not merely that the pipeline finished.
+		const body = stripComments(runBody(stepNamed(deployJob, 'Post / update preview URL PR comment')))
+		expect(body).toContain('What green guarantees')
+		expect(body).toContain('/api/config')
+		expect(body).toContain('commit == the built SHA')
+	})
 })

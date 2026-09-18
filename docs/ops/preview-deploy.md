@@ -150,18 +150,50 @@ document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
 Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
 of this application, so it is a failed health check.
 
-## Proof the preview serves the built commit
+## What a green `Deploy preview` guarantees
 
 The preview image bakes the commit it was built from (`ARG APP_COMMIT_SHA` →
 `ENV`, set from `github.sha`) and the app surfaces it on `/api/config` as
-`commit`. The deploy health check requires the live value to equal the built
-`github.sha`, and the PR comment then reports
-`Commit: <sha> (served, verified) · PR head: <head.sha>`.
+`commit`. A green `Deploy preview` check means the preview at
+`https://<prN>.test-market.orangesync.tech` is serving exactly the artifact that
+run built — not a stale image, and not merely a pipeline that finished. The run
+is green only if **all** of these held:
 
-So a green `Deploy preview` means the preview is serving exactly the artifact CI
-built — not a stale image and not merely a pipeline that finished.
-(`github.sha` is the `pull_request` **merge ref** the image is built from; the
-PR head is shown alongside for orientation.)
+1. The image was built on the runner from the pull request's **merge ref**
+   (`github.sha`) and tagged `market-app:<github.sha>`, with `<github.sha>` baked
+   into the image as `APP_COMMIT_SHA` (`infra/preview-vps/app.Dockerfile`).
+2. `GET /` served a **non-empty HTML document** (a `200` with a zero-length body
+   fails).
+3. `wss://<prN>.test-market.orangesync.tech/relay` completed a **WebSocket
+   handshake and a Nostr `REQ`** (the browser-reachable relay).
+4. `GET /api/config` reported `commit == <github.sha>` — i.e. the running
+   container is the image this run built.
+
+If any of those fails the check is **red**: the health step's failure is promoted
+to the check by `Fail the check when the preview did not serve` (the health step
+itself stays `continue-on-error` only so the PR comment still posts).
+
+**How to read the hash.** `Commit: <sha> (served, verified)` in the PR comment is
+`github.sha` — the **merge ref** (PR head merged into the base branch) — the honest
+identity of what CI built. It is _not_ the PR head tip; the comment shows that
+separately as `PR head: <head.sha>`. The merge ref changes when either the head
+or the base moves, and each change triggers a new deploy.
+
+**Verify at any time:**
+
+```bash
+curl -s https://<prN>.test-market.orangesync.tech/api/config | jq -r .commit
+```
+
+**Scope — what green does _not_ say:**
+
+- Fork PRs never receive secrets on the `pull_request` trigger; their
+  `Deploy preview` is green because it **skips**, so it does not imply a preview
+  exists.
+- The image is not swapped after deploy; the manager may stop/wake previews, but
+  the served commit stays until the next successful deploy.
+- It is per-run: it proves the latest deploy run served its build, not that no
+  newer run is queued (concurrency cancels superseded runs).
 
 ## The nak relay image is built from source on the host
 
