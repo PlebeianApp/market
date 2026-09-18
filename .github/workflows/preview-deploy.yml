@@ -117,6 +117,7 @@ jobs:
           cp package.json bun.lock tsconfig.json deploy-package/
           cp -r public styles deploy-package/
           cp bunfig.toml deploy-package/
+          cp -r patches deploy-package/
           # The deploy package is the build context for the app image, built on
           # the CI runner with deps pre-installed so a lazy-woken preview boots
           # in seconds.
