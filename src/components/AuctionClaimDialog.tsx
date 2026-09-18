@@ -90,6 +90,7 @@ export function AuctionClaimDialog({
 				</DialogHeader>
 
 				<form
+					noValidate
 					onSubmit={(e) => {
 						e.preventDefault()
 						e.stopPropagation()
@@ -206,7 +207,6 @@ export function AuctionClaimDialog({
 														onChange={(value) => field.handleChange(value)}
 														onBlur={field.handleBlur}
 														placeholder="e.g. San Francisco"
-														required
 														selectedCountry={selectedCountry}
 													/>
 													{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
@@ -266,7 +266,6 @@ export function AuctionClaimDialog({
 												onChange={(value) => field.handleChange(value)}
 												onBlur={field.handleBlur}
 												placeholder="e.g. United States"
-												required
 											/>
 											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
 												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>

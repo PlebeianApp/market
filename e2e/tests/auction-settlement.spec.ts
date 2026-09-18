@@ -36,6 +36,85 @@ const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 
 useWebSocketImplementation(WebSocket)
 
+test.describe('Auction Claim Dialog', () => {
+	test.use({ video: 'on' })
+
+	test('winner sees validation errors and can submit shipping details', async ({ buyerPage }: { buyerPage: Page }) => {
+		await dismissPiiModal(buyerPage, devUser2.pk)
+
+		const relay = await Relay.connect(RELAY_URL)
+		let auction: SeededAuction
+		let settlementId: string
+		try {
+			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+			const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+			const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId)
+			settlementId = await seedSettlement(relay, devUser1.sk, auction, {
+				status: 'settled',
+				winningBidId: bidId,
+				winnerPubkey: devUser2.pk,
+				finalAmount: MOCK_PROOF_AMOUNT,
+				pathReleaseEventId: prId,
+			})
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
+		} finally {
+			relay.close()
+		}
+
+		await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+		await buyerPage.waitForLoadState('networkidle')
+
+		await expect(buyerPage.getByRole('button', { name: /submit shipping address/i })).toBeVisible({ timeout: 15_000 })
+		await buyerPage.getByRole('button', { name: /submit shipping address/i }).click()
+
+		await expect(buyerPage.getByRole('dialog', { name: /claim your auction win/i })).toBeVisible({ timeout: 15_000 })
+		await buyerPage.getByRole('button', { name: /submit shipping details/i }).click()
+
+		await expect(buyerPage.getByText('Name must be at least 2 characters')).toBeVisible()
+		await expect(buyerPage.getByText('Address must be at least 5 characters')).toBeVisible()
+		await expect(buyerPage.getByText('City is required')).toBeVisible()
+		await expect(buyerPage.getByText('ZIP/Postal code is required')).toBeVisible()
+		await expect(buyerPage.getByText('Please select a valid country')).toBeVisible()
+
+		await buyerPage.getByLabel(/full name/i).fill('Satoshi123')
+		await expect(buyerPage.getByText('Name cannot contain numbers')).toBeVisible()
+
+		await buyerPage.getByLabel(/email/i).fill('not-an-email')
+		await expect(buyerPage.getByText('Please enter a valid email address')).toBeVisible()
+
+		await buyerPage.getByLabel(/full name/i).fill('Satoshi Nakamoto')
+		await buyerPage.getByLabel(/email/i).fill('satoshi@example.com')
+		await buyerPage.getByLabel(/street address/i).fill('123 Bitcoin Avenue')
+		await buyerPage.getByLabel(/^city/i).fill('San Francisco')
+		await buyerPage.getByLabel(/zip\/postal code/i).fill('94105')
+		await buyerPage.getByLabel(/country/i).fill('United States')
+		await buyerPage.getByLabel(/delivery notes/i).fill('Leave with the front desk')
+		await buyerPage.getByLabel(/message to seller/i).fill('Thanks again')
+
+		const subRelay = await Relay.connect(RELAY_URL)
+		try {
+			await buyerPage.getByRole('button', { name: /submit shipping details/i }).click()
+
+			const event = await waitForRelayEvent(subRelay, 16, 'a', auction.auctionCoordinate, 15_000)
+
+			expect(event, 'kind-16 auction claim event should arrive on the relay').not.toBeNull()
+			expect(event!.pubkey).toBe(devUser2.pk)
+
+			const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
+			expect(tagMap.get('subject')).toBe('Plebeian Auction Claim')
+			expect(tagMap.get('amount')).toBe(String(MOCK_PROOF_AMOUNT))
+			expect(tagMap.get('a')).toBe(auction.auctionCoordinate)
+			expect(tagMap.get('p')).toBe(devUser1.pk)
+			expect(event!.tags.some((t) => t[0] === 'e' && t[1] === settlementId && t[3] === 'settlement')).toBe(true)
+
+			await expect(buyerPage.getByText(/shipping details submitted/i)).toBeVisible({ timeout: 15_000 })
+			await expect(buyerPage.getByRole('dialog', { name: /claim your auction win/i })).not.toBeVisible({ timeout: 15_000 })
+		} finally {
+			subRelay.close()
+		}
+	})
+})
+
 test.use({ scenario: 'merchant' })
 // Record video for this suite (feature-quality-gate evidence). `recordVideo` is
 // the fixture option the authenticated page fixtures honour (Playwright's own
