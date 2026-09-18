@@ -78,7 +78,7 @@ test.describe('Auction Claim Dialog', () => {
 		await buyerPage.getByLabel(/street address/i).fill('123 Bitcoin Avenue')
 		await buyerPage.getByLabel(/^city/i).fill('San Francisco')
 		await buyerPage.getByLabel(/zip\/postal code/i).fill('94105')
-		await buyerPage.getByLabel(/country/i).fill('United States')
+		await buyerPage.getByRole('textbox', { name: /country/i }).fill('United States')
 		await buyerPage.getByLabel(/delivery notes/i).fill('Leave with the front desk')
 		await buyerPage.getByLabel(/message to seller/i).fill('Thanks again')
 
@@ -92,7 +92,7 @@ test.describe('Auction Claim Dialog', () => {
 			expect(event!.pubkey).toBe(devUser2.pk)
 
 			const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
-			expect(tagMap.get('subject')).toBe('Plebeian Auction Claim')
+			expect(tagMap.get('subject')).toBe('auction-claim')
 			expect(tagMap.get('amount')).toBe(String(MOCK_PROOF_AMOUNT))
 			expect(tagMap.get('a')).toBe(auction.auctionCoordinate)
 			expect(tagMap.get('p')).toBe(devUser1.pk)
@@ -763,12 +763,13 @@ async function waitForRelayEvent(
 	timeoutMs = 15_000,
 ): Promise<{ id: string; kind: number; pubkey: string; tags: string[][]; content: string } | null> {
 	return new Promise((resolve) => {
+		const filter = { kinds: [kind], [`#${tagName}`]: [tagValue] } as { kinds: number[] } & Record<`#${string}`, string[]>
 		const timer = setTimeout(() => {
 			sub.close()
 			resolve(null)
 		}, timeoutMs)
 
-		const sub = relay.subscribe([{ kinds: [kind], [`#${tagName}`]: [tagValue] }], {
+		const sub = relay.subscribe([filter], {
 			onevent: (event) => {
 				if (event.kind !== kind) return
 				if (!event.tags.some((t) => t[0] === tagName && t[1] === tagValue)) return
@@ -927,7 +928,7 @@ test.describe('UI interaction — publish events to relay', () => {
 					childPubkey: dynKeys.childPubkey,
 					lockSecret: dynKeys.lockSecret,
 					proofY: dynKeys.proofY,
-					token: dynKeys.token,
+					tokenStr: dynKeys.token,
 				})
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, {
