@@ -150,7 +150,7 @@ const buildBidEvent = (input: {
 			content: '',
 			tags: [
 				['e', input.auctionRootEventId],
-				['a', `30408:${input.sellerPubkey}:${input.auctionDTag}`],
+				['a', `30408:${input.sellerPubkey}:${input.auctionDTag ?? 'auction-test'}`],
 				['p', input.sellerPubkey],
 				['amount', '1200'],
 				['currency', 'SAT'],
@@ -232,14 +232,18 @@ describe('validator subscriber bounds every pending child buffer', () => {
 		const sellerPubkey = getPublicKey(sellerSk)
 		const bidderSk = generateSecretKey()
 		const bidderPubkey = getPublicKey(bidderSk)
-		const auction = buildAuctionEvent(sellerSk)
-		harness.dispatch(auction)
-		await harness.settle()
 
 		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: '1'.repeat(64) }))
 		await harness.settle()
 		harness.dispatch(
-			buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: '2'.repeat(64), bidEventId: '3'.repeat(64), bidderPubkey }),
+			buildSettlementEvent({
+				sellerSk,
+				sellerPubkey,
+				auctionRootEventId: '2'.repeat(64),
+				bidEventId: '3'.repeat(64),
+				bidderPubkey,
+				auctionDTag: 'auction-test',
+			}),
 		)
 		await harness.settle()
 		harness.dispatch(buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: '4'.repeat(64) }))
@@ -291,21 +295,45 @@ describe('validator subscriber bounds every pending child buffer', () => {
 		const sellerPubkey = getPublicKey(sellerSk)
 		const bidderSk = generateSecretKey()
 		const bidderPubkey = getPublicKey(bidderSk)
-		const auction = buildAuctionEvent(sellerSk)
-		harness.dispatch(auction)
-		await harness.settle()
 
 		const unknownAuctionA = '4'.repeat(64)
 		const unknownAuctionB = '5'.repeat(64)
 		const unknownAuctionC = '6'.repeat(64)
 		const bidEventId = '7'.repeat(64)
-		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionA, bidEventId, bidderPubkey }))
+		harness.dispatch(
+			buildSettlementEvent({
+				sellerSk,
+				sellerPubkey,
+				auctionRootEventId: unknownAuctionA,
+				bidEventId,
+				bidderPubkey,
+				auctionDTag: 'auction-test',
+			}),
+		)
 		await harness.settle()
 
 		harness.clock.value += 61
-		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionB, bidEventId, bidderPubkey }))
+		harness.dispatch(
+			buildSettlementEvent({
+				sellerSk,
+				sellerPubkey,
+				auctionRootEventId: unknownAuctionB,
+				bidEventId,
+				bidderPubkey,
+				auctionDTag: 'auction-test',
+			}),
+		)
 		await harness.settle()
-		harness.dispatch(buildSettlementEvent({ sellerSk, sellerPubkey, auctionRootEventId: unknownAuctionC, bidEventId, bidderPubkey }))
+		harness.dispatch(
+			buildSettlementEvent({
+				sellerSk,
+				sellerPubkey,
+				auctionRootEventId: unknownAuctionC,
+				bidEventId,
+				bidderPubkey,
+				auctionDTag: 'auction-test',
+			}),
+		)
 		await harness.settle()
 
 		expect(harness.warnings.join('\n')).toContain('dropping kind-1024')

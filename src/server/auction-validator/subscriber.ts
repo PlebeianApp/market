@@ -184,10 +184,45 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (watchedAuctionUnsubscribes.has(auctionRootEventId)) return
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return
+		const watchedCoordinate = auctionState.auction.coordinate
 		const filters: RelayFilter[] = [
-			{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], '#a': [auctionState.auction.coordinate] },
+			{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], '#a': [watchedCoordinate] },
 		]
 		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
+			switch (event.kind) {
+				case AUCTION_BID_KIND: {
+					const parsed = parseBidEvent(event)
+					if (
+						parsed.ok &&
+						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+					) {
+						logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				case AUCTION_PATH_RELEASE_KIND: {
+					const parsed = parsePathReleaseEvent(event)
+					if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
+						logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				case AUCTION_SETTLEMENT_KIND: {
+					const parsed = parseSettlementEvent(event)
+					if (
+						parsed.ok &&
+						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+					) {
+						logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				default:
+					break
+			}
 			dispatchChildEvent(event)
 		})
 		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)

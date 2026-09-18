@@ -361,6 +361,106 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
+	test('a child-subscribed bid with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, publishCalls, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const mismatchedBid = createSignedEvent(bidderSk, {
+			kind: AUCTION_BID_KIND,
+			created_at: 1_500,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['p', SELLER_PUBKEY],
+				['amount', '1200'],
+				['currency', 'SAT'],
+				['mint', 'https://mint.test'],
+				['locktime', '5700'],
+				['refund_pubkey', '03' + 'f'.repeat(64)],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['lock_secret', 'secret-1'],
+				['proof_y', '02' + 'b'.repeat(64)],
+				['created_for_end_at', '2100'],
+				['bid_nonce', 'nonce-mismatch'],
+				['key_scheme', 'hd_p2pk'],
+				['status', 'locked'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedBid)
+		await flush()
+
+		expect(auctionState.bids.size).toBe(0)
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.bids.size).toBe(0)
+		expect(publishCalls).toEqual([])
+		await subscriber.stop()
+	})
+
+	test('a child-subscribed release with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, publishCalls, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const bidEvent = buildSignedBid(bidderSk)
+		dispatch(relayPool, bidEvent)
+		await flush()
+		expect(publishCalls).toEqual([bidEvent.id])
+
+		const mismatchedRelease = createSignedEvent(bidderSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_600,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedRelease)
+		await flush()
+
+		expect(auctionState.pathReleases.get(bidEvent.id) ?? []).toEqual([])
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.pathReleases.size).toBe(0)
+		expect(publishCalls).toEqual([bidEvent.id])
+		await subscriber.stop()
+	})
+
+	test('a child-subscribed settlement with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const mismatchedSettlement = createSignedEvent(sellerSk, {
+			kind: AUCTION_SETTLEMENT_KIND,
+			created_at: 1_800,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['status', 'settled'],
+				['close_at', '2100'],
+				['winning_bid', 'e'.repeat(64)],
+				['winner', 'c'.repeat(64)],
+				['final_amount', '1200'],
+				['path_release', 'f'.repeat(64)],
+				['payout', 'e'.repeat(64), '1200', 'settled'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedSettlement)
+		await flush()
+
+		expect(auctionState.settlement).toBeNull()
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.settlement).toBeNull()
+		await subscriber.stop()
+	})
+
 	test('startup child replay preserves first-observed time for later auction discovery', async () => {
 		// Historical child events already on the relay at startup are
 		// captured with the startup observation time, so a later auction
