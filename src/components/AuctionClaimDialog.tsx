@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CountryCombobox, isValidCountry } from '@/components/checkout/CountryCombobox'
 import { CityCombobox } from '@/components/checkout/CityCombobox'
 import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@/publish/auctions'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 interface AuctionClaimDialogProps {
 	open: boolean
@@ -17,6 +17,9 @@ interface AuctionClaimDialogProps {
 	sellerPubkey: string
 	finalAmount: number
 }
+
+type ValidationField = 'name' | 'firstLineOfAddress' | 'city' | 'zipPostcode' | 'country'
+type ValidationErrors = Partial<Record<ValidationField, string>>
 
 export function AuctionClaimDialog({
 	open,
@@ -37,11 +40,47 @@ export function AuctionClaimDialog({
 	const [additionalInformation, setAdditionalInformation] = useState('')
 	const [email, setEmail] = useState('')
 	const [notes, setNotes] = useState('')
+	const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
 
-	const isValid =
-		name.trim().length >= 2 && firstLineOfAddress.trim().length >= 5 && city.trim() && zipPostcode.trim() && isValidCountry(country)
+	const validationErrors = useMemo<ValidationErrors>(() => {
+		const errors: ValidationErrors = {}
+
+		if (name.trim().length < 2) {
+			errors.name = 'Name must be at least 2 characters'
+		}
+
+		if (firstLineOfAddress.trim().length < 5) {
+			errors.firstLineOfAddress = 'Address must be at least 5 characters'
+		}
+
+		if (!city.trim()) {
+			errors.city = 'City is required'
+		}
+
+		if (!zipPostcode.trim()) {
+			errors.zipPostcode = 'ZIP/Postal code is required'
+		}
+
+		if (!isValidCountry(country)) {
+			errors.country = 'Please select a valid country'
+		}
+
+		return errors
+	}, [city, country, firstLineOfAddress, name, zipPostcode])
+
+	const isValid = Object.keys(validationErrors).length === 0
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (!nextOpen) {
+			setHasAttemptedSubmit(false)
+		}
+
+		onOpenChange(nextOpen)
+	}
 
 	const handleSubmit = async () => {
+		setHasAttemptedSubmit(true)
+
 		if (!isValid) return
 
 		const data: AuctionClaimFormData = {
@@ -64,14 +103,14 @@ export function AuctionClaimDialog({
 
 		try {
 			await claimMutation.mutateAsync(data)
-			onOpenChange(false)
+			handleOpenChange(false)
 		} catch {
 			// Error toast handled by mutation
 		}
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Claim Your Auction Win</DialogTitle>
@@ -87,6 +126,7 @@ export function AuctionClaimDialog({
 							Full Name <span className="text-red-500">*</span>
 						</Label>
 						<Input id="claim-name" placeholder="e.g. Satoshi Nakamoto" value={name} onChange={(e) => setName(e.target.value)} />
+						{hasAttemptedSubmit && validationErrors.name && <p className="mt-1 text-xs text-red-500">{validationErrors.name}</p>}
 					</div>
 
 					<div>
@@ -110,6 +150,9 @@ export function AuctionClaimDialog({
 							value={firstLineOfAddress}
 							onChange={(e) => setFirstLineOfAddress(e.target.value)}
 						/>
+						{hasAttemptedSubmit && validationErrors.firstLineOfAddress && (
+							<p className="mt-1 text-xs text-red-500">{validationErrors.firstLineOfAddress}</p>
+						)}
 					</div>
 
 					<div>
@@ -124,6 +167,7 @@ export function AuctionClaimDialog({
 							required
 							selectedCountry={country}
 						/>
+						{hasAttemptedSubmit && validationErrors.city && <p className="mt-1 text-xs text-red-500">{validationErrors.city}</p>}
 					</div>
 
 					<div>
@@ -131,6 +175,9 @@ export function AuctionClaimDialog({
 							ZIP/Postal Code <span className="text-red-500">*</span>
 						</Label>
 						<Input id="claim-zip" placeholder="e.g. 90210" value={zipPostcode} onChange={(e) => setZipPostcode(e.target.value)} />
+						{hasAttemptedSubmit && validationErrors.zipPostcode && (
+							<p className="mt-1 text-xs text-red-500">{validationErrors.zipPostcode}</p>
+						)}
 					</div>
 
 					<div>
@@ -138,6 +185,7 @@ export function AuctionClaimDialog({
 							Country <span className="text-red-500">*</span>
 						</Label>
 						<CountryCombobox id="claim-country" value={country} onChange={setCountry} placeholder="e.g. United States" required />
+						{hasAttemptedSubmit && validationErrors.country && <p className="mt-1 text-xs text-red-500">{validationErrors.country}</p>}
 					</div>
 
 					<div>
@@ -164,10 +212,10 @@ export function AuctionClaimDialog({
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
+					<Button variant="outline" onClick={() => handleOpenChange(false)}>
 						Cancel
 					</Button>
-					<Button onClick={() => void handleSubmit()} disabled={!isValid || claimMutation.isPending}>
+					<Button onClick={() => void handleSubmit()} disabled={claimMutation.isPending}>
 						{claimMutation.isPending ? 'Submitting...' : 'Submit Shipping Details'}
 					</Button>
 				</DialogFooter>
