@@ -734,13 +734,14 @@ test.describe('Direct Lightning Bid Funding (video recorded)', () => {
 			// Assert sum of dleq_proof amounts equals bid amount (520 sats: 20 wallet balance + 500 delta)
 			expect(totalDleqAmount).toBe(520)
 
-			// ADR-0011 — forged-amount rejection coverage. Build a tampered bid event
-			// with one dleq_proof.amount bumped (e.g. 512->513) while lock_secret/proof_y
-			// remain unchanged. The validation path (verifyBidDleq at validation.ts:556,627)
-			// rejects such bids with matchesAmount:false — the sum of dleq_proof amounts
-			// no longer equals the declared leg delta. This assertion demonstrates the
-			// forgery detection invariant: even when DLEQ proofs are cryptographically
-			// valid, an amount mismatch is caught by the sum check.
+			// ADR-0011 — forged-amount sum-check ILLUSTRATION (not end-to-end coverage).
+			// This builds a tampered object IN THE SPEC and asserts on that object; no
+			// production code runs here. The real coverage for "sum(dleq_proof.amount)
+			// must equal the declared leg delta" lives in the unit suites
+			// (`auctionDLEQ.test.ts`, `computeValidatedBids.test.ts`), where
+			// `verifyBidDleq` returns matchesAmount:false for a bumped amount. Kept as
+			// a compact illustration of the invariant; the test name does not claim
+			// more than that.
 			const forgedDleqProofs = dleqProofs.map((tag, i) => {
 				const parsed = JSON.parse(tag[1]) as { id: string; amount: number; C: string; e: string; s: string; r: string }
 				// Bump the first proof's amount by 1 sat to simulate forgery

@@ -1554,7 +1554,8 @@ flowchart TD
     CLIENT -->|unspent| COK[Client: NUT-7 ok]
     COK --> DLEQ{Client: DLEQ verified?<br/>(via verifyBidDleq, ADR-0011 C1)}
     DLEQ -->|dleq_invalid| DR1[Client: treat as invalid<br/>dleq_invalid → bid_invalid]
-    DLEQ -->|ok / not yet checked| DOK[Client: bid fully valid<br/>settlement CTAs enabled]
+    DLEQ -->|ok| DOK[Client: bid fully valid<br/>settlement CTAs enabled]
+    DLEQ -->|not yet checked / keyset unavailable| DP1[Client: pending<br/>dlequ_evidence_unavailable<br/>no settlement CTAs]
 ```
 
 Operational notes:

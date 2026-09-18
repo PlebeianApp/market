@@ -951,16 +951,6 @@ const lockAuctionBidProofs = async (
 		lockPubkey: string
 		locktime: number
 		refundPubkey: string
-		/**
-		 * ADR-0011 Blocker 2/3: whether to require NUT-12 DLEQ on the
-		 * NEWLY ISSUED P2PK swap OUTPUT proofs. The DLEQ security property
-		 * lives on the output, NOT on the input proofs — so we swap ALL
-		 * eligible inputs (regardless of input DLEQ metadata, which a
-		 * legacy/grandfathered balance may lack) and validate the outputs
-		 * after the swap. When true, an output proof without a DLEQ proof
-		 * fails closed.
-		 */
-		requireDleqOnOutput?: boolean
 	},
 ) => {
 	// No input-side DLEQ filtering. The mint consumes whatever inputs are

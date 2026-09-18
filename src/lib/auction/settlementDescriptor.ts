@@ -90,6 +90,8 @@ export interface GetSettlementDescriptorInput {
 	 * bids that cannot be crypto-verified are treated as PENDING (not valid).
 	 */
 	dleqKeysets?: Map<string, MintKeys>
+	/** Terminal keyset misses (ADR-0011 review R3) — threaded to computeValidatedBids. */
+	dleqUnknownKeysets?: ReadonlySet<string>
 }
 
 interface DerivedState {
@@ -342,6 +344,9 @@ function deriveState(
 			postSettlement: hasSettledSettlement,
 			settledBidIds,
 			dleqKeysets: input.dleqKeysets,
+			dleqUnknownKeysets: input.dleqUnknownKeysets,
+
+			dleqUnknownKeysets: input.dleqUnknownKeysets,
 		})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { MintKeys } from '@cashu/cashu-ts'
-import { fetchDleqKeysetsForBids, type DleqKeysetFetcher } from '../cashu/dleq'
+import { DleqKeysetTerminalError, fetchDleqKeysetsForBids, fetchDleqKeysetsForBidsDetailed, type DleqKeysetFetcher } from '../cashu/dleq'
 import type { ParsedBidEvent } from '../auction/events'
 
 const MINT_A = 'https://mint-a.test'
@@ -66,5 +66,39 @@ describe('fetchDleqKeysetsForBids (ADR-0011 Blocker 1)', () => {
 		const map = await fetchDleqKeysetsForBids([noDleqBid], [MINT_A], fetcher)
 		expect(fetched).toEqual([])
 		expect(map.size).toBe(0)
+	})
+})
+
+describe('fetchDleqKeysetsForBidsDetailed — terminal vs transient (ADR-0011 review R3)', () => {
+	test('a terminal miss is reported in unknownKeysets (bid → dleq_invalid), not as pending', async () => {
+		const fetcher: DleqKeysetFetcher = async () => {
+			throw new DleqKeysetTerminalError('mint has no such keyset')
+		}
+		const acq = await fetchDleqKeysetsForBidsDetailed([makeBid(MINT_A, KEYSET_1)], [MINT_A], fetcher)
+		expect(acq.keysets.size).toBe(0)
+		expect([...acq.unknownKeysets]).toEqual([`${MINT_A}:${KEYSET_1}`])
+	})
+
+	test('a transient failure stays pending (absent from both collections)', async () => {
+		const fetcher: DleqKeysetFetcher = async () => {
+			throw new Error('mint unreachable')
+		}
+		const acq = await fetchDleqKeysetsForBidsDetailed([makeBid(MINT_A, KEYSET_1)], [MINT_A], fetcher)
+		expect(acq.keysets.size).toBe(0)
+		expect(acq.unknownKeysets.size).toBe(0)
+	})
+
+	test('caps the number of distinct keysets fetched (unbounded crafted bids cannot fan out)', async () => {
+		const fetched: string[] = []
+		const fetcher: DleqKeysetFetcher = async (mintUrl, keysetId) => {
+			fetched.push(`${mintUrl}:${keysetId}`)
+			return makeKeyset(keysetId)
+		}
+		const bids = [makeBid(MINT_A, KEYSET_1), makeBid(MINT_A, KEYSET_2)]
+		const acq = await fetchDleqKeysetsForBidsDetailed(bids, [MINT_A], fetcher, { maxKeysets: 1 })
+		expect(fetched).toHaveLength(1)
+		expect(acq.keysets.size).toBe(1)
+		// The pair beyond the cap is left absent (pending), never a beacon.
+		expect(acq.unknownKeysets.size).toBe(0)
 	})
 })
