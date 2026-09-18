@@ -85,11 +85,6 @@ let poolSubscriptionController = (
 ): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
 let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => []
 
-// Sentinel returned by the RelayGroup.completeOnAllEose() stub — the adapter
-// must forward it as request()'s `complete` option so fetchEvents waits for
-// every relay's EOSE instead of applesauce 6.2's first-relay-EOSE default.
-const completeOnAllEoseOperator = { marker: 'completeOnAllEose' }
-
 mock.module('applesauce-relay', () => ({
 	RelayPool: class MockRelayPool {
 		request = (urls: string[], filters: unknown, opts?: unknown) => ({
@@ -99,9 +94,6 @@ mock.module('applesauce-relay', () => ({
 			subscribe: (cb: (msg: unknown) => void) => poolSubscriptionController(cb, urls, filters, opts),
 		})
 		publish = async (urls: string[], event: unknown) => poolPublishController(urls, event)
-	},
-	RelayGroup: {
-		completeOnAllEose: () => completeOnAllEoseOperator,
 	},
 }))
 
@@ -508,20 +500,15 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(captured).toEqual(['wss://from-store'])
 	})
 
-	test('fetchEvents pins request() to all-relay EOSE completion (not the 6.2 first-EOSE default)', async () => {
-		// applesauce-relay 6.2's request() default completes via
-		// completeOnAny(completeAfterFirstRelay(5s), completeOnAllEose()) — the
-		// first relay's EOSE starts a 5s fuse that can end the fetch before
-		// slower relays deliver. The adapter must pass the group-completion
-		// operator explicitly.
-		let capturedOpts: { complete?: unknown } | undefined
+	test('fetchEvents relies on RelayPool.request() default completion semantics', async () => {
+		let capturedOpts: unknown
 		poolRequestController = (h, _urls, _filters, opts) => {
-			capturedOpts = opts as { complete?: unknown }
+			capturedOpts = opts
 			h.complete()
 			return { unsubscribe: () => {} }
 		}
 		await applesauceIo.fetchEvents({ kinds: [1] }, { relayUrls: ['wss://relay.example'] })
-		expect(capturedOpts?.complete).toBe(completeOnAllEoseOperator)
+		expect(capturedOpts).toBeUndefined()
 	})
 
 	test('subscribe passes a bounded reconnect policy to req() (1 initial + 3 retries, no resetOnSuccess)', () => {
