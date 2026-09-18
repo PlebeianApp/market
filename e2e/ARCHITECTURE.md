@@ -238,14 +238,25 @@ the published kind-1023 carries one `dleq_proof` tag per `lock_secret`. DLEQ is
 required for every auction — there is no non-DLEQ or grandfathered cohort. The
 suite seeds a stray `dleq_required=0` tag to prove it is ignored.
 
-**Deprecation of mock mint fixtures (ADR-0006):** this real mint
-supersedes the previous mock approach for mint flows. Inert mint URLs
-with `getEncodedToken`/pre-computed tokens (ADR-0005), the wallet/mint
-path of `lightning-mock.ts`, and `cashu-mint-mock.ts` are deprecated for
-mint operations. Roadmap: migrate mint-adjacent tests
-(`auction-mint-state`, `auction-live-chat*`) off external mint URLs,
-then remove `cashu-mint-mock.ts`. `lightning-mock.ts` remains for
-non-wallet Lightning flows (zaps, LNURL). See ADR-0006.
+**Mock mint fixtures removed (ADR-0006):** `cashu-mint-mock.ts` has been
+**deleted**. It intercepted `testnut.cashu.space` with a dummy `/v1/keys` and
+a `/v1/swap` that echoed `B_` as `C_` without real signing — so it could not
+produce DLEQ-verifiable collateral, and the settlement descriptor e2e tests
+(now that DLEQ is unconditional) need a real winner. `auction-settlement.spec.ts`
+now mints and P2PK-locks **real** collateral from the local nutshell mint via
+`@cashu/cashu-ts` (`CashuWallet.swap(..., { p2pk })`), and seeds the kind-1023
+with one `dleq_proof` per `lock_secret`. `lightning-mock.ts` remains for
+non-wallet Lightning flows (zaps, LNURL).
+
+**Roadmap — CDK `fakewallet` mint for e2e (gated on cashu-ts >= v4).** CDK is
+the target for production parity (prod runs `cdk-mintd`). A ready recipe lives
+in `OpenTollGate/physical-router-test-automation` →
+`deployment-kit/scripts/bring-up-fakewallet-mint.sh` (`cdk-mintd 0.18.0`,
+`[payment_backend] backend = "fakewallet"`, sqlite). It is **blocked today**:
+CDK emits NUT-02 V2 (`01…`, 33-byte) keyset ids, and the pinned
+`@cashu/cashu-ts` 2.9.0 cannot verify them (the same reason the local nutshell
+mint is pinned to `cashu==0.19.2`). Adopt CDK here once the cashu-ts >= v4
+upgrade lands.
 
 ### Seed Relay: `seed-relay.ts`
 

@@ -132,7 +132,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
-	const trustedMints = getAuctionMints(auction)
+	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const auctionDTag = getAuctionId(auction)
 
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
