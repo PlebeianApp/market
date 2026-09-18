@@ -24,4 +24,10 @@ FROM oven/bun:latest
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 RUN bun install
+# Build identity, baked into the image ENV so the running preview reports the
+# exact commit it was built from (the deploy health check asserts it via
+# /api/config). Kept after `RUN bun install` so a new commit does not
+# invalidate the dependency-layer cache.
+ARG APP_COMMIT_SHA=""
+ENV APP_COMMIT_SHA=${APP_COMMIT_SHA}
 COPY . /app

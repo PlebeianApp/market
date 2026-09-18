@@ -278,6 +278,9 @@ describe('preview app serves a real document', () => {
 		// images without touching other previews.
 		expect(build).toContain('--label "preview.pr=${{ github.event.pull_request.number }}"')
 		expect(build).toContain('market-app:${{ github.sha }}')
+		// The built commit is baked into the image so the health check can
+		// prove the served artifact is the one we built.
+		expect(build).toContain('--build-arg APP_COMMIT_SHA=${{ github.sha }}')
 		// The deploy package (assembled above) is the build context, the last
 		// argument of the `docker build` invocation.
 		expect(runBody(build)).toMatch(/\n\s+deploy-package\n/)
@@ -377,5 +380,31 @@ describe('preview app serves a real document', () => {
 		expect(fail).toContain("steps.health.outcome == 'failure'")
 		expect(fail).toContain('previews_ready == ')
 		expect(fail).toContain('exit 1')
+	})
+
+	test('the image Dockerfile bakes the commit after the dependency layer', () => {
+		// APP_COMMIT_SHA must be baked (ENV), and placed after `RUN bun install`
+		// so a per-commit ARG change does not invalidate the dependency cache.
+		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
+		expect(dockerfile).toContain('ARG APP_COMMIT_SHA')
+		expect(dockerfile).toContain('ENV APP_COMMIT_SHA=${APP_COMMIT_SHA}')
+		expect(dockerfile.indexOf('RUN bun install')).toBeLessThan(dockerfile.indexOf('ARG APP_COMMIT_SHA'))
+	})
+
+	test('the health check asserts the served commit matches the built one', () => {
+		// The image surfaces the commit on /api/config; the health check must
+		// assert the live value equals the commit we built (${{ github.sha }}),
+		// so a stale/wrong artifact fails instead of reporting a working preview.
+		const body = stripComments(runBody(stepNamed(deployJob, HEALTH_STEP)))
+		expect(body).toContain('/api/config')
+		expect(body).toContain("jq -r '.commit // empty'")
+		expect(body).toContain('"$SERVED_COMMIT" = "${{ github.sha }}"')
+	})
+
+	test('the PR comment reports the served commit and the PR head', () => {
+		const body = stripComments(runBody(stepNamed(deployJob, 'Post / update preview URL PR comment')))
+		expect(body).toContain('(served, verified)')
+		expect(body).toContain('PR head:')
+		expect(body).toContain('${{ github.event.pull_request.head.sha }}')
 	})
 })

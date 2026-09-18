@@ -196,6 +196,7 @@ jobs:
           set -euo pipefail
           docker build \
             --label "preview.pr=${{ github.event.pull_request.number }}" \
+            --build-arg APP_COMMIT_SHA=${{ github.sha }} \
             -t "market-app:${{ github.sha }}" \
             deploy-package
 
@@ -494,16 +495,25 @@ jobs:
                   ws.onmessage = () => { clearTimeout(timer); console.log("relay ok"); process.exit(0) }
                   ws.onerror = () => { clearTimeout(timer); console.error("relay handshake failed"); process.exit(1) }
                 ' 2>/dev/null; then
-                echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present, relay reachable)"
-                echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
-                exit 0
+                # And prove the served artifact is the commit we built: the
+                # image bakes APP_COMMIT_SHA and surfaces it on /api/config, so
+                # a stale/wrong image (or a proxy serving something else) fails.
+                SERVED_COMMIT="$(curl -s --max-time 10 "https://${{ steps.ports.outputs.subdomain }}/api/config" | jq -r '.commit // empty' 2>/dev/null || true)"
+                if [ "$SERVED_COMMIT" = "${{ github.sha }}" ]; then
+                  echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present, relay reachable, served commit $SERVED_COMMIT)"
+                  echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+                  echo "commit=$SERVED_COMMIT" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                RELAY_NOTE=" (relay reachable but served commit '${SERVED_COMMIT:-none}' does not match the built ${{ github.sha }})"
+              else
+                RELAY_NOTE=" (app served HTML but the relay WebSocket was not reachable)"
               fi
-              RELAY_NOTE=" (app served HTML but the relay WebSocket was not reachable)"
             fi
             echo "attempt: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s), doctype matches: ${DOCTYPE:-0}${RELAY_NOTE} — not a complete preview yet"
             sleep 5
           done
-          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document with a reachable relay. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app is up but its request-time HTML bundle does not build; a served page with a failed relay handshake means APP_RELAY_URL (wss://<subdomain>/relay) is not reachable through the gateway."
+          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document with a reachable relay and the built commit. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app is up but its request-time HTML bundle does not build; a served page with a failed relay handshake means APP_RELAY_URL (wss://<subdomain>/relay) is not reachable through the gateway; a served page whose /api/config commit does not match ${{ github.sha }} means the wrong artifact is being served."
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           exit 1
 
@@ -536,6 +546,13 @@ jobs:
             # failure state — never a green-adjacent "give it a minute".
             STATUS_LINE="🔴 Preview deployment failed — a deploy step failed before the health check ran. Inspect the logs: $RUN_URL"
           fi
+          # Show the built commit, marked "served, verified" only when the
+          # health check actually confirmed the live preview reports it.
+          if [ "$READY" = "true" ] && [ "$HEALTH" = "success" ]; then
+            COMMIT_LINE="- Commit: \`${{ github.sha }}\` (served, verified) · PR head: \`${{ github.event.pull_request.head.sha }}\`"
+          else
+            COMMIT_LINE="- Commit: \`${{ github.sha }}\` (built) · PR head: \`${{ github.event.pull_request.head.sha }}\`"
+          fi
           MARKER="<!-- preview-deploy -->"
           BODY=$(cat <<EOF
           $MARKER
@@ -545,7 +562,7 @@ jobs:
 
           - URL: $PREVIEW_URL
           - App host port: \`$APP_PORT\` · Relay host port: \`$RELAY_PORT\`
-          - Commit: \`${{ github.event.pull_request.head.sha }}\`
+          $COMMIT_LINE
 
           The preview is torn down automatically when this PR is closed.
           Idle previews are stopped after a few hours; the gateway on the VPS

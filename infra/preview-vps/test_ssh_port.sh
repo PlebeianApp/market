@@ -63,7 +63,7 @@ check "provision.sh exists" test -f "${PROVISION}"
 # gone entirely (Go/drone-ssh negotiates a different host key than OpenSSH; see
 # test_pinned_openssh.sh). The port now travels as the optional
 # PREVIEW_VPS_SSH_PORT secret into ssh-prepare.sh, which publishes
-# PREVIEW_SSH_PORT to $GITHUB_ENV for remote-ssh.sh / remote-scp.sh.
+# PREVIEW_SSH_PORT to $GITHUB_ENV for remote-ssh.sh.
 PREPARE_PORT_LINE='^[[:space:]]+PREVIEW_VPS_SSH_PORT: \$\{\{ secrets\.PREVIEW_VPS_SSH_PORT \}\}[[:space:]]*$'
 PREPARE_COUNT="$(grep -cE 'bash infra/preview-vps/ssh-prepare\.sh' "${WORKFLOW}")"
 PORT_ENV_COUNT="$(grep -cE "${PREPARE_PORT_LINE}" "${WORKFLOW}")"
@@ -93,8 +93,10 @@ check "teardown job's SSH preparation receives the optional port secret" \
 # behaviour exactly (the deploy ran on port 22 before the port was configurable).
 check "remote-ssh.sh defaults the port to 22 when the secret is unset" \
   grep -qF '${PREVIEW_SSH_PORT:-22}' "${SCRIPT_DIR}/remote-ssh.sh"
-check "remote-scp.sh defaults the port to 22 when the secret is unset" \
-  grep -qF '${PREVIEW_SSH_PORT:-22}' "${SCRIPT_DIR}/remote-scp.sh"
+# The scp helper was removed (the app image is streamed over remote-ssh.sh
+# stdin); guard against reintroducing it.
+check_not "the removed remote-scp.sh helper stays gone" \
+  test -e "${SCRIPT_DIR}/remote-scp.sh"
 
 # ── 2. Workflow: port secret plumbed into the provision step env ──────────
 check "Bootstrap VPS step env exports the optional port secret" \

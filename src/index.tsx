@@ -16,6 +16,10 @@ import { file } from 'bun'
 import.meta.hot.accept()
 
 const RELAY_URL = process.env.APP_RELAY_URL
+// Build identity baked into the preview image (see
+// infra/preview-vps/app.Dockerfile); surfaced on /api/config so the deploy
+// health check can prove the running preview is the commit it built.
+const COMMIT_SHA = process.env.APP_COMMIT_SHA || ''
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
@@ -244,6 +248,7 @@ export const server = serve({
 				return Response.json({
 					appRelay: RELAY_URL,
 					stage,
+					commit: COMMIT_SHA,
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
