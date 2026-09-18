@@ -435,8 +435,41 @@ function AuctionDetailRoute() {
 	const biddingCutoffAt = getAuctionBiddingCutoffAt(auction)
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const bidsCount = getAuctionBidCountFromBids(auction, bids)
+	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
+	const parsedVerdicts = useMemo(() => {
+		return (verdictsQuery.data ?? [])
+			.map((e) =>
+				parseValidatorVerdictEvent(
+					e as unknown as { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number },
+				),
+			)
+			.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+	}, [verdictsQuery.data])
+
+	const validatedSet = useMemo(() => {
+		if (!auction || !(verdictsQuery.data ?? []).length) return null
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
+		if (!parsedAuctionResult.ok) return null
+		const parsedBids = bids
+			.map((b) => parseBidEvent(toRawEvent(b)))
+			.filter((r): r is { ok: true; value: ParsedBidEvent } => r.ok)
+			.map((r) => r.value)
+		const parsedVerdicts = (verdictsQuery.data ?? [])
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
+			.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+		return computeValidatedBids({
+			auction: parsedAuctionResult.value,
+			bids: parsedBids,
+			verdicts: parsedVerdicts,
+		})
+	}, [auction, bids, verdictsQuery.data])
+	const currentPrice = validatedSet
+		? Math.max(validatedSet.currentTopValidAmount, startingBid)
+		: getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = validatedSet ? validatedSet.validBids.length : getAuctionBidCountFromBids(auction, bids)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 	const newestBids = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
@@ -447,8 +480,9 @@ function AuctionDetailRoute() {
 				auction,
 				bids,
 				isEnded: ended,
+				validatedBidSet: validatedSet,
 			}),
-		[activeUserPubkey, auction, bids, ended],
+		[activeUserPubkey, auction, bids, ended, validatedSet],
 	)
 
 	const { data: oracleName } = useProfileName(pathIssuerPubkey || '')
@@ -484,6 +518,26 @@ function AuctionDetailRoute() {
 	// (no kind-1025 from them on this auction yet).
 	const pathReleasesQuery = useAuctionPathReleases(auctionRootEventId || auctionId, 200, auctionCoordinates)
 	const pathReleases = pathReleasesQuery.data ?? []
+	const parsedSettlementsForSettlement = useMemo(
+		() =>
+			(settlementsQuery.data ?? [])
+				.map((s) => parseSettlementEvent(toRawEvent(s)))
+				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
+				.map((r) => r.value),
+		[settlementsQuery.data],
+	)
+
+	const parsedPathReleasesForSettlement = useMemo(
+		() =>
+			(pathReleasesQuery.data ?? [])
+				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
+				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
+				.map((r) => r.value),
+		[pathReleasesQuery.data],
+	)
+
+	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => toRawEvent(o)), [claimOrdersQuery.data])
+
 	const queryClient = useQueryClient()
 
 	// Parse raw NDK events into typed structs for the settlement descriptor.
@@ -505,41 +559,19 @@ function AuctionDetailRoute() {
 	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
 	// configured auditors (relay authors filter) — null-safe; an unloaded or
 	// auditor-less auction fails closed (no verdicts authorized).
-	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
-	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
-	const parsedVerdicts = useMemo(() => {
-		return (verdictsQuery.data ?? [])
-			.map((e) =>
-				parseValidatorVerdictEvent(
-					e as unknown as { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number },
-				),
-			)
-			.filter((r): r is { ok: true; value: ParsedValidatorVerdictEvent } => r.ok)
-			.map((r) => r.value)
-	}, [verdictsQuery.data])
-
-	const parsedSettlementsForSettlement = useMemo(
-		() =>
-			(settlementsQuery.data ?? [])
-				.map((s) => parseSettlementEvent(toRawEvent(s)))
-				.filter((r): r is { ok: true; value: ParsedSettlementEvent } => r.ok)
-				.map((r) => r.value),
-		[settlementsQuery.data],
-	)
-
-	const parsedPathReleasesForSettlement = useMemo(
-		() =>
-			(pathReleasesQuery.data ?? [])
-				.map((pr) => parsePathReleaseEvent(toRawEvent(pr)))
-				.filter((r): r is { ok: true; value: ParsedPathReleaseEvent } => r.ok)
-				.map((r) => r.value),
-		[pathReleasesQuery.data],
-	)
-
-	const parsedClaimOrdersForSettlement = useMemo(() => (claimOrdersQuery.data ?? []).map((o) => toRawEvent(o)), [claimOrdersQuery.data])
+	// Compute validated bid set from the already-parsed auction, bids, verdicts
 
 	const myTopBidEvent = useMemo(() => {
 		if (!activeUserPubkey) return null
+		// Use validated set when available: find the user's highest valid bid
+		if (validatedSet) {
+			const mine = validatedSet.validBids.filter((b) => b.bidderPubkey === activeUserPubkey)
+			if (!mine.length) return null
+			// Map back to the raw NDKEvent for path-release / bidder-record lookups
+			const topParsedBid = mine.reduce((best, b) => (b.amount > best.amount ? b : best), mine[0])
+			return bids.find((b) => b.id === topParsedBid.id) ?? null
+		}
+		// Fallback: derive from raw bids (verdicts still loading)
 		const mine = bids.filter((b) => b.pubkey === activeUserPubkey)
 		if (!mine.length) return null
 		return mine.reduce(
@@ -552,9 +584,15 @@ function AuctionDetailRoute() {
 			},
 			mine[0] as (typeof mine)[0] | null,
 		)
-	}, [bids, activeUserPubkey])
+	}, [bids, activeUserPubkey, validatedSet])
 
 	const topBidOverall = useMemo(() => {
+		if (validatedSet && validatedSet.canonicalWinner) {
+			// Map canonicalWinner (ParsedBidEvent) back to raw NDKEvent for rendering
+			const rawBid = bids.find((b) => b.id === validatedSet.canonicalWinner!.id)
+			if (rawBid) return rawBid
+		}
+		// Fallback: derive from raw bids
 		if (!bids.length) return null
 		return bids.reduce(
 			(best, bid) => {
@@ -566,11 +604,11 @@ function AuctionDetailRoute() {
 			},
 			bids[0] as (typeof bids)[0] | null,
 		)
-	}, [bids])
+	}, [bids, validatedSet])
 
 	const bidderSummaries = useMemo(() => {
 		const summariesByPubkey = new Map<string, AuctionParticipantSummary>()
-		const currentLeaderPubkey = topBidOverall?.pubkey || ''
+		const currentLeaderPubkey = validatedSet?.canonicalWinner?.bidderPubkey || topBidOverall?.pubkey || ''
 
 		for (const bid of newestBids) {
 			if (!bid.pubkey) continue
@@ -612,14 +650,24 @@ function AuctionDetailRoute() {
 
 			return a.pubkey.localeCompare(b.pubkey)
 		})
-	}, [newestBids, settlementWinner, topBidOverall?.pubkey])
+	}, [newestBids, settlementWinner, topBidOverall?.pubkey, validatedSet?.canonicalWinner])
 
-	const isMyBidTop = !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
+	const isMyBidTop = validatedSet
+		? !!(validatedSet.canonicalWinner && validatedSet.canonicalWinner.bidderPubkey === activeUserPubkey)
+		: !!(myTopBidEvent && topBidOverall && myTopBidEvent.id === topBidOverall.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
-	const canReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
+	const canReleaseNow = validatedSet
+		? !!(
+				validatedSet.canonicalWinner?.bidderPubkey === activeUserPubkey &&
+				ended &&
+				!myAlreadyReleased &&
+				myTopBidEvent &&
+				findBidderRecord(myTopBidEvent.id)
+			)
+		: !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
 	const [isReleasing, setIsReleasing] = useState(false)
 
 	const handleReleasePath = async () => {
@@ -888,6 +936,7 @@ function AuctionDetailRoute() {
 									auctionCoordinates={auctionCoordinates}
 									currentUserPubkey={activeUserPubkey}
 									isEnded={ended}
+									validatedBidSet={validatedSet}
 									className="max-h-[500px]"
 								/>
 

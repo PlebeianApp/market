@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getAuctionBidderStatus } from '@/lib/auctionBidderStatus'
+import { getAuctionBidderStatus, getValidatedBidderStatus } from '@/lib/auctionBidderStatus'
+import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
+import type { ParsedBidEvent } from '@/lib/auction/events'
 
 const makeAuction = (params: { id?: string; startAt?: number; endAt?: number }): NDKEvent =>
 	({
@@ -110,5 +112,104 @@ describe('auction bidder status', () => {
 			label: "You're winning",
 		})
 		expect(getAuctionBidderStatus({ currentUserPubkey: 'alice', auction, bids, isEnded: false })?.status).toBe('outbid')
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Validated-set path — `getAuctionBidderStatus` delegates to
+// `getValidatedBidderStatus` whenever a ValidatedBidSet is supplied, so the raw
+// bid chains are never consulted. These cases pin that contract: the set is the
+// single source of truth for the badge, and `'none'` means no badge at all.
+// ---------------------------------------------------------------------------
+
+// Only `bidderPubkey` (and `id` for readability) is read by the status
+// derivation, so a single documented cast keeps the fixture readable — same
+// approach as makeAuction/makeBid above.
+const makeValidatedSet = (winnerPubkey: string | null, validPubkeys: string[]): ValidatedBidSet => {
+	const bid = (pubkey: string, id: string) => ({ id, bidderPubkey: pubkey }) as unknown as ParsedBidEvent
+	return {
+		classified: [],
+		validBids: validPubkeys.map((pubkey, index) => bid(pubkey, `bid-${index}`)),
+		pendingBids: [],
+		invalidBids: [],
+		canonicalWinner: winnerPubkey ? bid(winnerPubkey, 'bid-winner') : null,
+		currentTopValidAmount: 1200,
+	}
+}
+
+describe('auction bidder status — validated set path', () => {
+	test('the validated set overrides raw bids for the badge', () => {
+		const auction = makeAuction({})
+		// Raw bids say alice is winning; the validated set says bob is.
+		const bids = [makeBid({ id: 'bid-1', pubkey: 'alice', amount: 9999, createdAt: 120 })]
+		const validatedBidSet = makeValidatedSet('bob', ['bob'])
+
+		expect(getAuctionBidderStatus({ currentUserPubkey: 'bob', auction, bids, isEnded: false, validatedBidSet })).toEqual({
+			status: 'winning',
+			label: "You're winning",
+		})
+		expect(getAuctionBidderStatus({ currentUserPubkey: 'alice', auction, bids, isEnded: false, validatedBidSet })).toBeNull()
+	})
+
+	test('validated winner after the auction ended reads "won"', () => {
+		const auction = makeAuction({})
+		expect(
+			getAuctionBidderStatus({
+				currentUserPubkey: 'bob',
+				auction,
+				bids: [],
+				isEnded: true,
+				validatedBidSet: makeValidatedSet('bob', ['bob']),
+			}),
+		).toEqual({ status: 'won', label: 'You had the top bid' })
+	})
+
+	test('validated non-winner with a valid bid is "outbid", and "was_outbid" once ended', () => {
+		const auction = makeAuction({})
+		const validatedBidSet = makeValidatedSet('bob', ['bob', 'alice'])
+
+		expect(getAuctionBidderStatus({ currentUserPubkey: 'alice', auction, bids: [], isEnded: false, validatedBidSet })).toEqual({
+			status: 'outbid',
+			label: "You've been outbid",
+		})
+		expect(getAuctionBidderStatus({ currentUserPubkey: 'alice', auction, bids: [], isEnded: true, validatedBidSet })).toEqual({
+			status: 'was_outbid',
+			label: 'You were outbid',
+		})
+	})
+
+	test('no valid bid in the set returns null even when the user has a raw bid', () => {
+		const auction = makeAuction({})
+		const bids = [makeBid({ id: 'bid-1', pubkey: 'alice', amount: 1000, createdAt: 120 })]
+
+		expect(
+			getAuctionBidderStatus({ currentUserPubkey: 'alice', auction, bids, isEnded: false, validatedBidSet: makeValidatedSet(null, []) }),
+		).toBeNull()
+	})
+
+	test('pending-only set (no quorum) returns null — no badge while validators decide', () => {
+		const auction = makeAuction({})
+		expect(
+			getAuctionBidderStatus({
+				currentUserPubkey: 'alice',
+				auction,
+				bids: [],
+				isEnded: false,
+				validatedBidSet: makeValidatedSet(null, []),
+			}),
+		).toBeNull()
+	})
+
+	test('getValidatedBidderStatus returns null for a pubkey outside the valid set', () => {
+		expect(getValidatedBidderStatus('carol', makeValidatedSet('bob', ['bob']), false)).toBeNull()
+	})
+
+	test('getValidatedBidderStatus trims nothing — callers pass a normalised pubkey', () => {
+		// getAuctionBidderStatus trims before delegating; the direct export is the
+		// low-level half and expects an already-normalised pubkey.
+		expect(getValidatedBidderStatus('bob', makeValidatedSet('bob', ['bob']), false)).toEqual({
+			status: 'winning',
+			label: "You're winning",
+		})
 	})
 })

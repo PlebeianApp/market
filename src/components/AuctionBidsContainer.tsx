@@ -1,6 +1,6 @@
 // src/components/auction/LatestBidsContainer.tsx
 import { getBidAmount, getBidMint, useStreamingAuctionBids } from '@/queries/auctions'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { cn } from '@/lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
 import { formatSats, getMintHostname } from '@/lib/wallet'
@@ -8,6 +8,13 @@ import { Badge } from './ui/badge'
 import type { ReactNode } from 'react'
 import { UserCard } from './UserCard'
 import { Check, Landmark } from 'lucide-react'
+import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
+import {
+	getValidatedTopAmount,
+	getValidatedTopBidderPubkey,
+	getValidatedBidderState,
+	getBidClassification,
+} from '@/lib/auction/validatedBidView'
 
 function TechnicalDataRow({ label, value }: { label: string; value: ReactNode }) {
 	return (
@@ -24,6 +31,13 @@ interface Props {
 	currentUserPubkey?: string
 	isEnded?: boolean
 	className?: string
+	/**
+	 * Optional validated bid set. When present, the highest-bid badge,
+	 * outbid notice, and bid-list classifications are derived from the
+	 * validated set's canonicalWinner and classification instead of raw
+	 * bid chain computation.
+	 */
+	validatedBidSet?: ValidatedBidSet | null
 }
 
 type BidTone = 'blue' | 'orange' | 'green' | 'pink' | 'white'
@@ -44,7 +58,7 @@ const toneLabelClassName: Record<BidTone, string> = {
 	white: 'text-zinc-500',
 }
 
-function formatBidRecordedAt(bidEvent: NDKEvent): string {
+function formatBidRecordedAt(bidEvent: NostrEventLike): string {
 	return bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'Unknown time'
 }
 
@@ -62,7 +76,7 @@ function BidMintRow({ mint }: { mint: string }) {
 	)
 }
 
-function BidEventDetails({ bidEvent }: { bidEvent: NDKEvent }) {
+function BidEventDetails({ bidEvent }: { bidEvent: NostrEventLike }) {
 	const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
 	const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 
@@ -82,22 +96,49 @@ function BidEventDetails({ bidEvent }: { bidEvent: NDKEvent }) {
 	)
 }
 
-export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, currentUserPubkey, isEnded, className }: Props) {
+export function AuctionBidsContainer({
+	auctionRootEventId,
+	auctionCoordinates,
+	currentUserPubkey,
+	isEnded,
+	className,
+	validatedBidSet,
+}: Props) {
 	const { bids } = useStreamingAuctionBids(auctionRootEventId, 500, auctionCoordinates)
 
-	const topBid = bids.reduce<NDKEvent | null>((best, bid) => {
-		if (!best) return bid
+	// Determine top bid — use the validated canonicalWinner when available,
+	// otherwise fall back to raw bid sort (legacy behaviour).
+	//
+	// Both branches yield a raw nostr event shape: `bids` comes from
+	// `useStreamingAuctionBids` (which returns `NostrEventLike[]`, not NDKEvent)
+	// and `canonicalWinner.rawEvent` is `NostrEventLike` too. Keep the local
+	// helpers on `NostrEventLike` rather than widening to NDKEvent — nothing
+	// here uses NDK-only members.
+	let topBid: NostrEventLike | null
+	let topBidPubkey: string | null
+	let topAmount: number
 
-		const amountDiff = getBidAmount(bid) - getBidAmount(best)
-		if (amountDiff > 0) return bid
-		if (amountDiff < 0) return best
+	if (validatedBidSet) {
+		topBid = validatedBidSet.canonicalWinner?.rawEvent ?? null
+		topBidPubkey = getValidatedTopBidderPubkey(validatedBidSet)
+		topAmount = getValidatedTopAmount(validatedBidSet)
+	} else {
+		topBid = bids.reduce<NostrEventLike | null>((best, bid) => {
+			if (!best) return bid
 
-		const createdAtDiff = (bid.created_at ?? 0) - (best.created_at ?? 0)
-		if (createdAtDiff < 0) return bid
-		if (createdAtDiff > 0) return best
+			const amountDiff = getBidAmount(bid) - getBidAmount(best)
+			if (amountDiff > 0) return bid
+			if (amountDiff < 0) return best
 
-		return bid.id.localeCompare(best.id) < 0 ? bid : best
-	}, null)
+			const createdAtDiff = (bid.created_at ?? 0) - (best.created_at ?? 0)
+			if (createdAtDiff < 0) return bid
+			if (createdAtDiff > 0) return best
+
+			return bid.id.localeCompare(best.id) < 0 ? bid : best
+		}, null)
+		topBidPubkey = topBid?.pubkey ?? null
+		topAmount = topBid ? getBidAmount(topBid) : 0
+	}
 
 	const latestBids = [...bids]
 		.filter((bid) => bid.id !== topBid?.id)
@@ -108,7 +149,7 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 		})
 
 	const hasOwnBids = !!currentUserPubkey && bids.some((bid) => bid.pubkey === currentUserPubkey)
-	const topBidIsOwn = !!topBid && topBid.pubkey === currentUserPubkey
+	const topBidIsOwn = !!topBid && topBidPubkey === currentUserPubkey
 	const topBidTone: BidTone = topBidIsOwn ? 'green' : hasOwnBids ? 'orange' : 'blue'
 	const myHighestBidAmount = hasOwnBids
 		? bids.filter((bid) => bid.pubkey === currentUserPubkey).reduce((max, bid) => Math.max(max, getBidAmount(bid)), 0)
@@ -128,7 +169,7 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 							<p className={cn('text-[11px] font-semibold uppercase tracking-[0.18em]', toneLabelClassName[topBidTone])}>
 								Highest visible bid
 							</p>
-							<p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(topBid))} sats</p>
+							<p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">{formatSats(topAmount)} sats</p>
 							<p className="mt-1 text-sm text-zinc-600">Recorded {formatBidRecordedAt(topBid)}</p>
 						</div>
 						<div className="flex flex-col items-end gap-2">
@@ -141,7 +182,7 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 						</div>
 					</div>
 
-					<UserCard pubkey={topBid.pubkey} size="md" />
+					<UserCard pubkey={topBidPubkey ?? ''} size="md" />
 					<BidMintRow mint={getBidMint(topBid)} />
 					<BidEventDetails bidEvent={topBid} />
 				</div>
@@ -169,6 +210,7 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 					) : (
 						latestBids.map((bidEvent) => {
 							const isOwnBid = bidEvent.pubkey === currentUserPubkey
+							const classification = validatedBidSet ? getBidClassification(validatedBidSet, bidEvent.id) : null
 							const tone: BidTone = isOwnBid ? 'pink' : 'white'
 							return (
 								<div
@@ -184,6 +226,18 @@ export function AuctionBidsContainer({ auctionRootEventId, auctionCoordinates, c
 											<p className="mt-1 text-sm text-zinc-500">Recorded {formatBidRecordedAt(bidEvent)}</p>
 										</div>
 										<div className="flex items-center gap-2">
+											{classification && classification !== 'valid' && (
+												<Badge
+													className={cn(
+														'border-zinc-300',
+														classification === 'invalid'
+															? 'bg-red-100 text-red-700 hover:bg-red-100'
+															: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100',
+													)}
+												>
+													{classification === 'invalid' ? 'Rejected' : 'Pending'}
+												</Badge>
+											)}
 											{isOwnBid && <Badge className="border-pink-400 bg-pink-100 text-pink-700 hover:bg-pink-100">Your Bid</Badge>}
 										</div>
 									</div>

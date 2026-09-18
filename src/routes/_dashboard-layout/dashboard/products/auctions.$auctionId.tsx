@@ -270,11 +270,6 @@ function DashboardAuctionDetailRoute() {
 	const now = countdown.now
 	const status = formatAuctionStatus(startAt, biddingCutoffAt, now)
 	const ended = status === 'Ended'
-	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const bidCount = getAuctionBidCountFromBids(auction, bids)
-
-	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
-	const settlements = settlementsQuery.data ?? []
 	// Review #1235 (Should-fix 3): scope verdict fetch to the auction's
 	// configured auditors (relay authors filter) — null-safe; an unloaded or
 	// auditor-less auction fails closed (no verdicts authorized).
@@ -282,6 +277,35 @@ function DashboardAuctionDetailRoute() {
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const verdictsData = verdictsQuery.data ?? []
 
+	// Compute validated bid set unconditionally for display (no postSettlement).
+	// This is separate from the latestSettlement memo's validated set, which uses
+	// postSettlement semantics and is settlement-scoped.
+	const validatedBidSet = useMemo(() => {
+		if (!auction) return null
+		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
+		if (!parsedAuctionResult.ok) return null
+		const parsedBids = bids
+			.map((b) => parseBidEvent(toRawEvent(b)))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => r.ok)
+			.map((r) => r.value)
+		const parsedVerdicts = verdictsData
+			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
+			.filter((r): r is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => r.ok)
+			.map((r) => r.value)
+		return computeValidatedBids({
+			auction: parsedAuctionResult.value,
+			bids: parsedBids,
+			verdicts: parsedVerdicts,
+			nut7States,
+		})
+	}, [auction, bids, verdictsData, nut7States])
+	const currentPrice = validatedBidSet
+		? Math.max(validatedBidSet.currentTopValidAmount, startingBid)
+		: getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidCount = validatedBidSet ? validatedBidSet.validBids.length : getAuctionBidCountFromBids(auction, bids)
+
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
+	const settlements = settlementsQuery.data ?? []
 	// B4: Validate settlements before using them. The previous code read
 	// `settlements[0]` (newest by created_at) with NO validation, allowing
 	// a malicious settlement to surface claim-order/shipping UI. We now:
@@ -291,7 +315,10 @@ function DashboardAuctionDetailRoute() {
 	// 4. For 'reserve_not_met'/'cancelled': verify no reserve-meeting bid.
 	// 5. Pick the latest valid settlement, preferring 'settled'.
 	const latestSettlement = useMemo<(typeof settlements)[0] | null>(() => {
-		if (!auction || settlements.length === 0) return null
+		if (!auction) return null
+		// The validated bid set for display is already computed above. This memo
+		// re-computes with postSettlement semantics for settlement validation only.
+		if (settlements.length === 0) return null
 
 		// Parse the auction event (NostrEventLike → raw shape for the parse boundary).
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auction))
@@ -381,6 +408,12 @@ function DashboardAuctionDetailRoute() {
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {
+		if (validatedBidSet && validatedBidSet.canonicalWinner) {
+			// Map canonicalWinner back to raw NDKEvent for downstream render + path-release gating
+			const rawBid = bids.find((b) => b.id === validatedBidSet.canonicalWinner!.id)
+			if (rawBid) return rawBid
+		}
+		// Fallback: derive from raw window-valid bids
 		const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
 		if (validBids.length === 0) return null
 		return [...validBids]
@@ -392,11 +425,13 @@ function DashboardAuctionDetailRoute() {
 				return b.id.localeCompare(a.id)
 			})
 			.at(0)
-	}, [auction, bids])
+	}, [auction, bids, validatedBidSet])
 
 	const bidsByNewest = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
-	const reserveMet = !!topBid && getBidAmount(topBid) >= reserve
+	const reserveMet = validatedBidSet
+		? validatedBidSet.validBids.some((b) => b.amount >= reserve)
+		: !!(topBid && getBidAmount(topBid) >= reserve)
 	const settlementLocked = !!latestSettlement
 	const latestSettlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
 	const reserveLabel = bidCount === 0 ? 'Waiting for bids' : reserveMet ? 'Reserve met' : 'Below reserve'
@@ -465,6 +500,15 @@ function DashboardAuctionDetailRoute() {
 	// available.
 	const myTopBidEvent = useMemo(() => {
 		if (!user?.pubkey) return null
+		// Use validated set when available: find the user's highest valid bid
+		if (validatedBidSet) {
+			const mine = validatedBidSet.validBids.filter((b) => b.bidderPubkey === user.pubkey)
+			if (!mine.length) return null
+			// Map back to raw NDKEvent for path-release / bidder-record lookups
+			const topParsed = mine.reduce((best, b) => (b.amount > best.amount ? b : best), mine[0])
+			return bids.find((b) => b.id === topParsed.id) ?? null
+		}
+		// Fallback: derive from raw bids
 		const mine = bids.filter((b) => b.pubkey === user.pubkey)
 		if (!mine.length) return null
 		return mine.reduce<(typeof mine)[0] | null>((best, bid) => {
@@ -474,9 +518,11 @@ function DashboardAuctionDetailRoute() {
 			if (delta < 0) return best
 			return (bid.created_at ?? 0) < (best.created_at ?? 0) ? bid : best
 		}, mine[0])
-	}, [bids, user?.pubkey])
+	}, [bids, user?.pubkey, validatedBidSet])
 
-	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
+	const isMyBidTop = validatedBidSet
+		? !!(validatedBidSet.canonicalWinner && validatedBidSet.canonicalWinner.bidderPubkey === user?.pubkey)
+		: !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = useMemo(() => {
 		if (!myTopBidEvent) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)

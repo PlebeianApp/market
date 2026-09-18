@@ -37,6 +37,13 @@ import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
+import { computeValidatedBids } from '@/lib/auction/bidValidation'
+import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
+import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
+import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import type { Nut7ProofState } from '@/lib/auction/constants'
 
 type EventFetcher = (filter: NostrFilter | NostrFilter[]) => Promise<NostrEventLike[]>
 
@@ -946,18 +953,135 @@ export const getBidLocktime = (bidEvent: NostrEventLike | null): number => {
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
+/**
+ * @deprecated Use `getValidatedCurrentPriceFromBids` instead when verdicts are
+ * available. This function uses `getAuctionWindowValidBids` which does not
+ * account for validator verdicts. Kept for callers (e.g. AuctionCard list view)
+ * that lack verdicts in scope.
+ */
 export const getAuctionCurrentPriceFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[], startingBid: number = 0): number =>
 	auction
 		? computeAuctionCurrentPrice(auction, bids, startingBid)
 		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
 
+/**
+ * @deprecated Use validated variants that consume a `ValidatedBidSet` instead
+ * when verdicts are available.
+ */
 export const getAuctionBidCountFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
 
+/**
+ * @deprecated Use validated variants that consume a `ValidatedBidSet` instead
+ * when verdicts are available.
+ */
 export const getAuctionTopBidFromBids = (auction: NostrEventLike | null, bids: NostrEventLike[]): NostrEventLike | null => {
 	const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
 	if (validBids.length === 0) return null
 	return validBids.reduce((top, bid) => (getBidAmount(bid) > getBidAmount(top) ? bid : top), validBids[0])
+}
+
+/**
+ * Result of the raw-event → validated-bid pipeline. Carries only what a
+ * consumer needs: the two bid partitions and the two display amounts.
+ *
+ * Deliberately no `count` (ambiguous — valid only, or valid + pending? — and
+ * both lengths are already on the arrays it would sit next to) and no `status`
+ * discriminator (`validBids.length === 0` is the pending-only case).
+ */
+interface ValidatedCurrentPriceResult {
+	currentTopValidAmount: number
+	validBids: ParsedBidEvent[]
+	pendingBids: ParsedBidEvent[]
+	validatedTopBidAmount: number
+}
+
+/**
+ * Validated variant of `getAuctionCurrentPriceFromBids`. Parses the raw
+ * events through schema parsers, runs `computeValidatedBids`, and returns
+ * the validated top amount plus the bid partitions.
+ *
+ * When verdicts or nut7States are empty/missing the result has a zero
+ * `currentTopValidAmount` and empty `validBids`, while `pendingBids` holds the
+ * un-verdicted bids — correct behaviour per the quorum requirement.
+ *
+ * NOTE: no call sites yet. Consumers that already hold a `ValidatedBidSet`
+ * should prefer the pure selectors in `@/lib/auction/validatedBidView`
+ * (`getValidatedTopAmount`, `getValidatedBidderState`, `getBidClassification`);
+ * this wrapper exists for surfaces that still receive raw events and therefore
+ * need the parse step too (the deferred AuctionCard verdict-fetch work). If
+ * that lands as a query hook instead, delete this.
+ *
+ * @param startingBid - Floor value from the auction's `starting_bid` tag.
+ *   The returned `validatedTopBidAmount` is `Math.max(currentTopValidAmount, startingBid)`.
+ */
+export function getValidatedCurrentPriceFromBids(
+	auction: NostrEventLike | null,
+	bids: NostrEventLike[],
+	verdicts: NostrEventLike[],
+	nut7States?: Map<string, Nut7ProofState>,
+	startingBid: number = 0,
+): ValidatedCurrentPriceResult {
+	if (!auction || bids.length === 0) {
+		return {
+			currentTopValidAmount: 0,
+			validBids: [],
+			pendingBids: [],
+			validatedTopBidAmount: startingBid,
+		}
+	}
+
+	const parsedAuction = parseAuctionEvent(auction)
+	if (!parsedAuction.ok) {
+		return {
+			currentTopValidAmount: 0,
+			validBids: [],
+			pendingBids: [],
+			validatedTopBidAmount: startingBid,
+		}
+	}
+
+	const parsedBids: ParsedBidEvent[] = []
+	for (const bid of bids) {
+		const result = parseBidEvent(bid)
+		if (result.ok) parsedBids.push(result.value)
+	}
+
+	const parsedVerdicts: ParsedValidatorVerdictEvent[] = []
+	for (const v of verdicts) {
+		const result = parseValidatorVerdictEvent(v)
+		if (result.ok) parsedVerdicts.push(result.value)
+	}
+
+	const validatedSet = computeValidatedBids({
+		auction: parsedAuction.value,
+		bids: parsedBids,
+		verdicts: parsedVerdicts,
+		nut7States,
+	})
+
+	return {
+		currentTopValidAmount: validatedSet.currentTopValidAmount,
+		validBids: validatedSet.validBids,
+		pendingBids: validatedSet.pendingBids,
+		validatedTopBidAmount: Math.max(validatedSet.currentTopValidAmount, startingBid),
+	}
+}
+
+/**
+ * Validated variant of `getAuctionBidCountFromBids`. Takes a pre-computed
+ * `ValidatedBidSet` and returns the count of valid bids.
+ */
+export function getValidatedBidCountFromBids(set: ValidatedBidSet): number {
+	return set.validBids.length
+}
+
+/**
+ * Validated variant of `getAuctionTopBidFromBids`. Takes a pre-computed
+ * `ValidatedBidSet` and returns the canonical winner's raw event, or null.
+ */
+export function getValidatedTopBidFromBids(set: ValidatedBidSet): NostrEventLike | null {
+	return set.canonicalWinner?.rawEvent ?? null
 }
 
 export const getAuctionSettlementStatus = (settlementEvent: NostrEventLike | null): AuctionSettlementStatus => {
