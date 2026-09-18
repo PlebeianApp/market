@@ -36,9 +36,9 @@ const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 
 useWebSocketImplementation(WebSocket)
 
-test.describe('Auction Claim Dialog', () => {
-	test.use({ video: 'on' })
+test.use({ scenario: 'merchant', video: 'on' })
 
+test.describe('Auction Claim Dialog', () => {
 	test('winner sees validation errors and can submit shipping details', async ({ buyerPage }: { buyerPage: Page }) => {
 		await dismissPiiModal(buyerPage, devUser2.pk)
 
@@ -114,12 +114,6 @@ test.describe('Auction Claim Dialog', () => {
 		}
 	})
 })
-
-test.use({ scenario: 'merchant' })
-// Record video for this suite (feature-quality-gate evidence). `recordVideo` is
-// the fixture option the authenticated page fixtures honour (Playwright's own
-// `video` option does not reach contexts those fixtures create themselves).
-test.use({ recordVideo: true })
 
 // ---------------------------------------------------------------------------
 // Seed helpers — real collateral from the local nutshell mint (DLEQ-verifiable).
