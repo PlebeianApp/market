@@ -381,6 +381,12 @@ jobs:
                 # nak-relay:10547, which no browser can resolve, and not a
                 # plain ws:// which an https page would block as mixed content).
                 - APP_RELAY_URL=wss://${{ steps.ports.outputs.subdomain }}/relay
+                # NIP-46 (remote signer / Nostr Connect) relay. The upstream
+                # default (wss://relay.nsec.app) is unreachable, which breaks
+                # the QR lane; point it at the project's own relay, verified
+                # reachable and answering EOSE. NostrConnectQR honors this via
+                # config.nip46Relay.
+                - NIP46_RELAY_URL=wss://relay.plebeian.market
                 - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
                 - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
               restart: unless-stopped
