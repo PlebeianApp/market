@@ -45,7 +45,14 @@ import { createPendingBuffer, createPendingBufferBudget } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
-import { checkBidSpamPolicy, checkEventEnvelope, recordAcceptedBid, resolveBidSpamPolicy, resolvePendingBufferLimits, type BidSpamPolicy } from './spamPolicy'
+import {
+	checkBidSpamPolicy,
+	checkEventEnvelope,
+	recordAcceptedBid,
+	resolveBidSpamPolicy,
+	resolvePendingBufferLimits,
+	type BidSpamPolicy,
+} from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -139,7 +146,8 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
 		if (hasAttributablePendingChildren(auctionRootEventId)) return true
-		const childWindowClosesAt = auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
+		const childWindowClosesAt =
+			auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
 		if (now() <= childWindowClosesAt) return true
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (bidState.currentClaim === null) return true

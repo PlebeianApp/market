@@ -268,5 +268,5 @@ export const recordAcceptedBid = (input: {
 		input.state.bidderBidTimes.delete(oldest)
 	}
 	input.state.nonceOwners.set(nonce, eventId)
-		input.state.bidderBidTimes.set(bidRateKey, [...recent, input.now])
+	input.state.bidderBidTimes.set(bidRateKey, [...recent, input.now])
 }

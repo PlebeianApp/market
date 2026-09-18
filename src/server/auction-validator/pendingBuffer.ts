@@ -89,7 +89,10 @@ export const createPendingBufferBudget = (maxPendingEvents: number): PendingBuff
 	}
 }
 
-export const createPendingBuffer = <T>(limits: PendingBufferLimits, budget = createPendingBufferBudget(limits.maxPendingEvents)): PendingBuffer<T> => {
+export const createPendingBuffer = <T>(
+	limits: PendingBufferLimits,
+	budget = createPendingBufferBudget(limits.maxPendingEvents),
+): PendingBuffer<T> => {
 	const buckets = new Map<string, PendingBucket<T>>()
 	let itemCount = 0
 

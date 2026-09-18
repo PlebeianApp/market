@@ -24,7 +24,7 @@ describe('auction validator startup policy resolution', () => {
 					publishedContent = event.content ?? ''
 				},
 			} as any,
-				spamPolicy: { maxBidsPerWindow: 3, maxTagCount: 9 },
+			spamPolicy: { maxBidsPerWindow: 3, maxTagCount: 9 },
 			logger: {
 				info: (...args: unknown[]) => logs.push(args),
 				warn: (...args: unknown[]) => logs.push(args),

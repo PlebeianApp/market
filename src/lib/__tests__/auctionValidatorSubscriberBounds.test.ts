@@ -211,7 +211,11 @@ describe('validator subscriber replays child history only for tracked auctions',
 		await harness.settle()
 
 		expect(harness.subscriptions[2]).toEqual([
-			{ kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND], '#a': [`30408:${sellerPubkey}:auction-test`], since: 1_000 },
+			{
+				kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND],
+				'#a': [`30408:${sellerPubkey}:auction-test`],
+				since: 1_000,
+			},
 		])
 		expect(harness.state.auctions.get(auctionA.id)?.bids.has(bidA.id)).toBe(true)
 		expect(harness.state.auctions.get(auctionB.id)).toBeUndefined()

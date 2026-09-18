@@ -61,7 +61,7 @@ describe('auction validator bid spam policy', () => {
 				bid: blocked,
 				now: 105,
 				state,
-					trackedBidCount: 2,
+				trackedBidCount: 2,
 				policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
 			}),
 		).toMatchObject({ ok: false, reason: 'rate_limited' })
@@ -73,7 +73,7 @@ describe('auction validator bid spam policy', () => {
 				bid: allowed,
 				now: 111,
 				state,
-					trackedBidCount: 2,
+				trackedBidCount: 2,
 				policy: { maxBidsPerWindow: 2, rateWindowSec: 10 },
 			}),
 		).toEqual({ ok: true })
@@ -112,7 +112,9 @@ describe('auction validator bid spam policy', () => {
 	test('enforces the tracked bid cap independently of rate limiting', () => {
 		const state = createBidSpamState()
 		const bid = buildBid()
-		expect(checkBidSpamPolicy({ auction, bid, now: 100, state, trackedBidCount: 1, policy: { maxTrackedBidsPerAuction: 1 } })).toMatchObject({
+		expect(
+			checkBidSpamPolicy({ auction, bid, now: 100, state, trackedBidCount: 1, policy: { maxTrackedBidsPerAuction: 1 } }),
+		).toMatchObject({
 			ok: false,
 			reason: 'too_many_tracked_bids',
 		})
