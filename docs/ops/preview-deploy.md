@@ -145,6 +145,16 @@ it raw** to the PR's relay port (`10547 + (N % 100) * 10`): HTTP-level proxying
 cannot carry a WebSocket upgrade, so the request line + headers are forwarded
 verbatim and bytes are copied both ways until either side closes.
 
+**Trailing slash.** Clients normalize relay URLs, and NDK in particular appends
+`/` (`normalizeRelayUrl`), so the browser dials `wss://<sub>/relay/`, not
+`/relay`. The gateway matches an optional trailing slash (`is_relay_path`) and
+rewrites the forwarded request target back to exactly `/relay`
+(`normalize_relay_request_line`) — the form the relay answers. A mismatch here
+is invisible to the CI health check, which uses the literal `/relay`, but the
+browser silently fails the upgrade. `submitAppSettings` likewise publishes to
+the configured app relay (`getMainRelay()`), not the page origin, so it goes
+through the same `/relay` route.
+
 The health check therefore asserts **both** that `/` serves a non-empty HTML
 document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
 Nostr `REQ`. An app that serves HTML but cannot reach its relay is not a preview
