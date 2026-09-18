@@ -1304,11 +1304,13 @@ export const fetchPrivateAuctionClaimForMarker = async (publicMarker: NostrEvent
 		let events: Awaited<ReturnType<typeof applesauceIo.fetchEvents>>
 		try {
 			events = await applesauceIo.fetchEvents(filter, { timeoutMs: 6000 })
-		} catch {
+		} catch (error) {
 			// The applesauce adapter REJECTS on a subscription error (the NDK helper
 			// this replaced resolved). Left uncaught, a relay error would throw out
 			// of the query instead of the `unavailable` result the UI handles.
+			// Keep the reason diagnosable without logging marker/claim data.
 			// (review 2026-09-18)
+			console.warn('[private-claim] relay read failed:', error instanceof Error ? error.message : String(error))
 			return { status: 'unavailable', reason: 'relay_error' }
 		}
 		if (events.length === 0) break
