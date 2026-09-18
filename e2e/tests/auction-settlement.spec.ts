@@ -813,6 +813,10 @@ test.describe('UI interaction — publish events to relay', () => {
 
 	test.describe('seller clicks Publish Settlement', () => {
 		test('clicking Publish Settlement publishes a kind-1024 event to the relay', async ({ merchantPage }: { merchantPage: Page }) => {
+			// The real-mint redemption swap + kind-1024 publish is slower than the
+			// mock path; give it headroom (the original disable note recorded this
+			// test as the one intermittent settlement-publish flake).
+			test.slow()
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			// Derive the seller's real auction xpub + child pubkey so the
@@ -854,7 +858,7 @@ test.describe('UI interaction — publish events to relay', () => {
 				// Wait for the mutation to complete (redemption swap + publish).
 				await merchantPage.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
 
-				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 30_000)
+				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 45_000)
 
 				expect(event, 'kind-1024 settlement event should arrive on the relay').not.toBeNull()
 				expect(event!.pubkey).toBe(devUser1.pk)
