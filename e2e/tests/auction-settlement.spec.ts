@@ -26,9 +26,9 @@ import { getEncodedToken } from '@cashu/cashu-ts'
 
 useWebSocketImplementation(WebSocket)
 
-test.describe('Auction Claim Dialog', () => {
-	test.use({ video: 'on' })
+test.use({ scenario: 'merchant', video: 'on' })
 
+test.describe('Auction Claim Dialog', () => {
 	test('winner sees validation errors and can submit shipping details', async ({ buyerPage }: { buyerPage: Page }) => {
 		await CashuMintMock.setup(buyerPage, { defaultState: 'SPENT' })
 		await dismissPiiModal(buyerPage, devUser2.pk)
@@ -105,8 +105,6 @@ test.describe('Auction Claim Dialog', () => {
 		}
 	})
 })
-
-test.use({ scenario: 'merchant' })
 
 // ---------------------------------------------------------------------------
 // Seed helpers — use pre-computed crypto fixtures from CashuMintMock.
