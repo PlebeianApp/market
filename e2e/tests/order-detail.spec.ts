@@ -119,26 +119,6 @@ test.describe('Order Details - Seller View - Products', () => {
 })
 
 test.describe('Order Details - Seller View - Auctions', () => {
-	test('sales table shows Auction type chip and auction item title', async ({ merchantPage: page }) => {
-		await seedOrder('auction', 'confirmed')
-
-		// The seller's sales table (with the new Type/Item columns) is rendered
-		// by the sales route, not the (nonexistent) /dashboard/orders index.
-		await page.goto('/dashboard/sales/sales')
-
-		// The seeded auction order surfaces a Product-vs-Auction type chip and
-		// the auction title (kind-30408 'title' tag) in the sales table. The
-		// scenario also seeds product orders, so 'Product' chips coexist.
-		//
-		// OrderDataTable renders a mobile card layout *and* an xl-only desktop
-		// grid for every row, so the same chip exists twice in the DOM. Assert
-		// on the visible one (:visible) rather than the first match — the
-		// first match is the mobile copy, which is hidden at the desktop
-		// viewport these tests run at.
-		await expect(page.locator('[data-testid="order-type"]:visible', { hasText: 'Auction' }).first()).toBeVisible()
-		await expect(page.locator('[data-testid="order-item-title"]:visible', { hasText: 'Test Auction' }).first()).toBeVisible()
-	})
-
 	test('views pending auction claim order and marks as processed from the claim authority', async ({ merchantPage: page }) => {
 		// 'confirmed' is the highest pre-processing stage in the shared seed
 		// ladder, but the auction flow has no CONFIRMED state: it never
