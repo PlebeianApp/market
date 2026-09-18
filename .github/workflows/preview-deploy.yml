@@ -1,0 +1,754 @@
+name: Preview Deploy
+
+# Per-PR Docker-based preview deployment on the shared test VPS (Layer G of
+# docs/plans/pr-trust-pipeline.md):
+#   - PR opened/synchronize: build the app image ON THE CI RUNNER, ship it to
+#     the VPS (`docker save | gzip | ssh 'gunzip | docker load'`), bring up
+#     per-PR `docker compose` services (market app + nak relay on offset ports),
+#     create the Cloudflare A record pr{N}.test-market.orangesync.tech → VPS IP,
+#     wait for Caddy to pick up the new subdomain, health-check, and post an
+#     idempotent PR comment with the live URL. Building on the runner — not on
+#     the host — keeps the preview VPS free of build contexts, build cache and
+#     dangling layers (which previously filled its disk and pushed this job past
+#     its timeout); images are labelled `preview.pr=<N>` so deploy and teardown
+#     garbage-collect everything a PR shipped.
+#   - PR closed: `docker compose down`, delete the DNS A record, update the
+#     comment to "Preview torn down".
+#   - Lazy-start: a preview_gateway.py router on the VPS fronts Caddy for
+#     *.test-market.orangesync.tech — it approves on-demand-TLS ask requests,
+#     routes Host pr{N} to this PR's app port, and pokes the manager
+#     (preview_manager.py --wake N) on EVERY request, so stopped previews
+#     boot on the next visit even when Caddy already holds the cached
+#     certificate. A systemd-timer preview_manager.py cycle stops containers
+#     idle beyond IDLE_HOURS (per the Caddy access log) and tears down
+#     closed-PR previews; open-PR recency ranking keeps only the top-K (K=5)
+#     most recently pushed previews running, fail-closed on any GitHub API
+#     failure (no teardown decisions when the open-PR list is not trusted).
+#
+# Port offsets (PR_OFFSET = (PR_NUMBER % 100) * 10) are claimed on the VPS via
+# marker files (preview_manager.py --claim-port-offset N) BEFORE compose up;
+# a PR colliding with a live preview (congruent mod 100) fails the deploy
+# loudly instead of racing on shared host ports. Caddy on the VPS uses
+# on-demand TLS to serve each pr{N}.test-market.orangesync.tech subdomain.
+#
+# SSH port: the VPS is reached on the port in the OPTIONAL repository secret
+# PREVIEW_VPS_SSH_PORT. It defaults to 22, so leaving the secret unset keeps
+# the historical behaviour exactly (the preview VPS listens on 22 today). Set
+# it only if the box is fronted by a non-standard ingress (NAT/port-forward
+# or a different sshd port) — no workflow edit is needed for that. The
+# host-key pin (PREVIEW_VPS_HOST_FINGERPRINT) is per-HOST, not per-port, so
+# it stays valid if the port changes. See docs/ops/preview-deploy.md.
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 'latest'
+
+jobs:
+  deploy:
+    name: Deploy preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    # 25 min: the image is now built on the runner and streamed to the VPS, so
+    # the job covers a `bun install` + Docker build + a ~1.8 GB image transfer.
+    # The old 10 min limit was hit by the on-host build (run 35265465544,
+    # "Build app image on VPS" cancelled at 10m09s).
+    timeout-minutes: 25
+    # Preview Deploy is a follow-up enhancement (Layer G), not a trust-pipeline
+    # blocker. The PR Trust Pipeline merge gate (Layer H) does not require this
+    # check. NOTE: job-level continue-on-error here masks the RUN conclusion to
+    # "success" even when an individual step FAILS, which made the check appear
+    # as a red FAIL next to a green run. The per-step guards added below either
+    # deploy the preview (secrets present) or skip loudly with a clear warning
+    # and a visible PR comment (secrets absent / fork PR), so the check
+    # reflects the real outcome instead of a masked failure. Do NOT re-add
+    # job-level continue-on-error.
+    continue-on-error: false
+    permissions:
+      contents: read
+      pull-requests: write # post / update the idempotent preview-URL comment
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build application
+        run: |
+          bun run generate-routes
+          bun run build
+
+      # The app has NO static-file middleware: `src/index.tsx` imports
+      # `./index.html` and hands that import straight to Bun as the `/*` route,
+      # so Bun bundles the shell (HTML + CSS + JS) AT REQUEST TIME inside the
+      # preview container, on the first request for `/`. That bundle resolves
+      # every local asset the HTML references, and a missing one fails the
+      # whole route:
+      #   src/index.html -> ../public/images/logo.svg, ../public/favicon.ico
+      #   src/index.html -> /styles/index.css -> @import './globals.css'
+      #   styles/globals.css -> @import 'tailwindcss'  (resolved by the plugin
+      #                        named in bunfig.toml, see below)
+      # Observed on PR #1271, with the app's own deps fully installed:
+      #   error: Could not resolve: "../public/images/logo.svg"
+      #   error: Could not resolve: "/styles/index.css"
+      # and `GET /` answered an empty 200 while `/api/config` stayed healthy.
+      # (`icons/` is NOT needed — styles/icons.css inlines its glyphs as data
+      # URIs, and the bundle builds fine without it.)
+      # So public/, styles/ and the tailwind entry have to ship with the app.
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy-package
+          cp -r dist deploy-package/
+          cp -r src deploy-package/
+          cp -r contextvm deploy-package/
+          cp package.json bun.lock tsconfig.json deploy-package/
+          cp -r public styles deploy-package/
+          cp bunfig.toml deploy-package/
+          # The deploy package is the build context for the app image, built on
+          # the CI runner with deps pre-installed so a lazy-woken preview boots
+          # in seconds.
+          cp infra/preview-vps/app.Dockerfile deploy-package/Dockerfile
+
+      - name: Compute per-PR ports
+        id: ports
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_OFFSET=$(( (PR_NUMBER % 100) * 10 ))
+          APP_PORT=$(( 3000 + PR_OFFSET ))
+          RELAY_PORT=$(( 10547 + PR_OFFSET ))
+          {
+            echo "pr_offset=$PR_OFFSET"
+            echo "app_port=$APP_PORT"
+            echo "relay_port=$RELAY_PORT"
+            echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech"
+          } >> "$GITHUB_OUTPUT"
+
+      # Guard: cross-repo (fork) PR branches never receive repository secrets
+      # under the `pull_request` trigger, so `secrets.PREVIEW_VPS_*` resolve to
+      # empty strings in the runner. Rather than let the Bootstrap step crash on
+      # an empty host (observed: `provision.sh: line 20: PREVIEW_VPS_HOST is
+      # required`), surface a clear annotation and skip all VPS/DNS steps. The
+      # check then reports a visible "skipped" instead of a confusing FAIL.
+      # See docs/ops/preview-deploy.md for the secrets to set and the
+      # `pull_request_target` option for real fork-PR previews.
+      #
+      # PREVIEW_VPS_SSH_PORT is NOT checked here on purpose: it is optional
+      # and defaults to 22. Only the four secrets above are required.
+      - name: Check preview VPS secrets
+        id: secrets
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -uo pipefail
+          # This list MUST stay equal to the set of `${VAR:?…}` requirements in
+          # infra/preview-vps/provision.sh. That script aborts on the first
+          # missing one, so a guard that checks fewer secrets than the deploy
+          # consumes reports "ready" and then dies at, e.g.,
+          # `provision.sh: line 39: PREVIEW_CLOUDFLARE_API_TOKEN is required` —
+          # a red check instead of the intended loud skip. Lockstep between the
+          # two lists is enforced by
+          # src/lib/__tests__/preview-deploy-workflow-guard.test.ts.
+          MISSING=""
+          for NAME in PREVIEW_VPS_HOST PREVIEW_VPS_USER PREVIEW_VPS_SSH_KEY PREVIEW_VPS_HOST_FINGERPRINT PREVIEW_CLOUDFLARE_API_TOKEN PREVIEW_CLOUDFLARE_ZONE_ID; do
+            if [ -z "${!NAME:-}" ]; then
+              MISSING="$MISSING $NAME"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=" >> "$GITHUB_OUTPUT"
+            echo "Preview deploy secrets present — proceeding with deployment."
+          else
+            echo "previews_ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$MISSING" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview deploy skipped::Missing preview secrets:$MISSING. Fork PRs under the pull_request trigger never receive repository secrets, and this job has no environment binding. Skipping the VPS/DNS deploy. See docs/ops/preview-deploy.md for the required secrets and the pull_request_target option."
+          fi
+
+      # Build market-app:<sha> on the RUNNER, not on the VPS. The on-host build
+      # (added in #1344) ran a full `docker build` against the uploaded package
+      # and, on a disk-starved host, pushed the job past its timeout (see run
+      # 35265465544). Building here also means the preview host never carries a
+      # build context, build cache, or dangling layers. The `preview.pr` label
+      # is what makes the deploy/teardown garbage collection below PR-scoped.
+      # Gated with the rest of the deploy path: a fork PR that will skip the
+      # VPS steps must not spend runner minutes on an image it cannot ship.
+      - name: Build app image on CI runner
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          set -euo pipefail
+          docker build \
+            --label "preview.pr=${{ github.event.pull_request.number }}" \
+            --build-arg APP_COMMIT_SHA=${{ github.sha }} \
+            -t "market-app:${{ github.sha }}" \
+            deploy-package
+
+      # ── OpenSSH only ────────────────────────────────────────────────────────
+      # Every VPS connection in this workflow runs through the OpenSSH helpers in
+      # infra/preview-vps/ (ssh-prepare.sh, remote-ssh.sh).
+      #
+      # GitHub's appleboy/* actions are Go programs (drone-ssh on
+      # golang.org/x/crypto/ssh) and their DEFAULT HostKeyAlgorithms negotiate a
+      # different host key than OpenSSH against this VPS. Measured 2026-09-11
+      # against 23.182.128.51:22 with an unmodified Go ssh client:
+      #   OpenSSH -> ssh-ed25519         SHA256:rjbvoYsKckQMv/L9Y4LQNCx86z95pqonoNGmXdUS41M
+      #   Go      -> ecdsa-sha2-nistp256 SHA256:UTl0gzMwYlKNuORtrA8jxS7gmj9U1x8taGQh5vxaXQo
+      # One PREVIEW_VPS_HOST_FINGERPRINT secret cannot satisfy two SSH stacks that
+      # disagree about which host key to negotiate, so every appleboy step failed
+      # with:
+      #   ssh: handshake failed: ssh: host key fingerprint mismatch
+      # Do not reintroduce a Go-based SSH action here without re-measuring the
+      # negotiated host key first. See docs/ops/preview-deploy.md section (g).
+      - name: Prepare SSH key + pinned host key
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
+        run: bash infra/preview-vps/ssh-prepare.sh "$RUNNER_TEMP/preview-ssh" >> "$GITHUB_ENV"
+
+      - name: Bootstrap VPS (gateway + Caddy route + manager env)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          # The private key was materialised, its mandatory trailing newline
+          # restored, and the VPS host key pinned by the previous step
+          # (ssh-prepare.sh) — one implementation, shared with the teardown job.
+          # provision.sh reads the private key PATH from PREVIEW_VPS_SSH_KEY, so
+          # hand it the prepared file rather than the secret text.
+          #
+          # Run the idempotent provision script. It verifies the VPS host key
+          # against PREVIEW_VPS_HOST_FINGERPRINT before any key exchange, ships
+          # preview_manager.py + preview_gateway.py, writes manager.env
+          # (Cloudflare creds for DNS cleanup, chmod 600), installs the gateway
+          # + manager systemd units, and ensures Caddy has the on-demand-TLS ask
+          # endpoint, the JSON access log, and the
+          # *.test-market.orangesync.tech route → gateway router.
+          export PREVIEW_VPS_SSH_KEY="$PREVIEW_KEY_FILE"
+          bash infra/preview-vps/provision.sh
+
+      - name: Ensure remote preview directory exists
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          set -euo pipefail
+          # The compose file is written here in the claim/up step. Absolute
+          # path, because the remote shell does not expand $HOME for us.
+          bash infra/preview-vps/remote-ssh.sh \
+            mkdir -p "/home/${{ secrets.PREVIEW_VPS_USER }}/previews/pr-${{ github.event.pull_request.number }}"
+
+      - name: Ship app image to VPS
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          set -euo pipefail
+          # Stream the finished image over the pinned OpenSSH helper:
+          # `docker save | gzip -1` on the runner, `gunzip | docker load` on the
+          # VPS. remote-ssh.sh forwards stdin, so no temp file is written on
+          # either side. gzip -1 because the link, not the CPU, is the
+          # bottleneck; the image is ~1.8 GB.
+          docker save "market-app:${{ github.sha }}" \
+            | gzip -1 \
+            | bash infra/preview-vps/remote-ssh.sh 'gunzip | docker load'
+
+      - name: Prune older app images for this PR
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # Each new commit ships another market-app:<sha>. Keep only the one
+          # this run just loaded, scoped by the `preview.pr` label so other
+          # previews' images are never touched, then drop the dangling layers
+          # the replaced images left behind.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -uo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SHA="${{ github.sha }}"
+          docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.Tag}} {{.ID}}' \
+            | while read -r tag id; do
+                [ "$tag" = "$SHA" ] && continue
+                if docker image rm -f "$id" >/dev/null 2>&1; then
+                  echo "  pruned market-app:$tag ($id)"
+                fi
+              done
+          # Echo what is left under the label: this is the proof that
+          # `preview.pr` survived `docker save | docker load` (the whole
+          # label-based GC depends on it) instead of swallowing the result.
+          echo "  images still labelled preview.pr=$PR_NUMBER:"
+          docker images --filter "label=preview.pr=$PR_NUMBER" --format '    {{.Repository}}:{{.Tag}} {{.ID}}' || true
+          docker image prune -f >/dev/null 2>&1 || true
+          REMOTE_EOF
+
+      # Upstream's nak image on ghcr.io is gone: the registry now denies
+      # anonymous pulls (the token endpoint returns no token and the manifest
+      # GET is denied), so `docker compose up` aborted at "Claim host-port
+      # offset (M6) then bring up services" and the Cloudflare DNS step never
+      # ran — the preview URL stayed NXDOMAIN.
+      # Build nak from source on the preview host instead, pinned to the same
+      # commit upstream's e2e workflow uses (b6568388), and tag it
+      # market-nak:b6568388 for docker-compose. Cached via `docker image
+      # inspect` so repeat deploys on the same host skip the build.
+      - name: Build nak image on VPS (registry image is gone)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # Remote script piped to `bash -s` over stdin through the shared
+          # OpenSSH helper (never a Go-based action — see the block comment
+          # above "Prepare SSH key + pinned host key").
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          if docker image inspect market-nak:b6568388 >/dev/null 2>&1; then
+            echo "nak image market-nak:b6568388 already present — skipping build"
+            exit 0
+          fi
+          cd /tmp
+          rm -rf nak-build
+          git clone https://github.com/fiatjaf/nak.git nak-build
+          cd nak-build
+          git checkout b65683886b58382890888fbdda90e5c2129df488
+          docker build -t market-nak:b6568388 .
+          REMOTE_EOF
+
+      - name: Claim host-port offset (M6) then bring up services
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          # The remote script is piped to `bash -s` on the VPS over stdin.
+          # Expression placeholders are substituted by GitHub BEFORE this shell
+          # runs; every other $ is expanded by the remote shell. ssh propagates
+          # the remote exit status, so a failure here still fails the step.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          APP_PORT="${{ steps.ports.outputs.app_port }}"
+          RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          cd "$APP_DIR"
+
+          # ── Port-offset claim (M6) ──
+          # PRs congruent mod 100 (e.g. 1257 and 1357) share the same host
+          # port offset. Claim the marker in ~/previews/ports/<offset> BEFORE
+          # compose up; if another PR's preview holds the offset, the claim
+          # fails loudly and this step aborts instead of two deploy jobs
+          # racing on the same host ports (one compose up silently fails).
+          if ! python3 "$HOME/preview-infra/preview_manager.py" --claim-port-offset "$PR_NUMBER" --preview-root "$HOME/previews"; then
+            echo "FATAL: Port-offset collision — another preview holds offset ${{ steps.ports.outputs.pr_offset }} (PR congruent mod 100). Close that PR or wait for its preview to be torn down." >&2
+            exit 1
+          fi
+
+          cat > docker-compose.yml <<EOF
+          services:
+            market-app:
+              # Built on the CI runner ("Build app image on CI runner") and
+              # shipped here: dependencies are baked into the image, so a lazy
+              # wake starts in seconds instead of running bun install per
+              # container start (~5 min cold start that exceeded the gateway's
+              # boot budget). The Dockerfile runs a FULL bun install (not
+              # --production), so the tailwindcss devDependency the
+              # request-time HTML bundle needs is present.
+              image: market-app:${{ github.sha }}
+              working_dir: /app
+              command: sh -c "bun run start:production"
+              ports:
+                - "${APP_PORT}:3000"
+              environment:
+                - NODE_ENV=production
+                - PORT=3000
+                # Browser-reachable relay: the gateway splices this host's
+                # /relay path to the PR's relay port, so the value the app hands
+                # the browser on /api/config is wss (not the internal
+                # nak-relay:10547, which no browser can resolve, and not a
+                # plain ws:// which an https page would block as mixed content).
+                - APP_RELAY_URL=wss://${{ steps.ports.outputs.subdomain }}/relay
+                - APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001
+                - CVM_SERVER_KEY=e2e2222222222222222222222222222222222222222222222222222222222222
+              restart: unless-stopped
+              depends_on:
+                - nak-relay
+            nak-relay:
+              image: market-nak:b6568388
+              command: serve --hostname 0.0.0.0
+              ports:
+                - "${RELAY_PORT}:10547"
+              restart: unless-stopped
+          EOF
+          docker compose up -d --remove-orphans
+          docker compose ps
+          REMOTE_EOF
+
+      # B1: The systemd timer on the VPS owns the preview lifecycle (idle
+      # stop, recency ranking, closed-PR cleanup). CI must never run the
+      # manager (preview_manager.py --cron) — over SSH it has no GitHub
+      # credentials, so the open-PR list resolves empty and the cycle would
+      # treat every live preview as belonging to a closed PR and destroy it
+      # (fail-open destructive). The timer's unit is provisioned with
+      # GITHUB_REPO and the Caddy access log; the gateway wakes previews.
+      - name: Upsert Cloudflare DNS A record
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+          SUBDOMAIN: ${{ steps.ports.outputs.subdomain }}
+          VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+        run: |
+          set -euo pipefail
+          # Resolve VPS public IP (the host secret may be a hostname or an IP).
+          VPS_IP="$(getent ahostsv4 "$VPS_HOST" | awk '{print $1}' | head -1)"
+          if [ -z "$VPS_IP" ]; then
+            VPS_IP="$(dig +short "$VPS_HOST" A | tail -1)"
+          fi
+          if [ -z "$VPS_IP" ]; then
+            echo "::error::Could not resolve VPS IP for $VPS_HOST"
+            exit 1
+          fi
+          echo "VPS public IP: $VPS_IP"
+
+          # Upsert: delete any existing A record for this subdomain, then create.
+          # GitHub Actions log redaction masks $CF_TOKEN automatically.
+          LIST_RESPONSE=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=$SUBDOMAIN" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json")
+          EXISTING_IDS=$(echo "$LIST_RESPONSE" | jq -r '.result[].id // empty')
+          for rid in $EXISTING_IDS; do
+            echo "Deleting existing A record $rid for $SUBDOMAIN"
+            curl -sS -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$rid" \
+              -H "Authorization: Bearer $CF_TOKEN" >/dev/null
+          done
+          echo "Creating A record $SUBDOMAIN → $VPS_IP"
+          curl -sS -X POST \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{\"type\":\"A\",\"name\":\"$SUBDOMAIN\",\"content\":\"$VPS_IP\",\"ttl\":60,\"proxied\":false}" \
+            | jq .
+
+      - name: Wait for Caddy auto-discovery
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: sleep 15
+
+      - name: Health check
+        id: health
+        if: steps.secrets.outputs.previews_ready == 'true'
+        continue-on-error: true
+        run: |
+          PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          BODY_FILE="$RUNNER_TEMP/preview-body.html"
+          # `curl -sf -o /dev/null` is NOT a liveness test: it exits 0 for a 200
+          # whose body is ZERO bytes (and curl even reports 200 when the server
+          # answers a bare blank line, treating it as HTTP/0.9). The preview app
+          # serves exactly that when its request-time HTML bundle cannot be
+          # built — observed on PR #1271 live: `GET /` = "HTTP/1.1 200 OK" with
+          # an empty body and no Content-Type, while `/api/config` returned
+          # normal JSON. A health check that accepts it reports a blank page as
+          # a working preview. Require a real HTML document instead: 200 AND a
+          # non-empty body AND the app's doctype.
+          #
+          # Individual failed attempts inside this loop are TRANSIENT warm-up
+          # (preview booting, DNS propagating, Caddy issuing the cert). Only
+          # after all 12 attempts (~3 min) are exhausted is this a FINAL
+          # failure — at that point exit nonzero. continue-on-error keeps this
+          # step from aborting the job so the comment step still posts the
+          # explicit degraded state; the later "Fail the check when the preview
+          # did not serve" step turns the check red so a green Deploy preview
+          # always means a preview served.
+          for _ in $(seq 1 12); do
+            STATUS="$(curl -s -o "$BODY_FILE" -w '%{http_code}' --max-time 10 "$PREVIEW_URL" 2>/dev/null || true)"
+            SIZE=0
+            if [ -f "$BODY_FILE" ]; then
+              SIZE="$(wc -c < "$BODY_FILE" | tr -d ' ')"
+            fi
+            DOCTYPE="$(grep -ci '<!doctype html' "$BODY_FILE" 2>/dev/null || true)"
+            RELAY_NOTE=""
+            if [ "${STATUS:-000}" = "200" ] && [ "${SIZE:-0}" -gt 0 ] && [ "${DOCTYPE:-0}" -gt 0 ]; then
+              # The app serves HTML. Now prove the browser-reachable relay
+              # works: the app advertises wss://<subdomain>/relay (which the
+              # gateway splices to the PR's relay port), so a WebSocket
+              # handshake plus one Nostr REQ must complete there. An app that is
+              # up but cannot reach its relay is not a preview of this app.
+              if RELAY_URL="wss://${{ steps.ports.outputs.subdomain }}/relay" bun -e '
+                  const url = process.env.RELAY_URL
+                  const ws = new WebSocket(url)
+                  const timer = setTimeout(() => { console.error("relay handshake timeout"); process.exit(1) }, 15000)
+                  ws.onopen = () => ws.send(JSON.stringify(["REQ", "preview-health", { kinds: [0], limit: 0 }]))
+                  ws.onmessage = () => { clearTimeout(timer); console.log("relay ok"); process.exit(0) }
+                  ws.onerror = () => { clearTimeout(timer); console.error("relay handshake failed"); process.exit(1) }
+                ' 2>/dev/null; then
+                # And prove the served artifact is the commit we built: the
+                # image bakes APP_COMMIT_SHA and surfaces it on /api/config, so
+                # a stale/wrong image (or a proxy serving something else) fails.
+                SERVED_COMMIT="$(curl -s --max-time 10 "https://${{ steps.ports.outputs.subdomain }}/api/config" | jq -r '.commit // empty' 2>/dev/null || true)"
+                if [ "$SERVED_COMMIT" = "${{ github.sha }}" ]; then
+                  echo "Preview is live: $PREVIEW_URL (HTTP $STATUS, $SIZE body bytes, doctype present, relay reachable, served commit $SERVED_COMMIT)"
+                  echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+                  echo "commit=$SERVED_COMMIT" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                RELAY_NOTE=" (relay reachable but served commit '${SERVED_COMMIT:-none}' does not match the built ${{ github.sha }})"
+              else
+                RELAY_NOTE=" (app served HTML but the relay WebSocket was not reachable)"
+              fi
+            fi
+            echo "attempt: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s), doctype matches: ${DOCTYPE:-0}${RELAY_NOTE} — not a complete preview yet"
+            sleep 5
+          done
+          echo "::error::Preview health check FAILED after 12 attempts (~3 min): $PREVIEW_URL never served a non-empty HTML document with a reachable relay and the built commit. Last response: HTTP ${STATUS:-000}, ${SIZE:-0} body byte(s). A 200 with a zero-length body means the app is up but its request-time HTML bundle does not build; a served page with a failed relay handshake means APP_RELAY_URL (wss://<subdomain>/relay) is not reachable through the gateway; a served page whose /api/config commit does not match ${{ github.sha }} means the wrong artifact is being served."
+          echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Post / update preview URL PR comment
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
+          HEALTH="${{ steps.health.outcome }}"
+          READY="${{ steps.secrets.outputs.previews_ready }}"
+          APP_PORT="${{ steps.ports.outputs.app_port }}"
+          RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "$READY" != "true" ]; then
+            STATUS_LINE="⚠️ Preview deploy skipped — VPS secrets not configured on this fork PR (see docs/ops/preview-deploy.md)"
+          elif [ "$HEALTH" = "success" ]; then
+            STATUS_LINE="✅ Preview is live"
+          elif [ "$HEALTH" = "failure" ]; then
+            # FINAL health failure: the ~3-min retry loop already exhausted
+            # all transient warm-up attempts. Never report this as "warming
+            # up" — post the explicit degraded state with the run link.
+            STATUS_LINE="🔴 Preview deployment degraded — the health check failed after exhausting its retry loop. Inspect the logs: $RUN_URL"
+          else
+            # The health step never ran because an earlier deploy step failed
+            # (port-offset collision, compose up, DNS, …). Same explicit
+            # failure state — never a green-adjacent "give it a minute".
+            STATUS_LINE="🔴 Preview deployment failed — a deploy step failed before the health check ran. Inspect the logs: $RUN_URL"
+          fi
+          # Show the built commit, marked "served, verified" only when the
+          # health check actually confirmed the live preview reports it.
+          if [ "$READY" = "true" ] && [ "$HEALTH" = "success" ]; then
+            COMMIT_LINE="- Commit: \`${{ github.sha }}\` (served, verified) · PR head: \`${{ github.event.pull_request.head.sha }}\`"
+          else
+            COMMIT_LINE="- Commit: \`${{ github.sha }}\` (built) · PR head: \`${{ github.event.pull_request.head.sha }}\`"
+          fi
+          MARKER="<!-- preview-deploy -->"
+          BODY=$(cat <<EOF
+          $MARKER
+          ## 🚀 Preview deployment
+
+          $STATUS_LINE
+
+          - URL: $PREVIEW_URL
+          - App host port: \`$APP_PORT\` · Relay host port: \`$RELAY_PORT\`
+          $COMMIT_LINE
+
+          The preview is torn down automatically when this PR is closed.
+          Idle previews are stopped after a few hours; the gateway on the VPS
+          wakes them on the next visit to the preview URL (first load may
+          take up to ~15 s while the preview boots).
+
+          **What green guarantees:** this build is being served — \`/\` served real
+          HTML, \`wss://${{ steps.ports.outputs.subdomain }}/relay\` completed a
+          WebSocket handshake, and \`/api/config\` reports \`commit == the built SHA\`.
+          \`Commit:\` is the PR's merge ref; \`PR head:\` is shown alongside.
+          Details: \`docs/ops/preview-deploy.md\`.
+          EOF
+          )
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi
+
+      # The health step is continue-on-error so the comment always posts, but a
+      # failed health check must not leave `Deploy preview` green: a green check
+      # has to mean a preview serves. Without this step the job reports success
+      # even when the health check failed (its *outcome* is failure while its
+      # *conclusion* stays green), which is exactly the misleading green this
+      # addresses. Only runs when a preview was actually attempted.
+      - name: Fail the check when the preview did not serve
+        if: ${{ !cancelled() && steps.secrets.outputs.previews_ready == 'true' && steps.health.outcome == 'failure' }}
+        run: |
+          echo "::error::Preview deployment failed its health check (app HTML and/or relay WebSocket). A green Deploy preview now means a preview served; see the run log and the PR comment."
+          exit 1
+
+      - name: Remove the materialised SSH key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/preview-ssh"
+
+  teardown:
+    name: Tear down preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Same lockstep requirement as the deploy job's guard: a repo with no
+      # preview secrets must tear down quietly (nothing was ever created)
+      # instead of failing the check on an empty PREVIEW_VPS_HOST.
+      #
+      # The teardown job runs in its own runner, so it repeats the secrets guard
+      # and the SSH preparation. Before, this job had NO guard at all: on any PR
+      # whose secrets are unavailable (fork PRs) it still tried to reach the VPS
+      # and painted a red check on every PR close.
+      - name: Check preview VPS secrets
+        id: secrets
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_CLOUDFLARE_API_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CLOUDFLARE_ZONE_ID: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -uo pipefail
+          MISSING=""
+          for NAME in PREVIEW_VPS_HOST PREVIEW_VPS_USER PREVIEW_VPS_SSH_KEY PREVIEW_VPS_HOST_FINGERPRINT PREVIEW_CLOUDFLARE_API_TOKEN PREVIEW_CLOUDFLARE_ZONE_ID; do
+            if [ -z "${!NAME:-}" ]; then
+              MISSING="$MISSING $NAME"
+            fi
+          done
+          if [ -z "$MISSING" ]; then
+            echo "previews_ready=true" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=" >> "$GITHUB_OUTPUT"
+            echo "Preview secrets present — tearing down any VPS/DNS resources."
+          else
+            echo "previews_ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$MISSING" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Preview teardown skipped::Missing preview secrets:$MISSING. Nothing was ever provisioned for this repository, so there is nothing to tear down."
+          fi
+
+      - name: Compute subdomain
+        id: ports
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH key + pinned host key
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
+          PREVIEW_VPS_USER: ${{ secrets.PREVIEW_VPS_USER }}
+          PREVIEW_VPS_SSH_KEY: ${{ secrets.PREVIEW_VPS_SSH_KEY }}
+          PREVIEW_VPS_HOST_FINGERPRINT: ${{ secrets.PREVIEW_VPS_HOST_FINGERPRINT }}
+          PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
+        run: bash infra/preview-vps/ssh-prepare.sh "$RUNNER_TEMP/preview-ssh" >> "$GITHUB_ENV"
+
+      - name: Release port offset, stop containers, clean up VPS directory
+        if: steps.secrets.outputs.previews_ready == 'true'
+        run: |
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -uo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          # Release the shared host-port offset marker (M6) so a future PR
+          # congruent mod 100 can claim it. Owner-checked: a marker held by
+          # a different PR is left alone (and logged) rather than deleted.
+          python3 "$HOME/preview-infra/preview_manager.py" --release-port-offset "$PR_NUMBER" --preview-root "$HOME/previews" || true
+          if [ -f "$APP_DIR/docker-compose.yml" ]; then
+            cd "$APP_DIR"
+            docker compose down --remove-orphans --volumes || true
+          fi
+          # Remove every image this PR shipped, scoped by the `preview.pr`
+          # label, then reclaim the dangling layers and build cache so the
+          # preview host does not accumulate a full imageset per merged/closed
+          # PR. The nak image is intentionally NOT labelled and is shared.
+          # Echo what was removed so the GC effect is visible, not swallowed.
+          PR_IMAGE_IDS="$(docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.ID}}' | sort -u)"
+          if [ -n "$PR_IMAGE_IDS" ]; then
+            echo "$PR_IMAGE_IDS" | xargs -r docker image rm -f || true
+            echo "  removed $(printf '%s\n' "$PR_IMAGE_IDS" | grep -c . || true) image(s) labelled preview.pr=$PR_NUMBER"
+          else
+            echo "  no images labelled preview.pr=$PR_NUMBER found"
+          fi
+          docker image prune -f >/dev/null 2>&1 || true
+          # Scope the build-cache sweep: an unfiltered `builder prune` on a
+          # shared host cold-builds the (unlabelled, shared) nak image for the
+          # next deploy of any PR. Only drop cache older than a day.
+          docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
+          rm -rf "$APP_DIR"
+          REMOTE_EOF
+
+      - name: Delete Cloudflare DNS record
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+          SUBDOMAIN: ${{ steps.ports.outputs.subdomain }}
+        run: |
+          set -uo pipefail
+          LIST_RESPONSE=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=$SUBDOMAIN" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json")
+          EXISTING_IDS=$(echo "$LIST_RESPONSE" | jq -r '.result[].id // empty')
+          for rid in $EXISTING_IDS; do
+            echo "Deleting DNS record $rid for $SUBDOMAIN"
+            curl -sS -X DELETE \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records/$rid" \
+              -H "Authorization: Bearer $CF_TOKEN" >/dev/null
+          done
+
+      - name: Update PR comment (torn down)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # This job deliberately has no checkout (the head branch may already be
+          # gone by the time the PR closes, so a ref-dependent checkout can
+          # fail). `gh` therefore needs the repository named explicitly; without
+          # it `gh pr comment` aborted with
+          # `failed to run git: fatal: not a git repository` and the
+          # "Preview torn down" comment was never posted — observed on the
+          # closed predecessor PR #1257.
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          MARKER="<!-- preview-deploy -->"
+          BODY=$(cat <<EOF
+          $MARKER
+          ## 🧹 Preview torn down
+
+          The preview deployment for this PR has been removed and its DNS record deleted.
+          EOF
+          )
+          CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$CID" -f body="$BODY" \
+              || gh pr comment "$PR" --body "$BODY"
+          else
+            gh pr comment "$PR" --body "$BODY"
+          fi
+      - name: Remove the materialised SSH key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/preview-ssh"

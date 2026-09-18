@@ -1,0 +1,46 @@
+---
+# preview_host — a dedicated host for Plebeian Market per-PR Docker previews.
+#
+# This role is a declarative port of `infra/preview-vps/provision.sh` (the
+# script the Preview Deploy workflow runs over SSH on every deploy). Run it to
+# stand up a brand-new host; the workflow's `Bootstrap VPS` step then
+# re-converges the same host.
+#
+# It ships `preview_gateway.py` / `preview_manager.py` straight from this repo
+# (no network fetch, no pinned ref), so the role and the scripts can never
+# drift.
+
+# Deploy user and layout. Matches provision.sh (/home/<user>/preview-infra,
+# /home/<user>/previews).
+preview_host_user: "{{ ansible_user | default('debian') }}"
+preview_host_base_dir: '/home/{{ preview_host_user }}/preview-infra'
+preview_host_root: '/home/{{ preview_host_user }}/previews'
+preview_host_ports_dir: '{{ preview_host_root }}/ports'
+
+# Repo-relative source of the two scripts this role installs
+# (role_path = …/infra/preview-vps/ansible/roles/preview_host).
+preview_host_scripts_dir: '{{ role_path }}/../../../'
+
+# The gateway listens here (127.0.0.1) and is fronted by Caddy.
+preview_host_gateway_port: 6799
+
+# Routing suffix + access log consumed by the manager's idle detection.
+preview_host_site_suffix: test-market.orangesync.tech
+preview_host_access_log: /var/log/caddy/access.json
+
+# Manager uses the public GitHub repo anonymously (no token).
+preview_host_github_repo: PlebeianApp/market
+
+# Cloudflare credentials for closed-PR DNS cleanup.
+preview_host_cloudflare_api_token: "{{ lookup('env', 'PREVIEW_CLOUDFLARE_API_TOKEN') | default(lookup('env', 'CLOUDFLARE_API_TOKEN'), true) }}"
+preview_host_cloudflare_zone_id: "{{ lookup('env', 'PREVIEW_CLOUDFLARE_ZONE_ID') | default(lookup('env', 'CLOUDFLARE_ZONE_ID'), true) }}"
+
+# Docker daemon log rotation (matches provision.sh).
+preview_host_docker_log_max_size: 10m
+preview_host_docker_log_max_file: '3'
+
+# Legacy co-located nsite gateway. OFF by default: previews do not need it and
+# its upstream source (github.com/fiatjaf/nsite) is no longer cloneable.
+preview_host_nsite_gateway: false
+preview_host_nsite_domain: nsite.orangesync.tech
+preview_host_nsite_port: 3002

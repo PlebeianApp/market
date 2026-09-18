@@ -1,0 +1,26 @@
+{
+	on_demand_tls {
+		ask http://localhost:{{ preview_host_gateway_port }}/ask
+	}
+}
+{% if preview_host_nsite_gateway %}
+*.{{ preview_host_nsite_domain }} {
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:{{ preview_host_nsite_port }}
+}
+{% endif %}
+*.{{ preview_host_site_suffix }} {
+	log {
+		output file {{ preview_host_access_log }} {
+			roll_size 50MiB
+			roll_keep 3
+		}
+		format json
+	}
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:{{ preview_host_gateway_port }}
+}
