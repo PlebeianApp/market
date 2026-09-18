@@ -1,6 +1,7 @@
 import NDK, { type NDKFilter, type NDKEvent, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 import { isValidHexKey } from './utils'
+import { getMainRelay } from '@/lib/stores/ndk'
 
 /** Kind for NIP-89 handler information / app-config events. */
 export const APP_SETTINGS_KIND = 31990
@@ -168,7 +169,11 @@ export interface AppSettingsSubmitData {
 
 export async function submitAppSettings(data: NostrEvent): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+		// Publish to the configured app relay, not the page origin. On a preview
+		// the relay is served behind the gateway at /relay, so `wss://<host>`
+		// would hit the app and never reach the relay. Fall back to the origin
+		// only when config has not loaded yet.
+		const wsUrl = getMainRelay() ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 		console.log(`Connecting to WebSocket at ${wsUrl}`)
 
 		const ws = new WebSocket(wsUrl)
