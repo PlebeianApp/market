@@ -53,6 +53,7 @@ export function MobileMenu() {
 	const menuItems = [
 		{ to: '/', label: 'Home' },
 		{ to: '/products', label: 'Products' },
+		{ to: '/auctions', label: 'Auctions' },
 		{ to: '/community', label: 'Community' },
 		...(config?.appSettings?.showNostrLink ? [{ to: '/nostr', label: 'Nostr' }] : []),
 		...(isAuthenticated ? [{ to: '/dashboard', label: 'Dashboard' }] : []),

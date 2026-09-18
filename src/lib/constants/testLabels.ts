@@ -2,9 +2,14 @@
  * ADR-0009 — Test-listing curation via NIP-32 labels.
  *
  * Label events (kind 1985, NIP-32) mark a product or auction as a "test"
- * listing. Items carrying an active `test` label are excluded from feeds and
- * detail views. Un-labeling is a NIP-09 deletion event (kind 5) signed by the
- * same labeler, referencing the label event's id in an `e` tag.
+ * listing. Items carrying an active `test` label are excluded from the
+ * browsing and discovery surfaces only — the home feed, paginated browse,
+ * NIP-50 search (including its seller-name expansion), collections, and the
+ * auction feed. They stay reachable by direct link, on the seller's profile,
+ * and in the owner's dashboard (ADR-0009, browsing-only gating), where
+ * `TestListingNotice` explains the label. Un-labeling is a NIP-09 deletion
+ * event (kind 5) signed by the same labeler, referencing the label event's id
+ * in an `e` tag.
  *
  * See docs/adr/ADR-0009-test-listing-labels-via-nip-32.md for the full design.
  */

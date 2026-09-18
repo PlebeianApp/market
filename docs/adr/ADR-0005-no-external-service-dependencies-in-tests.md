@@ -59,6 +59,13 @@ All other external services must be mocked or intercepted:
   strings; no NUT-7 queries or mint redemptions are performed. Token
   encoding for test fixtures uses `getEncodedToken` (a pure function
   with no network calls) or pre-computed token strings.
+
+  > **Amended (ADR-0006):** for auction bid-funding tests this
+  > inert-string approach is deprecated in favour of the real local
+  > Cashu mint (`e2e/start-local-mint.sh`, nutshell + FakeWallet on
+  > `127.0.0.1:3338`). The local mint is an allowed local service, not
+  > an external dependency. See ADR-0006 for the deprecation roadmap.
+
 - **Lightning payments** — use `LightningMock` which intercepts all
   LNURL and WebLN calls.
 

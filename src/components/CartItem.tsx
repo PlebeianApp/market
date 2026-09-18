@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Media } from '@/components/Media'
 import { Input } from '@/components/ui/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -208,7 +209,7 @@ export default function CartItem({
 				{/* Product Image */}
 				{images && images.length > 0 ? (
 					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border overflow-hidden">
-						<img
+						<Media
 							src={images[0][1]}
 							alt={title || 'Product image'}
 							className="h-full w-full object-cover object-center"

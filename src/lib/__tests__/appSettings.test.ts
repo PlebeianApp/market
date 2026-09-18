@@ -1,8 +1,26 @@
-import { selectAuthoritativeAppSettingsEvent, APP_SETTINGS_KIND, APP_SETTINGS_D_TAG, type AppSettingsEventLike } from '../appSettings'
+import {
+	APP_SETTINGS_D_TAG,
+	APP_SETTINGS_KIND,
+	fetchAppSettings,
+	resolveFetchedAppSettings,
+	selectAuthoritativeAppSettingsEvent,
+	type AppSettingsEventLike,
+} from '../appSettings'
 import { describe, expect, test } from 'bun:test'
 
 const APP_PUBKEY = 'a'.repeat(64)
 const SPOOF_PUBKEY = 'b'.repeat(64)
+
+const VALID_SETTINGS = {
+	name: 'Demo Market',
+	displayName: 'Demo Market',
+	picture: 'https://example.com/picture.png',
+	banner: 'https://example.com/banner.png',
+	ownerPk: 'c'.repeat(64),
+	allowRegister: false,
+	defaultCurrency: 'sat',
+	showNostrLink: false,
+}
 
 /** Minimal event factory satisfying the AppSettingsEventLike structural type. */
 function mockEvent(opts: Partial<AppSettingsEventLike> & { pubkey?: string }): AppSettingsEventLike {
@@ -85,5 +103,44 @@ describe('selectAuthoritativeAppSettingsEvent', () => {
 		const result = selectAuthoritativeAppSettingsEvent(events, APP_PUBKEY)
 
 		expect(result?.created_at).toBe(200)
+	})
+})
+
+describe('resolveFetchedAppSettings', () => {
+	test('returns null only when a completed query returned no candidate events', () => {
+		expect(resolveFetchedAppSettings([], APP_PUBKEY)).toBeNull()
+	})
+
+	test('returns validated settings from the authoritative event', () => {
+		const event = mockEvent({ content: JSON.stringify(VALID_SETTINGS) })
+
+		expect(resolveFetchedAppSettings([event], APP_PUBKEY)).toEqual(VALID_SETTINGS)
+	})
+
+	test('fails closed when returned candidates contain no authoritative event', () => {
+		const spoofed = mockEvent({
+			pubkey: SPOOF_PUBKEY,
+			content: JSON.stringify(VALID_SETTINGS),
+		})
+
+		expect(() => resolveFetchedAppSettings([spoofed], APP_PUBKEY)).toThrow(/No authoritative app settings event/)
+	})
+
+	test('fails closed on malformed authoritative JSON', () => {
+		const event = mockEvent({ content: '{not-json' })
+
+		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY)).toThrow(/invalid JSON/)
+	})
+
+	test('fails closed when authoritative settings fail schema validation', () => {
+		const event = mockEvent({ content: JSON.stringify({ name: 'incomplete' }) })
+
+		expect(() => resolveFetchedAppSettings([event], APP_PUBKEY)).toThrow(/schema validation/)
+	})
+})
+
+describe('fetchAppSettings fail-closed preflight', () => {
+	test('rejects malformed app pubkeys before relay I/O', async () => {
+		await expect(fetchAppSettings('wss://relay.invalid', 'not-a-pubkey')).rejects.toThrow(/Invalid app pubkey/)
 	})
 })

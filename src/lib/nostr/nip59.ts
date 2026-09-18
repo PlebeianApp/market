@@ -342,9 +342,9 @@ function parseRecordJson(json: string, label: string): Record<string, unknown> {
 }
 
 function assertGiftWrap(event: Event, expectedRecipientPubkey: string): void {
+	if (!verifyEventSignature(event)) throw new Error('Invalid NIP-59 gift wrap signature')
 	assertEvent(event, 'NIP-59 gift wrap')
 	if (event.kind !== NIP59_GIFT_WRAP_KIND) throw new Error('Invalid NIP-59 gift wrap kind')
-	if (!verifyEventSignature(event)) throw new Error('Invalid NIP-59 gift wrap signature')
 	const recipientTag = event.tags[0]
 	if (event.tags.length !== 1 || recipientTag?.[0] !== 'p' || recipientTag[1] !== expectedRecipientPubkey || recipientTag.length !== 2) {
 		throw new Error('NIP-59 gift wrap recipient mismatch')
@@ -352,10 +352,10 @@ function assertGiftWrap(event: Event, expectedRecipientPubkey: string): void {
 }
 
 function assertSeal(event: Event): void {
+	if (!verifyEventSignature(event)) throw new Error('Invalid NIP-59 seal signature')
 	assertEvent(event, 'NIP-59 seal')
 	if (event.kind !== NIP59_SEAL_KIND) throw new Error('Invalid NIP-59 seal kind')
 	if (event.tags.length !== 0) throw new Error('NIP-59 seal tags must be empty')
-	if (!verifyEventSignature(event)) throw new Error('Invalid NIP-59 seal signature')
 }
 
 function verifyEventSignature(event: Event): boolean {

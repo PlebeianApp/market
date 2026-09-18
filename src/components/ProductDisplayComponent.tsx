@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Media } from '@/components/Media'
 import { Card } from '@/components/ui/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'
 import { fetchProductByATag, getProductImages, getProductTitle, productKeys } from '@/queries/products'
@@ -51,7 +52,7 @@ export function ProductDisplayComponent({
 				{/* Product Image */}
 				<div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
 					{imageUrl ? (
-						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+						<Media src={imageUrl} alt={title} className="w-full h-full object-cover" />
 					) : (
 						<div className="w-full h-full bg-gray-300 flex items-center justify-center text-gray-500 text-xs">No Image</div>
 					)}

@@ -1,0 +1,1086 @@
+/**
+ * Pure validation pipeline for kind-1023 bids under
+ * `cashu_p2pk_bidder_path_v1` — implements AUCTIONS.md §7.1 as amended by
+ * ADR-0012 Phase 1.
+ *
+ * "Pure" in two senses:
+ *
+ * 1. Side-effect-free **and self-contained**. {@link validateBid} derives a
+ *    verdict from its own arguments alone: the bid event, the auction event,
+ *    the validator's `observed_at`, and (optionally) the validator's
+ *    published policy. It performs **no** external state queries — no mint
+ *    calls, no NUT-7 spend-state lookups, no relay fetches — and it consults
+ *    **no other bid's state**. A verdict that depended on fetching or on a
+ *    mutable leading-bid position could not be reproduced by a second honest
+ *    validator, which is what the quorum is built on.
+ *
+ * 2. Decoupled from event publishing. The validator process turns the
+ *    returned verdict into a kind-30440 event; this module only
+ *    decides what the verdict *is*.
+ *
+ * The pipeline runs in the order specified in §7.1's flowchart and
+ * **short-circuits at the first failure** — a bid that's both outside the
+ * time window and below the floor gets reported as `post_end` (the first
+ * check that fails). That keeps the verdict stable: rerunning validation
+ * with the same inputs always yields the same verdict, and validators
+ * sweeping the bid set produce deterministic results across runs.
+ *
+ * The one amount-based check is the absolute floor, `amount ≥ starting_bid`.
+ * The minimum increment and the anti-snipe curve are **not** validity rules
+ * (ADR-0012 Phase 1): they are selection-time rules applied over the valid
+ * bid set, and advisory hints in the client. `prev_bid` is linkage metadata
+ * only — an unresolvable parent is never grounds for condemnation.
+ *
+ * Failure verdicts always carry a {@link ValidatorReason} via the
+ * `reason` field. Successful verdicts carry no reason. Both shapes
+ * are discriminated by the `claim` field so callers don't need to
+ * type-guard.
+ */
+
+import {
+	AUCTION_MIN_BID_LEG_SATS,
+	AUCTION_MIN_BID_SATS,
+	type PathReleaseReason,
+	type Nut7ProofState,
+	type ValidatorClaim,
+	type ValidatorReason,
+} from './constants'
+import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedSettlementEvent, SettlementPayoutEntry } from './events'
+import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
+import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
+import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
+import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+const KEYSET_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes — keysets rotate rarely
+// A transient mint failure (network blip, timeout, 5xx) must NOT be cached for
+// the full success TTL, or settlement stays degraded long after the mint
+// recovers. Cache failures for only a few seconds so the next call re-queries
+// the mint and picks up the real keyset as soon as it is back.
+const KEYSET_CACHE_FAILURE_TTL_MS = 5 * 1000 // 5 seconds — short negative-cache window
+const KEYSET_FETCH_TIMEOUT_MS = 2000 // bound the mint HTTP call so a slow mint cannot hang the UI
+// A cache entry carries an explicit `isFailure` flag rather than inferring
+// failure from an empty keyset array: a mint can legitimately return an empty
+// keyset on success (e.g. a freshly initialized mint), and that must be cached
+// for the full success TTL, not the short failure TTL.
+const keysetCache = new Map<string, { keysets: MintKeyset[]; cachedAt: number; isFailure: boolean }>()
+
+/**
+ * Export for test isolation. Unit tests clear the module-global cache between
+ * runs so a slow/dead mint in one test cannot poison the next.
+ */
+export function clearKeysetCache(): void {
+	keysetCache.clear()
+}
+
+type CashuRequestOptions = { endpoint: string; requestBody?: Record<string, unknown>; headers?: Record<string, string> } & Omit<
+	RequestInit,
+	'body' | 'headers'
+>
+
+/**
+ * Custom request function for {@link CashuMint.getKeySets} that injects a
+ * bounded timeout. cashu-ts' instance `getKeySets()` performs the fetch with
+ * no AbortSignal, so we use the static form and pass a request override that
+ * aborts after {@link KEYSET_FETCH_TIMEOUT_MS}. This mirrors cashu-ts' internal
+ * request semantics (JSON body stringify + Accept/Content-Type headers) and
+ * only adds the abort signal. A hanging mint (slow/reachable but never
+ * answering) then rejects to the negative-cache path instead of blocking the
+ * settlement UI indefinitely.
+ */
+async function requestWithTimeout<T>({ endpoint, requestBody, headers, ...signalInit }: CashuRequestOptions): Promise<T> {
+	const body = requestBody ? JSON.stringify(requestBody) : undefined
+	const reqHeaders = {
+		Accept: 'application/json, text/plain, */*',
+		...(body ? { 'Content-Type': 'application/json' } : undefined),
+		...headers,
+	}
+	const res = await fetch(endpoint, { body, headers: reqHeaders, ...signalInit, signal: AbortSignal.timeout(KEYSET_FETCH_TIMEOUT_MS) })
+	if (!res.ok) {
+		throw new Error(`keysets request failed: ${res.status} ${res.statusText}`)
+	}
+	return (await res.json()) as T
+}
+
+export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
+	const cached = keysetCache.get(mintUrl)
+	if (cached) {
+		// A failed request is a negative-cache entry and expires after the short
+		// failure TTL; a successful response (even an empty keyset) uses the long
+		// success TTL. This lets settlement recover as soon as the mint is back
+		// without misclassifying a legitimately-empty successful keyset.
+		const ttl = cached.isFailure ? KEYSET_CACHE_FAILURE_TTL_MS : KEYSET_CACHE_TTL_MS
+		if (Date.now() - cached.cachedAt < ttl) {
+			return cached.keysets
+		}
+	}
+	let keysets: MintKeyset[]
+	try {
+		const response = await CashuMint.getKeySets(mintUrl, requestWithTimeout)
+		keysets = response.keysets
+	} catch (err) {
+		// Never silently swallow — operators must be able to distinguish a dead
+		// mint from an invalid settlement. Empty keysets route the descriptor to
+		// its pending/invalid degradation path.
+		console.warn(`[validation] fetchMintKeysets failed for ${mintUrl}: ${err instanceof Error ? err.message : String(err)}`)
+		// Negative cache: remember the failure briefly so a dead mint is not
+		// re-hammered on every settlement UI render.
+		keysetCache.set(mintUrl, { keysets: [], cachedAt: Date.now(), isFailure: true })
+		return []
+	}
+	keysetCache.set(mintUrl, { keysets, cachedAt: Date.now(), isFailure: false })
+	return keysets
+}
+
+/**
+ * Output of {@link validateBid}. Discriminated by {@link claim}:
+ *
+ * - `valid_bid_placed` → the bid passes every structural check. No `reason`,
+ *   and deliberately **no ranking marker**: a structurally valid bid is
+ *   reported as valid whether or not it currently leads (ADR-0012 Phase 1).
+ * - `bid_invalid`      → `reason` carries the specific cause.
+ *
+ * ADR-0012 Phase 1 removed the `bid_pending_review` variant from this union.
+ * A verdict is now a pure function of the bid, the auction and `observed_at`,
+ * so there is no external state whose absence could leave a verdict pending.
+ * (`bid_pending_review` remains a valid protocol *claim* — the validator
+ * service still uses it while a quorum-confirmed verdict is being observed —
+ * it is simply no longer derivable from structure alone.)
+ */
+export type BidValidationVerdict = { claim: 'valid_bid_placed' } | { claim: 'bid_invalid'; reason: ValidatorReason; detail?: string }
+
+/**
+ * Hook for validator-specific policy decisions (relatr score,
+ * blacklist, KYC, etc.). Returning `'pass'` is the default; returning
+ * `{ reject, reason, detail? }` short-circuits the pipeline and the
+ * verdict surfaces with `claim=bid_invalid` and the chosen reason.
+ *
+ * The hook receives the parsed auction + bid and the validator's own
+ * observation timestamp. Policy callouts are wired here (rather than
+ * as a post-pipeline step) so a policy-driven reject is indistinguishable
+ * from a rule-driven reject in the verdict event — every reason gets
+ * the same first-class treatment.
+ */
+export type PolicyHook = (input: {
+	auction: ParsedAuctionEvent
+	bid: ParsedBidEvent
+	observedAt: number
+}) => 'pass' | { reject: true; reason: ValidatorReason; detail?: string }
+
+export type BidChainValidation = { ok: true; legAmount: number } | { ok: false; detail: string }
+
+export interface ValidateBidInput {
+	auction: ParsedAuctionEvent
+	bid: ParsedBidEvent
+	/** Validator's own observation timestamp in unix seconds. NOT the bidder's `created_at`. */
+	observedAt: number
+	/**
+	 * Optional validator policy hook. Policy is attributable, published
+	 * opinion (kind-30441) and deterministic per policy — it is distinct
+	 * from structure, and it is the ONLY per-validator input to a verdict.
+	 */
+	policy?: PolicyHook
+}
+
+export type ReleaseTiming = 'prompt' | 'late'
+
+export type ReleaseValidityFailureCode =
+	| 'unauthorized_signer'
+	| 'bid_reference_mismatch'
+	| 'auction_mismatch'
+	| 'seller_mismatch'
+	| 'release_reason_invalid'
+	| 'derivation_invalid'
+	| 'child_pubkey_mismatch'
+	| 'cashu_token_missing'
+	| 'cashu_token_decode_failed'
+	| 'cashu_token_mint_mismatch'
+	| 'cashu_token_amount_mismatch'
+	| 'cashu_token_proof_count_mismatch'
+	| 'cashu_token_lock_mismatch'
+	| 'cashu_token_secret_mismatch'
+	| 'cashu_token_proof_y_mismatch'
+
+export type ReleaseValidityResult =
+	| {
+			isValid: true
+			releaseTiming: ReleaseTiming
+			derivedChildPubkey: string
+			decodedTokenSummary: {
+				mintUrl: string
+				amount: number
+				proofCount: number
+			}
+	  }
+	| {
+			isValid: false
+			failureCode: ReleaseValidityFailureCode
+			releaseTiming: ReleaseTiming
+			detail: string
+	  }
+
+export interface ValidatePathReleaseInput {
+	auction: ParsedAuctionEvent
+	bid: ParsedBidEvent
+	release: ParsedPathReleaseEvent
+	now: number
+	postCloseDecision: 'winner' | 'loser' | null
+	fallbackOfferedAt?: number | null
+	expectedTokenAmount?: number
+	mintKeysets?: MintKeyset[]
+	/**
+	 * When true, skip the cashu token decode + proof validation section.
+	 * The validator passes this because token decoding requires mint keyset
+	 * info it doesn't have (the validator makes no mint interaction), and
+	 * cashu token validation is the SELLER's job at redemption time. An
+	 * undecodable token must not condemn a bid as fraudulent. The
+	 * derivation path + child_pubkey + release timing checks still run.
+	 *
+	 * Note: `validateBid` no longer has an analogous bypass flag. ADR-0012
+	 * Phase 1 deleted the NUT-7 step from the verdict path outright rather
+	 * than leaving a switch that callers must remember to set.
+	 */
+	skipCashuTokenCheck?: boolean
+}
+
+export type SettlementCompletenessFailureCode =
+	| 'unauthorized_signer'
+	| 'status_invalid'
+	| 'auction_mismatch'
+	| 'winning_bid_mismatch'
+	| 'winning_bid_invalid'
+	| 'path_release_mismatch'
+	| 'path_release_invalid'
+	| 'payout_missing'
+	| 'payout_leg_mismatch'
+	| 'payout_sum_mismatch'
+	| 'fallback_chain_inconsistent'
+	| 'nut7_not_spent'
+
+export type SettlementCompletenessResult =
+	| {
+			isComplete: true
+			releaseTiming: ReleaseTiming
+			payoutSum: number
+			legCount: number
+			usesFallback: boolean
+	  }
+	| {
+			isComplete: false
+			failureCode: SettlementCompletenessFailureCode
+			detail: string
+	  }
+
+export interface SettlementChainLegContext {
+	bid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
+	nut7State?: Nut7ProofState
+	/**
+	 * Optional per-proof NUT-7 states keyed by `proof_y` (lowercased).
+	 * When present, settlement completeness requires every expected proof
+	 * to be explicitly `spent`.
+	 */
+	nut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
+}
+
+export interface ValidateSettlementCompletenessInput {
+	auction: ParsedAuctionEvent
+	settlement: ParsedSettlementEvent
+	winningBid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
+	winningBidClaim?: ValidatorClaim | null
+	winningBidPostCloseDecision?: 'winner' | 'loser' | null
+	winningBidNut7State?: Nut7ProofState
+	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
+	bidChain?: SettlementChainLegContext[]
+	mintKeysets?: MintKeyset[]
+}
+
+// ============================================================================
+// Floor computation — pure
+// ============================================================================
+
+const computeFloorMultiplier = (
+	atSeconds: number,
+	endAt: number,
+	maxEndAt: number,
+	shape: 'none' | 'linear' | 'exponential',
+	peakMultiplier: number,
+): number => {
+	if (shape === 'none' || peakMultiplier <= 1) return 1
+	if (maxEndAt <= endAt) return 1
+	if (atSeconds <= endAt) return 1
+	if (atSeconds >= maxEndAt) return peakMultiplier
+	const tNorm = (atSeconds - endAt) / (maxEndAt - endAt)
+	if (shape === 'linear') return 1 + (peakMultiplier - 1) * tNorm
+	return Math.pow(peakMultiplier, tNorm)
+}
+
+/**
+ * Per AUCTIONS.md §6.1 — the anti-snipe curve floor, `baseline × multiplier(t)`,
+ * with `baseline(top_bid) = top_bid === 0 ? starting_bid : top_bid + bid_increment`.
+ * `Math.ceil` so a fractional multiplier still requires the bidder to pay AT
+ * LEAST the floor — never less.
+ *
+ * **This is not a validity gate.** ADR-0012 Phase 1 removed the curve from the
+ * verdict path: a bid below this floor is *valid but not leading*. The floor is
+ * consumed by the selection algorithm (ADR-0012 Phase 2) and by the advisory
+ * `current price` shown in the UI. Nothing here may be reintroduced into
+ * {@link validateBid}.
+ *
+ * Note the baseline falls back to `starting_bid`, never `reserve`: `reserve` is
+ * a close-time winner gate only (AUCTIONS.md §8), and using it here was a
+ * documentation-vs-code contradiction tracked as issue #1315.
+ */
+export const computeBidFloor = (input: { auction: ParsedAuctionEvent; topBid: number; atSeconds: number }): number => {
+	const { auction, topBid, atSeconds } = input
+	const baseline = topBid > 0 ? topBid + auction.bidIncrement : auction.startingBid
+	const multiplier = computeFloorMultiplier(
+		atSeconds,
+		auction.endAt,
+		auction.maxEndAt,
+		auction.minBidCurve.shape,
+		auction.minBidCurve.peakMultiplier,
+	)
+	return Math.max(0, Math.ceil(baseline * multiplier))
+}
+
+// ============================================================================
+// validateBid — the §7.1 pipeline
+// ============================================================================
+
+/**
+ * Run the full §7.1 decision tree against one bid. Pure: same inputs
+ * always yield the same verdict. Order of checks matters — see the
+ * module docstring on short-circuiting.
+ */
+export const validateBid = (input: ValidateBidInput): BidValidationVerdict => {
+	const { auction, bid, observedAt, policy } = input
+
+	// --- Step 1: cross-event reference integrity -----------------------------
+
+	if (bid.auctionRootEventId !== auction.rootEventId) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `bid references root ${bid.auctionRootEventId}, auction root is ${auction.rootEventId}`,
+		}
+	}
+	if (bid.auctionCoordinate !== auction.coordinate) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `bid coordinate ${bid.auctionCoordinate} doesn't match auction ${auction.coordinate}`,
+		}
+	}
+	if (bid.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
+		return { claim: 'bid_invalid', reason: 'bad_lock', detail: 'bid `p` tag does not match auction seller pubkey' }
+	}
+
+	// --- Step 2: time-window checks ------------------------------------------
+
+	if (bid.createdAt < auction.startAt) {
+		return { claim: 'bid_invalid', reason: 'pre_start', detail: `created_at=${bid.createdAt} < start_at=${auction.startAt}` }
+	}
+	if (bid.createdAt > auction.maxEndAt) {
+		return { claim: 'bid_invalid', reason: 'post_end', detail: `created_at=${bid.createdAt} > max_end_at=${auction.maxEndAt}` }
+	}
+	if (observedAt < auction.startAt || observedAt > auction.maxEndAt) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'late_arrival',
+			detail: `observed_at=${observedAt} outside [${auction.startAt}, ${auction.maxEndAt}]`,
+		}
+	}
+	if (Math.abs(bid.createdAt - observedAt) > auction.maxSkewSec) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'timestamp_skew',
+			detail: `|created_at - observed_at|=${Math.abs(bid.createdAt - observedAt)} > max_skew_sec=${auction.maxSkewSec}`,
+		}
+	}
+
+	// --- Step 3: mint allowlist ---------------------------------------------
+
+	if (!auction.mints.includes(bid.mint)) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'unsupported_mint',
+			detail: `mint ${bid.mint} not in auction allowlist [${auction.mints.join(', ')}]`,
+		}
+	}
+
+	// --- Step 4: lock secret structure --------------------------------------
+
+	const expectedLocktime = auction.maxEndAt + auction.settlementGrace
+	if (bid.locktime !== expectedLocktime) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `bid locktime tag=${bid.locktime}, expected max_end_at+settlement_grace=${expectedLocktime}`,
+		}
+	}
+	if (bid.lockSecrets.length !== bid.proofYs.length) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'bad_lock',
+			detail: `lock_secret and proof_y tags must be parallel: ${bid.lockSecrets.length} vs ${bid.proofYs.length}`,
+		}
+	}
+	// M5 FIX: Reject bids with duplicate lock_secret or proof_y values
+	// within the same bid. The bid amount is declared in the `amount` tag
+	// but is not cryptographically bound to the proofs — an attacker could
+	// pad their proof count by repeating the same lock_secret/proof_y pair
+	// to make the bid appear to lock more value than it actually does.
+	// Duplicates within a single bid are always invalid: each proof in a
+	// Cashu token has a unique secret and Y value by construction.
+	const seenLockSecrets = new Set<string>()
+	const seenProofYs = new Set<string>()
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const secretLower = bid.lockSecrets[i].toLowerCase()
+		const proofYLower = bid.proofYs[i].toLowerCase()
+		if (seenLockSecrets.has(secretLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_lock',
+				detail: `duplicate lock_secret at index ${i} — each proof must have a unique secret`,
+			}
+		}
+		if (seenProofYs.has(proofYLower)) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_proof_y',
+				detail: `duplicate proof_y at index ${i} — each proof must have a unique Y value`,
+			}
+		}
+		seenLockSecrets.add(secretLower)
+		seenProofYs.add(proofYLower)
+	}
+	// Validate every proof's secret independently. All MUST share the same
+	// lock parameters — the bidder split their input across multiple
+	// denominations but each output proof is its own P2PK lock with its
+	// own nonce. Reject the bid if any proof is malformed; we don't want
+	// validators to selectively trust subsets of a lock set.
+	for (let i = 0; i < bid.lockSecrets.length; i++) {
+		const lockParse = parseAuctionLockSecret(bid.lockSecrets[i], {
+			expectedLocktime,
+			expectedChildPubkey: bid.childPubkey,
+			expectedRefundPubkey: bid.refundPubkey,
+		})
+		if (!lockParse.ok) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_lock',
+				detail: `proof ${i + 1}/${bid.lockSecrets.length}: ${lockParse.reason}${lockParse.detail ? `: ${lockParse.detail}` : ''}`,
+			}
+		}
+
+		const derivedProofY = hashToCurveHexFromString(bid.lockSecrets[i])
+		if (derivedProofY.toLowerCase() !== bid.proofYs[i].toLowerCase()) {
+			return {
+				claim: 'bid_invalid',
+				reason: 'bad_proof_y',
+				detail: `proof ${i + 1}/${bid.proofYs.length}: derived proof_y ${derivedProofY} does not match published ${bid.proofYs[i]}`,
+			}
+		}
+	}
+
+	// --- Step 5: the absolute bid floor -------------------------------------
+	//
+	// ADR-0012 Phase 1: this is the ONLY amount-based validity check, and it
+	// is a pure function of the bid and the auction. Deliberately absent:
+	// the leading-bid minimum increment, the anti-snipe curve floor, and the
+	// `prev_bid` chain walk. Each depends on state two honest validators can
+	// legitimately hold differently — which bids each observed, which bid
+	// currently leads, whether a referenced parent is resolvable — so
+	// conditioning a verdict on them makes verdicts non-deterministic,
+	// retro-condemns funded bids, and breaks quorum. Increment, curve and
+	// chain integrity are selection- and settlement-time concerns
+	// (ADR-0012 Phase 2), never validity rules.
+	//
+	// `starting_bid` is REQUIRED on the auction (AUCTIONS.md §3) and is the
+	// seller's declared absolute floor. There is no protocol-fixed minimum
+	// sat value in the verdict path: fee coverage is mint- and
+	// network-dependent, so it is the seller's decision, with fee-aware
+	// client form defaults and validator policy MAY as the remaining
+	// enforcement surfaces.
+
+	if (bid.amount < auction.startingBid) {
+		return {
+			claim: 'bid_invalid',
+			reason: 'below_starting_bid',
+			detail: `amount=${bid.amount} < starting_bid=${auction.startingBid}`,
+		}
+	}
+
+	// `prev_bid` is declared linkage metadata (Phase 1). An unresolvable,
+	// missing or cyclic parent is NEVER, by itself, grounds for
+	// condemnation. The reference is walked at selection and settlement
+	// time, where the chain is the bidder's own replacement history and the
+	// caller holds the bid graph. Falling through to the policy check below
+	// is the intended behaviour for a structurally valid bid whose parent
+	// this validator has not seen — or never will.
+
+	// --- Step 6: validator-specific policy ----------------------------------
+
+	if (policy) {
+		const verdict = policy({ auction, bid, observedAt })
+		if (verdict !== 'pass') {
+			return { claim: 'bid_invalid', reason: verdict.reason, detail: verdict.detail }
+		}
+	}
+
+	// --- Step 7: success ----------------------------------------------------
+
+	return { claim: 'valid_bid_placed' }
+}
+
+export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseValidityResult => {
+	const { auction, bid, release, now, postCloseDecision, fallbackOfferedAt = null } = input
+	const releaseTiming: ReleaseTiming = now > auction.maxEndAt + auction.settlementGrace ? 'late' : 'prompt'
+	const expectedTokenAmount = input.expectedTokenAmount ?? bid.legLockedAmount ?? bid.amount
+
+	if (release.bidderPubkey.toLowerCase() !== bid.bidderPubkey.toLowerCase()) {
+		return invalidRelease('unauthorized_signer', releaseTiming, 'kind-1025 author does not match the original bidder')
+	}
+	if (release.bidEventId !== bid.id) {
+		return invalidRelease('bid_reference_mismatch', releaseTiming, `release references bid ${release.bidEventId}, expected ${bid.id}`)
+	}
+	if (release.auctionCoordinate !== bid.auctionCoordinate || release.auctionCoordinate !== auction.coordinate) {
+		return invalidRelease(
+			'auction_mismatch',
+			releaseTiming,
+			`release auction coordinate ${release.auctionCoordinate} does not match bid/auction coordinate ${auction.coordinate}`,
+		)
+	}
+	if (
+		release.sellerPubkey.toLowerCase() !== bid.sellerPubkey.toLowerCase() ||
+		release.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()
+	) {
+		return invalidRelease('seller_mismatch', releaseTiming, 'release seller pubkey does not match the referenced bid and auction seller')
+	}
+
+	const releaseReasonValidity = validateReleaseReason({
+		releaseReason: release.releaseReason,
+		postCloseDecision,
+		now,
+		graceExpiresAt: auction.maxEndAt + auction.settlementGrace,
+		fallbackOfferedAt,
+	})
+	if (!releaseReasonValidity.ok) {
+		return invalidRelease('release_reason_invalid', releaseTiming, releaseReasonValidity.detail)
+	}
+
+	let derivedChildPubkey: string
+	try {
+		derivedChildPubkey = deriveAuctionChildP2pkPubkeyFromXpub(auction.p2pkXpub, release.derivationPath)
+	} catch (err) {
+		return invalidRelease(
+			'derivation_invalid',
+			releaseTiming,
+			`derive(p2pk_xpub, path) failed: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	if (derivedChildPubkey.toLowerCase() !== release.childPubkey.toLowerCase()) {
+		return invalidRelease(
+			'child_pubkey_mismatch',
+			releaseTiming,
+			`derive(p2pk_xpub, path)=${derivedChildPubkey} does not match release.child_pubkey=${release.childPubkey}`,
+		)
+	}
+	if (derivedChildPubkey.toLowerCase() !== bid.childPubkey.toLowerCase()) {
+		return invalidRelease(
+			'child_pubkey_mismatch',
+			releaseTiming,
+			`derive(p2pk_xpub, path)=${derivedChildPubkey} does not match bid.child_pubkey=${bid.childPubkey}`,
+		)
+	}
+
+	// Cashu token decode + proof validation. Skipped entirely when the
+	// caller passes `skipCashuTokenCheck` (the validator does this: token
+	// decoding requires mint keyset info it doesn't have, and cashu token
+	// validation is the seller's job at redemption time). The derivation
+	// path + child_pubkey + release timing checks above still run.
+	if (input.skipCashuTokenCheck) {
+		return {
+			isValid: true,
+			releaseTiming,
+			derivedChildPubkey,
+		}
+	}
+
+	if (!release.cashuToken?.trim()) {
+		return invalidRelease('cashu_token_missing', releaseTiming, 'kind-1025 is missing the cashu_token tag required for redemption')
+	}
+
+	let decodedToken: Token
+	try {
+		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
+	} catch (err) {
+		return invalidRelease(
+			'cashu_token_decode_failed',
+			releaseTiming,
+			`cashu_token could not be decoded: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	if (!decodedToken.proofs.length) {
+		return invalidRelease('cashu_token_proof_count_mismatch', releaseTiming, 'cashu_token contains no proofs')
+	}
+	if (decodedToken.proofs.length !== bid.proofYs.length) {
+		return invalidRelease(
+			'cashu_token_proof_count_mismatch',
+			releaseTiming,
+			`cashu_token proof count ${decodedToken.proofs.length} does not match bid proof count ${bid.proofYs.length}`,
+		)
+	}
+
+	const tokenMintUrl = normalizeMintUrl(decodedToken.mint ?? '')
+	const bidMintUrl = normalizeMintUrl(bid.mint)
+	if (!tokenMintUrl || tokenMintUrl !== bidMintUrl) {
+		return invalidRelease(
+			'cashu_token_mint_mismatch',
+			releaseTiming,
+			`cashu_token mint ${decodedToken.mint ?? '<missing>'} does not match bid mint ${bid.mint}`,
+		)
+	}
+
+	const expectedSecrets = buildCounter(bid.lockSecrets)
+	const expectedProofYs = buildCounter(bid.proofYs.map((proofY) => proofY.toLowerCase()))
+	let tokenAmount = 0
+
+	for (let index = 0; index < decodedToken.proofs.length; index++) {
+		const proof = decodedToken.proofs[index]
+		if (!Number.isSafeInteger(proof.amount) || proof.amount <= 0) {
+			return invalidRelease(
+				'cashu_token_amount_mismatch',
+				releaseTiming,
+				`cashu_token proof ${index + 1} has invalid amount ${proof.amount}`,
+			)
+		}
+		tokenAmount = addAuctionSettlementProofAmount(tokenAmount, proof.amount)
+
+		const parsedLock = parseAuctionLockSecret(proof.secret, {
+			expectedLocktime: bid.locktime,
+			expectedChildPubkey: bid.childPubkey,
+			expectedRefundPubkey: bid.refundPubkey,
+		})
+		if (!parsedLock.ok) {
+			return invalidRelease(
+				'cashu_token_lock_mismatch',
+				releaseTiming,
+				`cashu_token proof ${index + 1} lock mismatch: ${parsedLock.reason}${parsedLock.detail ? `: ${parsedLock.detail}` : ''}`,
+			)
+		}
+
+		if (!consumeCounterValue(expectedSecrets, proof.secret)) {
+			return invalidRelease(
+				'cashu_token_secret_mismatch',
+				releaseTiming,
+				`cashu_token proof ${index + 1} secret was not committed in the original bid`,
+			)
+		}
+
+		const proofY = hashToCurveHexFromString(proof.secret).toLowerCase()
+		if (!consumeCounterValue(expectedProofYs, proofY)) {
+			return invalidRelease(
+				'cashu_token_proof_y_mismatch',
+				releaseTiming,
+				`cashu_token proof ${index + 1} hash_to_curve(secret) does not match the bid's proof_y set`,
+			)
+		}
+	}
+
+	if (!counterIsEmpty(expectedSecrets)) {
+		return invalidRelease('cashu_token_secret_mismatch', releaseTiming, 'cashu_token is missing one or more secrets committed in the bid')
+	}
+	if (!counterIsEmpty(expectedProofYs)) {
+		return invalidRelease(
+			'cashu_token_proof_y_mismatch',
+			releaseTiming,
+			'cashu_token is missing one or more proof_y commitments from the bid',
+		)
+	}
+	if (tokenAmount !== expectedTokenAmount) {
+		return invalidRelease(
+			'cashu_token_amount_mismatch',
+			releaseTiming,
+			`cashu_token proof sum ${tokenAmount} does not match expected leg amount ${expectedTokenAmount}`,
+		)
+	}
+
+	return {
+		isValid: true,
+		releaseTiming,
+		derivedChildPubkey,
+		decodedTokenSummary: {
+			mintUrl: tokenMintUrl,
+			amount: tokenAmount,
+			proofCount: decodedToken.proofs.length,
+		},
+	}
+}
+
+export const validateSettlementCompleteness = (input: ValidateSettlementCompletenessInput): SettlementCompletenessResult => {
+	const { auction, settlement, winningBid, pathRelease, winningBidClaim, winningBidPostCloseDecision, winningBidNut7State, bidChain } =
+		input
+
+	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) {
+		return invalidSettlement('unauthorized_signer', 'kind-1024 author does not match the auction seller')
+	}
+	if (settlement.status !== 'settled') {
+		return invalidSettlement('status_invalid', `kind-1024 status must be settled, got ${settlement.status}`)
+	}
+	if (settlement.closeAt < auction.maxEndAt) {
+		return invalidSettlement('status_invalid', `kind-1024 close_at=${settlement.closeAt} precedes max_end_at=${auction.maxEndAt}`)
+	}
+	if (settlement.auctionRootEventId !== auction.rootEventId || settlement.auctionCoordinate !== auction.coordinate) {
+		return invalidSettlement(
+			'auction_mismatch',
+			`kind-1024 references ${settlement.auctionRootEventId}/${settlement.auctionCoordinate}, expected ${auction.rootEventId}/${auction.coordinate}`,
+		)
+	}
+	if (settlement.winningBidId !== winningBid.id || settlement.winnerPubkey?.toLowerCase() !== winningBid.bidderPubkey.toLowerCase()) {
+		return invalidSettlement('winning_bid_mismatch', 'kind-1024 winner tags do not match the expected winning bid')
+	}
+	if (winningBidClaim && !SETTLEMENT_ELIGIBLE_CLAIMS.has(winningBidClaim)) {
+		return invalidSettlement('winning_bid_invalid', `winning bid claim ${winningBidClaim} is not settlement-eligible`)
+	}
+
+	const chain = normaliseSettlementChain({
+		winningBid,
+		pathRelease,
+		winningBidNut7State,
+		winningBidNut7ProofStates: input.winningBidNut7ProofStates,
+		bidChain,
+	})
+	const latestLeg = chain[chain.length - 1]
+	if (!latestLeg) {
+		return invalidSettlement('payout_missing', 'settlement chain is empty')
+	}
+	if (settlement.pathReleaseEventId !== latestLeg.pathRelease.id) {
+		return invalidSettlement(
+			'path_release_mismatch',
+			`kind-1024 path_release ${settlement.pathReleaseEventId ?? '<missing>'} does not match latest leg release ${latestLeg.pathRelease.id}`,
+		)
+	}
+
+	const usesFallback = pathRelease.releaseReason === 'fallback_settlement' || settlement.fallbackChain.length > 0
+	const expectedPayouts = buildExpectedSettlementPayouts(chain)
+	const latestExpectedPayout = expectedPayouts[expectedPayouts.length - 1]
+	const inferredPostCloseDecision = inferSettlementPostCloseDecision(pathRelease, settlement, winningBidPostCloseDecision)
+	const pathReleaseValidity = validatePathRelease({
+		auction,
+		bid: winningBid,
+		release: pathRelease,
+		now: input.pathReleaseObservedAt ?? latestLeg.pathReleaseObservedAt ?? settlement.createdAt,
+		postCloseDecision: inferredPostCloseDecision,
+		fallbackOfferedAt: usesFallback ? auction.maxEndAt + auction.fallbackDelaySec : null,
+		expectedTokenAmount: latestExpectedPayout?.amount ?? winningBid.amount,
+		mintKeysets: input.mintKeysets,
+	})
+	if (!pathReleaseValidity.isValid) {
+		return invalidSettlement('path_release_invalid', pathReleaseValidity.detail)
+	}
+
+	const fallbackValidity = validateFallbackChainConsistency(settlement, winningBid, pathRelease)
+	if (!fallbackValidity.ok) {
+		return invalidSettlement('fallback_chain_inconsistent', fallbackValidity.detail)
+	}
+
+	if (expectedPayouts.length === 0 || settlement.payouts.length === 0) {
+		return invalidSettlement('payout_missing', 'kind-1024 settled event must carry payout tags for every redeemed leg')
+	}
+	const payoutValidity = validateSettlementPayouts(expectedPayouts, settlement.payouts, settlement.finalAmount)
+	if (!payoutValidity.ok) {
+		return invalidSettlement(payoutValidity.failureCode, payoutValidity.detail)
+	}
+
+	for (const leg of chain) {
+		const nut7SpendEvidence = validateSettlementLegNut7States(leg)
+		if (!nut7SpendEvidence.ok) {
+			return invalidSettlement('nut7_not_spent', nut7SpendEvidence.detail)
+		}
+	}
+
+	return {
+		isComplete: true,
+		releaseTiming: pathReleaseValidity.releaseTiming,
+		payoutSum: payoutValidity.payoutSum,
+		legCount: expectedPayouts.length,
+		usesFallback,
+	}
+}
+
+// ============================================================================
+// Convenience helpers
+// ============================================================================
+
+const validateReleaseReason = (input: {
+	releaseReason: PathReleaseReason
+	postCloseDecision: 'winner' | 'loser' | null
+	now: number
+	graceExpiresAt: number
+	fallbackOfferedAt: number | null
+}): { ok: true } | { ok: false; detail: string } => {
+	const { releaseReason, postCloseDecision, now, graceExpiresAt, fallbackOfferedAt } = input
+	if (postCloseDecision === null) {
+		return { ok: false, detail: 'release arrived before the validator assigned winner/loser roles' }
+	}
+	if (releaseReason === 'settlement') {
+		if (postCloseDecision !== 'winner') {
+			return { ok: false, detail: 'release_reason=settlement is only valid for the winning bid' }
+		}
+		return { ok: true }
+	}
+	if (releaseReason === 'fallback_settlement') {
+		if (postCloseDecision !== 'loser') {
+			return { ok: false, detail: 'release_reason=fallback_settlement is only valid for fallback bidders' }
+		}
+		if (fallbackOfferedAt === null) {
+			return { ok: false, detail: 'release_reason=fallback_settlement requires fallback context from the validator lifecycle' }
+		}
+		return { ok: true }
+	}
+	if (postCloseDecision !== 'winner') {
+		return { ok: false, detail: 'release_reason=voluntary_late is only valid for the original winning bid' }
+	}
+	if (now <= graceExpiresAt) {
+		return { ok: false, detail: 'release_reason=voluntary_late is only valid after settlement_grace has elapsed' }
+	}
+	return { ok: true }
+}
+
+const SETTLEMENT_ELIGIBLE_CLAIMS = new Set<ValidatorClaim>([
+	'valid_bid_placed',
+	'won_pending_settlement',
+	'lost_pending_refund',
+	'settled_promptly',
+	'settled_late',
+])
+
+const invalidSettlement = (failureCode: SettlementCompletenessFailureCode, detail: string): SettlementCompletenessResult => ({
+	isComplete: false,
+	failureCode,
+	detail,
+})
+
+const normaliseSettlementChain = (input: {
+	winningBid: ParsedBidEvent
+	pathRelease: ParsedPathReleaseEvent
+	pathReleaseObservedAt?: number
+	winningBidNut7State?: Nut7ProofState
+	winningBidNut7ProofStates?: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>
+	bidChain?: SettlementChainLegContext[]
+}): SettlementChainLegContext[] => {
+	if (input.bidChain && input.bidChain.length > 0) return input.bidChain
+	return [
+		{
+			bid: input.winningBid,
+			pathRelease: input.pathRelease,
+			pathReleaseObservedAt: input.pathReleaseObservedAt,
+			nut7State: input.winningBidNut7State,
+			nut7ProofStates: input.winningBidNut7ProofStates,
+		},
+	]
+}
+
+const validateSettlementLegNut7States = (leg: SettlementChainLegContext): { ok: true } | { ok: false; detail: string } => {
+	const proofStates = leg.nut7ProofStates
+	if (proofStates) {
+		for (const proofY of leg.bid.proofYs) {
+			const state = readProofState(proofStates, proofY)
+			if (state !== 'spent') {
+				return {
+					ok: false,
+					detail: `chain leg ${leg.bid.id.slice(0, 8)}… proof ${proofY.slice(0, 8)}… is ${state ?? 'unknown'}, not spent`,
+				}
+			}
+		}
+		return { ok: true }
+	}
+
+	// B1 (ADR-0004): When no NUT-7 data is provided at all (neither
+	// per-proof states nor aggregate state), skip the NUT-7 spend check.
+	// Validators no longer query the mint for proof state — they observe
+	// the seller's kind-1024 settlement event as proof of redemption.
+	// The client performs NUT-7 checks separately via checkProofStateBatch.
+	if (leg.nut7State === undefined) {
+		return { ok: true }
+	}
+
+	// Backward-compatible fallback: aggregate state is only sufficient for
+	// single-proof legs. Multi-proof legs require explicit per-proof states.
+	if (leg.bid.proofYs.length <= 1 && leg.nut7State === 'spent') {
+		return { ok: true }
+	}
+
+	if (leg.bid.proofYs.length > 1) {
+		return {
+			ok: false,
+			detail: `chain leg ${leg.bid.id.slice(0, 8)}… has ${leg.bid.proofYs.length} proofs but no per-proof NUT-7 evidence`,
+		}
+	}
+
+	return {
+		ok: false,
+		detail: `chain leg ${leg.bid.id.slice(0, 8)}… is ${leg.nut7State ?? 'unknown'}, not spent`,
+	}
+}
+
+const readProofState = (
+	states: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>,
+	proofY: string,
+): Nut7ProofState | undefined => {
+	const key = proofY.toLowerCase()
+	if (isNut7ProofStateMap(states)) return states.get(key)
+	return states[key]
+}
+
+const isNut7ProofStateMap = (
+	states: ReadonlyMap<string, Nut7ProofState> | Record<string, Nut7ProofState>,
+): states is ReadonlyMap<string, Nut7ProofState> => states instanceof Map
+
+const inferSettlementPostCloseDecision = (
+	pathRelease: ParsedPathReleaseEvent,
+	settlement: ParsedSettlementEvent,
+	override: 'winner' | 'loser' | null | undefined,
+): 'winner' | 'loser' => {
+	if (override) return override
+	if (pathRelease.releaseReason === 'fallback_settlement') return 'loser'
+	if (settlement.fallbackChain.some((entry) => entry.bidEventId === settlement.winningBidId && entry.status === 'accepted')) return 'loser'
+	return 'winner'
+}
+
+const validateFallbackChainConsistency = (
+	settlement: ParsedSettlementEvent,
+	winningBid: ParsedBidEvent,
+	pathRelease: ParsedPathReleaseEvent,
+): { ok: true } | { ok: false; detail: string } => {
+	const seen = new Set<string>()
+	let acceptedCount = 0
+	for (const entry of settlement.fallbackChain) {
+		if (seen.has(entry.bidEventId)) {
+			return { ok: false, detail: `fallback_chain repeats bid ${entry.bidEventId}` }
+		}
+		seen.add(entry.bidEventId)
+		if (entry.status === 'accepted') acceptedCount += 1
+	}
+	if (acceptedCount > 1) {
+		return { ok: false, detail: 'fallback_chain may contain at most one accepted bid' }
+	}
+	const acceptedWinningEntry = settlement.fallbackChain.find((entry) => entry.bidEventId === winningBid.id && entry.status === 'accepted')
+	if (pathRelease.releaseReason === 'fallback_settlement') {
+		if (!settlement.fallbackChain.length) {
+			return { ok: false, detail: 'fallback settlement requires a non-empty fallback_chain' }
+		}
+		if (!acceptedWinningEntry) {
+			return { ok: false, detail: 'fallback settlement requires an accepted fallback_chain entry for the settled bid' }
+		}
+		const priorFailure = settlement.fallbackChain.some((entry) => entry.bidEventId !== winningBid.id && entry.status !== 'accepted')
+		if (!priorFailure) {
+			return { ok: false, detail: 'fallback settlement requires at least one prior griefed/declined/refunded bid in fallback_chain' }
+		}
+	} else if (acceptedCount > 0 && !acceptedWinningEntry) {
+		return { ok: false, detail: 'fallback_chain accepted entry does not match the declared winning bid' }
+	}
+	return { ok: true }
+}
+
+const buildExpectedSettlementPayouts = (chain: SettlementChainLegContext[]): SettlementPayoutEntry[] => {
+	const expected: SettlementPayoutEntry[] = []
+	for (const leg of chain) {
+		const legAmount = leg.bid.legLockedAmount ?? leg.bid.amount
+		expected.push({ bidEventId: leg.bid.id, amount: legAmount, status: 'redeemed' })
+	}
+	return expected
+}
+
+const validateSettlementPayouts = (
+	expectedPayouts: SettlementPayoutEntry[],
+	actualPayouts: SettlementPayoutEntry[],
+	finalAmount: number,
+):
+	| { ok: true; payoutSum: number }
+	| { ok: false; failureCode: 'payout_missing' | 'payout_leg_mismatch' | 'payout_sum_mismatch'; detail: string } => {
+	if (actualPayouts.length !== expectedPayouts.length) {
+		return {
+			ok: false,
+			failureCode: 'payout_missing',
+			detail: `kind-1024 carries ${actualPayouts.length} payout tag(s), expected ${expectedPayouts.length}`,
+		}
+	}
+	let payoutSum = 0
+	for (let index = 0; index < expectedPayouts.length; index++) {
+		const expected = expectedPayouts[index]
+		const actual = actualPayouts[index]
+		if (!actual || actual.bidEventId !== expected.bidEventId || actual.amount !== expected.amount || actual.status !== expected.status) {
+			return {
+				ok: false,
+				failureCode: 'payout_leg_mismatch',
+				detail: `payout ${index + 1} does not match expected leg ${expected.bidEventId.slice(0, 8)}… amount=${expected.amount} status=${expected.status}`,
+			}
+		}
+		payoutSum = addAuctionSettlementProofAmount(payoutSum, actual.amount)
+	}
+	if (payoutSum !== finalAmount) {
+		return {
+			ok: false,
+			failureCode: 'payout_sum_mismatch',
+			detail: `sum(payout.amount)=${payoutSum} does not equal final_amount=${finalAmount}`,
+		}
+	}
+	return { ok: true, payoutSum }
+}
+
+const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
+
+const invalidRelease = (failureCode: ReleaseValidityFailureCode, releaseTiming: ReleaseTiming, detail: string): ReleaseValidityResult => {
+	return {
+		isValid: false,
+		failureCode,
+		releaseTiming,
+		detail,
+	}
+}
+
+const buildCounter = (values: string[]): Map<string, number> => {
+	const counter = new Map<string, number>()
+	for (const value of values) {
+		counter.set(value, (counter.get(value) ?? 0) + 1)
+	}
+	return counter
+}
+
+const consumeCounterValue = (counter: Map<string, number>, value: string): boolean => {
+	const current = counter.get(value) ?? 0
+	if (current <= 0) return false
+	if (current === 1) counter.delete(value)
+	else counter.set(value, current - 1)
+	return true
+}
+
+const counterIsEmpty = (counter: Map<string, number>): boolean => counter.size === 0
+
+/**
+ * The set of {@link ValidatorClaim} values produced by {@link validateBid}.
+ * Validators may later transition these to post-close claims
+ * (`won_pending_settlement`, etc.) — that lifecycle is handled by the
+ * validator service rather than this module.
+ *
+ * ADR-0012 Phase 1 narrowed what {@link validateBid} can itself return to
+ * `valid_bid_placed` and `bid_invalid`: with no external state queried at
+ * verdict time there is no longer any such thing as a verdict "pending"
+ * mint confirmation. `bid_pending_review` remains a valid *protocol* claim
+ * — the validator service still uses it for bids whose quorum-confirmed
+ * verdict has not yet been observed — it is simply no longer derivable
+ * from structure alone.
+ */
+export const VALIDATE_BID_CLAIMS: readonly ValidatorClaim[] = ['valid_bid_placed', 'bid_invalid', 'bid_pending_review']

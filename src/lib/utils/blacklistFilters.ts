@@ -1,11 +1,12 @@
 import { blacklistActions } from '@/lib/stores/blacklist'
 import { getATagFromCoords } from './coords'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 
 /**
  * Filter out blacklisted items from an array of events
  */
-export const filterBlacklistedEvents = <T extends NDKEvent>(events: T[]): T[] => {
+export const filterBlacklistedEvents = <T extends NostrEventLike>(events: T[]): T[] => {
 	if (!blacklistActions.isBlacklistLoaded()) {
 		return events // Return all if blacklist not loaded yet
 	}
@@ -18,7 +19,7 @@ export const filterBlacklistedEvents = <T extends NDKEvent>(events: T[]): T[] =>
 
 		// For products (kind 30402) and collections (kind 30405), check coordinates
 		if (event.kind === 30402 || event.kind === 30405) {
-			const dTag = event.tagValue('d')
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
 			if (dTag) {
 				const coords = getATagFromCoords({
 					kind: event.kind,

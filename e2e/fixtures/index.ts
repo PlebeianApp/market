@@ -3,6 +3,7 @@ import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
+import { BASE_URL } from '../test-config'
 
 type TestFixtures = {
 	/** Page with devUser1 logged in (merchant / app owner) */
@@ -36,7 +37,7 @@ export const test = base.extend<TestFixtures>({
 
 	merchantPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext()
+		const context = await browser.newContext({ baseURL: BASE_URL })
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
@@ -53,7 +54,7 @@ export const test = base.extend<TestFixtures>({
 	buyerPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser2.sk)
-		const context = await browser.newContext()
+		const context = await browser.newContext({ baseURL: BASE_URL })
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
 
@@ -68,7 +69,7 @@ export const test = base.extend<TestFixtures>({
 	newUserPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser3.sk)
-		const context = await browser.newContext()
+		const context = await browser.newContext({ baseURL: BASE_URL })
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
 
@@ -82,7 +83,7 @@ export const test = base.extend<TestFixtures>({
 
 	unauthenticatedPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext()
+		const context = await browser.newContext({ baseURL: BASE_URL })
 		// Do NOT call setupAuthContext here. This leaves the user logged out.
 		const page = await context.newPage()
 

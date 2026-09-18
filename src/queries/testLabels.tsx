@@ -3,6 +3,7 @@ import { testLabelActions, type TestLabelInfo } from '@/lib/stores/testLabels'
 import { testLabelKeys } from '@/queries/queryKeyFactory'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
 import type { NDKEvent, NDKFilter, NDKRelaySet } from '@/lib/nostr/ndk-events'
+import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
@@ -352,7 +353,7 @@ export const setCachedTestLabel = (coordinate: string, label: TestLabelInfo | nu
  * Pipeline position: NDK fetch → filterDeleted* → filterBlacklistedEvents →
  * excludeTestLabeledEvents → (business filters) → return.
  */
-export const excludeTestLabeledEvents = async <T extends NDKEvent>(events: T[]): Promise<T[]> => {
+export const excludeTestLabeledEvents = async <T extends NostrEventLike>(events: T[]): Promise<T[]> => {
 	// Show-test-listings toggle: reveal test-labeled items without filtering.
 	if (testLabelStore.state.showTestListings) return events
 

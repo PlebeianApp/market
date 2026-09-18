@@ -1,3 +1,4 @@
+import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { Button } from '@/components/ui/button'
@@ -11,24 +12,29 @@ import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
 	addToFeaturedCollections,
 	addToFeaturedProducts,
+	addToFeaturedAuctions,
 	addToFeaturedUsers,
 	removeFromFeaturedCollections,
 	removeFromFeaturedProducts,
+	removeFromFeaturedAuctions,
 	removeFromFeaturedUsers,
 	reorderFeaturedCollections,
 	reorderFeaturedProducts,
+	reorderFeaturedAuctions,
 	reorderFeaturedUsers,
 } from '@/publish/featured'
 import { useUserRole } from '@/queries/app-settings'
+import { fetchAuction, getAuctionId } from '@/queries/auctions'
 import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/queries/collections'
 import { useConfigQuery } from '@/queries/config'
-import { useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
-import { fetchProduct, fetchProductByATag, getProductId, getProductTitle } from '@/queries/products'
+import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
+import { fetchProduct, getProductId } from '@/queries/products'
+import { configKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { npubToHex } from '@/routes/setup'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { FolderOpen, Package, Plus, Star, Users } from 'lucide-react'
+import { FolderOpen, Gavel, Package, Plus, Star, Users } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -36,26 +42,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/
 	component: FeaturedItemsComponent,
 })
 
-// Helper functions for coordinate conversion and display
-const getProductDisplayInfo = async (productCoords: string) => {
-	try {
-		const coords = getCoordsFromATag(productCoords)
-		if (coords.kind !== 30402) return { id: coords.identifier, title: 'Unknown Product', coords: productCoords }
-
-		const product = await fetchProductByATag(coords.pubkey, coords.identifier)
-		const title = product ? getProductTitle(product) : 'Product Not Found'
-
-		return {
-			id: coords.identifier,
-			title,
-			coords: productCoords,
-		}
-	} catch (error) {
-		return { id: 'invalid', title: 'Invalid Coordinate', coords: productCoords }
-	}
-}
-
-const convertInputToCoords = async (input: string, authorPubkey?: string): Promise<string> => {
+const convertInputToCoords = async (input: string): Promise<string> => {
 	// If input is already a coordinate (contains colons), return as-is
 	if (input.includes(':')) {
 		try {
@@ -85,7 +72,7 @@ const convertInputToCoords = async (input: string, authorPubkey?: string): Promi
 	}
 }
 
-const convertCollectionInputToCoords = async (input: string, authorPubkey?: string): Promise<string> => {
+const convertCollectionInputToCoords = async (input: string): Promise<string> => {
 	// If input is already a coordinate (contains colons), return as-is
 	if (input.includes(':')) {
 		try {
@@ -122,20 +109,53 @@ const convertCollectionInputToCoords = async (input: string, authorPubkey?: stri
 	}
 }
 
+const convertAuctionInputToCoords = async (input: string): Promise<string> => {
+	if (input.includes(':')) {
+		try {
+			const coords = getCoordsFromATag(input)
+			if (coords.kind !== 30408) {
+				throw new Error('Expected auction coordinates with kind 30408')
+			}
+			return input
+		} catch (error) {
+			throw new Error(`Invalid auction coordinate format: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		}
+	}
+
+	try {
+		const auctionEvent = await fetchAuction(input)
+		if (!auctionEvent) {
+			throw new Error('Auction not found')
+		}
+
+		const realDtag = getAuctionId(auctionEvent)
+		if (!realDtag) {
+			throw new Error('Auction has no dtag')
+		}
+
+		return getATagFromCoords({ kind: 30408, pubkey: auctionEvent.pubkey, identifier: realDtag })
+	} catch (error) {
+		throw new Error(`Failed to convert auction ID to coordinates: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	}
+}
+
 function FeaturedItemsComponent() {
 	useDashboardTitle('Featured Items')
 	const { data: config } = useConfigQuery()
 	const { data: featuredProducts, isLoading: isLoadingProducts } = useFeaturedProducts(config?.appPublicKey || '')
 	const { data: featuredCollections, isLoading: isLoadingCollections } = useFeaturedCollections(config?.appPublicKey || '')
+	const { data: featuredAuctions, isLoading: isLoadingAuctions } = useFeaturedAuctions(config?.appPublicKey || '')
 	const { data: featuredUsers, isLoading: isLoadingUsers } = useFeaturedUsers(config?.appPublicKey || '')
 	const { amIAdmin, amIEditor, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
 
 	// State for adding new items
 	const [newProductInput, setNewProductInput] = useState('')
 	const [newCollectionInput, setNewCollectionInput] = useState('')
+	const [newAuctionInput, setNewAuctionInput] = useState('')
 	const [newUserInput, setNewUserInput] = useState('')
 	const [isAddingProduct, setIsAddingProduct] = useState(false)
 	const [isAddingCollection, setIsAddingCollection] = useState(false)
+	const [isAddingAuction, setIsAddingAuction] = useState(false)
 	const [isAddingUser, setIsAddingUser] = useState(false)
 
 	// Mutation hooks
@@ -148,7 +168,20 @@ function FeaturedItemsComponent() {
 			if (!ndk || !signer) throw new Error('NDK or signer not available')
 			return addToFeaturedProducts(productCoords, signer, ndk, appPubkey)
 		},
-		onSuccess: () => {
+		onSuccess: (_eventId, variables) => {
+			const appPubkey = variables.appPubkey || config?.appPublicKey
+			if (appPubkey) {
+				queryClient.setQueryData(
+					configKeys.featuredProducts(appPubkey),
+					(prev: { featuredProducts?: string[]; lastUpdated?: number } | null) => ({
+						featuredProducts: prev?.featuredProducts?.includes(variables.productCoords)
+							? prev.featuredProducts
+							: [...(prev?.featuredProducts || []), variables.productCoords],
+						lastUpdated: Date.now() / 1000,
+					}),
+				)
+				queryClient.invalidateQueries({ queryKey: configKeys.featuredProducts(appPubkey) })
+			}
 			queryClient.invalidateQueries({ queryKey: ['config'] })
 		},
 	})
@@ -158,7 +191,22 @@ function FeaturedItemsComponent() {
 			if (!ndk || !signer) throw new Error('NDK or signer not available')
 			return removeFromFeaturedProducts(productCoords, signer, ndk, appPubkey)
 		},
-		onSuccess: () => {
+		onSuccess: (_eventId, variables) => {
+			const appPubkey = variables.appPubkey || config?.appPublicKey
+			if (appPubkey) {
+				queryClient.setQueryData(
+					configKeys.featuredProducts(appPubkey),
+					(prev: { featuredProducts?: string[]; lastUpdated?: number } | null) => {
+						if (!prev) return prev
+						return {
+							...prev,
+							featuredProducts: (prev.featuredProducts || []).filter((coords) => coords !== variables.productCoords),
+							lastUpdated: Date.now() / 1000,
+						}
+					},
+				)
+				queryClient.invalidateQueries({ queryKey: configKeys.featuredProducts(appPubkey) })
+			}
 			queryClient.invalidateQueries({ queryKey: ['config'] })
 		},
 	})
@@ -209,6 +257,39 @@ function FeaturedItemsComponent() {
 		},
 	})
 
+	const addAuctionMutation = useMutation({
+		mutationFn: async ({ auctionCoords, appPubkey }: { auctionCoords: string; appPubkey?: string }) => {
+			if (!ndk || !signer) throw new Error('NDK or signer not available')
+			return addToFeaturedAuctions(auctionCoords, signer, ndk, appPubkey)
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['config'] })
+		},
+	})
+
+	const removeAuctionMutation = useMutation({
+		mutationFn: async ({ auctionCoords, appPubkey }: { auctionCoords: string; appPubkey?: string }) => {
+			if (!ndk || !signer) throw new Error('NDK or signer not available')
+			return removeFromFeaturedAuctions(auctionCoords, signer, ndk, appPubkey)
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['config'] })
+		},
+	})
+
+	const reorderAuctionsMutation = useMutation({
+		mutationFn: async ({ fromIndex, toIndex }: { fromIndex: number; toIndex: number }) => {
+			if (!featuredAuctions?.featuredAuctions || !ndk || !signer) throw new Error('Missing data or NDK/signer')
+			const reordered = [...featuredAuctions.featuredAuctions]
+			const [moved] = reordered.splice(fromIndex, 1)
+			reordered.splice(toIndex, 0, moved)
+			return reorderFeaturedAuctions(reordered, signer, ndk)
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['config'] })
+		},
+	})
+
 	const addUserMutation = useMutation({
 		mutationFn: async ({ userPubkey, appPubkey }: { userPubkey: string; appPubkey?: string }) => {
 			if (!ndk || !signer) throw new Error('NDK or signer not available')
@@ -253,7 +334,7 @@ function FeaturedItemsComponent() {
 			setIsAddingProduct(true)
 
 			// Convert input to coordinates if needed
-			const productCoords = await convertInputToCoords(newProductInput.trim(), config?.appPublicKey)
+			const productCoords = await convertInputToCoords(newProductInput.trim())
 
 			await addProductMutation.mutateAsync({
 				productCoords,
@@ -279,7 +360,7 @@ function FeaturedItemsComponent() {
 			setIsAddingCollection(true)
 
 			// Convert input to coordinates if needed
-			const collectionCoords = await convertCollectionInputToCoords(newCollectionInput.trim(), config?.appPublicKey)
+			const collectionCoords = await convertCollectionInputToCoords(newCollectionInput.trim())
 
 			await addCollectionMutation.mutateAsync({
 				collectionCoords,
@@ -292,6 +373,29 @@ function FeaturedItemsComponent() {
 			toast.error(`Failed to add collection: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		} finally {
 			setIsAddingCollection(false)
+		}
+	}
+
+	const handleAddAuction = async () => {
+		if (!newAuctionInput.trim()) {
+			toast.error('Please enter an auction ID or coordinate (e.g., "auction-id" or "30408:pubkey:d-tag")')
+			return
+		}
+
+		try {
+			setIsAddingAuction(true)
+			const auctionCoords = await convertAuctionInputToCoords(newAuctionInput.trim())
+			await addAuctionMutation.mutateAsync({
+				auctionCoords,
+				appPubkey: config?.appPublicKey,
+			})
+			setNewAuctionInput('')
+			toast.success('Auction added to featured list')
+		} catch (error) {
+			console.error('Failed to add auction:', error)
+			toast.error(`Failed to add auction: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		} finally {
+			setIsAddingAuction(false)
 		}
 	}
 
@@ -372,6 +476,30 @@ function FeaturedItemsComponent() {
 		}
 	}
 
+	const handleMoveAuctionUp = async (index: number) => {
+		if (index === 0 || !featuredAuctions?.featuredAuctions) return
+		try {
+			await reorderAuctionsMutation.mutateAsync({
+				fromIndex: index,
+				toIndex: index - 1,
+			})
+		} catch (error) {
+			console.error('Failed to reorder auctions:', error)
+		}
+	}
+
+	const handleMoveAuctionDown = async (index: number) => {
+		if (!featuredAuctions?.featuredAuctions || index === featuredAuctions.featuredAuctions.length - 1) return
+		try {
+			await reorderAuctionsMutation.mutateAsync({
+				fromIndex: index,
+				toIndex: index + 1,
+			})
+		} catch (error) {
+			console.error('Failed to reorder auctions:', error)
+		}
+	}
+
 	const handleMoveUserUp = async (index: number) => {
 		if (index === 0 || !featuredUsers?.featuredUsers) return
 		try {
@@ -423,6 +551,18 @@ function FeaturedItemsComponent() {
 		}
 	}
 
+	const handleRemoveAuction = async (auctionCoords: string) => {
+		try {
+			await removeAuctionMutation.mutateAsync({
+				auctionCoords,
+				appPubkey: config?.appPublicKey,
+			})
+			toast.success('Auction removed from featured list')
+		} catch (error) {
+			console.error('Failed to remove auction:', error)
+		}
+	}
+
 	const handleRemoveUser = async (userPubkey: string) => {
 		try {
 			await removeUserMutation.mutateAsync({
@@ -435,7 +575,7 @@ function FeaturedItemsComponent() {
 		}
 	}
 
-	if (isLoadingProducts || isLoadingCollections || isLoadingUsers || isLoadingPermissions) {
+	if (isLoadingProducts || isLoadingCollections || isLoadingAuctions || isLoadingUsers || isLoadingPermissions) {
 		return (
 			<div className="space-y-6 p-6">
 				<div className="animate-pulse">
@@ -482,7 +622,7 @@ function FeaturedItemsComponent() {
 					<Star className="w-6 h-6 text-muted-foreground" />
 					<div>
 						<h1 className="text-2xl font-bold">Featured Items</h1>
-						<p className="text-muted-foreground text-sm">Manage featured products, collections, and users</p>
+						<p className="text-muted-foreground text-sm">Manage featured products, collections, auctions, and users</p>
 					</div>
 				</div>
 			</div>
@@ -492,7 +632,7 @@ function FeaturedItemsComponent() {
 						<Star className="w-6 h-6 text-muted-foreground" />
 						<div>
 							<h1 className="text-2xl font-bold">Featured Items</h1>
-							<p className="text-muted-foreground text-sm">Manage featured products, collections, and users</p>
+							<p className="text-muted-foreground text-sm">Manage featured products, collections, auctions, and users</p>
 						</div>
 					</div>
 				</div>
@@ -512,6 +652,13 @@ function FeaturedItemsComponent() {
 						>
 							<FolderOpen className="w-4 h-4" />
 							Collections
+						</TabsTrigger>
+						<TabsTrigger
+							value="auctions"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none flex items-center gap-2"
+						>
+							<Gavel className="w-4 h-4" />
+							Auctions
 						</TabsTrigger>
 						<TabsTrigger
 							value="users"
@@ -677,6 +824,84 @@ function FeaturedItemsComponent() {
 								</div>
 								<div className="text-xs text-gray-500">
 									Note: Collections will be displayed in the order they appear in the list. Use the up/down buttons to reorder.
+								</div>
+							</CardContent>
+						</Card>
+					</TabsContent>
+
+					{/* Featured Auctions Tab */}
+					<TabsContent value="auctions" className="space-y-6">
+						<Card>
+							<CardHeader>
+								<CardTitle className="flex items-center gap-2">
+									<Gavel className="w-5 h-5" />
+									Featured Auctions
+								</CardTitle>
+								<CardDescription>
+									Auctions highlighted on the auctions page hero. Order matters - use up/down buttons to reorder.
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-4">
+								{!featuredAuctions?.featuredAuctions || featuredAuctions.featuredAuctions.length === 0 ? (
+									<div className="text-center py-8 text-gray-500">
+										<Gavel className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+										<p>No featured auctions yet</p>
+									</div>
+								) : (
+									<div className="space-y-3">
+										{featuredAuctions.featuredAuctions.map((auctionCoords, index) => (
+											<AuctionDisplayComponent
+												key={auctionCoords}
+												auctionCoords={auctionCoords}
+												index={index}
+												onMoveUp={() => handleMoveAuctionUp(index)}
+												onMoveDown={() => handleMoveAuctionDown(index)}
+												onRemove={() => handleRemoveAuction(auctionCoords)}
+												canMoveUp={index > 0}
+												canMoveDown={index < featuredAuctions.featuredAuctions.length - 1}
+												isReordering={reorderAuctionsMutation.isPending}
+												isRemoving={removeAuctionMutation.isPending}
+											/>
+										))}
+									</div>
+								)}
+							</CardContent>
+						</Card>
+
+						<Card>
+							<CardHeader>
+								<CardTitle className="flex items-center gap-2">
+									<Plus className="w-5 h-5" />
+									Add Featured Auction
+								</CardTitle>
+								<CardDescription>Add an auction to the featured list using its ID or full coordinate.</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-4">
+								<div className="space-y-2">
+									<Label htmlFor="newAuction">Auction ID or Coordinate</Label>
+									<div className="flex gap-2">
+										<Input
+											id="newAuction"
+											value={newAuctionInput}
+											onChange={(e) => setNewAuctionInput(e.target.value)}
+											placeholder="auction-id or 30408:pubkey:d-tag"
+											className="flex-1"
+										/>
+										<Button
+											onClick={handleAddAuction}
+											disabled={isAddingAuction || addAuctionMutation.isPending || !newAuctionInput.trim()}
+										>
+											{isAddingAuction || addAuctionMutation.isPending ? (
+												<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+											) : (
+												<Plus className="w-4 h-4" />
+											)}
+											Add
+										</Button>
+									</div>
+								</div>
+								<div className="text-xs text-gray-500">
+									Note: Auctions will be displayed in the order they appear in the list. Use the up/down buttons to reorder.
 								</div>
 							</CardContent>
 						</Card>

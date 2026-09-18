@@ -63,7 +63,12 @@ export class EventHandler {
 		// Initialize core components
 		this.adminManager = new AdminManagerImpl(config.adminPubkeys)
 		this.editorManager = new EditorManagerImpl()
-		this.bootstrapManager = new BootstrapManagerImpl(this.adminManager, config.adminPubkeys.length)
+		this.bootstrapManager = new BootstrapManagerImpl(
+			this.adminManager,
+			config.adminPubkeys.length,
+			config.hasExistingSetup,
+			config.allowPublicBootstrap,
+		)
 		this.eventSigner = new EventSigner(config.appPrivateKey)
 		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)

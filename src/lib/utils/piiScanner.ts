@@ -36,8 +36,6 @@ export async function scanForPIIExposure(userPubkey: string): Promise<PIIScanRes
 		const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
 		const eventsArray = Array.from(events)
 
-		console.log(`[PII Scanner] Scanning ${eventsArray.length} order events for PII exposure`)
-
 		const piiLeaks: PIIEvent[] = []
 
 		// Check each event for PII tags

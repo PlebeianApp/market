@@ -86,6 +86,99 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: str
 	return Promise.race([promise, timeoutPromise])
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+function extractPreimageCandidate(result: unknown): string | undefined {
+	if (!isRecord(result)) return undefined
+
+	const records = [result, result.result, result.response].filter(isRecord)
+	for (const record of records) {
+		for (const key of ['preimage', 'payment_preimage', 'paymentPreimage', 'preimage_hex', 'preimageHex']) {
+			const value = record[key]
+			if (typeof value === 'string' && value.length > 0) return value
+		}
+	}
+
+	return undefined
+}
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+	if (typeof value === 'number' && Number.isFinite(value)) return value
+	if (typeof value !== 'string' || value.trim() === '') return undefined
+
+	const parsed = Number(value)
+	return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function extractFeesPaidMsats(result: unknown): number | undefined {
+	if (!isRecord(result)) return undefined
+
+	const records = [result, result.result, result.response].filter(isRecord)
+	for (const record of records) {
+		for (const key of ['fees_paid', 'feesPaid', 'fees_paid_msat', 'feesPaidMsats']) {
+			const value = toFiniteNumber(record[key])
+			if (value !== undefined) return value
+		}
+	}
+
+	return undefined
+}
+
+const collectErrorText = (error: unknown): string => {
+	const parts: string[] = []
+	const visit = (value: unknown) => {
+		if (!value) return
+		if (typeof value === 'string') {
+			parts.push(value)
+			return
+		}
+		if (value instanceof Error) {
+			parts.push(value.name, value.message)
+		}
+		if (!isRecord(value)) return
+		for (const key of ['code', 'message', 'name']) {
+			const field = value[key]
+			if (typeof field === 'string') parts.push(field)
+		}
+		visit(value.error)
+		visit(value.result)
+		visit(value.response)
+	}
+
+	visit(error)
+	return parts.join(' ')
+}
+
+const sanitizeNwcPaymentErrorMessage = (error: unknown): string => {
+	const message = collectErrorText(error)
+	const lower = message.toLowerCase()
+	const upper = message.toUpperCase()
+
+	if (upper.includes('INSUFFICIENT_BALANCE') || lower.includes('insufficient balance')) {
+		return 'Connected wallet has insufficient balance'
+	}
+	if (upper.includes('QUOTA_EXCEEDED') || lower.includes('quota exceeded') || lower.includes('spending limit')) {
+		return 'Connected wallet spending limit was exceeded'
+	}
+	if (upper.includes('UNAUTHORIZED') || lower.includes('unauthorized')) {
+		return 'Connected wallet is not authorized'
+	}
+	if (upper.includes('RESTRICTED') || lower.includes('restricted')) {
+		return 'Connected wallet is not authorized to pay invoices'
+	}
+	if (lower.includes('timeout') || lower.includes('did not respond')) {
+		return 'Connected wallet did not respond in time'
+	}
+	if (upper.includes('NOT_IMPLEMENTED') || lower.includes('unsupported') || lower.includes('not implemented')) {
+		return 'Connected wallet does not support invoice payment'
+	}
+	if (upper.includes('PAYMENT_FAILED') || lower.includes('payment failed')) {
+		return 'Connected wallet could not pay the invoice'
+	}
+
+	return 'Could not pay invoice with connected wallet'
+}
+
 const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
 	const entries = Array.from(nwcClientCache.values())
 	nwcClientCache.clear()
@@ -342,10 +435,43 @@ export const walletActions = {
 
 		try {
 			return await createPromise
-		} catch (error) {
+		} catch {
 			nwcClientCache.delete(nwcUri)
-			console.error('Failed to create NWC client:', error)
+			console.error('Failed to create NWC client')
 			return null
+		}
+	},
+
+	payInvoiceWithNwc: async (
+		nwcUri: string,
+		invoice: string,
+		signer: NDKSigner,
+		options?: { timeoutMs?: number },
+	): Promise<{ preimage?: string; feesPaidMsats?: number }> => {
+		if (!signer) {
+			throw new Error('Connected wallet is not authorized')
+		}
+		if (!nwcUri || !invoice) {
+			throw new Error('Could not pay invoice with connected wallet')
+		}
+
+		const timeoutMs = options?.timeoutMs ?? 10000
+		const nwcClient = await walletActions.getOrCreateNwcClient(nwcUri, signer, timeoutMs)
+		if (!nwcClient) {
+			throw new Error('Could not pay invoice with connected wallet')
+		}
+
+		try {
+			const result = await withTimeout(nwcClient.wallet.lnPay({ pr: invoice }), timeoutMs, 'NWC payment')
+			const preimage = extractPreimageCandidate(result)
+			const feesPaidMsats = extractFeesPaidMsats(result)
+
+			return {
+				...(preimage ? { preimage } : {}),
+				...(feesPaidMsats !== undefined ? { feesPaidMsats } : {}),
+			}
+		} catch (error) {
+			throw new Error(sanitizeNwcPaymentErrorMessage(error))
 		}
 	},
 }

@@ -4,6 +4,8 @@ import type { UnsignedEvent } from 'nostr-tools/pure'
 export interface EventHandlerConfig {
 	appPrivateKey: string
 	adminPubkeys: string[]
+	hasExistingSetup: boolean
+	allowPublicBootstrap: boolean
 	relayUrl?: string
 }
 
