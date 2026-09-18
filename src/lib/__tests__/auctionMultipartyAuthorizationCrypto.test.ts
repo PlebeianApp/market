@@ -4,7 +4,8 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { base64urlnopad } from '@scure/base'
 import { HDKey } from '@scure/bip32'
 import bs58check from 'bs58check'
-import { finalizeEvent, getPublicKey } from 'nostr-tools'
+import { finalizeEvent, getPublicKey, verifyEvent } from 'nostr-tools'
+import type { Event } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import {
 	AUCTION_MULTIPARTY_ACTIVATION_KIND,
@@ -27,6 +28,7 @@ import {
 	authenticateMultipartyValidatorOffer,
 	buildPayoutXpubPopMessage,
 } from '../auction/multipartyAuthorizationCrypto'
+import { buildMultipartyAuthorizationReadyBundle } from '../auction/multipartyAuthorizationBundle'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY, compileSourceSchedule } from '../auction/multipartySchedule'
 
 const CREATED_AT = 1_800_000_000
@@ -246,6 +248,67 @@ const expectCryptoError = (expectedCode: string, operation: () => unknown): void
 	}
 }
 
+const replaceTagValue = (event: NostrEventLike, name: string, value: string, elementIndex = 1): string[][] =>
+	event.tags.map((tag) => {
+		if (tag[0] !== name) return [...tag]
+
+		const replacement = [...tag]
+		replacement[elementIndex] = value
+		return replacement
+	})
+
+const splitTagsEnvelope = (
+	event: NostrEventLike,
+	firstTags: string[][],
+): {
+	readonly event: NostrEventLike
+	readonly reads: () => number
+} => {
+	let reads = 0
+
+	return {
+		event: {
+			...event,
+			get tags() {
+				reads += 1
+				return reads === 1 ? firstTags : event.tags
+			},
+		},
+		reads: () => reads,
+	}
+}
+
+const instrumentTopLevelReads = (
+	event: NostrEventLike,
+): {
+	readonly event: NostrEventLike
+	readonly reads: Readonly<Record<'id' | 'pubkey' | 'created_at' | 'kind' | 'tags' | 'content' | 'sig', number>>
+} => {
+	const reads = {
+		id: 0,
+		pubkey: 0,
+		created_at: 0,
+		kind: 0,
+		tags: 0,
+		content: 0,
+		sig: 0,
+	}
+
+	const instrumented = {} as NostrEventLike
+
+	for (const property of Object.keys(reads) as (keyof typeof reads)[]) {
+		Object.defineProperty(instrumented, property, {
+			enumerable: true,
+			get: () => {
+				reads[property] += 1
+				return event[property]
+			},
+		})
+	}
+
+	return { event: instrumented, reads }
+}
+
 describe('Auction Multiparty Gate C2 cryptographic authentication', () => {
 	test('matches fixed whole-xpub PoP message vector', () => {
 		const bip32VectorXpub =
@@ -390,5 +453,192 @@ describe('Auction Multiparty Gate C2 cryptographic authentication', () => {
 		})
 
 		expectCryptoError('crypto_payout_xpub_pop_invalid', () => authenticateMultipartyPayoutCapability(capability))
+	})
+
+	test('rejects the reproduced root mint split and reads caller tags exactly once', () => {
+		const { root } = buildSignedBundle()
+		const split = splitTagsEnvelope(root, replaceTagValue(root, 'mint', 'https://mint-b.example'))
+
+		expectCryptoError('crypto_nostr_event_invalid', () => authenticateMultipartyRoot(split.event))
+		expect(split.reads()).toBe(1)
+	})
+
+	test('rejects an event-id split before parsed, verified, and branded identities can diverge', () => {
+		const { root } = buildSignedBundle()
+		let idReads = 0
+		const splitIdRoot: NostrEventLike = {
+			...root,
+			get id() {
+				idReads += 1
+				if (idReads === 1) return '1'.repeat(64)
+				if (idReads === 2) return root.id
+				return '2'.repeat(64)
+			},
+		}
+
+		expectCryptoError('crypto_nostr_event_invalid', () => authenticateMultipartyRoot(splitIdRoot))
+		expect(idReads).toBe(1)
+	})
+
+	test('captures every caller-owned scalar exactly once', () => {
+		const { root } = buildSignedBundle()
+		const instrumented = instrumentTopLevelReads(root)
+		const authenticated = authenticateMultipartyRoot(instrumented.event)
+
+		expect(authenticated.event_id).toBe(root.id)
+		expect(authenticated.value.id).toBe(root.id)
+		expect(instrumented.reads).toEqual({
+			id: 1,
+			pubkey: 1,
+			created_at: 1,
+			kind: 1,
+			tags: 1,
+			content: 1,
+			sig: 1,
+		})
+	})
+
+	test('rejects scalar split envelopes without rereading caller-owned values', () => {
+		const { root } = buildSignedBundle()
+		const alternatives: ReadonlyArray<readonly [keyof NostrEventLike, unknown]> = [
+			['id', '1'.repeat(64)],
+			['pubkey', V4V],
+			['kind', AUCTION_MULTIPARTY_PAYOUT_CAPABILITY_KIND],
+			['created_at', CREATED_AT + 1],
+			['content', 'unsigned alternate display content'],
+			['sig', '0'.repeat(128)],
+		]
+
+		for (const [property, firstValue] of alternatives) {
+			let reads = 0
+			const split = { ...root } as NostrEventLike
+			Object.defineProperty(split, property, {
+				enumerable: true,
+				get: () => {
+					reads += 1
+					return reads === 1 ? firstValue : root[property]
+				},
+			})
+
+			expect(() => authenticateMultipartyRoot(split)).toThrow()
+			expect(reads).toBe(1)
+		}
+	})
+
+	test('owns nested tag arrays and elements before parsing or verification', () => {
+		const { root } = buildSignedBundle()
+		const callerTags = root.tags.map((tag) => [...tag])
+		const mintTag = callerTags.find((tag) => tag[0] === 'mint')
+
+		if (!mintTag) throw new Error('fixture missing mint tag')
+
+		let mintReads = 0
+		Object.defineProperty(mintTag, 1, {
+			enumerable: true,
+			configurable: true,
+			get: () => {
+				mintReads += 1
+				return mintReads === 1 ? MINT : 'https://mint-b.example'
+			},
+		})
+
+		const authenticated = authenticateMultipartyRoot({ ...root, tags: callerTags })
+
+		callerTags.length = 0
+		Object.defineProperty(mintTag, 1, { value: 'https://mint-c.example' })
+
+		expect(mintReads).toBe(1)
+		expect(authenticated.value.mints).toEqual([MINT])
+		expect(authenticated.event_id).toBe(root.id)
+	})
+
+	test('rejects unsigned root schedule and funding-window observations', () => {
+		const { root } = buildSignedBundle()
+
+		for (const [tagName, alternate] of [
+			['payout_schedule_commitment', 'f'.repeat(64)],
+			['max_end_at', String(MAX_END_AT + 1)],
+		] as const) {
+			const split = splitTagsEnvelope(root, replaceTagValue(root, tagName, alternate))
+			expect(() => authenticateMultipartyRoot(split.event)).toThrow()
+			expect(split.reads()).toBe(1)
+		}
+	})
+
+	test('rejects split envelopes for capability, offer, acceptance, and activation', () => {
+		const bundle = buildSignedBundle()
+		const cases: ReadonlyArray<readonly [NostrEventLike, string[][], (event: NostrEventLike) => unknown]> = [
+			[
+				bundle.validatorCapability,
+				replaceTagValue(bundle.validatorCapability, 'mint', 'https://mint-b.example'),
+				authenticateMultipartyPayoutCapability,
+			],
+			[bundle.offer, replaceTagValue(bundle.offer, 'allocation_bps', '626'), authenticateMultipartyValidatorOffer],
+			[bundle.acceptance, replaceTagValue(bundle.acceptance, 'e', 'f'.repeat(64)), authenticateMultipartyValidatorAcceptance],
+			[bundle.activation, replaceTagValue(bundle.activation, 'acceptance', 'f'.repeat(64), 2), authenticateMultipartySellerActivation],
+		]
+
+		for (const [event, alternateTags, authenticate] of cases) {
+			const split = splitTagsEnvelope(event, alternateTags)
+			expectCryptoError('crypto_nostr_event_invalid', () => authenticate(split.event))
+			expect(split.reads()).toBe(1)
+		}
+	})
+
+	test('does not transfer caller-owned cached verification state into the exact snapshot', () => {
+		const { root } = buildSignedBundle()
+		expect(verifyEvent(root as Event)).toBe(true)
+		expect(Object.getOwnPropertySymbols(root).length).toBeGreaterThan(0)
+
+		const tampered = {
+			...root,
+			tags: replaceTagValue(root, 'mint', 'https://mint-b.example'),
+		}
+
+		expectCryptoError('crypto_nostr_event_invalid', () => authenticateMultipartyRoot(tampered))
+	})
+
+	test('keeps authenticated semantics isolated from post-snapshot caller mutation', () => {
+		const { root } = buildSignedBundle()
+		const callerTags = root.tags.map((tag) => [...tag])
+		const callerEvent = { ...root, tags: callerTags }
+		const authenticated = authenticateMultipartyRoot(callerEvent)
+
+		const mintTag = callerTags.find((tag) => tag[0] === 'mint')
+		if (!mintTag) throw new Error('fixture missing mint tag')
+		mintTag[1] = 'https://mint-b.example'
+		callerTags.push(['mint', 'https://mint-c.example'])
+
+		expect(authenticated.value.mints).toEqual([MINT])
+		expect(authenticated.value.id).toBe(root.id)
+		expect(authenticated.event_id).toBe(root.id)
+	})
+
+	test('blocks complete C3 propagation of split mint semantics through unchanged C3 code', () => {
+		const bundle = buildSignedBundle()
+		const root = splitTagsEnvelope(bundle.root, replaceTagValue(bundle.root, 'mint', 'https://mint-b.example'))
+		const activation = splitTagsEnvelope(bundle.activation, replaceTagValue(bundle.activation, 'mint', 'https://mint-b.example'))
+		const validatorCapability = splitTagsEnvelope(
+			bundle.validatorCapability,
+			replaceTagValue(bundle.validatorCapability, 'mint', 'https://mint-b.example'),
+		)
+		const v4vCapability = splitTagsEnvelope(bundle.v4vCapability, replaceTagValue(bundle.v4vCapability, 'mint', 'https://mint-b.example'))
+		const offer = splitTagsEnvelope(bundle.offer, replaceTagValue(bundle.offer, 'mint', 'https://mint-b.example'))
+
+		expectCryptoError('crypto_nostr_event_invalid', () =>
+			buildMultipartyAuthorizationReadyBundle({
+				root: root.event,
+				capabilities: [validatorCapability.event, v4vCapability.event],
+				offers: [offer.event],
+				acceptances: [bundle.acceptance],
+				activation: activation.event,
+			}),
+		)
+
+		expect(root.reads()).toBe(1)
+		expect(activation.reads()).toBe(0)
+		expect(validatorCapability.reads()).toBe(0)
+		expect(v4vCapability.reads()).toBe(0)
+		expect(offer.reads()).toBe(0)
 	})
 })

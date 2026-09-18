@@ -4,6 +4,8 @@ import bs58check from 'bs58check'
 import { verifyNostrEventSignature } from '../nostr/event-signature'
 import type { NostrEventLike } from '../nostr/eventLike'
 import {
+	AUCTION_MULTIPARTY_MAX_TAG_ELEMENTS,
+	AUCTION_MULTIPARTY_ROOT_MAX_TAGS,
 	parseMultipartyPayoutCapability,
 	parseMultipartyRoot,
 	parseMultipartySellerActivation,
@@ -27,6 +29,97 @@ const HEX64 = /^[0-9a-f]{64}$/
 const HEX128 = /^[0-9a-f]{128}$/
 
 const utf8Encoder = new TextEncoder()
+
+const snapshotExactNostrEnvelope = (event: NostrEventLike): NostrEventLike => {
+	if (typeof event !== 'object' || event === null) {
+		fail('crypto_nostr_event_shape_invalid')
+	}
+
+	let id: unknown
+	let pubkey: unknown
+	let createdAt: unknown
+	let kind: unknown
+	let callerTags: unknown
+	let content: unknown
+	let signature: unknown
+
+	try {
+		id = event.id
+		pubkey = event.pubkey
+		createdAt = event.created_at
+		kind = event.kind
+		callerTags = event.tags
+		content = event.content
+		signature = event.sig
+	} catch {
+		return fail('crypto_nostr_event_shape_invalid')
+	}
+
+	const ownedId = typeof id === 'string' ? id : fail('crypto_nostr_event_shape_invalid')
+	const ownedPubkey = typeof pubkey === 'string' ? pubkey : fail('crypto_nostr_event_shape_invalid')
+	const ownedCreatedAt =
+		typeof createdAt === 'number' && Number.isSafeInteger(createdAt) && createdAt >= 0
+			? createdAt
+			: fail('crypto_nostr_event_shape_invalid')
+	const ownedKind = typeof kind === 'number' && Number.isSafeInteger(kind) ? kind : fail('crypto_nostr_event_shape_invalid')
+	const callerTagArray = Array.isArray(callerTags) ? callerTags : fail('crypto_nostr_event_shape_invalid')
+	const ownedContent = typeof content === 'string' ? content : fail('crypto_nostr_event_shape_invalid')
+	const ownedSignature = typeof signature === 'string' ? signature : fail('crypto_nostr_event_shape_invalid')
+
+	const tagCount = callerTagArray.length
+
+	if (!Number.isSafeInteger(tagCount) || tagCount > AUCTION_MULTIPARTY_ROOT_MAX_TAGS) {
+		fail('crypto_nostr_event_shape_invalid')
+	}
+
+	const ownedTags: string[][] = []
+
+	try {
+		for (let tagIndex = 0; tagIndex < tagCount; tagIndex++) {
+			const callerTag = callerTagArray[tagIndex]
+
+			if (!Array.isArray(callerTag)) {
+				fail('crypto_nostr_event_shape_invalid')
+			}
+
+			const elementCount = callerTag.length
+
+			if (!Number.isSafeInteger(elementCount) || elementCount > AUCTION_MULTIPARTY_MAX_TAG_ELEMENTS) {
+				fail('crypto_nostr_event_shape_invalid')
+			}
+
+			const ownedTag: string[] = []
+
+			for (let elementIndex = 0; elementIndex < elementCount; elementIndex++) {
+				const element = callerTag[elementIndex]
+
+				if (typeof element !== 'string') {
+					fail('crypto_nostr_event_shape_invalid')
+				}
+
+				ownedTag.push(element)
+			}
+
+			ownedTags.push(Object.freeze(ownedTag) as string[])
+		}
+	} catch (error) {
+		if (error instanceof AuctionMultipartyAuthorizationCryptoError) {
+			throw error
+		}
+
+		return fail('crypto_nostr_event_shape_invalid')
+	}
+
+	return Object.freeze({
+		id: ownedId,
+		pubkey: ownedPubkey,
+		created_at: ownedCreatedAt,
+		kind: ownedKind,
+		tags: Object.freeze(ownedTags) as string[][],
+		content: ownedContent,
+		sig: ownedSignature,
+	})
+}
 
 export class AuctionMultipartyAuthorizationCryptoError extends Error {
 	readonly code: string
@@ -222,50 +315,55 @@ export const assertCryptographicallyAuthenticatedMultipartySnapshot = (
 export const authenticateMultipartyRoot = (
 	event: NostrEventLike,
 ): CryptographicallyAuthenticatedMultipartySnapshot<ParsedMultipartyRoot> => {
-	const parsed = parseMultipartyRoot(event)
+	const snapshot = snapshotExactNostrEnvelope(event)
+	const parsed = parseMultipartyRoot(snapshot)
 
-	verifyExactNostrEvent(event)
+	verifyExactNostrEvent(snapshot)
 
-	return authenticated(event.id, parsed)
+	return authenticated(snapshot.id, parsed)
 }
 
 export const authenticateMultipartyPayoutCapability = (
 	event: NostrEventLike,
 ): CryptographicallyAuthenticatedMultipartySnapshot<ParsedMultipartyPayoutCapability> => {
-	const parsed = parseMultipartyPayoutCapability(event)
+	const snapshot = snapshotExactNostrEnvelope(event)
+	const parsed = parseMultipartyPayoutCapability(snapshot)
 
-	verifyExactNostrEvent(event)
+	verifyExactNostrEvent(snapshot)
 	verifyPayoutXpubProofOfPossession(parsed)
 
-	return authenticated(event.id, parsed)
+	return authenticated(snapshot.id, parsed)
 }
 
 export const authenticateMultipartyValidatorOffer = (
 	event: NostrEventLike,
 ): CryptographicallyAuthenticatedMultipartySnapshot<ParsedMultipartyValidatorOffer> => {
-	const parsed = parseMultipartyValidatorOffer(event)
+	const snapshot = snapshotExactNostrEnvelope(event)
+	const parsed = parseMultipartyValidatorOffer(snapshot)
 
-	verifyExactNostrEvent(event)
+	verifyExactNostrEvent(snapshot)
 
-	return authenticated(event.id, parsed)
+	return authenticated(snapshot.id, parsed)
 }
 
 export const authenticateMultipartyValidatorAcceptance = (
 	event: NostrEventLike,
 ): CryptographicallyAuthenticatedMultipartySnapshot<ParsedMultipartyValidatorAcceptance> => {
-	const parsed = parseMultipartyValidatorAcceptance(event)
+	const snapshot = snapshotExactNostrEnvelope(event)
+	const parsed = parseMultipartyValidatorAcceptance(snapshot)
 
-	verifyExactNostrEvent(event)
+	verifyExactNostrEvent(snapshot)
 
-	return authenticated(event.id, parsed)
+	return authenticated(snapshot.id, parsed)
 }
 
 export const authenticateMultipartySellerActivation = (
 	event: NostrEventLike,
 ): CryptographicallyAuthenticatedMultipartySnapshot<ParsedMultipartySellerActivation> => {
-	const parsed = parseMultipartySellerActivation(event)
+	const snapshot = snapshotExactNostrEnvelope(event)
+	const parsed = parseMultipartySellerActivation(snapshot)
 
-	verifyExactNostrEvent(event)
+	verifyExactNostrEvent(snapshot)
 
-	return authenticated(event.id, parsed)
+	return authenticated(snapshot.id, parsed)
 }
