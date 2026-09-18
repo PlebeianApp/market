@@ -1,7 +1,8 @@
-import { NDKUser, type NDKEncryptionScheme, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, getEventHash, getPublicKey, nip44, verifyEvent } from 'nostr-tools'
 import type { Event } from 'nostr-tools'
+import type { EventTemplate } from 'nostr-tools/pure'
+import type { NipEncryptionCapability, SignerCapability } from './signer-capability'
 import {
 	createNip59GiftWrap,
 	createNip59GiftWrapWithSigner,
@@ -19,7 +20,7 @@ const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
-	'+15551234567',
+	'+155****4567',
 	'Los Angeles',
 	'90210',
 	'United States',
@@ -31,11 +32,12 @@ type KeyPair = {
 	pubkey: string
 }
 
-type MockSignerOptions = {
-	supportsNip44?: boolean
+type MockCapabilityOptions = {
+	withNip44?: boolean
 	canEncrypt?: boolean
 	canDecrypt?: boolean
-	encryptionEnabledThrows?: boolean
+	encryptOnly?: boolean
+	decryptOnly?: boolean
 }
 
 function keyPair(): KeyPair {
@@ -43,34 +45,30 @@ function keyPair(): KeyPair {
 	return { privateKey, pubkey: getPublicKey(privateKey) }
 }
 
-function signerFor(privateKey: Uint8Array, options: MockSignerOptions = {}): NDKSigner {
+function capabilityFor(privateKey: Uint8Array, options: MockCapabilityOptions = {}): SignerCapability {
 	const pubkey = getPublicKey(privateKey)
-	const user = new NDKUser({ pubkey })
+
+	const encrypt = async (recipientPubkey: string, plaintext: string): Promise<string> => {
+		if (options.canEncrypt === false) throw new Error('NIP-44 unavailable')
+		return encryptForRecipient(plaintext, privateKey, recipientPubkey)
+	}
+	const decrypt = async (senderPubkey: string, ciphertext: string): Promise<string> => {
+		if (options.canDecrypt === false) throw new Error('NIP-44 unavailable')
+		return decryptFromSender(ciphertext, privateKey, senderPubkey)
+	}
+
+	let nip44: NipEncryptionCapability | undefined
+	if (options.withNip44 !== false) {
+		nip44 = {
+			encrypt: options.decryptOnly ? (undefined as unknown as NipEncryptionCapability['encrypt']) : encrypt,
+			decrypt: options.encryptOnly ? (undefined as unknown as NipEncryptionCapability['decrypt']) : decrypt,
+		}
+	}
+
 	return {
-		get pubkey() {
-			return pubkey
-		},
-		blockUntilReady: async () => user,
-		user: async () => user,
-		get userSync() {
-			return user
-		},
-		encryptionEnabled: async (scheme?: NDKEncryptionScheme) => {
-			if (options.encryptionEnabledThrows) throw new Error('capability check failed')
-			if (options.supportsNip44 === false) return []
-			if (!scheme || scheme === 'nip44') return ['nip44']
-			return []
-		},
-		encrypt: async (recipient, value, scheme) => {
-			if (options.supportsNip44 === false || options.canEncrypt === false || scheme !== 'nip44') throw new Error('NIP-44 unavailable')
-			return encryptForRecipient(value, privateKey, recipient.pubkey)
-		},
-		decrypt: async (sender, value, scheme) => {
-			if (options.supportsNip44 === false || options.canDecrypt === false || scheme !== 'nip44') throw new Error('NIP-44 unavailable')
-			return decryptFromSender(value, privateKey, sender.pubkey)
-		},
-		sign: async (event) => finalizeEvent(event as unknown as Parameters<typeof finalizeEvent>[0], privateKey).sig,
-		toPayload: () => JSON.stringify({ type: 'mock' }),
+		getPublicKey: async () => pubkey,
+		signEvent: async (template) => finalizeEvent(template as EventTemplate, privateKey),
+		nip44,
 	}
 }
 
@@ -189,7 +187,7 @@ describe('NIP-59 helper', () => {
 		const seller = keyPair()
 		const wrapper = keyPair()
 		const rumor = rumorFor(buyer.pubkey)
-		const signer = signerFor(buyer.privateKey)
+		const capability = capabilityFor(buyer.privateKey)
 
 		const {
 			rumor: normalizedRumor,
@@ -197,7 +195,7 @@ describe('NIP-59 helper', () => {
 			giftWrap,
 		} = await createNip59GiftWrapWithSigner({
 			rumor,
-			signer,
+			signer: capability,
 			recipientPubkey: seller.pubkey,
 			wrapperPrivateKey: wrapper.privateKey,
 			createdAt: CREATED_AT,
@@ -216,7 +214,7 @@ describe('NIP-59 helper', () => {
 
 		const unwrapped = await unwrapNip59GiftWrapWithSigner({
 			giftWrap,
-			signer: signerFor(seller.privateKey),
+			signer: capabilityFor(seller.privateKey),
 			expectedRecipientPubkey: seller.pubkey,
 			expectedSenderPubkey: buyer.pubkey,
 		})
@@ -228,14 +226,14 @@ describe('NIP-59 helper', () => {
 	test('signer with encrypt support but no decrypt support can create a valid gift wrap', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
-		const signer = { ...signerFor(buyer.privateKey), decrypt: undefined } as unknown as NDKSigner
+		const capability = capabilityFor(buyer.privateKey, { encryptOnly: true })
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(true)
-		await expect(signerSupportsNip44(signer, 'decrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(true)
+		await expect(signerSupportsNip44(capability, 'decrypt')).resolves.toBe(false)
 
 		const { giftWrap, seal } = await createNip59GiftWrapWithSigner({
 			rumor: rumorFor(buyer.pubkey),
-			signer,
+			signer: capability,
 			recipientPubkey: seller.pubkey,
 			createdAt: CREATED_AT,
 		})
@@ -256,14 +254,14 @@ describe('NIP-59 helper', () => {
 			recipientPubkey: seller.pubkey,
 			createdAt: CREATED_AT,
 		})
-		const signer = { ...signerFor(seller.privateKey), encrypt: undefined } as unknown as NDKSigner
+		const capability = capabilityFor(seller.privateKey, { decryptOnly: true })
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(false)
-		await expect(signerSupportsNip44(signer, 'decrypt')).resolves.toBe(true)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'decrypt')).resolves.toBe(true)
 
 		const unwrapped = await unwrapNip59GiftWrapWithSigner({
 			giftWrap,
-			signer,
+			signer: capability,
 			expectedRecipientPubkey: seller.pubkey,
 			expectedSenderPubkey: buyer.pubkey,
 		})
@@ -275,13 +273,13 @@ describe('NIP-59 helper', () => {
 	test('signer-backed helper fails closed when NIP-44 encrypt is unavailable', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
-		const signer = signerFor(buyer.privateKey, { supportsNip44: false })
+		const capability = capabilityFor(buyer.privateKey, { withNip44: false })
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(false)
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer,
+				signer: capability,
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
@@ -291,41 +289,64 @@ describe('NIP-59 helper', () => {
 	test('signer-backed helper fails closed when NIP-44 encrypt throws', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
-		const signer = signerFor(buyer.privateKey, { canEncrypt: false })
+		const capability = capabilityFor(buyer.privateKey, { canEncrypt: false })
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(true)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(true)
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer,
+				signer: capability,
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
 		).rejects.toThrow('NIP-44 encryption failed for NIP-59 seal')
 	})
 
-	test('signer-backed helper fails closed when NIP-44 capability checks are unavailable', async () => {
+	test('signer-backed helper fails closed when the capability lacks a nip44 object', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
-		const signer: NDKSigner = { ...signerFor(buyer.privateKey), encryptionEnabled: undefined }
+		const capability: SignerCapability = { ...capabilityFor(buyer.privateKey), nip44: undefined }
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(false)
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer,
+				signer: capability,
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
 		).rejects.toThrow('Signer does not support NIP-44 encrypt')
 	})
 
-	test('operation-specific capability helper returns false when NIP-44 capability check throws', async () => {
+	test('operation-specific capability helper returns false for both directions when nip44 is absent', async () => {
 		const buyer = keyPair()
-		const signer = signerFor(buyer.privateKey, { encryptionEnabledThrows: true })
+		const capability = capabilityFor(buyer.privateKey, { withNip44: false })
 
-		await expect(signerSupportsNip44(signer, 'encrypt')).resolves.toBe(false)
-		await expect(signerSupportsNip44(signer, 'decrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'encrypt')).resolves.toBe(false)
+		await expect(signerSupportsNip44(capability, 'decrypt')).resolves.toBe(false)
+	})
+
+	test('signer-backed helper fails closed when the signer capability is absent (no local fallback)', async () => {
+		const buyer = keyPair()
+		const seller = keyPair()
+
+		await expect(
+			createNip59GiftWrapWithSigner({
+				rumor: rumorFor(buyer.pubkey),
+				signer: null,
+				recipientPubkey: seller.pubkey,
+				createdAt: CREATED_AT,
+			}),
+		).rejects.toThrow('Signer does not support NIP-44 encrypt')
+
+		await expect(
+			createNip59GiftWrapWithSigner({
+				rumor: rumorFor(buyer.pubkey),
+				signer: undefined,
+				recipientPubkey: seller.pubkey,
+				createdAt: CREATED_AT,
+			}),
+		).rejects.toThrow('Signer does not support NIP-44 encrypt')
 	})
 
 	test('signer-backed unwrap fails closed when NIP-44 decrypt is unavailable', async () => {
@@ -341,7 +362,7 @@ describe('NIP-59 helper', () => {
 		await expect(
 			unwrapNip59GiftWrapWithSigner({
 				giftWrap,
-				signer: signerFor(seller.privateKey, { supportsNip44: false }),
+				signer: capabilityFor(seller.privateKey, { withNip44: false }),
 				expectedRecipientPubkey: seller.pubkey,
 				expectedSenderPubkey: buyer.pubkey,
 			}),
@@ -357,13 +378,13 @@ describe('NIP-59 helper', () => {
 			recipientPubkey: seller.pubkey,
 			createdAt: CREATED_AT,
 		})
-		const signer = signerFor(seller.privateKey, { canDecrypt: false })
+		const capability = capabilityFor(seller.privateKey, { canDecrypt: false })
 
-		await expect(signerSupportsNip44(signer, 'decrypt')).resolves.toBe(true)
+		await expect(signerSupportsNip44(capability, 'decrypt')).resolves.toBe(true)
 		await expect(
 			unwrapNip59GiftWrapWithSigner({
 				giftWrap,
-				signer,
+				signer: capability,
 				expectedRecipientPubkey: seller.pubkey,
 				expectedSenderPubkey: buyer.pubkey,
 			}),
@@ -378,7 +399,7 @@ describe('NIP-59 helper', () => {
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer: signerFor(otherBuyer.privateKey),
+				signer: capabilityFor(otherBuyer.privateKey),
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
@@ -388,12 +409,12 @@ describe('NIP-59 helper', () => {
 	test('signer-backed creation fails closed when signing is unavailable or invalid', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
-		const signerWithoutSign = { ...signerFor(buyer.privateKey), sign: undefined } as unknown as NDKSigner
+		const capabilityWithoutSign = { ...capabilityFor(buyer.privateKey), signEvent: undefined } as unknown as SignerCapability
 
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer: signerWithoutSign,
+				signer: capabilityWithoutSign,
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
@@ -402,7 +423,10 @@ describe('NIP-59 helper', () => {
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer: { ...signerFor(buyer.privateKey), sign: async () => Promise.reject(new Error('sign failed')) },
+				signer: {
+					...capabilityFor(buyer.privateKey),
+					signEvent: async () => Promise.reject(new Error('sign failed')),
+				},
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
@@ -411,14 +435,17 @@ describe('NIP-59 helper', () => {
 		await expect(
 			createNip59GiftWrapWithSigner({
 				rumor: rumorFor(buyer.pubkey),
-				signer: { ...signerFor(buyer.privateKey), sign: async () => '0'.repeat(128) },
+				signer: {
+					...capabilityFor(buyer.privateKey),
+					signEvent: async (template) => ({ ...finalizeEvent(template as EventTemplate, buyer.privateKey), sig: '0'.repeat(128) }),
+				},
 				recipientPubkey: seller.pubkey,
 				createdAt: CREATED_AT,
 			}),
 		).rejects.toThrow('Invalid NIP-59 seal signature')
 	})
 
-	test('signer-backed unwrap does not call signer.sign', async () => {
+	test('signer-backed unwrap does not call signer.signEvent', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()
 		const { giftWrap, rumor } = createNip59GiftWrap({
@@ -428,18 +455,17 @@ describe('NIP-59 helper', () => {
 			createdAt: CREATED_AT,
 		})
 		let signCalls = 0
-		const signer = {
-			...signerFor(seller.privateKey),
-			encrypt: undefined,
-			sign: async () => {
+		const capability: SignerCapability = {
+			...capabilityFor(seller.privateKey, { decryptOnly: true }),
+			signEvent: async () => {
 				signCalls += 1
 				throw new Error('unwrap must not sign')
 			},
-		} as unknown as NDKSigner
+		}
 
 		const unwrapped = await unwrapNip59GiftWrapWithSigner({
 			giftWrap,
-			signer,
+			signer: capability,
 			expectedRecipientPubkey: seller.pubkey,
 			expectedSenderPubkey: buyer.pubkey,
 		})
@@ -459,7 +485,7 @@ describe('NIP-59 helper', () => {
 		await expect(
 			unwrapNip59GiftWrapWithSigner({
 				giftWrap: giftWrapWithInvalidRumor,
-				signer: signerFor(seller.privateKey),
+				signer: capabilityFor(seller.privateKey),
 				expectedRecipientPubkey: seller.pubkey,
 				expectedSenderPubkey: buyer.pubkey,
 			}),
@@ -470,7 +496,7 @@ describe('NIP-59 helper', () => {
 		await expect(
 			unwrapNip59GiftWrapWithSigner({
 				giftWrap: giftWrapWithInvalidSeal,
-				signer: signerFor(seller.privateKey),
+				signer: capabilityFor(seller.privateKey),
 				expectedRecipientPubkey: seller.pubkey,
 				expectedSenderPubkey: buyer.pubkey,
 			}),
@@ -485,7 +511,7 @@ describe('NIP-59 helper', () => {
 		await expect(
 			unwrapNip59GiftWrapWithSigner({
 				giftWrap: { ...giftWrap, content: `${giftWrap.content}x` },
-				signer: signerFor(seller.privateKey),
+				signer: capabilityFor(seller.privateKey),
 				expectedRecipientPubkey: seller.pubkey,
 				expectedSenderPubkey: buyer.pubkey,
 			}),

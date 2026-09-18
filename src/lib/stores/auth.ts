@@ -1,16 +1,169 @@
-import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
-import { ndkActions } from './ndk'
+import { hasPublishedSignerAuthority, ndkActions } from './ndk'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
-import { decrypt, encrypt } from 'nostr-tools/nip49'
+import { encrypt } from 'nostr-tools/nip49'
 import { hexToBytes } from 'nostr-tools/utils'
+import {
+	createExtensionSigner,
+	createPrivateKeySigner,
+	getSignerCapability,
+	getSignerTeardown,
+	setSignerCapability,
+	setSignerTeardown,
+} from '@/lib/nostr/signer-registry'
+import { connectBunkerSigner } from '@/lib/nostr/nostr-connect-signer'
+import { createPasswordSignerSession } from '@/lib/nostr/password-signer-session'
+import { rehydrateNostrConnectSession } from '@/lib/nostr/nostr-connect-session'
+import {
+	clearVaultedSession,
+	hasLegacyPlaintextSession,
+	hasVaultedSession,
+	LEGACY_CONNECT_URL_KEY,
+	LEGACY_LOCAL_SIGNER_KEY,
+	migrateLegacySessionToVault,
+	saveVaultedSession,
+	unlockVault,
+	discardLegacySession,
+} from '@/lib/nostr/session-vault'
+import type { UnlockOptions, WrapOptions } from '@/lib/nostr/session-vault'
+import { NdkSignerAdapter } from '@/lib/nostr/ndk-signer-adapter'
 
-export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
-export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
+type SignerTeardown = () => void | Promise<void>
+
+interface AuthAttempt {
+	cleanup?: SignerTeardown
+	cleanupClaimed: boolean
+	cleanupPromise?: Promise<void>
+}
+
+class AuthAttemptCancelledError extends Error {
+	constructor() {
+		super('Authentication attempt was cancelled')
+		this.name = 'AuthAttemptCancelledError'
+	}
+}
+
+let activeAuthAttempt: AuthAttempt | undefined
+
+function assertGlobalAuthorityDetached(): void {
+	if (authStore.state.isAuthenticated || getSignerCapability() || getSignerTeardown() || hasPublishedSignerAuthority()) {
+		throw new Error('A signer is already attached. Log out before signing in with another account.')
+	}
+}
+
+function beginDetachedAuthAttempt(): AuthAttempt {
+	assertGlobalAuthorityDetached()
+	if (activeAuthAttempt) throw new Error('Another authentication attempt is already in progress')
+	const attempt: AuthAttempt = { cleanupClaimed: false }
+	activeAuthAttempt = attempt
+	authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+	return attempt
+}
+
+function assertAttemptCurrent(attempt: AuthAttempt): void {
+	if (activeAuthAttempt !== attempt) throw new AuthAttemptCancelledError()
+}
+
+function claimAttemptCleanup(attempt: AuthAttempt): Promise<void> {
+	if (attempt.cleanupPromise) return attempt.cleanupPromise
+	if (attempt.cleanupClaimed || !attempt.cleanup) return Promise.resolve()
+	attempt.cleanupClaimed = true
+	const cleanup = attempt.cleanup
+	attempt.cleanup = undefined
+	try {
+		attempt.cleanupPromise = Promise.resolve(cleanup()).catch((error) => {
+			console.error('Failed to clean up cancelled auth attempt:', error)
+		})
+	} catch (error) {
+		console.error('Failed to clean up cancelled auth attempt:', error)
+		attempt.cleanupPromise = Promise.resolve()
+	}
+	return attempt.cleanupPromise
+}
+
+function registerAttemptCleanup(attempt: AuthAttempt, cleanup: SignerTeardown): void {
+	attempt.cleanup = cleanup
+	if (activeAuthAttempt !== attempt) {
+		void claimAttemptCleanup(attempt)
+		throw new AuthAttemptCancelledError()
+	}
+}
+
+function transferAttemptCleanup(attempt: AuthAttempt): void {
+	attempt.cleanupClaimed = true
+	attempt.cleanup = undefined
+}
+
+function cancelActiveAuthAttempt(): void {
+	const attempt = activeAuthAttempt
+	activeAuthAttempt = undefined
+	if (attempt) void claimAttemptCleanup(attempt)
+}
+
+function finishAuthAttempt(attempt: AuthAttempt): void {
+	if (activeAuthAttempt !== attempt) return
+	activeAuthAttempt = undefined
+	authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+}
+
+function commitSignerAuthority(
+	attempt: AuthAttempt,
+	user: NDKUser,
+	capability: Parameters<typeof setSignerCapability>[0],
+	signer: NdkSignerAdapter,
+	teardown?: SignerTeardown,
+	authState?: Partial<AuthState>,
+): void {
+	assertAttemptCurrent(attempt)
+	assertGlobalAuthorityDetached()
+	const previousAuthState = authStore.state
+	const previousCapability = getSignerCapability()
+	const previousTeardown = getSignerTeardown()
+	const previousNdkAuthority = ndkActions.captureSignerAuthority?.()
+	try {
+		// This authority commit is intentionally non-yielding. auth=true is
+		// published first, so auth=false can never coexist with either usable
+		// signer surface while the remaining synchronous mutations complete.
+		authStore.setState((state) => ({ ...state, ...authState, user, isAuthenticated: true }))
+		setSignerCapability(capability)
+		setSignerTeardown(teardown)
+		ndkActions.publishSigner(signer, user)
+	} catch (error) {
+		try {
+			if (previousNdkAuthority && ndkActions.restoreSignerAuthority) {
+				ndkActions.restoreSignerAuthority(previousNdkAuthority)
+			} else {
+				ndkActions.publishSigner(undefined)
+			}
+		} catch (cleanupError) {
+			console.error('Failed to roll back synchronous NDK signer publication:', cleanupError)
+		}
+		setSignerCapability(previousCapability)
+		setSignerTeardown(previousTeardown)
+		authStore.setState(() => previousAuthState)
+		throw error
+	}
+}
+
+function startSignerServices(signer: NdkSignerAdapter): void {
+	const initializeSignerServices = ndkActions.initializeSignerServices
+	if (!initializeSignerServices) return
+	void initializeSignerServices(signer).catch((error) => {
+		console.error('Failed to initialize signer services:', error)
+	})
+}
+
+// Single source of truth for the legacy plaintext-pair literals is
+// session-vault.ts (LEGACY_*_KEY) — these aliases keep the historical
+// auth.ts names importable while preventing drift between the two
+// definitions (Gate 2.5: duplicated constants silently break migration).
+export const NOSTR_CONNECT_KEY = LEGACY_CONNECT_URL_KEY
+export const NOSTR_LOCAL_SIGNER_KEY = LEGACY_LOCAL_SIGNER_KEY
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
 export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
@@ -21,10 +174,21 @@ interface AuthState {
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
 	needsMigration: boolean
+	/** A vaulted/legacy NIP-46 session exists — the unlock prompt is showing. */
+	needsSessionUnlock: boolean
 }
 
 interface Nip46LoginOptions {
 	onAuthUrl?: (url: string) => void
+	/**
+	 * Session passphrase for encrypted-at-rest persistence (ADR-0002 B-3 /
+	 * #996 H8). When supplied, the nbunksec session is wrapped
+	 * PBKDF2+AES-GCM under `nostr_session_v1`. Without it the session is
+	 * in-memory only — the plaintext pair is NEVER written again.
+	 */
+	sessionPassphrase?: string
+	/** KDF cost override (tests only; default is the >= 600k floor). */
+	vaultIterations?: number
 }
 
 const initialState: AuthState = {
@@ -33,6 +197,7 @@ const initialState: AuthState = {
 	needsDecryptionPassword: false,
 	isAuthenticating: false,
 	needsMigration: false,
+	needsSessionUnlock: false,
 }
 
 export const authStore = new Store<AuthState>(initialState)
@@ -57,14 +222,13 @@ export const authActions = {
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
-			// Signer / Bunker URL
+			// Signer / Bunker URL — legacy plaintext pair (ADR-0002 invariant 4:
+			// persisted-session migration policy). Read ONCE: surface the unlock
+			// prompt; the user either completes the migrate-on-unlock (wrap +
+			// delete) or is logged out. NEVER silently re-login with plaintext.
 
-			const privateKeySigner = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
-			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
-
-			if (privateKeySigner && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
-				authActions.checkAndShowTermsDialog()
+			if (hasLegacyPlaintextSession() || hasVaultedSession()) {
+				authStore.setState((state) => ({ ...state, needsSessionUnlock: true }))
 				return
 			}
 
@@ -98,11 +262,16 @@ export const authActions = {
 			// Extract the ncryptsec part (format: "pubkey:ncryptsec...")
 			const [, encryptedKey] = encryptedPrivateKey.split(':')
 
-			// Use nostr-tools decrypt function
-			const decryptedBytes = decrypt(encryptedKey, password)
-
-			// Convert Uint8Array to hex string
-			const privateKeyHex = Array.from(decryptedBytes)
+			// NIP-49 lane via PasswordSigner (ADR-0002 B-3/B-4): the ncryptsec is
+			// decrypted inside the signer, which then holds the key in memory
+			// behind the capability seam. TRANSITIONAL: decryptAndLogin still
+			// derives the raw key hex below because loginWithPrivateKey expects
+			// it — B-4 unifies session storage and removes this materialization.
+			// `fromNcryptsec` throws on a wrong password ("failed to decrypt
+			// key"), preserving the fail-closed UX.
+			const session = await createPasswordSignerSession(encryptedKey, password)
+			if (!session.signer.key) throw new Error('Failed to decrypt key')
+			const privateKeyHex = Array.from(session.signer.key)
 				.map((byte) => byte.toString(16).padStart(2, '0'))
 				.join('')
 
@@ -148,37 +317,38 @@ export const authActions = {
 	},
 
 	loginWithPrivateKey: async (privateKey: string) => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
-
+		const attempt = beginDetachedAuthAttempt()
+		let ndk!: NonNullable<ReturnType<typeof ndkActions.getNDK>>
+		let wasLoggedOut = false
+		let signer!: NdkSignerAdapter
+		let user!: NDKUser
 		try {
-			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKPrivateKeySigner(privateKey)
+			const currentNdk = ndkActions.getNDK()
+			if (!currentNdk) throw new Error('NDK not initialized')
+			ndk = currentNdk
+			wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+			// nsec lane: build the applesauce PrivateKeySigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0002 strangler-fig). No NEW plaintext is persisted here
+			// — the nsec key stays in-memory until Wave B-3 unifies session storage.
+			const capability = createPrivateKeySigner(privateKey)
+			signer = new NdkSignerAdapter(capability)
 			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-
-			const user = await signer.user()
-
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
-
-			return user
+			assertAttemptCurrent(attempt)
+			user = await signer.user()
+			assertAttemptCurrent(attempt)
+			commitSignerAuthority(attempt, user, capability, signer)
 		} catch (error) {
-			authStore.setState((state) => ({
-				...state,
-				isAuthenticated: false,
-			}))
+			await claimAttemptCleanup(attempt)
 			throw error
 		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+			finishAuthAttempt(attempt)
 		}
+
+		startSignerServices(signer)
+		void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
+		return user
 	},
 
 	getAvailableNostrExtensions: (): string[] => {
@@ -192,111 +362,209 @@ export const authActions = {
 	},
 
 	loginWithExtension: async () => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		// Check if extensions are available before attempting login
-		const availableExtensions = authActions.getAvailableNostrExtensions()
-		if (availableExtensions.length === 0) {
-			throw new Error('No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x) before logging in.')
-		}
-
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
-
+		const attempt = beginDetachedAuthAttempt()
+		let ndk!: NonNullable<ReturnType<typeof ndkActions.getNDK>>
+		let wasLoggedOut = false
+		let signer!: NdkSignerAdapter
+		let user!: NDKUser
 		try {
-			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip07Signer()
+			const currentNdk = ndkActions.getNDK()
+			if (!currentNdk) throw new Error('NDK not initialized')
+			ndk = currentNdk
+			const availableExtensions = authActions.getAvailableNostrExtensions()
+			if (availableExtensions.length === 0) {
+				throw new Error('No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x) before logging in.')
+			}
+			wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+			// NIP-07 lane: build the applesauce ExtensionSigner behind the signer
+			// registry + capability seam, then attach an NDKSigner adapter so the
+			// ~70 `signer.user()` consumers (and the wallet NWC paths) keep working
+			// unchanged (ADR-0002 strangler-fig). No key is held locally.
+			const capability = createExtensionSigner()
+			signer = new NdkSignerAdapter(capability)
+			// blockUntilReady awaits getPublicKey — the extension-available check
+			// (ExtensionSigner throws ExtensionMissingError when window.nostr is
+			// absent, on top of the getAvailableNostrExtensions guard above).
 			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-
-			const user = await signer.user()
+			assertAttemptCurrent(attempt)
+			user = await signer.user()
+			assertAttemptCurrent(attempt)
 
 			if (!user || !user.pubkey) {
 				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
 			}
 
 			// Store user pubkey and enable auto-login for persistence
+			assertAttemptCurrent(attempt)
 			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
 			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
-
-			return user
+			commitSignerAuthority(attempt, user, capability, signer)
 		} catch (error) {
-			authStore.setState((state) => ({
-				...state,
-				isAuthenticated: false,
-			}))
+			await claimAttemptCleanup(attempt)
 			throw error
 		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+			finishAuthAttempt(attempt)
 		}
+
+		startSignerServices(signer)
+		void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
+		return user
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner, options?: Nip46LoginOptions) => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
-
+	loginWithNip46: async (bunkerUrl: string, clientKeyHex?: string, options?: Nip46LoginOptions) => {
+		const attempt = beginDetachedAuthAttempt()
+		let ndk!: NonNullable<ReturnType<typeof ndkActions.getNDK>>
+		let wasLoggedOut = false
+		let bundle: Awaited<ReturnType<typeof connectBunkerSigner>> | undefined
+		let adapter!: NdkSignerAdapter
+		let user!: NDKUser
 		try {
-			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
+			const currentNdk = ndkActions.getNDK()
+			if (!currentNdk) throw new Error('NDK not initialized')
+			ndk = currentNdk
+			wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+			// NIP-46 bunker lane: build the applesauce NostrConnectSigner behind
+			// the signer capability seam (ADR-0002 Wave A3b / B-2), then attach an
+			// NDKSigner adapter so the ~70 `signer.user()` consumers (and the wallet
+			// NWC paths) keep working unchanged. The app-side wrappers enforce the
+			// ADR invariants the library does NOT provide (strict connect-secret
+			// binding, RPC timeouts, authUrl → onAuth, pubkey-equality on sign).
+			bundle = await connectBunkerSigner(bunkerUrl, {
+				clientKeyHex,
+				onAuth: options?.onAuthUrl
+					? (url) => {
+							options.onAuthUrl?.(url)
+							return Promise.resolve()
+						}
+					: undefined,
+			})
+			registerAttemptCleanup(attempt, () => bundle!.signer.logout())
+			assertAttemptCurrent(attempt)
+			adapter = new NdkSignerAdapter(bundle.capability)
+			await adapter.blockUntilReady()
+			assertAttemptCurrent(attempt)
+			user = await adapter.user()
+			assertAttemptCurrent(attempt)
 
-			if (options?.onAuthUrl) {
-				signer.on('authUrl', (url) => {
-					if (typeof url === 'string' && url.length > 0) {
-						options.onAuthUrl?.(url)
-					}
-				})
+			// Session persistence (ADR-0002 B-3 / #996 H8): with a passphrase the
+			// nbunksec session is wrapped PBKDF2+AES-GCM under nostr_session_v1;
+			// without one the session stays in-memory. The legacy plaintext pair
+			// is NEVER written again.
+			if (options?.sessionPassphrase) {
+				const wrapOptions: WrapOptions | undefined = options.vaultIterations != null ? { iterations: options.vaultIterations } : undefined
+				assertAttemptCurrent(attempt)
+				await saveVaultedSession(bundle.signer.getNbunksec(), options.sessionPassphrase, wrapOptions, () => assertAttemptCurrent(attempt))
+				assertAttemptCurrent(attempt)
 			}
 
-			await signer.blockUntilReady()
-			ndkActions.setSigner(signer)
-			const user = await signer.user()
-
-			// Wait until user is logged in successfully before saving the bunkerURL/private key.
-
-			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
-			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
-
-			authStore.setState((state) => ({
-				...state,
-				user,
-				isAuthenticated: true,
-			}))
-
-			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk, wasLoggedOut)
-
-			return user
+			commitSignerAuthority(attempt, user, bundle.capability, adapter, () => bundle!.signer.logout())
+			transferAttemptCleanup(attempt)
 		} catch (error) {
-			authStore.setState((state) => ({
-				...state,
-				isAuthenticated: false,
-			}))
+			await claimAttemptCleanup(attempt)
 			throw error
 		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+			finishAuthAttempt(attempt)
 		}
+
+		startSignerServices(adapter)
+		void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
+		return user
 	},
 
 	logout: () => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) return
+		cancelActiveAuthAttempt()
+		// The NDK detach path is the single owner of the registered global
+		// teardown, capability clearing, and signer-reference removal.
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		// Lock on logout (ADR-0002 B-3): the vaulted NIP-46 session is removed
+		// with the rest of the persisted auth state.
+		clearVaultedSession()
 		// Clear cart when user logs out
 		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
+	},
+
+	/**
+	 * Unlock prompt completion (ADR-0002 B-3). With a legacy plaintext pair
+	 * this migrates it into the encrypted vault (wrap + delete); otherwise it
+	 * unwraps the stored vault. Either way the recovered nbunksec session is
+	 * rehydrated into a live `NostrConnectSigner` and the user is signed in.
+	 * Fails closed on a wrong passphrase (nothing migrated, prompt stays up).
+	 */
+	unlockVaultedSession: async (passphrase: string, options?: WrapOptions & Partial<UnlockOptions>) => {
+		const attempt = beginDetachedAuthAttempt()
+		let ndk!: NonNullable<ReturnType<typeof ndkActions.getNDK>>
+		let wasLoggedOut = false
+		let bundle: Awaited<ReturnType<typeof rehydrateNostrConnectSession>> | undefined
+		let adapter!: NdkSignerAdapter
+		let user!: NDKUser
+		try {
+			const currentNdk = ndkActions.getNDK()
+			if (!currentNdk) throw new Error('NDK not initialized')
+			ndk = currentNdk
+			wasLoggedOut = localStorage.getItem(NOSTR_AUTO_LOGIN) !== 'true'
+
+			let nbunksec: string
+			if (hasLegacyPlaintextSession()) {
+				// Read-ONCE migration: wrap the plaintext pair, then delete it.
+				;({ nbunksec } = await migrateLegacySessionToVault(passphrase, options, () => assertAttemptCurrent(attempt)))
+				assertAttemptCurrent(attempt)
+			} else {
+				if (!hasVaultedSession()) throw new Error('No vaulted session to unlock')
+				const { iterations: _wrapOnly, ...unlockOptions } = options ?? {}
+				nbunksec = await unlockVault(undefined, passphrase, unlockOptions)
+				assertAttemptCurrent(attempt)
+			}
+
+			// Restore path: derive → decrypt → fromNbunksec → NostrConnectSigner.
+			bundle = await rehydrateNostrConnectSession(nbunksec)
+			registerAttemptCleanup(attempt, () => bundle!.signer.logout())
+			assertAttemptCurrent(attempt)
+			adapter = new NdkSignerAdapter(bundle.capability)
+			await adapter.blockUntilReady()
+			assertAttemptCurrent(attempt)
+			user = await adapter.user()
+			assertAttemptCurrent(attempt)
+
+			assertAttemptCurrent(attempt)
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+			commitSignerAuthority(attempt, user, bundle.capability, adapter, () => bundle!.signer.logout(), { needsSessionUnlock: false })
+			transferAttemptCleanup(attempt)
+		} catch (error) {
+			await claimAttemptCleanup(attempt)
+			throw error
+		} finally {
+			finishAuthAttempt(attempt)
+		}
+
+		startSignerServices(adapter)
+		void cartActions.reconcileRemoteCartForUser(user.pubkey, adapter, ndk, wasLoggedOut)
+		authActions.checkAndShowTermsDialog()
+		return user
+	},
+
+	/**
+	 * Unlock prompt refusal (ADR-0002 invariant 4b): the user declined the
+	 * migration, so the session is discarded — plaintext pair deleted, NO
+	 * vault written, user logged out. An intentional, user-visible forced
+	 * re-login; never silent plaintext retention.
+	 */
+	discardVaultedSession: () => {
+		cancelActiveAuthAttempt()
+		// Intentional forced re-login: delete the plaintext pair (migration
+		// refused) AND any vault (the user wants out), plus the auto-login flag.
+		// cartActions.clear is intentionally NOT called here, unlike logout():
+		// no signer was ever attached on this path, so there is no user-scoped
+		// cart state to reconcile — the asymmetry is deliberate.
+		discardLegacySession()
+		clearVaultedSession()
+		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		authStore.setState((state) => ({ ...state, needsSessionUnlock: false, isAuthenticated: false, user: null }))
 	},
 
 	userHasProducts: async (): Promise<boolean> => {

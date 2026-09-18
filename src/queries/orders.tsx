@@ -11,14 +11,9 @@ import {
 import { NIP59_GIFT_WRAP_KIND, signerSupportsNip44 } from '@/lib/nostr/nip59'
 import { decryptPrivateOrderMessageWithSigner, type PrivateOrderDeliveryDetails } from '@/lib/orders/privateOrderMessage'
 import { applesauceIo, type NostrFilter } from '@/lib/nostr/io'
-import {
-	fetchNdkEventSet,
-	mergeNdkEventSetsById,
-	rehydrateVerifiedNdkEvent,
-	type NDKEvent,
-	type NDKFilter,
-	type NDKSigner,
-} from '@/lib/nostr/ndk-events'
+import { fetchNdkEventSet, mergeNdkEventSetsById, rehydrateVerifiedNdkEvent, type NDKEvent, type NDKFilter } from '@/lib/nostr/ndk-events'
+import type { SignerCapability } from '@/lib/nostr/signer-capability'
+import { getSignerCapability } from '@/lib/nostr/signer-registry'
 import { ndkActions } from '@/lib/stores/ndk'
 import { isValidHexKey } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -47,7 +42,7 @@ export type OrderWithRelatedEvents = {
 
 type FetchOrdersBySellerOptions = {
 	includePrivateOrderDetails?: boolean
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }
 
 type UseOrdersBySellerOptions = {
@@ -56,7 +51,7 @@ type UseOrdersBySellerOptions = {
 
 type FetchOrderByIdOptions = {
 	includePrivateOrderDetails?: boolean
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }
 
 type UseOrderByIdOptions = {
@@ -104,7 +99,7 @@ export const fetchSellerPrivateOrderGiftWraps = async (sellerPubkey: string): Pr
 export const decryptSellerPrivateOrderGiftWraps = async (params: {
 	giftWrapEvents: NDKEvent[]
 	sellerPubkey: string
-	signer?: NDKSigner | null
+	signer?: SignerCapability | null
 }): Promise<SellerPrivateOrderDetailsCandidate[]> => {
 	const { giftWrapEvents, sellerPubkey, signer } = params
 	if (!isHexPubkey(sellerPubkey)) return []
@@ -800,7 +795,7 @@ export const fetchOrdersBySeller = async (
 		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
 			giftWrapEvents,
 			sellerPubkey,
-			signer: options.signer ?? ndkActions.getSigner(),
+			signer: options.signer ?? getSignerCapability(),
 		})
 		return attachPrivateOrderDetailsToOrders(publicOrders, decryptedDetails)
 	} catch {
@@ -821,7 +816,7 @@ export const useOrdersBySeller = (sellerPubkey: string, options: UseOrdersBySell
 				includePrivateOrderDetails
 					? {
 							includePrivateOrderDetails: true,
-							signer: ndkActions.getSigner(),
+							signer: getSignerCapability(),
 						}
 					: undefined,
 			),
@@ -980,7 +975,7 @@ export const fetchOrderById = async (orderId: string, options: FetchOrderByIdOpt
 		const decryptedDetails = await decryptSellerPrivateOrderGiftWraps({
 			giftWrapEvents,
 			sellerPubkey: seller,
-			signer: options.signer ?? ndkActions.getSigner(),
+			signer: options.signer ?? getSignerCapability(),
 		})
 		return attachPrivateOrderDetailsToOrders([publicOrder], decryptedDetails)[0] ?? publicOrder
 	} catch {
@@ -1033,7 +1028,7 @@ export const useOrderById = (orderId: string, options: UseOrderByIdOptions = {})
 				includePrivateOrderDetails
 					? {
 							includePrivateOrderDetails: true,
-							signer: ndkActions.getSigner(),
+							signer: getSignerCapability(),
 						}
 					: undefined,
 			),
@@ -1153,10 +1148,10 @@ function comparePrivateOrderDetailsCandidates(a: SellerPrivateOrderDetailsCandid
 	return (b.event.id || '').localeCompare(a.event.id || '')
 }
 
-async function getSignerPubkey(signer: NDKSigner): Promise<string | null> {
+async function getSignerPubkey(signer: SignerCapability): Promise<string | null> {
 	try {
-		const user = await signer.user()
-		return user.pubkey
+		const pubkey = await signer.getPublicKey()
+		return pubkey
 	} catch {
 		return null
 	}

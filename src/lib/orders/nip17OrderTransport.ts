@@ -289,9 +289,9 @@ function validationFailed(code: Nip17OrderTransportError['code']): PublishNip17O
 }
 
 async function getSignerPubkey(signer: Nip17OrderTransportSigner): Promise<string> {
-	const user = await signer.user()
-	if (!user?.pubkey) throw new Error('Signer pubkey unavailable')
-	return user.pubkey
+	const pubkey = await signer.getPublicKey()
+	if (!pubkey) throw new Error('Signer pubkey unavailable')
+	return pubkey
 }
 
 function getOrderRumorRecipientPubkey(rumor: OrderMessageRumor): string {
