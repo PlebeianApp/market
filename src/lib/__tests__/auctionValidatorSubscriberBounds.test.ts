@@ -29,16 +29,33 @@ interface Harness {
 	clock: { value: number }
 	dispatch: (event: NostrEvent) => void
 	subscriptions: Array<Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>>
+	/** Unsubscribe calls made against per-auction child REQs (one per retire). */
+	childUnsubscribes: { count: number }
+	/** Unsubscribe calls across every REQ, including the startup replay. */
+	unsubscribes: { count: number }
+	/** Every EOSE callback the subscriber handed to the pool, in subscribe order. */
+	eoseCallbacks: Array<() => void>
 	settle: () => Promise<void>
 	subscriber: ReturnType<typeof createValidatorSubscriber>
 }
 
-const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): Harness => {
+const createHarness = (
+	options: {
+		spamPolicy?: Partial<BidSpamPolicy>
+		/** Recovered first-observation seed, as `recoverObservedAt` would supply it. */
+		seedObservedAt?: Map<string, number>
+		/** Set false to model a relay that never answers a REQ with EOSE. */
+		deliverEose?: boolean
+	} = {},
+): Harness => {
 	const state = createValidatorState(VALIDATOR_PUBKEY)
 	const publishCalls: string[] = []
 	const warnings: string[] = []
 	const clock = { value: 5_000 }
 	const subscriptions: Array<Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>> = []
+	const childUnsubscribes = { count: 0 }
+	const unsubscribes = { count: 0 }
+	const eoseCallbacks: Array<() => void> = []
 	const history: NostrEvent[] = []
 	const matchesFilter = (event: NostrEvent, filter: { kinds?: number[]; '#a'?: string[]; since?: number }): boolean => {
 		if (filter.kinds && !filter.kinds.includes(event.kind)) return false
@@ -51,8 +68,13 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 	}
 	const relayPool = {
 		handlers: new Map<number, (event: NostrEvent) => void>(),
-		subscribe: async (filters: Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>, handler: (event: NostrEvent) => void) => {
+		subscribe: async (
+			filters: Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>,
+			handler: (event: NostrEvent) => void,
+			onEose?: () => void,
+		) => {
 			subscriptions.push(filters)
+			const isChildSubscription = Array.isArray(filters[0]?.['#a'])
 			for (const kind of filters[0]?.kinds ?? []) {
 				;(relayPool as any).handlers.set(kind, handler)
 			}
@@ -61,7 +83,12 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 					handler(event)
 				}
 			}
-			return () => undefined
+			if (onEose) eoseCallbacks.push(onEose)
+			if (options.deliverEose !== false) onEose?.()
+			return () => {
+				unsubscribes.count += 1
+				if (isChildSubscription) childUnsubscribes.count += 1
+			}
 		},
 		publish: async () => undefined,
 	}
@@ -75,6 +102,7 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 			},
 		} as any,
 		now: () => clock.value,
+		seedObservedAt: options.seedObservedAt,
 		logger: {
 			info: () => undefined,
 			warn: (...args: unknown[]) => warnings.push(args.join(' ')),
@@ -96,6 +124,9 @@ const createHarness = (options: { spamPolicy?: Partial<BidSpamPolicy> } = {}): H
 		clock,
 		dispatch,
 		subscriptions,
+		childUnsubscribes,
+		unsubscribes,
+		eoseCallbacks,
 		subscriber,
 		settle: () => new Promise((resolve) => setTimeout(resolve, 20)),
 	}
@@ -342,6 +373,199 @@ describe('validator subscriber bounds every pending child buffer', () => {
 
 		expect(harness.warnings.join('\n')).toContain('dropping kind-1024')
 		expect(harness.warnings.join('\n')).toContain('key_cap_reached')
+
+		await harness.subscriber.stop()
+	})
+})
+
+/**
+ * Review 5242945675 — the four required items, exercised at the boundary
+ * that has to enforce them rather than at the layer that already agreed
+ * with itself.
+ */
+describe('validator subscriber observes a closed auction for the declared arrival bound (Required 1)', () => {
+	/**
+	 * Auction fixture timeline: `max_end_at` 2100, `settlement_grace` 3600,
+	 * `max_skew_sec` 60 → the settlement window closes at 5700, and with the
+	 * default 3600 s bound the watch may live until 9300.
+	 */
+	const openAuctionWithGriefedWinner = async (options: { lateSettlementObservationSec?: number } = {}) => {
+		const harness = createHarness(
+			options.lateSettlementObservationSec === undefined
+				? {}
+				: { spamPolicy: { lateSettlementObservationSec: options.lateSettlementObservationSec } },
+		)
+		await harness.subscriber.start()
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-late' })
+		harness.dispatch(auction)
+		await harness.settle()
+		harness.dispatch(bid)
+		await harness.settle()
+		const auctionState = harness.state.auctions.get(auction.id)
+		if (!auctionState) throw new Error('auction was not tracked')
+		const bidState = auctionState.bids.get(bid.id)
+		if (!bidState) throw new Error('bid was not tracked')
+		// The claim the lifecycle publishes once grace elapses unsettled.
+		bidState.currentClaim = 'griefed'
+		return { harness, auctionState, bid, bidderSk, sellerPubkey }
+	}
+
+	test('keeps the child REQ open past the settlement window so a late release is observed', async () => {
+		const { harness, auctionState, bid, bidderSk, sellerPubkey } = await openAuctionWithGriefedWinner()
+
+		harness.clock.value = 6_000 // past 5700, inside 9300
+		await harness.subscriber.republishAll()
+		expect(harness.childUnsubscribes.count).toBe(0)
+
+		const release = buildPathReleaseEvent({ bidderSk, sellerPubkey, bidEventId: bid.id })
+		harness.dispatch(release)
+		await harness.settle()
+		// The release reached state: this is the late-release path that
+		// `lifecycle.ts` unit-tests as `settled_late` and that ingestion used
+		// to make unreachable.
+		expect(auctionState.pathReleases.get(bid.id)?.map((recorded) => recorded.id)).toEqual([release.id])
+
+		harness.clock.value = 9_301 // past 5700 + 3600
+		await harness.subscriber.republishAll()
+		expect(harness.childUnsubscribes.count).toBe(1)
+
+		await harness.subscriber.stop()
+	})
+
+	test('releases the watch at the declared bound when the bound is zero', async () => {
+		const { harness } = await openAuctionWithGriefedWinner({ lateSettlementObservationSec: 0 })
+
+		harness.clock.value = 5_701
+		await harness.subscriber.republishAll()
+		// The arrival bound is the published knob that decides reachability,
+		// so an operator who sets it to zero gets the pre-fix behaviour and
+		// the policy document says so.
+		expect(harness.childUnsubscribes.count).toBe(1)
+
+		await harness.subscriber.stop()
+	})
+})
+
+describe('validator subscriber bounds every child replay (Required 2)', () => {
+	test('does not retire a child REQ before its replay completes, even when the window already closed', async () => {
+		const harness = createHarness({ deliverEose: false })
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		// Discovered long after its settlement window closed (5700), still
+		// inside the arrival bound (9300): with no completion signal the REQ
+		// must survive the tick instead of opening and retiring in one go.
+		harness.clock.value = 9_000
+		harness.dispatch(auction)
+		await harness.settle()
+		await harness.subscriber.republishAll()
+		expect(harness.state.auctions.has(auction.id)).toBe(true)
+		expect(harness.childUnsubscribes.count).toBe(0)
+
+		// The relay answers at last: the replay is known complete, so the
+		// watch may be released.
+		const eose = harness.eoseCallbacks.at(-1)
+		if (!eose) throw new Error('child REQ registered no EOSE callback')
+		eose()
+		expect(harness.childUnsubscribes.count).toBe(1)
+
+		await harness.subscriber.stop()
+	})
+
+	test('closes a startup replay that never reaches EOSE after the bounded timeout', async () => {
+		const harness = createHarness({
+			deliverEose: false,
+			spamPolicy: { childReplayCompletionTimeoutSec: 0 },
+		})
+		await harness.subscriber.start()
+		await new Promise((resolve) => setTimeout(resolve, 25))
+
+		expect(harness.warnings.join('\n')).toContain('startup child replay did not reach EOSE within 0s')
+		// The REQ is released rather than living for the process lifetime and
+		// stamping every child it delivers with the process-start clock.
+		expect(harness.unsubscribes.count).toBe(1)
+
+		await harness.subscriber.stop()
+	})
+
+	test('stamps a replay-delivered bid with its recovered first observation, not the process-start clock', async () => {
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		const bid = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-seed' })
+		const harness = createHarness({ seedObservedAt: new Map([[bid.id, 1_500]]) })
+
+		// The bid is already on the relay when the process starts; the auction
+		// is discovered later.
+		harness.dispatch(bid)
+		await harness.subscriber.start()
+		harness.clock.value = 9_000
+		harness.dispatch(auction)
+		await harness.settle()
+
+		const bidState = harness.state.auctions.get(auction.id)?.bids.get(bid.id)
+		// 1500 is the bid's true first observation recovered from this
+		// validator's own prior verdicts (Fix 1); 5000 is the replay's
+		// placeholder clock. The placeholder must not shadow the seed.
+		expect(bidState?.observedAt).toBe(1_500)
+
+		await harness.subscriber.stop()
+	})
+})
+
+describe('validator subscriber admission master switch (Required 3)', () => {
+	test('refuses an oversized auction with admission on and admits it with admission off', async () => {
+		const oversized = buildAuctionEvent(generateSecretKey(), 'auction-test', junkTags(200))
+
+		const enforcing = createHarness({ spamPolicy: { maxTagCount: 10 } })
+		await enforcing.subscriber.start()
+		enforcing.dispatch(oversized)
+		await enforcing.settle()
+		expect(enforcing.state.auctions.size).toBe(0)
+		expect(enforcing.warnings.join('\n')).toContain('too_many_tags')
+		await enforcing.subscriber.stop()
+
+		const declaredOff = createHarness({ spamPolicy: { maxTagCount: 10, admissionEnabled: false } })
+		await declaredOff.subscriber.start()
+		declaredOff.dispatch(oversized)
+		await declaredOff.settle()
+		// The published `{ enabled: false }` has to match the behaviour, not
+		// just the document.
+		expect(declaredOff.state.auctions.size).toBe(1)
+		await declaredOff.subscriber.stop()
+	})
+})
+
+describe('validator subscriber admission bookkeeping (non-blocking)', () => {
+	test('enforces the lifetime bid cap from the incremental per-bidder tally', async () => {
+		const harness = createHarness({ spamPolicy: { maxTrackedBidsPerAuction: 1 } })
+		await harness.subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const bidderSk = generateSecretKey()
+		const auction = buildAuctionEvent(sellerSk)
+		harness.dispatch(auction)
+		await harness.settle()
+
+		const first = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-1' })
+		const second = buildBidEvent({ bidderSk, sellerPubkey, auctionRootEventId: auction.id, bidNonce: 'nonce-2' })
+		harness.dispatch(first)
+		await harness.settle()
+		harness.dispatch(second)
+		await harness.settle()
+
+		const auctionState = harness.state.auctions.get(auction.id)
+		expect(auctionState?.bidsByBidder.get(getPublicKey(bidderSk).toLowerCase())).toBe(1)
+		expect(auctionState?.bids.has(first.id)).toBe(true)
+		expect(auctionState?.bids.has(second.id)).toBe(false)
+		expect(harness.warnings.join('\n')).toContain('too_many_tracked_bids')
 
 		await harness.subscriber.stop()
 	})

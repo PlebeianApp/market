@@ -148,6 +148,16 @@ export interface ValidatorAuctionState {
 	/** bidEventId -> per-bid state. */
 	bids: Map<string, ValidatorBidState>
 
+	/**
+	 * Lowercased bidder pubkey -> lifetime accepted-bid count for this
+	 * auction. Maintained on insert so the admission layer's lifetime cap
+	 * is an O(1) lookup instead of a full scan of `bids` on every accepted
+	 * bid (review 5242945675, non-blocking). It counts every stored bid,
+	 * including ones a later verdict marks invalid, because `bids` is
+	 * append-only — the two stay in step by construction.
+	 */
+	bidsByBidder: Map<string, number>
+
 	/** Seller's kind-1024, when observed. */
 	settlement: ParsedSettlementEvent | null
 
@@ -324,6 +334,7 @@ export const upsertAuction = (state: ValidatorState, auction: ParsedAuctionEvent
 		contextStatus: 'pending_mint_check',
 		mintReachability: new Map(auction.mints.map((mintUrl) => [mintUrl, 'unreachable' as const])),
 		bids: new Map(),
+		bidsByBidder: new Map(),
 		settlement: null,
 		settlements: [],
 		pathReleases: new Map(),
@@ -387,8 +398,18 @@ export const upsertBid = (
 		postGraceRetry: null,
 	}
 	auctionState.bids.set(bid.id, fresh)
+	const bidderKey = bid.bidderPubkey.toLowerCase()
+	auctionState.bidsByBidder.set(bidderKey, (auctionState.bidsByBidder.get(bidderKey) ?? 0) + 1)
 	return { auctionState, bidState: fresh }
 }
+
+/**
+ * Lifetime accepted-bid count for one (auction, bidder) pair — the O(1)
+ * read of {@link ValidatorAuctionState.bidsByBidder} that replaced the
+ * per-bid full scan of `bids` (review 5242945675, non-blocking).
+ */
+export const acceptedBidCountForBidder = (auctionState: ValidatorAuctionState, bidderPubkey: string): number =>
+	auctionState.bidsByBidder.get(bidderPubkey.toLowerCase()) ?? 0
 
 /** Result of attempting to record a kind-1025 path release. */
 export type RecordPathReleaseResult =

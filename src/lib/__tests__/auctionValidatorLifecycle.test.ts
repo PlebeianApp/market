@@ -157,6 +157,7 @@ const buildAuctionState = (auction: ParsedAuctionEvent, overrides: Partial<Valid
 	contextStatus: overrides.contextStatus ?? 'active',
 	mintReachability: overrides.mintReachability ?? new Map(auction.mints.map((mintUrl) => [mintUrl, 'reachable' as const])),
 	bids: overrides.bids ?? new Map(),
+	bidsByBidder: overrides.bidsByBidder ?? new Map(),
 	settlement: overrides.settlement ?? null,
 	settlements: overrides.settlements ?? (overrides.settlement ? [overrides.settlement] : []),
 	pathReleases: overrides.pathReleases ?? new Map(),
