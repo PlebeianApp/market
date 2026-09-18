@@ -326,6 +326,7 @@ export type ValidatorAdmissionPolicy =
 			maxBidsPerWindow: number
 			rateWindowSec: number
 			maxTrackedBidsPerAuction: number
+			maxSeenEventIds: number
 			maxPendingEventsPerKey: number
 			maxPendingKeys: number
 			maxPendingEvents: number

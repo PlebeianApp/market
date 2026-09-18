@@ -38,6 +38,7 @@ export const resolvePublishedAdmissionPolicy = (policy?: BidSpamPolicy): Validat
 		maxBidsPerWindow: resolved.maxBidsPerWindow,
 		rateWindowSec: resolved.rateWindowSec,
 		maxTrackedBidsPerAuction: resolved.maxTrackedBidsPerAuction,
+		maxSeenEventIds: resolved.maxSeenEventIds,
 		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
 		maxPendingKeys: resolved.maxPendingKeys,
 		maxPendingEvents: resolved.maxPendingEvents,

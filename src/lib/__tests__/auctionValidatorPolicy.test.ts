@@ -36,6 +36,7 @@ describe('validator policy publication', () => {
 			maxBidsPerWindow: DEFAULT_BID_SPAM_POLICY.maxBidsPerWindow,
 			rateWindowSec: DEFAULT_BID_SPAM_POLICY.rateWindowSec,
 			maxTrackedBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxTrackedBidsPerAuction,
+			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxPendingEventsPerKey: DEFAULT_BID_SPAM_POLICY.maxPendingEventsPerKey,
 			maxPendingKeys: DEFAULT_BID_SPAM_POLICY.maxPendingKeys,
 			maxPendingEvents: DEFAULT_BID_SPAM_POLICY.maxPendingEvents,
@@ -77,6 +78,7 @@ describe('validator policy publication', () => {
 		expect(parsed.value.policy.admission).toMatchObject({
 			enabled: true,
 			maxBidsPerWindow: 3,
+			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxTagCount: 9,
 			pendingTtlSec: 30,
 		})
