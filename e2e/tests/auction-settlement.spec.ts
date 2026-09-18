@@ -37,6 +37,10 @@ const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 useWebSocketImplementation(WebSocket)
 
 test.use({ scenario: 'merchant' })
+// Record video for this suite (feature-quality-gate evidence). Must be at the
+// top level: `workers: 1, fullyParallel: false` is set, and `test.use` inside a
+// describe aborts collection.
+test.use({ video: 'on' })
 
 // ---------------------------------------------------------------------------
 // Seed helpers — real collateral from the local nutshell mint (DLEQ-verifiable).

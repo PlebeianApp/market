@@ -5,6 +5,7 @@ import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, M
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import { fetchDleqKeysetsForBidsDetailed, type DleqKeysetFetcher } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
 
 // =============================================================================
@@ -1059,5 +1060,36 @@ describe('computeValidatedBids — M5 (A3) bidder↔collateral binding across au
 		})
 		expect(result.invalidBids).toHaveLength(0)
 		expect(result.validBids.map((b) => b.id).sort()).toEqual([bid1.id, bid2.id].sort())
+	})
+})
+
+/**
+ * R2 regression (review 2026-09-18): `publishBidderPathRelease` re-derives the
+ * winner with keysets gathered by `fetchDleqKeysetsForBidsDetailed`. This pins
+ * that exact composition — gather → `computeValidatedBids` → `canonicalWinner`
+ * — so a DLEQ-bearing winning bid no longer falls into the "Auction winner
+ * changed" branch.
+ */
+describe('path-release winner guard composition (ADR-0011 R2)', () => {
+	test('keysets gathered by fetchDleqKeysetsForBidsDetailed yield the canonical winner', async () => {
+		const auction = buildAuction()
+		const bid = buildBid(auction)
+		const verdicts = [
+			buildVerdict(bid, { validatorPubkey: V1 }),
+			buildVerdict(bid, { validatorPubkey: V2, observedAt: bid.createdAt + 30 }),
+		]
+		const fetcher: DleqKeysetFetcher = async () => makeFixtureKeyset((bid.dleqProofs ?? []).map((p) => p.amount))
+		const acq = await fetchDleqKeysetsForBidsDetailed([bid], auction.mints, fetcher)
+		expect(acq.keysets.size).toBeGreaterThan(0)
+		expect(acq.unknownKeysets.size).toBe(0)
+		const result = computeValidatedBids({
+			auction,
+			bids: [bid],
+			verdicts,
+			nut7States: unspent([bid]),
+			dleqKeysets: acq.keysets,
+			dleqUnknownKeysets: acq.unknownKeysets,
+		})
+		expect(result.canonicalWinner?.id).toBe(bid.id)
 	})
 })

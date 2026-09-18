@@ -345,8 +345,6 @@ function deriveState(
 			settledBidIds,
 			dleqKeysets: input.dleqKeysets,
 			dleqUnknownKeysets: input.dleqUnknownKeysets,
-
-			dleqUnknownKeysets: input.dleqUnknownKeysets,
 		})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
@@ -566,6 +564,7 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 		postSettlement: hasSettledSettlement,
 		settledBidIds,
 		dleqKeysets: input.dleqKeysets,
+		dleqUnknownKeysets: input.dleqUnknownKeysets,
 	})
 	const winnerBid = preValidated.canonicalWinner
 	// Resolve mint keysets deterministically: an injected value short-circuits
