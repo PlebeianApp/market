@@ -37,10 +37,10 @@ const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 useWebSocketImplementation(WebSocket)
 
 test.use({ scenario: 'merchant' })
-// Record video for this suite (feature-quality-gate evidence). Must be at the
-// top level: `workers: 1, fullyParallel: false` is set, and `test.use` inside a
-// describe aborts collection.
-test.use({ video: 'on' })
+// Record video for this suite (feature-quality-gate evidence). `recordVideo` is
+// the fixture option the authenticated page fixtures honour (Playwright's own
+// `video` option does not reach contexts those fixtures create themselves).
+test.use({ recordVideo: true })
 
 // ---------------------------------------------------------------------------
 // Seed helpers — real collateral from the local nutshell mint (DLEQ-verifiable).
