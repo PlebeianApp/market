@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, type VerifiedEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1, devUser2 } from '@/lib/fixtures'
-import { getSettlementDescriptor, getAuctionFulfillmentAuthority } from '@/lib/auction/settlementDescriptor'
+import {
+	getSettlementDescriptor,
+	getAuctionFulfillmentAuthority,
+	claimOrderAuthorizesFulfillment,
+} from '@/lib/auction/settlementDescriptor'
 import { getAuctionClaimPublicMarkerFields } from '@/lib/auctions/privateAuctionClaimMessage'
 import { getAuctionOrderClassification, isAuctionOrder } from '@/queries/orders'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
@@ -241,5 +245,36 @@ describe('seeded auction order reaches validated fulfillment authority', () => {
 		)
 		const input = inputWith([forged], devUser1.pk)
 		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: a `pending` settlement is not authority -------------
+	test('a settlement whose matching path release is not observed yet grants NO authority', async () => {
+		// Same production-valid chain, minus the path release: the seller's
+		// kind-1024 is retained but still `pending`, so the settlement is not one
+		// this module validated and fulfillment must fail closed.
+		const input = { ...inputWith([claimOrder], devUser1.pk), pathReleases: [] } as DescriptorInput
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: authority is bound to the order that earned it ------
+	test('authority for the canonical claim does NOT authorize a sibling order on the same coordinate', () => {
+		// A second, well-formed kind-16 order for the same auction coordinate —
+		// exactly the shape that a collapsed boolean would have unlocked.
+		const sibling = finalizeEvent(
+			{
+				kind: ORDER_PROCESS_KIND,
+				created_at: now,
+				content: 'sibling auction order',
+				tags: buildAuctionClaimOrderTags(fixture, `${orderId}-sibling`),
+			},
+			hexToBytes(devUser2.sk),
+		)
+		const authority = getAuctionFulfillmentAuthority(inputWith([claimOrder, sibling], devUser1.pk))
+
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe(claimOrder.id)
+		expect(claimOrderAuthorizesFulfillment(authority, claimOrder.id)).toBe(true)
+		expect(claimOrderAuthorizesFulfillment(authority, sibling.id)).toBe(false)
 	})
 })

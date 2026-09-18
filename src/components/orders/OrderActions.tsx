@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
+import { claimOrderAuthorizesFulfillment, type AuctionFulfillmentAuthority } from '@/lib/auction/settlementDescriptor'
 import { cn } from '@/lib/utils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
@@ -25,16 +26,21 @@ interface OrderActionsProps {
 	 * callers that hold the validated settlement descriptor for this order
 	 * (`getAuctionFulfillmentAuthority()` in `@/lib/auction/settlementDescriptor`).
 	 *
-	 * It is true only when the order's referenced settlement resolves out of the
-	 * validated settlement set AND a canonical claim order binds to that
-	 * settlement. Callers that do not hold that context leave it `false`: a
-	 * buyer-authored claim marker is never authority on its own. Product orders
-	 * ignore it entirely.
+	 * The authority OBJECT is passed, never a boolean: it is true only when the
+	 * order's referenced settlement resolves out of the validated settlement set
+	 * *as valid* (not `pending`) AND a canonical claim order binds to that
+	 * settlement — and the mutation is additionally bound to the order id that
+	 * earned it (`claimOrderAuthorizesFulfillment`), so authority from claim A
+	 * cannot authorize a different order B on the same auction coordinate.
+	 *
+	 * Callers that do not hold that context leave it unset: a buyer-authored
+	 * claim marker is never authority on its own. Product orders ignore it
+	 * entirely.
 	 */
-	auctionFulfillmentReady?: boolean
+	auctionAuthority?: AuctionFulfillmentAuthority | null
 }
 
-export function OrderActions({ order, userPubkey, className = '', auctionFulfillmentReady = false }: OrderActionsProps) {
+export function OrderActions({ order, userPubkey, className = '', auctionAuthority = null }: OrderActionsProps) {
 	const [cancelReason, setCancelReason] = useState('')
 	const [isCancelOpen, setIsCancelOpen] = useState(false)
 
@@ -49,8 +55,8 @@ export function OrderActions({ order, userPubkey, className = '', auctionFulfill
 
 	// Presentation-only: "does this order carry an auction coordinate?".
 	// It is NOT authority for settlement, payment, or fulfillment decisions —
-	// see `auctionFulfillmentReady` above and getAuctionFulfillmentAuthority()
-	// in @/lib/auction/settlementDescriptor.
+	// see `auctionAuthority` above and getAuctionFulfillmentAuthority() /
+	// claimOrderAuthorizesFulfillment() in @/lib/auction/settlementDescriptor.
 	const isAuction = isAuctionOrder(order)
 
 	const status = getOrderStatus(order)
@@ -75,13 +81,23 @@ export function OrderActions({ order, userPubkey, className = '', auctionFulfill
 	// processing. Auction orders do NOT — the auction flow never publishes a
 	// generic payment confirmation, and no synthetic one may be manufactured to
 	// unblock processing. For an auction the authority is the validated
-	// settlement + canonical claim context (`auctionFulfillmentReady`), which
-	// arrives while the order is still PENDING; that is why Process is reachable
-	// at PENDING for auctions and why fulfillment is never stranded behind a
-	// status the auction flow does not publish.
-	const fulfillmentReady = isAuction ? auctionFulfillmentReady : status === ORDER_STATUS.CONFIRMED
+	// settlement + canonical claim context, which arrives while the order is
+	// still PENDING; that is why Process is reachable at PENDING for auctions and
+	// why fulfillment is never stranded behind a status the auction flow does
+	// not publish.
+	//
+	// The authority is bound to THIS order id, not merely to the auction: the
+	// same coordinate can carry more than one order event, so the canonical claim
+	// that earned the authority must be the order being mutated. Authority for
+	// order A never unlocks order B.
+	const auctionAuthorized = claimOrderAuthorizesFulfillment(auctionAuthority, order.order.id)
+	const fulfillmentReady = isAuction ? auctionAuthorized : status === ORDER_STATUS.CONFIRMED
 	const canProcess = isSeller && fulfillmentReady && (status === ORDER_STATUS.CONFIRMED || status === ORDER_STATUS.PENDING)
-	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
+	// Shipping is the same fulfillment decision one step later: for an auction it
+	// stays bound to the authorized claim order, so a PROCESSING status on some
+	// other auction-associated order cannot move goods for a claim that never
+	// earned authority. Product orders are unchanged.
+	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped && (!isAuction || auctionAuthorized)
 
 	// Buyer actions
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
@@ -93,10 +109,11 @@ export function OrderActions({ order, userPubkey, className = '', auctionFulfill
 	// auction orders still progress through processing/shipping.
 	//
 	// Consequence, by design: an auction order that is only auction-associated
-	// (legacy/broad `a` tag, no validated settlement + canonical claim) exposes
-	// no order-surface action at all — Cancel/Confirm are suppressed here and
-	// Process requires `auctionFulfillmentReady`. Order surfaces deliberately do
-	// not invent a fallback path for pre-canonical-claim auction orders.
+	// (legacy/broad `a` tag, no valid settlement + canonical claim bound to this
+	// very order) exposes no order-surface action at all — Cancel/Confirm are
+	// suppressed here and Process requires the bound `auctionAuthority`. Order
+	// surfaces deliberately do not invent a fallback path for pre-canonical-claim
+	// auction orders.
 	const showCancel = canCancel && !isAuction
 	const showConfirm = canConfirm && !isAuction
 

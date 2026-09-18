@@ -755,15 +755,26 @@ quorum rather than from the seller's own cancellation.
   (`@/lib/auction/settlementDescriptor`). It returns
   `{ fulfillmentReady, settlementEventId?, claimOrderId? }` and is derived from
   the same validated descriptor input the settlement card uses. `fulfillmentReady`
-  is true only when **both** hold:
+  is true only when **all** of these hold:
   1. the referenced settlement resolves out of the validated settlement set
-     (correct seller/root/coordinate, canonical winning bid, valid path release,
-     complete payout chain), and
-  2. a claim order passes the 8-point `validateClaimOrder()` check against that
+     **as `valid`** (correct seller/root/coordinate, canonical winning bid,
+     _validated_ path release, complete payout chain). A settlement that is only
+     `pending` — retained, but whose required matching path release has not been
+     validated/observed yet — is **not** authority: fulfillment fails closed on
+     `pending`, exactly as it does on `invalid`, and
+  2. the settled phase (`classifyPhase`), and
+  3. a claim order passes the 8-point `validateClaimOrder()` check against that
      exact settlement (referenced settlement resolved, author === settlement
      winner, amount === final amount, auction root/coordinate/seller match).
      A forged marker naming a settlement that does not exist therefore grants no
      authority — the settlement is resolved, never taken on faith.
+- The authority object carries **identity** and must not be collapsed to a
+  boolean at the action boundary. One auction coordinate can carry more than one
+  kind-16 order event, so a caller that mutates an order must additionally
+  require `claimOrderAuthorizesFulfillment(authority, order.order.id)` — i.e.
+  `authority.fulfillmentReady && authority.claimOrderId === order.order.id`.
+  Authority earned by claim A therefore authorizes **only** claim A, never a
+  sibling order B sharing the coordinate.
 - A caller that only renders may use the presentation detector; a caller that
   decides must use the validated authority.
 - Fulfillment transition for auction orders:

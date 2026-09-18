@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+	claimOrderAuthorizesFulfillment,
 	getAuctionFulfillmentAuthority,
 	getSettlementDescriptor,
 	type GetSettlementDescriptorInput,
@@ -1637,5 +1638,87 @@ describe('getAuctionFulfillmentAuthority', () => {
 		const descriptor = await getSettlementDescriptor(input)
 		expect(descriptor?.phase).toBe('reserve-not-met')
 		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: a `pending` settlement is not authority -------------
+	// Re-review of the order-detail work (2026-09-13): `deriveState()` retains a
+	// settlement that passed the seller/root/coordinate checks but is still
+	// `pending` because its required matching path release has not been
+	// validated/observed yet; `classifyPhase()` then reads `settled`. Authority
+	// must fail closed on that shape — only an explicitly `valid` settlement may
+	// authorize fulfillment.
+	test('a PENDING settlement (matching path release not valid/observed) grants NO fulfillment authority', async () => {
+		const input = settledInput({
+			// The seller published the settled kind-1024, the canonical claim order
+			// exists, but no (valid) path release has been observed yet.
+			pathReleases: [],
+			claimOrders: [makeClaimOrder()],
+		})
+		// The descriptor still reports the settled phase and flags the settlement
+		// as unverified (`verifying`) — that is the exact state the reviewer
+		// flagged as able to authorize fulfillment.
+		const descriptor = await getSettlementDescriptor(input)
+		expect(descriptor?.phase).toBe('settled')
+		expect(descriptor?.verifiedBadge).toBe('verifying')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(false)
+		// Identity is still reported — it grants nothing on its own, and no order
+		// may be bound to it while `fulfillmentReady` is false.
+		expect(authority.settlementEventId).toBe('settle-1')
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(false)
+	})
+
+	test('a settlement whose matching path release is fraudulent (invalid) grants NO fulfillment authority', async () => {
+		// Raw release present but rejected by `validatePathRelease` → the
+		// settlement is classified `invalid` and filtered out of the validated
+		// set, so nothing settles and authority stays closed.
+		const fraudulentRelease = makePathRelease({ bidEventId: winningBid.id, cashuToken: 'garbage' })
+		const input = settledInput({
+			pathReleases: [fraudulentRelease],
+			claimOrders: [makeClaimOrder()],
+		})
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: authority is bound to the order that earned it ------
+	// One auction coordinate can carry more than one kind-16 order event, so the
+	// authority object must survive to the action boundary intact and be bound to
+	// the order id being mutated — never collapsed to a bare boolean.
+	test('authority names its canonical claim order, and authorizes ONLY that order id', () => {
+		const input = settledInput({ claimOrders: [makeClaimOrder()] })
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(true)
+		// A sibling order carrying the same auction coordinate never inherits it.
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-2')).toBe(false)
+	})
+
+	test('a sibling order on the same coordinate stays non-fulfillable when claim A is canonical', () => {
+		// Two well-formed claim orders on the same auction coordinate. The
+		// authority resolves one canonical claim (the first validated match) and
+		// must refuse to authorize the sibling — the reviewer's A/B regression.
+		const sibling = makeClaimOrder({ id: 'order-2' })
+		const input = settledInput({ claimOrders: [makeClaimOrder(), sibling] })
+		const authority = getAuctionFulfillmentAuthority(input)
+
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(true)
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-2')).toBe(false)
+	})
+
+	test('claimOrderAuthorizesFulfillment fails closed on missing or partial authority', () => {
+		expect(claimOrderAuthorizesFulfillment(null, 'order-1')).toBe(false)
+		expect(claimOrderAuthorizesFulfillment(undefined, 'order-1')).toBe(false)
+		// Not fulfillment-ready → no binding, even with a matching id.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: false, claimOrderId: 'order-1' }, 'order-1')).toBe(false)
+		// No claim order id recorded → nothing can be bound to it.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true }, 'order-1')).toBe(false)
+		// No order id to bind to.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true, claimOrderId: 'order-1' }, '')).toBe(false)
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true, claimOrderId: 'order-1' }, undefined)).toBe(false)
 	})
 })
