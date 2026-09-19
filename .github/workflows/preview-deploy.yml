@@ -55,11 +55,13 @@ jobs:
     name: Deploy preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
-    # 25 min: the image is now built on the runner and streamed to the VPS, so
+    # 30 min: the image is now built on the runner and streamed to the VPS, so
     # the job covers a `bun install` + Docker build + a ~1.8 GB image transfer.
     # The old 10 min limit was hit by the on-host build (run 35265465544,
-    # "Build app image on VPS" cancelled at 10m09s).
-    timeout-minutes: 25
+    # "Build app image on VPS" cancelled at 10m09s). The preview-lane steps at
+    # the end of the job add a Playwright browser install and a two-spec run
+    # against the finished preview (measured: 3 tests, 1.1 min) on top of that.
+    timeout-minutes: 30
     # Preview Deploy is a follow-up enhancement (Layer G), not a trust-pipeline
     # blocker. The PR Trust Pipeline merge gate (Layer H) does not require this
     # check. NOTE: job-level continue-on-error here masks the RUN conclusion to
@@ -613,6 +615,62 @@ jobs:
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           exit 1
 
+      # ─── Preview lane: the deployed preview is the only place the preview
+      # claim can be PROVEN ─────────────────────────────────────────────────
+      # The local `e2e-grep` lane runs `preview-content-seed.spec.ts` through
+      # its documented LOCAL branch (see the gate comment in
+      # `.github/workflows/e2e.yml`): the assertions that prove the SEEDED
+      # preview is what renders sit behind `TARGETS_EXTERNAL_APP`
+      # (`e2e/test-config.ts`), which is true only when `E2E_BASE_URL` is a
+      # non-loopback URL — and no workflow set one, so those assertions were
+      # unreachable. This step is that base URL: the two preview specs run by
+      # path against the preview this job just health-checked —
+      #   preview-content-seed.spec.ts → the seeded listings + app-owned
+      #                                  featured list are actually rendered
+      #   login-nip46-relay.spec.ts    → login over the advertised NIP-46 relay
+      # Measured 2026-09-19 against a live preview of this branch: both specs,
+      # 3 tests, 1.1 min, video recorded. Video is the repository's Feature
+      # Quality Gate requirement, so the recordings are published as a CI
+      # artifact below (the `recorded` fixture FAILS a test whose .webm is
+      # missing or empty — a green run here can never be green-without-evidence).
+      # Scope: preview-only. Nothing new is triggered, no secret or permission
+      # is added, and the steps are gated on the same preview condition as
+      # their neighbours plus a passing health check — a preview that does not
+      # serve is already reported by the health path, so this gate adds no
+      # second, redundant failure and never runs for another PR's environment.
+      - name: Install Playwright browsers (preview lane)
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.health.outcome == 'success'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Preview lane e2e against the deployed preview
+        id: preview_e2e
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.health.outcome == 'success'
+        env:
+          # `https://` here (not loopback) is what turns the specs' preview-only
+          # assertions on; the relay is the same subdomain, spliced to this PR's
+          # relay port by the preview gateway.
+          E2E_BASE_URL: https://${{ steps.ports.outputs.subdomain }}
+          E2E_RELAY_URL: wss://${{ steps.ports.outputs.subdomain }}/relay
+        run: |
+          # `--retries=0`: a red run must mean the preview is wrong, not that a
+          # retry papered over a flake. No `E2E_VIDEO` override is set, so the
+          # specs stay in their default `required` mode and video is mandatory.
+          bunx playwright test --config=e2e/playwright.config.ts \
+            e2e/tests/login-nip46-relay.spec.ts \
+            e2e/tests/preview-content-seed.spec.ts \
+            --retries=0
+
+      - name: Upload preview-lane video evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-e2e-video-evidence
+          # `test-results/evidence/` holds the `recorded` fixture's .webm files;
+          # traces/screenshots from a failure land beside them.
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Post / update preview URL PR comment
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -623,6 +681,7 @@ jobs:
           PR="${{ github.event.pull_request.number }}"
           PREVIEW_URL="https://${{ steps.ports.outputs.subdomain }}"
           HEALTH="${{ steps.health.outcome }}"
+          GATE="${{ steps.preview_e2e.outcome }}"
           READY="${{ steps.secrets.outputs.previews_ready }}"
           APP_PORT="${{ steps.ports.outputs.app_port }}"
           RELAY_PORT="${{ steps.ports.outputs.relay_port }}"
@@ -642,6 +701,18 @@ jobs:
             # failure state — never a green-adjacent "give it a minute".
             STATUS_LINE="🔴 Preview deployment failed — a deploy step failed before the health check ran. Inspect the logs: $RUN_URL"
           fi
+          # The preview-lane specs (seeded content + NIP-46 login) run AFTER the
+          # health check, so a red gate has to be visible here too: otherwise
+          # this comment keeps saying "Preview is live" next to a red check.
+          if [ "$READY" != "true" ]; then
+            GATE_LINE=""
+          elif [ "$HEALTH" != "success" ]; then
+            GATE_LINE="- Content gate: skipped — the preview never passed its health check."
+          elif [ "$GATE" = "success" ]; then
+            GATE_LINE="- Content gate: ✅ the seeded listings rendered on this preview and login over the advertised NIP-46 relay passed (videos: the run's \`preview-e2e-video-evidence\` artifact)."
+          else
+            GATE_LINE="- Content gate: 🔴 the preview-lane specs failed — the relay is seeded but the app did not render the seeded content, or NIP-46 login failed. Inspect the logs: $RUN_URL"
+          fi
           # Show the built commit, marked "served, verified" only when the
           # health check actually confirmed the live preview reports it.
           if [ "$READY" = "true" ] && [ "$HEALTH" = "success" ]; then
@@ -657,6 +728,7 @@ jobs:
           $STATUS_LINE
 
           - URL: $PREVIEW_URL
+          $GATE_LINE
           - App host port: \`$APP_PORT\` · Relay host port: \`$RELAY_PORT\`
           $COMMIT_LINE
 
