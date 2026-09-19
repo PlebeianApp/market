@@ -1,10 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
-import {
-	AUCTION_PATH_RELEASE_KIND,
-	DEFAULT_AUDITOR_QUORUM,
-	VALIDATOR_VERDICT_KIND,
-} from '@/lib/auction/constants'
+import { AUCTION_PATH_RELEASE_KIND, DEFAULT_AUDITOR_QUORUM, VALIDATOR_VERDICT_KIND } from '@/lib/auction/constants'
 import {
 	decryptPrivateAuctionClaimMessageForActiveSigner,
 	getAuctionClaimPublicMarkerFields,
