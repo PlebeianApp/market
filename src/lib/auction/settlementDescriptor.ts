@@ -8,7 +8,7 @@ import type {
 } from './events'
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
-import type { MintKeyset } from '@cashu/cashu-ts'
+import type { MintKeys, MintKeyset } from '@cashu/cashu-ts'
 import { validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
 import { computeValidatedBids } from './bidValidation'
 import type { SettlementChainLegContext } from './validation'
@@ -84,6 +84,14 @@ export interface GetSettlementDescriptorInput {
 	 * bid's mint (bounded by a 2s timeout — see `fetchMintKeysets`).
 	 */
 	mintKeysets?: MintKeyset[]
+	/**
+	 * ADR-0011 Blocker 1: pre-fetched mint keysets for DLEQ verification,
+	 * keyed by `${mint}:${keysetId}`. When absent for a DLEQ-required auction,
+	 * bids that cannot be crypto-verified are treated as PENDING (not valid).
+	 */
+	dleqKeysets?: Map<string, MintKeys>
+	/** Terminal keyset misses (ADR-0011 review R3) — threaded to computeValidatedBids. */
+	dleqUnknownKeysets?: ReadonlySet<string>
 }
 
 interface DerivedState {
@@ -335,6 +343,8 @@ function deriveState(
 			nut7States: input.nut7States,
 			postSettlement: hasSettledSettlement,
 			settledBidIds,
+			dleqKeysets: input.dleqKeysets,
+			dleqUnknownKeysets: input.dleqUnknownKeysets,
 		})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
@@ -553,6 +563,8 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 		nut7States: input.nut7States,
 		postSettlement: hasSettledSettlement,
 		settledBidIds,
+		dleqKeysets: input.dleqKeysets,
+		dleqUnknownKeysets: input.dleqUnknownKeysets,
 	})
 	const winnerBid = preValidated.canonicalWinner
 	// Resolve mint keysets deterministically: an injected value short-circuits

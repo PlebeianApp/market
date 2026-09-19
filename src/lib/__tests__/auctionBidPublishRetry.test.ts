@@ -112,7 +112,9 @@ const buildFormData = (amount: number) => {
 		auctionEventId: '1'.repeat(64),
 		auctionCoordinates: `30408:${SELLER_PK}:auction-1`,
 		amount,
-		auctionStartAt: now - 1_000,
+		// An already-open auction (started a little in the past). DLEQ is
+		// unconditional, so the lock always attaches NUT-12 metadata below.
+		auctionStartAt: now - 100,
 		auctionEffectiveEndAt: now + 3_600,
 		auctionLocktimeAt: now + 7_200,
 		settlementGraceSeconds: 300,
@@ -126,11 +128,26 @@ const buildFormData = (amount: number) => {
 // Mocks — nip60 (mint lock) and ndk (relay publish). No network, ever.
 // =============================================================================
 
+/**
+ * Mirrors the real mint's ADR-0011 contract: DLEQ is unconditional, so the
+ * freshly issued P2PK outputs always carry NUT-12 DLEQ metadata (nutshell
+ * 0.19.2 behaviour). A proof without `dleq` (or a missing `r`) makes the real
+ * lock fail closed, so every lock fixture that returns proofs — the default
+ * mock and one-off `mockImplementationOnce` overrides alike — goes through here.
+ */
+const withDleqMetadata = <T extends { proofs: Proof[] }>(result: T): T => ({
+	...result,
+	proofs: result.proofs.map((p: Proof) => ({
+		...p,
+		dleq: { e: 'e'.repeat(64), s: '5'.repeat(64), r: 'r'.repeat(64) },
+	})),
+})
+
 const lockAuctionBidFundsMock = mock(async (input: { amount: number; locktime?: number }) => {
 	// #1235 round-3 B1 test hook: an injected throw models a lock failure
 	// (raw pre-lock validation error, or AuctionBidLockMutationPossibleError).
 	if (lockShouldThrow) throw lockShouldThrow
-	return buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length)
+	return withDleqMetadata(buildLockResult(input, lockAuctionBidFundsMock.mock.calls.length))
 })
 
 let lockShouldThrow: unknown = null
@@ -138,11 +155,17 @@ let lockShouldThrow: unknown = null
 const updatePendingTokenContextMock = mock(() => ({ tokenId: 'pending-token-1', context: {} }))
 
 /** Raw payloads passed to the relay publish surface, in call order. */
-const publishedPayloads: Array<{ id: string; sig?: string; kind: number; created_at?: number }> = []
+const publishedPayloads: Array<{ id: string; sig?: string; kind: number; created_at?: number; tags?: string[][] }> = []
 let publishShouldFail = false
 
 const publishEventMock = mock(async (event: NDKEvent) => {
-	publishedPayloads.push({ id: event.id, sig: event.sig, kind: event.kind, created_at: event.created_at })
+	publishedPayloads.push({
+		id: event.id,
+		sig: event.sig,
+		kind: event.kind,
+		created_at: event.created_at,
+		tags: (event.tags as string[][] | undefined) ?? [],
+	})
 	if (publishShouldFail) throw new Error('relay down')
 	return new Set(['wss://relay.test'])
 })
@@ -286,7 +309,11 @@ describe('publishAuctionBid timestamps the bid at signing time (review 2026-09-1
 		// in flight so the pre-flight `now` differs from signing time.
 		lockAuctionBidFundsMock.mockImplementationOnce(async (input: { amount: number; locktime?: number }) => {
 			nowSpy.mockReturnValue((preLockSeconds + lockSeconds) * 1000)
-			return buildLockResult(input, 1)
+			// Same ADR-0011 lock contract as the default mock: the freshly
+			// issued P2PK outputs carry NUT-12 DLEQ metadata, so the bid's
+			// `dleq_proof` tags can be built (the real lock would fail closed
+			// without it).
+			return withDleqMetadata(buildLockResult(input, 1))
 		})
 
 		try {
@@ -808,5 +835,32 @@ describe('AuctionBidLockOutcomeUncertainError reclaim copy is gated on pendingTo
 		const explicitFalse = new AuctionBidLockOutcomeUncertainError({ ...baseParams, pendingTokenPersisted: false })
 		expect(explicitFalse.pendingTokenPersisted).toBe(false)
 		expect(explicitFalse.message).toBe(recordOnly.message)
+	})
+})
+
+// =============================================================================
+// ADR-0011 (operator ruling): DLEQ is UNCONDITIONAL. The retired
+// `dleq_required` activation tag no longer gates anything, so every published
+// bid carries one `dleq_proof` tag per locked proof, parallel to
+// `lock_secret`/`proof_y`. A bid without them is structurally `dleq_invalid`.
+// =============================================================================
+
+describe('publishAuctionBid dleq_proof tags are unconditional (ADR-0011)', () => {
+	const dleqProofTagCount = () => (publishedPayloads[0]?.tags ?? []).filter((t) => t[0] === 'dleq_proof').length
+
+	test('every auction publishes one dleq_proof tag per locked proof', async () => {
+		const formData = buildFormData(700)
+
+		// The publish layer signs through the first-party I/O seam now, which
+		// reads signer + NDK from the store singleton — the `dleq_proof` tags
+		// are derived on this path exactly as they are for every other bid.
+		const bidEventId = await publishAuctionBid(formData)
+
+		expect(bidEventId).toHaveLength(64)
+		expect(publishedPayloads).toHaveLength(1)
+		// One dleq_proof tag per locked proof, parallel to lock_secret/proof_y.
+		const lockSecretCount = (publishedPayloads[0]?.tags ?? []).filter((t) => t[0] === 'lock_secret').length
+		expect(lockSecretCount).toBeGreaterThan(0)
+		expect(dleqProofTagCount()).toBe(lockSecretCount)
 	})
 })

@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Browser, type Page } from '@playwright/test'
 import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
@@ -23,11 +23,31 @@ type TestFixtures = {
 
 	/** Which data scenario to seed before tests. Set via test.use({ scenario: '...' }) */
 	scenario: ScenarioName
+
+	/**
+	 * Record a video for the authenticated page fixtures. Set via
+	 * `test.use({ recordVideo: true })`. Playwright's own `video` option does
+	 * NOT reach these fixtures because they create their own contexts; this
+	 * option is what the feature-quality-gate specs opt into.
+	 */
+	recordVideo: boolean
 }
+
+/**
+ * Context options for the authenticated page fixtures.
+ *
+ * These fixtures create their OWN contexts (one per role), so Playwright does
+ * NOT apply the spec-level `video` option to them automatically. When the
+ * `recordVideo` fixture option is set, request `recordVideo` explicitly so the
+ * opt-in specs (e.g. the settlement feature-gate spec) produce a video artefact.
+ */
+const contextOptions = (wantsVideo: boolean): Parameters<Browser['newContext']>[0] =>
+	wantsVideo ? { baseURL: BASE_URL, recordVideo: { dir: test.info().outputPath('videos') } } : { baseURL: BASE_URL }
 
 export const test = base.extend<TestFixtures>({
 	// Default scenario - override per test file with test.use({ scenario: '...' })
 	scenario: ['base', { option: true }],
+	recordVideo: [false, { option: true }],
 
 	relayMonitor: async ({ page }, use) => {
 		const monitor = new RelayMonitor(page)
@@ -35,9 +55,9 @@ export const test = base.extend<TestFixtures>({
 		await use(monitor)
 	},
 
-	merchantPage: async ({ browser, scenario }, use) => {
+	merchantPage: async ({ browser, scenario, recordVideo }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext({ baseURL: BASE_URL })
+		const context = await browser.newContext(contextOptions(recordVideo))
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
@@ -51,10 +71,10 @@ export const test = base.extend<TestFixtures>({
 		await context.close()
 	},
 
-	buyerPage: async ({ browser, scenario }, use) => {
+	buyerPage: async ({ browser, scenario, recordVideo }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser2.sk)
-		const context = await browser.newContext({ baseURL: BASE_URL })
+		const context = await browser.newContext(contextOptions(recordVideo))
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
 
@@ -66,10 +86,10 @@ export const test = base.extend<TestFixtures>({
 		await context.close()
 	},
 
-	newUserPage: async ({ browser, scenario }, use) => {
+	newUserPage: async ({ browser, scenario, recordVideo }, use) => {
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser3.sk)
-		const context = await browser.newContext({ baseURL: BASE_URL })
+		const context = await browser.newContext(contextOptions(recordVideo))
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
 
@@ -81,9 +101,9 @@ export const test = base.extend<TestFixtures>({
 		await context.close()
 	},
 
-	unauthenticatedPage: async ({ browser, scenario }, use) => {
+	unauthenticatedPage: async ({ browser, scenario, recordVideo }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext({ baseURL: BASE_URL })
+		const context = await browser.newContext(contextOptions(recordVideo))
 		// Do NOT call setupAuthContext here. This leaves the user logged out.
 		const page = await context.newPage()
 

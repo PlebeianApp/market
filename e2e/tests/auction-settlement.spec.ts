@@ -5,33 +5,69 @@ import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
-import {
-	CashuMintMock,
-	MOCK_TOKENS,
-	MOCK_MINT_URL,
-	MOCK_LOCKTIME_PAST,
-	MOCK_LOCKTIME_FUTURE,
-	MOCK_CHILD_PUBKEY,
-	MOCK_REFUND_PUBKEY,
-	MOCK_XPUB,
-	MOCK_PROOF_AMOUNT,
-	MOCK_KEYSET_ID,
-	type MockToken,
-} from '../utils/cashu-mint-mock'
 import type { Page } from 'playwright/test'
 import { getAuctionHdAccountFromWalletKeys } from '../../src/lib/auctionHd'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../src/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '../../src/lib/cashu/hashToCurve'
-import { getEncodedToken } from '@cashu/cashu-ts'
+import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
+
+// ---------------------------------------------------------------------------
+// Real local Cashu mint — nutshell 0.19.2 FakeWallet, V1 keyset, NUT-12 DLEQ on
+// mint/swap. Started by the Playwright webServer config (see e2e/ARCHITECTURE.md).
+// The previous CashuMintMock has been removed: it could not produce DLEQ-
+// verifiable collateral. CDK (V2 keysets) is a roadmap item gated on the
+// cashu-ts >= v4 upgrade.
+// ---------------------------------------------------------------------------
+const TEST_MINT_URL = 'http://127.0.0.1:3338'
+const MOCK_XPUB = 'xpub6CHGS91EATnrt7a3wBLqCeJ13KvVXQp3m39ufe1TYiFxHHmAK1TiwfrT1N89CAHNLa9YQgbJAyysBZTiRRH38wTvYeBiYvgRrqxALmvghTH'
+const MOCK_REFUND_PUBKEY = '0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5'
+const MOCK_REFUND_PRIVATE_KEY = 'e61ae5a4f505026e3d2b5aeba82c748b6b799346a1e98e266d7252cddb8f502b'
+const MOCK_LOCKTIME_PAST = 150
+const MOCK_LOCKTIME_FUTURE = 2000000000
+const MOCK_PROOF_AMOUNT = 50000
+
+/**
+ * Real locked collateral per seeded bid, keyed by the published kind-1023 id.
+ * `seedBid` locks against the local mint and records the result here, so the
+ * path-release / bidder-record helpers can reuse the exact proofs + token
+ * without every call site threading them through.
+ */
+const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 
 useWebSocketImplementation(WebSocket)
 
 test.use({ scenario: 'merchant' })
+// Record video for this suite (feature-quality-gate evidence). `recordVideo` is
+// the fixture option the authenticated page fixtures honour (Playwright's own
+// `video` option does not reach contexts those fixtures create themselves).
+test.use({ recordVideo: true })
 
 // ---------------------------------------------------------------------------
-// Seed helpers — use pre-computed crypto fixtures from CashuMintMock.
-// No @cashu/cashu-ts or @noble/secp256k1 imports needed in e2e tests.
+// Seed helpers — real collateral from the local nutshell mint (DLEQ-verifiable).
 // ---------------------------------------------------------------------------
+
+/**
+ * Mint `amount` from the local mint and swap it into freshly-issued NUT-11
+ * P2PK outputs locked to `lockPubkey`, returning the locked proofs (each carries
+ * a NUT-12 DLEQ proof from the mint) and an encoded token.
+ */
+async function mintAndLockP2pk(opts: {
+	amount: number
+	lockPubkey: string
+	locktime: number
+	refundPubkey: string
+}): Promise<{ token: string; proofs: Proof[] }> {
+	const wallet = new CashuWallet(new CashuMint(TEST_MINT_URL))
+	await wallet.loadMint()
+	const quote = await wallet.createMintQuote(opts.amount)
+	const minted = await wallet.mintProofs(opts.amount, quote.quote)
+	const { send } = await wallet.swap(opts.amount, minted, {
+		p2pk: { pubkey: opts.lockPubkey, locktime: opts.locktime, refundKeys: [opts.refundPubkey] },
+	})
+	if (!send?.length) throw new Error('mintAndLockP2pk: swap returned no locked proofs')
+	const token = getEncodedToken({ mint: TEST_MINT_URL, proofs: send })
+	return { token, proofs: send }
+}
 
 interface SeededAuction {
 	auctionEventId: string
@@ -42,24 +78,16 @@ interface SeededAuction {
 	maxEndAt: number
 	settlementGrace: number
 	locktime: number
-}
-
-interface DynamicWalletKeys {
-	xpub: string
+	/** Child pubkey at m/0 of the auction's `p2pk_xpub` — the bid's lock target. */
 	childPubkey: string
-	lockSecret: string
-	token: string
-	proofY: string
 }
 
 /**
- * Reads the seller's NIP-60 wallet p2pk + privkey from the browser,
- * then computes the auction HD xpub, child pubkey at m/0, P2PK lock
- * secret, Cashu token, and proofY — all derived from the wallet's
- * actual keys so publishAuctionSettlement can verify the chain.
+ * Reads the seller's NIP-60 wallet p2pk + privkey from the browser and derives
+ * the auction HD xpub + its m/0 child pubkey — the key the bidder locks to and
+ * the seller later derives the private key for.
  */
-async function deriveDynamicWalletKeys(page: Page): Promise<DynamicWalletKeys> {
-	// Read the wallet's p2pk and the corresponding private key from the browser.
+async function deriveSellerAuctionKeys(page: Page): Promise<{ xpub: string; childPubkey: string }> {
 	const { walletP2pk, walletPrivkey } = await page.evaluate(async () => {
 		const wallet = (window as any).__nip60Wallet
 		if (!wallet) throw new Error('NIP-60 wallet not initialized')
@@ -70,47 +98,10 @@ async function deriveDynamicWalletKeys(page: Page): Promise<DynamicWalletKeys> {
 		return { walletP2pk: p2pk, walletPrivkey: privkey }
 	})
 
-	// Compute the auction HD account xpub from the wallet keys.
 	const account = await getAuctionHdAccountFromWalletKeys(walletP2pk, walletPrivkey)
 	const xpub = account.publicExtendedKey
 	if (!xpub) throw new Error('Failed to derive auction HD xpub from wallet keys')
-
-	// Derive the child pubkey at m/0.
-	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, 'm/0')
-
-	// Build the P2PK lock secret JSON (NUT-10/11 format).
-	const lockSecret = JSON.stringify([
-		'P2PK',
-		{
-			nonce: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-			data: childPubkey,
-			tags: [
-				['n_sigs', '1'],
-				['locktime', String(MOCK_LOCKTIME_FUTURE)],
-				['refund', MOCK_REFUND_PUBKEY],
-				['n_sigs_refund', '1'],
-				['sigflag', 'SIG_INPUTS'],
-			],
-		},
-	])
-
-	// Encode the Cashu token using getEncodedToken (pure function, no network).
-	const token = getEncodedToken({
-		mint: MOCK_MINT_URL,
-		proofs: [
-			{
-				id: MOCK_KEYSET_ID,
-				amount: MOCK_PROOF_AMOUNT,
-				secret: lockSecret,
-				C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
-			},
-		],
-	})
-
-	// Compute proofY from the lock secret.
-	const proofY = hashToCurveHexFromString(lockSecret)
-
-	return { xpub, childPubkey, lockSecret, token, proofY }
+	return { xpub, childPubkey: deriveAuctionChildP2pkPubkeyFromXpub(xpub, 'm/0') }
 }
 
 async function seedEndedAuction(
@@ -118,19 +109,18 @@ async function seedEndedAuction(
 	sellerSk: string,
 	opts: {
 		reserve?: number
-		token?: MockToken
 		title?: string
 		xpub?: string
 		locktime?: number
 	},
 ): Promise<SeededAuction> {
 	const sellerPk = devUser1.pk
-	const token = opts.token ?? MOCK_TOKENS.unspent
-	const locktime = opts.locktime ?? (token === MOCK_TOKENS.unspentFuture ? MOCK_LOCKTIME_FUTURE : MOCK_LOCKTIME_PAST)
+	const xpub = opts.xpub ?? MOCK_XPUB
+	const locktime = opts.locktime ?? MOCK_LOCKTIME_PAST
 
-	// For past-window tokens (locktime=150): use timestamps in 1970 so the
-	// auction ended long ago and the settlement window is expired.
-	// For future-window tokens (locktime=2e9): maxEndAt=1, grace=2e9-1.
+	// Past-window (locktime=150): timestamps in 1970 so the auction ended long
+	// ago and the settlement window is expired. Future-window (locktime=2e9):
+	// maxEndAt=1, grace=2e9-1.
 	const maxEndAt = locktime === MOCK_LOCKTIME_FUTURE ? 1 : 50
 	const settlementGrace = locktime - maxEndAt
 	const endAt = maxEndAt
@@ -158,9 +148,9 @@ async function seedEndedAuction(
 				['starting_bid', '1000', 'SAT'],
 				['bid_increment', '100'],
 				['reserve', String(opts.reserve ?? 0)],
-				['mint', MOCK_MINT_URL],
+				['mint', TEST_MINT_URL],
 				['key_scheme', 'hd_p2pk'],
-				['p2pk_xpub', opts.xpub ?? MOCK_XPUB],
+				['p2pk_xpub', xpub],
 				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 				['auditors', devUser3.pk],
 				['auditor_quorum', '1'],
@@ -182,6 +172,7 @@ async function seedEndedAuction(
 		maxEndAt,
 		settlementGrace,
 		locktime,
+		childPubkey: deriveAuctionChildP2pkPubkeyFromXpub(xpub, 'm/0'),
 	}
 }
 
@@ -191,14 +182,36 @@ async function seedBid(
 	auction: SeededAuction,
 	opts: {
 		amount: number
-		token?: MockToken
 		childPubkey?: string
-		lockSecret?: string
-		proofY?: string
-		tokenStr?: string
 	},
 ): Promise<string> {
-	const token = opts.token ?? MOCK_TOKENS.unspent
+	const childPubkey = opts.childPubkey ?? auction.childPubkey
+
+	// Lock REAL collateral from the local mint, so the published bid carries a
+	// verifiable NUT-12 `dleq_proof` per lock_secret (DLEQ is unconditional).
+	const { token, proofs } = await mintAndLockP2pk({
+		amount: opts.amount,
+		lockPubkey: childPubkey,
+		locktime: auction.locktime,
+		refundPubkey: MOCK_REFUND_PUBKEY,
+	})
+
+	const lockSecretTags = proofs.map((proof) => ['lock_secret', proof.secret])
+	const proofYTags = proofs.map((proof) => ['proof_y', hashToCurveHexFromString(proof.secret)])
+	const dleqTags = proofs.map((proof) => {
+		if (!proof.dleq) throw new Error('seedBid: locked proof is missing its NUT-12 DLEQ proof')
+		return [
+			'dleq_proof',
+			JSON.stringify({
+				id: proof.id,
+				amount: proof.amount,
+				C: proof.C,
+				e: proof.dleq.e,
+				s: proof.dleq.s,
+				r: proof.dleq.r,
+			}),
+		]
+	})
 
 	const event = finalizeEvent(
 		{
@@ -211,12 +224,13 @@ async function seedBid(
 				['p', auction.sellerPk],
 				['amount', String(opts.amount)],
 				['currency', 'SAT'],
-				['mint', MOCK_MINT_URL],
+				['mint', TEST_MINT_URL],
 				['locktime', String(auction.locktime)],
 				['refund_pubkey', MOCK_REFUND_PUBKEY],
-				['child_pubkey', opts.childPubkey ?? MOCK_CHILD_PUBKEY],
-				['lock_secret', opts.lockSecret ?? token.lockSecret],
-				['proof_y', opts.proofY ?? token.proofY],
+				['child_pubkey', childPubkey],
+				...lockSecretTags,
+				...proofYTags,
+				...dleqTags,
 				['created_for_end_at', String(auction.endAt)],
 				['bid_nonce', `nonce-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`],
 				['key_scheme', 'hd_p2pk'],
@@ -226,6 +240,7 @@ async function seedBid(
 		hexToBytes(bidderSk),
 	)
 	await relay.publish(event)
+	locksByBid.set(event.id, { token, proofs })
 	return event.id
 }
 
@@ -234,10 +249,10 @@ async function seedPathRelease(
 	bidderSk: string,
 	auction: SeededAuction,
 	bidEventId: string,
-	opts: { childPubkey?: string; token: string } | MockToken,
+	opts: { childPubkey?: string; token?: string } = {},
 ): Promise<string> {
-	const childPubkey = 'childPubkey' in opts ? opts.childPubkey : undefined
-	const tokenStr = 'token' in opts && typeof opts.token === 'string' ? opts.token : (opts as MockToken).token
+	const token = opts.token ?? locksByBid.get(bidEventId)?.token
+	if (!token) throw new Error(`seedPathRelease: no locked collateral recorded for bid ${bidEventId}`)
 	const event = finalizeEvent(
 		{
 			kind: 1025,
@@ -248,9 +263,9 @@ async function seedPathRelease(
 				['a', auction.auctionCoordinate],
 				['p', auction.sellerPk],
 				['derivation_path', 'm/0'],
-				['child_pubkey', childPubkey ?? MOCK_CHILD_PUBKEY],
+				['child_pubkey', opts.childPubkey ?? auction.childPubkey],
 				['release_reason', 'settlement'],
-				['cashu_token', tokenStr],
+				['cashu_token', token],
 			],
 		},
 		hexToBytes(bidderSk),
@@ -377,14 +392,13 @@ test.describe('Auction Settlement Descriptor', () => {
 		}: {
 			merchantPage: Page
 		}) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				const bidId1 = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				const bidId1 = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 				await seedVerdict(relay, devUser3.sk, auction, bidId1, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
@@ -397,15 +411,14 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('seller sees settlement-ready when path release published', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
-				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedPathRelease(relay, devUser2.sk, auction, bidId)
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
@@ -419,7 +432,6 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('seller sees reserve-not-met when no bid meets reserve', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -440,15 +452,14 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('seller sees order-received after settlement with claim order', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage, { defaultState: 'SPENT' })
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
-				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId)
 				const settlementId = await seedSettlement(relay, devUser1.sk, auction, {
 					status: 'settled',
 					winningBidId: bidId,
@@ -472,16 +483,14 @@ test.describe('Auction Settlement Descriptor', () => {
 
 	test.describe('winning-bidder view', () => {
 		test('winner sees release-path card when auction ended, reserve met, window open', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage)
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
-			const token = MOCK_TOKENS.unspentFuture
 			let bidId: string
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
-				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
@@ -490,7 +499,7 @@ test.describe('Auction Settlement Descriptor', () => {
 			// Navigate first so auth context is ready, then inject bidder record.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
-			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction)
 
 			// Reload so the component picks up the localStorage record.
 			await buyerPage.reload()
@@ -501,15 +510,14 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('winner sees path-released after publishing path release', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage)
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
-				await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				await seedPathRelease(relay, devUser2.sk, auction, bidId)
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			} finally {
 				relay.close()
@@ -522,15 +530,14 @@ test.describe('Auction Settlement Descriptor', () => {
 		})
 
 		test('winner sees you-won after settlement', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage, { defaultState: 'SPENT' })
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
-				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
-				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
+				const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId)
 				await seedSettlement(relay, devUser1.sk, auction, {
 					status: 'settled',
 					winningBidId: bidId,
@@ -553,7 +560,6 @@ test.describe('Auction Settlement Descriptor', () => {
 
 	test.describe('outbid-bidder view', () => {
 		test('outbid bidder sees no settlement card (null descriptor)', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -576,7 +582,6 @@ test.describe('Auction Settlement Descriptor', () => {
 
 	test.describe('settlement window expired', () => {
 		test('seller sees settlement-window-expired when no path release after grace', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -627,22 +632,13 @@ async function dismissPiiModal(page: import('@playwright/test').Page, userPubkey
  * contain enough crypto data for `publishBidderPathRelease` to
  * construct and sign a kind-1025 event.
  */
-async function seedBidderRecordToBrowser(
-	page: import('@playwright/test').Page,
-	bidEventId: string,
-	auction: SeededAuction,
-	token: MockToken,
-) {
+async function seedBidderRecordToBrowser(page: import('@playwright/test').Page, bidEventId: string, auction: SeededAuction) {
+	const locked = locksByBid.get(bidEventId)
+	if (!locked) throw new Error(`seedBidderRecordToBrowser: no locked collateral recorded for bid ${bidEventId}`)
 	const bidderPk = devUser2.pk
 	const storageKey = `auction_bidder_records_v1_${bidderPk.slice(0, 8)}`
 
-	const proof = {
-		id: MOCK_KEYSET_ID,
-		amount: MOCK_PROOF_AMOUNT,
-		secret: token.lockSecret,
-		C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
-	}
-
+	// Real locked proofs (with DLEQ) — the release flow reads this record.
 	const record = {
 		bidEventId,
 		auctionRootEventId: auction.auctionRootEventId,
@@ -650,17 +646,17 @@ async function seedBidderRecordToBrowser(
 		sellerPubkey: auction.sellerPk,
 		p2pkXpub: MOCK_XPUB,
 		derivationPath: 'm/0',
-		childPubkey: MOCK_CHILD_PUBKEY,
+		childPubkey: auction.childPubkey,
 		refundPubkey: MOCK_REFUND_PUBKEY,
-		refundPrivateKey: 'e61ae5a4f505026e3d2b5aeba82c748b6b799346a1e98e266d7252cddb8f502b',
-		mintUrl: MOCK_MINT_URL,
+		refundPrivateKey: MOCK_REFUND_PRIVATE_KEY,
+		mintUrl: TEST_MINT_URL,
 		amount: MOCK_PROOF_AMOUNT,
 		legLockedAmount: MOCK_PROOF_AMOUNT,
 		prevBidEventId: null,
 		locktime: auction.locktime,
-		proofs: [proof],
-		lockSecrets: [token.lockSecret],
-		proofYs: [token.proofY],
+		proofs: locked.proofs,
+		lockSecrets: locked.proofs.map((p) => p.secret),
+		proofYs: locked.proofs.map((p) => hashToCurveHexFromString(p.secret)),
 		createdAt: Math.floor(Date.now() / 1000) - 60,
 		status: 'live',
 	}
@@ -709,16 +705,14 @@ async function waitForRelayEvent(
 test.describe('UI interaction — publish events to relay', () => {
 	test.describe('winning-bidder clicks Release Path', () => {
 		test('clicking Release Path publishes a kind-1025 event to the relay', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage)
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
-			const token = MOCK_TOKENS.unspentFuture
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			let bidId: string
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
-				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 			} finally {
 				relay.close()
@@ -728,7 +722,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			// then inject the bidder record into localStorage.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
-			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction)
 
 			// Reload so the component picks up the localStorage record.
 			await buyerPage.reload()
@@ -755,7 +749,7 @@ test.describe('UI interaction — publish events to relay', () => {
 				expect(tagMap.get('a')).toBe(auction.auctionCoordinate)
 				expect(tagMap.get('p')).toBe(auction.sellerPk)
 				expect(tagMap.get('derivation_path')).toBe('m/0')
-				expect(tagMap.get('child_pubkey')).toBe(MOCK_CHILD_PUBKEY)
+				expect(tagMap.get('child_pubkey')).toBe(auction.childPubkey)
 				expect(tagMap.get('release_reason')).toBe('settlement')
 				expect(tagMap.has('cashu_token')).toBe(true)
 				expect(tagMap.get('cashu_token')!.startsWith('cashuB')).toBe(true)
@@ -765,16 +759,14 @@ test.describe('UI interaction — publish events to relay', () => {
 		})
 
 		test('after clicking Release Path, UI transitions to path-released state', async ({ buyerPage }: { buyerPage: Page }) => {
-			await CashuMintMock.setup(buyerPage)
 			await dismissPiiModal(buyerPage, devUser2.pk)
 
-			const token = MOCK_TOKENS.unspentFuture
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			let bidId: string
 			try {
-				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
-				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+				auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+				bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 			} finally {
 				relay.close()
@@ -783,7 +775,7 @@ test.describe('UI interaction — publish events to relay', () => {
 			// Navigate and inject bidder record into localStorage.
 			await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 			await buyerPage.waitForLoadState('networkidle')
-			await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+			await seedBidderRecordToBrowser(buyerPage, bidId, auction)
 
 			// Reload so the component picks up the localStorage record.
 			await buyerPage.reload()
@@ -821,19 +813,18 @@ test.describe('UI interaction — publish events to relay', () => {
 
 	test.describe('seller clicks Publish Settlement', () => {
 		test('clicking Publish Settlement publishes a kind-1024 event to the relay', async ({ merchantPage }: { merchantPage: Page }) => {
-			await CashuMintMock.setup(merchantPage)
+			// The real-mint redemption swap + kind-1024 publish is slower than the
+			// mock path; give it headroom (the original disable note recorded this
+			// test as the one intermittent settlement-publish flake).
+			test.slow()
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
-			// Navigate to the app first so the NIP-60 wallet initializes,
-			// then read the wallet's actual p2pk + privkey and compute
-			// the auction HD xpub, child pubkey, token, and proofY
-			// dynamically — all derived from the wallet's real keys.
-			// The merchantPage fixture already navigated to '/' and initialized
-			// the NIP-60 wallet. Wait for the wallet to be ready before reading keys.
+			// Derive the seller's real auction xpub + child pubkey so the
+			// publisher can derive the child private key and redeem the locked
+			// collateral from the real local mint (no receiveLockedEcash stub).
 			await merchantPage.waitForFunction(() => !!(window as any).__nip60Wallet, undefined, { timeout: 15_000 })
-			const dynKeys = await deriveDynamicWalletKeys(merchantPage)
+			const sellerKeys = await deriveSellerAuctionKeys(merchantPage)
 
-			// Seed events to the relay using the dynamic xpub/child pubkey.
 			const relay = await Relay.connect(RELAY_URL)
 			let auction: SeededAuction
 			let bidId: string
@@ -841,54 +832,33 @@ test.describe('UI interaction — publish events to relay', () => {
 			try {
 				auction = await seedEndedAuction(relay, devUser1.sk, {
 					reserve: 0,
-					xpub: dynKeys.xpub,
+					xpub: sellerKeys.xpub,
 					locktime: MOCK_LOCKTIME_FUTURE,
 				})
 				bidId = await seedBid(relay, devUser2.sk, auction, {
 					amount: MOCK_PROOF_AMOUNT,
-					childPubkey: dynKeys.childPubkey,
-					lockSecret: dynKeys.lockSecret,
-					proofY: dynKeys.proofY,
-					token: dynKeys.token,
+					childPubkey: sellerKeys.childPubkey,
 				})
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
-				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, {
-					childPubkey: dynKeys.childPubkey,
-					token: dynKeys.token,
-				})
+				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId)
 			} finally {
 				relay.close()
 			}
 
-			// Navigate to the auction page. The first goto('/') already
-			// initialized the wallet; this second goto loads the auction
-			// page with the wallet ready.
 			await merchantPage.goto(`/auctions/${auction.auctionEventId}`)
 			await merchantPage.waitForLoadState('networkidle')
 
-			// Wait a moment for React to hydrate, then check if the
-			// button responds by evaluating a click in-page.
-
-			// Wait for the Publish Settlement button to appear.
 			await expect(merchantPage.getByRole('button', { name: /publish settlement/i })).toBeVisible({ timeout: 15_000 })
-
-			// Stub receiveLockedEcash: the CashuMintMock's /v1/swap echoes B_ as C_
-			// without real blind signatures, so receiveTokenIntoWallet rejects the
-			// redeemed proofs. A real test mint will replace this stub later.
-			await merchantPage.evaluate(() => {
-				const actions = (window as any).__nip60Actions
-				if (actions) actions.receiveLockedEcash = async () => true
-			})
 
 			// Open a relay subscription BEFORE clicking.
 			const subRelay = await Relay.connect(RELAY_URL)
 			try {
 				await merchantPage.getByRole('button', { name: /publish settlement/i }).click()
 
-				// Wait for the mutation to complete (swap + publish)
+				// Wait for the mutation to complete (redemption swap + publish).
 				await merchantPage.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
 
-				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 30_000)
+				const event = await waitForRelayEvent(subRelay, 1024, 'a', auction.auctionCoordinate, 45_000)
 
 				expect(event, 'kind-1024 settlement event should arrive on the relay').not.toBeNull()
 				expect(event!.pubkey).toBe(devUser1.pk)
@@ -910,7 +880,6 @@ test.describe('UI interaction — publish events to relay', () => {
 		}: {
 			merchantPage: Page
 		}) => {
-			await CashuMintMock.setup(merchantPage)
 			await dismissPiiModal(merchantPage, devUser1.pk)
 
 			const relay = await Relay.connect(RELAY_URL)
@@ -960,18 +929,15 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		buyerPage: Page
 		merchantPage: Page
 	}) => {
-		await CashuMintMock.setup(buyerPage)
-		await CashuMintMock.setup(merchantPage)
 		await dismissPiiModal(buyerPage, devUser2.pk)
 		await dismissPiiModal(merchantPage, devUser1.pk)
 
-		const token = MOCK_TOKENS.unspentFuture
 		const relay = await Relay.connect(RELAY_URL)
 		let auction: SeededAuction
 		let bidId: string
 		try {
-			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token })
-			bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token })
+			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
+			bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'won_pending_settlement')
 		} finally {
 			relay.close()
@@ -985,7 +951,7 @@ test.describe('Cross-client — bidder publishes path release, seller detects', 
 		// Bidder navigates to the auction page and injects bidder record.
 		await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
 		await buyerPage.waitForLoadState('networkidle')
-		await seedBidderRecordToBrowser(buyerPage, bidId, auction, token)
+		await seedBidderRecordToBrowser(buyerPage, bidId, auction)
 		await buyerPage.reload()
 		await buyerPage.waitForLoadState('networkidle')
 
@@ -1009,20 +975,19 @@ test.describe('settlement validation failure — unresolvable v2 keyset ID', () 
 	}: {
 		merchantPage: Page
 	}) => {
-		await CashuMintMock.setup(merchantPage)
 		await dismissPiiModal(merchantPage, devUser1.pk)
 
-		// Build a token with a v2 keyset ID (01 prefix, 33 bytes).
-		// The mock mint only returns v1 keysets (id: '0000000000000000'),
-		// so getDecodedToken cannot resolve the v2 short keyset ID → throws.
+		// Build a token with a v2 keyset ID (01 prefix, 33 bytes). The local
+		// nutshell mint advertises only v1 keysets, so the v2 id is unresolvable
+		// and validatePathRelease rejects it.
 		const V2_KEYSET_ID = '01abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
 		const v2Token = getEncodedToken({
-			mint: MOCK_MINT_URL,
+			mint: TEST_MINT_URL,
 			proofs: [
 				{
 					id: V2_KEYSET_ID,
 					amount: MOCK_PROOF_AMOUNT,
-					secret: MOCK_TOKENS.unspentFuture.lockSecret,
+					secret: 'v2-keyset-unresolvable-secret',
 					C: '03' + '4'.repeat(64),
 				},
 			],
@@ -1035,11 +1000,10 @@ test.describe('settlement validation failure — unresolvable v2 keyset ID', () 
 		try {
 			auction = await seedEndedAuction(relay, devUser1.sk, {
 				reserve: 0,
-				token: MOCK_TOKENS.unspentFuture,
+				locktime: MOCK_LOCKTIME_FUTURE,
 			})
 			bidId = await seedBid(relay, devUser2.sk, auction, {
 				amount: MOCK_PROOF_AMOUNT,
-				token: MOCK_TOKENS.unspentFuture,
 			})
 			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 			// Path release uses a token with an unresolvable v2 keyset ID.

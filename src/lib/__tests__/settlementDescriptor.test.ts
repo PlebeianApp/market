@@ -13,7 +13,8 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
+import { getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
+import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const BUYER_PUBKEY = 'b'.repeat(64)
@@ -43,6 +44,25 @@ const LOCK_SECRET = JSON.stringify([
 	},
 ])
 const PROOF_Y = hashToCurveHexFromString(LOCK_SECRET)
+// A second, INDEPENDENT collateral pair. Bid collateral (`lock_secret` and the
+// `proof_y` it hashes to) is public in the bid event, so two different bidders
+// must lock DISTINCT proofs: sharing them would leave two bids authoritative
+// for the same coins while only one is redeemable (M5/A3 uniqueness rules).
+const LOCK_SECRET_2 = JSON.stringify([
+	'P2PK',
+	{
+		nonce: 'b'.repeat(16),
+		data: CHILD_PUBKEY,
+		tags: [
+			['n_sigs', '1'],
+			['locktime', String(AUCTION_LOCKTIME)],
+			['refund', REFUND_PUBKEY],
+			['n_sigs_refund', '1'],
+			['sigflag', 'SIG_INPUTS'],
+		],
+	},
+])
+const PROOF_Y_2 = hashToCurveHexFromString(LOCK_SECRET_2)
 const TEST_PROOF: Proof = {
 	amount: 50000,
 	secret: LOCK_SECRET,
@@ -87,6 +107,13 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 }
 
 function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
+	const amount = overrides.amount ?? 50000
+	const legLockedAmount = overrides.legLockedAmount ?? amount
+	const lockSecrets = overrides.lockSecrets ?? [LOCK_SECRET]
+	// DLEQ is unconditional (ADR-0011): every locked proof needs a matching
+	// honest proof, minted against the leg's own delta (the amount the client
+	// verification path uses as `legDelta`).
+	const dleqProofs = overrides.dleqProofs ?? lockSecrets.map((secret) => makeHonestDleqProof(legLockedAmount, secret))
 	return {
 		rawEvent: { id: 'bid-1', pubkey: BUYER_PUBKEY, kind: 1024, tags: [], content: '', created_at: 100 },
 		id: 'bid-1',
@@ -102,8 +129,9 @@ function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
 		locktime: AUCTION_LOCKTIME,
 		refundPubkey: REFUND_PUBKEY,
 		childPubkey: CHILD_PUBKEY,
-		lockSecrets: [LOCK_SECRET],
+		lockSecrets,
 		proofYs: [PROOF_Y],
+		dleqProofs,
 		createdForEndAt: AUCTION_END,
 		bidNonce: 'nonce-1',
 		keyScheme: 'hd_p2pk',
@@ -210,6 +238,8 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		now: 120,
 		nut7States: undefined,
 		mintKeysets: mockMintKeysets(),
+		dleqKeysets: undefined,
+		dleqUnknownKeysets: undefined,
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -222,6 +252,20 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	// explicitly (mirroring `spentNut7States`).
 	if (base.nut7States === undefined) {
 		delete base.nut7States
+	}
+	// DLEQ is unconditional (ADR-0011): the descriptor crypto-verifies every
+	// quorum-confirmed bid, so supply a keyset covering every proof amount the
+	// fixtures commit (keyed `${mint}:${proof.id}`). Tests that exercise the
+	// evidence-unavailable path can override `dleqKeysets` explicitly.
+	if (base.dleqKeysets === undefined && base.bids.length > 0) {
+		const amounts = new Set<number>()
+		for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) amounts.add(proof.amount)
+		if (amounts.size > 0) {
+			const keyset = makeDleqKeyset(Array.from(amounts))
+			const map = new Map<string, MintKeys>()
+			for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) map.set(`${bid.mint}:${proof.id}`, keyset)
+			base.dleqKeysets = map
+		}
 	}
 	// mintKeysets is ALWAYS injected (empty array) so the descriptor never makes
 	// an HTTP call to the inert fixture mint URL — matching ADR-0005's rule that
@@ -275,7 +319,15 @@ describe('getSettlementDescriptor', () => {
 		})
 
 		test('outbid-bidder: I have a validated bid but am not the top', async () => {
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 			const d = await getSettlementDescriptor(
 				makeInput({
@@ -326,6 +378,41 @@ describe('getSettlementDescriptor', () => {
 				}),
 			)
 			expect(d?.role).toBe('seller')
+		})
+	})
+
+	describe('terminal keyset miss (ADR-0011 R3, review 2026-09-18 N2)', () => {
+		test('a reserve-meeting bid whose keyset is terminally unknown yields no canonical winner and no valid bids', async () => {
+			const topBid = makeBid({ amount: 50000 })
+			const terminalKeysetKey = `${topBid.mint}:${topBid.dleqProofs![0].id}`
+			const d = await getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 40000 }),
+					bids: [topBid],
+					verdicts: [verdictForBid(topBid.id)],
+					nut7States: unspentNut7States([topBid]),
+					currentUserPubkey: SELLER_PUBKEY,
+					// Empty keyset map + a TERMINAL miss for this proof's keyset. The
+					// descriptor's early pre-pass must thread `dleqUnknownKeysets` so the
+					// bid is `dleq_invalid` (never valid) rather than `pending`; the
+					// resulting classification feeds the reserve guard in the publish
+					// path (review 2026-09-18 N2).
+					dleqKeysets: new Map(),
+					dleqUnknownKeysets: new Set([terminalKeysetKey]),
+					now: 120,
+				}),
+			)
+			// With a terminal keyset miss and no other valid bid, there is no
+			// canonical winner, so the seller sees Reserve Not Met (close allowed).
+			// The descriptor result exposes only `validatedTopBid`/`validatedBids`
+			// (empty for both `pending` and `dleq_invalid`), so the invalid-vs-pending
+			// classification itself is pinned directly in
+			// `computeValidatedBids.test.ts`; this test drives the descriptor path
+			// with `dleqUnknownKeysets` supplied, covering the pre-pass threading
+			// (review 2026-09-18 N2).
+			expect(d?.title).toBe('Reserve Not Met')
+			expect(d?.validatedTopBid ?? null).toBeNull()
+			expect(d?.validatedBids ?? []).toHaveLength(0)
 		})
 	})
 
@@ -683,7 +770,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('refund: outbid bidder with reserve_not_met settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 30000 })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
@@ -709,7 +804,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('no card: outbid with validated bid, no settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid, myBid],
