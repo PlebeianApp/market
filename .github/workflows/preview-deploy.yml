@@ -455,6 +455,50 @@ jobs:
         if: steps.secrets.outputs.previews_ready == 'true'
         run: sleep 15
 
+      # SETTINGS first (needed to boot out of /setup), then CONTENT.
+      # The preview's nak relay starts EMPTY, so the app served
+      # "/setup — no app settings found" and had no products or orders to
+      # exercise. Seed the minimum settings (kinds 31990/30000/10002) so the
+      # preview boots configured, then restart the app: it caches app settings
+      # and the admin list at startup (the same reason e2e/seed-relay.ts runs
+      # before the dev server). Full dev fixture data is opt-in via the
+      # repository variable PREVIEW_SEED_FULL.
+      - name: Seed preview relay (app settings, optional dev data)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          APP_RELAY_URL: wss://${{ steps.ports.outputs.subdomain }}/relay
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+        run: |
+          set -uo pipefail
+          # DNS + Caddy converge over the 15s wait above, but a cold cert issue
+          # can still race this step; retry the seed before giving up.
+          SEED_OUTPUT=""
+          for attempt in $(seq 1 6); do
+            if SEED_OUTPUT="$(bun run scripts/seed-preview-settings.ts 2>&1)"; then
+              echo "$SEED_OUTPUT"
+              break
+            fi
+            echo "seed attempt $attempt failed:"
+            echo "$SEED_OUTPUT"
+            if [ "$attempt" = "6" ]; then
+              echo "::error::Could not seed the preview relay after 6 attempts."
+              exit 1
+            fi
+            sleep 10
+          done
+          # Idempotent: only publish the (heavier) dev fixtures on the first
+          # seed of this relay, not on every redeploy.
+          if [ "${{ vars.PREVIEW_SEED_FULL }}" = "true" ] && echo "$SEED_OUTPUT" | grep -q '^seeded$'; then
+            echo "PREVIEW_SEED_FULL=true — publishing full dev fixture data (scripts/seed.ts)"
+            bun run scripts/seed.ts
+          fi
+          # Restart so the app's startup cache picks up the seeded settings.
+          bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -euo pipefail
+          cd "$HOME/previews/pr-${{ github.event.pull_request.number }}"
+          docker compose restart market-app
+          REMOTE_EOF
+
       # CONTENT, not settings. A preview relay seeded only with app settings
       # boots (`needsSetup:false`) but renders an EMPTY feed: the operator's
       # "the relay should be seeded with CONTENT" is not satisfied by settings.
@@ -471,12 +515,8 @@ jobs:
       # pins both facts (wiring + interlock), so neither can drift silently.
       #
       # ORDERING: content is read per request, NOT cached at boot, so it does not
-      # need the app restart that app settings do. The step sits after the
-      # settings seeding step and therefore after that restart. When PR #1356
-      # (scripts/seed-preview-settings.ts) lands, its step anchors at this same
-      # spot; keep the settings step first — the only correct resolution of that
-      # trivial conflict, since a preview with content but no settings is still
-      # stuck in /setup.
+      # need the app restart that app settings do. This step sits after the
+      # settings seeding step and therefore after that restart.
       - name: Seed preview relay with content (products, profiles, featured list)
         if: steps.secrets.outputs.previews_ready == 'true'
         env:
