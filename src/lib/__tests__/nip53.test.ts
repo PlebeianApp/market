@@ -1,8 +1,12 @@
 import { describe, test, expect } from 'bun:test'
 import {
 	LIVE_ACTIVITY_KIND,
+	LIVE_ACTIVITY_DTAG_MAX_LENGTH,
+	LIVE_ACTIVITY_DTAG_PREFIX,
+	RELAY_TAG_INDEX_VALUE_MAX_LENGTH,
 	AUCTION_KIND,
 	deriveLiveActivityStatus,
+	isWithinRelayTagIndexBudget,
 	parseAuctionCoordFromATag,
 	buildLiveActivityDTag,
 	buildLiveActivityCoord,
@@ -71,20 +75,71 @@ describe('nip53', () => {
 	})
 
 	describe('buildLiveActivityDTag', () => {
-		test('derives safe d tag from full auction coordinate', () => {
+		test('derives a short digest d tag from the auction coordinate', () => {
 			const dTag = buildLiveActivityDTag(AUCTION_COORD)
-			expect(dTag).toBe(`auction:${SELLER_PUBKEY.slice(0, 16)}:${AUCTION_DTAG}`)
+			// `auction:<12 hex>` — 20 characters, inside the 29-character budget
+			// that the relay tag index leaves for a live-activity `d`.
+			expect(dTag).toMatch(/^auction:[0-9a-f]{12}$/)
+			expect(dTag.length).toBeLessThanOrEqual(LIVE_ACTIVITY_DTAG_MAX_LENGTH)
 		})
 
-		test('includes truncated seller pubkey to prevent collisions', () => {
-			const dTag = buildLiveActivityDTag(AUCTION_COORD)
-			expect(dTag).toContain(SELLER_PUBKEY.slice(0, 16))
+		test('is deterministic — the same auction always yields the same address', () => {
+			// This is what makes auction → activity reachability work without a
+			// lookup: any client with the auction event computes the activity's
+			// address, and the activity's own `a` tag gives the other direction.
+			expect(buildLiveActivityDTag(AUCTION_COORD)).toBe(buildLiveActivityDTag(AUCTION_COORD))
 		})
 
-		test('handles auction d tags with colons', () => {
+		test('keeps two sellers using the same d tag apart', () => {
+			// Hashing the *coordinate* rather than the bare d tag: d tags are
+			// seller-chosen, so two sellers may legitimately pick the same one.
+			const otherSellerCoord = `${AUCTION_KIND}:${'c'.repeat(64)}:${AUCTION_DTAG}`
+			expect(buildLiveActivityDTag(AUCTION_COORD)).not.toBe(buildLiveActivityDTag(otherSellerCoord))
+		})
+
+		test('never leaks an auction d tag containing colons into the address', () => {
+			// The retired format embedded the auction d tag verbatim, so a d tag
+			// with colons produced a coordinate whose own d tag had colons —
+			// exactly the ambiguity that made naive `<kind>:<pubkey>:<d>` parsing
+			// unsafe. The digest has exactly one colon, the prefix separator.
 			const coord = `${AUCTION_KIND}:${SELLER_PUBKEY}:my:complex:tag`
 			const dTag = buildLiveActivityDTag(coord)
-			expect(dTag).toBe(`auction:${SELLER_PUBKEY.slice(0, 16)}:my:complex:tag`)
+
+			expect(dTag.match(/:/g)).toHaveLength(1)
+			expect(dTag.startsWith(`${LIVE_ACTIVITY_DTAG_PREFIX}:`)).toBe(true)
+			expect(dTag).not.toContain('my:complex:tag')
+		})
+	})
+
+	describe('relay tag-index budget', () => {
+		/**
+		 * The relay indexes a tag only when the name is one character and the
+		 * value is ≤ 100 characters, and its query planner builds an `#a` lookup
+		 * from that index alone (no fallback scan). Every `a` value this feature
+		 * publishes therefore has to fit — that is the whole reason the activity
+		 * `d` tag is a digest instead of `auction:<seller-prefix>:<auction-d>`.
+		 */
+		const REALISTIC_AUCTION_DTAG = 'auction_1789745290774_nuh7g'
+		const REALISTIC_COORD = `${AUCTION_KIND}:${SELLER_PUBKEY}:${REALISTIC_AUCTION_DTAG}`
+
+		test('the activity coordinate the chat messages reference fits the budget', () => {
+			const coord = buildLiveActivityCoord(CVM_PUBKEY, REALISTIC_COORD)
+
+			expect(isWithinRelayTagIndexBudget(coord)).toBe(true)
+			expect(coord.length).toBeLessThanOrEqual(RELAY_TAG_INDEX_VALUE_MAX_LENGTH)
+			// The retired format produced 123 characters for this exact shape and
+			// was therefore unreadable through any `#a` lookup.
+			expect(coord.length).toBeLessThan(123)
+		})
+
+		test('the auction reference tag the activity carries fits the budget', () => {
+			expect(isWithinRelayTagIndexBudget(REALISTIC_COORD)).toBe(true)
+		})
+
+		test('the digest leaves headroom for longer auction d tags', () => {
+			const longCoord = `${AUCTION_KIND}:${SELLER_PUBKEY}:${'x'.repeat(29)}`
+			expect(isWithinRelayTagIndexBudget(buildLiveActivityCoord(CVM_PUBKEY, longCoord))).toBe(true)
+			expect(isWithinRelayTagIndexBudget(buildLiveActivityDTag(longCoord))).toBe(true)
 		})
 	})
 
@@ -105,7 +160,7 @@ describe('nip53', () => {
 	describe('buildLiveActivityTags', () => {
 		test('includes required tags', () => {
 			const tags = buildLiveActivityTags({
-				dTag: buildLiveActivityDTag(AUCTION_COORD),
+				auctionCoord: AUCTION_COORD,
 				sellerPubkey: SELLER_PUBKEY,
 				title: 'Test Auction',
 				summary: 'A test auction',
@@ -132,9 +187,9 @@ describe('nip53', () => {
 			expect(tagNames).toContain('t')
 		})
 
-		test('a tag links to auction coordinate with seller pubkey', () => {
+		test('a tag is the full auction coordinate — the activity → auction direction', () => {
 			const tags = buildLiveActivityTags({
-				dTag: buildLiveActivityDTag(AUCTION_COORD),
+				auctionCoord: AUCTION_COORD,
 				sellerPubkey: SELLER_PUBKEY,
 				title: 'Test',
 				summary: '',
@@ -148,12 +203,35 @@ describe('nip53', () => {
 
 			const aTag = tags.find((t) => t[0] === 'a')
 			expect(aTag).toBeDefined()
+			// Exact equality, not "contains the seller": the reference tag has to
+			// be the coordinate a client can resolve, and it must fit the relay
+			// tag-index budget (98 chars for a realistic auction d tag).
+			expect(aTag![1]).toBe(AUCTION_COORD)
 			expect(aTag![1]).toContain(SELLER_PUBKEY)
+			expect(isWithinRelayTagIndexBudget(aTag![1])).toBe(true)
+		})
+
+		test('d tag is derived from the auction coordinate, not passed in', () => {
+			const tags = buildLiveActivityTags({
+				auctionCoord: AUCTION_COORD,
+				sellerPubkey: SELLER_PUBKEY,
+				title: 'Test',
+				summary: '',
+				image: undefined,
+				startsAt: 0,
+				maxEndAt: 0,
+				status: 'planned',
+				relays: [],
+				categories: [],
+			})
+
+			const dTag = tags.find((t) => t[0] === 'd')
+			expect(dTag![1]).toBe(buildLiveActivityDTag(AUCTION_COORD))
 		})
 
 		test('p tag marks seller as Host', () => {
 			const tags = buildLiveActivityTags({
-				dTag: buildLiveActivityDTag(AUCTION_COORD),
+				auctionCoord: AUCTION_COORD,
 				sellerPubkey: SELLER_PUBKEY,
 				title: 'Test',
 				summary: '',
@@ -173,7 +251,7 @@ describe('nip53', () => {
 
 		test('omits optional tags when not provided', () => {
 			const tags = buildLiveActivityTags({
-				dTag: 'test',
+				auctionCoord: AUCTION_COORD,
 				sellerPubkey: SELLER_PUBKEY,
 				title: 'Test',
 				summary: '',
