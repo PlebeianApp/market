@@ -124,10 +124,61 @@ async function stubThirdPartyRelays(context: BrowserContext) {
 	return () => Array.from(stubbed)
 }
 
-/** Fresh, unauthenticated context state (terms pre-accepted, as the other auth specs do). */
+/**
+ * Fresh, unauthenticated context state (terms pre-accepted, as the other auth specs do).
+ *
+ * `sw-reload` — the app's own once-per-session guard, pinned so the production
+ * service worker does not reload the page under this spec.
+ *
+ * MEASURED CAUSE OF THE PREVIEW-LANE TIMEOUT (run 35469770860, job
+ * 105968487250, head 52c87c12; test at :348 failed with
+ * 'Test timeout of 180000ms exceeded' at openQrLane :260 called from :393):
+ *
+ *   `/sw.js` calls `self.skipWaiting()` on install and `self.clients.claim()`
+ *   on activate. Claiming makes `controllerchange` fire in the page, and
+ *   `src/frontend.tsx:91-97` answers it with `window.location.reload()` unless
+ *   `sessionStorage['sw-reload']` is already set. The preview deploys a
+ *   PRODUCTION build, so that path is live there (the only guard in the app is
+ *   `process.env.NODE_ENV === 'production'`, which a preview always satisfies)
+ *   — the app's own comment on that effect says the skipWaiting + clients.claim
+ *   cycle "causes non-deterministic page reloads that break Playwright
+ *   navigation".
+ *
+ *   Measured on this preview in fresh CI-shaped contexts (viewport 1280x720,
+ *   recordVideo on, `channel: chrome`): every fresh context navigates THREE
+ *   times to `/` — the initial load, the SW-driven reload ~1.1-1.8 s after
+ *   `load`, and one more commit — and a `locator.click()` issued inside that
+ *   window blocks for ~20 s while the pending navigation exists.
+ *
+ *   In CI the dialog interaction lands exactly in that window: `openLoginDialog`
+ *   opened the dialog (its visibility assertion passed) and the :260 click
+ *   RESOLVED `[data-testid="connect-tab"]`, then the reload replaced the
+ *   document. The element never comes back, so `locator.click()` — which has no
+ *   action timeout here — keeps polling until the 180 s test timeout, and the
+ *   failure is reported as 'Target page, context or browser has been closed'.
+ *   That is why the failure's call log stops after 'locator resolved to …'
+ *   (no actionability line was ever produced: the injected script's document was
+ *   replaced) and why the failure snapshot shows the plain home page with no
+ *   dialog. Test 1 and preview-content-seed.spec.ts do not click through the
+ *   dialog inside that window, so they were unaffected.
+ *
+ *   Pinning the app's own flag is the fix that does NOT weaken this spec's
+ *   evidence: the SW still registers and controls the page (the production
+ *   runtime is unchanged), no assertion, timeout or video requirement is
+ *   touched, everything the spec asserts about the login lane is still asserted,
+ *   and no console error is introduced — the app logs `SW registered:` either
+ *   way. `serviceWorkers: 'block'` would also stop the reload but makes
+ *   `navigator.serviceWorker.register()` reject, which the app reports with
+ *   `console.error('SW registration failed:', …)` and would trip this spec's
+ *   `expect(consoleErrors).toEqual([])` assertion at :483.
+ */
 async function seedFreshContext(context: BrowserContext) {
 	await context.addInitScript(() => {
 		localStorage.setItem('plebeian_terms_accepted', 'true')
+		// The app's own "a reload already happened this session" guard: the
+		// service worker's controllerchange handler skips its reload when this
+		// is set, so the page cannot be replaced mid-interaction.
+		sessionStorage.setItem('sw-reload', 'true')
 	})
 }
 
