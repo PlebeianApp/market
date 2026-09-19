@@ -37,34 +37,39 @@
  *     The context is built WITHOUT `recordVideo`, no video file is asserted,
  *     and ONE loud banner is printed to the reporter output for every test
  *     that uses this fixture. That run proves BEHAVIOUR ONLY — it is not gate
- *     evidence and must never be cited as such. Use it only where recording is
- *     physically impossible (see the measured platform fact below).
+ *     evidence and must never be cited as such. Use it only on a host that
+ *     cannot provision the recorder (see the measured platform fact below).
  *
  * Any other value throws at import time: the switch is fail-closed, so a typo
  * can never silently downgrade a run from evidence to non-evidence.
  *
  * MEASURED PLATFORM FACT (Ubuntu 26.04 x64 — fleet T470 node, 2026-09-19)
  * -----------------------------------------------------------------------
- * The Playwright version this repo pins (`@playwright/test` ^1.60.0; the
- * runner reports 1.60.0) refuses to provision the recorder for Ubuntu 26.04:
+ * With the Playwright version this repo pins (`@playwright/test` ^1.60.0; the
+ * runner reports 1.60.0), Ubuntu 26.04 x64 is not a supported target for the
+ * recorder, and the installer refuses to provision it — while also DELETING
+ * any recorder already sitting in the cache:
  *
  *   $ bunx playwright install ffmpeg
  *   Failed to install browsers
  *   Error: ERROR: Playwright does not support ffmpeg on ubuntu26.04-x64
- *   (exit 1 — and the same command DELETES any cached `ffmpeg-1011` dir)
+ *   (exit 1)
  *
- * and any context constructed with `recordVideo` under that runner dies before
- * the first navigation:
+ * With no recorder in the cache, every context built with `recordVideo` dies
+ * before its first navigation:
  *
  *   Error: browserContext.newPage: Executable doesn't exist at
  *   /home/<user>/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux
  *   ╔═ Video rendering requires ffmpeg binary ... install ffmpeg ═╗
  *
- * A NEWER Playwright release can hand over the binary (measured: 1.63.0 via
- * `bunx playwright@latest install ffmpeg` downloads playwright ffmpeg v1011 on
- * this OS), but a run under the PINNED runner cannot — and results produced by
- * a different runner version are not this gate's results. `E2E_VIDEO=off` is
- * therefore the ONLY way to exercise these specs' LOGIC on such a host.
+ * The binary is not impossible to obtain: a newer release still publishes
+ * playwright ffmpeg v1011 for this OS (measured: fetched with
+ * `bunx playwright@latest install ffmpeg`), and once `ffmpeg-linux` is sitting
+ * in the pinned runner's `ffmpeg-1011/` cache dir the strict path records
+ * normally under 1.60.0 (measured: 719292-byte `.webm`, assertion satisfied).
+ * But that is an out-of-band step the pinned toolchain cannot do for itself,
+ * so `E2E_VIDEO=off` stays the supported way to exercise these specs' LOGIC on
+ * a host in this state — and, by construction, never evidence.
  *
  * CI is unaffected: the GitHub runners are `ubuntu-latest` (<= 24.04) and
  * install the recorder via `bunx playwright install --with-deps chromium`
