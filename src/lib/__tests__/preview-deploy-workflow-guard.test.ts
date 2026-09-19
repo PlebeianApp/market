@@ -434,6 +434,25 @@ describe('preview app serves a real document', () => {
 		expect(body).not.toContain('NIP46_RELAY_URL=wss://relay.nsec.app')
 	})
 
+	test('every deploy path advertises the project NIP-46 relay, not nsec.app', () => {
+		// Required 4 (maxime-tt review at 187408be): `NIP46_RELAY_URL` is the
+		// value `/api/config` serves as `nip46Relay`, and `NostrConnectQR` now
+		// defaults the QR lane to it — so whichever relay a deploy path writes
+		// there becomes the pick a new user is handed. `wss://relay.nsec.app`
+		// times out on TCP:443 (measured 2026-09-19, 3/3 attempts, while
+		// relay.plebeian.market — the project relay and `DEFAULT_NIP46_RELAYS[0]`
+		// — connected in the same window), and it is what deploy.yml,
+		// release.yml and deploy-auctionsdev.yml used to write. Assert every
+		// declaration, not just the preview's compose service.
+		const declared = WORKFLOW_PATHS.flatMap((file) =>
+			Array.from(readFileSync(join(REPO_ROOT, file), 'utf8').matchAll(/NIP46_RELAY_URL=(\S+)/g), (m) => [file, m[1]] as const),
+		)
+		// Non-vacuity control first: an empty list would satisfy the check below.
+		expect(declared.length).toBeGreaterThanOrEqual(4)
+		const unreachable = declared.filter(([, value]) => value !== 'wss://relay.plebeian.market')
+		expect(unreachable).toEqual([])
+	})
+
 	test('the health check also proves the relay WebSocket is reachable', () => {
 		// An app that serves HTML but cannot reach its relay is not a preview
 		// of this application (review finding 2, 2026-09-17).
