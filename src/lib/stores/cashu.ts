@@ -7,8 +7,8 @@
  * - Recovery of pending tokens on startup
  */
 import { Store } from '@tanstack/store'
-import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
-import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
+import { initializeCoco, Manager, getEncodedToken } from '@cashu/coco-core'
+import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
 import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
