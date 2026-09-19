@@ -453,6 +453,27 @@ describe('preview app serves a real document', () => {
 		expect(unreachable).toEqual([])
 	})
 
+	test('the app-code NIP-46 fallback is the project relay, not nsec.app', () => {
+		// Required 5 (maxime-tt review at 12073757). `src/index.tsx` decides the
+		// `/api/config.nip46Relay` value when NIP46_RELAY_URL is unset — local
+		// dev, CI, and any self-hosted instance — which is exactly the value
+		// `NostrConnectQR` now seeds the QR lane with. Before this fix the
+		// fallback was the relay the PR's own code comment calls fatal to the
+		// listener. The workflow guard above only covers declared env values;
+		// this covers the code default, at the layer that decides it.
+		const src = readFileSync(join(REPO_ROOT, 'src/index.tsx'), 'utf8')
+		expect(src).toContain("process.env.NIP46_RELAY_URL || 'wss://relay.plebeian.market'")
+		expect(src).not.toContain("process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'")
+	})
+
+	test('no workflow disables the e2e video-evidence requirement', () => {
+		// `E2E_VIDEO=off` is the recorded-context fixture's escape hatch; the
+		// Feature Quality Gate needs `required` on in CI. Assert no workflow
+		// turns it off so the requirement cannot silently lapse.
+		const offenders = WORKFLOW_PATHS.filter((file) => /E2E_VIDEO\s*[:=]\s*['"]?off/.test(readFileSync(join(REPO_ROOT, file), 'utf8')))
+		expect(offenders).toEqual([])
+	})
+
 	test('the health check also proves the relay WebSocket is reachable', () => {
 		// An app that serves HTML but cannot reach its relay is not a preview
 		// of this application (review finding 2, 2026-09-17).
