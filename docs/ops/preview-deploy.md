@@ -156,12 +156,16 @@ the configured app relay (`getMainRelay()`), not the page origin, so it goes
 through the same `/relay` route.
 
 **NIP-46 relay.** The compose service pins `NIP46_RELAY_URL` to
-`wss://relay.plebeian.market` instead of the upstream default
-`wss://relay.nsec.app`, which is unreachable and silently breaks the Nostr
-Connect / remote-signer lane. The app surfaces the value as `nip46Relay` on
-`/api/config`, and `NostrConnectQR` now defaults to it (it previously ignored
-the config and used a hardcoded list). Extension (NIP-07) and private-key logins
-do not use this relay at all.
+`wss://relay.plebeian.market`, the project's own app relay
+(`MAIN_RELAY_BY_STAGE.production`). `deploy.yml`, `release.yml` and
+`deploy-auctionsdev.yml` used to set `wss://relay.nsec.app` for their
+environments instead. That is not the upstream default but the app's own
+fallback (`NIP46_RELAY_URL` default in `src/index.tsx`), and three of this
+repo's workflows set it explicitly; the host is unreachable (TCP:443 times out),
+which silently breaks the Nostr Connect / remote-signer lane. The app surfaces
+the value as `nip46Relay` on `/api/config`, and `NostrConnectQR` now defaults to
+it (it previously ignored the config and used a hardcoded list). Extension
+(NIP-07) and private-key logins do not use this relay at all.
 
 The health check therefore asserts **both** that `/` serves a non-empty HTML
 document **and** that `wss://<sub>/relay` completes a WebSocket handshake and a
@@ -247,6 +251,12 @@ deploy package has to carry them:
   `styles/globals.css` → `@import 'tailwindcss'`: ship `styles/` **and**
   `bunfig.toml`, which enables `[serve.static] plugins =
 ["bun-plugin-tailwind"]` (the plugin that resolves that import).
+- `package.json` → `patchedDependencies` (`rxjs@7.8.2` →
+  `patches/rxjs@7.8.2.patch`): ship `patches/`. `bun install` exits 1 with
+  `error: Couldn't find patch file: 'patches/rxjs@7.8.2.patch'` when the patch
+  files are absent, so every partial deploy package (`deploy.yml`, `release.yml`,
+  `deploy-auctionsdev.yml`) stages `patches/` next to `package.json` and
+  `bun.lock` — the same way `infra/preview-vps/app.Dockerfile` copies both in.
 - Install the **full** dependency set — `bun install`, not
   `bun install --production`. The production install drops `tailwindcss` (a
   devDependency) while keeping `bun-plugin-tailwind`, and the bundle then fails
