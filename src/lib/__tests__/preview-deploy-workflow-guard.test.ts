@@ -19,7 +19,7 @@
  * These are text-level assertions on purpose: the workflow is the artifact under
  * test, and the repo carries no YAML dependency to parse it with.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
@@ -80,6 +80,34 @@ function previewSecretRefs(step: string): string[] {
 function runBody(step: string): string {
 	const at = step.indexOf('\n        run:')
 	return at < 0 ? '' : step.slice(at)
+}
+
+const WORKFLOWS_DIR = '.github/workflows'
+const WORKFLOW_PATHS = readdirSync(join(REPO_ROOT, WORKFLOWS_DIR))
+	.filter((f) => f.endsWith('.yml'))
+	.map((f) => `${WORKFLOWS_DIR}/${f}`)
+	.sort()
+
+/**
+ * Workflows that assemble a partial package: every one of them does
+ * `mkdir -p deploy-package` before selecting what to copy in. Derived from the
+ * workflow text rather than a hand-kept list, so a new partial-package workflow
+ * is covered the day it lands.
+ */
+function packagingWorkflows(): string[] {
+	return WORKFLOW_PATHS.filter((f) => readFileSync(join(REPO_ROOT, f), 'utf8').includes('mkdir -p deploy-package'))
+}
+
+/**
+ * Paths a workflow copies *into* `deploy-package/` — the inventory of the
+ * partial package. Only whole-path copies land here: a rename such as
+ * `cp infra/preview-vps/app.Dockerfile deploy-package/Dockerfile` is not part
+ * of the inventory and does not match.
+ */
+function stagedSources(file: string): string[] {
+	const body = readFileSync(join(REPO_ROOT, file), 'utf8')
+	const sources = [...body.matchAll(/^\s*cp (?:-r |--recursive )?(.+?) deploy-package\/?$/gm)].flatMap((m) => m[1].split(/\s+/))
+	return [...new Set(sources)].sort()
 }
 
 const required = provisionRequiredSecrets()
@@ -251,6 +279,39 @@ describe('preview app serves a real document', () => {
 		// The Dockerfile is baked into the uploaded package and built into the
 		// prebuilt app image on the host.
 		expect(body).toContain('app.Dockerfile deploy-package/Dockerfile')
+		// `package.json` pins `patchedDependencies` — `rxjs@7.8.2` →
+		// `patches/rxjs@7.8.2.patch` — and the package's own `bun install` applies
+		// that patch from disk, so the patch file belongs to the same inventory as
+		// `public/`, `styles/` and `bunfig.toml`.
+		expect(body).toMatch(/^\s*cp -r .*\bpatches\b.* deploy-package\/$/m)
+	})
+
+	test('the app image build context stages patches/ the way app.Dockerfile expects', () => {
+		// `infra/preview-vps/app.Dockerfile:25-27` is the reference shape: the
+		// manifests plus `patches/` are copied in, then `bun install` runs. The
+		// package the preview uploads has to satisfy the contract it is built
+		// with, so the two sides are asserted against each other rather than in
+		// isolation.
+		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
+		expect(dockerfile).toContain('COPY patches ./patches')
+		expect(dockerfile).toContain('RUN bun install')
+		expect(dockerfile.indexOf('COPY patches ./patches')).toBeLessThan(dockerfile.indexOf('RUN bun install'))
+	})
+
+	test('every workflow that stages a partial deploy package also stages patches/', () => {
+		// `package.json` pins `patchedDependencies` (`patches/rxjs@7.8.2.patch`),
+		// so every `bun install` run against a staged package — full or
+		// `--production` — resolves that path inside the package. Without it the
+		// install fails before it resolves anything else (measured on this repo:
+		// `bun install --production` in a directory holding the real
+		// package.json + bun.lock + bunfig.toml and no `patches/` → exit 1,
+		// `error: Couldn't find patch file: 'patches/rxjs@7.8.2.patch'`; the same
+		// directory with `patches/` → exit 0). Each offender is labelled with the
+		// file and the missing path so a failure names both.
+		const missing = packagingWorkflows()
+			.filter((file) => !stagedSources(file).includes('patches'))
+			.map((file) => `${file}: no patches/ in deploy-package/`)
+		expect(missing).toEqual([])
 	})
 
 	test('the app container starts the prebuilt image (no install at container start)', () => {
