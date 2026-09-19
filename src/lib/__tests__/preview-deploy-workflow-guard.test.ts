@@ -19,7 +19,7 @@
  * These are text-level assertions on purpose: the workflow is the artifact under
  * test, and the repo carries no YAML dependency to parse it with.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, test } from 'bun:test'
@@ -80,6 +80,34 @@ function previewSecretRefs(step: string): string[] {
 function runBody(step: string): string {
 	const at = step.indexOf('\n        run:')
 	return at < 0 ? '' : step.slice(at)
+}
+
+const WORKFLOWS_DIR = '.github/workflows'
+const WORKFLOW_PATHS = readdirSync(join(REPO_ROOT, WORKFLOWS_DIR))
+	.filter((f) => f.endsWith('.yml'))
+	.map((f) => `${WORKFLOWS_DIR}/${f}`)
+	.sort()
+
+/**
+ * Workflows that assemble a partial package: every one of them does
+ * `mkdir -p deploy-package` before selecting what to copy in. Derived from the
+ * workflow text rather than a hand-kept list, so a new partial-package workflow
+ * is covered the day it lands.
+ */
+function packagingWorkflows(): string[] {
+	return WORKFLOW_PATHS.filter((f) => readFileSync(join(REPO_ROOT, f), 'utf8').includes('mkdir -p deploy-package'))
+}
+
+/**
+ * Paths a workflow copies *into* `deploy-package/` — the inventory of the
+ * partial package. Only whole-path copies land here: a rename such as
+ * `cp infra/preview-vps/app.Dockerfile deploy-package/Dockerfile` is not part
+ * of the inventory and does not match.
+ */
+function stagedSources(file: string): string[] {
+	const body = readFileSync(join(REPO_ROOT, file), 'utf8')
+	const sources = [...body.matchAll(/^\s*cp (?:-r |--recursive )?(.+?) deploy-package\/?$/gm)].flatMap((m) => m[1].split(/\s+/))
+	return [...new Set(sources)].sort()
 }
 
 const required = provisionRequiredSecrets()
@@ -251,6 +279,39 @@ describe('preview app serves a real document', () => {
 		// The Dockerfile is baked into the uploaded package and built into the
 		// prebuilt app image on the host.
 		expect(body).toContain('app.Dockerfile deploy-package/Dockerfile')
+		// `package.json` pins `patchedDependencies` — `rxjs@7.8.2` →
+		// `patches/rxjs@7.8.2.patch` — and the package's own `bun install` applies
+		// that patch from disk, so the patch file belongs to the same inventory as
+		// `public/`, `styles/` and `bunfig.toml`.
+		expect(body).toMatch(/^\s*cp -r .*\bpatches\b.* deploy-package\/$/m)
+	})
+
+	test('the app image build context stages patches/ the way app.Dockerfile expects', () => {
+		// `infra/preview-vps/app.Dockerfile:25-27` is the reference shape: the
+		// manifests plus `patches/` are copied in, then `bun install` runs. The
+		// package the preview uploads has to satisfy the contract it is built
+		// with, so the two sides are asserted against each other rather than in
+		// isolation.
+		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
+		expect(dockerfile).toContain('COPY patches ./patches')
+		expect(dockerfile).toContain('RUN bun install')
+		expect(dockerfile.indexOf('COPY patches ./patches')).toBeLessThan(dockerfile.indexOf('RUN bun install'))
+	})
+
+	test('every workflow that stages a partial deploy package also stages patches/', () => {
+		// `package.json` pins `patchedDependencies` (`patches/rxjs@7.8.2.patch`),
+		// so every `bun install` run against a staged package — full or
+		// `--production` — resolves that path inside the package. Without it the
+		// install fails before it resolves anything else (measured on this repo:
+		// `bun install --production` in a directory holding the real
+		// package.json + bun.lock + bunfig.toml and no `patches/` → exit 1,
+		// `error: Couldn't find patch file: 'patches/rxjs@7.8.2.patch'`; the same
+		// directory with `patches/` → exit 0). Each offender is labelled with the
+		// file and the missing path so a failure names both.
+		const missing = packagingWorkflows()
+			.filter((file) => !stagedSources(file).includes('patches'))
+			.map((file) => `${file}: no patches/ in deploy-package/`)
+		expect(missing).toEqual([])
 	})
 
 	test('the app container starts the prebuilt image (no install at container start)', () => {
@@ -364,6 +425,55 @@ describe('preview app serves a real document', () => {
 		expect(body).not.toContain('APP_RELAY_URL=ws://nak-relay:10547')
 	})
 
+	test('the app advertises a reachable NIP-46 relay, not nsec.app', () => {
+		// wss://relay.nsec.app (the NIP46_RELAY_URL fallback) is unreachable,
+		// which breaks the Nostr Connect / remote-signer lane. The preview must
+		// advertise the project relay, which answers.
+		const body = stripComments(runBody(stepNamed(deployJob, CLAIM_STEP)))
+		expect(body).toContain('NIP46_RELAY_URL=wss://relay.plebeian.market')
+		expect(body).not.toContain('NIP46_RELAY_URL=wss://relay.nsec.app')
+	})
+
+	test('every deploy path advertises the project NIP-46 relay, not nsec.app', () => {
+		// Required 4 (maxime-tt review at 187408be): `NIP46_RELAY_URL` is the
+		// value `/api/config` serves as `nip46Relay`, and `NostrConnectQR` now
+		// defaults the QR lane to it — so whichever relay a deploy path writes
+		// there becomes the pick a new user is handed. `wss://relay.nsec.app`
+		// times out on TCP:443 (measured 2026-09-19, 3/3 attempts, while
+		// relay.plebeian.market — the project relay and `DEFAULT_NIP46_RELAYS[0]`
+		// — connected in the same window), and it is what deploy.yml,
+		// release.yml and deploy-auctionsdev.yml used to write. Assert every
+		// declaration, not just the preview's compose service.
+		const declared = WORKFLOW_PATHS.flatMap((file) =>
+			Array.from(readFileSync(join(REPO_ROOT, file), 'utf8').matchAll(/NIP46_RELAY_URL=(\S+)/g), (m) => [file, m[1]] as const),
+		)
+		// Non-vacuity control first: an empty list would satisfy the check below.
+		expect(declared.length).toBeGreaterThanOrEqual(4)
+		const unreachable = declared.filter(([, value]) => value !== 'wss://relay.plebeian.market')
+		expect(unreachable).toEqual([])
+	})
+
+	test('the app-code NIP-46 fallback is the project relay, not nsec.app', () => {
+		// Required 5 (maxime-tt review at 12073757). `src/index.tsx` decides the
+		// `/api/config.nip46Relay` value when NIP46_RELAY_URL is unset — local
+		// dev, CI, and any self-hosted instance — which is exactly the value
+		// `NostrConnectQR` now seeds the QR lane with. Before this fix the
+		// fallback was the relay the PR's own code comment calls fatal to the
+		// listener. The workflow guard above only covers declared env values;
+		// this covers the code default, at the layer that decides it.
+		const src = readFileSync(join(REPO_ROOT, 'src/index.tsx'), 'utf8')
+		expect(src).toContain("process.env.NIP46_RELAY_URL || 'wss://relay.plebeian.market'")
+		expect(src).not.toContain("process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'")
+	})
+
+	test('no workflow disables the e2e video-evidence requirement', () => {
+		// `E2E_VIDEO=off` is the recorded-context fixture's escape hatch; the
+		// Feature Quality Gate needs `required` on in CI. Assert no workflow
+		// turns it off so the requirement cannot silently lapse.
+		const offenders = WORKFLOW_PATHS.filter((file) => /E2E_VIDEO\s*[:=]\s*['"]?off/.test(readFileSync(join(REPO_ROOT, file), 'utf8')))
+		expect(offenders).toEqual([])
+	})
+
 	test('the health check also proves the relay WebSocket is reachable', () => {
 		// An app that serves HTML but cannot reach its relay is not a preview
 		// of this application (review finding 2, 2026-09-17).
@@ -416,5 +526,67 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('What green guarantees')
 		expect(body).toContain('/api/config')
 		expect(body).toContain('commit == the built SHA')
+	})
+})
+
+/**
+ * A fifth incident motivated this block: the PR #1271 preview deployed green
+ * but its relay started empty, so the app served `/setup — no app settings
+ * found` and there was no data to exercise. The deploy now seeds the minimum
+ * app settings (and, opt-in, the dev fixture data), then restarts the app
+ * because it caches app settings and the admin list at startup.
+ */
+describe('preview relay seeding', () => {
+	const SEED_STEP = 'Seed preview relay (app settings, optional dev data)'
+	const CADDY_STEP = 'Wait for Caddy auto-discovery'
+	const HEALTH_STEP = 'Health check'
+
+	const script = readFileSync(join(REPO_ROOT, 'scripts/seed-preview-settings.ts'), 'utf8')
+
+	test('the seed script is env-driven and never hardcodes a relay', () => {
+		expect(script).toContain('process.env.APP_RELAY_URL')
+		expect(script).toContain('process.env.APP_PRIVATE_KEY')
+		expect(script).not.toContain('ws://localhost:10547')
+		expect(script).not.toContain('TEST_APP_PRIVATE_KEY')
+	})
+
+	test('the seed script publishes the settings the app boots from', () => {
+		expect(script).toContain('31990')
+		expect(script).toContain('30000')
+		expect(script).toContain('10002')
+		expect(script).toContain("'plebeian-market-handler'")
+	})
+
+	test('the seed script is idempotent', () => {
+		expect(script).toContain('appSettingsExist')
+		expect(script).toContain('already-seeded')
+	})
+
+	test('the deploy seeds the relay through the browser-reachable wss URL', () => {
+		const seed = stepNamed(deployJob, SEED_STEP)
+		expect(seed).toContain('steps.secrets.outputs.previews_ready == ')
+		// The browser-reachable relay URL is injected via the step's `env:` so
+		// both the minimal script and the optional full seed share it.
+		expect(seed).toContain('wss://${{ steps.ports.outputs.subdomain }}/relay')
+		expect(runBody(seed)).toContain('bun run scripts/seed-preview-settings.ts')
+	})
+
+	test('the full dev seed is opt-in and runs only on the first seed', () => {
+		const body = runBody(stepNamed(deployJob, SEED_STEP))
+		expect(body).toContain('vars.PREVIEW_SEED_FULL')
+		expect(body).toContain('bun run scripts/seed.ts')
+		expect(body).toContain("grep -q '^seeded$'")
+	})
+
+	test('the app is restarted after seeding so the startup cache refreshes', () => {
+		const body = runBody(stepNamed(deployJob, SEED_STEP))
+		expect(body).toContain('infra/preview-vps/remote-ssh.sh')
+		expect(body).toContain('docker compose restart market-app')
+	})
+
+	test('seeding runs after Caddy converges and before the health check', () => {
+		const stepOrder = stepsOf(deployJob).map((s) => /- name: (.+)/.exec(s)?.[1]?.trim() ?? '')
+		expect(stepOrder.indexOf(SEED_STEP)).toBeGreaterThan(stepOrder.indexOf(CADDY_STEP))
+		expect(stepOrder.indexOf(SEED_STEP)).toBeLessThan(stepOrder.indexOf(HEALTH_STEP))
 	})
 })

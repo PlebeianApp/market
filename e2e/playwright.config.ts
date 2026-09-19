@@ -1,9 +1,14 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
+import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT, TARGETS_EXTERNAL_APP } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// Some hosts (CI images, slim local checkouts) have no bundled Playwright
+// Chromium. `E2E_BROWSER_CHANNEL=chrome` uses the system Google Chrome instead.
+// Unset on CI, so CI keeps using the downloaded bundled browser.
+const BROWSER_CHANNEL = process.env.E2E_BROWSER_CHANNEL
 
 export default defineConfig({
 	testDir: './tests',
@@ -24,42 +29,49 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] },
+			use: {
+				...devices['Desktop Chrome'],
+				...(BROWSER_CHANNEL ? { channel: BROWSER_CHANNEL } : {}),
+			},
 		},
 	],
 
 	// On CI, servers are started manually in the workflow for better visibility.
-	// Locally, Playwright manages the relay and dev server automatically.
-	webServer: process.env.CI
-		? []
-		: [
-				{
-					command: 'nak serve --hostname 0.0.0.0',
-					port: 10547,
-					reuseExistingServer: true,
-					stdout: 'pipe',
-					stderr: 'pipe',
-				},
-				{
-					// Seed the relay with app settings, then start the dev server.
-					// The dev server caches appSettings at startup, so events must
-					// exist on the relay before it initializes.
-					command: 'bun e2e/seed-relay.ts && NODE_ENV=test bun dev',
-					cwd: PROJECT_ROOT,
-					port: TEST_PORT,
-					reuseExistingServer: true,
-					stdout: 'pipe',
-					stderr: 'pipe',
-					env: {
-						NODE_ENV: 'test',
-						PORT: String(TEST_PORT),
-						APP_RELAY_URL: RELAY_URL,
-						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
-						LOCAL_RELAY_ONLY: 'true',
-						NIP46_RELAY_URL: RELAY_URL,
+	// Locally, Playwright manages the relay and dev server automatically —
+	// unless E2E_BASE_URL points at a deployed app, in which case starting a
+	// local relay + dev server would be pointless (and could silently make a
+	// "remote" run hit localhost instead).
+	webServer:
+		process.env.CI || TARGETS_EXTERNAL_APP
+			? []
+			: [
+					{
+						command: 'nak serve --hostname 0.0.0.0',
+						port: 10547,
+						reuseExistingServer: true,
+						stdout: 'pipe',
+						stderr: 'pipe',
 					},
-				},
-			],
+					{
+						// Seed the relay with app settings, then start the dev server.
+						// The dev server caches appSettings at startup, so events must
+						// exist on the relay before it initializes.
+						command: 'bun e2e/seed-relay.ts && NODE_ENV=test bun dev',
+						cwd: PROJECT_ROOT,
+						port: TEST_PORT,
+						reuseExistingServer: true,
+						stdout: 'pipe',
+						stderr: 'pipe',
+						env: {
+							NODE_ENV: 'test',
+							PORT: String(TEST_PORT),
+							APP_RELAY_URL: RELAY_URL,
+							APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
+							LOCAL_RELAY_ONLY: 'true',
+							NIP46_RELAY_URL: RELAY_URL,
+						},
+					},
+				],
 
 	globalSetup: './global-setup.ts',
 	globalTeardown: './global-teardown.ts',
