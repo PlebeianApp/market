@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-17). This ADR amends AUCTIONS.md and
+Accepted (2026-09-17) by c03rad0r (maintainer). This ADR amends AUCTIONS.md and
 ADR-0003 and governs the auction bid lifecycle end to end.
 
 This document supersedes the working draft circulated as `ADR-0020` (2026-09-09);
