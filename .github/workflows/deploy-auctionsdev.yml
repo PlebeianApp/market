@@ -46,6 +46,7 @@ jobs:
           cp -r dist deploy-package/
           cp -r src deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
+          cp -r patches deploy-package/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
