@@ -7,11 +7,17 @@ After=network-online.target
 Type=simple
 User=deployer
 Group=deployer
+# Soft Go-runtime budget; the environment file may override it. File mappings
+# and the other VPS services also need RAM, so this is below physical capacity.
+Environment=GOMEMLIMIT=1GiB
 EnvironmentFile=/etc/market-relay.env
 WorkingDirectory=/home/deployer
 ExecStart=/usr/local/bin/market-relay
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=120
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
 LimitNOFILE=65536
 
 [Install]
