@@ -483,7 +483,11 @@ export const useNotificationMonitor = () => {
 					return isUpdate && event.pubkey !== user.pubkey && isNewPurchaseUpdate(event)
 				})
 
-				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500)
+				// Owner scope: this read builds the notification routing table for the
+				// seller's own auctions, so it keeps malformed events visible — a
+				// malformed auction that the seller republishes must not silently lose
+				// its notification mapping in the meantime.
+				const sellerAuctions = await fetchAuctionsByPubkey(user.pubkey, 500, { includeInvalid: true })
 				const sellerProducts = await fetchProductsByPubkey(user.pubkey, true, 500)
 				const sellerAuctionKeyByRootEventId = new Map<string, string>()
 				const sellerAuctionKeyByCoordinate = new Map<string, string>()

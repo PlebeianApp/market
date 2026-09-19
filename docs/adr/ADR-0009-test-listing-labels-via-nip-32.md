@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (rev 5 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy; products on `master`, auctions on `auctions` — both implemented)
+Accepted (rev 6 — browsing-only gating + inspectability toggle + the discovery/curation surface taxonomy + spec-validity admission as the taxonomy's second rule; products on `master`, auctions on `auctions` — both implemented)
 
 ## Date
 
@@ -67,6 +67,13 @@ Use **NIP-32 labeling events** (kind 1985) to tag items as tests.
   every surface; what this taxonomy fixes is the _default_, so a stale or
   accidental label can never silently empty a surface an operator believes they
   control.
+- **The taxonomy is about filtering, not about labels (rev 6)** — a second,
+  independent rule now follows the same split: **spec-validity admission**
+  (an event that fails its kind's parser is not an item) is gated on discovery
+  surfaces, kept reachable by direct link with a notice naming the reason, and
+  ungated on owner/curation surfaces. See _Spec validity — the taxonomy applied
+  to the event format_ below. Anything that can hide an item from a surface
+  follows this shape; the label is its first instance, not its definition.
 
 ### Label event example
 
@@ -272,6 +279,91 @@ exclusion is exercised on every pull request instead of only in the scheduled
 the spec stops matching the gate pattern, the same guard the `OG Meta Tags`
 family carries.
 
+### Spec validity — the taxonomy applied to the event format (rev 6)
+
+Rev 4 named the surface split; rev 6 records that it is a rule about **gating in
+general**, and adds the two obligations a gate carries. The worked example is
+kind-30408 (auctions), where the label mechanism and spec-validity admission sit
+side by side on the same reads.
+
+**Why a second rule.** A test label answers "should this real item be shown?".
+Spec validity answers a prior question: "is this an item at all?". An event that
+fails the kind's parser (missing required tags, a tag value outside its range)
+is not an auction, and before this revision it was still rendered — it took a
+card slot in the feed and, because a missing close time read as `0`, it took
+slot #1 under the default "Ending Soon" sort and rendered "No end date". The
+gate for it cannot be a label: nobody has to curate it away, and the parser is
+already the definition of the rule.
+
+**The rule, stated once.** An event is admissible when the repository's own
+parser for its kind accepts it. `src/lib/schemas/auction/auctionAdmission.ts`
+holds no second required-tag list: it calls `parseAuctionEvent` and translates
+the structured failure into tag-scoped reasons. If the parser learns a
+constraint, every gate and every notice learns it in the same commit — the
+alternative is the drift that produced the original defect.
+
+**Where the gate is applied (auctions).**
+
+- **Gated (discovery):** `fetchAuctions` (the auction feed; applied to the
+  collapsed version set, so the decision is about the version the feed would
+  render) and `fetchAuctionsByPubkey` in its default `browsing` scope (seller
+  profile, "more from seller"). Query keys are scoped
+  (`auctionKeys.byPubkey(pubkey, 'browsing' | 'owner')`) so the two rules cannot
+  share a cache entry.
+- **Ungated, by decision:** `fetchAuction` (detail by id), `fetchAuctionByATag`
+  (detail by a-tag) — the direct-link promise — plus the owner dashboard list,
+  its detail page and the notification-routing read, which pass
+  `{ includeInvalid: true }`: a seller cannot republish a corrected event they
+  cannot see. The Featured carousel inherits the same ungated by-a-tag read
+  (rev 4 curation default).
+- **UI:** `InvalidAuctionNotice` renders on the public detail page and the
+  owner's dashboard detail page, naming the offending tags
+  (`missing the required tag \`start_at\``) rather than saying "invalid". It
+reads the same `inspectAuctionAdmission` the gate reads, so the badge can never
+  disagree with the reason the auction is absent from the feed.
+
+**A gated item is not interactive.** Reachability by direct link is for
+_inspection_, not for participation. A malformed auction keeps its notice and
+loses its bid panel (`AuctionBidder` renders `InvalidAuctionBidBlock`): a bid
+would lock the bidder's eCash to a seller-derived P2PK key at the mint against an
+event the validators refuse, and the funds stay locked until the locktime.
+Every number the bid path checks (window, floor, increment) is derived from the
+same tags the parser could not read, so the panel would be showing guesses.
+The same principle applies to any future admission rule: gate the read _and_
+close the write.
+
+**Owner surfaces opt out of the gate, never of the notice.** The dashboard keeps
+the event visible with the notice attached, which is what makes the correction
+path (republish the addressable event) reachable at all.
+
+**Ordering is a separate defect, and stays separate.** A gate does not fix a
+comparator: `getAuctionEndingSoonRank` buckets cutoffs into live → unknown →
+ended, so a value the parser cannot read never outranks a real auction on the
+surfaces that are deliberately ungated. Pinned as pure functions in
+`src/lib/__tests__/auctionEndingSoonOrder.test.ts`.
+
+**Scope of rev 6.** The obligations above are written as the general shape for
+any admission rule, but only kind-30408 implements one today. Other kinds are
+surfaced without an equivalent check — see roadmap item 10. The repository-level
+AGENTS.md rule that would make this binding for every kind ("Event validation
+before surfacing") is drafted but not landed: AGENTS.md is a protected file and
+the write needs the maintainer's explicit approval.
+
+Coverage:
+
+- `src/lib/__tests__/auctionAdmission.test.ts` — the parser as the single source
+  of truth (missing tag, zero timing, non-numeric timing, wrong kind, one issue
+  per failing tag) and the batch filter.
+- `src/queries/__tests__/auctionAdmissionGate.test.ts` — the read boundary:
+  feed drops, the version the feed would render is the one judged, the owner
+  scope keeps the event, the two scopes cannot share a cache entry, and the
+  direct reads stay ungated.
+- `e2e/tests/auction-invalid-event-gate.spec.ts` — the relay really holds the
+  malformed event, the feed omits it, the ten-minute control still outranks the
+  tomorrow control, the direct link renders it with the notice naming the tag,
+  the bid panel is replaced by the block, and a well-formed auction renders
+  neither.
+
 ## Consequences
 
 **Positive:**
@@ -283,6 +375,9 @@ family carries.
 - Works regardless of how the item was published (our app, third-party
   clients, direct relay writes).
 - No user is ever hidden by this mechanism.
+- Spec-validity admission (rev 6) needs no curator: an event that is not an item
+  is not shown, and the same predicate answers the detail page's notice, the
+  feed's gate and the bid panel's block.
 
 **Negative / trade-offs accepted:**
 
@@ -296,6 +391,15 @@ family carries.
   explicitly chose, which would get worse once CMS page authors inherit an
   ambient filter they cannot see. The surface taxonomy and the CMS block-level
   opt-in are a follow-up proposal.
+- **Admission inherits the parser's strictness (rev 6).** Tightening a schema is
+  now also a decision about what disappears from browsing: the zero-timing ruling
+  (`start_at = 0` + `end_at = 0`) reclassified a shape that used to be shown and
+  sorted last. That is the intended direction — the parser is the single
+  definition of an item — but it means a schema change is a user-visible change
+  and has to be reviewed as one (spec + notice copy + gate coverage together).
+- **Only one kind implements admission today (rev 6).** Auctions are covered;
+  other kinds are still surfaced on the strength of their shape. Recorded as a
+  gap to close per kind, not as a precedent that shape-only rendering is fine.
 
 ## Roadmap
 
@@ -320,6 +424,14 @@ family carries.
 9. Auctions: the same taxonomy applies to the auction feed (discovery) and to
    any curated auction surface, via the shared `testLabelFilters` layer.
    **Implemented** — see _Auctions — surface map_ above.
+10. **Spec-validity admission per event kind (rev 6)** — implemented for
+    kind-30408 only. The follow-up is a sweep: for every kind the app renders,
+    decide whether a parser-backed admission rule belongs on its discovery
+    surfaces, then write the parser first and gate with it. A repository-level
+    AGENTS.md rule ("Event validation before surfacing") is drafted to make the
+    obligation binding for new kinds; it needs maintainer approval, since
+    AGENTS.md is a protected file. This item tracks the kinds that do not meet
+    the obligation yet.
 
 ## Related
 
@@ -331,5 +443,8 @@ family carries.
 - Query-layer gate and its ADR-0009 tests:
   `src/lib/utils/testLabelFilters.ts`, `src/queries/testLabels.tsx`,
   `src/queries/products.tsx`.
+- Spec-validity admission (rev 6): `src/lib/schemas/auction/auctionAdmission.ts`
+  (the predicate), `src/components/InvalidAuctionNotice.tsx` (the notice and the
+  bid block), `src/lib/utils/auctions.ts` (the "Ending Soon" buckets).
 - Rev 1 of this ADR (blacklist-based) lives in this branch's history.
 - Parked proposals from #1240 in the fork backlog.

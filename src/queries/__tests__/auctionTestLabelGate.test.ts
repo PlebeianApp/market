@@ -136,6 +136,8 @@ beforeAll(async () => {
 const MERCHANT_PUBKEY = 'c'.repeat(64)
 const OTHER_PUBKEY = 'd'.repeat(64)
 const LABELER_PUBKEY = 'a'.repeat(64)
+/** Auditor listed on the auction fixtures — required by AUCTIONS.md §4.1. */
+const AUDITOR_PUBKEY = 'e'.repeat(64)
 
 // d-tags → coordinates (kind 30408 = auction listing)
 const LABELED_D = 'labeled-auction'
@@ -152,6 +154,12 @@ const ALL_COORDINATES = [LABELED_COORD, CONTROL_COORD, OTHER_COORD]
  * A minimal but structurally real auction event. Two events sharing a d-tag are
  * "versions" of one auction: identical immutable tags, different `created_at`
  * and `id`, which is what `resolveAuctionVersionSet` collapses.
+ *
+ * Every required tag is present on purpose. The feed is gated on spec validity
+ * as well as on labels (`filterAdmissibleAuctionEvents`, AUCTIONS.md §4.1), so a
+ * fixture that is not a well-formed auction would be dropped before the label
+ * gate this file pins ever ran — and the assertions below would pass for the
+ * wrong reason.
  */
 const makeAuction = (params: { id: string; pubkey: string; dTag: string; created_at?: number }): NostrEventLike => ({
 	id: params.id,
@@ -163,6 +171,21 @@ const makeAuction = (params: { id: string; pubkey: string; dTag: string; created
 		['d', params.dTag],
 		['title', `Auction ${params.dTag}`],
 		['schema', 'auction_v1'],
+		['auction_type', 'english'],
+		['currency', 'SAT'],
+		['start_at', '1700000000'],
+		['end_at', '1700086400'],
+		['max_end_at', '1700086400'],
+		['settlement_grace', '60'],
+		['starting_bid', '1000'],
+		['bid_increment', '100'],
+		['reserve', '0'],
+		['mint', 'https://mint.example.com'],
+		['p2pk_xpub', 'xpub-fixture'],
+		['auditors', AUDITOR_PUBKEY],
+		['auditor_quorum', '1'],
+		['key_scheme', 'hd_p2pk'],
+		['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 	],
 })
 

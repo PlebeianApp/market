@@ -134,7 +134,13 @@ async function seedEndedAuction(
 	const maxEndAt = locktime === MOCK_LOCKTIME_FUTURE ? 1 : 50
 	const settlementGrace = locktime - maxEndAt
 	const endAt = maxEndAt
-	const startAt = 0
+	// Positive on purpose. A timing tag may not be `0` — the range is part of the
+	// format, and the parser gates a non-positive timing (maintainer ruling of
+	// 2026-09-19, AUCTIONS.md §4.1), so `start_at = 0` made these auctions
+	// inadmissible and the settlement descriptor had nothing to render. The value
+	// stays in 1970 so the auction has long ended and the settlement window is
+	// expired, which is what these cases assert.
+	const startAt = 1
 	const now = Math.floor(Date.now() / 1000)
 	const dTag = `e2e-settlement-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
 	const coordinate = `30408:${sellerPk}:${dTag}`

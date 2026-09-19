@@ -33,7 +33,7 @@ import {
 } from '../../auction/constants'
 import type { MinBidCurve, MinBidCurveShape, ParsedAuctionEvent } from '../../auction/events'
 import type { NostrEventLike } from '../../nostr/eventLike'
-import { addressableCoordinate, nostrEventIdHex, nostrPubkeyHex, nonNegativeInt, positiveInt, unixSeconds } from './common'
+import { addressableCoordinate, nostrEventIdHex, nostrPubkeyHex, nonNegativeInt, positiveInt, positiveUnixSeconds } from './common'
 import { readIntegerTag, readMultiTag, readSingleTag } from './tagAccess'
 
 // ----------------------------------------------------------------------------
@@ -42,6 +42,14 @@ import { readIntegerTag, readMultiTag, readSingleTag } from './tagAccess'
 
 const MIN_BID_CURVE_MIN_PEAK = 1
 const MIN_BID_CURVE_MAX_PEAK = 100
+
+/**
+ * Timing tags that MUST be present on a kind-30408 event (AUCTIONS.md §4.1,
+ * "Required tags"). Presence is checked here; the value ranges are the
+ * schema's job — and since the zero-timing ruling, the range is *also* gating:
+ * a timing tag may not be `0` (see `positiveUnixSeconds`).
+ */
+const REQUIRED_TIMING_TAGS = ['start_at', 'end_at'] as const
 
 const parseMinBidCurve = (raw: string | undefined): MinBidCurve => {
 	if (!raw) return { shape: 'none', peakMultiplier: 1, raw: '' }
@@ -75,9 +83,9 @@ export const AuctionEventSchema = z
 		summary: z.string().optional(),
 		content: z.string().default(''),
 		auctionType: z.literal(AUCTION_TYPE_ENGLISH, { message: `auction_type must equal "${AUCTION_TYPE_ENGLISH}"` }),
-		startAt: unixSeconds,
-		endAt: unixSeconds,
-		maxEndAt: unixSeconds,
+		startAt: positiveUnixSeconds,
+		endAt: positiveUnixSeconds,
+		maxEndAt: positiveUnixSeconds,
 		settlementGrace: positiveInt,
 		currency: z.literal('SAT', { message: 'currency must be SAT' }),
 		reserve: nonNegativeInt,
@@ -111,13 +119,19 @@ export type AuctionEventInput = z.infer<typeof AuctionEventSchema>
 // ----------------------------------------------------------------------------
 
 /**
+ * Structured (non-Zod) parse failure. `tag` names the protocol tag the failure
+ * is about when it is tag-scoped, so a caller can render a precise reason
+ * (the malformed-event notice does exactly that) without re-deriving it from
+ * the message string.
+ */
+export type ParseAuctionEventError = { message: string; code: string; tag?: string }
+
+/**
  * Discriminated result. We don't throw because validators / clients
  * often iterate over many events and want to skip individual bad ones
  * without try/catch.
  */
-export type ParseAuctionEventResult =
-	| { ok: true; value: ParsedAuctionEvent }
-	| { ok: false; error: z.ZodError | { message: string; code: string } }
+export type ParseAuctionEventResult = { ok: true; value: ParsedAuctionEvent } | { ok: false; error: z.ZodError | ParseAuctionEventError }
 
 /**
  * Parse a raw kind-30408 event into a {@link ParsedAuctionEvent}.
@@ -125,7 +139,8 @@ export type ParseAuctionEventResult =
  * Failure modes:
  *   - Wrong kind on the event → `wrong_kind`
  *   - Missing REQUIRED tag (`d`, `title`, `mint`, `auditors`, `p2pk_xpub`,
- *     `starting_bid`) → `missing_required_tag`, or a ZodError with field path
+ *     `starting_bid`, `start_at`, `end_at`) → `missing_required_tag` with the
+ *     offending tag named in `error.tag`, or a ZodError with field path
  *   - Tag value fails format / range constraint → ZodError
  */
 export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResult => {
@@ -143,11 +158,45 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 	const settlementPolicy = readSingleTag(event, 'settlement_policy') ?? ''
 	const keyScheme = readSingleTag(event, 'key_scheme') ?? ''
 
-	const startAt = readIntegerTag(event, 'start_at') ?? 0
-	const endAt = readIntegerTag(event, 'end_at') ?? 0
-	const maxEndAt = readIntegerTag(event, 'max_end_at') ?? endAt
 	const settlementGrace = readIntegerTag(event, 'settlement_grace') ?? 0
 	const reserve = readIntegerTag(event, 'reserve') ?? 0
+
+	// `start_at` and `end_at` are REQUIRED tags (AUCTIONS.md §4.1, "Required
+	// tags"). The old `?? 0` fallback silently turned tag omission into the unix
+	// epoch, and that is exactly what made a malformed event win the feed: a
+	// missing close time reads as `0`, `0` is not "ended", and `0` beats every
+	// real `end_at` in the "Ending Soon" comparison — so the card sat at slot #1
+	// with "No end date". Same class as the `starting_bid` fallback below
+	// (#1315): omission is now a structured failure, not a plausible-looking
+	// default.
+	//
+	// Presence *and* range are gating. Presence is checked here, because a
+	// missing tag has no field to fail in; the range is the schema's
+	// `positiveUnixSeconds` on all three timing fields, so a *present* `0` —
+	// `start_at = 0` + `end_at = 0`, the one zero-cutoff shape the old
+	// `end_at >= start_at` invariant could not refuse — is now refused as well
+	// (maintainer ruling, 2026-09-19: "gate completely on invalid event
+	// format"). A timing value of `0` is the epoch, which no auction has ever
+	// legitimately started or closed at; treating it as an absent value is what
+	// the format always meant. `max_end_at` keeps its `?? endAt` derivation —
+	// §6.0 defines `max_end_at = end_at` for the no-anti-snipe-window form, so
+	// that default is the spec's own value rather than a guess, and the derived
+	// value is positive whenever `end_at` is.
+	for (const timingTag of REQUIRED_TIMING_TAGS) {
+		if (readSingleTag(event, timingTag) === undefined) {
+			return {
+				ok: false,
+				error: {
+					code: 'missing_required_tag',
+					tag: timingTag,
+					message: `auction is missing the required \`${timingTag}\` tag (AUCTIONS.md §4.1)`,
+				},
+			}
+		}
+	}
+	const startAt = readIntegerTag(event, 'start_at') ?? Number.NaN
+	const endAt = readIntegerTag(event, 'end_at') ?? Number.NaN
+	const maxEndAt = readIntegerTag(event, 'max_end_at') ?? endAt
 
 	// `starting_bid` is REQUIRED (AUCTIONS.md §3, ADR-0012 Phase 1). It is the
 	// auction's absolute bid floor and the only amount-based check a validator
@@ -168,6 +217,7 @@ export const parseAuctionEvent = (event: NostrEventLike): ParseAuctionEventResul
 			ok: false,
 			error: {
 				code: 'missing_required_tag',
+				tag: 'starting_bid',
 				message: 'auction is missing the required `starting_bid` tag (AUCTIONS.md §3)',
 			},
 		}

@@ -33,13 +33,14 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import { useSubscriptionEvents } from '@/lib/nostr/useSubscriptionEvents'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import { auctionKeys } from './queryKeyFactory'
+import { auctionKeys, type AuctionByPubkeyScope } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { excludeTestLabeledEvents } from '@/queries/testLabels'
 import { verifyNostrEventSignature } from '@/lib/nostr/event-signature'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import type { ValidatedBidSet } from '@/lib/auction/bidValidation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { filterAdmissibleAuctionEvents } from '@/lib/schemas/auction/auctionAdmission'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
@@ -180,13 +181,16 @@ const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: nu
 		'#d': [dTag],
 		limit,
 	})
-	// NOT test-label gated, deliberately. This read resolves a coordinate's
-	// version set for three callers that must keep a labeled auction reachable:
-	// detail-by-id, detail-by-a-tag, and the Featured carousel's by-a-tag read
-	// (a curation surface, ungated by the ADR-0009 rev 4 taxonomy). ADR-0009
-	// step 3 — "the label never removes the item from direct navigation" — is
-	// only true if this read stays clean. The gate belongs to the discovery
-	// surface that composes it: `fetchAuctions`.
+	// NOT gated, deliberately — neither on test labels nor on spec validity. This
+	// read resolves a coordinate's version set for three callers that must keep a
+	// labeled *and* a malformed auction reachable: detail-by-id,
+	// detail-by-a-tag, and the Featured carousel's by-a-tag read (a curation
+	// surface, ungated by the ADR-0009 rev 4 taxonomy). ADR-0009 step 3 — "the
+	// label never removes the item from direct navigation" — is only true if this
+	// read stays clean, and the same holds for validity: the detail page has to
+	// resolve the event to render the notice that explains why it is missing from
+	// browsing. The gates belong to the surfaces that compose this read:
+	// `fetchAuctions` and `fetchAuctionsByPubkey`.
 	return filterDeletedAuctions(filterBlacklistedEvents(events))
 }
 
@@ -201,7 +205,13 @@ export const fetchAuctions = async (limit: number = 200): Promise<NostrEventLike
 	// test-label gate, then collapse versions. The gate is coordinate-based, so
 	// every version of a labeled auction drops together.
 	const filteredEvents = await excludeTestLabeledEvents(filterDeletedAuctions(filterBlacklistedEvents(events)))
-	return collapseAuctionVersions(filteredEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	// Spec-validity admission (AUCTIONS.md §4.1). This is a *browsing* gate, not
+	// a read gate: an event that is shaped like a 30408 but is not a well-formed
+	// auction must not take a card slot — least of all slot #1, which it wins
+	// outright when its close time is missing. Applied to the collapsed set, so
+	// the decision is made about the version the feed would actually render.
+	const admittedEvents = filterAdmissibleAuctionEvents(collapseAuctionVersions(filteredEvents))
+	return admittedEvents.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuction = async (id: string, verifySignatures = false): Promise<NostrEventLike | null> => {
@@ -238,7 +248,23 @@ export const fetchAuctionWithRetry = async (
 	return null
 }
 
-export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100): Promise<NostrEventLike[]> => {
+/**
+ * Options for the by-pubkey auction read. The spec-validity gate (see
+ * `inspectAuctionAdmission`) applies by default, because this read backs
+ * browsing surfaces — the seller's profile and "more from seller". The owner
+ * dashboard opts out: ADR-0009 keeps the owner's own inventory reachable, and an
+ * owner cannot republish a corrected event they cannot see. The detail page
+ * carries the notice that explains the state either way.
+ */
+export interface AuctionByPubkeyReadOptions {
+	includeInvalid?: boolean
+}
+
+export const fetchAuctionsByPubkey = async (
+	pubkey: string,
+	limit: number = 100,
+	options: AuctionByPubkeyReadOptions = {},
+): Promise<NostrEventLike[]> => {
 	if (!pubkey) return []
 
 	const filter: NostrFilter = {
@@ -248,10 +274,13 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 	}
 
 	const events = await applesauceIo.fetchEvents(filter)
-	// By-pubkey surface stays reachable by design (ADR-0009: browsing-only gating) — no label filter here.
-	return collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events))).sort(
-		(a, b) => (b.created_at || 0) - (a.created_at || 0),
-	)
+	// Test labels do not gate this read (ADR-0009: label gating is
+	// browsing-only, and this surface is also how the owner reaches their own
+	// inventory). Spec validity does, unless the caller opts out — see
+	// `AuctionByPubkeyReadOptions`.
+	const collapsed = collapseAuctionVersions(filterDeletedAuctions(filterBlacklistedEvents(events)))
+	const admitted = options.includeInvalid ? collapsed : filterAdmissibleAuctionEvents(collapsed)
+	return admitted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
 export const fetchAuctionByATag = async (pubkey: string, dTag: string): Promise<NostrEventLike | null> => {
@@ -614,12 +643,14 @@ export const auctionsQueryOptions = (limit: number = 200) =>
 		refetchOnMount: 'always',
 	})
 
-export const auctionsByPubkeyQueryOptions = (pubkey: string, limit: number = 100) =>
-	queryOptions({
-		queryKey: auctionKeys.byPubkey(pubkey),
-		queryFn: () => fetchAuctionsByPubkey(pubkey, limit),
+export const auctionsByPubkeyQueryOptions = (pubkey: string, limit: number = 100, options: AuctionByPubkeyReadOptions = {}) => {
+	const scope: AuctionByPubkeyScope = options.includeInvalid ? 'owner' : 'browsing'
+	return queryOptions({
+		queryKey: auctionKeys.byPubkey(pubkey, scope),
+		queryFn: () => fetchAuctionsByPubkey(pubkey, limit, options),
 		enabled: !!pubkey,
 	})
+}
 
 export const auctionQueryOptions = (id: string, verifySignatures = false, retryUnavailable = false) =>
 	queryOptions({
@@ -806,22 +837,27 @@ export const getAuctionSettlementGrace = (event: NostrEventLike | null): number 
 
 export const getAuctionExtensionRule = (event: NostrEventLike | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
 
+/**
+ * Display-side bid floor. Reads `starting_bid` and nothing else.
+ *
+ * The old `price` fallback made this a second source of truth for the same
+ * number: `price` is a product-shaped display tag, while `starting_bid` is the
+ * protocol floor the parser hard-fails on when absent (#1315) and the value the
+ * settlement path and the validators read. A malformed event with no floor
+ * therefore rendered a plausible one here — the same "a missing value silently
+ * becomes a plausible one" defect this PR's gate closes — and two callers could
+ * disagree about the floor of one auction.
+ *
+ * Absent or unparseable → `0`, i.e. "no declared floor". The detail page's
+ * invalid-event notice states that the tag is missing, so the `0` is explained
+ * rather than implied.
+ */
 export const getAuctionStartingBid = (event: NostrEventLike | null): number => {
 	if (!event) return 0
 
 	const startingBidTag = event.tags.find((t) => t[0] === 'starting_bid')
-	if (startingBidTag?.[1]) {
-		const parsed = parseInt(startingBidTag[1], 10)
-		if (!isNaN(parsed)) return parsed
-	}
-
-	const priceTag = event.tags.find((t) => t[0] === 'price')
-	if (priceTag?.[1]) {
-		const parsed = parseInt(priceTag[1], 10)
-		if (!isNaN(parsed)) return parsed
-	}
-
-	return 0
+	const parsed = startingBidTag?.[1] ? parseInt(startingBidTag[1], 10) : Number.NaN
+	return Number.isNaN(parsed) ? 0 : parsed
 }
 
 export const getAuctionBidIncrement = (event: NostrEventLike | null): number => {

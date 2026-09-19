@@ -21,9 +21,21 @@ export const auctionKeys = {
 	pathReleasesForList: (auctionCoordinates: string[]) => [...auctionKeys.all, 'pathReleases', 'forList', auctionCoordinates] as const,
 	verdicts: (auctionId: string) => [...auctionKeys.all, 'verdicts', auctionId] as const,
 	winResolution: (auctionId: string, bidId: string) => [...auctionKeys.all, 'winResolution', auctionId, bidId] as const,
-	byPubkey: (pubkey: string) => [...auctionKeys.all, 'byPubkey', pubkey] as const,
+	byPubkey: (pubkey: string, scope: AuctionByPubkeyScope = 'browsing') => [...auctionKeys.all, 'byPubkey', pubkey, scope] as const,
+	/**
+	 * Prefix covering every scope of one pubkey's auctions. Use this for
+	 * invalidation: `byPubkey` alone is a full key, so invalidating it would
+	 * leave the other scope stale after a publish.
+	 */
+	byPubkeyAll: (pubkey: string) => [...auctionKeys.all, 'byPubkey', pubkey] as const,
 	byATag: (pubkey: string, dTag: string) => [...auctionKeys.all, 'byATag', pubkey, dTag] as const,
 } as const
+
+/**
+ * Which spec-validity rule applies to a by-pubkey auction read. See
+ * `AuctionByPubkeyReadOptions` in `@/queries/auctions`.
+ */
+export type AuctionByPubkeyScope = 'browsing' | 'owner'
 
 export const testLabelKeys = {
 	all: ['testLabels'] as const,

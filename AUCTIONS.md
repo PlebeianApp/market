@@ -146,8 +146,9 @@ There is intentionally no product reference (`a` tag) in v1.
 - `d`: auction identifier.
 - `title`: display title.
 - `auction_type`: `english` (v1 required).
-- `start_at`: unix seconds.
-- `end_at`: unix seconds.
+- `start_at`: unix seconds. **Positive** — `0` is not a timing value (see the
+  amendment below).
+- `end_at`: unix seconds. **Positive**, same rule.
 - `currency`: `SAT` (v1 required).
 - `starting_bid`: the auction's **absolute bid floor**, in sats. Every
   kind-1023 bid MUST satisfy `amount ≥ starting_bid`; a bid below it is
@@ -197,6 +198,33 @@ There is intentionally no product reference (`a` tag) in v1.
   reputation events (kind 30440); they MUST NOT use the opinions of
   unlisted validators when deciding whether bids count for _this_
   auction. At least one `auditors` tag is REQUIRED.
+
+> **Amendment (2026-09-19, maintainer ruling — "gate completely on invalid
+> event format"):** the timing tags are required **and** must be **positive** unix
+> seconds. `0` is not a timing value; it is the absent value written as a number,
+> and a close time of `0` is what let a malformed event win the default "Ending
+> Soon" ordering outright. Concretely:
+>
+> - a **missing** `start_at` / `end_at` is a parse failure
+>   (`missing_required_tag`, naming the tag that is absent);
+> - a **present** non-positive `start_at` / `end_at` / `max_end_at` is a parse
+>   failure as well (`invalid_tag_value` on that tag). `start_at = 0` +
+>   `end_at = 0` used to pass, because `end_at ≥ start_at` and
+>   `max_end_at ≥ end_at` are trivially true at zero.
+>
+> Both are **gating**: an event that fails either is not an auction, so it is
+> excluded from the discovery surfaces (auction feed, browse pages, seller
+> profile) and it is **not biddable** — a bid against it would lock the bidder's
+> eCash against an event the validators refuse. It stays reachable by direct
+> link, where the app states which tags failed (see ADR-0009 rev 6). Implemented
+> once, as `positiveUnixSeconds` on the kind-30408 schema
+> (`src/lib/schemas/auction/auctionEvent.ts`), and enforced on every surface
+> through `src/lib/schemas/auction/auctionAdmission.ts` — the same predicate the
+> notice renders, so the two can never disagree.
+>
+> Unaffected by this amendment: `starting_bid` MAY be `0` (there is no
+> protocol-fixed minimum sat value — the floor is the seller's decision, ADR-0012
+> Phase 1), and `reserve` MAY be `0`.
 
 ### Optional auction tags
 
@@ -1314,6 +1342,13 @@ If you collapse any two:
 on shared infrastructure; sub-10-minute values are questionable in
 production. Dev environments use a shorter value (≈ 30 s) for test
 velocity, not as a design example.
+
+All three timestamps are **positive** unix seconds. `0` is not an instant: it
+satisfies every ordering invariant above while meaning "no close time at all",
+which is exactly how a malformed event won the "Ending Soon" ordering. A zero
+`start_at`, `end_at` or `max_end_at` is a parse failure on the listing event
+(§4.1 amendment, 2026-09-19), so such an event is not an auction, is excluded
+from the discovery surfaces, and is not biddable.
 
 ## 6.1 Bid floor and the anti-snipe curve
 

@@ -89,6 +89,43 @@ already exists.
 - Do not turn Wave 0 guidance into automatic push, merge, CI rerun, deployment,
   or broad rewrite instructions.
 
+## Event Validation Before Surfacing
+
+Relay data is untrusted (see Constraints). This section states what that means
+at the surface level: an event becomes an _item_ only after the repository's
+parser for its kind accepts it.
+
+- Every event kind the app renders must have a parser under `src/lib/schemas/`
+  that is the single definition of a valid item for that kind. Surfaces apply
+  that parser before the event is rendered as an item — an event that merely has
+  the right shape is not a valid item.
+- **Discovery surfaces drop what the parser rejects**: home feed, paginated
+  browse, NIP-50 search (including its seller-name expansion), collections, the
+  auction feed, and seller profiles.
+- **Direct navigation still resolves the event** (by id, by coordinate) and
+  states _which_ constraint failed. A silent disappearance, or a bare "not
+  found" for an event that exists on the relay, is not an acceptable outcome:
+  the author cannot fix what they cannot see, and a visitor cannot tell a
+  curated item from a broken one.
+- **A gated event is not interactive.** No bid, purchase, claim, or settlement
+  action may be offered on an event the parser rejects: those flows lock or move
+  funds, and every number they validate is derived from the tags the parser could
+  not read.
+- **Owner surfaces stay ungated** so the author can see the event and republish a
+  corrected version — the owner's dashboard list, its detail page, and reads
+  that build routing tables for the owner's own items. The notice travels with
+  the event there too.
+- **The gate and the notice read the same predicate**, so a badge can never
+  disagree with the reason an item is missing from a feed.
+- **Status (2026-09-19): implemented for kind 30408 (auctions)** —
+  `src/lib/schemas/auction/auctionAdmission.ts`, ADR-0009 rev 6, AUCTIONS.md §4.1
+  amendment. Other kinds are a known gap; closing it means writing the parser
+  first and gating with it, never adding a second required-tag list next to a
+  feed.
+- Tightening a parser is a user-visible change, because it reclassifies events
+  that used to render. Land the spec text, the gate, and the notice copy in the
+  same change.
+
 ## Test Isolation
 
 Tests must not make network calls to external services. The only allowed
