@@ -53,11 +53,6 @@ mock.module('@/lib/stores/blacklist', () => ({
 	},
 }))
 
-// Identity label gate: keeps this file offline and about admission only.
-mock.module('@/queries/testLabels', () => ({
-	excludeTestLabeledEvents: async <T>(events: T[]): Promise<T[]> => events,
-}))
-
 mock.module('@/lib/stores/ndk', () => ({
 	getWriteRelays: () => [],
 	getMainRelay: () => null,
