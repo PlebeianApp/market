@@ -139,9 +139,9 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
 - `src/publish/featured.tsx`.
 - `src/routes/_dashboard-layout/dashboard/index.tsx`.
 - `src/lib/stores/nip60.ts` is handed to the auctions team instead of being
-  migrated in this stack. **(Superseded by the auctions amendment below:** this
+  migrated in this stack. **(Superseded by the auctions amendment below: this
   file is explicitly out of scope for the auctions-line migration and is not in
-  the auctions NDK-surface gate.**)**
+  the auctions NDK-surface gate.)**
 
 **Wave D: Capstone**
 
@@ -197,9 +197,10 @@ The known overlap files between this migration and auctions work are:
 - `src/routes/_dashboard-layout/dashboard/index.tsx`
 
 `src/lib/stores/nip60.ts` belongs to the auctions team for migration planning.
-**(Superseded by the auctions amendment below** — the shared NIP-60 wallet store
+**(Superseded by the auctions amendment below — the shared NIP-60 wallet store
 is explicitly out of scope for the auctions-line migration and is not in the
-auctions NDK-surface gate.**)**
+auctions NDK-surface gate.)**
+
 Wave C stays at the top of the stack and merges later so auctions-related work
 can land first without forcing broad rebases through the lower waves.
 
