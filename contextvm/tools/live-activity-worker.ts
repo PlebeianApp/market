@@ -6,7 +6,7 @@ import {
 	LIVE_CHAT_KIND,
 	AUCTION_KIND,
 	buildLiveActivityTags,
-	buildLiveActivityDTag,
+	buildLiveActivityCoord,
 	deriveLiveActivityStatus,
 	type LiveActivityStatus,
 } from '../../src/lib/nip53'
@@ -164,7 +164,8 @@ export async function fetchChatParticipants(
 export async function publishLiveActivityUpdate(
 	ctx: LiveActivityWorkerContext,
 	params: {
-		dTag: string
+		/** The kind-30408 coordinate the activity is for; the `d` is derived from it. */
+		auctionCoord: string
 		sellerPubkey: string
 		title: string
 		summary: string
@@ -179,7 +180,7 @@ export async function publishLiveActivityUpdate(
 	},
 ): Promise<void> {
 	const tags = buildLiveActivityTags({
-		dTag: params.dTag,
+		auctionCoord: params.auctionCoord,
 		sellerPubkey: params.sellerPubkey,
 		title: params.title,
 		summary: params.summary,
@@ -206,7 +207,8 @@ export async function publishLiveActivityUpdate(
 }
 
 type PublishFn = (params: {
-	dTag: string
+	/** The kind-30408 coordinate the activity is for; the `d` is derived from it. */
+	auctionCoord: string
 	sellerPubkey: string
 	title: string
 	summary: string
@@ -262,8 +264,12 @@ export async function pollAndUpdateLiveActivities(
 			const categories = getTagValues(auction, 't')
 
 			const auctionCoord = `${AUCTION_KIND}:${sellerPubkey}:${auctionDTag}`
-			const safeDTag = buildLiveActivityDTag(auctionCoord)
-			const liveActivityCoord = `${LIVE_ACTIVITY_KIND}:${ctx.issuerPubkey}:${safeDTag}`
+			// The activity's address, derived from the auction coordinate. Both
+			// this coordinate (the value chat messages carry in their `a` tag)
+			// and the activity's own `d` stay inside the relay tag-index budget —
+			// that is the whole point of the derivation. See
+			// RELAY_TAG_INDEX_VALUE_MAX_LENGTH in src/lib/nip53.ts.
+			const liveActivityCoord = buildLiveActivityCoord(ctx.issuerPubkey, auctionCoord)
 
 			const dedupKey = `${sellerPubkey}:${auctionDTag}`
 
@@ -292,7 +298,7 @@ export async function pollAndUpdateLiveActivities(
 			const relayUrls = ctx.relayPool.getRelayUrls()
 
 			await publish({
-				dTag: safeDTag,
+				auctionCoord,
 				sellerPubkey,
 				title,
 				summary,
