@@ -2139,7 +2139,6 @@ export const usePublishAuctionSettlementMutation = () => {
 
 	const mutation = useMutation({
 		mutationFn: async (formData: AuctionSettlementFormData) => publishAuctionSettlement(formData),
-		},
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
