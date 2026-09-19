@@ -15,7 +15,7 @@
  * depends on is pinned end-to-end at the pure layer.
  */
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NostrEventLike } from '../nostr/eventLike'
 import { computeValidatedBids } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
@@ -35,8 +35,14 @@ const KEYSET_ID = '00deadbeef'
 
 const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 
-const stubRawEvent = (kind: number, pubkey: string): NDKEvent =>
-	({ kind, pubkey, content: '', tags: [] as string[][], id: 'stub', created_at: 0 }) as unknown as NDKEvent
+const stubRawEvent = (kind: number, pubkey: string): NostrEventLike => ({
+	kind,
+	pubkey,
+	content: '',
+	tags: [] as string[][],
+	id: 'stub',
+	created_at: 0,
+})
 
 const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctionEvent => {
 	const endAt = overrides.endAt ?? 2_000
