@@ -2,7 +2,7 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { computeValidatedBids, type ValidatedBidSet } from '@/lib/auction/bidValidation'
-import type { Nut7ProofState } from '@/lib/auction/constants'
+import type { AuctionSettlementStatus, Nut7ProofState } from '@/lib/auction/constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { fetchMintKeysets, validatePathRelease } from '@/lib/auction/validation'
 import type { MintKeyset } from '@cashu/cashu-ts'
@@ -132,19 +132,46 @@ export async function hasValidatedPathReleaseForAuctionWin(
 	return chain.length > 0
 }
 
-export const hasFinalSettlementForAuctionWin = (
+/**
+ * Any settlement the auction's seller published for this auction (+coordinate)
+ * closes the *read* side of the win flow, whatever its `status`:
+ * `publishBidderPathRelease` refuses to release a path once any seller
+ * settlement exists for the auction (`src/publish/auctions.tsx` — "Auction
+ * already has a settlement"), so a queued win that keeps inviting a settle
+ * action for a `reserve_not_met` / `cancelled` / `griefed_no_fallback`
+ * settlement is an action the publish layer always rejects - and it blocks the
+ * head of the win queue while it does.
+ *
+ * Pass `{ statuses: ['settled'] }` (see `hasFinalSettlementForAuctionWin`) when
+ * the question is specifically "did the sale complete".
+ */
+export const hasSellerSettlementForAuctionWin = (
 	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
 	auction: NostrEventLike,
 	auctionCoordinate: string,
 	settlements: NostrEventLike[],
-): boolean =>
-	settlements.some((event) => {
+	options?: { statuses?: AuctionSettlementStatus[] },
+): boolean => {
+	const statuses = options?.statuses
+	return settlements.some((event) => {
 		const parsed = parseSettlementEvent(toRawEvent(event))
 		return (
 			parsed.ok &&
-			parsed.value.status === 'settled' &&
+			(statuses === undefined || statuses.includes(parsed.value.status)) &&
 			parsed.value.sellerPubkey === auction.pubkey &&
 			parsed.value.auctionRootEventId === win.auctionRootEventId &&
 			parsed.value.auctionCoordinate === auctionCoordinate
 		)
 	})
+}
+
+/**
+ * Only `status: settled` means the sale completed and the winner's locked
+ * ecash was redeemed. Non-settled terminal statuses are not settlement.
+ */
+export const hasFinalSettlementForAuctionWin = (
+	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
+	auction: NostrEventLike,
+	auctionCoordinate: string,
+	settlements: NostrEventLike[],
+): boolean => hasSellerSettlementForAuctionWin(win, auction, auctionCoordinate, settlements, { statuses: ['settled'] })

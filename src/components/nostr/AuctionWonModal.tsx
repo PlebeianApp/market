@@ -18,14 +18,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Media } from '@/components/Media'
 import { UserCard } from '@/components/UserCard'
-import { ConfettiBurst } from '@/components/ConfettiBurst'
+import { ConfettiBurst } from '@/components/shared/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { useAuctionCountdown } from '@/components/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
 import {
-	hasFinalSettlementForAuctionWin,
+	hasSellerSettlementForAuctionWin,
 	resolveAuctionWinFromEvents,
 	shouldUseNonBlockingAuctionWinPrompt,
 } from '@/lib/auction/winNotification'
@@ -96,8 +96,11 @@ export function AuctionWonModal() {
 	const settlementDeadlineAt = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
 	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
-	const hasFinalSettlement =
-		active !== null && auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
+	// Any seller settlement for this auction (not only `status: settled`) closes the win prompt:
+	// `publishBidderPathRelease` rejects every release once one exists, so keeping the prompt up
+	// would invite an action that always fails and would hold the head of the win queue.
+	const hasSellerSettlement =
+		active !== null && auction !== null && hasSellerSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
 	const hasReleasedPath = winResolutionQuery.data?.hasReleasedPath === true
 	const isNoLongerWinner = !!winResolutionQuery.data?.canonicalWinner && !winResolutionQuery.data.isActiveWinner
 	const hasVerifiedUnresolved =
@@ -105,7 +108,7 @@ export function AuctionWonModal() {
 		settlementsQuery.isSuccess &&
 		winResolutionQuery.isSuccess &&
 		winResolutionQuery.data.isActiveWinner &&
-		!hasFinalSettlement &&
+		!hasSellerSettlement &&
 		!hasReleasedPath
 	const useNonBlockingPrompt = shouldUseNonBlockingAuctionWinPrompt(location.pathname)
 
@@ -116,10 +119,10 @@ export function AuctionWonModal() {
 	}, [active?.auctionRootEventId])
 
 	useEffect(() => {
-		if (active && !isClosingAfterSettlement && (hasSettlementExpired || hasFinalSettlement || hasReleasedPath || isNoLongerWinner)) {
+		if (active && !isClosingAfterSettlement && (hasSettlementExpired || hasSellerSettlement || hasReleasedPath || isNoLongerWinner)) {
 			auctionWonActions.dismissActive()
 		}
-	}, [active, hasFinalSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
+	}, [active, hasSellerSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
 
 	if (
 		!active ||
@@ -151,7 +154,7 @@ export function AuctionWonModal() {
 			const latestDeadline = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 			const latestSettlementExpired = latestDeadline > 0 && Math.floor(Date.now() / 1000) >= latestDeadline
 			const latestSettlementExists =
-				auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, latestSettlements.data ?? [])
+				auction !== null && hasSellerSettlementForAuctionWin(active, auction, auctionCoordinate, latestSettlements.data ?? [])
 			if (
 				!latestResolution.data?.isActiveWinner ||
 				latestResolution.data.hasReleasedPath ||
