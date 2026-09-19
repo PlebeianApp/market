@@ -75,3 +75,35 @@ describe('e2e-grep gate membership (auctions test-listing family)', () => {
 		expect(ungated).toEqual([])
 	})
 })
+
+/**
+ * The `e2e-full` job runs everything the gate does NOT match, via
+ * `--grep-invert '<invert pattern>'`, so a family named in that list is skipped
+ * there. That is only safe while the per-PR gate still runs it; a family that
+ * drops out of the gate but stays in the invert list runs in NO workflow at
+ * all. That is how `Collection Management` (`e2e/tests/collections.spec.ts`)
+ * lost its coverage: it was added to the invert list and never to the gate.
+ * The invariant this pins is `invert ⊆ gate` — the gate may be broader (a
+ * family in the gate and not in the invert list simply runs in both jobs).
+ */
+async function invertPattern(): Promise<string> {
+	const yaml = await readFile(WORKFLOW_PATH, 'utf8')
+	const match = yaml.match(/--grep-invert '([^']+)'/)
+	expect(match).not.toBeNull()
+	return match![1]
+}
+
+describe('e2e-full exclusion list stays inside the per-PR gate', () => {
+	test('every --grep-invert term is also a term of the per-PR gate pattern', async () => {
+		const [gate, invert] = await Promise.all([gatePattern(), invertPattern()])
+		const gateTerms = new Set(gate.split('|').map((term) => term.trim()))
+		const excludedOnlyWhenGated = invert
+			.split('|')
+			.map((term) => term.trim())
+			.filter((term) => !gateTerms.has(term))
+		// A term that fails here is skipped by the `e2e-full` job and not run on
+		// any pull request: either add it to the gate or take it out of the
+		// invert list (and say why in this file).
+		expect(excludedOnlyWhenGated).toEqual([])
+	})
+})
