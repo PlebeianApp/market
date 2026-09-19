@@ -26,7 +26,85 @@ import { getEncodedToken } from '@cashu/cashu-ts'
 
 useWebSocketImplementation(WebSocket)
 
-test.use({ scenario: 'merchant' })
+test.use({ scenario: 'merchant', video: 'on' })
+
+test.describe('Auction Claim Dialog', () => {
+	test('winner sees validation errors and can submit shipping details', async ({ buyerPage }: { buyerPage: Page }) => {
+		await CashuMintMock.setup(buyerPage, { defaultState: 'SPENT' })
+		await dismissPiiModal(buyerPage, devUser2.pk)
+
+		const relay = await Relay.connect(RELAY_URL)
+		let auction: SeededAuction
+		let settlementId: string
+		try {
+			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, token: MOCK_TOKENS.unspentFuture })
+			const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT, token: MOCK_TOKENS.unspentFuture })
+			const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, MOCK_TOKENS.unspentFuture)
+			settlementId = await seedSettlement(relay, devUser1.sk, auction, {
+				status: 'settled',
+				winningBidId: bidId,
+				winnerPubkey: devUser2.pk,
+				finalAmount: MOCK_PROOF_AMOUNT,
+				pathReleaseEventId: prId,
+			})
+			await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
+		} finally {
+			relay.close()
+		}
+
+		await buyerPage.goto(`/auctions/${auction.auctionEventId}`)
+		await buyerPage.waitForLoadState('networkidle')
+
+		await expect(buyerPage.getByRole('button', { name: /submit shipping address/i })).toBeVisible({ timeout: 15_000 })
+		await buyerPage.getByRole('button', { name: /submit shipping address/i }).click()
+
+		await expect(buyerPage.getByRole('dialog', { name: /claim your auction win/i })).toBeVisible({ timeout: 15_000 })
+		await buyerPage.getByRole('button', { name: /submit shipping details/i }).click()
+
+		await expect(buyerPage.getByText('Name must be at least 2 characters')).toBeVisible()
+		await expect(buyerPage.getByText('Address must be at least 5 characters')).toBeVisible()
+		await expect(buyerPage.getByText('City is required')).toBeVisible()
+		await expect(buyerPage.getByText('ZIP/Postal code is required')).toBeVisible()
+		await expect(buyerPage.getByText('Please select a valid country')).toBeVisible()
+
+		await buyerPage.getByLabel(/full name/i).fill('Satoshi123')
+		await expect(buyerPage.getByText('Name cannot contain numbers')).toBeVisible()
+
+		await buyerPage.getByLabel(/email/i).fill('not-an-email')
+		await expect(buyerPage.getByText('Please enter a valid email address')).toBeVisible()
+
+		await buyerPage.getByLabel(/full name/i).fill('Satoshi Nakamoto')
+		await buyerPage.getByLabel(/email/i).fill('satoshi@example.com')
+		await buyerPage.getByLabel(/street address/i).fill('123 Bitcoin Avenue')
+		await buyerPage.getByLabel(/^city/i).fill('San Francisco')
+		await buyerPage.getByLabel(/zip\/postal code/i).fill('94105')
+		await buyerPage.getByRole('textbox', { name: /country/i }).fill('United States')
+		await buyerPage.getByLabel(/delivery notes/i).fill('Leave with the front desk')
+		await buyerPage.getByLabel(/message to seller/i).fill('Thanks again')
+
+		const subRelay = await Relay.connect(RELAY_URL)
+		try {
+			await buyerPage.getByRole('button', { name: /submit shipping details/i }).click()
+
+			const event = await waitForRelayEvent(subRelay, 16, 'a', auction.auctionCoordinate, 15_000)
+
+			expect(event, 'kind-16 auction claim event should arrive on the relay').not.toBeNull()
+			expect(event!.pubkey).toBe(devUser2.pk)
+
+			const tagMap = new Map(event!.tags.map((t) => [t[0], t[1]]))
+			expect(tagMap.get('subject')).toBe('auction-claim')
+			expect(tagMap.get('amount')).toBe(String(MOCK_PROOF_AMOUNT))
+			expect(tagMap.get('a')).toBe(auction.auctionCoordinate)
+			expect(tagMap.get('p')).toBe(devUser1.pk)
+			expect(event!.tags.some((t) => t[0] === 'e' && t[1] === settlementId && t[3] === 'settlement')).toBe(true)
+
+			await expect(buyerPage.getByText(/shipping details submitted/i)).toBeVisible({ timeout: 15_000 })
+			await expect(buyerPage.getByRole('dialog', { name: /claim your auction win/i })).not.toBeVisible({ timeout: 15_000 })
+		} finally {
+			subRelay.close()
+		}
+	})
+})
 
 // ---------------------------------------------------------------------------
 // Seed helpers — use pre-computed crypto fixtures from CashuMintMock.
@@ -685,12 +763,13 @@ async function waitForRelayEvent(
 	timeoutMs = 15_000,
 ): Promise<{ id: string; kind: number; pubkey: string; tags: string[][]; content: string } | null> {
 	return new Promise((resolve) => {
+		const filter = { kinds: [kind], [`#${tagName}`]: [tagValue] } as { kinds: number[] } & Record<`#${string}`, string[]>
 		const timer = setTimeout(() => {
 			sub.close()
 			resolve(null)
 		}, timeoutMs)
 
-		const sub = relay.subscribe([{ kinds: [kind], [`#${tagName}`]: [tagValue] }], {
+		const sub = relay.subscribe([filter], {
 			onevent: (event) => {
 				if (event.kind !== kind) return
 				if (!event.tags.some((t) => t[0] === tagName && t[1] === tagValue)) return
@@ -849,7 +928,7 @@ test.describe('UI interaction — publish events to relay', () => {
 					childPubkey: dynKeys.childPubkey,
 					lockSecret: dynKeys.lockSecret,
 					proofY: dynKeys.proofY,
-					token: dynKeys.token,
+					tokenStr: dynKeys.token,
 				})
 				await seedVerdict(relay, devUser3.sk, auction, bidId, devUser2.pk, 'valid_bid_placed')
 				prId = await seedPathRelease(relay, devUser2.sk, auction, bidId, {

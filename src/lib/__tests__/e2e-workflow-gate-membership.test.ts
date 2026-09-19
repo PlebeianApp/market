@@ -1,7 +1,7 @@
 /**
  * Guards per-PR gate membership for the gated e2e families in
- * `.github/workflows/e2e.yml`: `OG Meta Tags` and `Test listing labels —
- * auctions`.
+ * `.github/workflows/e2e.yml`: `OG Meta Tags`, `Test listing labels —
+ * auctions`, and `Auction Claim Dialog`.
  *
  * The `e2e-grep` job runs one single-quoted `--grep` alternation of
  * deterministic test families on every pull request / push; that gate is the
@@ -9,12 +9,13 @@
  * `e2e-full` job also runs them, but it is not a merge gate). It is the only
  * merge gate for the `Test listing labels — auctions` spec at all.
  *
- * A family that is renamed or added to `e2e/tests/og-meta-tags.spec.ts` or
- * `e2e/tests/test-labels-auctions.spec.ts` without a matching entry in the gate
- * pattern silently drops out of CI. This guard ties the specs and the workflow
- * together: every `test.describe` title in those specs must be matched by the
- * gate pattern, so removing an alternation term (or renaming a describe) fails
- * a unit test instead of quietly narrowing CI coverage.
+ * A family that is renamed or added to `e2e/tests/og-meta-tags.spec.ts`,
+ * `e2e/tests/test-labels-auctions.spec.ts`, or the `Auction Claim Dialog`
+ * family in `e2e/tests/auction-settlement.spec.ts` without a matching entry in
+ * the gate pattern silently drops out of CI. This guard ties the specs and the
+ * workflow together: every guarded `test.describe` title must be matched by
+ * the gate pattern, so removing an alternation term (or renaming a describe)
+ * fails a unit test instead of quietly narrowing CI coverage.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -25,6 +26,7 @@ const REPO_ROOT = join(import.meta.dir, '..', '..', '..')
 const WORKFLOW_PATH = join(REPO_ROOT, '.github', 'workflows', 'e2e.yml')
 const OG_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'og-meta-tags.spec.ts')
 const AUCTIONS_LABEL_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'test-labels-auctions.spec.ts')
+const AUCTION_SETTLEMENT_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'auction-settlement.spec.ts')
 
 /**
  * The single-quoted `--grep '<pattern>'` used by the per-PR `e2e-grep` gate.
@@ -73,5 +75,14 @@ describe('e2e-grep gate membership (auctions test-listing family)', () => {
 		// Removing the `|Test listing labels — auctions` term, or renaming a
 		// describe in that spec, fails here with the ungated title named.
 		expect(ungated).toEqual([])
+	})
+})
+
+describe('e2e-grep gate membership (auction claim dialog family)', () => {
+	test('Auction Claim Dialog is matched by the per-PR gate pattern', async () => {
+		const [pattern, titles] = await Promise.all([gatePattern(), describeTitles(AUCTION_SETTLEMENT_SPEC_PATH)])
+		expect(titles).toContain('Auction Claim Dialog')
+		const gate = new RegExp(pattern)
+		expect(gate.test('Auction Claim Dialog')).toBe(true)
 	})
 })
