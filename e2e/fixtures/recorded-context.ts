@@ -71,6 +71,11 @@
  * so `E2E_VIDEO=off` stays the supported way to exercise these specs' LOGIC on
  * a host in this state — and, by construction, never evidence.
  *
+ * A network-free route works too: a system `ffmpeg` symlinked to
+ * `~/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux` satisfies the pinned
+ * runner as well (measured 2026-09-19 on this host: first login test green,
+ * 928,184-byte `.webm`).
+ *
  * CI is unaffected: the GitHub runners are `ubuntu-latest` (<= 24.04) and
  * install the recorder via `bunx playwright install --with-deps chromium`
  * (see `.github/workflows/e2e.yml`), so CI keeps `required` — video stays
