@@ -51,6 +51,9 @@ jobs:
           cd deploy-simple/relay
           go test ./...
 
+      - name: Test staging relay readiness gate
+        run: bash deploy-simple/relay/tests/install-staging-relay-readiness.test.sh
+
       - name: Build relay binary
         env:
           RELAY_VERSION: ${{ steps.version.outputs.relay_version }}
