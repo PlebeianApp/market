@@ -96,7 +96,7 @@ auction (unchanged)  30408:<seller 64 hex>:<auction d tag>          = 98 chars
   guard later; not touched here.
 - **The discovery filter is not indexable either.** The worker finds auctions to
   advertise with `'#live_chat': ['enabled']`. The index rule requires a
-  *single-character* tag name, so that filter cannot use the tag index; the
+  _single-character_ tag name, so that filter cannot use the tag index; the
   planner falls back to a kind scan plus in-memory filtering. It works (the
   worker did create activities on staging), but it is a scan over every auction
   per poll and the obvious next pass if this area gets more attention.
