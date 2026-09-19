@@ -83,7 +83,7 @@ export function CartSummary({
 					const data = sellerData[sellerPubkey] || {
 						satsTotal: 0,
 						currencyTotals: {},
-						shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
+						shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 100, communityPercentage: 0 },
 						shippingSats: 0,
 					}
 
@@ -146,7 +146,7 @@ export function CartSummary({
 									<div className="flex justify-between">
 										<p className="text-sm">Community Share: </p>
 										<p className="text-sm">
-											{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
+											{formatSats(data.shares.communityAmount)} sat ({data.shares.communityPercentage.toFixed(2)}%)
 										</p>
 									</div>
 								)}
