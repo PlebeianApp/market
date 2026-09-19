@@ -139,7 +139,9 @@ the NIP-46 bunker inner rewrite is Wave A3b and gates Wave D.
 - `src/publish/featured.tsx`.
 - `src/routes/_dashboard-layout/dashboard/index.tsx`.
 - `src/lib/stores/nip60.ts` is handed to the auctions team instead of being
-  migrated in this stack.
+  migrated in this stack. **(Superseded by the auctions amendment below: this
+  file is explicitly out of scope for the auctions-line migration and is not in
+  the auctions NDK-surface gate.)**
 
 **Wave D: Capstone**
 
@@ -195,6 +197,10 @@ The known overlap files between this migration and auctions work are:
 - `src/routes/_dashboard-layout/dashboard/index.tsx`
 
 `src/lib/stores/nip60.ts` belongs to the auctions team for migration planning.
+**(Superseded by the auctions amendment below — the shared NIP-60 wallet store
+is explicitly out of scope for the auctions-line migration and is not in the
+auctions NDK-surface gate.)**
+
 Wave C stays at the top of the stack and merges later so auctions-related work
 can land first without forcing broad rebases through the lower waves.
 
@@ -314,3 +320,61 @@ The fix is a semantics-preserving patch of rxjs's two ESM index files, applied t
 ### NIP-46 QR lane: bounded connect for the listener
 
 The nostrconnect (`QR code`) lane kept its own NDK instance for the scan subscription and awaited `ndk.connect()` with no bound. NDK only settles that promise once **every** relay in the instance's pool reaches `CONNECTED`, so a single slow or unreachable relay — the default `wss://relay.plebeian.market` pick, or a user-typed relay — left the kind-24133 subscription unstarted and the signer's `connect` request unanswered (the relay answered the signer with `mute: no one was listening for this`, which is what the e2e QR spec saw). `NostrConnectQR` bounds the connect at 3s: the socket keeps connecting in the background and the listener starts, so a slow relay degrades to a retry instead of a dead scan.
+
+## Amendment (2026-09): Auctions route through the io seam (auctions line only)
+
+Scope: the auctions release line (`auctions`), not `master`. This amendment
+moves no wave above and claims no additional wave has landed.
+
+Decision: the auctions surface is seam-first. Every production file in the
+auctions file set routes relay I/O, signing, and identity through the
+first-party port at `src/lib/nostr/io.ts`; none of them imports
+`@nostr-dev-kit` (runtime or type) or touches the NDK store singleton
+(`ndkActions` / `ndkStore`). The first-party wrapper
+`src/lib/nostr/ndk-events.ts` (which re-exports NDK types) is part of the seam,
+not an auction file; auction files may import it. Auction-specific capabilities — the bid stream
+including its `onEose` page boundary, the private-claim read, bid publish and
+sign, and bidder identity — are port contract, not NDK-bridge-only behavior.
+The read path is included: the bid stream and the private-claim read go through
+the seam.
+
+Enforcement: `scripts/check-auctions-ndk-surface.sh`, run as the
+`auctions-surface` job in `.github/workflows/ci-ndk-guard.yml`. The guard's
+scanned file set is the operational definition of "auctions file set" for this
+gate: adding auction production code outside that set, or letting auction code
+reach NDK under another name, is a gate regression, not a scope choice.
+
+Adapter state (Wave 0, explicit): the seam's active adapter still defaults to
+the NDK bridge (`io-ndk.ts`) for the rest of the app, and Wave D still deletes
+it on schedule. This amendment constrains where auction code calls, and
+requires the applesauce adapter to serve every auction capability the app uses;
+it does not assert that auctions already run on the applesauce adapter at
+runtime.
+
+Outstanding Wave-A3 exception: on this branch the applesauce adapter's `sign` is
+not wired — `src/lib/nostr/io-applesauce.ts` throws `applesauceIo.sign is not
+wired until Wave A3 (auth/signer migration)`. The signer migration (#1252) is
+**merged on `master` but not yet merged into `auctions`**, so on this branch the
+auctions **write** path still runs through the NDK bridge for sign/publish, even
+though auction code calls only the seam. This amendment constrains where auction
+code calls; it does not claim the applesauce adapter can serve the write path
+here. (When the signer migration reaches `auctions`, this paragraph and the
+signer-migration amendment above must be reconciled.)
+
+Allowlisted exception: `src/lib/auctions/privateAuctionClaimMessage.ts` —
+NIP-59 private-claim encrypt/decrypt needs the raw active signer, which the
+port does not expose. Gated on the signer-capability seam (`#1252`, Waves A3/A3b;
+**merged on `master`, not yet merged into `auctions`**); the allowlist disappears
+on this branch once the signer capability is present here.
+
+Superseded ownership: the earlier assignment of `src/lib/stores/nip60.ts` to the
+auctions team (`:141`, `:197`) is **superseded** by this amendment. Migrating the
+shared NIP-60 wallet store (`NDKCashuWallet` / `NDKZapper`) is **explicitly out of
+scope for the auctions-line migration**; it is not part of this gate's scanned set
+and is tracked separately. `scripts/check-auctions-ndk-surface.sh` names it as a
+documented, deliberate gap rather than a silent omission.
+
+Relationship to the wave roadmap: unchanged for `master`. The auctions line
+lands its own production set on the seam ahead of Wave C, which is the ordering
+the "Auctions coordination" section above already anticipates (auctions work
+lands first; Wave C stays at the top of the stack).

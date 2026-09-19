@@ -162,6 +162,9 @@ function privateClaimUnavailableMessage(status?: string, reason?: string): strin
 	if (status === 'unavailable' && reason === 'missing_marker_fields') {
 		return 'Private shipping details unavailable because the public claim marker is missing required references.'
 	}
+	if (status === 'unavailable' && reason === 'relay_error') {
+		return 'Private shipping details could not be loaded from the relay — this is usually temporary; retry in a moment.'
+	}
 	return 'Private shipping details are not available from the encrypted claim path yet.'
 }
 

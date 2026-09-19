@@ -8,17 +8,19 @@ import {
 import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
-import { ndkActions } from '@/lib/stores/ndk'
 import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { isStructurallyValidSettledSettlement } from '@/lib/auction/events'
-import { toRawEvent } from '@/lib/nostr/eventLike'
+import { toRawEvent, type NostrEventLike } from '@/lib/nostr/eventLike'
 import { generateAuctionDerivationPath } from '@/lib/auctionPathOracle'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
-import { buildAuctionClaimPublicMarkerTags, createPrivateAuctionClaimMessageWithSigner } from '@/lib/auctions/privateAuctionClaimMessage'
+import {
+	buildAuctionClaimPublicMarkerTags,
+	createPrivateAuctionClaimMessageForActiveSigner,
+} from '@/lib/auctions/privateAuctionClaimMessage'
 import {
 	findLatestBidderRecordForAuction,
 	updateBidderRecordStatus,
@@ -40,7 +42,9 @@ import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk
 import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, NDKRelaySet, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
+import type { EventTemplate, NostrEvent, PublishOptions } from '@/lib/nostr/io'
+import { getEventHash } from 'nostr-tools'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
@@ -235,11 +239,8 @@ const tagBidError = (step: string, cause: unknown): Error => {
 	return tagged
 }
 
-export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<NDKEvent> => {
+export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: string): Promise<EventTemplate> => {
 	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
-	const event = new NDKEvent(ndk)
-	event.kind = 30408
-	event.content = validated.description
 
 	const id = auctionId || `auction_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 	const startingBid = String(validated.startingBid)
@@ -270,29 +271,29 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
-	const imageTags = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
-	const categoryTags: NDKTag[] = []
+	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
+	const categoryTags: string[][] = []
 	if (formData.mainCategory) {
-		categoryTags.push(['t', formData.mainCategory] as NDKTag)
+		categoryTags.push(['t', formData.mainCategory])
 	}
 	for (const category of formData.categories) {
 		if (category && category.trim()) {
-			categoryTags.push(['t', category.trim()] as NDKTag)
+			categoryTags.push(['t', category.trim()])
 		}
 	}
 
-	const specTags: NDKTag[] = (formData.specs ?? [])
+	const specTags: string[][] = (formData.specs ?? [])
 		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
-		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()] as NDKTag)
+		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()])
 
-	const shippingTags: NDKTag[] = validated.shippings.map((ship) =>
-		ship.extraCost ? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', ship.shippingRef] as NDKTag),
+	const shippingTags: string[][] = validated.shippings.map((ship) =>
+		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
 	)
 
-	event.tags = [
+	const tags: string[][] = [
 		['d', id],
 		['title', validated.title],
-		...(validated.summary ? ([['summary', validated.summary] as NDKTag] as NDKTag[]) : []),
+		...(validated.summary ? [['summary', validated.summary]] : []),
 		['auction_type', 'english'],
 		['start_at', String(validated.startAt)],
 		['end_at', String(validated.endAt)],
@@ -301,11 +302,11 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['starting_bid', startingBid, 'SAT'],
 		['bid_increment', bidIncrement],
 		['reserve', reserve],
-		...validated.trustedMints.map((mint) => ['mint', mint] as NDKTag),
+		...validated.trustedMints.map((mint) => ['mint', mint]),
 		// Bidder-held-path scheme: list one or more validator pubkeys whose
 		// kind-30440 verdicts compliant clients consult to gate bid validity
 		// for THIS auction. See AUCTIONS.md §4.1.
-		...auditorsList.map((auditor) => ['auditors', auditor] as NDKTag),
+		...auditorsList.map((auditor) => ['auditors', auditor]),
 		// Explicit values for the per-auction validator parameters.
 		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
 		// in src/lib/auction/constants.ts — emitting them explicitly
@@ -324,39 +325,35 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		...categoryTags,
 		...specTags,
 		...shippingTags,
-		...(formData.isNSFW ? ([['content-warning', 'nsfw'] as NDKTag] as NDKTag[]) : []),
-		...(formData.enableLiveChat ? ([['live_chat', 'enabled'] as NDKTag] as NDKTag[]) : []),
+		...(formData.isNSFW ? [['content-warning', 'nsfw']] : []),
+		...(formData.enableLiveChat ? [['live_chat', 'enabled']] : []),
 	]
 
-	return event
+	return {
+		kind: 30408,
+		content: validated.description,
+		tags,
+		created_at: Math.floor(Date.now() / 1000),
+	}
 }
 
-export const publishAuction = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<string> => {
+export const publishAuction = async (formData: AuctionFormData, auctionId?: string): Promise<string> => {
 	validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 
-	const event = await createAuctionEvent(formData, signer, ndk, auctionId)
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
+	const template = await createAuctionEvent(formData, auctionId)
+	const event = await signNostrEvent(template)
+	await publishRequired(event)
 	return event.id
 }
 
 export const usePublishAuctionMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
 
 	return useMutation({
-		mutationFn: async (formData: AuctionFormData) => {
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!signer) throw new Error('No signer available')
-			return publishAuction(formData, signer, ndk)
-		},
+		mutationFn: async (formData: AuctionFormData) => publishAuction(formData),
 		onSuccess: async () => {
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				userPubkey = user?.pubkey || ''
-			}
+			const user = await getUser()
+			const userPubkey = user?.pubkey || ''
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			if (userPubkey) {
 				await queryClient.invalidateQueries({ queryKey: auctionKeys.byPubkey(userPubkey) })
@@ -370,38 +367,32 @@ export const usePublishAuctionMutation = () => {
 	})
 }
 
-export const deleteAuction = async (auctionDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
-	const deleteEvent = new NDKEvent(ndk)
-	deleteEvent.kind = 5
-	deleteEvent.content = 'Auction deleted'
+export const deleteAuction = async (auctionDTag: string): Promise<boolean> => {
+	const user = await getUser()
+	if (!user?.pubkey) throw new Error('No active user')
 
-	const pubkey = await signer.user().then((user) => user.pubkey)
-	deleteEvent.tags = [['a', `30408:${pubkey}:${auctionDTag}`]]
+	const template: EventTemplate = {
+		kind: 5,
+		content: 'Auction deleted',
+		tags: [['a', `30408:${user.pubkey}:${auctionDTag}`]],
+		created_at: Math.floor(Date.now() / 1000),
+	}
 
-	await deleteEvent.sign(signer)
-	await ndkActions.publishEvent(deleteEvent)
+	const event = await signNostrEvent(template)
+	await publishRequired(event)
 	return true
 }
 
 export const useDeleteAuctionMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
 
 	return useMutation({
-		mutationFn: async (auctionDTag: string) => {
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!signer) throw new Error('No signer available')
-			return deleteAuction(auctionDTag, signer, ndk)
-		},
+		mutationFn: async (auctionDTag: string) => deleteAuction(auctionDTag),
 		onSuccess: async (_success, auctionDTag) => {
 			markAuctionAsDeleted(auctionDTag)
 
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				userPubkey = user?.pubkey || ''
-			}
+			const user = await getUser()
+			const userPubkey = user?.pubkey || ''
 
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			if (userPubkey) {
@@ -427,7 +418,7 @@ const isSpentTokenError = (error: unknown): boolean => {
 	return message.includes('already spent') || message.includes('token spent') || message.includes('proof not found')
 }
 
-const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string): NDKEvent | null => {
+const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: string): NostrEventLike | null => {
 	const bidderBids = bids.filter((bid) => bid.pubkey === bidderPubkey && ACTIVE_BID_STATUSES.has(getBidStatus(bid)))
 	if (!bidderBids.length) return null
 
@@ -460,7 +451,7 @@ const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string):
  *
  * Returns the published bid event id.
  */
-export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
@@ -486,7 +477,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (now >= formData.auctionEffectiveEndAt) throw new Error('Auction already ended')
 	if (now >= formData.auctionLocktimeAt) throw new Error('Auction has reached its hard bidding cutoff')
 
-	const bidderUser = await signer.user()
+	const bidderUser = await getUser()
+	if (!bidderUser?.pubkey) throw new Error('No active user')
 	const bidderPubkey = bidderUser.pubkey
 
 	// Step 1.5 — rebid detection. If this bidder already has a leg on
@@ -657,43 +649,73 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
 		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
 
+		// Stamp the bid at signing time, NOT at pre-flight. `now` above was
+		// captured before `lockAuctionBidFunds` (a Cashu mint swap); reusing it
+		// here would spend the bid's own `max_skew_sec` budget on the lock
+		// latency. A lock+sign round trip slower than the configured skew makes
+		// `created_at` stale relative to every validator's `observed_at`, so the
+		// verdicts the bid needs for quorum become ineligible and the funded bid
+		// can never be confirmed. Base filled `created_at` in at finalization
+		// (i.e. post-lock); the seam preserves whatever the template carries, so
+		// the timestamp must be taken here (review 2026-09-18, item 1).
+		const publishedAt = Math.floor(Date.now() / 1000)
+
 		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
 		// (what the validator uses for the min-increment check); the lock
 		// itself is only the delta. `prev_bid` chains the leg to the
 		// previous one when this is a rebid.
 		const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
-		const bidEvent = new NDKEvent(ndk)
-		bidEvent.kind = AUCTION_BID_KIND
-		bidEvent.content = JSON.stringify({
-			type: 'auction_bid_v1',
-			amount: formData.amount,
-			mint: lockResult.mintUrl,
-		})
-		bidEvent.tags = buildBidEventTags({
-			auctionRootEventId: formData.auctionEventId,
-			auctionCoordinate: formData.auctionCoordinates,
-			sellerPubkey: formData.sellerPubkey,
-			amount: formData.amount,
-			mint: lockResult.mintUrl,
-			locktime,
-			refundPubkey,
-			childPubkey,
-			lockSecrets,
-			proofYs,
-			createdForEndAt: formData.auctionEffectiveEndAt,
-			bidNonce,
-			prevBidId: prevLeg?.bidEventId,
-		}) as NDKTag[]
+		const bidTemplate: EventTemplate = {
+			kind: AUCTION_BID_KIND,
+			content: JSON.stringify({
+				type: 'auction_bid_v1',
+				amount: formData.amount,
+				mint: lockResult.mintUrl,
+			}),
+			tags: buildBidEventTags({
+				auctionRootEventId: formData.auctionEventId,
+				auctionCoordinate: formData.auctionCoordinates,
+				sellerPubkey: formData.sellerPubkey,
+				amount: formData.amount,
+				mint: lockResult.mintUrl,
+				locktime,
+				refundPubkey,
+				childPubkey,
+				lockSecrets,
+				proofYs,
+				createdForEndAt: formData.auctionEffectiveEndAt,
+				bidNonce,
+				prevBidId: prevLeg?.bidEventId,
+			}),
+			created_at: publishedAt,
+		}
 
-		// Step 7a — finalize the event fields WITHOUT signing. `toNostrEvent`
-		// fills in `pubkey`/`created_at` and computes the FINAL event id (the
-		// signature never participates in the id), so the id computed here is
-		// exactly the id the signed event will keep. Finalizing before the
-		// publish attempt lets us persist the durable recovery record and the
-		// retry cache ahead of any sign/broadcast failure (#1235 Blocking 1).
-		bidEvent.pubkey = bidderPubkey
-		await bidEvent.toNostrEvent()
-		finalizedBidEventId = bidEvent.id
+		// Step 7a — finalize the event fields WITHOUT signing. The NIP-01 event
+		// id covers `pubkey`/`created_at`/`kind`/`tags`/`content` and does NOT
+		// depend on the signature, so the id computed here is exactly the id the
+		// signed event keeps. Finalizing before the publish attempt lets us
+		// persist the durable recovery record and the retry cache ahead of any
+		// sign/broadcast failure (#1235 Blocking 1).
+		//
+		// Latent, fail-closed (review 2026-09-18): the frozen id is computed from
+		// the template via nostr-tools `getEventHash`, but signing goes through
+		// NDK (`signNostrEvent` → `NDKEvent.sign`), whose `toNostrEvent` runs
+		// `generateTags()` first and appends a `["client", …]` tag when
+		// `ndk.clientName`/`clientNip89` is set. If either were ever set on the
+		// singleton, the signed id would differ from this frozen id and the
+		// post-sign drift guard below would refuse every bid (fail-closed, never
+		// wrong). `clientName` is unset everywhere under `src/` today, so the ids
+		// match; derive the id from the signed event, or assert the client tag is
+		// absent, if that invariant is ever weakened.
+		const unsignedBidEvent: NostrEvent = {
+			...bidTemplate,
+			pubkey: bidderPubkey,
+			created_at: bidTemplate.created_at ?? publishedAt,
+			id: '',
+			sig: '',
+		}
+		unsignedBidEvent.id = getEventHash(unsignedBidEvent)
+		finalizedBidEventId = unsignedBidEvent.id
 
 		// Step 7b — durable recovery state BEFORE the publish attempt
 		// (#1235 Blocking 1, prescription 2). Until this record is written the
@@ -710,7 +732,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		// named follow-up (review Should-fix 7) and is intentionally out of
 		// scope here.
 		upsertBidderRecord({
-			bidEventId: bidEvent.id,
+			bidEventId: unsignedBidEvent.id,
 			auctionRootEventId: formData.auctionEventId,
 			auctionCoordinate: formData.auctionCoordinates,
 			sellerPubkey: formData.sellerPubkey,
@@ -739,7 +761,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			kind: 'auction_bid',
 			auctionEventId: formData.auctionEventId,
 			auctionCoordinates: formData.auctionCoordinates,
-			bidEventId: bidEvent.id,
+			bidEventId: unsignedBidEvent.id,
 			sellerPubkey: formData.sellerPubkey,
 			pathIssuerPubkey: '',
 			lockPubkey: lockResult.lockPubkey,
@@ -757,35 +779,35 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		// (#1235 Blocking 1, prescription 1). The cache entry is written before
 		// signing (so even a sign failure is retryable via re-signing the same
 		// event) and refreshed with the signature once signing completes.
-		cacheAuctionBidEventForRepublish(bidEvent)
+		cacheAuctionBidEventForRepublish(unsignedBidEvent)
 		try {
-			await bidEvent.sign(signer)
+			const signedBidEvent = await signNostrEvent(bidTemplate)
 			// #1235 round-3 B2 — same invariant as republishAuctionBid's
 			// post-sign guard: a signer whose identity drifted since
 			// `bidderPubkey` was captured would re-key the event and change its
 			// id. Refuse to broadcast a foreign event; the cached UNSIGNED event
 			// (serialized pre-sign, still keyed to the original id) is preserved.
-			if (bidEvent.getEventHash() !== finalizedBidEventId) {
+			if (signedBidEvent.id !== finalizedBidEventId || getEventHash(signedBidEvent) !== finalizedBidEventId) {
 				throw new Error(
-					`Refusing to publish auction bid: signing changed the event identity (expected ${finalizedBidEventId}, got ${bidEvent.id}). Nothing was published.`,
+					`Refusing to publish auction bid: signing changed the event identity (expected ${finalizedBidEventId}, got ${signedBidEvent.id}). Nothing was published.`,
 				)
 			}
-			cacheAuctionBidEventForRepublish(bidEvent)
-			await ndkActions.publishEvent(bidEvent)
+			cacheAuctionBidEventForRepublish(signedBidEvent)
+			await publishRequired(signedBidEvent)
 		} catch (error) {
 			// The recovery record and the signed (or signable) event are already
 			// persisted — surface the event id so the funding lifecycle retries
 			// with a pure rebroadcast (republishAuctionBid) instead of re-running
 			// the lock pipeline (which would swap/lock funds a second time).
 			// #1235 round-3 B2: the FINALIZED id (captured pre-sign), never the
-			// possibly-drifted `bidEvent.id` — a drift must not poison the retry
+			// possibly-drifted signed id — a drift must not poison the retry
 			// tracker with a foreign event id.
-			throw new AuctionBidPublishFailedError(finalizedBidEventId ?? bidEvent.id, error)
+			throw new AuctionBidPublishFailedError(finalizedBidEventId ?? unsignedBidEvent.id, error)
 		}
 		// Published — the rebroadcast cache entry is no longer needed.
-		discardAuctionBidEventRepublishCacheEntry(bidEvent.id)
+		discardAuctionBidEventRepublishCacheEntry(unsignedBidEvent.id)
 
-		return bidEvent.id
+		return unsignedBidEvent.id
 	} catch (error) {
 		// Tier 1 — already correctly modeled by the inner try above.
 		if (error instanceof AuctionBidPublishFailedError) throw error
@@ -986,7 +1008,7 @@ const AUCTION_BID_REPUBLISH_CACHE_KEY = 'auction_bid_republish_events_v1'
 const AUCTION_BID_REPUBLISH_CACHE_MAX_ENTRIES = 25
 
 /** Serialized kind-1023 payload persisted for idempotent retry. */
-type SerializedAuctionBidEventPayload = ReturnType<NDKEvent['rawEvent']>
+type SerializedAuctionBidEventPayload = NostrEvent
 
 interface CachedAuctionBidEvent {
 	bidEventId: string
@@ -1031,10 +1053,10 @@ const persistAuctionBidRepublishCache = (cache: AuctionBidRepublishCache): void 
 	saveUserData(AUCTION_BID_REPUBLISH_CACHE_KEY, cache)
 }
 
-const cacheAuctionBidEventForRepublish = (bidEvent: NDKEvent): void => {
+const cacheAuctionBidEventForRepublish = (bidEvent: NostrEvent): void => {
 	if (!bidEvent.id) return
 	const cache = loadAuctionBidRepublishCache()
-	cache[bidEvent.id] = { bidEventId: bidEvent.id, payload: bidEvent.rawEvent(), savedAt: Date.now() }
+	cache[bidEvent.id] = { bidEventId: bidEvent.id, payload: bidEvent, savedAt: Date.now() }
 	persistAuctionBidRepublishCache(cache)
 }
 
@@ -1061,14 +1083,12 @@ const discardAuctionBidEventRepublishCacheEntry = (bidEventId: string): void => 
  * event is re-signed locally — the id is unaffected by the signature).
  *
  * @param bidEventId id of the previously-built kind-1023 bid event
- * @param signer     signer to re-sign with when the cached entry is unsigned
- * @param ndk        NDK instance to publish through
  * @returns the rebroadcast bid event id
  * @throws when nothing is cached for the id, the cached payload is not a
  *         kind-1023 bid, the payload does not hash to the requested id
  *         (corrupted/tampered cache), or the rebroadcast fails
  */
-export const republishAuctionBid = async (bidEventId: string, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const republishAuctionBid = async (bidEventId: string): Promise<string> => {
 	if (!bidEventId) throw new Error('Cannot rebroadcast auction bid: bidEventId is empty')
 	const cached = loadAuctionBidRepublishCache()[bidEventId]
 	if (!cached) {
@@ -1077,28 +1097,28 @@ export const republishAuctionBid = async (bidEventId: string, signer: NDKSigner,
 		)
 	}
 
-	const bidEvent = new NDKEvent(ndk, cached.payload)
+	let bidEvent = cached.payload
 	if (bidEvent.kind !== AUCTION_BID_KIND) {
 		throw new Error(`Refusing to rebroadcast ${bidEventId}: expected kind ${AUCTION_BID_KIND}, got kind ${bidEvent.kind}`)
 	}
 	// Integrity: the cached payload must still hash to the requested id —
 	// guards against a corrupted or tampered cache entry.
-	if (bidEvent.getEventHash() !== bidEventId) {
+	if (getEventHash(bidEvent) !== bidEventId || bidEvent.id !== bidEventId) {
 		throw new Error(`Refusing to rebroadcast ${bidEventId}: cached payload does not hash to the requested event id`)
 	}
 
 	if (!bidEvent.sig) {
 		// #1235 round-3 B2 — retry identity binding. The cached unsigned event
-		// was authored by the original bidder; NDK's `sign` overwrites the
-		// event's pubkey with the active signer's user, so a retry from a
-		// DIFFERENT account would publish a foreign-authored kind-1023 carrying
-		// the original bidder's lock secrets under a drifted event id. Refuse
+		// was authored by the original bidder; signing overwrites the event's
+		// pubkey with the active signer's user, so a retry from a DIFFERENT
+		// account would publish a foreign-authored kind-1023 carrying the
+		// original bidder's lock secrets under a drifted event id. Refuse
 		// PRE-SIGN — zero mint interaction, zero signing, cache entry preserved.
-		const signerUser = await signer.user()
-		if (signerUser.pubkey !== bidEvent.pubkey) {
+		const activeUser = await getUser()
+		if (activeUser?.pubkey !== bidEvent.pubkey) {
 			throw new Error(
 				`Refusing to republish auction bid ${bidEventId}: cached bid was created by ${bidEvent.pubkey} ` +
-					`but the active signer is ${signerUser.pubkey}. Switch back to the original bidder account and retry. ` +
+					`but the active signer is ${activeUser?.pubkey ?? ''}. Switch back to the original bidder account and retry. ` +
 					`No signing, no publishing, and no mint interaction was performed; the cached event is preserved.`,
 			)
 		}
@@ -1109,17 +1129,18 @@ export const republishAuctionBid = async (bidEventId: string, signer: NDKSigner,
 		// assignment (a stateful or remote signer). Belt-and-braces: recompute
 		// the hash/id and require equality with the ORIGINAL event id before
 		// publishing anything.
-		await bidEvent.sign(signer)
-		if (bidEvent.getEventHash() !== bidEventId || bidEvent.id !== bidEventId) {
+		const signed = await signNostrEvent(bidEvent)
+		if (getEventHash(signed) !== bidEventId || signed.id !== bidEventId) {
 			throw new Error(
-				`Refusing to republish auction bid ${bidEventId}: re-signing produced a different event id (${bidEvent.id}). Nothing was published; the cached entry is preserved.`,
+				`Refusing to republish auction bid ${bidEventId}: re-signing produced a different event id (${signed.id}). Nothing was published; the cached entry is preserved.`,
 			)
 		}
-		cacheAuctionBidEventForRepublish(bidEvent)
+		cacheAuctionBidEventForRepublish(signed)
+		bidEvent = signed
 	}
 
 	try {
-		await ndkActions.publishEvent(bidEvent)
+		await publishRequired(bidEvent)
 	} catch (error) {
 		throw new AuctionBidPublishFailedError(bidEventId, error)
 	}
@@ -1192,11 +1213,7 @@ export interface PublishBidderPathReleaseResult {
  * kind-1025 isn't tracked — caller can re-publish if they want a fresh
  * event, but the typical path returns early without re-emitting.
  */
-export const publishBidderPathRelease = async (
-	input: PublishBidderPathReleaseInput,
-	signer: NDKSigner,
-	ndk: NDK,
-): Promise<PublishBidderPathReleaseResult> => {
+export const publishBidderPathRelease = async (input: PublishBidderPathReleaseInput): Promise<PublishBidderPathReleaseResult> => {
 	if (!input.bidEventId) throw new Error('bidEventId is required')
 
 	// Walk the rebid chain. For a single-leg bid this returns one
@@ -1368,26 +1385,28 @@ export const publishBidderPathRelease = async (
 			)
 		}
 
-		const event = new NDKEvent(ndk)
-		event.kind = AUCTION_PATH_RELEASE_KIND as unknown as number
-		event.content = input.note ?? ''
-		event.tags = buildPathReleaseTags({
-			bidEventId: leg.bidEventId,
-			auctionCoordinate: leg.auctionCoordinate,
-			sellerPubkey: leg.sellerPubkey,
-			derivationPath: leg.derivationPath,
-			childPubkey: leg.childPubkey,
-			releaseReason,
-			// Only the latest leg carries auditorRefs / fallbackOfferId —
-			// those reference verdicts/offers about the chain's current
-			// state, not its history.
-			auditorRefs: leg.bidEventId === input.bidEventId ? input.auditorRefs : undefined,
-			fallbackOfferId: leg.bidEventId === input.bidEventId ? input.fallbackOfferId : undefined,
-			cashuToken,
-		}) as NDKTag[]
+		const template: EventTemplate = {
+			kind: AUCTION_PATH_RELEASE_KIND as unknown as number,
+			content: input.note ?? '',
+			tags: buildPathReleaseTags({
+				bidEventId: leg.bidEventId,
+				auctionCoordinate: leg.auctionCoordinate,
+				sellerPubkey: leg.sellerPubkey,
+				derivationPath: leg.derivationPath,
+				childPubkey: leg.childPubkey,
+				releaseReason,
+				// Only the latest leg carries auditorRefs / fallbackOfferId —
+				// those reference verdicts/offers about the chain's current
+				// state, not its history.
+				auditorRefs: leg.bidEventId === input.bidEventId ? input.auditorRefs : undefined,
+				fallbackOfferId: leg.bidEventId === input.bidEventId ? input.fallbackOfferId : undefined,
+				cashuToken,
+			}),
+			created_at: Math.floor(Date.now() / 1000),
+		}
 
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
+		const event = await signNostrEvent(template)
+		await publishRequired(event)
 
 		updateBidderRecordStatus(leg.bidEventId, 'settled')
 
@@ -1406,15 +1425,9 @@ export const publishBidderPathRelease = async (
 
 export const usePublishAuctionBidMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
 
 	return useMutation({
-		mutationFn: async (formData: AuctionBidFormData) => {
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!signer) throw new Error('No signer available')
-			return publishAuctionBid(formData, signer, ndk)
-		},
+		mutationFn: async (formData: AuctionBidFormData) => publishAuctionBid(formData),
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
@@ -1436,15 +1449,9 @@ export const usePublishAuctionBidMutation = () => {
  */
 export const useRepublishAuctionBidMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
 
 	return useMutation({
-		mutationFn: async (bidEventId: string) => {
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!signer) throw new Error('No signer available')
-			return republishAuctionBid(bidEventId, signer, ndk)
-		},
+		mutationFn: async (bidEventId: string) => republishAuctionBid(bidEventId),
 		onSuccess: async (bidEventId) => {
 			// The rebroadcast leg's bid may now be visible to bidders queries.
 			// Cache invalidation is a UI-refresh aid, not proof of relay
@@ -1489,7 +1496,7 @@ export const useRepublishAuctionBidMutation = () => {
 // scope for the MVP. The UI's only settle button this milestone is "I
 // won, here's the path / I have a path, redeem".
 
-export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 
 	// Lazy imports to avoid pulling settlement-only deps into the bid
@@ -1528,8 +1535,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	const auctionEvent = await fetchAuction(formData.auctionEventId, true)
 	if (!auctionEvent) throw new Error(`Auction ${formData.auctionEventId} not found on relay`)
 	const sellerPubkey = auctionEvent.pubkey
-	const signerUser = await signer.user()
-	if (signerUser.pubkey !== sellerPubkey) {
+	const activeUser = await getUser()
+	if (activeUser?.pubkey !== sellerPubkey) {
 		throw new Error('Only the auction seller can publish a kind-1024 settlement event')
 	}
 	const auctionDTag = getTag(auctionEvent, 'd')?.trim()
@@ -1644,19 +1651,21 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			throw new Error('Cannot publish reserve_not_met: a settled settlement already exists for this auction.')
 		}
 
-		const event = new NDKEvent(ndk)
-		event.kind = AUCTION_SETTLEMENT_KIND
-		event.content = ''
-		event.tags = (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
-			auctionRootEventId,
-			auctionCoordinate,
-			status: 'reserve_not_met',
-			closeAt,
-			finalAmount: 0,
-			reason: formData.reason ?? 'reserve_not_met',
-		}) as NDKTag[]
-		await event.sign(signer)
-		await ndkActions.publishEvent(event)
+		const template: EventTemplate = {
+			kind: AUCTION_SETTLEMENT_KIND,
+			content: '',
+			tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
+				auctionRootEventId,
+				auctionCoordinate,
+				status: 'reserve_not_met',
+				closeAt,
+				finalAmount: 0,
+				reason: formData.reason ?? 'reserve_not_met',
+			}),
+			created_at: Math.floor(Date.now() / 1000),
+		}
+		const event = await signNostrEvent(template)
+		await publishRequired(event)
 		return event.id
 	}
 
@@ -1713,7 +1722,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		)
 	}
 
-	// Map canonical winner back to its NDKEvent for chain walking.
+	// Map canonical winner back to its raw event for chain walking.
 	const winningBid = bids.find((b) => b.id === validatedBids.canonicalWinner!.id)!
 	const winningBidId = winningBid.id
 	const winnerPubkey = winningBid.pubkey
@@ -1731,7 +1740,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// AUCTIONS.md §8.1 line 1014: "derive every child privkey in the
 	// winner's chain, swap each leg at the mint".
 	const bidsById = new Map(bids.map((b) => [b.id, b]))
-	const chainBids: NDKEvent[] = []
+	const chainBids: NostrEventLike[] = []
 	const seenIds = new Set<string>()
 	let cursor: string | undefined = winningBidId
 	while (cursor) {
@@ -1769,7 +1778,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// chain can't be redeemed and the seller would only end up with
 	// some of the bid value.
 	const allReleases = await fetchAuctionPathReleases(formData.auctionEventId, 500, auctionCoordinate)
-	const releasesByBidId = new Map<string, NDKEvent[]>()
+	const releasesByBidId = new Map<string, NostrEventLike[]>()
 	for (const ev of allReleases) {
 		const e = getTag(ev, 'e') ?? ''
 		if (!e) continue
@@ -1779,7 +1788,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	}
 
 	interface ResolvedLeg {
-		bid: NDKEvent
+		bid: NostrEventLike
 		releaseEventId: string
 		derivationPath: string
 		bidChildPubkey: string
@@ -2032,36 +2041,32 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// via their prev_bid tags. `payouts` enumerates each leg the
 	// seller actually redeemed.
 	const latestLeg = resolvedLegs[resolvedLegs.length - 1]
-	const event = new NDKEvent(ndk)
-	event.kind = kind1024
-	event.content = ''
-	event.tags = (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
-		auctionRootEventId,
-		auctionCoordinate,
-		status: 'settled',
-		closeAt,
-		finalAmount: winningAmount,
-		winningBidId,
-		winnerPubkey,
-		pathReleaseEventId: latestLeg.releaseEventId,
-		payouts,
-	}) as NDKTag[]
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
+	const template: EventTemplate = {
+		kind: kind1024,
+		content: '',
+		tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
+			auctionRootEventId,
+			auctionCoordinate,
+			status: 'settled',
+			closeAt,
+			finalAmount: winningAmount,
+			winningBidId,
+			winnerPubkey,
+			pathReleaseEventId: latestLeg.releaseEventId,
+			payouts,
+		}),
+		created_at: Math.floor(Date.now() / 1000),
+	}
+	const event = await signNostrEvent(template)
+	await publishRequired(event)
 	return event.id
 }
 
 export const usePublishAuctionSettlementMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const signer = ndkActions.getSigner()
 
 	return useMutation({
-		mutationFn: async (formData: AuctionSettlementFormData) => {
-			if (!ndk) throw new Error('NDK not initialized')
-			if (!signer) throw new Error('No signer available')
-			return publishAuctionSettlement(formData, signer, ndk)
-		},
+		mutationFn: async (formData: AuctionSettlementFormData) => publishAuctionSettlement(formData),
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
@@ -2106,13 +2111,7 @@ export interface AuctionClaimFormData {
  * settlement event instead of product `item` tags.
  */
 export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const signer = ndkActions.getSigner()
-	if (!signer) throw new Error('No active user')
-
-	const buyerPubkey = await resolveAuctionClaimBuyerPubkey(ndk, signer)
+	const buyerPubkey = await resolveAuctionClaimBuyerPubkey()
 	const orderId = uuidv4()
 	const claimFields = {
 		orderId,
@@ -2128,87 +2127,86 @@ export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): 
 		notes: formData.notes,
 	}
 
-	const privateClaim = await createPrivateAuctionClaimMessageWithSigner({
-		...claimFields,
-		signer,
-	})
-	const privateEvent = new NDKEvent(ndk, privateClaim.giftWrap)
-	const privateRelayUrls = await publishRequiredPrivateGiftWrap(privateEvent)
+	// NIP-59 private claim — #1252-gated raw-signer path (see
+	// `privateAuctionClaimMessage.ts`). The public marker + gift-wrap publish
+	// stay on the library-agnostic I/O seam.
+	const privateClaim = await createPrivateAuctionClaimMessageForActiveSigner(claimFields)
+	const privateRelayUrls = await publishRequiredPrivateGiftWrap(privateClaim.giftWrap)
 
-	const event = new NDKEvent(ndk)
-	event.kind = ORDER_PROCESS_KIND
-	event.content = ''
-	event.tags = buildAuctionClaimPublicMarkerTags(claimFields) as NDKTag[]
+	const template: EventTemplate = {
+		kind: ORDER_PROCESS_KIND,
+		content: '',
+		tags: buildAuctionClaimPublicMarkerTags(claimFields),
+		created_at: Math.floor(Date.now() / 1000),
+	}
 
-	await event.sign(signer)
-	await publishAuctionClaimMarkerToPrivateRelays(event, ndk, privateRelayUrls)
+	const event = await signNostrEvent(template)
+	await publishAuctionClaimMarkerToPrivateRelays(event, privateRelayUrls)
 
 	return event.id
 }
 
-function publishResultHasRelayDetails(result: unknown): boolean {
-	return result instanceof Set || Array.isArray(result) || (typeof result === 'object' && result !== null && 'size' in result)
-}
-
-function publishResultHasRelaySuccess(result: unknown): boolean {
-	if (result instanceof Set) return result.size > 0
-	if (Array.isArray(result)) return result.length > 0
-	if (typeof result === 'object' && result !== null && 'size' in result && typeof (result as { size?: unknown }).size === 'number') {
-		return (result as { size: number }).size > 0
+/**
+ * Publish through the seam and fail closed on zero relay ACKs.
+ *
+ * `io.ts` documents an empty `publishedRelays` as "no relay accepted it, which
+ * callers must treat as a publish failure". That is enforced for free by the
+ * NDK bridge (it throws `NDKPublishError` below `requiredRelayCount = 1`), but
+ * the applesauce adapter RESOLVES with the ACK-filtered set
+ * (`io-applesauce.ts`), so an unchecked call reports a zero-ACK publish as a
+ * success. This wrapper makes the contract adapter-independent (review
+ * 2026-09-18, item 4). `publishRequiredPrivateGiftWrap` /
+ * `publishAuctionClaimMarkerToPrivateRelays` keep their own checks because they
+ * need the accepted relay URLs.
+ */
+async function publishRequired(event: NostrEvent, options?: PublishOptions): Promise<void> {
+	const result = await publishNostrEvent(event, options)
+	if (result.publishedRelays.size === 0) {
+		throw new Error(`No relay accepted the event (kind ${event.kind}, id ${event.id}) — treating as a publish failure`)
 	}
-	return true
 }
 
-function publishResultAcceptedRelayUrls(result: unknown): string[] {
-	const relays = result instanceof Set || Array.isArray(result) ? Array.from(result) : []
-	const urls = relays
-		.map((relay) =>
-			typeof relay === 'object' && relay !== null && 'url' in relay && typeof (relay as { url?: unknown }).url === 'string'
-				? (relay as { url: string }).url.trim()
-				: '',
-		)
-		.filter((url) => url.length > 0)
-
-	return [...new Set(urls)]
-}
-
-async function publishRequiredPrivateGiftWrap(event: NDKEvent): Promise<string[]> {
-	const result = await ndkActions.publishEvent(event)
-	if (publishResultHasRelayDetails(result) && !publishResultHasRelaySuccess(result)) {
+async function publishRequiredPrivateGiftWrap(event: NostrEvent): Promise<string[]> {
+	const result = await publishNostrEvent(event)
+	if (result.publishedRelays.size === 0) {
 		throw new Error('Encrypted auction claim details could not be published')
 	}
-	const acceptedRelayUrls = publishResultAcceptedRelayUrls(result)
-	if (acceptedRelayUrls.length === 0) {
-		throw new Error('Encrypted auction claim details were published but no accepted relay URLs were available')
-	}
-	return acceptedRelayUrls
+	return Array.from(result.publishedRelays)
 }
 
-async function publishAuctionClaimMarkerToPrivateRelays(event: NDKEvent, ndk: NDK, privateRelayUrls: string[]): Promise<void> {
-	const markerRelaySet = NDKRelaySet.fromRelayUrls(privateRelayUrls, ndk)
-	const result = await event.publish(markerRelaySet)
-	if (!publishResultHasRelayDetails(result) || !publishResultHasRelaySuccess(result)) {
+async function publishAuctionClaimMarkerToPrivateRelays(event: NostrEvent, privateRelayUrls: string[]): Promise<void> {
+	const result = await publishNostrEvent(event, { relayUrls: privateRelayUrls })
+	if (result.publishedRelays.size === 0) {
 		throw new Error('Auction claim marker could not be published to the private claim relays')
 	}
 }
 
-async function resolveAuctionClaimBuyerPubkey(ndk: NDK, signer: NDKSigner): Promise<string> {
-	const user = await signer.user()
-	const signerPubkey = user.pubkey
+/**
+ * Resolve the buyer identity written into the public claim marker.
+ *
+ * The base implementation compared `ndk.activeUser?.pubkey` against the active
+ * signer's pubkey and threw "Active user does not match active signer."; the
+ * seam exposes identity only through `getUser()`, which is itself
+ * signer-derived (`@/lib/stores/ndk` `getUser()` → the active signer's user).
+ * The two values therefore cannot diverge through the seam today, so the
+ * comparison is vacuous here rather than removed. The identity property that
+ * actually matters — the pubkey written into the public marker is the identity
+ * that encrypted the private claim — holds because
+ * `privateAuctionClaimMessage.ts` produces the gift wrap from the same active
+ * signer. The #1252 signer migration re-points `getUser()`; if it ever makes
+ * identity independent of the signer, that migration MUST re-establish the
+ * cross-account assertion (review 2026-09-18, item 5).
+ */
+async function resolveAuctionClaimBuyerPubkey(): Promise<string> {
+	const user = await getUser()
+	const signerPubkey = user?.pubkey ?? ''
 	if (!HEX_PUBKEY_RE.test(signerPubkey)) throw new Error('Active signer pubkey is not a 32-byte hex Nostr pubkey.')
-
-	const activeUserPubkey = ndk.activeUser?.pubkey
-	if (activeUserPubkey && activeUserPubkey !== signerPubkey) {
-		throw new Error('Active user does not match active signer.')
-	}
 
 	return signerPubkey
 }
 
 export const usePublishAuctionClaimOrderMutation = () => {
 	const queryClient = useQueryClient()
-	const ndk = ndkActions.getNDK()
-	const currentUserPubkey = ndk?.activeUser?.pubkey
 
 	return useMutation({
 		mutationFn: publishAuctionClaimOrder,
@@ -2216,9 +2214,10 @@ export const usePublishAuctionClaimOrderMutation = () => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
-			if (currentUserPubkey) {
-				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(currentUserPubkey) })
-				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(currentUserPubkey) })
+			const user = await getUser()
+			if (user?.pubkey) {
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(user.pubkey) })
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(user.pubkey) })
 			}
 			toast.success('Shipping details submitted — the seller has been notified')
 		},

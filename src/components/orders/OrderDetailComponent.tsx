@@ -88,6 +88,9 @@ function privateAuctionClaimUnavailableMessage(status?: string, reason?: string)
 	if (status === 'unavailable' && reason === 'not_seller') {
 		return 'Private auction claim details are only available to the auction seller.'
 	}
+	if (status === 'unavailable' && reason === 'relay_error') {
+		return 'Private auction claim details could not be loaded from the relay — this is usually temporary; retry in a moment.'
+	}
 	return 'Private auction claim details are not available from the encrypted claim path yet.'
 }
 

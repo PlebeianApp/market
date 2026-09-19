@@ -26,7 +26,7 @@ import {
 } from '@/queries/auctions'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
