@@ -347,7 +347,7 @@ already does can be recorded on its own, and this can be argued on its merits.
 ### Proposal 1 — a bounded author-relay path for author-scoped reads
 
 Production NDK is constructed with `enableOutboxModel: true`
-(`src/lib/stores/ndk.ts:301`, `:317`), so legacy `ndk.fetchEvents` calls on
+(`src/lib/stores/ndk.ts:421`, `:437`), so legacy `ndk.fetchEvents` calls on
 author-scoped filters could route to an author's NIP-65 write relays discovered
 via the outbox model. Every wave-1 read pins to the configured relay set
 (`ndkStore.state.explicitRelayUrls`, with zap reads pinning to `ZAP_RELAYS` union
@@ -356,7 +356,7 @@ reads.
 
 **The motive is tool-shape plus disclosure control, not leak-avoidance.** The
 outbox-disclosure gating ADR-0002's Context names is already implemented for
-`staging`, `development`, and `LOCAL_RELAY_ONLY` (`ndk.ts:301`), so production is
+`staging`, `development`, and `LOCAL_RELAY_ONLY` (`ndk.ts:421`), so production is
 the only stage where the outbox model is active — and the only stage this wave
 changes. The applesauce relay pool requires an explicit relay list, and an
 explicit list is also the posture we can state plainly: the client reaches the
@@ -375,7 +375,7 @@ This is a real read-topology change, and the affected reads are user-visible:
   knowable before the read (the filter names no author), so this read cannot
   reach a counterparty that publishes _only_ to its own relays — the residual gap
   is recorded in the F3 decision below.
-- `src/lib/stores/nip60.ts:159` — kind 17375 wallet bootstrap; a wallet event
+- `src/lib/stores/nip60.ts:198` — kind 17375 wallet bootstrap; a wallet event
   living only on the user's own relays initializes fresh instead of restoring.
 - `src/lib/appSettings.ts:107` — app settings read as absent.
 
@@ -401,7 +401,7 @@ bounded, per-purpose author-relay path** rather than by the outbox model:
 - scope — display-only author-scoped third-party reads (kind-0 profiles), plus
   reads scoped to the reader: the `#p` notification reads above (inbox reads of the
   reader's own declared relays) and the reader's **own** events. The kind-17375
-  wallet bootstrap at `src/lib/stores/nip60.ts:159` is therefore in scope: the
+  wallet bootstrap at `src/lib/stores/nip60.ts:198` is therefore in scope: the
   relays consulted are the reader's own declared relays, not a third party's.
   No counterparty relay set is ever resolved for a read whose filter names no
   author, so the notification reads recover the reader's declared relays, not an
@@ -499,7 +499,7 @@ not a design element.
   subscriptions at `src/hooks/useNotificationMonitor.ts:135/161/185` remain
   pinned-only and are not migrated by it.
 - The author-relay e2e spec is not part of the per-PR e2e alternation
-  (`.github/workflows/e2e.yml:139`), so its mocked-relay coverage does not run in
+  (`.github/workflows/e2e.yml:147`), so its mocked-relay coverage does not run in
   the normal PR gate.
 - The earlier draft's claim that NIP-17 DM discovery (kind 10050) is an
   "already deployed external-reach path" is **unverified** and has been dropped
@@ -510,9 +510,9 @@ not a design element.
 The earlier draft listed `src/lib/appSettings.ts:107` among the client reads that
 go pinned-only. That entry is wrong: `fetchAppSettings` (`src/lib/appSettings.ts:42`)
 is imported by the **server** entry only (`src/index.tsx:7`), called at boot
-(`:139`) and refreshed when a kind-31990 event is published (`:404`). The browser
+(`:143`) and refreshed when a kind-31990 event is published (`:409`). The browser
 never performs that read — it consumes the parsed result from `/api/config`
-(`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-282`).
+(`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-290`).
 
 So there is no fourth degraded client read to bound: the app-settings read is
 server-side and stays pinned to the server's relay, and the recommendation is to
