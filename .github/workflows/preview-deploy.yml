@@ -455,6 +455,55 @@ jobs:
         if: steps.secrets.outputs.previews_ready == 'true'
         run: sleep 15
 
+      # CONTENT, not settings. A preview relay seeded only with app settings
+      # boots (`needsSetup:false`) but renders an EMPTY feed: the operator's
+      # "the relay should be seeded with CONTENT" is not satisfied by settings.
+      # Seed the fixture defined in src/lib/preview/previewContentFixtures.ts —
+      # kind 30402 product listings, kind 0 seller profiles, and the app-owned
+      # kind 30405 `featured_products` list — every kind and tag justified there
+      # against the app's own read paths.
+      #
+      # PREVIEW-ONLY BY CONSTRUCTION: this step lives in preview-deploy.yml,
+      # which runs solely for a per-PR preview, and the seeder refuses any relay
+      # host outside the preview domain (`PREVIEW_SEED_ALLOWED_HOST_SUFFIX`,
+      # default `.test-market.orangesync.tech`). Production/staging/auctionsdev
+      # never run this workflow. src/lib/__tests__/preview-content-fixtures.test.ts
+      # pins both facts (wiring + interlock), so neither can drift silently.
+      #
+      # ORDERING: content is read per request, NOT cached at boot, so it does not
+      # need the app restart that app settings do. The step sits after the
+      # settings seeding step and therefore after that restart. When PR #1356
+      # (scripts/seed-preview-settings.ts) lands, its step anchors at this same
+      # spot; keep the settings step first — the only correct resolution of that
+      # trivial conflict, since a preview with content but no settings is still
+      # stuck in /setup.
+      - name: Seed preview relay with content (products, profiles, featured list)
+        if: steps.secrets.outputs.previews_ready == 'true'
+        env:
+          APP_RELAY_URL: wss://${{ steps.ports.outputs.subdomain }}/relay
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+        run: |
+          set -uo pipefail
+          # DNS + Caddy converge over the 15s wait above, but a cold cert issue
+          # can still race this step; retry the seed before giving up. The
+          # seeder is idempotent — a repeat run prints `already-seeded` on its
+          # own line and publishes nothing, so redeploys never duplicate state
+          # (and never touch the events the settings seeder wrote).
+          SEED_OUTPUT=""
+          for attempt in $(seq 1 6); do
+            if SEED_OUTPUT="$(bun run scripts/seed-preview-content.ts 2>&1)"; then
+              echo "$SEED_OUTPUT"
+              break
+            fi
+            echo "content seed attempt $attempt failed:"
+            echo "$SEED_OUTPUT"
+            if [ "$attempt" = "6" ]; then
+              echo "::error::Could not seed preview content after 6 attempts (see scripts/seed-preview-content.ts)."
+              exit 1
+            fi
+            sleep 10
+          done
+
       - name: Health check
         id: health
         if: steps.secrets.outputs.previews_ready == 'true'
