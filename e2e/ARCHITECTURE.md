@@ -363,6 +363,53 @@ Since `nak serve` stores data in memory, the relay starts empty on each Playwrig
 
 For CI, the relay always starts fresh. For local dev, `reuseExistingServer: true` means the relay might have stale data from previous runs - this is generally fine since events are idempotent (replaceable events with same `d` tag get overwritten).
 
+### Production-Valid Fixture Chains
+
+A multi-event fixture must be something a real client could have published.
+`buildAuctionOrderFixture()` (`e2e/scenarios/index.ts`) therefore returns only
+after `assertAuctionOrderFixtureValid()` has pushed every seeded event through
+the **production** parsers (`parseAuctionEvent`, `parseBidEvent`,
+`parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`)
+and the production **cross-event** validators (`computeValidatedBids`,
+`validatePathRelease`, `validateSettlementCompleteness`). A fixture that cannot
+represent a real relay history throws while it is being built.
+
+This matters because a green E2E run over impossible relay data - an auction
+that is still open, a settlement below the reserve, a placeholder bid
+reference - proves only that the UI reacts to events no client would publish.
+The fixture asserts against the parsers and validators production uses, not a
+hand-rolled copy, so parser drift fails the fixture instead of silently
+weakening the test. Follow the same shape for any new multi-event fixture;
+`e2e/scenarios/auctionOrderFixture.test.ts` covers both the valid chain and the
+gate's rejections.
+
+The fixture is only half of the chain: a valid bid → path release → settlement
+proves the _auction_ is real, not that the _order_ on top of it is. `seedOrder('auction', …)`
+therefore publishes the order with the canonical claim marker
+(`buildAuctionClaimOrderTags()`, mirroring `buildAuctionClaimPublicMarkerTags()`)
+bound to the fixture's settlement event id, which is what gives the order
+fulfillment authority and its Auction type chip. Auction stage-local settlement
+events are NOT re-published per stage — the fixture is the single source of the
+auction chain. A claim marker naming an unresolved settlement grants no
+authority, and `auctionOrderFixture.test.ts` asserts both directions through
+`getAuctionClaimPublicMarkerFields()` and `getAuctionFulfillmentAuthority()`.
+
+The same rule applies to the seeded order's _status_ events. `advanceStage()`
+publishes the generic `CONFIRMED` status update for **product orders only**: a
+payment confirmation is a product-flow event, and the auction flow never
+publishes one (AUCTIONS.md 4.3.3) — an auction claim order is fulfillment-ready
+while still `PENDING`, authorized by the validated settlement + canonical claim.
+Seeding `CONFIRMED` on an auction order would manufacture a status no auction
+client produces _and_ let the auction e2e pass through the generic
+`isSeller && CONFIRMED` gate instead of the authority path.
+`seedOrder('auction', 'confirmed')` therefore deliberately leaves the order
+`PENDING`, and `Order Details - Seller View - Auctions` asserts exactly that,
+with `Process Order` reachable at `PENDING`.
+
+The fixture test runs in the unit suite (`bun run test:unit` includes
+`e2e/scenarios/`), so the publish-time gate is enforced on every PR rather than
+only when the Playwright suite happens to execute.
+
 ---
 
 ## 3. Auth Layer
