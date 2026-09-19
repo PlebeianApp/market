@@ -163,7 +163,7 @@ export function Nip60Wallet() {
 		}
 	}
 
-	const handleReclaim = async (pendingToken: UnifiedPendingToken) => {
+	const handleReclaim = async (pendingToken: UnifiedPendingToken): Promise<boolean> => {
 		setIsReclaiming(pendingToken.id)
 		try {
 			let success: boolean
@@ -177,9 +177,11 @@ export function Nip60Wallet() {
 			} else {
 				toast.info('Token already claimed by recipient')
 			}
+			return success
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Failed to reclaim token'
 			toast.error(message)
+			return false
 		} finally {
 			setIsReclaiming(null)
 		}
@@ -203,8 +205,12 @@ export function Nip60Wallet() {
 	const handleClaimFirst = async () => {
 		if (!tokenPendingRemoval) return
 		const token = tokenPendingRemoval
-		setTokenPendingRemoval(null)
-		await handleReclaim(token)
+		// Keep the dialog open while the reclaim runs so the disabled/spinner
+		// state is visible; only a successful reclaim closes it. A failed or
+		// already-claimed token leaves the dialog up, with Cancel / Remove
+		// anyway still available, because the toast alone is easy to miss.
+		const reclaimed = await handleReclaim(token)
+		if (reclaimed) setTokenPendingRemoval(null)
 	}
 
 	// Button appearance class definitions
