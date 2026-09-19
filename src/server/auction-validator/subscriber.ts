@@ -11,15 +11,24 @@
  *
  * Subscriptions:
  *   1. kind 30408 (auctions): one open REQ, filter on receipt.
- *   2. kind 1023 (bids): scoped to known auction root event ids via
- *      `#e`. We close + reopen this whenever a new auction lands so
- *      bids on the new auction stream in too.
- *   3. kind 1025 (path releases): same pattern as #2.
- *   4. kind 1024 (settlements): same pattern as #2.
+ *   2. kinds 1023/1025/1024 startup replay: one bounded historical REQ
+ *      at process start, used only to preserve stable first-observation
+ *      timestamps for child events that were already on the relay before
+ *      their auction is discovered.
+ *   3. kinds 1023/1025/1024 (bids, path releases, settlements): one
+ *      REQ per tracked auction, scoped by `#a` to that auction's
+ *      canonical coordinate (`30408:<seller>:<d>`). `#e` cannot serve
+ *      as the shared child filter here: bids + settlements tag the
+ *      auction root in `e`, but kind-1025 path releases tag the BID id
+ *      there. All three child kinds do share the auction coordinate in
+ *      `a`, so that is the narrow common live filter.
  *
- * Re-subscribing on every new auction is wasteful at scale but easy
- * and correct. A future optimisation is one persistent multi-filter
- * REQ; not worth doing now.
+ * Child REQs stay open until the auction is past the validator's own
+ * close-time skew window (`max_end_at + max_skew_sec`) AND the tracked
+ * bids are terminal AND no buffered children attributable to that
+ * auction remain. We enforce closure by calling the unsubscribe handle,
+ * not by `until`, so the validator never drops a still-replayable child
+ * solely because its local clock advanced.
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
@@ -32,9 +41,18 @@ import { parseBidEvent } from '../../lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/auction/settlementEvents'
 
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
+import { createPendingBuffer, createPendingBufferBudget } from './pendingBuffer'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
+import {
+	checkBidSpamPolicy,
+	checkEventEnvelope,
+	recordAcceptedBid,
+	resolveBidSpamPolicy,
+	resolvePendingBufferLimits,
+	type BidSpamPolicy,
+} from './spamPolicy'
 
 export interface ValidatorSubscriberDeps {
 	state: ValidatorState
@@ -56,6 +74,8 @@ export interface ValidatorSubscriberDeps {
 	 * no seed and falls back to `now()` (correct first observation).
 	 */
 	seedObservedAt?: Map<string, number>
+	/** Validator admission limits. Defaults are intentionally permissive. */
+	spamPolicy?: Partial<BidSpamPolicy>
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
 
@@ -76,16 +96,176 @@ export interface ValidatorSubscriber {
 export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): ValidatorSubscriber => {
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
 	const logger = deps.logger ?? defaultLogger()
+	const resolvedPolicy = resolveBidSpamPolicy(deps.spamPolicy)
 
-	// Active unsubscribe handles, one per REQ we currently have open.
+	// Active unsubscribe handles: one global auction REQ and one child
+	// REQ per tracked auction coordinate.
 	const unsubscribes: Array<() => void> = []
-	// Buffered bids/releases/settlements that arrived before we knew
-	// about their auction. Each carries the validator's first-observed
-	// time so replay uses the original sighting, not replay-time now()
-	// (which would let relay ordering change prompt/late classification).
-	const pendingBids = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
-	const pendingReleases = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // bidEventId → events
-	const pendingSettlements = new Map<string, { raw: NostrEvent; observedAt: number }[]>() // auctionRootEventId → events
+	const watchedAuctionUnsubscribes = new Map<string, () => void>()
+	// Bounded, TTL'd buffers for events that arrived before we knew
+	// about their parent. Each entry carries the validator's
+	// first-observed time so replay uses the original sighting, not
+	// replay-time now() (which would let relay ordering change
+	// prompt/late classification).
+	//
+	// The keys come straight off the relay, so they are attacker-chosen:
+	// a bidder signing bids against invented auction ids must not be
+	// able to grow one of these buffers without limit, and a key whose
+	// parent never arrives must not be pinned for the process lifetime
+	// (review 5645059400 findings 1 and 3). Eviction is fail-closed: a
+	// dropped buffered event is never replayed, so no verdict is emitted.
+	// The three buffers share one aggregate event budget, so the worst
+	// case is bounded across the combined ordering-gap surface.
+	const pendingLimits = resolvePendingBufferLimits(resolvedPolicy)
+	const pendingBudget = createPendingBufferBudget(pendingLimits.maxPendingEvents)
+	const pendingBids = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // auctionRootEventId → events
+	const pendingReleases = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // bidEventId → events
+	const pendingSettlements = createPendingBuffer<{ raw: NostrEvent; observedAt: number }>(pendingLimits, pendingBudget) // auctionRootEventId → events
+	const activeBidClaimsNeedingChildWatch = new Set([
+		'valid_bid_placed',
+		'bid_pending_review',
+		'won_pending_settlement',
+		'griefed_pending_fallback',
+	])
+
+	type RelayFilter = { kinds?: number[]; since?: number; '#a'?: string[] }
+
+	const hasAttributablePendingChildren = (auctionRootEventId: string): boolean => {
+		if (pendingBids.keys(now()).includes(auctionRootEventId)) return true
+		if (pendingSettlements.keys(now()).includes(auctionRootEventId)) return true
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return false
+		const pendingReleaseKeys = new Set(pendingReleases.keys(now()))
+		for (const bidEventId of Array.from(auctionState.bids.keys())) {
+			if (pendingReleaseKeys.has(bidEventId)) return true
+		}
+		return false
+	}
+
+	const auctionNeedsChildWatch = (auctionRootEventId: string): boolean => {
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return false
+		if (hasAttributablePendingChildren(auctionRootEventId)) return true
+		const childWindowClosesAt =
+			auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
+		if (now() <= childWindowClosesAt) return true
+		for (const bidState of Array.from(auctionState.bids.values())) {
+			if (bidState.currentClaim === null) return true
+			if (activeBidClaimsNeedingChildWatch.has(bidState.currentClaim)) return true
+		}
+		return false
+	}
+
+	const stopWatchingAuction = (auctionRootEventId: string): void => {
+		const unsubscribe = watchedAuctionUnsubscribes.get(auctionRootEventId)
+		if (!unsubscribe) return
+		watchedAuctionUnsubscribes.delete(auctionRootEventId)
+		try {
+			unsubscribe()
+		} catch {
+			// Ignore — pool might already be torn down.
+		}
+	}
+
+	const maybeRetireAuctionWatch = (auctionRootEventId: string): void => {
+		if (auctionNeedsChildWatch(auctionRootEventId)) return
+		stopWatchingAuction(auctionRootEventId)
+		logger.info(`[validator] closed child subscriptions for auction ${auctionRootEventId.slice(0, 8)}`)
+	}
+
+	const childReplaySince = (auctionStartedAt?: number): number => {
+		const lookbackFloor = now() - resolvedPolicy.childReplayLookbackSec
+		if (auctionStartedAt === undefined) return lookbackFloor
+		return Math.max(lookbackFloor, auctionStartedAt)
+	}
+
+	const reconcileAuctionWatches = async (): Promise<void> => {
+		for (const auctionState of Array.from(deps.state.auctions.values())) {
+			if (watchedAuctionUnsubscribes.size >= resolvedPolicy.maxTrackedChildSubscriptions) return
+			if (watchedAuctionUnsubscribes.has(auctionState.auction.rootEventId)) continue
+			if (!auctionNeedsChildWatch(auctionState.auction.rootEventId)) continue
+			await startWatchingAuction(auctionState.auction.rootEventId)
+		}
+	}
+
+	const drainPendingReleasesForBid = async (auctionRootEventId: string, bidEventId: string): Promise<void> => {
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState || !auctionState.bids.has(bidEventId)) return
+		const releases = pendingReleases.take(bidEventId, now())
+		for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
+	}
+
+	const dispatchChildEvent = (event: NostrEvent, observedAt?: number): void => {
+		switch (event.kind) {
+			case AUCTION_BID_KIND:
+				void onBidEvent(event, observedAt)
+				return
+			case AUCTION_PATH_RELEASE_KIND:
+				void onPathReleaseEvent(event, observedAt)
+				return
+			case AUCTION_SETTLEMENT_KIND:
+				void onSettlementEvent(event, observedAt)
+				return
+			default:
+				return
+		}
+	}
+
+	const startWatchingAuction = async (auctionRootEventId: string): Promise<void> => {
+		if (watchedAuctionUnsubscribes.has(auctionRootEventId)) return
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return
+		if (watchedAuctionUnsubscribes.size >= resolvedPolicy.maxTrackedChildSubscriptions) {
+			logger.warn(`[validator] child subscription cap reached for auction ${auctionRootEventId.slice(0, 8)}`)
+			return
+		}
+		const watchedCoordinate = auctionState.auction.coordinate
+		const filters: RelayFilter[] = [
+			{
+				kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()],
+				'#a': [watchedCoordinate],
+				since: childReplaySince(auctionState.auction.startAt),
+			},
+		]
+		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
+			switch (event.kind) {
+				case AUCTION_BID_KIND: {
+					const parsed = parseBidEvent(event)
+					if (
+						parsed.ok &&
+						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+					) {
+						logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				case AUCTION_PATH_RELEASE_KIND: {
+					const parsed = parsePathReleaseEvent(event)
+					if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
+						logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				case AUCTION_SETTLEMENT_KIND: {
+					const parsed = parseSettlementEvent(event)
+					if (
+						parsed.ok &&
+						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+					) {
+						logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+						return
+					}
+					break
+				}
+				default:
+					break
+			}
+			dispatchChildEvent(event)
+		})
+		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)
+	}
 
 	// =========================================================================
 	// Event handlers
@@ -115,7 +295,28 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		}
 	}
 
+	/**
+	 * Envelope gate for every relay-fed event kind. `checkEventEnvelope`
+	 * is kind-agnostic (serialized size + tag count), so it is the cheap
+	 * first refusal on all four ingestion paths before parsing or
+	 * buffering — the kind-1023 admission policy below only ever
+	 * protected one of them (review 5645059400 finding 3).
+	 */
+	const passesEventEnvelope = (raw: NostrEvent, label: string): boolean => {
+		const decision = checkEventEnvelope(raw, deps.spamPolicy)
+		if (decision.ok) return true
+		logger.warn(`[validator] dropping ${label} ${raw.id.slice(0, 8)}: ${decision.reason}`)
+		return false
+	}
+
 	const onAuctionEvent = async (raw: NostrEvent): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'auction')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'auction')) {
 			return
 		}
@@ -153,10 +354,23 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
 			await drainPending(auction.rootEventId)
+			await startWatchingAuction(auction.rootEventId)
+			// The scoped REQ may replay release-before-bid history for this
+			// auction; drain again so those freshly buffered children resolve.
+			await drainPending(auction.rootEventId)
 		}
+		maybeRetireAuctionWatch(auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onBidEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'bid')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'bid')) {
 			return
 		}
@@ -181,14 +395,43 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// and replay it (with this first-observed time) when the auction
 		// shows up.
 		if (!deps.state.auctions.has(bid.auctionRootEventId)) {
-			const existing = pendingBids.get(bid.auctionRootEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingBids.set(bid.auctionRootEventId, existing)
+			const admission = pendingBids.add(bid.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
+			return
+		}
+
+		const auctionState = deps.state.auctions.get(bid.auctionRootEventId)
+		if (!auctionState) return
+		// LIFETIME count, by design (review 5645059400 finding 2): `bids` is
+		// append-only and retains bids the verdict pass later marks invalid, so
+		// this is a lifetime cap per (auction, bidder), NOT a count of open bids.
+		// Documented rather than derived: the stored bid state carries verdict
+		// reasons (currentClaim/currentReason), not an authoritative
+		// active/invalid flag, so computing "active" here would invent protocol
+		// semantics this boundary does not own. The policy limit is labelled
+		// lifetime in spamPolicy.ts.
+		const lifetimeBidCount = Array.from(auctionState.bids.values()).filter(
+			(existingBid) => existingBid.bid.bidderPubkey.toLowerCase() === bid.bidderPubkey.toLowerCase(),
+		).length
+		const spamDecision = checkBidSpamPolicy({
+			auction: auctionState.auction,
+			bid,
+			now: firstObservedAt,
+			state: deps.state.spam,
+			policy: resolvedPolicy,
+			trackedBidCount: lifetimeBidCount,
+		})
+		if (!spamDecision.ok) {
+			logger.warn(`[validator] dropping bid ${bid.id.slice(0, 8)}: ${spamDecision.reason}`)
 			return
 		}
 
 		const result = upsertBid(deps.state, bid, firstObservedAt)
 		if (!result) return // can't happen — auction is known per the check above
+		recordAcceptedBid({ auction: auctionState.auction, bid, now: firstObservedAt, state: deps.state.spam, policy: resolvedPolicy })
+		await drainPendingReleasesForBid(bid.auctionRootEventId, bid.id)
 
 		// Run derive + publish.
 		try {
@@ -199,9 +442,18 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		} catch (err) {
 			logger.error(`[validator] verdict publish failed for bid ${bid.id.slice(0, 8)}:`, err instanceof Error ? err.message : err)
 		}
+		maybeRetireAuctionWatch(bid.auctionRootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onPathReleaseEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'path release')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'path release')) {
 			return
 		}
@@ -217,9 +469,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			// hasn't arrived). Stash and replay when the bid appears;
 			// authorization is re-applied on replay. Preserve the
 			// first-observed time so prompt/late classification is stable.
-			const existing = pendingReleases.get(release.bidEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingReleases.set(release.bidEventId, existing)
+			const admission = pendingReleases.add(release.bidEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping kind-1025 ${release.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_author') {
@@ -260,9 +513,18 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 				err instanceof Error ? err.message : err,
 			)
 		}
+		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	const onSettlementEvent = async (raw: NostrEvent, observedAt?: number): Promise<void> => {
+		// Envelope first: the size/shape bound must bound the WORK, not
+		// just the admission (review 5645059400 finding 4) — otherwise an
+		// oversized event still pays getEventHash + schnorr.verify before
+		// being dropped.
+		if (!passesEventEnvelope(raw, 'settlement')) {
+			return
+		}
 		if (!verifyIncomingEvent(raw, 'settlement')) {
 			return
 		}
@@ -274,9 +536,10 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 		const recordResult = recordSettlement(deps.state, settlement)
 		if (recordResult.status === 'unknown_auction') {
-			const existing = pendingSettlements.get(settlement.auctionRootEventId) ?? []
-			existing.push({ raw, observedAt: firstObservedAt })
-			pendingSettlements.set(settlement.auctionRootEventId, existing)
+			const admission = pendingSettlements.add(settlement.auctionRootEventId, { raw, observedAt: firstObservedAt }, now())
+			if (admission !== 'buffered') {
+				logger.warn(`[validator] dropping kind-1024 ${settlement.id.slice(0, 8)}: pending buffer ${admission}`)
+			}
 			return
 		}
 		if (recordResult.status === 'wrong_seller') {
@@ -306,6 +569,8 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		// late-arriving NUT-7 transitions land in the right verdict
 		// (e.g. winner that flipped to spent right as kind-1024 arrived).
 		await republishAuction(auctionState.auction.rootEventId)
+		maybeRetireAuctionWatch(auctionState.auction.rootEventId)
+		await reconcileAuctionWatches()
 	}
 
 	// =========================================================================
@@ -313,23 +578,20 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const drainPending = async (auctionRootEventId: string): Promise<void> => {
-		const bids = pendingBids.get(auctionRootEventId) ?? []
-		pendingBids.delete(auctionRootEventId)
+		const bids = pendingBids.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of bids) await onBidEvent(raw, observedAt)
 
-		const settlements = pendingSettlements.get(auctionRootEventId) ?? []
-		pendingSettlements.delete(auctionRootEventId)
+		const settlements = pendingSettlements.take(auctionRootEventId, now())
 		for (const { raw, observedAt } of settlements) await onSettlementEvent(raw, observedAt)
 
 		// Path releases are keyed by bidEventId — after the bids
 		// drained above, try replaying every stash and clean up the
 		// ones that now resolve.
-		for (const [bidEventId, releases] of Array.from(pendingReleases.entries())) {
-			const auctionState = deps.state.auctions.get(auctionRootEventId)
-			if (auctionState && auctionState.bids.has(bidEventId)) {
-				pendingReleases.delete(bidEventId)
-				for (const { raw, observedAt } of releases) await onPathReleaseEvent(raw, observedAt)
-			}
+		const auctionState = deps.state.auctions.get(auctionRootEventId)
+		if (!auctionState) return
+		for (const bidEventId of pendingReleases.keys(now())) {
+			if (!auctionState.bids.has(bidEventId)) continue
+			await drainPendingReleasesForBid(auctionRootEventId, bidEventId)
 		}
 	}
 
@@ -356,42 +618,50 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	// =========================================================================
 
 	const start = async (): Promise<void> => {
-		const auctionUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [auctionKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
+		const since = childReplaySince()
+		const startupObservedAt = now()
+		let startupChildReplayDone = false
+		let startupChildReplayUnsub: (() => void) | null = null
+		const stopStartupChildReplay = (): void => {
+			const off = startupChildReplayUnsub
+			startupChildReplayUnsub = null
+			if (!off) return
+			try {
+				off()
+			} catch {
+				// Ignore — pool might already be torn down.
+			}
+		}
+		startupChildReplayUnsub = await deps.relayPool.subscribe(
+			[{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], since }],
 			(event) => {
-				void onAuctionEvent(event)
+				dispatchChildEvent(event, startupObservedAt)
+			},
+			() => {
+				startupChildReplayDone = true
+				stopStartupChildReplay()
 			},
 		)
+		if (startupChildReplayDone) {
+			stopStartupChildReplay()
+		} else {
+			unsubscribes.push(stopStartupChildReplay)
+		}
+		const auctionUnsub = await deps.relayPool.subscribe([{ kinds: [auctionKindAsNumber()], since }], (event) => {
+			void onAuctionEvent(event)
+		})
 		unsubscribes.push(auctionUnsub)
-
-		const bidUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [bidKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onBidEvent(event)
-			},
-		)
-		unsubscribes.push(bidUnsub)
-
-		const releaseUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [pathReleaseKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onPathReleaseEvent(event)
-			},
-		)
-		unsubscribes.push(releaseUnsub)
-
-		const settlementUnsub = await deps.relayPool.subscribe(
-			[{ kinds: [settlementKindAsNumber()], since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30 }],
-			(event) => {
-				void onSettlementEvent(event)
-			},
-		)
-		unsubscribes.push(settlementUnsub)
+		for (const auctionState of Array.from(deps.state.auctions.values())) {
+			await startWatchingAuction(auctionState.auction.rootEventId)
+		}
 
 		logger.info('[validator] subscriptions established')
 	}
 
 	const stop = async (): Promise<void> => {
+		for (const auctionRootEventId of Array.from(watchedAuctionUnsubscribes.keys())) {
+			stopWatchingAuction(auctionRootEventId)
+		}
 		while (unsubscribes.length > 0) {
 			const off = unsubscribes.pop()
 			try {
@@ -405,7 +675,9 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 	const republishAll = async (): Promise<void> => {
 		for (const auctionState of Array.from(deps.state.auctions.values())) {
 			await republishAuction(auctionState.auction.rootEventId)
+			maybeRetireAuctionWatch(auctionState.auction.rootEventId)
 		}
+		await reconcileAuctionWatches()
 	}
 
 	return { start, stop, republishAll }

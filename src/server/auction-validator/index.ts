@@ -21,6 +21,7 @@ import { publishValidatorPolicy } from './policy'
 import { recoverObservedAt } from './observedAtRecovery'
 import type { MintProbePolicy } from './mintReachability'
 import type { ValidatorPolicyDocument } from '../../lib/auction/events'
+import { resolveBidSpamPolicy, type BidSpamPolicy } from './spamPolicy'
 
 export interface StartAuctionValidatorOptions {
 	signer: NostrSigner
@@ -43,6 +44,8 @@ export interface StartAuctionValidatorOptions {
 	 * https-only). Bounded concurrency + per-auction mint cap.
 	 */
 	mintProbePolicy?: MintProbePolicy
+	/** Admission limits for relay-fed kind-1023 bids. */
+	spamPolicy?: Partial<BidSpamPolicy>
 	/** Logger override. Default `console`. */
 	logger?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 }
@@ -52,14 +55,18 @@ export interface AuctionValidatorHandle {
 	stop: () => Promise<void>
 	/** Snapshot the live state — handy for debugging / dashboards. */
 	state: ValidatorState
+	/** Effective relay-admission limits after defaults + overrides. */
+	spamPolicy: BidSpamPolicy
 }
 
 export const startAuctionValidator = async (options: StartAuctionValidatorOptions): Promise<AuctionValidatorHandle> => {
 	const logger = options.logger ?? defaultLogger()
 	const validatorPubkey = await options.signer.getPublicKey()
 	const state = createValidatorState(validatorPubkey)
+	const resolvedSpamPolicy = resolveBidSpamPolicy(options.spamPolicy)
 
 	logger.info(`[validator] starting — pubkey: ${validatorPubkey.slice(0, 16)}…`)
+	logger.info('[validator] resolved admission policy', resolvedSpamPolicy)
 
 	// Publish the policy declaration first so any bidder reading kind-
 	// 30441 events while we're booting sees us right away.
@@ -69,6 +76,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 			relayPool: options.relayPool,
 			name: options.name ?? 'Plebeian dev validator',
 			policy: options.policy,
+			spamPolicy: resolvedSpamPolicy,
 		})
 		logger.info('[validator] policy published')
 	} catch (err) {
@@ -97,6 +105,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		logger,
 		mintProbePolicy: options.mintProbePolicy,
 		seedObservedAt,
+		spamPolicy: resolvedSpamPolicy,
 	})
 
 	await subscriber.start()
@@ -128,7 +137,7 @@ export const startAuctionValidator = async (options: StartAuctionValidatorOption
 		logger.info('[validator] stopped')
 	}
 
-	return { stop, state }
+	return { stop, state, spamPolicy: resolvedSpamPolicy }
 }
 
 const defaultLogger = () => ({
