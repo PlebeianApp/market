@@ -166,7 +166,7 @@ jobs:
           APP_RELAY_URL=${{ secrets.PROD_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.PROD_APP_PRIVATE_KEY }}
           CVM_SERVER_KEY=${{ secrets.PROD_CVM_SERVER_KEY }}
-          NIP46_RELAY_URL=wss://relay.nsec.app
+          NIP46_RELAY_URL=wss://relay.plebeian.market
           LOG_LEVEL=info
           EOF
 
