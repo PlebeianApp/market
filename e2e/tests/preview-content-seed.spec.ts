@@ -111,11 +111,98 @@ async function stubExternalImages(context: BrowserContext) {
 			await route.fulfill({
 				path: 'public/images/Plebeian_Logo_OpenGraph.png',
 				contentType: 'image/png',
+				headers: { [STUB_MARKER_HEADER]: 'image' },
 			})
 			return
 		}
 		await route.continue()
 	})
+}
+
+/**
+ * Marker every route stub in this spec sets on the response it serves, so the
+ * run's request log (see `trackExternalHttp`) can say WHICH stub answered — and
+ * so a response that did NOT come from a stub is visible as such rather than
+ * being assumed to be one.
+ */
+const STUB_MARKER_HEADER = 'x-e2e-route-stub'
+
+/**
+ * Test isolation (ADR-0005): `src/queries/external.tsx:101` fetches
+ * `https://api.yadio.io/exrates/BTC` whenever the ContextVM price lookup is
+ * unavailable — and in a test run it always is, because no ContextVM service
+ * stands behind the suite's relay. `ProductCard` renders `PriceDisplay` for
+ * every listing that carries a `price` tag (`src/components/ProductCard.tsx:127`)
+ * and `PriceDisplay` subscribes to that query, so a DEFAULT (non-preview) load of
+ * this seeded feed would otherwise reach the public internet. Serve the shape the
+ * unit-test precedent already uses
+ * (`src/queries/__tests__/external.test.ts:56` — `{ BTC: { USD, EUR, GBP } }`)
+ * instead of the live endpoint.
+ *
+ * Kept local to this spec: nothing under `e2e/utils/` or `e2e/helpers/` mocks the
+ * price endpoints, and this spec already keeps its own copies of the login
+ * spec's isolation stubs for the same reason.
+ *
+ * Register it AFTER the catch-all `context.route('**\/*')` image stub: Playwright
+ * checks the most recently registered handler first, so a catch-all that
+ * `route.continue()`s would otherwise hand this request to the real network.
+ */
+function stubYadioRates(context: BrowserContext) {
+	const served: string[] = []
+	context.route('https://api.yadio.io/**', async (route) => {
+		const url = route.request().url()
+		served.push(url)
+		console.log(`  [isolation] yadio route stub served: ${url}`)
+		await route.fulfill({
+			status: 200,
+			headers: { 'Content-Type': 'application/json', [STUB_MARKER_HEADER]: 'yadio' },
+			body: JSON.stringify({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
+		})
+	})
+	return () => served
+}
+
+/**
+ * The run's external request log. Records every HTTP response whose host is
+ * neither loopback nor the app under test, annotated with the stub marker it
+ * carries. A response for `api.yadio.io` that carries no `yadio` marker is a
+ * violation: `route.fulfill()` never reaches the network, so the marker can only
+ * be present if the stub — not the public API — served the request.
+ */
+function trackExternalHttp(context: BrowserContext) {
+	const appHost = new URL(BASE_URL).host
+	const external: string[] = []
+	const unstubbedYadio: string[] = []
+	context.on('response', (response) => {
+		const url = response.url()
+		let host: string
+		try {
+			host = new URL(url).host
+		} catch {
+			return
+		}
+		if (host === appHost || host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]')) return
+		const servedBy = response.headers()[STUB_MARKER_HEADER]
+		external.push(`${response.status()} ${url}${servedBy ? ` [served by the ${servedBy} route stub]` : ''}`)
+		if (host === 'api.yadio.io' && servedBy !== 'yadio') unstubbedYadio.push(url)
+	})
+	return () => ({ external, unstubbedYadio })
+}
+
+/**
+ * Print this run's isolation evidence to the reporter output and fail if any
+ * `api.yadio.io` response was NOT served by the route stub — i.e. if the request
+ * actually left the process (ADR-0005).
+ */
+function reportIsolation(servedYadio: string[], log: { external: string[]; unstubbedYadio: string[] }) {
+	console.log(`  [isolation] yadio requests served by the route stub: ${servedYadio.length}`)
+	for (const url of servedYadio) console.log(`    - ${url}`)
+	console.log(
+		`  [isolation] external HTTP responses: ${
+			log.external.length ? `\n${log.external.map((line) => `    ${line}`).join('\n')}` : '(none)'
+		}`,
+	)
+	expect(log.unstubbedYadio, 'a yadio request reached the network instead of the route stub').toEqual([])
 }
 
 /** Count relay WebSocket traffic (skips the app server's HMR socket). */
@@ -147,6 +234,12 @@ test.describe('Preview relay content (PR #1363 / #1371)', () => {
 
 		await seedFreshContext(context)
 		await stubExternalImages(context)
+		// Hermetic (ADR-0005): the ContextVM -> Yadio rate fallback that the
+		// rendered cards' PriceDisplay triggers is served locally. Registered
+		// AFTER the catch-all image stub above — Playwright checks the most
+		// recently registered handler first.
+		const servedYadio = stubYadioRates(context)
+		const externalHttp = trackExternalHttp(context)
 		const stubbedRelays = await stubThirdPartyRelays(context)
 
 		// Seeding writes to the relay, so it is only ever done against the
@@ -234,6 +327,11 @@ test.describe('Preview relay content (PR #1363 / #1371)', () => {
 		console.log(`  third-party relay sockets stubbed: ${stubbedRelays().join(', ') || '(none)'}`)
 		expect(frames.relayUrls, 'the app opened no relay WebSocket').not.toHaveLength(0)
 		expect(frames.received, 'no relay frame was received — the listings cannot have come from the relay').toBeGreaterThan(0)
+
+		// Isolation evidence (ADR-0005): every external HTTP response this run
+		// received must have come from a route stub — the Yadio rate fallback
+		// that the rendered cards' PriceDisplay triggers included.
+		reportIsolation(servedYadio(), externalHttp())
 
 		await testInfo.attach('rendered-card-titles', {
 			body: JSON.stringify({ baseUrl: BASE_URL, relay: RELAY_URL, targetExternalApp: TARGETS_EXTERNAL_APP, titles }, null, 2),
