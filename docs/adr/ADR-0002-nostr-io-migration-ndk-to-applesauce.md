@@ -280,8 +280,8 @@ as absence). A debug-level drop counter does not exist today; it is a separate
 follow-up, not a behavior this addendum asserts.
 
 **Scope of this behavior.** It applies where events are rehydrated through
-`rehydrateVerifiedNdkEvent` — the seam fetch path (`src/lib/nostr/ndk-events.ts:46`)
-and `src/queries/orders.tsx:1006`. Reads that call NDK directly without
+`rehydrateVerifiedNdkEvent` — the seam fetch path (`src/lib/nostr/ndk-events.ts:55`)
+and `src/queries/orders.tsx:1001`. Reads that call NDK directly without
 rehydration are not covered by it.
 
 ### F5 — live-subscribe stays pinned to the main relay once it is known
@@ -304,29 +304,29 @@ unknown.
 Conflicting `created_at` versions of the same deduplication-key event resolve to
 the highest `created_at`, independent of relay-arrival order; on an equal
 timestamp the lexicographically lower event id wins (NIP-01's tie-break). On
-`master` this is `isNewerEvent` (`src/lib/nostr/ndk-events.ts:20-31`), applied by
-`fetchNdkEventSet` (`:33-53`), which dedupes on the NDK coordinate key
+`master` this is `isNewerEvent` (`src/lib/nostr/ndk-events.ts:29-40`), applied by
+`fetchNdkEventSet` (`:42-62`), which dedupes on the NDK coordinate key
 (`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and keeps the newest
 copy. The single-event helper used for app-owned replaceable events is
-`fetchLatestAppEvent` (`src/lib/stores/ndk.ts:163-171`), which selects by
+`fetchLatestAppEvent` (`src/lib/stores/ndk.ts:283-291`), which selects by
 `created_at`.
 
 ### F3 — the read-reach question (premise only)
 
 Production NDK is constructed with `enableOutboxModel: true`
-(`src/lib/stores/ndk.ts:301`, `:317`); outbox discovery is gated off for
+(`src/lib/stores/ndk.ts:421`, `:437`); outbox discovery is gated off for
 `staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
 reads this wave touches still call NDK directly — `ndk.fetchEvents` at
-`src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`,
-`src/lib/stores/nip60.ts:159`, with live subscriptions at
+`src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`, and
+`ndk.fetchEvent` at `src/lib/stores/nip60.ts:198`, with live subscriptions at
 `src/hooks/useNotificationMonitor.ts:135/161/185`. In production those reads are
 therefore outbox-routed today; no pinning is described here because none ships on
 `master`.
 
 `src/lib/appSettings.ts:107` is **not** a client read: `fetchAppSettings`
 (`:42`) is imported only by the server entry (`src/index.tsx:7`, called at boot
-`:139` and refreshed at `:404`), and the browser consumes the parsed result from
-`/api/config` (`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-282`).
+`:143` and refreshed at `:409`), and the browser consumes the parsed result from
+`/api/config` (`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-290`).
 
 **No decision is recorded.** Whether production keeps that reach for
 author-scoped reads, or gains a bounded author-relay path, is proposed in a
