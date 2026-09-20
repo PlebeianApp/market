@@ -591,6 +591,79 @@ export const fetchAuctionVerdicts = async (
 }
 
 /**
+ * Retry budget for a publish-path verdict read: a bounded window with a
+ * fixed step. Sized to cover relay propagation lag (a verdict published
+ * moments ago is not necessarily visible to the next read) without holding
+ * a seller's/bidder's publish action open indefinitely.
+ */
+export const AUCTION_VERDICT_RETRY_WINDOW_MS = 2500
+export const AUCTION_VERDICT_RETRY_STEP_MS = 300
+
+/**
+ * Transport-level failures a retry can plausibly clear — socket closed,
+ * connection refused, timeouts/aborts. Deliberately narrow: a semantic
+ * failure (bad filter, malformed response, verification error) must
+ * propagate immediately rather than be hidden behind a retry window.
+ */
+const TRANSIENT_FETCH_ERROR_PATTERN =
+	/timeout|timed out|abort|network|fetch failed|econnreset|econnrefused|econnaborted|socket|closed|unavailable|not connected|relay.*(error|unreachable)/i
+
+const isTransientAuctionFetchError = (err: unknown): boolean => {
+	if (!err) return false
+	const name = typeof err === 'object' && 'name' in err ? String((err as { name?: unknown }).name ?? '') : ''
+	const message = err instanceof Error ? err.message : String(err)
+	return TRANSIENT_FETCH_ERROR_PATTERN.test(`${name} ${message}`)
+}
+
+/**
+ * Bounded, transient-only retry around `fetchAuctionVerdicts`, for the
+ * publish-path quorum gates.
+ *
+ * On the publish paths an empty verdict read is not a neutral observation:
+ * it makes the quorum resolve 0/N, and the gate is fail-closed, so a single
+ * racy read (a verdict that is published but not yet indexed by the relay)
+ * blocks a legitimate release or settlement. Retrying a *bounded* number of
+ * times separates "not visible yet" from "not there":
+ *
+ * - an empty result is retried (propagation lag is the expected cause);
+ * - an explicitly empty `validatorPubkeys` (auction declares no auditors) is
+ *   NOT retried — nothing is authorized, so re-reading cannot change the
+ *   answer;
+ * - an error is retried only when `isTransientAuctionFetchError` recognises
+ *   it; anything else propagates immediately.
+ *
+ * The final fail-closed behaviour is preserved: when the window closes the
+ * last observation is returned (or the last transient error rethrown), so
+ * the caller's quorum-shortfall throw still runs and a genuinely missing
+ * quorum is never published.
+ */
+export const fetchAuctionVerdictsWithRetry = async (
+	auctionEventId: string,
+	limit: number | null = 500,
+	auctionCoordinates?: string,
+	validatorPubkeys?: string[],
+	fetchFn: EventFetcher = applesauceIo.fetchEvents,
+	windowMs = AUCTION_VERDICT_RETRY_WINDOW_MS,
+	stepMs = AUCTION_VERDICT_RETRY_STEP_MS,
+): Promise<NostrEventLike[]> => {
+	const deadline = Date.now() + windowMs
+	for (;;) {
+		try {
+			const verdicts = await fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, validatorPubkeys, fetchFn)
+			if (verdicts.length > 0) return verdicts
+			// Permanent condition, not propagation lag: no declared auditor
+			// can ever produce an authorized verdict here.
+			if (validatorPubkeys?.length === 0) return verdicts
+			if (Date.now() + stepMs >= deadline) return verdicts
+		} catch (err) {
+			if (!isTransientAuctionFetchError(err)) throw err
+			if (Date.now() + stepMs >= deadline) throw err
+		}
+		await new Promise((resolve) => setTimeout(resolve, stepMs))
+	}
+}
+
+/**
  * Explicit signature check for kind-30440 verdicts. Tolerates both real
  * `NDKEvent`s (via `rawEvent()`) and duck-typed event objects so the parse
  * boundary never trusts an event it cannot verify.
