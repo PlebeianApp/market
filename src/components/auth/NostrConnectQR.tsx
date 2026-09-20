@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
+import { nip46RelayOptions } from '@/lib/nostr/nip46-relays'
 import { authActions } from '@/lib/stores/auth'
 import { buildNostrConnectUri, isMatchingConnectSecret } from '@/lib/nostr/nostr-connect-uri'
 import { copyToClipboard } from '@/lib/utils'
@@ -24,10 +24,22 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const [listening, setListening] = useState(false)
 	const [generatingConnectionUrl, setGeneratingConnectionUrl] = useState(false)
 	const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-	const [selectedRelay, setSelectedRelay] = useState(DEFAULT_NIP46_RELAYS[0].value)
+	const relayOptions = useMemo(() => nip46RelayOptions(config?.nip46Relay), [config?.nip46Relay])
+	const [selectedRelay, setSelectedRelay] = useState(relayOptions[0]?.value ?? '')
+	const userSelectedRelayRef = useRef(false)
 	const [customRelay, setCustomRelay] = useState('')
 	const isCustomRelay = selectedRelay === 'custom'
 	const activeRelay = isCustomRelay ? customRelay : selectedRelay
+
+	// Prefer the server-advertised NIP-46 relay (config.nip46Relay) until the
+	// user explicitly picks a different one from the dropdown. Take the value
+	// from the built option list rather than echoing the raw config string:
+	// options are trimmed (`nip46RelayOptions`), so a padded env value would
+	// match no `SelectItem` and render an empty Select.
+	useEffect(() => {
+		if (userSelectedRelayRef.current) return
+		if (config?.nip46Relay) setSelectedRelay(relayOptions[0]?.value ?? '')
+	}, [config?.nip46Relay, relayOptions])
 
 	// Generate secret once and keep it stable
 	const tempSecretRef = useRef<string>(Math.random().toString(36).substring(2, 15))
@@ -213,9 +225,11 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			try {
 				// Bounded connect: `ndk.connect()` with no timeout only settles
 				// once EVERY relay in the pool reaches CONNECTED, so one slow or
-				// unreachable relay (the default `wss://relay.plebeian.market`
-				// pick, or a user-typed relay) leaves the NIP-46 listener
-				// unstarted and the scan never sees a `connect` request.
+				// unreachable relay — a user-typed one, or a fallback entry such
+				// as `wss://relay.nsec.app` (TCP:443 times out) — leaves the
+				// NIP-46 listener unstarted and the scan never sees a `connect`
+				// request. The default pick is the project relay, which is
+				// reachable.
 				await ndk.connect(3_000)
 			} catch (error) {
 				console.error('Failed to connect to NIP-46 relay:', error)
@@ -326,12 +340,18 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			<div className="w-full space-y-2">
 				<label className="text-sm font-medium">Relay</label>
-				<Select value={selectedRelay} onValueChange={setSelectedRelay}>
+				<Select
+					value={selectedRelay}
+					onValueChange={(value) => {
+						userSelectedRelayRef.current = true
+						setSelectedRelay(value)
+					}}
+				>
 					<SelectTrigger className="w-full">
 						<SelectValue />
 					</SelectTrigger>
 					<SelectContent>
-						{DEFAULT_NIP46_RELAYS.map((relay) => (
+						{relayOptions.map((relay) => (
 							<SelectItem key={relay.value} value={relay.value}>
 								{relay.label}
 							</SelectItem>
