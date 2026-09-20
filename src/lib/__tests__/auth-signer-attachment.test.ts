@@ -127,7 +127,7 @@ mock.module('@/lib/nostr/session-vault', () => ({
 	unlockVault: mock(async () => 'nbunksec1vaulted'),
 }))
 
-import { authActions, authStore } from '@/lib/stores/auth'
+import { authActions, authStore, NOSTR_USER_PUBKEY } from '@/lib/stores/auth'
 import {
 	getSignerCapability,
 	getSignerTeardown,
@@ -676,6 +676,30 @@ describe('transactional signer authority attachment', () => {
 		expectFullyDetached()
 	})
 
+	test('the NIP-46 lane persists the resolved USER identity, never the remote/client key (invariant 2)', async () => {
+		const CLIENT_KEY = 'bb'.repeat(32)
+
+		const user = await authActions.loginWithNip46('bunker://identity-marker', CLIENT_KEY)
+
+		// `user()` resolves the account identity via get_public_key. The client /
+		// channel key that carries the NIP-46 transport — and the remote-signer
+		// endpoint it talks to — must never be persisted as the user identity.
+		expect(user.pubkey).toBe(USER_PUBKEY)
+		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(USER_PUBKEY)
+		expect(storage.get(NOSTR_USER_PUBKEY)).not.toBe(CLIENT_KEY)
+	})
+
+	test('logout clears the persisted user-identity marker with the rest of the auth state', async () => {
+		await authActions.loginWithNip46('bunker://identity-marker')
+		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(USER_PUBKEY)
+
+		authActions.logout()
+
+		// The previous account's identity must not survive the session.
+		expect(storage.has(NOSTR_USER_PUBKEY)).toBe(false)
+		expectFullyDetached()
+	})
+
 	test('post-commit signer-service failure does not roll back a valid login', async () => {
 		const serviceError = new Error('ancillary signer service failed')
 		ndkActions.loadRelaysFromNostr = mock(async () => {
@@ -773,6 +797,7 @@ describe('transactional signer authority attachment', () => {
 		}
 
 		await expect(authActions.loginWithNip46('bunker://test')).rejects.toThrow('synchronous publication failed')
+		expect(storage.has(NOSTR_USER_PUBKEY)).toBe(false)
 		expectDetached()
 		expect(freshLogout).toHaveBeenCalledTimes(1)
 	})

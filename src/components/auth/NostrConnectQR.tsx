@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
-import { buildNostrConnectUri, isMatchingConnectSecret } from '@/lib/nostr/nostr-connect-uri'
+import { buildNostrConnectUri, isApprovedNostrConnectResponse, isMatchingConnectSecret } from '@/lib/nostr/nostr-connect-uri'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
@@ -117,7 +117,10 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				name: 'Plebeian.market',
 				description: 'Connect with Plebeian.market',
 				url: window.location.origin,
-				icons: [],
+				// #1290 metadata/icon change: the signer's approval prompt renders
+				// this icon, so it must be the app's own served asset (an empty
+				// `icons` array left remote-signer UIs with no branding).
+				icons: [`${window.location.origin}/images/logo.svg`],
 			},
 		})
 	}, [localPubkey, config, tempSecret, activeRelay, isCustomRelay, customRelay])
@@ -225,7 +228,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			}
 
 			const processedRequestIds = new Set<string>()
-			const processedAckIds = new Set<string>()
+			const processedResponseIds = new Set<string>()
+			// #1290 signer-approval gate: only a signer that echoed the temp secret
+			// in its `connect` may later bind the session (see
+			// isApprovedNostrConnectResponse). A bare `ack` from anybody else must
+			// never start the login.
+			const approvedSignerPubkeys = new Set<string>()
 
 			const sub = ndk.subscribe(
 				{
@@ -256,9 +264,14 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 						}
 
 						// #807 (ADR-0002 amendment B-4): the connect request must echo the secret via the
-						// spec `secret` param. A legacy `token`-only request is a mismatch
-						// (fail closed) — isMatchingConnectSecret reads ONLY `secret`.
+						// spec `secret` param (positional array per NIP-46; the object form the
+						// app's own mock uses is accepted too). A legacy `token`-only request is a
+						// mismatch (fail closed) — isMatchingConnectSecret reads ONLY `secret`.
 						if (isMatchingConnectSecret(request.params, tempSecret)) {
+							// This signer proved it holds the temp secret — it is the only
+							// pubkey allowed to bind the session afterwards (#1290).
+							approvedSignerPubkeys.add(event.pubkey)
+
 							const response = {
 								id: request.id,
 								result: tempSecret,
@@ -284,12 +297,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 								}
 							}
 						}
-					} else if (request.result === 'ack') {
-						if (processedAckIds.has(event.id)) {
+					} else if (isApprovedNostrConnectResponse(request.result, tempSecret, event.pubkey, approvedSignerPubkeys)) {
+						if (processedResponseIds.has(event.id)) {
 							return
 						}
 
-						processedAckIds.add(event.id)
+						processedResponseIds.add(event.id)
 						await handleLoginWithNip46Signer(event)
 					}
 				} catch (error) {

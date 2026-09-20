@@ -125,7 +125,14 @@ function commitSignerAuthority(
 	const previousCapability = getSignerCapability()
 	const previousTeardown = getSignerTeardown()
 	const previousNdkAuthority = ndkActions.captureSignerAuthority?.()
+	const previousUserPubkey = localStorage.getItem(NOSTR_USER_PUBKEY)
 	try {
+		// The persisted identity marker is written HERE, on every lane, so it can
+		// never disagree with the live session: it always records the identity
+		// this commit authenticated. ADR-0002 invariant 2 (ported from #1290):
+		// `user.pubkey` is the identity resolved via `getPublicKey()` /
+		// `get_public_key` — never a NIP-46 remote-signer (bunker) endpoint key.
+		localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
 		// This authority commit is intentionally non-yielding. auth=true is
 		// published first, so auth=false can never coexist with either usable
 		// signer surface while the remaining synchronous mutations complete.
@@ -134,6 +141,9 @@ function commitSignerAuthority(
 		setSignerTeardown(teardown)
 		ndkActions.publishSigner(signer, user)
 	} catch (error) {
+		// Roll the identity marker back with the rest of the authority surfaces.
+		if (previousUserPubkey === null) localStorage.removeItem(NOSTR_USER_PUBKEY)
+		else localStorage.setItem(NOSTR_USER_PUBKEY, previousUserPubkey)
 		try {
 			if (previousNdkAuthority && ndkActions.restoreSignerAuthority) {
 				ndkActions.restoreSignerAuthority(previousNdkAuthority)
@@ -394,9 +404,10 @@ export const authActions = {
 				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
 			}
 
-			// Store user pubkey and enable auto-login for persistence
+			// Enable auto-login for persistence. The user-identity marker itself is
+			// written by commitSignerAuthority below, so every lane records the
+			// same thing: the identity that was actually authenticated.
 			assertAttemptCurrent(attempt)
-			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
 			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			commitSignerAuthority(attempt, user, capability, signer)
@@ -481,6 +492,10 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		// The persisted user-identity marker goes with the session (ported from
+		// #1290's logout completeness): after logout the previous account's
+		// identity must not stay behind in storage.
+		localStorage.removeItem(NOSTR_USER_PUBKEY)
 		// Lock on logout (ADR-0002 B-3): the vaulted NIP-46 session is removed
 		// with the rest of the persisted auth state.
 		clearVaultedSession()
