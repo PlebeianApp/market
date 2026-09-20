@@ -255,6 +255,88 @@ Negative / tradeoffs:
   can carry relay-targeting options; Wave A4 and Wave C define the publish
   rollout boundaries.
 
+## Wave 1 addendum — behaviour `master` already has
+
+**Status of this section.** Descriptive only. It records the seam behaviour that
+wave 1 depends on and that `master` already implements: the signature check on
+rehydration (F4), the main-relay pinning discipline and its effect-dependency
+invariant (F5), and the latest-wins ordering rule for replaceable events. It
+records **no new decision** and leaves the `## Status` field of this ADR at
+`Accepted`.
+
+The read-reach question for author-scoped reads (F3) is **not** recorded here.
+It is a proposed decision, separated into its own PR, and the F3 subsection
+below carries only the verified premise so the question is legible without the
+decision being smuggled in with the description.
+
+### F4 — invalid-signature events are dropped on rehydration
+
+`rehydrateVerifiedNdkEvent` runs `verifyEvent` on every raw event and discards
+those failing. NDK's default subscription path did not verify signatures by
+default, so bad-signature events that previously flowed into query data are
+now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
+validated"). The failure is silent (a relay serving malformed data now reads
+as absence). A debug-level drop counter does not exist today; it is a separate
+follow-up, not a behavior this addendum asserts.
+
+**Scope of this behavior.** It applies where events are rehydrated through
+`rehydrateVerifiedNdkEvent` — the seam fetch path (`src/lib/nostr/ndk-events.ts:55`)
+and `src/queries/orders.tsx:1001`. Reads that call NDK directly without
+rehydration are not covered by it.
+
+### F5 — live-subscribe stays pinned to the main relay once it is known
+
+`useAdminSettings` / `useEditorSettings` / `useBlacklistSettings` subscribe only
+when `getMainRelay()` is defined, and pin that subscription to the main relay.
+This preserves the pinning discipline `master` already has; the
+`getAppRelaySet()` pool-wide fallback it replaces belongs to the `auctions` line
+that wave 1 is migrating.
+
+The invariant this wave must keep: **the main-relay value is an effect dependency
+of the subscription.** A hook that mounts before config resolves must subscribe as
+soon as the relay becomes known; dropping the value from the dependency array
+leaves the subscription silently absent for the rest of the session. Fetch parity
+is unchanged — both the old and the new fetch paths return null while the relay is
+unknown.
+
+### Deterministic latest-wins for replaceable event reads
+
+Conflicting `created_at` versions of the same deduplication-key event resolve to
+the highest `created_at`, independent of relay-arrival order; on an equal
+timestamp the lexicographically lower event id wins (NIP-01's tie-break). On
+`master` this is `isNewerEvent` (`src/lib/nostr/ndk-events.ts:29-40`), applied by
+`fetchNdkEventSet` (`:42-62`), which dedupes on the NDK coordinate key
+(`kind:pubkey`, or `kind:pubkey:d` for parameterized kinds) and keeps the newest
+copy. The single-event helper used for app-owned replaceable events is
+`fetchLatestAppEvent` (`src/lib/stores/ndk.ts:283-291`), which selects by
+`created_at`.
+
+### F3 — the read-reach question (premise only)
+
+Production NDK is constructed with `enableOutboxModel: true`
+(`src/lib/stores/ndk.ts:421`, `:437`); outbox discovery is gated off for
+`staging`, `development` and `LOCAL_RELAY_ONLY`. On `master` the author-scoped
+reads this wave touches still call NDK directly — `ndk.fetchEvents` at
+`src/queries/authors.tsx:37`, `src/hooks/useNotificationMonitor.ts:59/74/95`, and
+`ndk.fetchEvent` at `src/lib/stores/nip60.ts:198`, with live subscriptions at
+`src/hooks/useNotificationMonitor.ts:135/161/185`. In production those reads are
+therefore outbox-routed today; no pinning is described here because none ships on
+`master`.
+
+`src/lib/appSettings.ts:107` is **not** a client read: `fetchAppSettings`
+(`:42`) is imported only by the server entry (`src/index.tsx:7`, called at boot
+`:143` and refreshed at `:409`), and the browser consumes the parsed result from
+`/api/config` (`appSettings`, `appPublicKey`, `needsSetup`, `src/index.tsx:279-290`).
+
+**No decision is recorded.** Whether production keeps that reach for
+author-scoped reads, or gains a bounded author-relay path, is proposed in a
+separate PR and deliberately not decided in this one.
+
+### Out of scope
+
+- Publish-path relay selection (`writeRelayUrls`) lands with Wave A4 / Wave C.
+  This section covers reads only.
+
 ## References
 
 - Upstream epic: `PlebeianApp/market#1005`
