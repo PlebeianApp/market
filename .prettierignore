@@ -2,4 +2,3 @@ node_modules
 dist
 src/components/ui
 build
-src/components/auctions/AGENTS.md
