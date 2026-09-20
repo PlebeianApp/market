@@ -13,7 +13,7 @@ import {
 	type ScatterShapeProps,
 } from 'recharts'
 import type { LabelPosition } from 'recharts/types/component/Label'
-import { UserCard } from './UserCard'
+import { UserCard } from '@/components/UserCard'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getBidAmount } from '@/queries/auctions'
 import {

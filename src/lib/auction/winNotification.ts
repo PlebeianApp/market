@@ -167,6 +167,16 @@ export async function hasValidatedPathReleaseForAuctionWin(
  *
  * Pass `{ statuses: ['settled'] }` (see `hasFinalSettlementForAuctionWin`) when
  * the question is specifically "did the sale complete".
+ *
+ * The seller comparison lowercases both sides, matching the publish gate this
+ * predicate has to agree with (`src/publish/auctions.tsx` — the "already has a
+ * settlement" check) and the other seller-binding comparisons in
+ * `src/lib/auction/events.ts` and `src/lib/auction/settlementDescriptor.ts`.
+ * `nostrPubkeyHex` accepts upper- and lower-case hex without normalising, and
+ * `sellerPubkey` comes straight from `event.pubkey`, so a raw `===` here would
+ * reject an upper-case settlement author the gate accepts — leaving the prompt
+ * inviting an action that always fails, which is the failure this predicate
+ * exists to close.
  */
 export const hasSellerSettlementForAuctionWin = (
 	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
@@ -176,12 +186,13 @@ export const hasSellerSettlementForAuctionWin = (
 	options?: { statuses?: AuctionSettlementStatus[] },
 ): boolean => {
 	const statuses = options?.statuses
+	const sellerPubkey = auction.pubkey?.toLowerCase() ?? ''
 	return settlements.some((event) => {
 		const parsed = parseSettlementEvent(toRawEvent(event))
 		return (
 			parsed.ok &&
 			(statuses === undefined || statuses.includes(parsed.value.status)) &&
-			parsed.value.sellerPubkey === auction.pubkey &&
+			parsed.value.sellerPubkey.toLowerCase() === sellerPubkey &&
 			parsed.value.auctionRootEventId === win.auctionRootEventId &&
 			parsed.value.auctionCoordinate === auctionCoordinate
 		)
@@ -189,8 +200,14 @@ export const hasSellerSettlementForAuctionWin = (
 }
 
 /**
- * Only `status: settled` means the sale completed and the winner's locked
- * ecash was redeemed. Non-settled terminal statuses are not settlement.
+ * The `status: 'settled'`-only variant of `hasSellerSettlementForAuctionWin`,
+ * kept as the named answer to the different question "did the sale complete?",
+ * which the seller-side surfaces have so far asked inline and independently.
+ *
+ * Deliberately narrow: a `cancelled` / `reserve_not_met` / `griefed_no_fallback`
+ * settlement closes the win prompt (see above) but did **not** complete a sale,
+ * so a caller must not use this predicate to mean "not settled ⇒ still
+ * actionable". No production surface consumes it today.
  */
 export const hasFinalSettlementForAuctionWin = (
 	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,

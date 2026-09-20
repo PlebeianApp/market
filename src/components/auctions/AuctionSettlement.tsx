@@ -28,7 +28,7 @@ import type {
 	ParsedValidatorVerdictEvent,
 } from '@/lib/auction/events'
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
-import { AuctionClaimDialog } from './AuctionClaimDialog'
+import { AuctionClaimDialog } from '@/components/auctions/AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
 
 function useNow(intervalMs = 30_000): number {

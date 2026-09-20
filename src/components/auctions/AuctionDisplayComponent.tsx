@@ -1,4 +1,4 @@
-import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionCountdown } from '@/components/auctions/AuctionCountdown'
 import { Media } from '@/components/Media'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

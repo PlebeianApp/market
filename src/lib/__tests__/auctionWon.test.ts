@@ -362,6 +362,24 @@ describe('auction win seller-closure verification', () => {
 
 		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [malformed])).toBe(false)
 	})
+
+	test('matches an upper-case-hex settlement author the way the publish gate does', () => {
+		// `nostrPubkeyHex` accepts upper- and lower-case hex without normalising, and
+		// `sellerPubkey` comes straight from `event.pubkey` — while the publish gate
+		// this predicate must agree with lowercases both sides. A raw `===` here would
+		// not close the prompt for an upper-case author, leaving the bidder inviting a
+		// settle action the gate then rejects.
+		const upperCaseSeller = makeSettlement({ pubkey: SELLER_PUBKEY.toUpperCase() })
+
+		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [upperCaseSeller])).toBe(true)
+	})
+
+	test('matches a lower-case settlement against an upper-case-hex auction author', () => {
+		// The mirror direction: the auction event carries the upper-case hex.
+		const upperCaseAuction: NostrEventLike = { ...auction, pubkey: SELLER_PUBKEY.toUpperCase() }
+
+		expect(hasSellerSettlementForAuctionWin(win, upperCaseAuction, AUCTION_COORDINATE, [makeSettlement()])).toBe(true)
+	})
 })
 
 describe('auction win candidate selection', () => {

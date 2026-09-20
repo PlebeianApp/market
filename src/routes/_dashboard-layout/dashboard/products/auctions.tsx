@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import { Media } from '@/components/Media'
 import { AvatarUser } from '@/components/AvatarUser'
-import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { AuctionCountdown } from '@/components/auctions/AuctionCountdown'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

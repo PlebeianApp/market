@@ -1,4 +1,4 @@
-import { AuctionDisplayComponent } from '@/components/AuctionDisplayComponent'
+import { AuctionDisplayComponent } from '@/components/auctions/AuctionDisplayComponent'
 import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
 import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { Button } from '@/components/ui/button'
