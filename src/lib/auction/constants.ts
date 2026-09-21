@@ -183,6 +183,10 @@ export const VALIDATOR_CONDEMN_CLAIMS: ReadonlySet<ValidatorClaim> = new Set<Val
  * Standardised machine codes for `bid_invalid` / negative verdicts — §4.4.3.
  * Validators MAY emit additional implementation-specific reasons; compliant
  * clients SHOULD show unknown reasons verbatim rather than ignoring them.
+ *
+ * The eight relay/admission abuse codes below are forward-declared vocabulary.
+ * The current subscriber refuses those events before verdict state exists and
+ * reports them only through operator logs; no kind-30440 producer emits them.
  */
 export const VALIDATOR_REASONS = [
 	// time-window
@@ -190,6 +194,18 @@ export const VALIDATOR_REASONS = [
 	'post_end',
 	'late_arrival',
 	'timestamp_skew',
+	// relay/admission abuse controls
+	'event_too_large',
+	'too_many_tags',
+	'bid_payload_too_large',
+	'too_many_lock_secrets',
+	'invalid_bid_nonce',
+	'duplicate_bid_nonce',
+	'rate_limited',
+	'too_many_tracked_bids',
+	// Additional forward declarations for future policy rules.
+	'too_many_invalid_attempts',
+	'validator_policy_rejected',
 	// amount — ADR-0012 Phase 1: the absolute floor is the ONLY
 	// amount-based validity check. `under_increment` and `under_curve`
 	// are retired: the minimum increment and the anti-snipe curve are

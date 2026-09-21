@@ -145,6 +145,30 @@ export const ValidatorPolicyDocumentSchema = z.object({
 	categoryAllowlist: z.array(z.string()).optional(),
 	categoryDenylist: z.array(z.string()).optional(),
 	maxAcceptableSkewSec: z.number().int().nonnegative().optional(),
+	admission: z
+		.discriminatedUnion('enabled', [
+			z.object({ enabled: z.literal(false) }),
+			z.object({
+				enabled: z.literal(true),
+				maxBidsPerWindow: z.number().int().nonnegative(),
+				rateWindowSec: z.number().int().nonnegative(),
+				maxTrackedChildSubscriptions: z.number().int().nonnegative(),
+				childReplayLookbackSec: z.number().int().nonnegative(),
+				lateSettlementObservationSec: z.number().int().nonnegative().optional(),
+				maxTrackedBidsPerAuction: z.number().int().nonnegative(),
+				maxSeenEventIds: z.number().int().nonnegative(),
+				maxPendingEventsPerKey: z.number().int().nonnegative(),
+				maxPendingKeys: z.number().int().nonnegative(),
+				maxPendingEvents: z.number().int().nonnegative(),
+				pendingTtlSec: z.number().int().nonnegative(),
+				maxEventBytes: z.number().int().nonnegative(),
+				maxTagCount: z.number().int().nonnegative(),
+				maxNonceLength: z.number().int().nonnegative(),
+				maxProofCount: z.number().int().nonnegative(),
+				maxContentBytes: z.number().int().nonnegative(),
+			}),
+		])
+		.optional(),
 	griefingDecayDays: z.number().int().nonnegative().optional(),
 	notes: z.string().optional(),
 }) satisfies z.ZodType<ValidatorPolicyDocument>

@@ -29,6 +29,9 @@
  *
  *   3. POST-GRACE (now > maxEndAt + settlement_grace)
  *      → unsettled winner → griefed (terminal).
+ *      → complete settlement evidence whose release was first observed after
+ *        grace → settled_late (terminal). This lifecycle layer owns that
+ *        observable timing classification; ingestion only records evidence.
  */
 
 import {

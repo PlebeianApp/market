@@ -3,6 +3,7 @@ import { finalizeEvent, generateSecretKey, getPublicKey, type EventTemplate, typ
 import { AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND, AUCTION_KIND } from '../auction/constants'
 import { createValidatorState, setAuctionMintReachability, upsertAuction, type ValidatorState } from '../../server/auction-validator/state'
 import { createValidatorSubscriber } from '../../server/auction-validator/subscriber'
+import { parseAuctionEvent } from '../schemas/auction/auctionEvent'
 
 const VALIDATOR_PUBKEY = 'a'.repeat(64)
 const SELLER_PUBKEY = 'b'.repeat(64)
@@ -173,8 +174,7 @@ describe('auction validator subscriber signature checks', () => {
 			const relayPool = {
 				handlers: new Map<number, (event: NostrEvent) => void>(),
 				subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
-					const kind = filters[0]?.kinds?.[0]
-					if (kind !== undefined) {
+					for (const kind of filters[0]?.kinds ?? []) {
 						;(relayPool as any).handlers.set(kind, handler)
 					}
 					return () => undefined
@@ -221,8 +221,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		const relayPool = {
 			handlers: new Map<number, (event: NostrEvent) => void>(),
 			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
-				const kind = filters[0]?.kinds?.[0]
-				if (kind !== undefined) {
+				for (const kind of filters[0]?.kinds ?? []) {
 					;(relayPool as any).handlers.set(kind, handler)
 				}
 				return () => undefined
@@ -363,23 +362,175 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
-	test('pending replay preserves first-observed time, not replay-time now()', async () => {
-		// Events arriving before their auction are buffered with their
-		// first-observed time; when the auction later arrives and drains
-		// them, the recorded time must stay at the first sighting, not the
-		// (advanced) replay clock.
+	test('a child-subscribed bid with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, publishCalls, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const mismatchedBid = createSignedEvent(bidderSk, {
+			kind: AUCTION_BID_KIND,
+			created_at: 1_500,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['p', SELLER_PUBKEY],
+				['amount', '1200'],
+				['currency', 'SAT'],
+				['mint', 'https://mint.test'],
+				['locktime', '5700'],
+				['refund_pubkey', '03' + 'f'.repeat(64)],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['lock_secret', 'secret-1'],
+				['proof_y', '02' + 'b'.repeat(64)],
+				['created_for_end_at', '2100'],
+				['bid_nonce', 'nonce-mismatch'],
+				['key_scheme', 'hd_p2pk'],
+				['status', 'locked'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedBid)
+		await flush()
+
+		expect(auctionState.bids.size).toBe(0)
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.bids.size).toBe(0)
+		expect(publishCalls).toEqual([])
+		await subscriber.stop()
+	})
+
+	test('a child-subscribed release with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, publishCalls, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const bidEvent = buildSignedBid(bidderSk)
+		dispatch(relayPool, bidEvent)
+		await flush()
+		expect(publishCalls).toEqual([bidEvent.id])
+
+		const mismatchedRelease = createSignedEvent(bidderSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_600,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedRelease)
+		await flush()
+
+		expect(auctionState.pathReleases.get(bidEvent.id) ?? []).toEqual([])
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.pathReleases.size).toBe(0)
+		expect(publishCalls).toEqual([bidEvent.id])
+		await subscriber.stop()
+	})
+
+	test('a release that arrives after the auction but before its bid is replayed when the bid lands', async () => {
+		let t = 5_000
+		const { auctionState, relayPool, publishCalls, subscriber } = buildHarness({ now: () => t })
+		await subscriber.start()
+
+		const bidderSk = generateSecretKey()
+		const bidEvent = buildSignedBid(bidderSk)
+		const releaseEvent = createSignedEvent(bidderSk, {
+			kind: AUCTION_PATH_RELEASE_KIND,
+			created_at: 1_600,
+			content: '',
+			tags: [
+				['e', bidEvent.id],
+				['a', `30408:${SELLER_PUBKEY}:auction-test`],
+				['p', SELLER_PUBKEY],
+				['derivation_path', 'm/0/0'],
+				['child_pubkey', '02' + 'a'.repeat(64)],
+				['release_reason', 'settlement'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, releaseEvent)
+		await flush()
+		expect(auctionState.pathReleases.get(bidEvent.id) ?? []).toEqual([])
+
+		t = 5_100
+		dispatch(relayPool, bidEvent)
+		await flush()
+
+		expect(auctionState.pathReleases.get(bidEvent.id)?.[0]?.id).toBe(releaseEvent.id)
+		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
+		expect(publishCalls).toEqual([bidEvent.id, bidEvent.id])
+		await subscriber.stop()
+	})
+
+	test('a child-subscribed settlement with a mismatched auction coordinate does not mutate the tracked auction', async () => {
+		const { state, auctionState, relayPool, subscriber } = buildHarness()
+		await subscriber.start()
+
+		const sellerSk = generateSecretKey()
+		const mismatchedSettlement = createSignedEvent(sellerSk, {
+			kind: AUCTION_SETTLEMENT_KIND,
+			created_at: 1_800,
+			content: '',
+			tags: [
+				['e', AUCTION_ROOT_EVENT_ID],
+				['a', `30408:${SELLER_PUBKEY}:other-auction`],
+				['status', 'settled'],
+				['close_at', '2100'],
+				['winning_bid', 'e'.repeat(64)],
+				['winner', 'c'.repeat(64)],
+				['final_amount', '1200'],
+				['path_release', 'f'.repeat(64)],
+				['payout', 'e'.repeat(64), '1200', 'settled'],
+			],
+		} as unknown as EventTemplate)
+
+		dispatch(relayPool, mismatchedSettlement)
+		await flush()
+
+		expect(auctionState.settlement).toBeNull()
+		expect(state.auctions.get(AUCTION_ROOT_EVENT_ID)?.settlement).toBeNull()
+		await subscriber.stop()
+	})
+
+	test('startup child replay prefers a recovered bid observation over delivery time', async () => {
+		// Historical child events already on the relay at startup are
+		// captured with the startup observation time, so a later auction
+		// discovery does not re-stamp them to replay-time now().
 		const sellerSk = generateSecretKey()
 		const sellerPub = getPublicKey(sellerSk)
 		const bidderSk = generateSecretKey()
+		const history: NostrEvent[] = []
+		const matchesFilter = (event: NostrEvent, filter: { kinds?: number[]; '#a'?: string[]; since?: number }): boolean => {
+			if (filter.kinds && !filter.kinds.includes(event.kind)) return false
+			if (filter.since !== undefined && event.created_at < filter.since) return false
+			if (filter['#a']) {
+				const aTags = event.tags.filter((tag) => tag[0] === 'a').map((tag) => tag[1] ?? '')
+				if (!aTags.some((tag) => filter['#a']?.includes(tag))) return false
+			}
+			return true
+		}
 		let t = 5_000
 		const now = () => t
+		const seedObservedAt = new Map<string, number>()
 
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		const relayPool = {
 			handlers: new Map<number, (event: NostrEvent) => void>(),
-			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
-				const kind = filters[0]?.kinds?.[0]
-				if (kind !== undefined) (relayPool as any).handlers.set(kind, handler)
+			subscribe: async (filters: Array<{ kinds?: number[]; '#a'?: string[]; since?: number }>, handler: (event: NostrEvent) => void) => {
+				for (const kind of filters[0]?.kinds ?? []) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				for (const event of history) {
+					if (filters.some((filter) => matchesFilter(event, filter))) {
+						handler(event)
+						t += 1
+					}
+				}
 				return () => undefined
 			},
 			publish: async () => undefined,
@@ -389,8 +540,8 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
 			now,
+			seedObservedAt,
 		})
-		await subscriber.start()
 
 		// A non-https mint so the reachability probe is rejected by the
 		// destination policy without any network contact (offline test).
@@ -450,6 +601,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 				['status', 'locked'],
 			],
 		} as unknown as EventTemplate)
+		seedObservedAt.set(bidEvent.id, 1_500)
 
 		// Release references the bid id.
 		const releaseEvent = createSignedEvent(bidderSk, {
@@ -466,24 +618,243 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			],
 		} as unknown as EventTemplate)
 
-		// 1. Release arrives first (bid unknown) at t=5000 → buffered.
-		dispatch(relayPool, releaseEvent)
-		await flush()
-		// 2. Bid arrives (auction unknown) at t=5000 → buffered.
-		dispatch(relayPool, bidEvent)
-		await flush()
-		// 3. Clock advances to t=9000; auction arrives → inserts → drains.
+		// 1. Release then bid are already on relay history when the
+		// Each historical child gets its own delivery-time observation, but the
+		// bid's recovered pre-restart observation remains authoritative.
+		history.push(releaseEvent)
+		history.push(bidEvent)
+		await subscriber.start()
+		// 2. Clock advances; the auction is only discovered later.
 		t = 9_000
 		dispatch(relayPool, auctionEvent)
-		// The auction handler awaits mint-reachability then drains pending
-		// events through several async hops, so drain the queue fully.
 		await new Promise((resolve) => setTimeout(resolve, 20))
 
-		// Recorded times use the FIRST sighting (5000), not replay-time (9000).
+		// The later auction discovery must preserve the startup observation
+		// time rather than re-stamp the bid/release to 9000.
 		const auctionState = state.auctions.get(auctionRootId)!
 		const bidState = auctionState.bids.get(bidEvent.id)!
-		expect(bidState.observedAt).toBe(5_000)
+		expect(bidState.observedAt).toBe(1_500)
 		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
+		await subscriber.stop()
+	})
+})
+
+describe('auction validator subscriber subscription contract', () => {
+	const flush = async () => {
+		await Promise.resolve()
+		await Promise.resolve()
+		await Promise.resolve()
+	}
+
+	test('opens one child REQ per tracked auction using the shared #a filter', async () => {
+		const sellerSk = generateSecretKey()
+		const sellerPubkey = getPublicKey(sellerSk)
+		const subscriptions: Array<Array<Record<string, unknown>>> = []
+		const relayPool = {
+			handlers: new Map<number, (event: NostrEvent) => void>(),
+			subscribe: async (filters: Array<Record<string, unknown>>, handler: (event: NostrEvent) => void) => {
+				subscriptions.push(filters)
+				for (const kind of (filters[0]?.kinds as number[] | undefined) ?? []) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				return () => undefined
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state: createValidatorState(VALIDATOR_PUBKEY),
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
+			now: () => 2_000,
+		})
+
+		await subscriber.start()
+		expect(subscriptions).toHaveLength(2)
+		expect(subscriptions[0]?.[0]).toMatchObject({ kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND] })
+		expect(subscriptions[0]?.[0]).toHaveProperty('since')
+		expect(subscriptions[1]?.[0]).toMatchObject({ kinds: [AUCTION_KIND] })
+		expect(subscriptions[1]?.[0]).toHaveProperty('since')
+
+		const auctionEvent = createSignedEvent(sellerSk, {
+			kind: AUCTION_KIND,
+			created_at: 1_000,
+			content: '',
+			tags: [
+				['d', 'auction-test'],
+				['title', 'Auction'],
+				['auction_type', 'english'],
+				['start_at', '1000'],
+				['end_at', '2000'],
+				['max_end_at', '2100'],
+				['settlement_grace', '3600'],
+				['currency', 'SAT'],
+				['reserve', '0'],
+				['starting_bid', '1000'],
+				['bid_increment', '100'],
+				['min_bid_curve', 'none'],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', 'xpub-root'],
+				['auditors', VALIDATOR_PUBKEY],
+				['auditor_quorum', '1'],
+				['max_skew_sec', '60'],
+				['fallback_delay_sec', '1800'],
+				['mint', 'http://mint.test'],
+			],
+		} as unknown as EventTemplate)
+
+		const auctionHandler = relayPool.handlers.get(AUCTION_KIND) as ((event: NostrEvent) => void) | undefined
+		if (!auctionHandler) throw new Error('subscriber did not register an auction handler')
+		auctionHandler(auctionEvent)
+		await flush()
+
+		expect(subscriptions).toHaveLength(3)
+		expect(subscriptions[2]).toEqual([
+			{
+				kinds: [AUCTION_BID_KIND, AUCTION_PATH_RELEASE_KIND, AUCTION_SETTLEMENT_KIND],
+				'#a': [`30408:${sellerPubkey}:auction-test`],
+				since: 1_000,
+			},
+		])
+
+		await subscriber.stop()
+	})
+
+	test('gives startup and per-auction child replay an EOSE completion signal', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		buildAuctionState(state)
+		const completionCallbacks: Array<(() => void) | undefined> = []
+		const relayPool = {
+			subscribe: async (_filters: Array<Record<string, unknown>>, _handler: (event: NostrEvent) => void, onEose?: () => void) => {
+				completionCallbacks.push(onEose)
+				return () => undefined
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+		})
+
+		await subscriber.start()
+
+		// Startup children, auction discovery, and scoped auction children.
+		expect(completionCallbacks[0]).toBeFunction()
+		expect(completionCallbacks[2]).toBeFunction()
+		await subscriber.stop()
+	})
+
+	test('caps live child subscriptions and backfills once a slot frees up', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		const auctionA = buildAuctionState(state)
+		const sellerSk = generateSecretKey()
+		const otherAuctionEvent = createSignedEvent(sellerSk, {
+			kind: AUCTION_KIND,
+			created_at: 1_000,
+			content: '',
+			tags: [
+				['d', 'auction-two'],
+				['title', 'Auction Two'],
+				['auction_type', 'english'],
+				['start_at', '5000'],
+				['end_at', '6000'],
+				['max_end_at', '9000'],
+				['settlement_grace', '3600'],
+				['currency', 'SAT'],
+				['reserve', '0'],
+				['starting_bid', '1000'],
+				['bid_increment', '100'],
+				['min_bid_curve', 'none'],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', 'xpub-root'],
+				['auditors', VALIDATOR_PUBKEY],
+				['auditor_quorum', '1'],
+				['max_skew_sec', '60'],
+				['fallback_delay_sec', '1800'],
+				['mint', 'http://mint.test'],
+			],
+		} as unknown as EventTemplate)
+		const parsedOtherAuction = parseAuctionEvent(otherAuctionEvent)
+		if (!parsedOtherAuction.ok) throw new Error('failed to parse second auction')
+		const otherAuctionState = upsertAuction(state, parsedOtherAuction.value).auctionState
+		let t = 2_000
+		const subscriptions: Array<Array<Record<string, unknown>>> = []
+		let childUnsubscribeCalls = 0
+		const relayPool = {
+			handlers: new Map<number, (event: NostrEvent) => void>(),
+			subscribe: async (filters: Array<Record<string, unknown>>, handler: (event: NostrEvent) => void) => {
+				subscriptions.push(filters)
+				for (const kind of (filters[0]?.kinds as number[] | undefined) ?? []) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				const isChildSubscription = Array.isArray(filters[0]?.['#a'])
+				return () => {
+					if (isChildSubscription) childUnsubscribeCalls += 1
+				}
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+			now: () => t,
+			spamPolicy: { maxTrackedChildSubscriptions: 1, lateSettlementObservationSec: 0 },
+		})
+
+		await subscriber.start()
+		expect(subscriptions).toHaveLength(3)
+		expect(subscriptions[2]?.[0]).toMatchObject({ '#a': [auctionA.auction.coordinate] })
+
+		t = 6_000
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(1)
+		expect(subscriptions).toHaveLength(4)
+		expect(subscriptions[3]?.[0]).toMatchObject({ '#a': [otherAuctionState.auction.coordinate] })
+		await subscriber.stop()
+	})
+
+	test('keeps a child REQ through the late-settlement window and retires it afterward', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		buildAuctionState(state)
+		let t = 2_161
+		let childUnsubscribeCalls = 0
+		const relayPool = {
+			handlers: new Map<number, (event: NostrEvent) => void>(),
+			subscribe: async (filters: Array<{ kinds?: number[] }>, handler: (event: NostrEvent) => void) => {
+				for (const kind of filters[0]?.kinds ?? []) {
+					;(relayPool as any).handlers.set(kind, handler)
+				}
+				const isChildSubscription = (filters[0]?.kinds?.length ?? 0) > 1
+				return () => {
+					if (isChildSubscription) childUnsubscribeCalls += 1
+				}
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+			now: () => t,
+			spamPolicy: { lateSettlementObservationSec: 60 },
+		})
+
+		await subscriber.start()
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(0)
+		t = 5_760
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(0)
+		t = 5_761
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(1)
 		await subscriber.stop()
 	})
 })
