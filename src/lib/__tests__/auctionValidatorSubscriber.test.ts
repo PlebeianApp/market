@@ -497,7 +497,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
-	test('startup child replay preserves first-observed time for later auction discovery', async () => {
+	test('startup child replay preserves each delivery time for later auction discovery', async () => {
 		// Historical child events already on the relay at startup are
 		// captured with the startup observation time, so a later auction
 		// discovery does not re-stamp them to replay-time now().
@@ -527,6 +527,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 				for (const event of history) {
 					if (filters.some((filter) => matchesFilter(event, filter))) {
 						handler(event)
+						t += 1
 					}
 				}
 				return () => undefined
@@ -615,7 +616,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		} as unknown as EventTemplate)
 
 		// 1. Release then bid are already on relay history when the
-		// subscriber starts; startup replay stamps both at t=5000.
+		// Each historical child gets its own delivery-time observation.
 		history.push(releaseEvent)
 		history.push(bidEvent)
 		await subscriber.start()
@@ -628,7 +629,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		// time rather than re-stamp the bid/release to 9000.
 		const auctionState = state.auctions.get(auctionRootId)!
 		const bidState = auctionState.bids.get(bidEvent.id)!
-		expect(bidState.observedAt).toBe(5_000)
+		expect(bidState.observedAt).toBe(5_001)
 		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
 		await subscriber.stop()
 	})
@@ -712,6 +713,31 @@ describe('auction validator subscriber subscription contract', () => {
 			},
 		])
 
+		await subscriber.stop()
+	})
+
+	test('gives startup and per-auction child replay an EOSE completion signal', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		buildAuctionState(state)
+		const completionCallbacks: Array<(() => void) | undefined> = []
+		const relayPool = {
+			subscribe: async (_filters: Array<Record<string, unknown>>, _handler: (event: NostrEvent) => void, onEose?: () => void) => {
+				completionCallbacks.push(onEose)
+				return () => undefined
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+		})
+
+		await subscriber.start()
+
+		// Startup children, auction discovery, and scoped auction children.
+		expect(completionCallbacks[0]).toBeFunction()
+		expect(completionCallbacks[2]).toBeFunction()
 		await subscriber.stop()
 	})
 

@@ -28,10 +28,14 @@ export interface PublishValidatorPolicyDeps {
 	/** Optional policy overrides. v1 default is fully permissive. */
 	policy?: Partial<ValidatorPolicyDocument>
 	/** Effective relay-admission limits to publish in the policy document. */
-	spamPolicy?: BidSpamPolicy
+	spamPolicy?: Partial<BidSpamPolicy>
 }
 
-export const resolvePublishedAdmissionPolicy = (policy?: BidSpamPolicy): ValidatorAdmissionPolicy => {
+export const resolvePublishedAdmissionPolicy = (
+	policy?: Partial<BidSpamPolicy>,
+	declared?: ValidatorAdmissionPolicy,
+): ValidatorAdmissionPolicy => {
+	if (declared?.enabled === false) return declared
 	const resolved = resolveBidSpamPolicy(policy)
 	return {
 		enabled: true,
@@ -55,12 +59,12 @@ export const resolvePublishedAdmissionPolicy = (policy?: BidSpamPolicy): Validat
 
 export const resolvePublishedValidatorPolicyDocument = (deps: {
 	policy?: Partial<ValidatorPolicyDocument>
-	spamPolicy?: BidSpamPolicy
+	spamPolicy?: Partial<BidSpamPolicy>
 }): ValidatorPolicyDocument => ({
 	...deps.policy,
 	type: VALIDATOR_POLICY_SCHEMA_TYPE,
 	maxAcceptableSkewSec: deps.policy?.maxAcceptableSkewSec ?? DEFAULT_MAX_SKEW_SECONDS,
-	admission: resolvePublishedAdmissionPolicy(deps.spamPolicy),
+	admission: resolvePublishedAdmissionPolicy(deps.spamPolicy, deps.policy?.admission),
 })
 
 export const publishValidatorPolicy = async (deps: PublishValidatorPolicyDeps): Promise<void> => {

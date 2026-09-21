@@ -29,6 +29,11 @@
  * auction remain. We enforce closure by calling the unsubscribe handle,
  * not by `until`, so the validator never drops a still-replayable child
  * solely because its local clock advanced.
+ *
+ * Admission refusals are intentionally log-only in this implementation: an
+ * event rejected before state admission has no kind-30440 verdict carrier.
+ * The matching ValidatorReason codes are forward declarations for a future
+ * relay-visible refusal protocol and are not produced as verdicts here.
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
@@ -94,6 +99,7 @@ export interface ValidatorSubscriber {
 }
 
 export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): ValidatorSubscriber => {
+	const CHILD_REPLAY_TIMEOUT_MS = 8_000
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
 	const logger = deps.logger ?? defaultLogger()
 	const resolvedPolicy = resolveBidSpamPolicy(deps.spamPolicy)
@@ -227,43 +233,60 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 				since: childReplaySince(auctionState.auction.startAt),
 			},
 		]
-		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
-			switch (event.kind) {
-				case AUCTION_BID_KIND: {
-					const parsed = parseBidEvent(event)
-					if (
-						parsed.ok &&
-						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
-					) {
-						logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+		let replaySettled = false
+		let replayTimer: ReturnType<typeof setTimeout> | undefined
+		const settleReplay = (): void => {
+			if (replaySettled) return
+			replaySettled = true
+			if (replayTimer) clearTimeout(replayTimer)
+			void drainPending(auctionRootEventId).then(() => maybeRetireAuctionWatch(auctionRootEventId))
+		}
+		const rawUnsubscribe = await deps.relayPool.subscribe(
+			filters,
+			(event) => {
+				switch (event.kind) {
+					case AUCTION_BID_KIND: {
+						const parsed = parseBidEvent(event)
+						if (
+							parsed.ok &&
+							(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+						) {
+							logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
-				}
-				case AUCTION_PATH_RELEASE_KIND: {
-					const parsed = parsePathReleaseEvent(event)
-					if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
-						logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+					case AUCTION_PATH_RELEASE_KIND: {
+						const parsed = parsePathReleaseEvent(event)
+						if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
+							logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
-				}
-				case AUCTION_SETTLEMENT_KIND: {
-					const parsed = parseSettlementEvent(event)
-					if (
-						parsed.ok &&
-						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
-					) {
-						logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+					case AUCTION_SETTLEMENT_KIND: {
+						const parsed = parseSettlementEvent(event)
+						if (
+							parsed.ok &&
+							(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+						) {
+							logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
+					default:
+						break
 				}
-				default:
-					break
-			}
-			dispatchChildEvent(event)
-		})
+				dispatchChildEvent(event, now())
+			},
+			settleReplay,
+		)
+		if (!replaySettled) replayTimer = setTimeout(settleReplay, CHILD_REPLAY_TIMEOUT_MS)
+		const unsubscribe = () => {
+			if (replayTimer) clearTimeout(replayTimer)
+			rawUnsubscribe()
+		}
 		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)
 	}
 
@@ -619,10 +642,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	const start = async (): Promise<void> => {
 		const since = childReplaySince()
-		const startupObservedAt = now()
 		let startupChildReplayDone = false
 		let startupChildReplayUnsub: (() => void) | null = null
+		let startupChildReplayTimer: ReturnType<typeof setTimeout> | undefined
 		const stopStartupChildReplay = (): void => {
+			if (startupChildReplayTimer) clearTimeout(startupChildReplayTimer)
 			const off = startupChildReplayUnsub
 			startupChildReplayUnsub = null
 			if (!off) return
@@ -635,13 +659,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		startupChildReplayUnsub = await deps.relayPool.subscribe(
 			[{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], since }],
 			(event) => {
-				dispatchChildEvent(event, startupObservedAt)
+				dispatchChildEvent(event, now())
 			},
 			() => {
 				startupChildReplayDone = true
 				stopStartupChildReplay()
 			},
 		)
+		startupChildReplayTimer = setTimeout(stopStartupChildReplay, CHILD_REPLAY_TIMEOUT_MS)
 		if (startupChildReplayDone) {
 			stopStartupChildReplay()
 		} else {

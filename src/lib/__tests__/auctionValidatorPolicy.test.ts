@@ -2,11 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import { parseValidatorPolicyEvent } from '../schemas/auction/validatorEvents'
 import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND } from '../auction/constants'
 import { DEFAULT_BID_SPAM_POLICY } from '../../server/auction-validator/spamPolicy'
-import { publishValidatorPolicy } from '../../server/auction-validator/policy'
+import { publishValidatorPolicy, resolvePublishedValidatorPolicyDocument } from '../../server/auction-validator/policy'
 
 const VALIDATOR_PUBKEY = 'a'.repeat(64)
 
 describe('validator policy publication', () => {
+	test('preserves an explicitly disabled admission policy', () => {
+		const policy = resolvePublishedValidatorPolicyDocument({ policy: { admission: { enabled: false } } })
+		expect(policy.admission).toEqual({ enabled: false })
+	})
+
 	test('publishes the effective admission policy and default skew', async () => {
 		let published: any
 		await publishValidatorPolicy({
