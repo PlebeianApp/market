@@ -48,6 +48,12 @@ import { getEventHash } from 'nostr-tools'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
+import {
+	assertLegacyAuctionMoneyAllowed,
+	getPlebeianWalletHost,
+	isCocoV2AuctionMode,
+	readCocoV2AuctionEnvironment,
+} from '@/lib/coco/auctions'
 
 export interface AuctionSpecEntry {
 	key: string
@@ -269,7 +275,18 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	// configured default. Phase 7 (reputation UI) will grow this into a
 	// multi-select.
 	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
-	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
+	const p2pkXpub = isCocoV2AuctionMode()
+		? await (async () => {
+				const seller = await getUser()
+				if (!seller?.pubkey) throw new Error('No active seller identity')
+				const environment = readCocoV2AuctionEnvironment()
+				const authority = await getPlebeianWalletHost().auctions.ensureSellerAuctionAuthority({
+					accountPubkey: seller.pubkey,
+					environmentId: environment.environmentId,
+				})
+				return authority.publicP2pkAuthority
+			})()
+		: await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
 	const categoryTags: string[][] = []
@@ -452,6 +469,7 @@ const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: st
  * Returns the published bid event id.
  */
 export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<string> => {
+	assertLegacyAuctionMoneyAllowed('publishAuctionBid')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
@@ -1089,6 +1107,7 @@ const discardAuctionBidEventRepublishCacheEntry = (bidEventId: string): void => 
  *         (corrupted/tampered cache), or the rebroadcast fails
  */
 export const republishAuctionBid = async (bidEventId: string): Promise<string> => {
+	assertLegacyAuctionMoneyAllowed('republishAuctionBid')
 	if (!bidEventId) throw new Error('Cannot rebroadcast auction bid: bidEventId is empty')
 	const cached = loadAuctionBidRepublishCache()[bidEventId]
 	if (!cached) {
@@ -1214,6 +1233,7 @@ export interface PublishBidderPathReleaseResult {
  * event, but the typical path returns early without re-emitting.
  */
 export const publishBidderPathRelease = async (input: PublishBidderPathReleaseInput): Promise<PublishBidderPathReleaseResult> => {
+	assertLegacyAuctionMoneyAllowed('publishBidderPathRelease')
 	if (!input.bidEventId) throw new Error('bidEventId is required')
 
 	// Walk the rebid chain. For a single-leg bid this returns one
@@ -1497,6 +1517,7 @@ export const useRepublishAuctionBidMutation = () => {
 // won, here's the path / I have a path, redeem".
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
+	assertLegacyAuctionMoneyAllowed('publishAuctionSettlement')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 
 	// Lazy imports to avoid pulling settlement-only deps into the bid
