@@ -175,7 +175,7 @@ jobs:
         # nak relay + dev server, so no new triggers, permissions, secrets, or
         # env are introduced. `src/lib/__tests__/e2e-workflow-gate-membership.test.ts`
         # fails if a describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
