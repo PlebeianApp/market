@@ -31,6 +31,7 @@ Profile:
 `cashu_p2pk_bidder_path_multiparty_v1`
 
 Key properties:
+
 - canonical schedule ordering;
 - validator before V4V;
 - canonical uints;
@@ -58,6 +59,7 @@ Regression:
 - result: seller 928 / validator 64 / V4V 32
 
 Important unresolved proof task:
+
 - randomized/adversarial recurrence checks passed;
 - a general lower-quota theorem proof remains open and should be handled as a separate read-only/property proof exercise before a final production-ready verdict.
 
@@ -85,9 +87,11 @@ C1 is bounded/fail-closed and does not perform relay, wallet, Cashu, persistence
   - SHA-256: `2d3a2b17e990ba9d5c204f9cf92858dd97040e44ff31bc30ef4cb71b9d7f786a`
 
 Direct dependency:
+
 - `@noble/curves@2.0.1` exact
 
 Crypto boundary:
+
 - NIP-01 event verification;
 - whole-xpub BIP340 proof-of-possession;
 - process-local WeakSet provenance.
@@ -104,11 +108,13 @@ Boundary:
 `authorization_ready != fundable`
 
 It proves:
+
 - bounded candidate cardinalities;
 - C2 crypto authentication;
 - exact C1 authorization relationships.
 
 It does not prove:
+
 - full auction listing validity;
 - sticky activation conflict absence;
 - mint usability;
@@ -140,15 +146,18 @@ No transition clears previously observed equivocation.
   - SHA-256: `22a45518d56455932b3c5e6617a6c32bfc3407f7f0a6e5cba86296168c943819`
 
 Test dependency:
+
 - `fake-indexeddb@6.2.5` exact dev dependency
 
 Frozen dependency identities:
+
 - `package.json`
   - SHA-256: `855a7c2143be89cf40a6dabf30d3af29c4bfba89d3d38a09e86c0fa193c4c602`
 - `bun.lock`
   - SHA-256: `a7a38b49cb3785dba81c0625892e0c56821c619aac8ec1f586097214466053f5`
 
 Durability invariant:
+
 - first qualifying activation is committed before durable-clear authority is returned;
 - distinct activation commits sticky conflict;
 - concurrent A/B observations serialize through the same IndexedDB readwrite domain;
@@ -187,10 +196,12 @@ For the multiparty profile:
 - Gate B allocation input is `principal_sats`, never cumulative `gross_sats`.
 
 Cashu input/construction fees are not payout entitlement:
+
 - payout rows sum to principal;
 - construction fee/change accounting belongs to the Cashu construction/journal gates, not the payout schedule.
 
 Regression target for later construction:
+
 - selected inputs: 2048
 - construction fee: 1
 - principal: 1024
@@ -213,6 +224,7 @@ Two D1 draft files currently exist locally:
 They are intentionally untracked and excluded from this checkpoint. They have not passed the D1 gate and must not be treated as frozen or production-ready. Re-review them against the frozen interfaces before deciding whether to continue from, replace, or discard the draft.
 
 Intended D1 boundary:
+
 - pure/additive module;
 - no IndexedDB;
 - no Nostr publication;
@@ -225,6 +237,7 @@ Intended D1 boundary:
 - construction fee and bidder change are not payout rows.
 
 Then:
+
 1. D2 canonical manifest wire/parse.
 2. E multiparty Cashu construction.
 3. F durable construction journal / ambiguous swap recovery.
@@ -239,6 +252,7 @@ Then:
 Do not describe this checkpoint as production-ready.
 
 Still required:
+
 - full multiparty-compatible auction-root business validation;
 - manifest wire + integration into kind-1023;
 - actual multiparty Cashu output construction;
