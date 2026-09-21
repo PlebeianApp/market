@@ -85,6 +85,8 @@ let poolSubscriptionController = (
 ): { unsubscribe: () => void } => ({ unsubscribe: () => {} })
 let poolPublishController = async (_urls: string[], _event: unknown): Promise<unknown> => []
 
+const completeOnAllEoseOperator = { marker: 'completeOnAllEose' }
+
 mock.module('applesauce-relay', () => ({
 	RelayPool: class MockRelayPool {
 		request = (urls: string[], filters: unknown, opts?: unknown) => ({
@@ -94,6 +96,9 @@ mock.module('applesauce-relay', () => ({
 			subscribe: (cb: (msg: unknown) => void) => poolSubscriptionController(cb, urls, filters, opts),
 		})
 		publish = async (urls: string[], event: unknown) => poolPublishController(urls, event)
+	},
+	RelayGroup: {
+		completeOnAllEose: () => completeOnAllEoseOperator,
 	},
 }))
 
@@ -500,15 +505,15 @@ describe('applesauce adapter (io-applesauce)', () => {
 		expect(captured).toEqual(['wss://from-store'])
 	})
 
-	test('fetchEvents relies on RelayPool.request() default completion semantics', async () => {
-		let capturedOpts: unknown
+	test('fetchEvents pins request() to all-relay EOSE completion', async () => {
+		let capturedOpts: { complete?: unknown } | undefined
 		poolRequestController = (h, _urls, _filters, opts) => {
-			capturedOpts = opts
+			capturedOpts = opts as { complete?: unknown }
 			h.complete()
 			return { unsubscribe: () => {} }
 		}
 		await applesauceIo.fetchEvents({ kinds: [1] }, { relayUrls: ['wss://relay.example'] })
-		expect(capturedOpts).toBeUndefined()
+		expect(capturedOpts?.complete).toBe(completeOnAllEoseOperator)
 	})
 
 	test('subscribe passes a bounded reconnect policy to req() (1 initial + 3 retries, no resetOnSuccess)', () => {

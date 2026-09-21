@@ -10,7 +10,7 @@
  * signer (NIP-07 / nsec) is migrated off NDK. Until then, callers that need
  * signing keep routing through the NDK bridge (NIP-46 stays there longest).
  */
-import { RelayPool } from 'applesauce-relay'
+import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
@@ -86,7 +86,12 @@ export const applesauceIo: NostrIo = {
 				resolve(collected)
 			}, opts?.timeoutMs ?? 8000)
 			subscription = getPool()
-				.request(urls, filters)
+				.request(urls, filters, {
+					// The v6 default starts a five-second fuse after the first relay's
+					// EOSE. Wait for all relays instead and let our timeout bound relays
+					// that never finish.
+					complete: RelayGroup.completeOnAllEose(),
+				})
 				.subscribe({
 					next: (event) => {
 						const raw = event as NostrEvent
