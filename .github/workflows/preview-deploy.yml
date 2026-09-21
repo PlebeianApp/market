@@ -12,8 +12,13 @@ name: Preview Deploy
 #     dangling layers (which previously filled its disk and pushed this job past
 #     its timeout); images are labelled `preview.pr=<N>` so deploy and teardown
 #     garbage-collect everything a PR shipped.
-#   - PR closed: `docker compose down`, delete the DNS A record, update the
-#     comment to "Preview torn down".
+#   - PR closed: `docker compose down`, delete the DNS A record, VERIFY both are
+#     actually gone, and only then update the comment to "Preview torn down".
+#     An incomplete teardown posts an explicit "resources may remain" message
+#     naming the steps that failed, and fails the check — a skipped step is no
+#     longer indistinguishable from a successful one. A `workflow_dispatch`
+#     input runs the same path on demand (dry by default) against a PR that is
+#     already closed, so the closed path is exercisable without closing a PR.
 #   - Lazy-start: a preview_gateway.py router on the VPS fronts Caddy for
 #     *.test-market.orangesync.tech — it approves on-demand-TLS ask requests,
 #     routes Host pr{N} to this PR's app port, and pokes the manager
@@ -42,9 +47,28 @@ name: Preview Deploy
 on:
   pull_request:
     types: [opened, synchronize, closed]
+  # On-demand entry point for the CLOSED path. The `closed` event is only
+  # reachable by actually closing a PR, so before this input existed the
+  # teardown job could not be exercised before merge — which is how its missing
+  # checkout survived review and then failed the first in-repo close
+  # (issue #1358). A dispatch runs the SAME job against a nominated PR that must
+  # already be closed, and defaults to a dry run that changes nothing.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to run the teardown path against. Must already be CLOSED.'
+        required: true
+        type: string
+      execute:
+        description: 'false (default) = dry run: prove the scripts and the SSH path work, report host state, change nothing. true = actually remove the closed PR preview.'
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
-  group: preview-pr-${{ github.event.pull_request.number }}
+  # The event name is part of the group so a `workflow_dispatch` probe can never
+  # cancel a live deploy run for the same PR number.
+  group: preview-pr-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 
 env:
@@ -53,7 +77,10 @@ env:
 jobs:
   deploy:
     name: Deploy preview
-    if: github.event.action != 'closed'
+    # `pull_request` only. Without the event guard a `workflow_dispatch` probe
+    # would deploy: `github.event.action` is empty on a dispatch, so
+    # `!= 'closed'` is true.
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     # 25 min: the image is now built on the runner and streamed to the VPS, so
     # the job covers a `bun install` + Docker build + a ~1.8 GB image transfer.
@@ -603,7 +630,10 @@ jobs:
 
   teardown:
     name: Tear down preview
-    if: github.event.action == 'closed'
+    # Real runs are PR closes; `workflow_dispatch` is the on-demand probe that
+    # makes the closed path exercisable without closing a PR (see the `on:`
+    # block and the "Resolve teardown target" step).
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'closed'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -611,6 +641,27 @@ jobs:
       pull-requests: write
 
     steps:
+      # This job runs repo-local scripts (infra/preview-vps/*.sh), so it needs a
+      # checkout. It MUST be pinned to the default branch: the PR's head branch
+      # may already be gone by the time the PR closes, and a ref-dependent
+      # checkout then fails — which is why the job originally had no checkout at
+      # all. That reasoning was valid for `gh` (GH_REPO is still set on the
+      # report step) but it silently removed the only means by which the steps
+      # below could reach their scripts:
+      #
+      #   bash: infra/preview-vps/ssh-prepare.sh: No such file or directory
+      #   ##[error]Process completed with exit code 127
+      #
+      # Step 4 failed, so the `success()`-implied cleanup and DNS steps were
+      # skipped, and the notification step still published "Preview torn down …
+      # DNS record deleted". `infra/preview-vps/*` lives on the default branch,
+      # so pinning there satisfies both constraints instead of trading one for
+      # the other (issue #1358; first in-repo close, run 35327856582).
+      - name: Checkout code (teardown scripts)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
       # Same lockstep requirement as the deploy job's guard: a repo with no
       # preview secrets must tear down quietly (nothing was ever created)
       # instead of failing the check on an empty PREVIEW_VPS_HOST.
@@ -646,13 +697,49 @@ jobs:
             echo "::warning title=Preview teardown skipped::Missing preview secrets:$MISSING. Nothing was ever provisioned for this repository, so there is nothing to tear down."
           fi
 
-      - name: Compute subdomain
-        id: ports
+      # Single source of truth for WHICH PR is being torn down and in WHICH mode.
+      # Both entry points converge here so every later step reads one output set
+      # instead of branching on the event itself.
+      - name: Resolve teardown target
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          echo "subdomain=pr${PR_NUMBER}.test-market.orangesync.tech" >> "$GITHUB_OUTPUT"
+          set -uo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR="${{ inputs.pr_number }}"
+            case "$PR" in
+              ''|*[!0-9]*)
+                echo "::error::pr_number must be a positive integer, got '$PR'."
+                exit 1
+                ;;
+            esac
+            # A manual probe may only touch a PR the workflow itself would tear
+            # down anyway. A live preview is never removed from a dispatch, so
+            # the dry-run/execute switch cannot be used as a destructive
+            # shortcut around the `closed` condition.
+            STATE="$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq '.state' 2>/dev/null || true)"
+            if [ "$STATE" != "closed" ]; then
+              echo "::error::Refusing to run the teardown path for PR #$PR: its state is '${STATE:-unknown}', not 'closed'. This path only ever runs for a closed PR."
+              exit 1
+            fi
+            if [ "${{ inputs.execute }}" = "true" ]; then MODE="execute"; else MODE="dry-run"; fi
+            echo "Manual $MODE run against closed PR #$PR."
+          else
+            PR="${{ github.event.pull_request.number }}"
+            MODE="execute"
+          fi
+          PR_OFFSET=$(( (PR % 100) * 10 ))
+          {
+            echo "pr_number=$PR"
+            echo "pr_offset=$PR_OFFSET"
+            echo "subdomain=pr${PR}.test-market.orangesync.tech"
+            echo "mode=$MODE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare SSH key + pinned host key
+        id: ssh
         if: steps.secrets.outputs.previews_ready == 'true'
         env:
           PREVIEW_VPS_HOST: ${{ secrets.PREVIEW_VPS_HOST }}
@@ -662,12 +749,41 @@ jobs:
           PREVIEW_VPS_SSH_PORT: ${{ secrets.PREVIEW_VPS_SSH_PORT }}
         run: bash infra/preview-vps/ssh-prepare.sh "$RUNNER_TEMP/preview-ssh" >> "$GITHUB_ENV"
 
+      # Dry run: prove the teardown job can actually reach the host over the
+      # pinned SSH helper and report what a real run would remove. This is the
+      # part that was impossible to exercise before the dispatch entry point
+      # existed — the exit-127 defect lived exactly here.
+      - name: Probe VPS state (dry run, removes nothing)
+        id: probe
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode != 'execute'
+        run: |
+          infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
+          set -uo pipefail
+          PR_NUMBER="${{ steps.target.outputs.pr_number }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          PORT_MARKER="$HOME/previews/ports/${{ steps.target.outputs.pr_offset }}"
+          echo "DRY RUN — nothing below is removed. Host state for pr-$PR_NUMBER:"
+          if [ -d "$APP_DIR" ]; then
+            echo "  app dir:     $APP_DIR (present)"
+          else
+            echo "  app dir:     $APP_DIR (absent)"
+          fi
+          echo "  containers:  $(docker ps -a --filter "label=preview.pr=$PR_NUMBER" --format '{{.Names}} ({{.Status}})' | paste -sd', ' - || true)"
+          echo "  images:      $(docker images --filter "label=preview.pr=$PR_NUMBER" --format '{{.Repository}}:{{.Tag}}' | paste -sd', ' - || true)"
+          if [ -f "$PORT_MARKER" ]; then
+            echo "  port marker: $PORT_MARKER held by PR $(tr -d '[:space:]' < "$PORT_MARKER")"
+          else
+            echo "  port marker: $PORT_MARKER (free)"
+          fi
+          REMOTE_EOF
+
       - name: Release port offset, stop containers, clean up VPS directory
-        if: steps.secrets.outputs.previews_ready == 'true'
+        id: cleanup
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
         run: |
           bash infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF'
           set -uo pipefail
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_NUMBER="${{ steps.target.outputs.pr_number }}"
           APP_DIR="$HOME/previews/pr-$PR_NUMBER"
           # Release the shared host-port offset marker (M6) so a future PR
           # congruent mod 100 can claim it. Owner-checked: a marker held by
@@ -698,11 +814,12 @@ jobs:
           REMOTE_EOF
 
       - name: Delete Cloudflare DNS record
-        if: steps.secrets.outputs.previews_ready == 'true'
+        id: dns
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
         env:
           CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
           CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
-          SUBDOMAIN: ${{ steps.ports.outputs.subdomain }}
+          SUBDOMAIN: ${{ steps.target.outputs.subdomain }}
         run: |
           set -uo pipefail
           LIST_RESPONSE=$(curl -sS -X GET \
@@ -717,30 +834,180 @@ jobs:
               -H "Authorization: Bearer $CF_TOKEN" >/dev/null
           done
 
-      - name: Update PR comment (torn down)
+      # A skipped step used to be indistinguishable from a successful one to
+      # everything downstream: the job reported success while the comment
+      # claimed cleanup, and the only other cleanup path (the VPS-resident
+      # preview manager) is fail-closed, so a rate-limited GitHub API means
+      # nothing is torn down at all. Assert the resources are actually gone and
+      # fail loudly when they are not, so "teardown ran" and "teardown worked"
+      # cannot diverge again.
+      - name: Verify teardown (fail loudly when resources remain)
+        id: verify
+        if: steps.secrets.outputs.previews_ready == 'true' && steps.target.outcome == 'success' && steps.target.outputs.mode == 'execute'
+        env:
+          CF_TOKEN: ${{ secrets.PREVIEW_CLOUDFLARE_API_TOKEN }}
+          CF_ZONE: ${{ secrets.PREVIEW_CLOUDFLARE_ZONE_ID }}
+          SUBDOMAIN: ${{ steps.target.outputs.subdomain }}
+        run: |
+          set -uo pipefail
+          PR="${{ steps.target.outputs.pr_number }}"
+          OFFSET="${{ steps.target.outputs.pr_offset }}"
+          FAILED=0
+
+          # 1. DNS. The Cloudflare zone API is authoritative and uncached, so it
+          #    is the hard gate. A recursive DoH lookup is reported next to it
+          #    but must NOT decide the outcome: the deploy creates the A record
+          #    with ttl=60, so a resolver that cached it just before the delete
+          #    can still answer for up to a minute after the record is gone, and
+          #    gating on that would make the check flaky.
+          REMAINING="$(curl -sS --max-time 20 -X GET \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/dns_records?type=A&name=$SUBDOMAIN" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" | jq -r '(.result // []) | length' 2>/dev/null || true)"
+          if [ "$REMAINING" = "0" ]; then
+            echo "Verified: the Cloudflare zone holds no A record for $SUBDOMAIN."
+          elif [ -n "$REMAINING" ]; then
+            echo "::error::$SUBDOMAIN still has $REMAINING A record(s) in the Cloudflare zone after the DNS delete step."
+            FAILED=1
+          else
+            # An unreadable answer is NOT an empty zone. Never report "verified"
+            # for a question that was not answered.
+            echo "::error::Could not read the Cloudflare zone record list for $SUBDOMAIN (empty or non-JSON answer from the API), so DNS teardown is unverified."
+            FAILED=1
+          fi
+          DOH_JSON="$(curl -sS --max-time 20 -H 'accept: application/dns-json' \
+            "https://cloudflare-dns.com/dns-query?name=$SUBDOMAIN&type=A" 2>/dev/null || true)"
+          DOH_STATUS="$(printf '%s' "$DOH_JSON" | jq -r '.Status // empty' 2>/dev/null || true)"
+          DOH_ANSWERS="$(printf '%s' "$DOH_JSON" | jq -r '(.Answer // []) | map(.data) | join(",")' 2>/dev/null || true)"
+          if [ "$DOH_STATUS" = "3" ]; then
+            echo "Verified: $SUBDOMAIN does not resolve (Cloudflare DoH, NXDOMAIN)."
+          elif [ -n "$DOH_ANSWERS" ]; then
+            echo "::warning title=DNS still answering::$SUBDOMAIN still answers over DoH with $DOH_ANSWERS while the zone holds no such record — a cached answer (ttl=60), not a failure."
+          elif [ -n "$DOH_STATUS" ]; then
+            echo "Note: $SUBDOMAIN returns DoH status $DOH_STATUS with no A answer — not NXDOMAIN, but no address either."
+          else
+            echo "::warning title=DNS observation unavailable::The Cloudflare DoH lookup returned no usable answer, so resolution was not observed. The zone-API check above is the authoritative gate and passed."
+          fi
+
+          # 2. The VPS app directory and this PR's port marker, read in one
+          #    round trip. A remote failure must count as "not verified", never
+          #    as "gone": the SSH_FAILED branch comes FIRST, so a partial answer
+          #    followed by a failed connection cannot be read as absence.
+          REMOTE_STATE="$(infra/preview-vps/remote-ssh.sh bash -s <<'REMOTE_EOF' || echo "SSH_FAILED"
+          set -uo pipefail
+          PR_NUMBER="${{ steps.target.outputs.pr_number }}"
+          APP_DIR="$HOME/previews/pr-$PR_NUMBER"
+          PORT_MARKER="$HOME/previews/ports/${{ steps.target.outputs.pr_offset }}"
+          if [ -d "$APP_DIR" ]; then echo "app_dir=present"; else echo "app_dir=absent"; fi
+          if [ -f "$PORT_MARKER" ]; then echo "port_marker=$(tr -d '[:space:]' < "$PORT_MARKER")"; else echo "port_marker=absent"; fi
+          REMOTE_EOF
+          )"
+          case "$REMOTE_STATE" in
+            *SSH_FAILED*)
+              echo "::error::SSH to the preview VPS failed, so the VPS side of the teardown is unverified. Remote state: ${REMOTE_STATE:-<no answer>}"
+              FAILED=1
+              ;;
+            *app_dir=absent*)
+              echo "Verified: the VPS app directory \$HOME/previews/pr-$PR is gone."
+              ;;
+            *)
+              echo "::error::The VPS app directory \$HOME/previews/pr-$PR is NOT verified gone (remote state: ${REMOTE_STATE:-<no answer>})."
+              FAILED=1
+              ;;
+          esac
+          # A marker held by a DIFFERENT PR (congruent mod 100) is legitimate —
+          # --release-port-offset is owner-checked — so only this PR's own marker
+          # counts as a failure. Skipped when the SSH check already failed.
+          case "$REMOTE_STATE" in
+            *SSH_FAILED*) ;;
+            *"port_marker=$PR"*)
+              echo "::error::PR #$PR still holds the host-port offset marker $OFFSET."
+              FAILED=1
+              ;;
+            *)
+              echo "Verified: PR #$PR no longer holds host-port offset marker $OFFSET."
+              ;;
+          esac
+
+          if [ "$FAILED" != "0" ]; then
+            echo "::error::Preview teardown did NOT complete — resources may remain on the VPS and/or in DNS. Failing on purpose: a skipped cleanup step must not look like a successful one (issue #1358)."
+          fi
+          exit "$FAILED"
+
+      # The verdict must be EARNED, not asserted. This step used to be gated only
+      # on `!cancelled()`, carried `continue-on-error: true`, and published
+      # "Preview torn down … DNS record deleted" ten seconds after the SSH step
+      # died with exit 127 — while every removal step had been skipped. It now
+      # derives its message from the removal steps' real outcomes, and it is a
+      # plain step: a notification that publishes a state claim must not be
+      # allowed to fail silently.
+      - name: Report teardown outcome (PR comment on a close, log on a probe)
+        id: report
         if: ${{ !cancelled() }}
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          # This job deliberately has no checkout (the head branch may already be
-          # gone by the time the PR closes, so a ref-dependent checkout can
-          # fail). `gh` therefore needs the repository named explicitly; without
-          # it `gh pr comment` aborted with
-          # `failed to run git: fatal: not a git repository` and the
-          # "Preview torn down" comment was never posted — observed on the
-          # closed predecessor PR #1257.
+          # Kept even though the job now checks out: `gh` must not depend on the
+          # working tree (the head branch may be gone on a close). Without it
+          # `gh pr comment` aborted with
+          # `failed to run git: fatal: not a git repository` and the comment was
+          # never posted — observed on the closed predecessor PR #1257.
           GH_REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
-          PR="${{ github.event.pull_request.number }}"
+          PR="${{ steps.target.outputs.pr_number }}"
           MARKER="<!-- preview-deploy -->"
+          READY="${{ steps.secrets.outputs.previews_ready }}"
+          MODE="${{ steps.target.outputs.mode }}"
+          SUBDOMAIN="${{ steps.target.outputs.subdomain }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          # Only a step whose outcome is `success` earns a claim about the
+          # resource it owns. `skipped` and `failure` both mean "not removed".
+          NOT_DONE=""
+          for ENTRY in \
+            "resolve-target:${{ steps.target.outcome }}" \
+            "prepare-ssh:${{ steps.ssh.outcome }}" \
+            "vps-cleanup:${{ steps.cleanup.outcome }}" \
+            "dns-delete:${{ steps.dns.outcome }}" \
+            "verify:${{ steps.verify.outcome }}"; do
+            NAME="${ENTRY%%:*}"
+            OUTCOME="${ENTRY#*:}"
+            case "$OUTCOME" in
+              success) ;;
+              *) NOT_DONE="$NOT_DONE $NAME=${OUTCOME:-did-not-run}" ;;
+            esac
+          done
+          # The branches are exclusive and ordered so that a claim of removal is
+          # reachable only from an `execute` run in which nothing is left undone.
+          # An unresolvable target leaves MODE empty and lands in the
+          # "incomplete" branch, never in the dry-run one.
+          if [ "$READY" != "true" ]; then
+            HEADLINE="## 🧹 Preview teardown skipped"
+            DETAIL="No preview secrets are configured for this repository, so nothing was ever provisioned for PR #$PR. No VPS or DNS resources were created and none were removed."
+          elif [ "$MODE" = "dry-run" ]; then
+            HEADLINE="## 🔎 Preview teardown probe (dry run)"
+            DETAIL="Nothing was changed. This run proved the teardown job can reach its scripts and the preview VPS over the pinned SSH helper, and reported the host state. Re-dispatch with \`execute: true\` to remove a closed PR's resources."
+          elif [ "$MODE" = "execute" ] && [ -z "$NOT_DONE" ]; then
+            HEADLINE="## 🧹 Preview torn down"
+            DETAIL="The preview deployment for this PR has been removed and its DNS record deleted — and this job verified it: the Cloudflare zone holds no A record for \`$SUBDOMAIN\`, the VPS app directory is gone and the host-port offset marker is released."
+          else
+            HEADLINE="## ⚠️ Preview teardown incomplete — resources may remain"
+            DETAIL="The teardown did NOT complete, so preview resources may still exist on the VPS and/or in DNS. Steps that did not succeed:$NOT_DONE. Inspect the logs: $RUN_URL"
+          fi
           BODY=$(cat <<EOF
           $MARKER
-          ## 🧹 Preview torn down
+          $HEADLINE
 
-          The preview deployment for this PR has been removed and its DNS record deleted.
+          $DETAIL
           EOF
           )
+          # A probe reports to the job log. So does a run whose target never
+          # resolved: without a PR number there is nothing to post to, and
+          # guessing one is exactly the failure mode this step exists to stop.
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.target.outcome }}" != "success" ]; then
+            echo "--- teardown report (not posted to the PR) ---"
+            printf '%s\n' "$BODY"
+            exit 0
+          fi
           CID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
             --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
           if [ -n "$CID" ]; then
@@ -749,6 +1016,7 @@ jobs:
           else
             gh pr comment "$PR" --body "$BODY"
           fi
+
       - name: Remove the materialised SSH key
         if: always()
         run: rm -rf "$RUNNER_TEMP/preview-ssh"

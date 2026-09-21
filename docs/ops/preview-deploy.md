@@ -11,7 +11,11 @@ builds the market app, ships a deploy package to a shared test VPS over SSH,
 brings up per-PR `docker compose` services (market app + nak relay on offset
 ports), creates a Cloudflare A record `pr{N}.test-market.orangesync.tech`, and
 posts the live URL as an idempotent PR comment. On `closed` it tears the
-preview down.
+preview down, **verifies** the removal, and only then says so (see
+[Tearing down](#tearing-down-and-proving-it)).
+
+A `workflow_dispatch` input (`pr_number` + `execute`, see the same section)
+runs the teardown path on demand, so it can be exercised without closing a PR.
 
 The deploy path claims a **port-offset marker** on the VPS
 (`preview_manager.py --claim-port-offset N`, marker file
@@ -283,10 +287,69 @@ safe and automatic:
   (`docker images --filter label=preview.pr=<N>`), so a PR that is pushed to
   repeatedly does not leave one ~1.8 GB image per commit behind.
 - **On teardown**, the cleanup step removes every image labelled
-  `preview.pr=<N>` and prunes dangling layers and build cache.
+  `preview.pr=<N>` and prunes dangling layers and build cache. This is the
+  **only** image reclamation path in the system — `preview_manager.py` never
+  removes images — so it runs on every in-repo PR close (issue #1358).
 
 The shared `market-nak:*` image is intentionally **not** labelled, so it
 survives both sweeps.
+
+## Tearing down (and proving it)
+
+Teardown has two independent layers, and only the first is fast:
+
+1. **The `teardown` job** in the workflow — the fast path. It checks the
+   repository out **pinned to the default branch** (`infra/preview-vps/*.sh`
+   lives there, and pinning is what keeps the checkout working when the PR's
+   head branch is already gone), then releases the port marker, runs
+   `docker compose down --volumes`, removes every image labelled
+   `preview.pr=<N>`, prunes dangling layers and build cache older than 24 h,
+   deletes the Cloudflare A record, and **verifies** the result. It is the only
+   path that reclaims preview-host disk.
+2. **The VPS-resident preview manager** (`preview_manager.py`, systemd timer) is
+   the fail-closed safety net for previews whose PR is no longer open. It only
+   acts when its GitHub open-PR fetch succeeds, so a rate limit or a network
+   failure means it does nothing at all — which is why layer 1 has to work
+   rather than be assumed.
+
+The job's PR comment is **earned, not asserted**. The verdict is derived from the
+removal steps' real outcomes: `🧹 Preview torn down` only when the VPS cleanup,
+the DNS delete _and_ the verification all succeeded; otherwise
+`⚠️ Preview teardown incomplete — resources may remain`, naming the steps that
+did not succeed. A `skipped` step counts as "not removed", so the exit-127
+failure mode of issue #1358 can no longer produce a false "torn down" claim.
+
+The verification step fails the job when anything remains, and it is deliberate
+about what counts as proof:
+
+- **DNS** is gated on the Cloudflare **zone API** (authoritative, uncached). A
+  DoH lookup is reported alongside it but does not decide the outcome: the A
+  record is created with `ttl=60`, so a resolver that cached it just before the
+  delete can still answer for up to a minute.
+- **The VPS** is checked in one SSH round trip, for the app directory and this
+  PR's port marker. A remote failure counts as _not verified_, never as _gone_.
+  A marker held by a _different_ PR (congruent mod 100) is legitimate and does
+  not fail the check.
+
+### Exercising the closed path without closing a PR
+
+`closed` is only reachable by actually closing a PR, which is why a missing
+checkout in this job survived review and then failed the first in-repo close.
+Use the manual entry point instead:
+
+```
+Actions → Preview Deploy → Run workflow
+  pr_number: <a PR that is ALREADY closed>
+  execute:   false        # dry run (default)
+```
+
+The dry run changes nothing: it proves the job can reach its scripts and the
+preview VPS over the pinned SSH helper, and prints the host state it _would_
+remove (app directory, containers, images, port marker). Set `execute: true` to
+perform the real removal. Either way the job refuses any PR whose state is not
+`closed`, so the switch cannot be used to tear down a live preview, and a probe
+gets its own `concurrency` group so it cannot cancel a deploy run. A probe
+reports to the job log instead of the PR: it does not post the preview comment.
 
 ## Why the check skips (missing preview secrets)
 
