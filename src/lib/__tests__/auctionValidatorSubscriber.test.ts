@@ -797,7 +797,7 @@ describe('auction validator subscriber subscription contract', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
 			now: () => t,
-			spamPolicy: { maxTrackedChildSubscriptions: 1 },
+			spamPolicy: { maxTrackedChildSubscriptions: 1, lateSettlementObservationSec: 0 },
 		})
 
 		await subscriber.start()
@@ -813,7 +813,7 @@ describe('auction validator subscriber subscription contract', () => {
 		await subscriber.stop()
 	})
 
-	test('keeps a child REQ through settlement grace and retires it afterward when no verdict work remains', async () => {
+	test('keeps a child REQ through the late-settlement window and retires it afterward', async () => {
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		buildAuctionState(state)
 		let t = 2_161
@@ -836,13 +836,18 @@ describe('auction validator subscriber subscription contract', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
 			now: () => t,
+			spamPolicy: { lateSettlementObservationSec: 60 },
 		})
 
 		await subscriber.start()
 		await subscriber.republishAll()
 
 		expect(childUnsubscribeCalls).toBe(0)
-		t = 5_701
+		t = 5_760
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(0)
+		t = 5_761
 		await subscriber.republishAll()
 
 		expect(childUnsubscribeCalls).toBe(1)

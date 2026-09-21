@@ -23,12 +23,13 @@
  *      there. All three child kinds do share the auction coordinate in
  *      `a`, so that is the narrow common live filter.
  *
- * Child REQs stay open until the auction is past the validator's own
- * close-time skew window (`max_end_at + max_skew_sec`) AND the tracked
- * bids are terminal AND no buffered children attributable to that
- * auction remain. We enforce closure by calling the unsubscribe handle,
- * not by `until`, so the validator never drops a still-replayable child
- * solely because its local clock advanced.
+ * Child REQs stay open through the bounded late-settlement observation
+ * window: `max_end_at + settlement_grace + lateSettlementObservationSec`.
+ * This makes `settled_late` observable after a winner first becomes
+ * `griefed`, while still giving every child subscription a finite lifetime.
+ * After that deadline, a watch remains open only for nonterminal work or
+ * buffered attributable children. We enforce closure by calling the
+ * unsubscribe handle, not by `until`.
  *
  * Admission refusals are intentionally log-only in this implementation: an
  * event rejected before state admission has no kind-30440 verdict carrier.
@@ -152,8 +153,8 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
 		if (hasAttributablePendingChildren(auctionRootEventId)) return true
-		const childWindowClosesAt =
-			auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
+		const graceExpiresAt = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
+		const childWindowClosesAt = graceExpiresAt + resolvedPolicy.lateSettlementObservationSec
 		if (now() <= childWindowClosesAt) return true
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (bidState.currentClaim === null) return true

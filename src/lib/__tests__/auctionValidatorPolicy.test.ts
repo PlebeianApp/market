@@ -42,6 +42,7 @@ describe('validator policy publication', () => {
 			rateWindowSec: DEFAULT_BID_SPAM_POLICY.rateWindowSec,
 			maxTrackedChildSubscriptions: DEFAULT_BID_SPAM_POLICY.maxTrackedChildSubscriptions,
 			childReplayLookbackSec: DEFAULT_BID_SPAM_POLICY.childReplayLookbackSec,
+			lateSettlementObservationSec: DEFAULT_BID_SPAM_POLICY.lateSettlementObservationSec,
 			maxTrackedBidsPerAuction: DEFAULT_BID_SPAM_POLICY.maxTrackedBidsPerAuction,
 			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxPendingEventsPerKey: DEFAULT_BID_SPAM_POLICY.maxPendingEventsPerKey,
@@ -74,7 +75,7 @@ describe('validator policy publication', () => {
 			} as any,
 			name: 'Local validator',
 			policy: { maxAcceptableSkewSec: 45, notes: 'tight caps' },
-			spamPolicy: { maxBidsPerWindow: 3, maxTagCount: 9, pendingTtlSec: 30 },
+			spamPolicy: { maxBidsPerWindow: 3, maxTagCount: 9, pendingTtlSec: 30, lateSettlementObservationSec: 120 },
 		})
 
 		const parsed = parseValidatorPolicyEvent(published)
@@ -88,6 +89,7 @@ describe('validator policy publication', () => {
 			maxSeenEventIds: DEFAULT_BID_SPAM_POLICY.maxSeenEventIds,
 			maxTrackedChildSubscriptions: DEFAULT_BID_SPAM_POLICY.maxTrackedChildSubscriptions,
 			childReplayLookbackSec: DEFAULT_BID_SPAM_POLICY.childReplayLookbackSec,
+			lateSettlementObservationSec: 120,
 			maxTagCount: 9,
 			pendingTtlSec: 30,
 		})

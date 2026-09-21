@@ -154,6 +154,7 @@ export const ValidatorPolicyDocumentSchema = z.object({
 				rateWindowSec: z.number().int().nonnegative(),
 				maxTrackedChildSubscriptions: z.number().int().nonnegative(),
 				childReplayLookbackSec: z.number().int().nonnegative(),
+				lateSettlementObservationSec: z.number().int().nonnegative().optional(),
 				maxTrackedBidsPerAuction: z.number().int().nonnegative(),
 				maxSeenEventIds: z.number().int().nonnegative(),
 				maxPendingEventsPerKey: z.number().int().nonnegative(),

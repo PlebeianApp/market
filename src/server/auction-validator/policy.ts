@@ -43,6 +43,7 @@ export const resolvePublishedAdmissionPolicy = (
 		rateWindowSec: resolved.rateWindowSec,
 		maxTrackedChildSubscriptions: resolved.maxTrackedChildSubscriptions,
 		childReplayLookbackSec: resolved.childReplayLookbackSec,
+		lateSettlementObservationSec: resolved.lateSettlementObservationSec,
 		maxTrackedBidsPerAuction: resolved.maxTrackedBidsPerAuction,
 		maxSeenEventIds: resolved.maxSeenEventIds,
 		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,

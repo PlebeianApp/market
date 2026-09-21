@@ -327,6 +327,8 @@ export type ValidatorAdmissionPolicy =
 			rateWindowSec: number
 			maxTrackedChildSubscriptions: number
 			childReplayLookbackSec: number
+			/** Optional for compatibility with policy events published before this bound was introduced. */
+			lateSettlementObservationSec?: number
 			maxTrackedBidsPerAuction: number
 			maxSeenEventIds: number
 			maxPendingEventsPerKey: number
