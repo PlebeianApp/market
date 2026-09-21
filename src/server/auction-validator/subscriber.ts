@@ -408,12 +408,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 		const bid = parsed.value
-		// Prefer an explicit observedAt (buffered replay preserves the
-		// original sighting), then the recovered seed (cross-restart
-		// first-observation, Fix 1), then a fresh `now()` (genuine first
-		// sight this process). This ordering keeps a single-process
-		// buffered sighting authoritative over the relay-recovered value.
-		const firstObservedAt = observedAt ?? deps.seedObservedAt?.get(bid.id) ?? now()
+		// A recovered timestamp is the earliest surviving observation from a
+		// prior process and therefore outranks this process's delivery time.
+		// Without a seed, preserve the explicit delivery/buffer timestamp and
+		// finally fall back to now() for a genuinely new sighting.
+		const firstObservedAt = deps.seedObservedAt?.get(bid.id) ?? observedAt ?? now()
 
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it (with this first-observed time) when the auction

@@ -497,7 +497,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
-	test('startup child replay preserves each delivery time for later auction discovery', async () => {
+	test('startup child replay prefers a recovered bid observation over delivery time', async () => {
 		// Historical child events already on the relay at startup are
 		// captured with the startup observation time, so a later auction
 		// discovery does not re-stamp them to replay-time now().
@@ -516,6 +516,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		}
 		let t = 5_000
 		const now = () => t
+		const seedObservedAt = new Map<string, number>()
 
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		const relayPool = {
@@ -539,6 +540,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
 			now,
+			seedObservedAt,
 		})
 
 		// A non-https mint so the reachability probe is rejected by the
@@ -599,6 +601,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 				['status', 'locked'],
 			],
 		} as unknown as EventTemplate)
+		seedObservedAt.set(bidEvent.id, 1_500)
 
 		// Release references the bid id.
 		const releaseEvent = createSignedEvent(bidderSk, {
@@ -616,7 +619,8 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		} as unknown as EventTemplate)
 
 		// 1. Release then bid are already on relay history when the
-		// Each historical child gets its own delivery-time observation.
+		// Each historical child gets its own delivery-time observation, but the
+		// bid's recovered pre-restart observation remains authoritative.
 		history.push(releaseEvent)
 		history.push(bidEvent)
 		await subscriber.start()
@@ -629,7 +633,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		// time rather than re-stamp the bid/release to 9000.
 		const auctionState = state.auctions.get(auctionRootId)!
 		const bidState = auctionState.bids.get(bidEvent.id)!
-		expect(bidState.observedAt).toBe(5_001)
+		expect(bidState.observedAt).toBe(1_500)
 		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
 		await subscriber.stop()
 	})
