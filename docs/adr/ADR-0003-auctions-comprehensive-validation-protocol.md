@@ -460,3 +460,41 @@ construction: two disjoint sets cannot each exceed half of the pool.
 - Supersedes the "quorum MAY equal the count to require unanimity" latitude: a
   declared quorum equal to the count is still valid, it is simply not the only
   admissible value.
+
+### Amendment — auction-level invalidity (2026-09)
+
+A broken validator configuration is a defect of the **auction**, not of any single
+bid, so it is reported about the auction: a validator observing an inadmissible
+configuration publishes a kind-30440 verdict with the claim
+`auction_policy_invalid`, and compliant clients MUST NOT treat any bid in that
+auction as valid.
+
+Inadmissible means any of:
+
+- fewer than **2 distinct** `auditors` on a multiparty auction
+  (`pool_below_minimum`);
+- a declared `auditor_quorum` **below the strict-majority floor**
+  (`quorum_below_majority`);
+- a declared `auditor_quorum` **above the pool**, which no outcome could reach
+  (`quorum_exceeds_pool`).
+
+Implementation: `src/lib/auction/auctionValidatorPolicy.ts`
+(`assessAuctionValidatorPolicy`) returns `valid`, the findings with their
+severity, and the floor/required quorum in one frozen object. The claim is
+deliberately **not** part of `VALIDATOR_CONDEMN_CLAIMS`: an invalid auction is not
+a condemned bid, and counting it as one would let an auction-level defect consume
+a bid's quorum.
+
+Two tolerances, both explicit rather than accidental:
+
+- **Grandfathering.** A single-validator auction under the legacy single-party
+  policy is reported at `warning` severity, never as invalid, so live auctions
+  published before this rule keep working. The pool requirement applies to
+  multiparty auctions and to new publishes; the severity is a one-line constant in
+  the assessment module when the team decides to apply it retroactively.
+- **Duplicate `auditors` tags** are a warning: they never inflate the pool size or
+  weaken the floor, and they do not invalidate the auction.
+
+The majority floor in the tally remains as a **backstop**: a client that fails to
+run the assessment still cannot accept an outcome with at most half the pool
+behind it.
