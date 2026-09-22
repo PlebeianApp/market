@@ -1,8 +1,15 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { Label } from '@/components/ui/label'
-import { AlertTriangle, CheckCircle2, CircleDashed } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { AlertTriangle, CheckCircle2, CircleDashed, Plus } from 'lucide-react'
 import type { AuctionFormData } from '@/publish/auctions'
 import { AUCTION_RECOMMENDED_VALIDATOR_POOL, AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS } from '@/lib/auction/auctionValidatorPolicy'
+import {
+	type MultipartyPickableRecipient,
+	type MultipartyPickableValidator,
+	describeValidatorTerms,
+} from '@/lib/auction/multipartyAnnouncements'
+import { useMultipartyAnnouncements } from '@/queries/multiparty'
 import type { AuctionWorkflowResolution } from '@/lib/workflow/auctionWorkflowResolver'
 
 export interface AuctionV4VTabProps {
@@ -11,6 +18,10 @@ export interface AuctionV4VTabProps {
 	/** The auditors the root will list, after the app-default fallback. */
 	auditors: readonly string[]
 	resolution: AuctionWorkflowResolution
+	/** Append a validator's recipient line and add it to the auditor list. */
+	onAddValidator: (validator: MultipartyPickableValidator) => void
+	/** Append a plain recipient's line. */
+	onAddRecipient: (recipient: MultipartyPickableRecipient) => void
 }
 
 const shortPubkey = (pubkey: string): string => `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`
@@ -30,10 +41,11 @@ const formatBps = (bps: number): string => `${(bps / 100).toFixed(2)}%`
  * profile name, payout capability and validator offer come from relay reads that are
  * a later slice, so the rows say "awaiting reads" rather than showing a guess.
  */
-export function AuctionV4VTab({ formData, setFormData, auditors, resolution }: AuctionV4VTabProps) {
+export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onAddValidator, onAddRecipient }: AuctionV4VTabProps) {
 	const { validators, recipients, preview, blockingMessages } = resolution
 	const recipientCount = recipients.length
 	const isSingleParty = recipientCount === 0 && formData.payoutRecipients?.trim().length === 0
+	const announcements = useMultipartyAnnouncements()
 
 	return (
 		<div className="space-y-6">
@@ -50,6 +62,87 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution }: A
 					</ul>
 				</div>
 			)}
+
+			<div className="rounded-md border p-3">
+				<div className="mb-2 flex items-center justify-between">
+					<div className="text-xs font-semibold uppercase text-muted-foreground">Pick from announcements</div>
+					<span className="text-xs text-muted-foreground">
+						{announcements.isLoading
+							? 'reading announcements…'
+							: announcements.data
+								? `${announcements.data.validators.length} validator(s), ${announcements.data.recipients.length} recipient(s)`
+								: 'announcements unavailable'}
+					</span>
+				</div>
+
+				{announcements.isError && (
+					<p className="text-xs text-muted-foreground">
+						Could not read announcements right now. You can still enter pubkeys by hand below.
+					</p>
+				)}
+
+				{announcements.data && announcements.data.validators.length > 0 && (
+					<ul className="space-y-2">
+						{announcements.data.validators.map((validator) => (
+							<li key={validator.pubkey} className="flex items-start gap-3 rounded-md border p-2">
+								{validator.picture ? (
+									<img src={validator.picture} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" loading="lazy" />
+								) : (
+									<div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
+								)}
+								<div className="min-w-0 flex-1">
+									<div className="text-sm font-medium">{validator.name ?? `${shortPubkey(validator.pubkey)} (unnamed)`}</div>
+									<div className="text-xs text-muted-foreground">{describeValidatorTerms(validator)}</div>
+									{validator.about && <div className="mt-0.5 text-xs text-muted-foreground">{validator.about}</div>}
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="shrink-0 gap-1 text-xs"
+									onClick={() => onAddValidator(validator)}
+								>
+									<Plus className="h-3 w-3" />
+									Add
+								</Button>
+							</li>
+						))}
+					</ul>
+				)}
+
+				{announcements.data && announcements.data.recipients.length > 0 && (
+					<ul className="mt-2 space-y-2">
+						{announcements.data.recipients.map((recipient) => (
+							<li key={recipient.pubkey} className="flex items-start gap-3 rounded-md border p-2">
+								{recipient.picture ? (
+									<img src={recipient.picture} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" loading="lazy" />
+								) : (
+									<div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
+								)}
+								<div className="min-w-0 flex-1">
+									<div className="text-sm font-medium">{recipient.name ?? `${shortPubkey(recipient.pubkey)} (unnamed)`}</div>
+									{recipient.about && <div className="text-xs text-muted-foreground">{recipient.about}</div>}
+									<div className="text-xs text-muted-foreground">v4v recipient · share set by you</div>
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="shrink-0 gap-1 text-xs"
+									onClick={() => onAddRecipient(recipient)}
+								>
+									<Plus className="h-3 w-3" />
+									Add
+								</Button>
+							</li>
+						))}
+					</ul>
+				)}
+
+				{announcements.data && announcements.data.validators.length === 0 && announcements.data.recipients.length === 0 && (
+					<p className="text-xs text-muted-foreground">No announcements found on the app relay yet. Enter pubkeys by hand below.</p>
+				)}
+			</div>
 
 			<div className="grid w-full gap-1.5">
 				<Label htmlFor="auction-auditor-pubkeys">Validators (one pubkey per line)</Label>

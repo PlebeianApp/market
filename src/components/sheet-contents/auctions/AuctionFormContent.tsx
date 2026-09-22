@@ -38,6 +38,12 @@ import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/co
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
 import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
+import {
+	type MultipartyPickableRecipient,
+	type MultipartyPickableValidator,
+	recipientLine,
+	validatorRecipientLine,
+} from '@/lib/auction/multipartyAnnouncements'
 import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
@@ -1816,10 +1822,14 @@ export function AuctionFormContent() {
 		v4v: true,
 	}
 
-	// Tab at index i is reachable only if every tab before it is valid.
+	// Tab at index i is reachable only if every tab before it is valid — except the
+	// V4V step, which the seller must be able to walk into at any point: it is where
+	// an incomplete validator set gets fixed, so disabling its trigger would hide the
+	// one screen that explains the problem.
 	const isTabReachable = (tabIndex: number): boolean => {
+		if (TAB_ORDER[tabIndex] === 'v4v') return true
 		for (let i = 0; i < tabIndex; i++) {
-			if (!tabValid[TAB_ORDER[i]]) return false
+			if (!tabValid[TAB_ORDER[i] as AuctionTab]) return false
 		}
 		return true
 	}
@@ -1869,6 +1879,38 @@ export function AuctionFormContent() {
 				return []
 		}
 	})()
+
+	// Adding from an announcement keeps the two inputs consistent: a validator's
+	// recipient line and its entry in the auditor list are written together, because
+	// a validator share whose pubkey is not an auditor would be refused at publish.
+	const appendRecipientLine = (line: string) => {
+		setFormData((prev) => {
+			const lines = (prev.payoutRecipients ?? '')
+				.split('\n')
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+			if (lines.includes(line)) return prev
+			lines.push(line)
+			return { ...prev, payoutRecipients: lines.join('\n') }
+		})
+	}
+
+	const handleAddValidator = (validator: MultipartyPickableValidator) => {
+		appendRecipientLine(validatorRecipientLine(validator))
+		setFormData((prev) => {
+			const listed = (prev.auditorPubkeys ?? '')
+				.split('\n')
+				.map((entry) => entry.trim())
+				.filter(Boolean)
+			if (listed.includes(validator.pubkey)) return prev
+			listed.push(validator.pubkey)
+			return { ...prev, auditorPubkeys: listed.join('\n') }
+		})
+	}
+
+	const handleAddRecipient = (recipient: MultipartyPickableRecipient) => {
+		appendRecipientLine(recipientLine(recipient))
+	}
 
 	const handleClearDraft = () => {
 		draftGenerationRef.current++
@@ -1984,7 +2026,14 @@ export function AuctionFormContent() {
 							<ImagesTab images={images} setImages={setImages} error={validationMessages.imageUrls} />
 						</TabsContent>
 						<TabsContent value="v4v" className="mt-4">
-							<AuctionV4VTab formData={formData} setFormData={setFormData} auditors={resolvedAuditors} resolution={v4vResolution} />
+							<AuctionV4VTab
+								formData={formData}
+								setFormData={setFormData}
+								auditors={resolvedAuditors}
+								resolution={v4vResolution}
+								onAddValidator={handleAddValidator}
+								onAddRecipient={handleAddRecipient}
+							/>
 						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
 							<ShippingTab
@@ -2024,6 +2073,23 @@ export function AuctionFormContent() {
 						))}
 					</ul>
 				)}
+				<div className="flex gap-2">
+					<Button
+						type="button"
+						variant={v4vResolution.v4vComplete ? 'outline' : 'destructive'}
+						size="sm"
+						className="w-full justify-between text-xs"
+						onClick={() => setActiveTab('v4v')}
+						data-testid="auction-v4v-status"
+					>
+						<span>
+							V4V:{' '}
+							{v4vResolution.validators.poolSize === 0 ? 'no validators resolved' : `${v4vResolution.validators.poolSize} validator(s)`}
+							{v4vResolution.recipients.length > 0 ? ` · ${v4vResolution.recipients.length} recipient(s)` : ' · seller keeps everything'}
+						</span>
+						<span>{v4vResolution.v4vComplete ? 'Set up ›' : 'Fix ›'}</span>
+					</Button>
+				</div>
 				<div className="flex gap-2">
 					{currentTabIndex > 0 && (
 						<Button
