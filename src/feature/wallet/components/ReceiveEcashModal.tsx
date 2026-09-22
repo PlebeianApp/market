@@ -7,6 +7,9 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2, Check, QrCode, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { Scanner } from '@yudiel/react-qr-scanner'
+import { authStore } from '@/lib/stores/auth'
+import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
+import { receiveCocoAuctionFakeFunds } from '@/lib/coco/runtime'
 
 interface ReceiveEcashModalProps {
 	open: boolean
@@ -14,7 +17,9 @@ interface ReceiveEcashModalProps {
 }
 
 export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
+	const cocoMode = isCocoV2AuctionMode()
 	const { status: cashuStatus } = useStore(cashuStore)
+	const { user } = useStore(authStore)
 	const [token, setToken] = useState('')
 	const [isReceiving, setIsReceiving] = useState(false)
 	const [isSuccess, setIsSuccess] = useState(false)
@@ -23,10 +28,10 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 
 	// Initialize cashu when modal opens
 	useEffect(() => {
-		if (open && cashuStatus === 'idle') {
+		if (open && !cocoMode && cashuStatus === 'idle') {
 			cashuActions.initialize()
 		}
-	}, [open, cashuStatus])
+	}, [open, cashuStatus, cocoMode])
 
 	const handleReceive = async () => {
 		if (!token.trim()) {
@@ -44,10 +49,14 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 		setIsReceiving(true)
 		setError(null)
 		try {
-			// Always use nip60 for receiving since that's where the wallet proofs are stored
-			// This ensures the proofs are synced to Nostr events for cross-device access
-			console.log('[Receive] Using nip60 for receive')
-			await nip60Actions.receiveEcash(normalizedToken)
+			if (cocoMode) {
+				if (!user?.pubkey) throw new Error('Sign in before receiving Coco Auction fake funds')
+				const environment = readCocoV2AuctionEnvironment()
+				await receiveCocoAuctionFakeFunds({ accountPubkey: user.pubkey, environmentId: environment.environmentId }, normalizedToken)
+				window.dispatchEvent(new Event('coco-auction-balance-changed'))
+			} else {
+				await nip60Actions.receiveEcash(normalizedToken)
+			}
 			setIsSuccess(true)
 			toast.success('eCash received successfully!')
 		} catch (err) {
@@ -138,7 +147,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 							</div>
 						</div>
 
-						{cashuStatus === 'initializing' && (
+						{!cocoMode && cashuStatus === 'initializing' && (
 							<p className="text-sm text-muted-foreground flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
@@ -151,7 +160,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 							<Button variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleReceive} disabled={isReceiving || !token.trim() || cashuStatus === 'initializing'}>
+							<Button onClick={handleReceive} disabled={isReceiving || !token.trim() || (!cocoMode && cashuStatus === 'initializing')}>
 								{isReceiving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Receive
 							</Button>

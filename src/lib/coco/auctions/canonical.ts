@@ -67,6 +67,9 @@ export const normalizeCocoAuctionBidIntent = (intent: CocoAuctionBidIntent): Coc
 	const sellerPubkey = intent.sellerPubkey.trim().toLowerCase()
 	if (!HEX_32.test(bidderPubkey) || !HEX_32.test(sellerPubkey))
 		throw new Error('Coco Auction signer identities must be 32-byte hex pubkeys')
+	if (!intent.sellerPublicAuthority.trim() || intent.sellerPublicAuthority.trim() !== intent.sellerPublicAuthority) {
+		throw new Error('Coco Auction seller public authority is required and exact')
+	}
 	if (account.accountPubkey !== bidderPubkey) throw new Error('Coco Auction command account does not match the bidder signer')
 	if (auction.coordinate.split(':')[1] !== sellerPubkey) throw new Error('Coco Auction seller does not match the addressable coordinate')
 	if (!Number.isSafeInteger(intent.grossAmount) || intent.grossAmount <= 0)
@@ -85,6 +88,7 @@ export const normalizeCocoAuctionBidIntent = (intent: CocoAuctionBidIntent): Coc
 		auction,
 		bidderPubkey,
 		sellerPubkey,
+		sellerPublicAuthority: intent.sellerPublicAuthority,
 		mintUrl: normalizeCocoMintUrl(intent.mintUrl),
 		unit: 'sat',
 	})
@@ -97,6 +101,7 @@ export const cocoAuctionBidIntentFingerprint = (intent: CocoAuctionBidIntent): s
 		auction: normalized.auction,
 		bidderPubkey: normalized.bidderPubkey,
 		sellerPubkey: normalized.sellerPubkey,
+		sellerPublicAuthority: normalized.sellerPublicAuthority,
 		mintUrl: normalized.mintUrl,
 		unit: normalized.unit,
 		grossAmount: normalized.grossAmount,
@@ -118,6 +123,7 @@ export const deriveCocoAuctionBidCommandId = (intent: Omit<CocoAuctionBidIntent,
 		auction: intent.auction,
 		bidderPubkey: intent.bidderPubkey,
 		sellerPubkey: intent.sellerPubkey,
+		sellerPublicAuthority: intent.sellerPublicAuthority,
 		mintUrl: normalizeCocoMintUrl(intent.mintUrl),
 		unit: intent.unit,
 		grossAmount: intent.grossAmount,

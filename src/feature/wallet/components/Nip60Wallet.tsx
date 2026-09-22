@@ -60,6 +60,8 @@ import { extractProofsByMint, getMintHostname, type ProofInfo } from '@/lib/wall
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
+import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
+import { getCocoAuctionBalances, type CocoAuctionBalanceProjection } from '@/lib/coco/runtime'
 
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
@@ -67,6 +69,7 @@ type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
 
 export function Nip60Wallet() {
+	const cocoMode = isCocoV2AuctionMode()
 	const { isAuthenticated, user } = useStore(authStore)
 	const appStage = useStore(configStore, (state) => state.config.stage)
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
@@ -93,6 +96,7 @@ export function Nip60Wallet() {
 		[walletDevMode],
 	)
 	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<UnifiedPendingToken | null>(null)
+	const [cocoBalances, setCocoBalances] = useState<readonly CocoAuctionBalanceProjection[]>([])
 
 	// Combine pending tokens from both stores
 	const activePendingTokens: UnifiedPendingToken[] = useMemo(
@@ -106,10 +110,11 @@ export function Nip60Wallet() {
 
 	// Get proofs from wallet state using shared utility
 	const proofsByMint = useMemo(() => {
+		if (cocoMode) return new Map<string, ProofInfo[]>()
 		const wallet = nip60Actions.getWallet()
 		if (!wallet) return new Map<string, ProofInfo[]>()
 		return extractProofsByMint(wallet, mints)
-	}, [balance, mints]) // Re-compute when balance or mints change
+	}, [balance, cocoMode, mints]) // Re-compute when balance or mints change
 
 	const toggleMintExpanded = (mint: string) => {
 		setExpandedMints((prev) => {
@@ -124,7 +129,7 @@ export function Nip60Wallet() {
 	}
 
 	useEffect(() => {
-		if (!isAuthenticated || !user?.pubkey) {
+		if (cocoMode || !isAuthenticated || !user?.pubkey) {
 			return
 		}
 
@@ -132,7 +137,26 @@ export function Nip60Wallet() {
 		if (status === 'idle') {
 			nip60Actions.initialize(user.pubkey)
 		}
-	}, [isAuthenticated, user?.pubkey, status])
+	}, [cocoMode, isAuthenticated, user?.pubkey, status])
+
+	useEffect(() => {
+		if (!cocoMode || !isAuthenticated || !user?.pubkey) return
+		let cancelled = false
+		const environmentId = readCocoV2AuctionEnvironment().environmentId
+		const refresh = () => {
+			void getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId })
+				.then((next) => {
+					if (!cancelled) setCocoBalances(next)
+				})
+				.catch(() => undefined)
+		}
+		refresh()
+		window.addEventListener('coco-auction-balance-changed', refresh)
+		return () => {
+			cancelled = true
+			window.removeEventListener('coco-auction-balance-changed', refresh)
+		}
+	}, [cocoMode, isAuthenticated, user?.pubkey])
 
 	const handleCreateWallet = async () => {
 		setIsCreating(true)
@@ -281,6 +305,25 @@ export function Nip60Wallet() {
 		return (
 			<div className="bg-primary p-4 rounded-lg text-gray-400 text-center">
 				<p>Please log in to view your wallet</p>
+			</div>
+		)
+	}
+
+	if (cocoMode) {
+		const spendable = cocoBalances.reduce((sum, item) => sum + item.spendable, 0)
+		const reserved = cocoBalances.reduce((sum, item) => sum + item.reserved, 0)
+		return (
+			<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
+				<div className="mb-4 text-center">
+					<p className="mb-1 text-gray-400 text-sm">Coco Auction fake balance</p>
+					<p className="font-bold text-white text-2xl">{spendable.toLocaleString()} sats</p>
+					{reserved > 0 && <p className="mt-1 text-xs text-amber-300">{reserved.toLocaleString()} sats reserved</p>}
+				</div>
+				<Button className="w-full bg-white/10 hover:bg-white/20 text-white" size="sm" onClick={() => setOpenModal('receive')}>
+					<QrCode className="w-4 h-4" />
+					Receive fake eCash
+				</Button>
+				<ReceiveEcashModal open={openModal === 'receive'} onClose={() => setOpenModal(null)} />
 			</div>
 		)
 	}

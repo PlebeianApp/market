@@ -7,7 +7,15 @@ import { Label } from '@/components/ui/label'
 import { DetailField } from '@/components/ui/DetailField'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DepositLightningModal } from '@/feature/wallet/components/DepositLightningModal'
-import { usePublishAuctionBidMutation, useRepublishAuctionBidMutation, type AuctionBidFormData } from '@/publish/auctions'
+import {
+	cancelPreparedCocoAuctionBid,
+	executePreparedCocoAuctionBid,
+	getCocoAuctionBid,
+	prepareCocoAuctionBid,
+	usePublishAuctionBidMutation,
+	useRepublishAuctionBidMutation,
+	type AuctionBidFormData,
+} from '@/publish/auctions'
 import {
 	getAuctionBiddingCutoffAt,
 	getAuctionEndAt,
@@ -58,6 +66,8 @@ import { normalizeMintUrl, getMintHostname } from '@/lib/wallet'
 import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
+import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment, type CocoAuctionBidProjection } from '@/lib/coco/auctions'
+import { getCocoAuctionBalances } from '@/lib/coco/runtime'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
@@ -120,6 +130,7 @@ export function useAuctionMintSelection(trustedMints: string[], bidAmount: numbe
 }
 
 export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
+	const cocoMode = isCocoV2AuctionMode()
 	const bidMutation = usePublishAuctionBidMutation()
 	// #1235 Blocking 1: idempotent rebroadcast for a funded-but-unpublished
 	// bid — never re-locks funds on retry.
@@ -131,7 +142,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const auctionId = auction.id
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
-	const p2pkXpub = getAuctionP2pkXpub(auction)
+	const p2pkXpub = cocoMode ? auction.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || '' : getAuctionP2pkXpub(auction)
 	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const auctionDTag = getAuctionId(auction)
 
@@ -204,23 +215,27 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const isNip60Loading = nip60Status === 'idle' || nip60Status === 'initializing'
 	const previousBidAmount = useMemo(() => {
 		if (!signedInBidderPubkey) return 0
-		const myBids = bids.filter((b) => b.pubkey === signedInBidderPubkey)
+		const myBids = bids.filter(
+			(b) => b.pubkey === signedInBidderPubkey && (!cocoMode || b.tags.some((tag) => tag[0] === 'coco_operation' && !!tag[1])),
+		)
 		if (!myBids.length) return 0
 		return Math.max(...myBids.map(getBidAmount))
-	}, [bids, signedInBidderPubkey])
+	}, [bids, cocoMode, signedInBidderPubkey])
 	// When the user has already bid on this auction, all subsequent rebids
 	// must use the same mint — the additive rebid chain (§4.2.1) doesn't
 	// support multi-mint chains. We extract the mint from the user's
 	// existing bids and lock the selection to it.
 	const existingBidMint = useMemo(() => {
 		if (!signedInBidderPubkey) return null
-		const myBids = bids.filter((b) => b.pubkey === signedInBidderPubkey)
+		const myBids = bids.filter(
+			(b) => b.pubkey === signedInBidderPubkey && (!cocoMode || b.tags.some((tag) => tag[0] === 'coco_operation' && !!tag[1])),
+		)
 		if (!myBids.length) return null
 		// Use the mint from the highest bid (the latest leg in the chain)
 		const highestBid = myBids.reduce((top, b) => (getBidAmount(b) > getBidAmount(top) ? b : top), myBids[0])
 		const mint = getBidMint(highestBid)
 		return mint ? normalizeMintUrl(mint) : null
-	}, [bids, signedInBidderPubkey])
+	}, [bids, cocoMode, signedInBidderPubkey])
 	const hasExistingBid = !!existingBidMint
 	// AUCTIONS.md §6.1 — bidder-side live floor. Display the floor at
 	// `client_now` (no inflation). The CVM server is more lenient by
@@ -295,6 +310,58 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// drives the compact card's button text.
 	const [confirmBidAmountInput, setConfirmBidAmountInput] = useState<string>('')
 	const [isBidProgressDialogOpen, setIsBidProgressDialogOpen] = useState(false)
+	const [cocoPreparedBid, setCocoPreparedBid] = useState<CocoAuctionBidProjection | null>(null)
+	const [cocoPreparedForm, setCocoPreparedForm] = useState<AuctionBidFormData | null>(null)
+	const [isCocoCommandPending, setIsCocoCommandPending] = useState(false)
+	const [cocoMintBalances, setCocoMintBalances] = useState<Record<string, number>>({})
+	const cocoPreparedStorageKey =
+		cocoMode && signedInBidderPubkey ? `coco-auction-prepared-v1:${signedInBidderPubkey}:${auctionRootEventId || auction.id}` : null
+
+	useEffect(() => {
+		if (!cocoPreparedStorageKey || typeof window === 'undefined') return
+		let cancelled = false
+		try {
+			const raw = window.localStorage.getItem(cocoPreparedStorageKey)
+			if (!raw) return
+			const saved = JSON.parse(raw) as { commandId?: unknown; formData?: unknown }
+			if (typeof saved.commandId !== 'string' || !saved.formData || typeof saved.formData !== 'object') return
+			void getCocoAuctionBid(saved.commandId, signedInBidderPubkey)
+				.then((projection) => {
+					if (cancelled || !projection || projection.status === 'cancelled' || projection.status === 'published') return
+					setCocoPreparedBid(projection)
+					setCocoPreparedForm(saved.formData as AuctionBidFormData)
+					setPendingBidData(saved.formData as AuctionBidFormData)
+					setConfirmBidMint(projection.mintUrl)
+					setConfirmBidAmountInput(String(projection.grossAmount))
+					setIsConfirmBidDialogOpen(true)
+				})
+				.catch(() => undefined)
+		} catch {
+			// Corrupt UI-only recovery metadata never changes Coco state.
+		}
+		return () => {
+			cancelled = true
+		}
+	}, [cocoPreparedStorageKey, signedInBidderPubkey])
+
+	useEffect(() => {
+		if (!cocoMode || !signedInBidderPubkey) return
+		let cancelled = false
+		const environmentId = readCocoV2AuctionEnvironment().environmentId
+		const refresh = () => {
+			void getCocoAuctionBalances({ accountPubkey: signedInBidderPubkey, environmentId })
+				.then((balances) => {
+					if (!cancelled) setCocoMintBalances(Object.fromEntries(balances.map((balance) => [balance.mintUrl, balance.spendable])))
+				})
+				.catch(() => undefined)
+		}
+		refresh()
+		window.addEventListener('coco-auction-balance-changed', refresh)
+		return () => {
+			cancelled = true
+			window.removeEventListener('coco-auction-balance-changed', refresh)
+		}
+	}, [cocoMode, signedInBidderPubkey])
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -308,6 +375,14 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	// Combined mint list for the confirm-bid dropdown: shows funded mints
 	// first, then any trusted mints not yet in the wallet (balance 0).
 	const confirmMintOptions = useMemo(() => {
+		if (cocoMode) {
+			return trustedMints.map((url) => ({
+				mintUrl: normalizeMintUrl(url),
+				hostname: getMintHostname(url),
+				balance: cocoMintBalances[normalizeMintUrl(url)] ?? 0,
+				hasSufficientBalance: true,
+			}))
+		}
 		const seen = new Set(availableMints.map((m) => m.mintUrl))
 		const extras = trustedMints
 			.filter((url) => !seen.has(normalizeMintUrl(url)))
@@ -318,7 +393,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				hasSufficientBalance: false,
 			}))
 		return [...availableMints, ...extras]
-	}, [availableMints, trustedMints])
+	}, [availableMints, cocoMintBalances, cocoMode, trustedMints])
 
 	// Funding summary for the confirm dialog. Per AUCTIONS.md §4.2.1, rebids
 	// only fund the delta (amount - previous_bid). The previous leg's lock
@@ -441,7 +516,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}, [])
 
 	// Disable logic
-	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
+	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending || isCocoCommandPending
 	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
 	// Button text logic
@@ -449,11 +524,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		if (isOwnAuction) return 'Your Auction'
 		if (ended) return 'Auction Ended'
 		if (notStarted) return 'Bidding not started'
-		if (bidMutation.isPending) return 'Submitting...'
+		if (bidMutation.isPending || isCocoCommandPending) return 'Submitting...'
 		if (!hasSignedInBidder) return 'Sign in to bid'
 		if (compact) return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
 		return 'Place Bid'
-	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, hasSignedInBidder, compact, parsedBidAmount])
+	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, isCocoCommandPending, hasSignedInBidder, compact, parsedBidAmount])
 
 	const createBidSubmission = (): AuctionBidFormData => ({
 		auctionEventId: auctionRootEventId || auction.id,
@@ -493,7 +568,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			return null
 		}
 
-		if (isNip60Loading) {
+		if (!cocoMode && isNip60Loading) {
 			toast.info('Wallet is still loading. Try again in a moment.')
 			return null
 		}
@@ -513,6 +588,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		const bidData = prepareBidSubmission()
 		if (!bidData) return
 
+		setCocoPreparedBid(null)
+		setCocoPreparedForm(null)
 		setPendingBidData(bidData)
 		// Pre-select the default mint (from the hook's resolution or the first
 		// available trusted mint) so the dropdown shows a concrete value and
@@ -534,9 +611,34 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		openConfirmBidDialog()
 	}
 
+	const clearCocoPreparedRecovery = () => {
+		if (cocoPreparedStorageKey && typeof window !== 'undefined') window.localStorage.removeItem(cocoPreparedStorageKey)
+		setCocoPreparedBid(null)
+		setCocoPreparedForm(null)
+	}
+
+	const cancelCocoPrepared = async () => {
+		if (!cocoPreparedBid || cocoPreparedBid.status !== 'prepared') return
+		setIsCocoCommandPending(true)
+		try {
+			await cancelPreparedCocoAuctionBid(cocoPreparedBid)
+			clearCocoPreparedRecovery()
+			toast.success('Prepared Coco bid cancelled; reserved funds were released.')
+		} catch (error) {
+			toast.error(`Could not cancel prepared Coco bid: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			setIsCocoCommandPending(false)
+		}
+	}
+
 	const handleConfirmBidDialogOpenChange = (open: boolean) => {
+		if (!open && cocoPreparedBid && cocoPreparedBid.status !== 'prepared') {
+			toast.info('This Coco bid has executed and must stay available for exact publication recovery.')
+			return
+		}
 		setIsConfirmBidDialogOpen(open)
 		if (!open) {
+			if (cocoMode && cocoPreparedBid?.status === 'prepared') void cancelCocoPrepared()
 			setPendingBidData(null)
 			setConfirmBidMint(null)
 			setConfirmBidAmountInput('')
@@ -556,8 +658,6 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			)
 			return
 		}
-		setIsConfirmBidDialogOpen(false)
-
 		// Compute funding parameters from the confirm dialog's own state
 		// (confirmBidAmountInput / confirmBidMint), not the main bidAmountInput
 		// or the hook's selectedMint.
@@ -570,6 +670,36 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 			amount: Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : pendingBidData.amount,
 			mintCandidates: [confirmBidMint, ...trustedMints.filter((m) => m !== confirmBidMint)],
 		}
+
+		if (cocoMode) {
+			setIsCocoCommandPending(true)
+			try {
+				if (!cocoPreparedBid) {
+					const prepared = await prepareCocoAuctionBid(updatedBidData)
+					setCocoPreparedBid(prepared)
+					setCocoPreparedForm(updatedBidData)
+					if (cocoPreparedStorageKey && typeof window !== 'undefined') {
+						window.localStorage.setItem(cocoPreparedStorageKey, JSON.stringify({ commandId: prepared.commandId, formData: updatedBidData }))
+					}
+					toast.success('Coco bid prepared. Review the amount and fee, then publish or cancel.')
+					return
+				}
+				const exactForm = cocoPreparedForm ?? updatedBidData
+				const eventId = await executePreparedCocoAuctionBid(exactForm, cocoPreparedBid)
+				clearCocoPreparedRecovery()
+				setPendingBidData(null)
+				setIsConfirmBidDialogOpen(false)
+				setHasStartedEditingBidAmount(false)
+				toast.success(`Bid published (${eventId.slice(0, 8)}…)`)
+				onBidSuccess?.()
+			} catch (error) {
+				toast.error(`Coco bid failed: ${error instanceof Error ? error.message : String(error)}`)
+			} finally {
+				setIsCocoCommandPending(false)
+			}
+			return
+		}
+		setIsConfirmBidDialogOpen(false)
 
 		const readyBidData = startFundingForBid({
 			bidData: updatedBidData,
@@ -663,32 +793,36 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	return (
 		<div className="flex flex-col gap-2 w-full" data-testid="auction-bidder">
-			<DepositLightningModal
-				open={isDepositOpen}
-				onClose={handleDepositModalClose}
-				initialAmount={depositAmount}
-				preferredMint={preferredDepositMint}
-				allowedMints={trustedMints}
-				onSuccess={handleFundingSuccess}
-				onInvoiceCreated={handleInvoiceCreated}
-				onPaymentAcknowledged={handlePaymentAcknowledged}
-				onFundingFailed={handleFundingFailed}
-				variant="bid"
-			/>
-			<AuctionBidProgressDialog
-				open={isBidProgressDialogOpen}
-				onClose={handleCloseBidProgressDialog}
-				lifecycleState={bidFundingLifecycleState}
-				auctionRootEventId={auctionRootEventId || auction.id}
-				auctionCoordinates={auctionCoordinates}
-				validatorPubkeys={auctionValidators}
-				bidEventId={publishedBidEventId ?? undefined}
-				auditorQuorum={auctionAuditorQuorum}
-				bidAmount={Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : undefined}
-				refundLocktime={biddingCutoffAt + getAuctionSettlementGrace(auction)}
-				onRetryPublish={() => void retryBidPublish()}
-				lockOutcomeUncertain={lockOutcomeUncertainRecoveryRecordId !== null}
-			/>
+			{!cocoMode && (
+				<DepositLightningModal
+					open={isDepositOpen}
+					onClose={handleDepositModalClose}
+					initialAmount={depositAmount}
+					preferredMint={preferredDepositMint}
+					allowedMints={trustedMints}
+					onSuccess={handleFundingSuccess}
+					onInvoiceCreated={handleInvoiceCreated}
+					onPaymentAcknowledged={handlePaymentAcknowledged}
+					onFundingFailed={handleFundingFailed}
+					variant="bid"
+				/>
+			)}
+			{!cocoMode && (
+				<AuctionBidProgressDialog
+					open={isBidProgressDialogOpen}
+					onClose={handleCloseBidProgressDialog}
+					lifecycleState={bidFundingLifecycleState}
+					auctionRootEventId={auctionRootEventId || auction.id}
+					auctionCoordinates={auctionCoordinates}
+					validatorPubkeys={auctionValidators}
+					bidEventId={publishedBidEventId ?? undefined}
+					auditorQuorum={auctionAuditorQuorum}
+					bidAmount={Number.isFinite(confirmParsedAmount) ? confirmParsedAmount : undefined}
+					refundLocktime={biddingCutoffAt + getAuctionSettlementGrace(auction)}
+					onRetryPublish={() => void retryBidPublish()}
+					lockOutcomeUncertain={lockOutcomeUncertainRecoveryRecordId !== null}
+				/>
+			)}
 			<Dialog open={isRulesDialogOpen} onOpenChange={handleRulesDialogOpenChange}>
 				<DialogContent className="sm:max-w-lg">
 					<DialogHeader>
@@ -782,7 +916,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 									value={confirmBidAmountInput}
 									onChange={(e) => setConfirmBidAmountInput(e.target.value)}
 									placeholder={`Minimum: ${minBid.toLocaleString()} sats`}
-									disabled={bidMutation.isPending}
+									disabled={bidMutation.isPending || isCocoCommandPending || !!cocoPreparedBid}
 								/>
 								<InputGroupAddon align="inline-end">sats</InputGroupAddon>
 							</InputGroup>
@@ -800,14 +934,19 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 						<div className="flex flex-col gap-2">
 							<Label>Mint</Label>
 							{confirmMintOptions.length > 0 ? (
-								<Select value={confirmBidMint ?? ''} onValueChange={(val) => setConfirmBidMint(val)} disabled={hasExistingBid}>
+								<Select
+									value={confirmBidMint ?? ''}
+									onValueChange={(val) => setConfirmBidMint(val)}
+									disabled={hasExistingBid || !!cocoPreparedBid}
+								>
 									<SelectTrigger className="w-full">
 										<SelectValue placeholder="Select a mint" />
 									</SelectTrigger>
 									<SelectContent>
 										{confirmMintOptions.map((m) => (
 											<SelectItem key={m.mintUrl} value={m.mintUrl}>
-												{m.hostname} ({m.balance.toLocaleString()} sats)
+												{m.hostname}
+												{!cocoMode && ` (${m.balance.toLocaleString()} sats)`}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -824,15 +963,25 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 						{/* Funding details */}
 						<div className="flex flex-col gap-2">
-							<DetailField label="Available in mint" value={`${confirmMintBalance.toLocaleString()} sats`} />
+							<DetailField
+								label={cocoMode ? 'Coco available' : 'Available in mint'}
+								value={`${confirmMintBalance.toLocaleString()} sats`}
+							/>
 							{previousBidAmount > 0 && (
 								<DetailField label="Already locked (previous bid)" value={`${previousBidAmount.toLocaleString()} sats`} />
 							)}
 							<DetailField label="To lock" value={`${confirmDeltaAmount.toLocaleString()} sats`} />
+							{cocoPreparedBid && (
+								<>
+									<DetailField label="Coco status" value={cocoPreparedBid.status} />
+									<DetailField label="Coco fee" value={`${cocoPreparedBid.fee.toLocaleString()} sats`} />
+									<DetailField label="Reserved by Coco" value={`${cocoPreparedBid.amount.toLocaleString()} sats`} />
+								</>
+							)}
 						</div>
 
 						{/* Top-up amount (big, prominent) */}
-						{confirmTopUpNeeded > 0 && (
+						{!cocoMode && confirmTopUpNeeded > 0 && (
 							<div className="flex flex-col items-center gap-1 py-2">
 								<p className="text-sm text-muted-foreground">Pay via Lightning</p>
 								<p className="text-3xl font-bold text-amber-600">{confirmTopUpNeeded.toLocaleString()} sats</p>
@@ -851,11 +1000,24 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 					</div>
 
 					<DialogFooter>
-						<Button variant="outline" onClick={() => handleConfirmBidDialogOpenChange(false)} disabled={bidMutation.isPending}>
-							Cancel
+						<Button
+							variant="outline"
+							onClick={() => handleConfirmBidDialogOpenChange(false)}
+							disabled={bidMutation.isPending || isCocoCommandPending || (!!cocoPreparedBid && cocoPreparedBid.status !== 'prepared')}
+						>
+							{cocoPreparedBid ? 'Cancel Prepared Bid' : 'Cancel'}
 						</Button>
-						<Button onClick={handleConfirmBid} disabled={bidMutation.isPending || !confirmBidMint || confirmAmountIsBelowFloor}>
-							{bidMutation.isPending ? 'Submitting...' : 'Confirm Bid'}
+						<Button
+							onClick={handleConfirmBid}
+							disabled={bidMutation.isPending || isCocoCommandPending || !confirmBidMint || confirmAmountIsBelowFloor}
+						>
+							{bidMutation.isPending || isCocoCommandPending
+								? 'Submitting...'
+								: cocoPreparedBid
+									? 'Publish Prepared Bid'
+									: cocoMode
+										? 'Prepare Bid'
+										: 'Confirm Bid'}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -875,7 +1037,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				</div>
 			)}
 
-			{!compact && showMintSelector && (
+			{!cocoMode && !compact && showMintSelector && (
 				<div className="flex items-center gap-2">
 					<span className="text-xs text-foreground/60 whitespace-nowrap">Mint:</span>
 					<ToggleGroup

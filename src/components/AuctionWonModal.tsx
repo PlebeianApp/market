@@ -43,10 +43,12 @@ import {
 } from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import { formatSats } from '@/lib/wallet/display'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 
 const SETTLEMENT_CLOSE_DELAY_MS = 1500
 
 export function AuctionWonModal() {
+	const cocoMode = isCocoV2AuctionMode()
 	const { queue } = useStore(auctionWonStore)
 	const { isAuthenticated, user } = useStore(authStore)
 	const location = useLocation()
@@ -122,6 +124,7 @@ export function AuctionWonModal() {
 	}, [active, hasFinalSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
 
 	if (
+		cocoMode ||
 		!active ||
 		!isActiveBidder ||
 		(!hasVerifiedUnresolved && !isClosingAfterSettlement) ||

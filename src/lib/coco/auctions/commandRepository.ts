@@ -9,6 +9,7 @@ export interface CocoAuctionCommandRecord {
 	auction: CocoAuctionReference
 	bidderPubkey: string
 	sellerPubkey: string
+	sellerPublicAuthority: string
 	mintUrl: string
 	unit: 'sat'
 	grossAmount: number
@@ -22,6 +23,8 @@ export interface CocoAuctionCommandRecord {
 	conditionFingerprint?: string
 	commitmentFingerprint?: string
 	status: CocoAuctionBusinessStatus
+	/** Frozen before Coco EXECUTE so a crash cannot change the logical kind-1023. */
+	publicationCreatedAt?: number
 	publicationEventId?: string
 	revision: number
 	createdAt: number
@@ -177,6 +180,7 @@ export const projectCocoAuctionCommand = (record: CocoAuctionCommandRecord): Coc
 		auction: record.auction,
 		bidderPubkey: record.bidderPubkey,
 		sellerPubkey: record.sellerPubkey,
+		sellerPublicAuthority: record.sellerPublicAuthority,
 		mintUrl: record.mintUrl,
 		unit: record.unit,
 		grossAmount: record.grossAmount,

@@ -41,10 +41,13 @@ export type CocoEngineBidProjection = Omit<CocoAuctionBidProjection, 'commandId'
 export interface CocoEnginePort {
 	ensureSellerAuctionAuthority(account: CocoAuctionAccountIdentity): Promise<{ publicP2pkAuthority: string }>
 	prepareBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection>
-	inspectBid(operationId: string): Promise<CocoEngineBidProjection | null>
-	cancelPreparedBid(operationId: string): Promise<void>
-	executeBid(operationId: string): Promise<CocoEngineBidProjection>
-	withBidPublicationMaterial<T>(operationId: string, use: (material: SealedCocoBidPublicationMaterial) => Promise<T>): Promise<T>
+	inspectBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection | null>
+	cancelPreparedBid(operationId: string, account: CocoAuctionAccountIdentity): Promise<void>
+	executeBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection>
+	withBidPublicationMaterial<T>(
+		input: CocoAuctionBidIntent & { operationId: string },
+		use: (material: SealedCocoBidPublicationMaterial) => Promise<T>,
+	): Promise<T>
 	releaseWinner<T>(
 		input: CocoAuctionWinnerReleaseInput,
 		use: (material: SealedCocoWinnerReleaseMaterial) => Promise<T>,
@@ -55,7 +58,11 @@ export interface CocoEnginePort {
 
 export interface CocoBidPublicationAdapter {
 	/** Build, sign, and durably cache one exact kind-1023 without broadcasting it. */
-	prepare(material: SealedCocoBidPublicationMaterial, intent: CocoAuctionBidIntent): Promise<{ eventId: string }>
+	prepare(
+		material: SealedCocoBidPublicationMaterial,
+		intent: CocoAuctionBidIntent,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }>
 	/** Broadcast the exact cached event. Repeated calls must not build a new event. */
 	publish(eventId: string): Promise<void>
 }

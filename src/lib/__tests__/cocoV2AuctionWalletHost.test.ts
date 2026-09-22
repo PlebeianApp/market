@@ -26,6 +26,7 @@ const BID_BUSINESS_INTENT: Omit<CocoAuctionBidIntent, 'commandId'> = {
 	auction: { rootEventId: ROOT, coordinate: `30408:${SELLER}:auction-a` },
 	bidderPubkey: ACCOUNT,
 	sellerPubkey: SELLER,
+	sellerPublicAuthority: 'xpub-public-only',
 	mintUrl: MINT,
 	unit: 'sat',
 	grossAmount: 32,
@@ -44,6 +45,7 @@ const intent = (overrides: Partial<CocoAuctionBidIntent> = {}): CocoAuctionBidIn
 
 const engineProjection = (operationId = COMMAND, overrides: Partial<CocoEngineBidProjection> = {}): CocoEngineBidProjection => ({
 	operationId,
+	sellerPublicAuthority: 'xpub-public-only',
 	mintUrl: MINT,
 	unit: 'sat',
 	grossAmount: 32,
@@ -74,22 +76,25 @@ class FakeEngine implements CocoEnginePort {
 		return { ...this.projection }
 	}
 
-	async inspectBid(operationId: string): Promise<CocoEngineBidProjection | null> {
-		return { ...this.projection, operationId }
+	async inspectBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection | null> {
+		return { ...this.projection, operationId: input.operationId }
 	}
 
 	async cancelPreparedBid(): Promise<void> {
 		this.cancelCalls += 1
 	}
 
-	async executeBid(operationId: string): Promise<CocoEngineBidProjection> {
+	async executeBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection> {
 		this.executeCalls += 1
-		return { ...this.projection, operationId, status: 'executed' }
+		return { ...this.projection, operationId: input.operationId, status: 'executed' }
 	}
 
-	async withBidPublicationMaterial<T>(operationId: string, use: (material: SealedCocoBidPublicationMaterial) => Promise<T>): Promise<T> {
+	async withBidPublicationMaterial<T>(
+		input: CocoAuctionBidIntent & { operationId: string },
+		use: (material: SealedCocoBidPublicationMaterial) => Promise<T>,
+	): Promise<T> {
 		return use({
-			operationId,
+			operationId: input.operationId,
 			mintUrl: MINT,
 			unit: 'sat',
 			grossAmount: 32,
@@ -124,11 +129,22 @@ class FakePublisher implements CocoBidPublicationAdapter {
 	prepareCalls = 0
 	publishCalls = 0
 	failPublishOnce = false
+	failPrepareOnce = false
 	seenMaterial: SealedCocoBidPublicationMaterial | null = null
+	publicationCreatedAt: number[] = []
 
-	async prepare(material: SealedCocoBidPublicationMaterial): Promise<{ eventId: string }> {
+	async prepare(
+		material: SealedCocoBidPublicationMaterial,
+		_intent: CocoAuctionBidIntent,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }> {
 		this.prepareCalls += 1
 		this.seenMaterial = material
+		this.publicationCreatedAt.push(publicationCreatedAt)
+		if (this.failPrepareOnce) {
+			this.failPrepareOnce = false
+			throw new Error('crash before publication cache')
+		}
 		return { eventId: EVENT_ID }
 	}
 
@@ -218,6 +234,32 @@ describe('PlebeianWalletHost.auctions command boundary', () => {
 		expect(publisher.publishCalls).toBe(2)
 	})
 
+	test('crash immediately after EXECUTE freezes the logical event and does not invoke execute again', async () => {
+		let now = 1_800_000_000_000
+		const engine = new FakeEngine()
+		const commands = new MemoryCocoAuctionCommandRepository()
+		const host = new PlebeianAuctionWalletHost(
+			engine,
+			commands,
+			{ environmentId: 'auctionsdev', monetaryMode: 'fake', fakeMintAllowlist: [MINT] },
+			() => now,
+		)
+		const publisher = new FakePublisher()
+		publisher.failPrepareOnce = true
+		await expect(host.executeBid(intent(), async () => {}, publisher)).rejects.toThrow('crash before publication cache')
+		expect(engine.executeCalls).toBe(1)
+		now += 60_000
+		const reloaded = new PlebeianAuctionWalletHost(
+			engine,
+			commands,
+			{ environmentId: 'auctionsdev', monetaryMode: 'fake', fakeMintAllowlist: [MINT] },
+			() => now,
+		)
+		await reloaded.executeBid(intent(), async () => {}, publisher)
+		expect(engine.executeCalls).toBe(1)
+		expect(publisher.publicationCreatedAt).toEqual([1_800_000_000, 1_800_000_000])
+	})
+
 	test('Market command state contains no Proof, token, private key, witness, or publication secret', async () => {
 		const { commands, host } = setup()
 		const publisher = new FakePublisher()
@@ -272,19 +314,31 @@ describe('PlebeianWalletHost.auctions command boundary', () => {
 		expect(order).toEqual(['revalidate', 'execute'])
 	})
 
-	test('Coco mode blocks every legacy Auction monetary publisher before it can mutate NIP-60', async () => {
+	test('Coco mode routes normal bids to Coco and blocks the remaining legacy monetary publishers', async () => {
 		const previousPublicMode = process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
+		const previousEnvironment = process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID
+		const previousMonetaryMode = process.env.BUN_PUBLIC_COCO_MONETARY_MODE
+		const previousAllowlist = process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
 		process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE = 'coco-v2'
+		process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID = 'auctionsdev'
+		process.env.BUN_PUBLIC_COCO_MONETARY_MODE = 'fake'
+		process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST = MINT
 		try {
 			const { publishAuctionBid, publishAuctionSettlement, publishBidderPathRelease, republishAuctionBid } =
 				await import('@/publish/auctions')
-			await expect(publishAuctionBid({} as never)).rejects.toThrow('Legacy Auction monetary action')
+			await expect(publishAuctionBid({} as never)).rejects.toThrow('Canonical Auction identity is required')
 			await expect(republishAuctionBid(EVENT_ID)).rejects.toThrow('Legacy Auction monetary action')
 			await expect(publishBidderPathRelease({ bidEventId: EVENT_ID })).rejects.toThrow('Legacy Auction monetary action')
 			await expect(publishAuctionSettlement({ auctionEventId: ROOT })).rejects.toThrow('Legacy Auction monetary action')
 		} finally {
 			if (previousPublicMode === undefined) delete process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
 			else process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE = previousPublicMode
+			if (previousEnvironment === undefined) delete process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID
+			else process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID = previousEnvironment
+			if (previousMonetaryMode === undefined) delete process.env.BUN_PUBLIC_COCO_MONETARY_MODE
+			else process.env.BUN_PUBLIC_COCO_MONETARY_MODE = previousMonetaryMode
+			if (previousAllowlist === undefined) delete process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
+			else process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST = previousAllowlist
 		}
 	})
 })
