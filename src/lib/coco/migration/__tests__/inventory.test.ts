@@ -35,6 +35,12 @@ describe('production inventory', () => {
 		await expect(sealProductionInventory(run, 1)).rejects.toMatchObject({ code: 'DUPLICATE_SOURCE' })
 	})
 
+	test('never infers canonical account attribution when an adapter omits it', async () => {
+		const missingAttribution = { ...item('missing-attribution'), accountAttribution: undefined } as never
+		const port = createInventoryPort({ LEGACY_SPENDABLE_PROOFS: projection([missingAttribution]) })
+		await expect(enumerateProductionInventory(IDENTITY, port)).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+	})
+
 	test('late discovery invalidates a previous seal while an idempotent rediscovery does not', async () => {
 		const run = await enumerateProductionInventory(
 			IDENTITY,

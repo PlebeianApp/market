@@ -21,6 +21,7 @@ describe('cutover predicate', () => {
 				(record) => void (record.inventorySeal = { ...record.inventorySeal!, completions: record.inventorySeal!.completions.slice(1) }),
 			],
 			['UNRESOLVED_ITEM', (record) => void (record.inventorySeal!.items[0].state = 'PENDING')],
+			['UNATTRIBUTED_SOURCE', (record) => void (record.inventorySeal!.items[0].accountAttribution = 'UNATTRIBUTED')],
 			['UNSAFE_FINAL_DISPOSITION', (record) => void (record.accountingReport!.dispositions[0].disposition = 'QUARANTINED')],
 			['RETAINED_LEGACY_AUTHORITY', (record) => void (record.inventorySeal!.items[0].legacyAuthorityRetained = true)],
 			['LATE_DISCOVERY', (record) => void (record.inventorySeal = { ...record.inventorySeal!, lateDiscoveries: ['late-source'] })],

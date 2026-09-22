@@ -4,6 +4,7 @@ import { evaluateCutover, assertPhaseTransition } from './cutover'
 import { assertSameIdentity, createMigrationIdentity, requireSafeId } from './identity'
 import { verifyInventorySeal } from './inventory'
 import { verifyRecoveryQuiescenceCertificate } from '../recovery/metadata'
+import { publishLegacyDisablement } from './legacyDisableSignal'
 import {
 	MigrationSafetyError,
 	type AccountingReport,
@@ -80,6 +81,7 @@ const COMPLETION_FIELDS = [
 	'source',
 	'sourceSchema',
 	'sourceVersion',
+	'snapshotId',
 	'itemCount',
 	'inventoryCommitment',
 	'completedAtMs',
@@ -91,6 +93,8 @@ const ITEM_FIELDS = [
 	'unit',
 	'amount',
 	'state',
+	'accountAttribution',
+	'attributionReason',
 	'legacyAuthorityRetained',
 	'uncertainRemoteEffect',
 	'unresolvedP2pkRecovery',
@@ -487,7 +491,7 @@ export async function commitCutover(
 		preflight.activeLegacyWriters.length,
 	)
 	const immutableEvidenceCommitment = await createCommitment('market-coco-v2-cutover-commit-v1', expected)
-	return store.transact(expected.namespace, (record) => {
+	const committed = await store.transact(expected.namespace, (record) => {
 		assertExpected(record, expected, expected.revision)
 		if (record.phase !== expected.phase) throw new MigrationSafetyError('INVALID_PHASE', 'cutover phase changed')
 		if (record.inventorySeal?.commitment !== expected.inventoryCommitment) {
@@ -519,6 +523,8 @@ export async function commitCutover(
 			cutoverEvidenceCommitment: immutableEvidenceCommitment,
 		})
 	})
+	publishLegacyDisablement({ namespace: committed.namespace, revision: committed.revision })
+	return committed
 }
 
 export async function createLegacyQuiescenceCertificate(

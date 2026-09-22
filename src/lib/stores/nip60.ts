@@ -35,6 +35,10 @@ import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { decode as decodeBolt11 } from 'light-bolt11-decoder'
 import { ndkActions, ndkStore } from './ndk'
+import { configStore } from './config'
+import { runBrowserLegacyMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
+import { buildCanonicalWalletNamespace } from '@/lib/coco/migration/identity'
+import { subscribeToLegacyDisablement } from '@/lib/coco/migration/legacyDisableSignal'
 import {
 	findBidderRecordByRefundPubkey,
 	findPreLockRecoveryRecordByRefundPubkey,
@@ -163,6 +167,8 @@ export interface LockAuctionBidFundsResult {
 }
 
 export interface Nip60State {
+	/** Exact 64-character account that owns the loaded runtime wallet. */
+	account: string | null
 	wallet: NDKCashuWallet | null
 	status: 'idle' | 'initializing' | 'ready' | 'no_wallet' | 'error'
 	balance: number
@@ -180,6 +186,7 @@ export interface Nip60State {
 }
 
 const initialState: Nip60State = {
+	account: null,
 	wallet: null,
 	status: 'idle',
 	balance: 0,
@@ -391,6 +398,32 @@ const isPermanentReclaimFailure = (err: unknown): boolean => {
 }
 
 export const nip60Store = new Store<Nip60State>(initialState)
+
+subscribeToLegacyDisablement(({ namespace }) => {
+	const state = nip60Store.state
+	if (!state.account) return
+	let runtimeNamespace: string
+	try {
+		runtimeNamespace = buildCanonicalWalletNamespace({
+			account: state.account,
+			environment: configStore.state.config.stage ?? 'development',
+		})
+	} catch {
+		return
+	}
+	if (runtimeNamespace !== namespace) return
+	state.wallet?.stop()
+	state.wallet?.removeAllListeners?.()
+	nip60Store.setState((current) => ({
+		...current,
+		wallet: null,
+		status: 'error',
+		error: 'Legacy wallet authority was disabled by Coco cutover.',
+		activeDeposit: null,
+		depositInvoice: null,
+		depositStatus: 'idle',
+	}))
+})
 
 // Keep track of transaction subscription cleanup
 let transactionUnsubscribe: (() => void) | null = null
@@ -1084,13 +1117,15 @@ function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; m
 	}
 }
 
-export const nip60Actions = {
+const nip60ActionImplementations = {
 	initialize: async (pubkey: string): Promise<void> => {
 		const state = nip60Store.state
+		const normalizedPubkey = pubkey.trim().toLowerCase()
+		if (!/^[0-9a-f]{64}$/.test(normalizedPubkey)) throw new Error('NIP-60 wallet account must be a full Nostr pubkey')
 
 		// Don't re-initialize if already initializing or ready
 		if (state.status === 'initializing') return
-		if (state.status === 'ready' && state.wallet) return
+		if (state.status === 'ready' && state.wallet && state.account === normalizedPubkey) return
 
 		const ndk = ndkStore.state.ndk
 		if (!ndk) {
@@ -1100,6 +1135,7 @@ export const nip60Actions = {
 
 		nip60Store.setState((s) => ({
 			...s,
+			account: normalizedPubkey,
 			status: 'initializing',
 			error: null,
 		}))
@@ -1112,7 +1148,7 @@ export const nip60Actions = {
 					await ndkActions.fetchEventsWithTimeout(
 						{
 							kinds: [NIP60_WALLET_KIND],
-							authors: [pubkey],
+							authors: [normalizedPubkey],
 							limit: 5,
 						},
 						{ timeoutMs: NIP60_WALLET_FETCH_TIMEOUT_MS },
@@ -1151,6 +1187,7 @@ export const nip60Actions = {
 			// Store wallet in state FIRST so event handlers can use it
 			nip60Store.setState((s) => ({
 				...s,
+				account: normalizedPubkey,
 				wallet,
 			}))
 
@@ -1227,7 +1264,7 @@ export const nip60Actions = {
 			// In local relay-only mode, this can hang if relays don't respond; force timeout so UI can recover.
 			let startTimedOut = false
 			try {
-				await withTimeout(wallet.start({ pubkey }), NIP60_WALLET_START_TIMEOUT_MS, 'nip60 wallet start')
+				await withTimeout(wallet.start({ pubkey: normalizedPubkey }), NIP60_WALLET_START_TIMEOUT_MS, 'nip60 wallet start')
 			} catch (startErr) {
 				startTimedOut = true
 				console.warn('[nip60] Wallet start timed out, continuing with fallback state:', startErr)
@@ -1826,7 +1863,9 @@ export const nip60Actions = {
 		}))
 
 		monitorDepositConfirmation(activeDeposit)
-		void activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS).catch((error) => {
+		void runNip60LegacyMutation('nip60-deposit-confirmation-retry', async () => {
+			await activeDeposit.check(NIP60_DEPOSIT_CONFIRMATION_TIMEOUT_MS)
+		}).catch((error) => {
 			console.error('[nip60] Deposit confirmation retry failed:', error)
 		})
 	},
@@ -2980,6 +3019,65 @@ export const nip60Actions = {
 		return nip60Store.state.pendingTokens.filter((t) => t.status === 'pending')
 	},
 }
+
+const NIP60_LEGACY_MUTATION_WRITERS = Object.freeze({
+	initialize: 'nip60-runtime-initialize',
+	runAutoCleanup: 'nip60-auto-cleanup',
+	createWallet: 'nip60-create-wallet',
+	getWalletP2pk: 'nip60-create-p2pk-authority',
+	getWalletCashuP2pk: 'nip60-create-cashu-p2pk-authority',
+	getAuctionP2pkXpub: 'nip60-create-auction-authority',
+	getAuctionHdChildPrivkey: 'nip60-access-auction-authority',
+	ensureWalletPrivkey: 'nip60-recover-wallet-authority',
+	consolidateProofs: 'nip60-consolidate-proofs',
+	publishWallet: 'nip60-publish-wallet',
+	startDeposit: 'nip60-start-deposit',
+	checkDepositNow: 'nip60-check-deposit',
+	payLightningInvoice: 'nip60-pay-lightning',
+	zapWithNutzap: 'nip60-nutzap',
+	withdrawLightning: 'nip60-withdraw-lightning',
+	lockAuctionBidFunds: 'nip60-auction-lock',
+	sendEcash: 'nip60-send-ecash',
+	mintTestEcash: 'nip60-dev-mint',
+	placeDevBidOnSeededAuction: 'nip60-dev-auction-bid',
+	settleAuctionAsWinner: 'nip60-winner-release',
+	receiveEcash: 'nip60-receive-ecash',
+	receiveLockedEcash: 'nip60-seller-receive',
+	syncAuctionTransfers: 'nip60-sync-auction-recovery',
+	reclaimToken: 'nip60-loser-reclaim',
+	autoReclaimTimelockedBids: 'nip60-auto-reclaim',
+} as const)
+
+type Nip60LegacyMutationName = keyof typeof NIP60_LEGACY_MUTATION_WRITERS
+
+function currentNip60Environment() {
+	return configStore.state.config.stage ?? 'development'
+}
+
+function runNip60LegacyMutation<T>(writerId: string, mutation: () => Promise<T>, accountOverride?: string): Promise<T> {
+	const account = accountOverride ?? nip60Store.state.account
+	const environment = currentNip60Environment()
+	if (!account) {
+		if (environment === 'production' || environment === 'staging') {
+			throw new Error('NIP-60 wallet is not bound to an exact account')
+		}
+		return mutation()
+	}
+	return runBrowserLegacyMonetaryMutation({ account, environment, writerId }, mutation)
+}
+
+export const nip60Actions = new Proxy(nip60ActionImplementations, {
+	get(target, property, receiver) {
+		const value = Reflect.get(target, property, receiver)
+		if (typeof property !== 'string' || typeof value !== 'function' || !(property in NIP60_LEGACY_MUTATION_WRITERS)) return value
+		return (...args: unknown[]) =>
+			runNip60LegacyMutation(
+				NIP60_LEGACY_MUTATION_WRITERS[property as Nip60LegacyMutationName],
+				async () => Reflect.apply(value, target, args),
+				property === 'initialize' && typeof args[0] === 'string' ? args[0] : undefined,
+			)
+	},
+}) as typeof nip60ActionImplementations
 
 export const useNip60 = () => {
 	return {

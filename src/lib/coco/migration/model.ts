@@ -26,6 +26,7 @@ export const REQUIRED_PRODUCTION_ENUMERATORS = [
 export type ProductionEnumerator = (typeof REQUIRED_PRODUCTION_ENUMERATORS)[number]
 export type MonetaryItemState = 'AVAILABLE' | 'PENDING' | 'EXECUTING' | 'LOCKED' | 'AMBIGUOUS' | 'QUARANTINED' | 'RESOLVED' | 'CONSUMED'
 export type FinalDisposition = 'COCO_OWNED' | 'CONSUMED_COMPLETED' | 'PENDING' | 'QUARANTINED' | 'RETAINED_LEGACY_WORKFLOW' | 'UNKNOWN'
+export type AccountAttribution = 'CANONICAL_ACCOUNT' | 'UNATTRIBUTED'
 
 export interface MigrationIdentity {
 	namespace: string
@@ -41,6 +42,8 @@ export interface InventoryItem {
 	unit: string
 	amount: bigint
 	state: MonetaryItemState
+	accountAttribution: AccountAttribution
+	attributionReason?: string
 	legacyAuthorityRetained: boolean
 	uncertainRemoteEffect: boolean
 	unresolvedP2pkRecovery: boolean
@@ -53,6 +56,7 @@ export interface EnumeratorCompletionEvidence extends MigrationIdentity {
 	source: ProductionEnumerator
 	sourceSchema: string
 	sourceVersion: string
+	snapshotId: string
 	itemCount: number
 	inventoryCommitment: string
 	completedAtMs: number
@@ -175,6 +179,7 @@ export type CutoverBlocker =
 	| 'INVENTORY_NOT_SEALED'
 	| 'REQUIRED_ENUMERATOR_INCOMPLETE'
 	| 'UNRESOLVED_ITEM'
+	| 'UNATTRIBUTED_SOURCE'
 	| 'UNSAFE_FINAL_DISPOSITION'
 	| 'RETAINED_LEGACY_AUTHORITY'
 	| 'LATE_DISCOVERY'

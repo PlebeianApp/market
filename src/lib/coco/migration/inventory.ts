@@ -14,6 +14,7 @@ import {
 export interface InventoryProjection {
 	sourceSchema: string
 	sourceVersion: string
+	snapshotId: string
 	items: readonly InventoryProjectionItem[]
 }
 
@@ -23,6 +24,8 @@ export interface InventoryProjectionItem {
 	unit: string
 	amount: bigint
 	state: MonetaryItemState
+	accountAttribution: 'CANONICAL_ACCOUNT' | 'UNATTRIBUTED'
+	attributionReason?: string
 	legacyAuthorityRetained?: boolean
 	uncertainRemoteEffect?: boolean
 	unresolvedP2pkRecovery?: boolean
@@ -90,6 +93,14 @@ function requireState(value: unknown): MonetaryItemState {
 }
 
 function normalizeItem(source: ProductionEnumerator, item: InventoryProjectionItem): Readonly<InventoryItem> {
+	const accountAttribution = item.accountAttribution
+	if (accountAttribution !== 'CANONICAL_ACCOUNT' && accountAttribution !== 'UNATTRIBUTED') {
+		throw new MigrationSafetyError('INVALID_INPUT', 'inventory account attribution is invalid')
+	}
+	const attributionReason = item.attributionReason ? requireSafeId(item.attributionReason, 'attributionReason') : undefined
+	if (accountAttribution === 'UNATTRIBUTED' && !attributionReason) {
+		throw new MigrationSafetyError('INVALID_INPUT', 'unattributed inventory requires a reason')
+	}
 	const normalized = {
 		sourceId: requireSafeId(item.sourceId, 'sourceId'),
 		source,
@@ -97,6 +108,8 @@ function normalizeItem(source: ProductionEnumerator, item: InventoryProjectionIt
 		unit: normalizeUnit(item.unit),
 		amount: requireAmount(item.amount),
 		state: requireState(item.state),
+		accountAttribution,
+		...(attributionReason ? { attributionReason } : {}),
 		legacyAuthorityRetained: item.legacyAuthorityRetained ?? false,
 		uncertainRemoteEffect: item.uncertainRemoteEffect ?? false,
 		unresolvedP2pkRecovery: item.unresolvedP2pkRecovery ?? false,
@@ -121,6 +134,7 @@ function normalizeProjection(projection: InventoryProjection): Readonly<Inventor
 	return Object.freeze({
 		sourceSchema: requireSafeId(projection.sourceSchema, 'sourceSchema'),
 		sourceVersion: requireSafeId(projection.sourceVersion, 'sourceVersion'),
+		snapshotId: requireSafeId(projection.snapshotId, 'snapshotId'),
 		items: Object.freeze([...projection.items]),
 	})
 }
@@ -137,11 +151,16 @@ export async function enumerateProductionInventory(
 	const completions: EnumeratorCompletionEvidence[] = []
 	const items: InventoryItem[] = []
 	const seenSourceIds = new Set<string>()
+	let frozenSnapshotId: string | null = null
 
 	for (const source of REQUIRED_PRODUCTION_ENUMERATORS) {
 		const read = PORT_READERS[source](port)
 		if (typeof read !== 'function') throw new MigrationSafetyError('INVALID_INPUT', `trusted enumerator ${source} is unavailable`)
 		const projection = normalizeProjection(await read.call(port, identity))
+		if (frozenSnapshotId === null) frozenSnapshotId = projection.snapshotId
+		if (projection.snapshotId !== frozenSnapshotId) {
+			throw new MigrationSafetyError('INVALID_INPUT', 'trusted enumerators did not read the same frozen snapshot')
+		}
 		const sourceItems = projection.items.map((item) => normalizeItem(source, item))
 		for (const item of sourceItems) {
 			if (seenSourceIds.has(item.sourceId)) {
@@ -155,6 +174,7 @@ export async function enumerateProductionInventory(
 			source,
 			sourceSchema: projection.sourceSchema,
 			sourceVersion: projection.sourceVersion,
+			snapshotId: projection.snapshotId,
 			items: sourceItems,
 		})
 		completions.push(
@@ -163,6 +183,7 @@ export async function enumerateProductionInventory(
 				source,
 				sourceSchema: projection.sourceSchema,
 				sourceVersion: projection.sourceVersion,
+				snapshotId: projection.snapshotId,
 				itemCount: sourceItems.length,
 				inventoryCommitment,
 				completedAtMs,
@@ -220,6 +241,7 @@ export async function sealProductionInventory(
 			source: completion.source,
 			sourceSchema: completion.sourceSchema,
 			sourceVersion: completion.sourceVersion,
+			snapshotId: completion.snapshotId,
 			items: sourceItems,
 		})
 		if (expectedCommitment !== completion.inventoryCommitment) {
@@ -285,6 +307,7 @@ export async function verifyInventorySeal(seal: InventorySeal): Promise<void> {
 			source: completion.source,
 			sourceSchema: completion.sourceSchema,
 			sourceVersion: completion.sourceVersion,
+			snapshotId: completion.snapshotId,
 			items: sourceItems,
 		})
 		if (commitment !== completion.inventoryCommitment) {
