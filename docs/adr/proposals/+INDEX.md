@@ -13,12 +13,14 @@ This index lists all Architecture Decision Records in `docs/adr/proposals/`.
 
 ## Proposed ADRs (Under Review)
 
-| ADR | Title                                                                                 | Date       | Status   |
-| --- | ------------------------------------------------------------------------------------- | ---------- | -------- |
-| —   | [Auction Multiparty Payout Schedule Wire Profile](auction-multiparty-wire-profile.md) | 2026-08-05 | Proposed |
-| —   | [V4V UI Agnostic Audit and Plan](v4v-ui-agnostic-audit-and-plan.md)                   | 2026-07-30 | Proposed |
+| ADR | Title                                                                                          | Date       | Status   |
+| --- | ---------------------------------------------------------------------------------------------- | ---------- | -------- |
+| —   | [Auction Multiparty Payout Schedule Wire Profile](auction-multiparty-wire-profile.md)          | 2026-08-05 | Proposed |
+| —   | [V4V UI Agnostic Audit and Plan](v4v-ui-agnostic-audit-and-plan.md)                            | 2026-07-30 | Proposed |
+| —   | [Auction V4V Participation, Validator Gating, and the Leg Floor](auction-v4v-participation.md) | 2026-09-21 | Proposed |
 
 ## Notes
 
 - ADR-0004 is intentionally skipped. Its scope (beta tag semantics) was folded into ADR-0001.
+- ADR-0003 carries an amendment dated 2026-09-21: its intent stands, but its tag encoding is superseded for the multiparty profile by the canonical payout schedule on the root. The `v4v_recipient` tag survives only as a non-authoritative display mirror.
 - ADRs follow the standard structure: Title, Status, Date, Context, Decision, Consequences, Alternatives Considered, Files Affected.

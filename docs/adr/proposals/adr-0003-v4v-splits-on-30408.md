@@ -8,6 +8,36 @@ Accepted
 
 2026-08-19
 
+## Amendment (2026-09-21) — encoding superseded for the multiparty profile
+
+Status remains **Accepted**. This amendment does not reopen the decision; it records
+that the multiparty payout profile
+(`docs/adr/proposals/auction-multiparty-wire-profile.md`,
+`cashu_p2pk_bidder_path_multiparty_v1`) carries the same intent in a form this ADR's
+encoding cannot express.
+
+**What is kept, unchanged:**
+
+- splits live on the kind-30408 auction event, not in a companion event;
+- the seller takes the implicit remainder `10000 - sum(allocation_bps)`;
+- allocation is expressed in integer basis points;
+- splits are set at auction creation.
+
+**What supersedes the tag encoding:** each schedule entry must additionally bind an
+exact payout-capability event ID (kind 1027), a role (`validator` before `v4v`), and,
+for validators, an exact validator-offer event ID (kind 1028). A
+`(recipient_pubkey, bps)` tuple cannot carry those references, and the canonical
+`payout_schedule` blob plus `payout_schedule_commitment` on the root already do, with
+the ordering, uniqueness and resource limits fixed by the profile.
+
+**Harmonisation:** `['v4v_recipient', '<pubkey>', '<bps>']` tags MAY be emitted as a
+**non-authoritative display mirror** alongside the schedule, so that product and
+auction surfaces read alike and older clients degrade gracefully. They MUST NOT be
+parsed for authorization, ordering, totals, or as the source of any payout decision.
+Products keep their own encoding (kind 30078, percentages); auctions use basis points.
+
+See `docs/adr/proposals/auction-v4v-participation.md` D11 for the full record.
+
 ## Context
 
 The Plebeian Market auction feature needs to support Value-for-Value (V4V) recipient splits — allowing auction creators to designate additional pubkeys that receive a portion of the auction's value, expressed in basis points (bps). For example, a creator might allocate 500 bps (5%) to a validator and 200 bps (2%) to a content creator, with the seller receiving the remainder.
