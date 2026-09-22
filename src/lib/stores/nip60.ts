@@ -56,8 +56,45 @@ export const nip60Store = new Store<Nip60State>(initialState)
 
 // Keep track of transaction subscription cleanup
 let transactionUnsubscribe: (() => void) | null = null
-let autoCleanupPromise: Promise<void> | null = null
+let autoCleanupRun: { generation: number; promise: Promise<void> } | null = null
 let lastAutoCleanupAt = 0
+
+interface Nip60Lifecycle {
+	readonly generation: number
+	readonly pubkey: string
+	readonly outerGuard?: () => boolean
+}
+
+let lifecycleGeneration = 0
+let activeLifecycle: Nip60Lifecycle | undefined
+const cleanedWallets = new WeakSet<NDKCashuWallet>()
+
+function beginLifecycle(pubkey: string, outerGuard?: () => boolean): Nip60Lifecycle {
+	const lifecycle = { generation: ++lifecycleGeneration, pubkey, outerGuard }
+	activeLifecycle = lifecycle
+	return lifecycle
+}
+
+function isLifecycleCurrent(lifecycle: Nip60Lifecycle, wallet?: NDKCashuWallet): boolean {
+	if (activeLifecycle !== lifecycle || lifecycle.generation !== lifecycleGeneration) return false
+	if (lifecycle.outerGuard && !lifecycle.outerGuard()) return false
+	return !wallet || nip60Store.state.wallet === wallet
+}
+
+function cleanupWallet(wallet: NDKCashuWallet): void {
+	if (cleanedWallets.has(wallet)) return
+	cleanedWallets.add(wallet)
+	try {
+		wallet.stop()
+	} catch (error) {
+		console.error('[nip60] Failed to stop stale wallet:', error)
+	}
+	try {
+		wallet.removeAllListeners?.()
+	} catch (error) {
+		console.error('[nip60] Failed to remove stale wallet listeners:', error)
+	}
+}
 
 function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -135,7 +172,7 @@ function getBalancesFromState(wallet: NDKCashuWallet): { totalBalance: number; m
 }
 
 export const nip60Actions = {
-	initialize: async (pubkey: string): Promise<void> => {
+	initialize: async (pubkey: string, outerGuard?: () => boolean): Promise<void> => {
 		const state = nip60Store.state
 
 		// Don't re-initialize if already initializing or ready
@@ -147,6 +184,7 @@ export const nip60Actions = {
 			console.warn('[nip60] NDK not initialized')
 			return
 		}
+		const lifecycle = beginLifecycle(pubkey, outerGuard)
 
 		nip60Store.setState((s) => ({
 			...s,
@@ -154,22 +192,31 @@ export const nip60Actions = {
 			error: null,
 		}))
 
+		let candidateWallet: NDKCashuWallet | undefined
 		try {
 			// First, try to fetch the existing wallet event (kind 17375)
 			const walletEvent = await ndk.fetchEvent({ kinds: [17375], authors: [pubkey] })
-
-			let wallet: NDKCashuWallet
+			if (!isLifecycleCurrent(lifecycle)) return
 
 			if (walletEvent) {
 				// Load wallet from existing event - this decrypts and loads mints/privkeys
 				const loadedWallet = await NDKCashuWallet.from(walletEvent)
+				if (!isLifecycleCurrent(lifecycle)) {
+					if (loadedWallet) cleanupWallet(loadedWallet)
+					return
+				}
 				if (!loadedWallet) {
 					throw new Error('Failed to load wallet from event')
 				}
-				wallet = loadedWallet
+				candidateWallet = loadedWallet
 			} else {
 				// No wallet event found - create a new wallet instance
-				wallet = new NDKCashuWallet(ndk)
+				candidateWallet = new NDKCashuWallet(ndk)
+			}
+			const wallet = candidateWallet
+			if (!isLifecycleCurrent(lifecycle)) {
+				cleanupWallet(wallet)
+				return
 			}
 
 			// Configure the wallet's relaySet from NDK's connected relays if not already set.
@@ -181,6 +228,10 @@ export const nip60Actions = {
 			}
 
 			// Store wallet in state FIRST so event handlers can use it
+			if (!isLifecycleCurrent(lifecycle)) {
+				cleanupWallet(wallet)
+				return
+			}
 			nip60Store.setState((s) => ({
 				...s,
 				wallet,
@@ -188,7 +239,9 @@ export const nip60Actions = {
 
 			// Subscribe to balance updates
 			wallet.on('balance_updated', () => {
+				if (!isLifecycleCurrent(lifecycle, wallet)) return
 				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
+				if (!isLifecycleCurrent(lifecycle, wallet)) return
 				nip60Store.setState((s) => ({
 					...s,
 					balance: totalBalance,
@@ -199,11 +252,13 @@ export const nip60Actions = {
 
 			// Listen for status changes
 			wallet.on('status_changed', (status: NDKWalletStatus) => {
+				if (!isLifecycleCurrent(lifecycle, wallet)) return
 				if (status === NDKWalletStatus.READY) {
 					const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 					const allMints = getAllMints(wallet)
 					const hasWallet = allMints.length > 0 || totalBalance > 0
 
+					if (!isLifecycleCurrent(lifecycle, wallet)) return
 					nip60Store.setState((s) => ({
 						...s,
 						status: hasWallet ? 'ready' : 'no_wallet',
@@ -212,6 +267,7 @@ export const nip60Actions = {
 						mintBalances,
 					}))
 				} else if (status === NDKWalletStatus.FAILED) {
+					if (!isLifecycleCurrent(lifecycle, wallet)) return
 					nip60Store.setState((s) => ({
 						...s,
 						status: 'error',
@@ -222,12 +278,20 @@ export const nip60Actions = {
 
 			// Start the wallet - this subscribes to token events and loads balance
 			await wallet.start({ pubkey })
+			if (!isLifecycleCurrent(lifecycle, wallet)) {
+				cleanupWallet(wallet)
+				return
+			}
 			const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 			const allMints = getAllMints(wallet)
 
 			// Determine if user has an existing wallet (we found a wallet event OR have mints/balance)
 			const hasWallet = walletEvent !== null || allMints.length > 0 || totalBalance > 0
 
+			if (!isLifecycleCurrent(lifecycle, wallet)) {
+				cleanupWallet(wallet)
+				return
+			}
 			nip60Store.setState((s) => ({
 				...s,
 				status: hasWallet ? 'ready' : 'no_wallet',
@@ -238,14 +302,18 @@ export const nip60Actions = {
 
 			// Only load transactions if we have a wallet
 			if (hasWallet) {
-				void nip60Actions.loadTransactions()
+				void nip60Actions.loadTransactions(lifecycle, wallet)
 				// Perform a background cleanup pass so spent proofs are removed without manual refresh.
-				void nip60Actions.runAutoCleanup({ force: true })
+				void nip60Actions.runAutoCleanup({ force: true }, lifecycle)
 			}
 
 			// Load pending tokens from localStorage
-			nip60Actions.loadPendingTokens()
+			nip60Actions.loadPendingTokens(lifecycle)
 		} catch (err) {
+			if (!isLifecycleCurrent(lifecycle)) {
+				if (candidateWallet) cleanupWallet(candidateWallet)
+				return
+			}
 			console.error('[nip60] Failed to initialize wallet:', err)
 			nip60Store.setState((s) => ({
 				...s,
@@ -255,30 +323,34 @@ export const nip60Actions = {
 		}
 	},
 
-	loadTransactions: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) {
+	loadTransactions: async (requestedLifecycle?: Nip60Lifecycle, requestedWallet?: NDKCashuWallet): Promise<void> => {
+		const lifecycle = requestedLifecycle ?? activeLifecycle
+		const wallet = requestedWallet ?? nip60Store.state.wallet
+		if (!wallet || !lifecycle || !isLifecycleCurrent(lifecycle, wallet)) {
 			console.warn('[nip60] Cannot load transactions without wallet')
 			return
 		}
 
 		try {
 			const txs = await wallet.fetchTransactions()
+			if (!isLifecycleCurrent(lifecycle, wallet)) return
 			nip60Store.setState((s) => ({
 				...s,
 				transactions: txs,
 			}))
 
 			// Subscribe to new transactions
-			nip60Actions.subscribeToTransactions()
+			nip60Actions.subscribeToTransactions(lifecycle, wallet)
 		} catch (err) {
+			if (!isLifecycleCurrent(lifecycle, wallet)) return
 			console.error('[nip60] Failed to fetch transactions:', err)
 		}
 	},
 
-	subscribeToTransactions: (): void => {
-		const wallet = nip60Store.state.wallet
-		if (!wallet) return
+	subscribeToTransactions: (requestedLifecycle?: Nip60Lifecycle, requestedWallet?: NDKCashuWallet): void => {
+		const lifecycle = requestedLifecycle ?? activeLifecycle
+		const wallet = requestedWallet ?? nip60Store.state.wallet
+		if (!wallet || !lifecycle || !isLifecycleCurrent(lifecycle, wallet)) return
 
 		// Clean up existing subscription
 		if (transactionUnsubscribe) {
@@ -287,6 +359,7 @@ export const nip60Actions = {
 		}
 
 		transactionUnsubscribe = wallet.subscribeTransactions((tx: NDKWalletTransaction) => {
+			if (!isLifecycleCurrent(lifecycle, wallet)) return
 			nip60Store.setState((s) => {
 				// Check if transaction already exists
 				const exists = s.transactions.some((t) => t.id === tx.id)
@@ -302,7 +375,7 @@ export const nip60Actions = {
 			// Outgoing payments can leave stale proofs visible until consolidation.
 			// Run cleanup in the background to keep balances accurate without manual refresh.
 			if (tx.direction === 'out') {
-				void nip60Actions.runAutoCleanup()
+				void nip60Actions.runAutoCleanup(undefined, lifecycle)
 			}
 		})
 	},
@@ -311,30 +384,34 @@ export const nip60Actions = {
 	 * Consolidate spent proofs and refresh wallet state in the background.
 	 * Uses dedupe + cooldown so we can call this from multiple lifecycle points safely.
 	 */
-	runAutoCleanup: async (options?: { force?: boolean; minIntervalMs?: number }): Promise<void> => {
+	runAutoCleanup: async (options?: { force?: boolean; minIntervalMs?: number }, requestedLifecycle?: Nip60Lifecycle): Promise<void> => {
+		const lifecycle = requestedLifecycle ?? activeLifecycle
 		const wallet = nip60Store.state.wallet
-		if (!wallet) return
+		if (!wallet || !lifecycle || !isLifecycleCurrent(lifecycle, wallet)) return
 
 		const force = options?.force ?? false
 		const minIntervalMs = options?.minIntervalMs ?? 30_000
 		const now = Date.now()
 
 		if (!force && now - lastAutoCleanupAt < minIntervalMs) return
-		if (autoCleanupPromise) return await autoCleanupPromise
+		if (autoCleanupRun?.generation === lifecycle.generation) return await autoCleanupRun.promise
 
-		autoCleanupPromise = (async () => {
+		const promise = (async () => {
 			try {
-				await nip60Actions.refresh({ consolidate: true })
-				lastAutoCleanupAt = Date.now()
+				await nip60Actions.refresh({ consolidate: true }, lifecycle)
+				if (isLifecycleCurrent(lifecycle, wallet)) lastAutoCleanupAt = Date.now()
 			} catch (err) {
+				if (!isLifecycleCurrent(lifecycle, wallet)) return
 				console.error('[nip60] Auto cleanup failed:', err)
 			}
 		})()
+		const run = { generation: lifecycle.generation, promise }
+		autoCleanupRun = run
 
 		try {
-			await autoCleanupPromise
+			await promise
 		} finally {
-			autoCleanupPromise = null
+			if (autoCleanupRun === run) autoCleanupRun = null
 		}
 	},
 
@@ -369,6 +446,12 @@ export const nip60Actions = {
 	},
 
 	reset: (): void => {
+		// Invalidate first so callbacks or promise continuations from the previous
+		// wallet cannot mutate the freshly reset state or a later session.
+		lifecycleGeneration += 1
+		activeLifecycle = undefined
+		autoCleanupRun = null
+
 		// Clean up transaction subscription
 		if (transactionUnsubscribe) {
 			transactionUnsubscribe()
@@ -377,8 +460,7 @@ export const nip60Actions = {
 
 		const state = nip60Store.state
 		if (state.wallet) {
-			state.wallet.stop()
-			state.wallet.removeAllListeners?.()
+			cleanupWallet(state.wallet)
 		}
 		nip60Store.setState(() => initialState)
 	},
@@ -391,9 +473,10 @@ export const nip60Actions = {
 	 * Refresh wallet balance and transactions
 	 * @param options.consolidate If true, consolidate tokens first (checks for spent proofs)
 	 */
-	refresh: async (options?: { consolidate?: boolean }): Promise<void> => {
+	refresh: async (options?: { consolidate?: boolean }, requestedLifecycle?: Nip60Lifecycle): Promise<void> => {
+		const lifecycle = requestedLifecycle ?? activeLifecycle
 		const wallet = nip60Store.state.wallet
-		if (!wallet) {
+		if (!wallet || !lifecycle || !isLifecycleCurrent(lifecycle, wallet)) {
 			console.warn('[nip60] Cannot refresh without wallet')
 			return
 		}
@@ -405,14 +488,17 @@ export const nip60Actions = {
 			try {
 				await wallet.consolidateTokens()
 			} catch (err) {
+				if (!isLifecycleCurrent(lifecycle, wallet)) return
 				console.error('[nip60] Failed to consolidate tokens:', err)
 				// Continue with refresh even if consolidation fails
 			}
 		}
+		if (!isLifecycleCurrent(lifecycle, wallet)) return
 
 		// Get balances directly from wallet state (source of truth)
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 
+		if (!isLifecycleCurrent(lifecycle, wallet)) return
 		nip60Store.setState((s) => ({
 			...s,
 			balance: totalBalance,
@@ -421,7 +507,7 @@ export const nip60Actions = {
 		}))
 
 		// Reload transactions
-		await nip60Actions.loadTransactions()
+		await nip60Actions.loadTransactions(lifecycle, wallet)
 	},
 
 	/**
@@ -866,8 +952,11 @@ export const nip60Actions = {
 	/**
 	 * Load pending tokens from localStorage
 	 */
-	loadPendingTokens: (): void => {
+	loadPendingTokens: (requestedLifecycle?: Nip60Lifecycle): void => {
+		const lifecycle = requestedLifecycle ?? activeLifecycle
+		if (!lifecycle || !isLifecycleCurrent(lifecycle)) return
 		const tokens = loadPendingTokens()
+		if (!isLifecycleCurrent(lifecycle)) return
 		nip60Store.setState((s) => ({ ...s, pendingTokens: tokens }))
 	},
 

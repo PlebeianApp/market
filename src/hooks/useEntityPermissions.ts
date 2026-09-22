@@ -16,6 +16,8 @@ export interface EntityPermissions {
 	canDelete: boolean
 	canBlacklist: boolean
 	canSetFeatured: boolean
+	/** ADR-0009: may mark/unmark test listings (editors UNION admins, + owner). */
+	canManageTestLabel: boolean
 	canAddToCart: boolean
 
 	// Loading state
@@ -44,6 +46,12 @@ export function useEntityPermissions(entityPubkey: string | undefined): EntityPe
 		const canBlacklist = userRole === 'owner' || userRole === 'admin' || userRole === 'editor'
 		const canSetFeatured = userRole === 'owner' || userRole === 'admin' || userRole === 'editor'
 
+		// ADR-0009 test-label moderation is the same role gate: the authorized
+		// labeler set is editors UNION admins (plus the app owner). Kept as its
+		// own flag so the label contract can diverge without silently changing
+		// blacklist/featured behaviour.
+		const canManageTestLabel = userRole === 'owner' || userRole === 'admin' || userRole === 'editor'
+
 		// Only entity owners can edit and delete their own entities
 		const canEdit = isEntityOwner
 		const canDelete = isEntityOwner
@@ -60,6 +68,7 @@ export function useEntityPermissions(entityPubkey: string | undefined): EntityPe
 			canDelete,
 			canBlacklist,
 			canSetFeatured,
+			canManageTestLabel,
 			canAddToCart,
 			isLoading,
 		}

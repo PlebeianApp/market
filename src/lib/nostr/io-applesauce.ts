@@ -6,19 +6,21 @@
  * are mirrored from the NDK store for now (temporary coupling that goes away
  * when the NDK singleton is deleted in Wave D).
  *
- * `sign` is intentionally not wired here: it lands in Wave A3 once the
- * signer (NIP-07 / nsec) is migrated off NDK. Until then, callers that need
- * signing keep routing through the NDK bridge (NIP-46 stays there longest).
+ * `sign` routes through the attached signer capability (Wave A3): when a user
+ * has logged in the `signer-registry` holds their capability and signing is
+ * delegated to it with a fail-closed pubkey-equality assertion; when no
+ * capability is attached it still throws (there is nothing to sign with).
  */
 import { RelayGroup, RelayPool } from 'applesauce-relay'
 import type { EventTemplate, NostrEvent } from 'nostr-tools/pure'
 
 import { getWriteRelays, ndkStore } from '@/lib/stores/ndk'
-import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, SubscribeOptions } from './io'
+import type { FetchOptions, NostrFilter, NostrIo, PublishOptions, PublishResult, SubscribeOptions } from './io'
+import { getSignerCapability } from './signer-registry'
 
 let pool: RelayPool | null = null
 
-function getPool(): RelayPool {
+export function getPool(): RelayPool {
 	if (!pool) pool = new RelayPool()
 	return pool
 }
@@ -151,14 +153,30 @@ export const applesauceIo: NostrIo = {
 		return stop
 	},
 
-	async publish(event, opts?: PublishOptions) {
+	async publish(event, opts?: PublishOptions): Promise<PublishResult> {
 		const urls = writeRelayUrls(opts?.relayUrls)
 		if (urls.length === 0) throw new Error('No relays configured for publish')
-		await getPool().publish(urls, event)
+		// RelayPool.publish resolves with one PublishResponse per relay that
+		// answered (errors are mapped to ok:false responses). Only ok responses
+		// are ACKs; surface those URLs so callers can fail closed on zero.
+		const responses = await getPool().publish(urls, event)
+		return { publishedRelays: new Set(responses.filter((response) => response.ok).map((response) => response.from)) }
 	},
 
-	async sign(_template: EventTemplate) {
-		throw new Error('applesauceIo.sign is not wired until Wave A3 (auth/signer migration)')
+	async sign(template: EventTemplate): Promise<NostrEvent> {
+		const capability = getSignerCapability()
+		if (!capability) {
+			throw new Error('applesauceIo.sign: no signer capability attached (login first)')
+		}
+		const signed = await capability.signEvent(template)
+		const pubkey = await capability.getPublicKey()
+		// ADR-0002 amendment signed-event identity invariant: in-signer verification alone
+		// does not prove WHICH key signed — assert the pubkey matches the
+		// authenticated user's, and fail closed otherwise.
+		if (signed.pubkey !== pubkey) {
+			throw new Error('Signer returned an event for a different pubkey than the authenticated user')
+		}
+		return signed
 	},
 
 	async getUser() {

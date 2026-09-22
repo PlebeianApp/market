@@ -7,6 +7,7 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
+import { runSignerTeardown, setSignerCapability } from '@/lib/nostr/signer-registry'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -34,10 +35,129 @@ const initialState: NDKState = {
 
 export const ndkStore = new Store<NDKState>(initialState)
 
+/** True when any NDK signer surface published by this store is occupied. */
+export function hasPublishedSignerAuthority(): boolean {
+	const state = ndkStore.state
+	return Boolean(state.ndk?.signer || state.zapNdk?.signer || state.signer)
+}
+
 let configRelaySyncInitialized = false
 let lastSyncedAppRelay: string | undefined
 let connectPromise: Promise<void> | null = null
 let connectZapPromise: Promise<void> | null = null
+
+interface SignerServiceLease {
+	readonly generation: number
+	readonly signer: NDKSigner
+}
+
+let signerServiceGeneration = 0
+let activeSignerServiceLease: SignerServiceLease | undefined
+let activeNwcLoadingLease: SignerServiceLease | undefined
+
+interface PublishedSignerAuthoritySnapshot {
+	readonly mainSigner: NDKSigner | undefined
+	readonly zapSigner: NDKSigner | undefined
+	readonly storeSigner: NDKSigner | undefined
+	readonly mainActiveUser: NDKUser | undefined
+	readonly zapActiveUser: NDKUser | undefined
+}
+
+const projectedActiveUsers = new WeakMap<NDK, NDKUser | undefined>()
+const activeUserProjectionGuards = new WeakSet<NDK>()
+
+function setProjectedActiveUser(ndk: NDK, user: NDKUser | undefined): void {
+	projectedActiveUsers.set(ndk, user)
+	if (!activeUserProjectionGuards.has(ndk) && typeof ndk.on === 'function') {
+		activeUserProjectionGuards.add(ndk)
+		ndk.on('activeUser:change', (changedUser) => {
+			if (!projectedActiveUsers.has(ndk)) return
+			const expectedUser = projectedActiveUsers.get(ndk)
+			if (changedUser?.pubkey !== expectedUser?.pubkey) ndk.activeUser = expectedUser
+		})
+	}
+	ndk.activeUser = user
+}
+
+function releaseActiveUserProjection(ndk: NDK): void {
+	projectedActiveUsers.delete(ndk)
+}
+
+function createActiveUserView(ndk: NDK, user: NDKUser): NDKUser {
+	return ndk.getUser({ pubkey: user.pubkey })
+}
+
+function capturePublishedSignerAuthority(): PublishedSignerAuthoritySnapshot {
+	const state = ndkStore.state
+	return {
+		mainSigner: state.ndk?.signer,
+		zapSigner: state.zapNdk?.signer,
+		storeSigner: state.signer,
+		mainActiveUser: state.ndk?.activeUser,
+		zapActiveUser: state.zapNdk?.activeUser,
+	}
+}
+
+function restorePublishedSignerAuthority(snapshot: PublishedSignerAuthoritySnapshot): void {
+	invalidateSignerServices()
+	const state = ndkStore.state
+	if (state.zapNdk) state.zapNdk.signer = snapshot.zapSigner
+	if (state.ndk) state.ndk.signer = snapshot.mainSigner
+	if (state.zapNdk) setProjectedActiveUser(state.zapNdk, snapshot.zapActiveUser)
+	if (state.ndk) setProjectedActiveUser(state.ndk, snapshot.mainActiveUser)
+	ndkStore.setState((current) => ({ ...current, signer: snapshot.storeSigner }))
+	if (
+		snapshot.storeSigner &&
+		snapshot.mainSigner === snapshot.storeSigner &&
+		(!state.zapNdk || snapshot.zapSigner === snapshot.storeSigner)
+	) {
+		activateSignerServices(snapshot.storeSigner)
+	}
+}
+
+function invalidateSignerServices(): void {
+	signerServiceGeneration += 1
+	activeSignerServiceLease = undefined
+}
+
+function activateSignerServices(signer: NDKSigner): SignerServiceLease {
+	const lease = { generation: ++signerServiceGeneration, signer }
+	activeSignerServiceLease = lease
+	return lease
+}
+
+function isCurrentSignerService(lease: SignerServiceLease): boolean {
+	const state = ndkStore.state
+	return (
+		activeSignerServiceLease === lease &&
+		lease.generation === signerServiceGeneration &&
+		state.ndk?.signer === lease.signer &&
+		state.signer === lease.signer &&
+		(!state.zapNdk || state.zapNdk.signer === lease.signer)
+	)
+}
+
+function getCurrentSignerServiceLease(signer: NDKSigner | undefined): SignerServiceLease | undefined {
+	const lease = activeSignerServiceLease
+	return lease && signer === lease.signer && isCurrentSignerService(lease) ? lease : undefined
+}
+
+function syncNwcLoadingState(): void {
+	const isLoading = Boolean(activeNwcLoadingLease && isCurrentSignerService(activeNwcLoadingLease))
+	walletStore.setState((state) => (state.isLoading === isLoading ? state : { ...state, isLoading }))
+}
+
+function beginNwcLoading(lease: SignerServiceLease): void {
+	if (!isCurrentSignerService(lease)) return
+	activeNwcLoadingLease = lease
+	syncNwcLoadingState()
+}
+
+function finishNwcLoading(lease: SignerServiceLease): void {
+	if (activeNwcLoadingLease !== lease) return
+	activeNwcLoadingLease = undefined
+	syncNwcLoadingState()
+}
 
 /**
  * Helper to connect an NDK instance with timeout
@@ -315,6 +435,9 @@ export const ndkActions = {
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: enableOutbox,
+			// Plebeian explicitly loads user relay preferences through the
+			// session-scoped initializeSignerServices/loadRelaysFromNostr path.
+			autoConnectUserRelays: false,
 			aiGuardrails: enableGuardrails ? { skip: new Set(['ndk-no-cache', 'fetch-events-usage']) } : false,
 		})
 
@@ -325,7 +448,9 @@ export const ndkActions = {
 		// and sends it to the browser — one decision point, no client/server
 		// drift. When disabled (staging, CI/E2E), don't create a zap NDK at all.
 		const externalZapRelaysEnabled = configStore.state.config.externalZapRelaysEnabled !== false
-		const zapNdk = externalZapRelaysEnabled ? new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] }) : null
+		const zapNdk = externalZapRelaysEnabled
+			? new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])], autoConnectUserRelays: false })
+			: null
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
@@ -484,45 +609,101 @@ export const ndkActions = {
 		}
 	},
 
-	setSigner: async (signer: NDKSigner | undefined) => {
-		const state = ndkStore.state
+	/**
+	 * Publish only the signer authority references used by NDK consumers.
+	 *
+	 * This is deliberately synchronous: authentication commits call it in the
+	 * same non-yielding execution segment that publishes the capability and auth
+	 * state. Relay discovery and wallet initialization belong to
+	 * initializeSignerServices(), after that commit has completed.
+	 */
+	publishSigner: (signer: NDKSigner | undefined, user?: NDKUser): void => {
+		// Detach invalidates every signer-scoped continuation before any authority
+		// or ancillary state is cleared. A late network response may still finish,
+		// but it no longer owns permission to mutate state.
+		if (!signer) invalidateSignerServices()
+
+		let state = ndkStore.state
 		if (!state.ndk) {
 			console.warn('Attempted to set signer before NDK was initialized. Initializing NDK now.')
 			ndkActions.initialize()
-			if (!ndkStore.state.ndk) {
-				console.error('NDK initialization failed. Cannot set signer.')
-				return
-			}
-			const newState = ndkStore.state
-			newState.ndk!.signer = signer
-			// Also set signer for zap NDK
-			if (newState.zapNdk) {
-				newState.zapNdk.signer = signer
-			}
-		} else {
-			state.ndk.signer = signer
-			// Also set signer for zap NDK
-			if (state.zapNdk) {
-				state.zapNdk.signer = signer
-			}
+			state = ndkStore.state
 		}
+		if (!state.ndk) throw new Error('NDK initialization failed. Cannot publish signer.')
 
-		ndkStore.setState((s) => ({ ...s, signer }))
+		const previousAuthority = capturePublishedSignerAuthority()
+		try {
+			if (state.zapNdk) state.zapNdk.signer = signer
+			state.ndk.signer = signer
+			if (signer && !user) {
+				releaseActiveUserProjection(state.ndk)
+				if (state.zapNdk) releaseActiveUserProjection(state.zapNdk)
+			} else {
+				if (state.zapNdk) setProjectedActiveUser(state.zapNdk, user ? createActiveUserView(state.zapNdk, user) : undefined)
+				setProjectedActiveUser(state.ndk, user ? createActiveUserView(state.ndk, user) : undefined)
+			}
+			ndkStore.setState((current) => ({ ...current, signer }))
+			if (signer) activateSignerServices(signer)
+		} catch (error) {
+			try {
+				restorePublishedSignerAuthority(previousAuthority)
+			} catch (rollbackError) {
+				console.error('Failed to roll back synchronous signer publication:', rollbackError)
+			}
+			throw error
+		}
+	},
+
+	captureSignerAuthority: (): PublishedSignerAuthoritySnapshot => capturePublishedSignerAuthority(),
+
+	restoreSignerAuthority: (snapshot: PublishedSignerAuthoritySnapshot): void => {
+		restorePublishedSignerAuthority(snapshot)
+	},
+
+	/** Run signer-dependent relay and wallet setup after authority publication. */
+	initializeSignerServices: async (signer: NDKSigner): Promise<void> => {
+		const lease = getCurrentSignerServiceLease(signer)
+		if (!lease) return
+
+		await Promise.all([ndkActions.loadRelaysFromNostr(lease), ndkActions.selectAndSetInitialNwcWallet(lease)])
+		if (!isCurrentSignerService(lease)) return
+
+		const user = await signer.user()
+		if (!isCurrentSignerService(lease)) return
+		if (user?.pubkey) await nip60Actions.initialize(user.pubkey, () => isCurrentSignerService(lease))
+	},
+
+	/**
+	 * Backward-compatible higher-level signer operation.
+	 *
+	 * Attachment publishes synchronously, then starts ancillary services in the
+	 * background. Detachment keeps the established capability, transport, NWC,
+	 * and NIP-60 cleanup semantics.
+	 */
+	setSigner: (signer: NDKSigner | undefined): void => {
+		ndkActions.publishSigner(signer)
 
 		if (signer) {
-			await Promise.all([ndkActions.loadRelaysFromNostr(), ndkActions.selectAndSetInitialNwcWallet()])
-
-			// Initialize NIP-60 Cashu wallet
-			try {
-				const user = await signer.user()
-				if (user?.pubkey) {
-					void nip60Actions.initialize(user.pubkey)
-				}
-			} catch (e) {
-				console.error('[ndk] Failed to initialize NIP-60 wallet:', e)
-			}
+			void ndkActions.initializeSignerServices(signer).catch((error) => {
+				console.error('Failed to initialize signer services:', error)
+			})
 		} else {
+			activeNwcLoadingLease = undefined
+			// Clear the attached signer capability in lockstep with the NDK
+			// signer. `setSigner(undefined)` is the single chokepoint through
+			// which EVERY detach path runs (authActions.logout, removeSigner,
+			// NIP-60 reset) — so clearing the registry HERE guarantees
+			// `io-applesauce.sign()` fails closed again no matter who removed
+			// the signer, not just authActions.logout.
+			setSignerCapability(undefined)
+			// Also tear down the NIP-46 signer session (closes its REQ subscription)
+			// so every detach path — logout, removeSigner, NIP-60 reset — stops the
+			// leak, not just authActions.logout.
+			void runSignerTeardown().catch((error) => {
+				console.error('Failed to tear down signer session:', error)
+			})
 			ndkActions.setActiveNwcWalletUri(null)
+			syncNwcLoadingState()
 			nip60Actions.reset()
 		}
 	},
@@ -531,16 +712,19 @@ export const ndkActions = {
 	 * Load user's relay list from Nostr (kind 10002)
 	 * This enables the outbox model to work properly by adding user's preferred relays
 	 */
-	loadRelaysFromNostr: async (): Promise<void> => {
+	loadRelaysFromNostr: async (requestedLease?: SignerServiceLease): Promise<void> => {
 		const ndk = ndkStore.state.ndk
 		if (!ndk || !ndk.signer) {
 			console.warn('NDK or signer not available for loading relays')
 			return
 		}
+		const lease = requestedLease ?? getCurrentSignerServiceLease(ndk.signer)
+		if (!lease || !isCurrentSignerService(lease)) return
 
 		let user: NDKUser | null = null
 		try {
 			user = await ndk.signer.user()
+			if (!isCurrentSignerService(lease)) return
 		} catch (e) {
 			console.error('Error getting user from signer:', e)
 			return
@@ -553,8 +737,10 @@ export const ndkActions = {
 
 		try {
 			const relayPrefs = await fetchUserRelayListWithPreferences(user.pubkey)
+			if (!isCurrentSignerService(lease)) return
 			if (relayPrefs && relayPrefs.length > 0) {
 				console.log(`📡 Loading ${relayPrefs.length} relays from user's Nostr relay list`)
+				if (!isCurrentSignerService(lease)) return
 				for (const relay of relayPrefs) {
 					ndkActions.addSingleRelay(relay.url)
 				}
@@ -574,16 +760,19 @@ export const ndkActions = {
 		ndkStore.setState((state) => ({ ...state, activeNwcWalletUri: uri }))
 	},
 
-	selectAndSetInitialNwcWallet: async () => {
+	selectAndSetInitialNwcWallet: async (requestedLease?: SignerServiceLease) => {
 		const ndk = ndkStore.state.ndk
 		if (!ndk || !ndk.signer) {
 			console.warn('NDK or signer not available for NWC wallet selection.')
 			return
 		}
+		const lease = requestedLease ?? getCurrentSignerServiceLease(ndk.signer)
+		if (!lease || !isCurrentSignerService(lease)) return
 
 		let user: NDKUser | null = null
 		try {
 			user = await ndk.signer.user()
+			if (!isCurrentSignerService(lease)) return
 		} catch (e) {
 			console.error('Error getting user from signer:', e)
 			return
@@ -597,25 +786,38 @@ export const ndkActions = {
 		const userPubkey = user.pubkey
 
 		// Set loading state for wallet operations
-		walletStore.setState((state) => ({ ...state, isLoading: true }))
+		if (!isCurrentSignerService(lease)) return
+		beginNwcLoading(lease)
 
 		await walletActions.initialize()
+		if (!isCurrentSignerService(lease)) {
+			// walletActions.initialize owns a generic loading flag internally. If A
+			// resolves after B has begun, restore B's signer-service ownership rather
+			// than allowing A's internal finally-state to clear B's indicator.
+			syncNwcLoadingState()
+			return
+		}
 
 		try {
 			const nostrWallets = await fetchUserNwcWallets(userPubkey)
+			if (!isCurrentSignerService(lease)) return
 			if (nostrWallets && nostrWallets.length > 0) {
+				if (!isCurrentSignerService(lease)) return
 				walletActions.setNostrWallets(nostrWallets as Wallet[])
 			}
 		} catch (error) {
+			if (!isCurrentSignerService(lease)) return
 			console.error('Failed to fetch or merge Nostr NWC wallets during initial setup:', error)
 		}
 
+		if (!isCurrentSignerService(lease)) return
 		const allWallets = walletActions.getWallets()
 
 		if (allWallets.length === 0) {
+			if (!isCurrentSignerService(lease)) return
 			ndkActions.setActiveNwcWalletUri(null)
 			// Clear loading state when done
-			walletStore.setState((state) => ({ ...state, isLoading: false }))
+			finishNwcLoading(lease)
 			return
 		}
 
@@ -636,6 +838,7 @@ export const ndkActions = {
 			})
 
 		const walletsWithBalances = await Promise.all(balancePromises)
+		if (!isCurrentSignerService(lease)) return
 
 		for (const wallet of walletsWithBalances) {
 			if (wallet.balance > highestBalance) {
@@ -644,6 +847,7 @@ export const ndkActions = {
 			}
 		}
 
+		if (!isCurrentSignerService(lease)) return
 		if (bestWallet && bestWallet.nwcUri) {
 			ndkActions.setActiveNwcWalletUri(bestWallet.nwcUri)
 		} else {
@@ -651,7 +855,7 @@ export const ndkActions = {
 		}
 
 		// Clear loading state when done
-		walletStore.setState((state) => ({ ...state, isLoading: false }))
+		finishNwcLoading(lease)
 	},
 
 	getNDK: () => {

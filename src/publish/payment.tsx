@@ -132,6 +132,8 @@ export interface PayWithNwcParams {
 	description: string
 }
 
+export const createPaymentNwcNdk = (relayUrl: string): NDK => new NDK({ explicitRelayUrls: [relayUrl], autoConnectUserRelays: false })
+
 /**
  * Pays an invoice using an NWC connection via direct NIP-47 pay_invoice method
  * @returns The payment preimage on success
@@ -146,9 +148,7 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 	}
 
 	// Create a dedicated NDK instance for this specific NWC wallet
-	const nwcNdk = new NDK({
-		explicitRelayUrls: [parsedUri.relay],
-	})
+	const nwcNdk = createPaymentNwcNdk(parsedUri.relay)
 
 	// Set the signer from the main NDK instance
 	const mainNdk = ndkActions.getNDK()

@@ -49,6 +49,17 @@ already exists.
   seed material, wallet files, or sensitive local configuration.
 - Do not commit, push, deploy, trigger workflows, mutate GitHub metadata, or
   change secrets unless explicitly authorized.
+- **Review-only exception:** posting review text to a pull request is
+  authorized without per-instance approval. Review text means review comments,
+  review submissions carrying findings/evidence/questions, and replies inside
+  an existing review thread. The exception is text-only: it does not authorize
+  pushing to a branch, merging, closing or reopening, labeling, assigning,
+  setting milestones, rerunning CI, deleting branches, force-pushing, or any
+  other metadata mutation. Because a posting account may be a bot, a review
+  submission is never maintainer approval; where a formal review state is
+  required, use `COMMENT` and state the verdict in the text. Every posted
+  review must identify the reviewer and, for agent reviewers, the model and
+  family it ran as, and must label unverified claims as unverified.
 - No new event kinds, payment semantics, relay assumptions, or network egress
   paths without code, tests, and documentation that make the decision explicit.
 - An outbox-style publisher is an architectural option for future server-side
@@ -148,7 +159,9 @@ full e2e suites require explicit approval before execution.
 - Review-related agent work should consult `docs/PR_REVIEW_CHECKLIST.md`
   for pass/fail criteria and `docs/REVIEWER_SYSTEM_PROMPT.md` for process,
   voice, and known failure modes. Do not treat these
-  files as authorization to push, merge, rerun CI, or mutate GitHub metadata.
+  files as authorization to push, merge, rerun CI, or mutate GitHub
+  metadata beyond posting review text (see the review-only exception under
+  Constraints).
 
 ## Subdirectory AGENTS.md Template
 
