@@ -273,6 +273,7 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   canonical result. Note the availability consequence: `P = 2` forces unanimity,
   so a pool of **3** (floor 2) is the smallest that both resists forking and
   tolerates one unavailable validator.
+
 - `max_skew_sec`: integer, default `120`. Maximum acceptable difference
   between a bid event's claimed `created_at` and the validator's own
   `observed_at`. Bids exceeding this are flagged `timestamp_skew`.
