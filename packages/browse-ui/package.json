@@ -1,0 +1,23 @@
+{
+	"name": "@plebeian/browse-ui",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Browsing components. Data in, markup out: no fetching, no validating, no store. The same components run in the app, the CMS and a sandboxed napplet.",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./styles.css": "./src/styles.css"
+	},
+	"sideEffects": [
+		"./src/styles.css"
+	],
+	"dependencies": {
+		"@plebeian/product-event": "0.1.0",
+		"@plebeian/browse-filter": "0.1.0",
+		"@plebeian/nostr-access": "0.1.0"
+	},
+	"peerDependencies": {
+		"react": ">=19"
+	}
+}

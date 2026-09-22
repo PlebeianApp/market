@@ -10,7 +10,12 @@
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@plebeian/product-event": ["./packages/product-event/src/index.ts"],
+			"@plebeian/product-query": ["./packages/product-query/src/index.ts"],
+			"@plebeian/browse-filter": ["./packages/browse-filter/src/index.ts"],
+			"@plebeian/nostr-access": ["./packages/nostr-access/src/index.ts"],
+			"@plebeian/browse-ui": ["./packages/browse-ui/src/index.ts"]
 		}
 	},
 	"include": ["**/*.ts", "**/*.tsx", "scripts/**/*.ts"]
