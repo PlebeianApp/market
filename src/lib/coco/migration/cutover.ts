@@ -35,6 +35,7 @@ export function evaluateCutover(record: Readonly<MigrationControlRecord>): Reado
 		if (seal.items.some((item) => ['PENDING', 'EXECUTING', 'LOCKED', 'AMBIGUOUS', 'QUARANTINED'].includes(item.state))) {
 			blockers.add('UNRESOLVED_ITEM')
 		}
+		if (seal.items.some((item) => item.accountAttribution !== 'CANONICAL_ACCOUNT')) blockers.add('UNATTRIBUTED_SOURCE')
 		if (seal.items.some((item) => item.legacyAuthorityRetained)) blockers.add('RETAINED_LEGACY_AUTHORITY')
 		if (seal.items.some((item) => item.uncertainRemoteEffect)) blockers.add('UNCERTAIN_REMOTE_EFFECT')
 		if (seal.items.some((item) => item.unresolvedP2pkRecovery)) blockers.add('UNRESOLVED_ITEM')

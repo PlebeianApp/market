@@ -9,6 +9,8 @@ import {
 	endLegacyMonetaryMutation,
 	installReadinessEvidence,
 	recordLateInventoryDiscovery,
+	runLegacyMutationAgainstControlStore,
+	runCocoMutationAgainstControlStore,
 	transitionMigrationPhase,
 	type CutoverExpectedState,
 	type MigrationControlRecord,
@@ -82,6 +84,39 @@ describe('migration control CAS', () => {
 				operationId: 'stale-operation',
 			}),
 		).rejects.toMatchObject({ code: 'LEGACY_WRITER_DISABLED' })
+	})
+
+	test('a stale already-open runtime re-reads durable authority and rejects after cutover', async () => {
+		const ready = await createReadyRecord()
+		const store = new InMemoryMigrationControlStore([ready])
+		let mutationCalls = 0
+		const staleRuntimeCall = () =>
+			runLegacyMutationAgainstControlStore(
+				store,
+				{ account: ready.account, environment: ready.environment, writerId: 'nip60-send' },
+				async () => {
+					mutationCalls++
+				},
+			)
+
+		await commitCutover(store, expectedFor(ready))
+		await expect(staleRuntimeCall()).rejects.toMatchObject({ code: 'LEGACY_WRITER_DISABLED' })
+		expect(mutationCalls).toBe(0)
+	})
+
+	test('direct Coco writers are fenced during migration and enabled only after committed authority', async () => {
+		const ready = await createReadyRecord()
+		const store = new InMemoryMigrationControlStore([ready])
+		let calls = 0
+		const mutate = () =>
+			runCocoMutationAgainstControlStore(store, ready, async () => {
+				calls++
+			})
+
+		await expect(mutate()).rejects.toMatchObject({ code: 'CUTOVER_BLOCKED' })
+		await commitCutover(store, expectedFor(ready))
+		await mutate()
+		expect(calls).toBe(1)
 	})
 
 	test('an active legacy writer lease blocks cutover until its exact lease closes', async () => {

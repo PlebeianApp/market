@@ -12,6 +12,25 @@ function getUserScopedKey(prefix: string): string | null {
 }
 
 /**
+ * Historical storage key format. It is exposed only so migration inventory
+ * can inspect the maintained buckets and classify them as unattributable.
+ * The eight-character suffix is never a production account identity.
+ */
+export function getLegacyTruncatedUserScopedKey(prefix: string, account: string): string {
+	const normalized = account.trim().toLowerCase()
+	if (!/^[0-9a-f]{64}$/.test(normalized)) throw new Error('inventory account must be a full Nostr pubkey')
+	return `${prefix}_${normalized.slice(0, 8)}`
+}
+
+/** Strict read for migration inventory; malformed buckets fail enumeration. */
+export function readLegacyTruncatedUserDataForInventory(prefix: string, account: string): unknown | null {
+	if (typeof localStorage === 'undefined') return null
+	const raw = localStorage.getItem(getLegacyTruncatedUserScopedKey(prefix, account))
+	if (raw === null) return null
+	return JSON.parse(raw) as unknown
+}
+
+/**
  * Load JSON data from user-scoped localStorage.
  * @param prefix The base key prefix
  * @param defaultValue Default value if not found or parse fails

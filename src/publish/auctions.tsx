@@ -63,6 +63,7 @@ import {
 	type CocoBidPublicationAdapter,
 	type SealedCocoBidPublicationMaterial,
 } from '@/lib/coco/auctions'
+import { runBrowserLegacyMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
 
 export interface AuctionSpecEntry {
 	key: string
@@ -786,6 +787,13 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	// not even timelock-reclaimable. `persistPreLockRecoveryRecord` uses
 	// CONFIRMED-WRITE semantics (strict save + read-back equality): if the
 	// record is not durably present, we must NOT proceed to the mint.
+	return runBrowserLegacyMonetaryMutation(
+		{
+			account: bidderPubkey,
+			environment: configStore.state.config.stage ?? 'development',
+			writerId: 'auction-bid-lock-publish',
+		},
+		async () => {
 	const preLockRecoveryRecordId = uuidv4()
 	const preLockRecoveryRecord: AuctionBidPreLockRecoveryRecord = {
 		id: preLockRecoveryRecordId,
@@ -1066,6 +1074,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 		// funding lifecycle NEVER falls back to the full re-locking pipeline.
 		throw new AuctionBidLockedButUnpublishedError(lockResult.tokenId, error, finalizedBidEventId)
 	}
+		},
+	)
 }
 
 /**

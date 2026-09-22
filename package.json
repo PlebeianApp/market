@@ -101,6 +101,7 @@
 		"@types/react-dom": "^19.2.3",
 		"@types/ws": "^8.18.1",
 		"bun": "1.4.2",
+		"fake-indexeddb": "^6.2.5",
 		"mini-svg-data-uri": "^1.4.4",
 		"playwright": "^1.60.0",
 		"prettier": "^3.8.3",

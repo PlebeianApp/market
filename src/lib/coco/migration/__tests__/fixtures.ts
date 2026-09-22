@@ -36,7 +36,7 @@ const METHOD_BY_SOURCE: Record<ProductionEnumerator, keyof TrustedProductionInve
 }
 
 export function projection(items: readonly InventoryProjectionItem[] = []): InventoryProjection {
-	return { sourceSchema: 'market-source-v1', sourceVersion: '1', items }
+	return { sourceSchema: 'market-source-v1', sourceVersion: '1', snapshotId: 'frozen-snapshot-1', items }
 }
 
 export function createInventoryPort(
@@ -56,6 +56,7 @@ export function item(sourceId: string, overrides: Partial<InventoryProjectionIte
 		unit: 'sat',
 		amount: BigInt(5),
 		state: 'RESOLVED',
+		accountAttribution: 'CANONICAL_ACCOUNT',
 		...overrides,
 	}
 }
