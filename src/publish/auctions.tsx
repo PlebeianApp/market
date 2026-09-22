@@ -5,7 +5,7 @@ import {
 	AUCTION_SETTLEMENT_POLICY,
 	getAuctionTagValue,
 } from '@/lib/auctionSettlement'
-import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
+import { AUCTION_MIN_DURATION_SECONDS, type ValidatedAuctionPublishData, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
@@ -19,6 +19,8 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { buildMultipartyRootTags } from '@/lib/auction/multipartyRootTags'
+import { parseMultipartyRecipientLines, resolveMultipartyPayoutSchedule } from '@/lib/auction/multipartyPublishSchedule'
 import {
 	buildAuctionClaimPublicMarkerTags,
 	createPrivateAuctionClaimMessageForActiveSigner,
@@ -135,6 +137,13 @@ export interface AuctionFormData {
 	 * multi-select; for the demo a single pubkey is fine.
 	 */
 	auditorPubkey: string
+	/**
+	 * Multiparty payout recipients, one per line:
+	 * `role, pubkey, bps, capability_event_id[, offer_event_id]`
+	 * (`validator` needs the offer id; `v4v` must not carry one). Empty = the
+	 * single-party auction this form published before multiparty existed.
+	 */
+	payoutRecipients?: string
 }
 
 export interface AuctionBidFormData {
@@ -253,6 +262,95 @@ const tagBidError = (step: string, cause: unknown): Error => {
 	return tagged
 }
 
+export interface AuctionRootTagListInput {
+	id: string
+	validated: ValidatedAuctionPublishData
+	auditors: readonly string[]
+	p2pkXpub: string
+	settlementGraceSeconds: number
+	minBidCurveTagValue: string
+	keyScheme: AuctionP2pkKeyScheme
+	mainCategory?: string
+	categories: readonly string[]
+	specs: readonly AuctionSpecEntry[]
+	isNSFW?: boolean
+	enableLiveChat?: boolean
+}
+
+/**
+ * The single-party kind-30408 tag list.
+ *
+ * Pure and exported so that (a) the multiparty projection has exactly one place to
+ * build on — `buildMultipartyRootTags` takes this output and switches the
+ * settlement policy plus appends the schedule — and (b) the published tag list can
+ * be asserted in tests without standing up the publish flow.
+ */
+export const buildAuctionRootTagList = (input: AuctionRootTagListInput): string[][] => {
+	const { validated } = input
+	const startingBid = String(validated.startingBid)
+	const bidIncrement = String(validated.bidIncrement)
+	const reserve = String(validated.reserve ?? 0)
+
+	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
+
+	const categoryTags: string[][] = []
+	if (input.mainCategory) {
+		categoryTags.push(['t', input.mainCategory])
+	}
+	for (const category of input.categories) {
+		if (category && category.trim()) {
+			categoryTags.push(['t', category.trim()])
+		}
+	}
+
+	const specTags: string[][] = (input.specs ?? [])
+		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
+		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()])
+
+	const shippingTags: string[][] = validated.shippings.map((ship) =>
+		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
+	)
+
+	return [
+		['d', input.id],
+		['title', validated.title],
+		...(validated.summary ? [['summary', validated.summary]] : []),
+		['auction_type', 'english'],
+		['start_at', String(validated.startAt)],
+		['end_at', String(validated.endAt)],
+		['currency', 'SAT'],
+		['price', startingBid, 'SAT'],
+		['starting_bid', startingBid, 'SAT'],
+		['bid_increment', bidIncrement],
+		['reserve', reserve],
+		...validated.trustedMints.map((mint) => ['mint', mint]),
+		// Bidder-held-path scheme: list one or more validator pubkeys whose
+		// kind-30440 verdicts compliant clients consult to gate bid validity
+		// for THIS auction. See AUCTIONS.md §4.1.
+		...input.auditors.map((auditor) => ['auditors', auditor]),
+		// Explicit values for the per-auction validator parameters.
+		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
+		// in src/lib/auction/constants.ts — emitting them explicitly
+		// makes the auction round-trip cleanly through compliant
+		// validators that strictly check tag presence.
+		['auditor_quorum', String(input.auditors.length)],
+		['max_skew_sec', '120'],
+		['max_end_at', String(validated.maxEndAt)],
+		['settlement_grace', String(input.settlementGraceSeconds)],
+		['min_bid_curve', input.minBidCurveTagValue],
+		['key_scheme', input.keyScheme],
+		['p2pk_xpub', input.p2pkXpub],
+		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
+		['schema', 'auction_v1'],
+		...imageTags,
+		...categoryTags,
+		...specTags,
+		...shippingTags,
+		...(input.isNSFW ? [['content-warning', 'nsfw']] : []),
+		...(input.enableLiveChat ? [['live_chat', 'enabled']] : []),
+	]
+}
+
 export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: string): Promise<EventTemplate> => {
 	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 
@@ -304,44 +402,31 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
 	)
 
-	const tags: string[][] = [
-		['d', id],
-		['title', validated.title],
-		...(validated.summary ? [['summary', validated.summary]] : []),
-		['auction_type', 'english'],
-		['start_at', String(validated.startAt)],
-		['end_at', String(validated.endAt)],
-		['currency', 'SAT'],
-		['price', startingBid, 'SAT'],
-		['starting_bid', startingBid, 'SAT'],
-		['bid_increment', bidIncrement],
-		['reserve', reserve],
-		...validated.trustedMints.map((mint) => ['mint', mint]),
-		// Bidder-held-path scheme: list one or more validator pubkeys whose
-		// kind-30440 verdicts compliant clients consult to gate bid validity
-		// for THIS auction. See AUCTIONS.md §4.1.
-		...auditorsList.map((auditor) => ['auditors', auditor]),
-		// Explicit values for the per-auction validator parameters.
-		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
-		// in src/lib/auction/constants.ts — emitting them explicitly
-		// makes the auction round-trip cleanly through compliant
-		// validators that strictly check tag presence.
-		['auditor_quorum', String(auditorsList.length)],
-		['max_skew_sec', '120'],
-		['max_end_at', String(validated.maxEndAt)],
-		['settlement_grace', String(settlementGraceSeconds)],
-		['min_bid_curve', minBidCurveTagValue],
-		['key_scheme', keyScheme],
-		['p2pk_xpub', p2pkXpub],
-		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
-		['schema', 'auction_v1'],
-		...imageTags,
-		...categoryTags,
-		...specTags,
-		...shippingTags,
-		...(formData.isNSFW ? [['content-warning', 'nsfw']] : []),
-		...(formData.enableLiveChat ? [['live_chat', 'enabled']] : []),
-	]
+	const baseTags = buildAuctionRootTagList({
+		id,
+		validated,
+		auditors: auditorsList,
+		p2pkXpub,
+		settlementGraceSeconds,
+		minBidCurveTagValue,
+		keyScheme,
+		mainCategory: formData.mainCategory,
+		categories: formData.categories,
+		specs: formData.specs ?? [],
+		isNSFW: formData.isNSFW,
+		enableLiveChat: formData.enableLiveChat,
+	})
+
+	// Multiparty payout (auction-v4v-participation, D2). The seller's recipient
+	// lines compile into the canonical schedule and the root carries it; with no
+	// recipients the single-party tags are published byte-for-byte as before.
+	const sellerPubkey = (await getUser())?.pubkey ?? ''
+	const payout = resolveMultipartyPayoutSchedule({
+		recipients: parseMultipartyRecipientLines(formData.payoutRecipients ?? ''),
+		auditors: auditorsList,
+		sellerPubkey,
+	})
+	const tags = payout === null ? baseTags : buildMultipartyRootTags({ baseTags, schedule: payout.schedule })
 
 	return {
 		kind: 30408,

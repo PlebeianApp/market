@@ -21,6 +21,16 @@ export const AUCTION_MULTIPARTY_ROOT_TAG_ERROR_CODES = [
 
 export type AuctionMultipartyRootTagErrorCode = (typeof AUCTION_MULTIPARTY_ROOT_TAG_ERROR_CODES)[number]
 
+/**
+ * Binary tag payloads carry an explicit `b64u:` prefix.
+ *
+ * The schedule packet fixes this convention for `payout_schedule`, and the read
+ * side (`parseMultipartyRoot`) rejects a bare base64url value. The manifest reuses
+ * the same prefix so every binary payload on this wire is unambiguous — a reader
+ * never has to guess whether a tag holds text or bytes.
+ */
+export const AUCTION_MULTIPARTY_BINARY_TAG_PREFIX = 'b64u:'
+
 export class AuctionMultipartyRootTagError extends Error {
 	readonly code: AuctionMultipartyRootTagErrorCode
 
@@ -64,7 +74,7 @@ export const buildMultipartyRootTags = (input: MultipartyRootTagsInput): string[
 	const tags = input.baseTags.map((tag) => [...tag])
 	const policyIndex = policyIndexes[0] as number
 	tags[policyIndex] = ['settlement_policy', AUCTION_MULTIPARTY_SETTLEMENT_POLICY]
-	tags.push(['payout_schedule', base64urlnopad.encode(input.schedule.canonical_bytes)])
+	tags.push(['payout_schedule', `${AUCTION_MULTIPARTY_BINARY_TAG_PREFIX}${base64urlnopad.encode(input.schedule.canonical_bytes)}`])
 	tags.push(['payout_schedule_commitment', input.schedule.schedule_commitment])
 	return tags
 }
@@ -89,9 +99,18 @@ export const readMultipartyRootScheduleTags = (tags: readonly (readonly string[]
 	if (scheduleTags.length !== 1 || commitmentTags.length !== 1) {
 		return fail('root_schedule_tags_incomplete')
 	}
-	const payoutScheduleB64u = scheduleTags[0]?.[1]
+	const payoutScheduleValue = scheduleTags[0]?.[1]
 	const payoutScheduleCommitment = commitmentTags[0]?.[1]
-	if (!payoutScheduleB64u || !payoutScheduleCommitment) {
+	if (!payoutScheduleValue || !payoutScheduleCommitment) {
+		return fail('root_schedule_tags_incomplete')
+	}
+	// The prefix is required, exactly as the read side requires it: a bare base64url
+	// value is not a valid payload on this wire.
+	if (!payoutScheduleValue.startsWith(AUCTION_MULTIPARTY_BINARY_TAG_PREFIX)) {
+		return fail('root_schedule_tags_incomplete')
+	}
+	const payoutScheduleB64u = payoutScheduleValue.slice(AUCTION_MULTIPARTY_BINARY_TAG_PREFIX.length)
+	if (payoutScheduleB64u.length === 0) {
 		return fail('root_schedule_tags_incomplete')
 	}
 	return Object.freeze({ settlementPolicy: policy, payoutScheduleB64u, payoutScheduleCommitment })

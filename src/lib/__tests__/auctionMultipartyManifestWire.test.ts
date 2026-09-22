@@ -292,8 +292,12 @@ describe('Auction multiparty payout manifest — commitment and tag decoding', (
 		expect(codes(() => validateManifestCommitment(compiled.canonical_bytes, 'not-hex'))).toBe('manifest_commitment_mismatch')
 	})
 
-	test('decodes a payout_manifest tag value back to the canonical bytes', () => {
-		const compiled = compileManifest(rows(sellerRow(), validatorRow()))
-		expect(decodeManifestTag(compiled.base64url)).toEqual(compiled.canonical_bytes)
+	test('decodes a payout_manifest tag value back to the canonical bytes, prefix and all', () => {
+		const compiled = compileManifest(rows(sellerRow()))
+		expect(compiled.tagValue.startsWith('b64u:')).toBe(true)
+		expect(decodeManifestTag(compiled.tagValue)).toEqual(compiled.canonical_bytes)
+		// A bare payload is not a valid tag value on this wire.
+		expect(codes(() => decodeManifestTag(compiled.base64url))).toBe('manifest_tag_value_noncanonical')
+		expect(codes(() => decodeManifestTag('b64u:'))).toBe('manifest_tag_value_noncanonical')
 	})
 })

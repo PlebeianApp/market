@@ -16,6 +16,7 @@
 
 import { sha256 } from '@noble/hashes/sha2.js'
 import { base64urlnopad } from '@scure/base'
+import { AUCTION_MULTIPARTY_BINARY_TAG_PREFIX } from './multipartyRootTags'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY, AUCTION_MULTIPARTY_SCHEDULE_MAX_ENTRIES } from './multipartySchedule'
 
 export const AUCTION_MULTIPARTY_MANIFEST_OBJECT = 'payout_manifest'
@@ -45,6 +46,8 @@ export interface AuctionMultipartyCanonicalManifest {
 	canonical_bytes: Uint8Array
 	manifest_commitment: string
 	base64url: string
+	/** The full `payout_manifest` tag value, `b64u:` prefix included. */
+	tagValue: string
 }
 
 export class AuctionMultipartyManifestError extends Error {
@@ -196,6 +199,10 @@ export const compileManifest = (rows: readonly AuctionMultipartyManifestRowInput
 		canonical_bytes: canonicalBytes,
 		manifest_commitment: commitManifestBytes(canonicalBytes),
 		base64url: base64urlnopad.encode(canonicalBytes),
+		// The tag value carries the wire's `b64u:` prefix, exactly as
+		// `payout_schedule` does; `base64url` is the bare payload for callers that
+		// only need the encoding.
+		tagValue: `${AUCTION_MULTIPARTY_BINARY_TAG_PREFIX}${base64urlnopad.encode(canonicalBytes)}`,
 	})
 }
 
@@ -310,6 +317,10 @@ export const parseCanonicalManifest = (bytes: Uint8Array): AuctionMultipartyCano
 		canonical_bytes: canonicalBytes,
 		manifest_commitment: commitManifestBytes(canonicalBytes),
 		base64url: base64urlnopad.encode(canonicalBytes),
+		// The tag value carries the wire's `b64u:` prefix, exactly as
+		// `payout_schedule` does; `base64url` is the bare payload for callers that
+		// only need the encoding.
+		tagValue: `${AUCTION_MULTIPARTY_BINARY_TAG_PREFIX}${base64urlnopad.encode(canonicalBytes)}`,
 	})
 }
 
@@ -326,9 +337,22 @@ export const validateManifestCommitment = (canonicalBytes: Uint8Array, claimedCo
 
 /** Decode a `payout_manifest` tag value into canonical bytes, fail-closed. */
 export const decodeManifestTag = (value: string): Uint8Array => {
+	if (!value.startsWith(AUCTION_MULTIPARTY_BINARY_TAG_PREFIX)) {
+		return fail('manifest_tag_value_noncanonical')
+	}
+	const payload = value.slice(AUCTION_MULTIPARTY_BINARY_TAG_PREFIX.length)
+	if (payload.length === 0) {
+		return fail('manifest_tag_value_noncanonical')
+	}
 	try {
-		return base64urlnopad.decode(value)
+		const bytes = base64urlnopad.decode(payload)
+		// Re-encoding must reproduce the payload: a non-canonical encoding is a
+		// different value on the wire, so it must not be silently accepted.
+		if (base64urlnopad.encode(bytes) !== payload) {
+			return fail('manifest_tag_value_noncanonical')
+		}
+		return bytes
 	} catch {
-		return fail('manifest_bytes_exceeds_limit')
+		return fail('manifest_tag_value_noncanonical')
 	}
 }

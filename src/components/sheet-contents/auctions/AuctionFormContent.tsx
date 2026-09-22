@@ -1288,6 +1288,24 @@ function CategoryTab({
 					placeholder="Collectibles, Art, Bitcoin"
 				/>
 			</div>
+
+			<div className="grid w-full gap-1.5">
+				<Label htmlFor="auction-payout-recipients">Multiparty payout recipients (optional, one per line)</Label>
+				<textarea
+					id="auction-payout-recipients"
+					value={formData.payoutRecipients ?? ''}
+					onChange={(e) => setFormData((prev) => ({ ...prev, payoutRecipients: e.target.value }))}
+					className="border-2 min-h-24 p-2 rounded-md font-mono text-xs"
+					placeholder={
+						'role, pubkey, bps, capability_event_id[, offer_event_id]\n' + 'validator, 2f…, 625, a1…, b2…\n' + 'v4v, 3c…, 313, c3…'
+					}
+				/>
+				<p className="text-muted-foreground text-xs">
+					Leave empty for a normal single-party auction. With recipients, the auction publishes the multiparty settlement policy plus the
+					payout schedule and its commitment. Every validator listed here must also be one of the auction&apos;s auditors, and the seller
+					keeps the remainder automatically.
+				</p>
+			</div>
 		</div>
 	)
 }

@@ -49,8 +49,8 @@ describe('Auction multiparty root tags', () => {
 		expect(policy).toHaveLength(1)
 
 		const scheduleTag = tags.find((tag) => tag[0] === 'payout_schedule')
-		expect(scheduleTag?.[1]).toBe(base64urlnopad.encode(schedule.canonical_bytes))
-		expect(base64urlnopad.decode(scheduleTag?.[1] as string)).toEqual(schedule.canonical_bytes)
+		expect(scheduleTag?.[1]).toBe(`b64u:${base64urlnopad.encode(schedule.canonical_bytes)}`)
+		expect(base64urlnopad.decode((scheduleTag?.[1] as string).slice('b64u:'.length))).toEqual(schedule.canonical_bytes)
 
 		const commitmentTag = tags.find((tag) => tag[0] === 'payout_schedule_commitment')
 		expect(commitmentTag).toEqual(['payout_schedule_commitment', schedule.schedule_commitment])
