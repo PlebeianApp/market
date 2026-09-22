@@ -364,6 +364,15 @@ export interface ValidatorPolicyDocument {
 	maxAcceptableSkewSec?: number
 	admission?: ValidatorAdmissionPolicy
 	griefingDecayDays?: number
+	/**
+	 * The validator's auditor ruleset (see `auctionValidatorPolicy.ts`): the smallest
+	 * validator pool it will validate, and the quorum it requires as a percentage of
+	 * that pool. The percentage MUST exceed 50 — a ruleset below the hard floor is
+	 * raised to it rather than honoured, because a lower value admits two disjoint
+	 * groups agreeing on opposite outcomes.
+	 */
+	minValidators?: number
+	minQuorumPercent?: number
 	notes?: string
 }
 

@@ -3,9 +3,13 @@ import {
 	AUCTION_MINIMUM_VALIDATORS,
 	AUCTION_POLICY_INVALID_CLAIM,
 	AUCTION_RECOMMENDED_VALIDATOR_POOL,
+	DEFAULT_AUCTION_VALIDATOR_RULESET,
 	assessAuctionValidatorPolicy,
 	bidSelectableUnderAuctionPolicy,
+	rulesetRequiredQuorum,
+	sanitizeAuctionValidatorRuleset,
 } from '../auction/auctionValidatorPolicy'
+import { requiredVerdictMajority } from '../auction/verdictMajority'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '../auction/multipartySchedule'
 
 const MULTIPARTY = AUCTION_MULTIPARTY_SETTLEMENT_POLICY
@@ -137,5 +141,64 @@ describe('Auction validator policy assessment', () => {
 
 	test('exposes the root-level claim name so a validator can mark the auction invalid', () => {
 		expect(AUCTION_POLICY_INVALID_CLAIM).toBe('auction_policy_invalid')
+	})
+
+	test('an untrusted ruleset cannot weaken the hard >50% rule', () => {
+		// A validator publishing a 40% ruleset does not get to fork the auction.
+		expect(sanitizeAuctionValidatorRuleset({ minimum_quorum_percent: 40 })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset({ minimum_quorum_percent: 50 })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset({ minimum_quorum_percent: 51 }).minimum_quorum_percent).toBe(51)
+
+		const assessment = assessAuctionValidatorPolicy(
+			{ auditors: pool(4), auditor_quorum: 3, settlement_policy: MULTIPARTY },
+			{ minimum_quorum_percent: 10 },
+		)
+		expect(assessment.ruleset.minimum_quorum_percent).toBe(51)
+		expect(assessment.requiredQuorum).toBe(3)
+		expect(assessment.valid).toBe(true)
+	})
+
+	test('the default ruleset reproduces the strict-majority floor exactly', () => {
+		for (const size of [2, 3, 4, 5, 6, 7]) {
+			expect(rulesetRequiredQuorum(DEFAULT_AUCTION_VALIDATOR_RULESET, size)).toBe(requiredVerdictMajority(size))
+		}
+	})
+
+	test('a stricter ruleset rejects an auction the default ruleset would accept', () => {
+		const auction = { auditors: pool(3), auditor_quorum: 2, settlement_policy: MULTIPARTY }
+		expect(assessAuctionValidatorPolicy(auction).valid).toBe(true)
+
+		// This validator wants at least 4 validators and unanimity: the same auction
+		// is below its floor on both counts.
+		const strict = assessAuctionValidatorPolicy(auction, { minimum_validators: 4, minimum_quorum_percent: 100 })
+		expect(strict.valid).toBe(false)
+		expect(codes(strict)).toContain('pool_below_minimum')
+		expect(strict.rulesetQuorum).toBe(3)
+		expect(strict.requiredQuorum).toBe(3)
+
+		// 67% of a 3-pool is 3 (ceil), so the ruleset demands unanimity here.
+		const twoThirds = assessAuctionValidatorPolicy(auction, { minimum_validators: 3, minimum_quorum_percent: 67 })
+		expect(twoThirds.rulesetQuorum).toBe(3)
+		expect(codes(twoThirds)).toContain('quorum_below_ruleset')
+	})
+
+	test('a ruleset minimum below the protocol default cannot lower the requirement', () => {
+		const assessment = assessAuctionValidatorPolicy(
+			{ auditors: pool(4), auditor_quorum: 3, settlement_policy: MULTIPARTY },
+			{ minimum_validators: 1, minimum_quorum_percent: 51 },
+		)
+		// The ruleset accepts a 1-validator pool in principle, but this auction has 4
+		// and still needs 3 agreeing verdicts.
+		expect(assessment.ruleset.minimum_validators).toBe(1)
+		expect(assessment.requiredQuorum).toBe(3)
+		expect(assessment.valid).toBe(true)
+	})
+
+	test('rulesets with nonsense values fall back to the defaults', () => {
+		expect(sanitizeAuctionValidatorRuleset({ minimum_validators: 0 })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset({ minimum_validators: 99 })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset({ minimum_validators: 2.5 })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset({ minimum_quorum_percent: Number.NaN })).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
+		expect(sanitizeAuctionValidatorRuleset(undefined)).toEqual(DEFAULT_AUCTION_VALIDATOR_RULESET)
 	})
 })

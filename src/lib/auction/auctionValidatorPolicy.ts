@@ -41,9 +41,64 @@ export const AUCTION_MINIMUM_VALIDATORS = 2
  */
 export const AUCTION_RECOMMENDED_VALIDATOR_POOL = 3
 
+/**
+ * The one rule no ruleset can weaken: an outcome needs **more than half** of the
+ * pool. Everything else about the validator set is the ruleset's business.
+ */
+export const AUCTION_HARD_MINIMUM_QUORUM_PERCENT = 50
+
+/**
+ * A validator's requirements of the auctions it will validate. Customizable per
+ * validator — published in its policy document — with a single strict constraint:
+ * `minimum_quorum_percent` MUST exceed 50, because a lower value admits two
+ * disjoint groups agreeing on opposite outcomes.
+ */
+export interface AuctionValidatorRuleset {
+	readonly minimum_validators: number
+	readonly minimum_quorum_percent: number
+}
+
+export const DEFAULT_AUCTION_VALIDATOR_RULESET: AuctionValidatorRuleset = Object.freeze({
+	minimum_validators: AUCTION_MINIMUM_VALIDATORS,
+	minimum_quorum_percent: AUCTION_HARD_MINIMUM_QUORUM_PERCENT + 1,
+})
+
+export const AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS = 16
+
+/**
+ * Clamp a caller-supplied ruleset to what the protocol permits. A ruleset is
+ * data from a third party (a validator's published policy), so it is treated as
+ * untrusted: percentages at or below the hard floor are raised, and non-integer or
+ * out-of-range counts fall back to the defaults rather than being honoured.
+ */
+export const sanitizeAuctionValidatorRuleset = (ruleset?: Partial<AuctionValidatorRuleset>): AuctionValidatorRuleset => {
+	const rawValidators = ruleset?.minimum_validators
+	const rawPercent = ruleset?.minimum_quorum_percent
+
+	const minimumValidators =
+		Number.isSafeInteger(rawValidators) &&
+		(rawValidators as number) >= 1 &&
+		(rawValidators as number) <= AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS
+			? (rawValidators as number)
+			: DEFAULT_AUCTION_VALIDATOR_RULESET.minimum_validators
+
+	const minimumQuorumPercent =
+		Number.isSafeInteger(rawPercent) && (rawPercent as number) > AUCTION_HARD_MINIMUM_QUORUM_PERCENT
+			? Math.min(rawPercent as number, 100)
+			: DEFAULT_AUCTION_VALIDATOR_RULESET.minimum_quorum_percent
+
+	return Object.freeze({ minimum_validators: minimumValidators, minimum_quorum_percent: minimumQuorumPercent })
+}
+
+/** The count a ruleset's percentage demands of a pool: `ceil(P × percent / 100)`. */
+export const rulesetRequiredQuorum = (ruleset: AuctionValidatorRuleset, poolSize: number): number =>
+	poolSize <= 0 ? 0 : Math.ceil((poolSize * ruleset.minimum_quorum_percent) / 100)
+
 export const AUCTION_VALIDATOR_POLICY_ISSUE_CODES = [
 	'pool_below_minimum',
 	'quorum_below_majority',
+	/** The declared quorum is below this validator's own ruleset requirement. */
+	'quorum_below_ruleset',
 	'quorum_exceeds_pool',
 	'duplicate_auditors',
 ] as const
@@ -64,9 +119,13 @@ export interface AuctionValidatorPolicyAssessment {
 	readonly poolSize: number
 	readonly declaredQuorum: number
 	readonly majorityFloor: number
-	/** `max(declaredQuorum, majorityFloor)` — what an outcome must actually reach. */
+	/** The count the validator's ruleset percentage demands of this pool. */
+	readonly rulesetQuorum: number
+	/** `max(declaredQuorum, majorityFloor, rulesetQuorum)` — what an outcome must reach. */
 	readonly requiredQuorum: number
 	readonly minimumPool: number
+	/** The sanitized ruleset this assessment applied. */
+	readonly ruleset: AuctionValidatorRuleset
 	/** Any issue at `invalid` severity. */
 	readonly valid: boolean
 	readonly issues: readonly AuctionValidatorPolicyIssue[]
@@ -81,31 +140,39 @@ export interface AuctionValidatorPolicyInput {
 	readonly settlement_policy?: string
 }
 
-export const assessAuctionValidatorPolicy = (input: AuctionValidatorPolicyInput): AuctionValidatorPolicyAssessment => {
+export const assessAuctionValidatorPolicy = (
+	input: AuctionValidatorPolicyInput,
+	rulesetInput?: Partial<AuctionValidatorRuleset>,
+): AuctionValidatorPolicyAssessment => {
 	const pool = Array.from(new Set(input.auditors))
 	const poolSize = pool.length
 	const declaredQuorum =
 		Number.isSafeInteger(input.auditor_quorum) && (input.auditor_quorum as number) > 0 ? (input.auditor_quorum as number) : 0
 	const majorityFloor = requiredVerdictMajority(poolSize)
-	const requiredQuorum = Math.max(declaredQuorum, majorityFloor)
+
+	// The validator's own requirements. The hard >50% rule is enforced inside
+	// `sanitizeAuctionValidatorRuleset`, so an untrusted ruleset cannot weaken it.
+	const ruleset = sanitizeAuctionValidatorRuleset(rulesetInput)
+	const rulesetQuorum = rulesetRequiredQuorum(ruleset, poolSize)
+	const requiredQuorum = Math.max(declaredQuorum, majorityFloor, rulesetQuorum)
 
 	// The multiparty policy is the strict one. Anything else is treated as the
 	// legacy single-party policy, whose existing auctions are grandfathered.
 	const isMultiparty = input.settlement_policy === AUCTION_MULTIPARTY_SETTLEMENT_POLICY
-	const minimumPool = isMultiparty ? AUCTION_MINIMUM_VALIDATORS : 1
+	const minimumPool = isMultiparty ? ruleset.minimum_validators : 1
 	const poolSeverity: AuctionValidatorPolicySeverity = isMultiparty ? 'invalid' : 'warning'
 
 	const issues: AuctionValidatorPolicyIssue[] = []
 
 	// Reported against the same threshold for both policies, so a grandfathered
 	// single-validator auction is still visible — it is merely not invalidated.
-	if (poolSize < AUCTION_MINIMUM_VALIDATORS) {
+	if (poolSize < ruleset.minimum_validators) {
 		issues.push({
 			code: 'pool_below_minimum',
 			severity: poolSeverity,
 			detail:
 				`This auction lists ${poolSize} validator(s); at least ${minimumPool} ` +
-				(isMultiparty ? 'are required.' : 'is required, and new auctions require at least 2.') +
+				(isMultiparty ? 'are required.' : `is required, and this validator requires at least ${ruleset.minimum_validators}.`) +
 				` A pool of ${AUCTION_RECOMMENDED_VALIDATOR_POOL} is recommended, since two validators ` +
 				'must agree unanimously to form a majority.',
 		})
@@ -119,6 +186,16 @@ export const assessAuctionValidatorPolicy = (input: AuctionValidatorPolicyInput)
 				`This auction declares a quorum of ${declaredQuorum}, below the strict majority of ` +
 				`${majorityFloor} required for a pool of ${poolSize}. Two disjoint groups could each reach ` +
 				'quorum on opposite outcomes, so the auction is invalid until the validators agree on one result.',
+		})
+	}
+
+	if (declaredQuorum > 0 && rulesetQuorum > majorityFloor && declaredQuorum < rulesetQuorum) {
+		issues.push({
+			code: 'quorum_below_ruleset',
+			severity: 'invalid',
+			detail:
+				`This auction declares a quorum of ${declaredQuorum}, but this validator's ruleset requires ` +
+				`${ruleset.minimum_quorum_percent}% of the pool (${rulesetQuorum} of ${poolSize}).`,
 		})
 	}
 
@@ -148,8 +225,10 @@ export const assessAuctionValidatorPolicy = (input: AuctionValidatorPolicyInput)
 		poolSize,
 		declaredQuorum,
 		majorityFloor,
+		rulesetQuorum,
 		requiredQuorum,
 		minimumPool,
+		ruleset,
 		valid: !issues.some((issue) => issue.severity === 'invalid'),
 		issues: issuesOut,
 		legacyTolerated: !isMultiparty && issuesOut.every((issue) => issue.severity === 'warning') && issuesOut.length > 0,

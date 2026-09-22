@@ -498,3 +498,27 @@ Two tolerances, both explicit rather than accidental:
 The majority floor in the tally remains as a **backstop**: a client that fails to
 run the assessment still cannot accept an outcome with at most half the pool
 behind it.
+
+### Amendment — the auditor ruleset, and one quorum implementation (2026-09)
+
+**The ruleset.** The minimum validator pool and the quorum minimum are the
+validator's own business, not a protocol constant. A validator declares
+`minValidators` and `minQuorumPercent` in its published policy document, and
+applies that ruleset to the auctions it validates. The ruleset is untrusted data
+from a third party, so `sanitizeAuctionValidatorRuleset` raises any percentage at or
+below **50** to the hard floor, falls back to the defaults for non-integer or
+out-of-range counts, and can only make the requirement stricter — never weaker.
+`minQuorumPercent` defaults to 51, which reproduces the strict-majority floor
+exactly at every pool size; `minValidators` defaults to 2 (3 recommended, since 2
+forces unanimity). The requirement an outcome must reach is
+`max(declared auditor_quorum, floor(P/2)+1, ceil(P × minQuorumPercent / 100))`.
+
+**One quorum implementation.** The rule now lives in `verdictMajority.ts` and is
+consumed by every path that decides whether a bid is valid: the verdict tally
+(`verdictQuorum.ts`, used by the bid-progress dialog), the participation gate
+(`multipartyParticipation.ts`), the bid classifier (`bidValidation.ts`), and the
+auction-level assessment. The classifier previously compared verdict counts against
+the declared `auditor_quorum` directly, which would have made it a second, weaker
+quorum implementation — a seller could have declared a forkable quorum and had bids
+classified as valid through that path alone. A test asserts each path's requirement
+for the same auction.

@@ -287,6 +287,22 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   one: it is not a member of the condemn claims. Compliant clients MUST NOT treat
   any bid in such an auction as valid, and MUST surface the reason.
 
+  **The auditor ruleset (amendment 2026-09).** The minimum validator pool and the
+  quorum minimum are a **ruleset**, not a constant: a validator declares its own
+  `minValidators` and `minQuorumPercent` in its published policy document
+  (`ValidatorPolicyDocument`), and applies that ruleset to the auctions it
+  validates. A ruleset is data from a third party and is treated as untrusted:
+  a percentage at or below **50** is raised to the hard floor rather than honoured,
+  non-integer or out-of-range counts fall back to the defaults, and a ruleset can
+  only ever make the requirement **stricter** than the protocol floor, never
+  weaker.
+
+  The **only strict requirement** is that rule: an outcome needs more than half of
+  the pool. `minQuorumPercent` defaults to 51, which reproduces the strict-majority
+  floor exactly for every pool size; `minValidators` defaults to 2, with 3
+  recommended. The requirement an outcome must actually reach is
+  `max(declared auditor_quorum, floor(P/2)+1, ceil(P × minQuorumPercent / 100))`.
+
   Two deliberate tolerances. **Single-validator auctions** published under the
   legacy single-party policy are grandfathered: their pool size is reported as a
   warning, never as invalidity, because invalidating live auctions for a rule their

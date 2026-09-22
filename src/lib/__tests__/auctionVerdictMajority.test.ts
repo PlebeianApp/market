@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { computeVerdictQuorum } from '../auction/verdictQuorum'
 import { effectiveVerdictQuorum, requiredVerdictMajority } from '../auction/verdictMajority'
+import { assessAuctionValidatorPolicy } from '../auction/auctionValidatorPolicy'
+import { projectMultipartyParticipation } from '../auction/multipartyParticipation'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '../auction/multipartySchedule'
+import type { ParsedMultipartyValidatorAcceptance } from '../auction/multipartyAuthorization'
 import type { ParsedValidatorVerdictEvent } from '../auction/events'
 
 const pool = (size: number): string[] => Array.from({ length: size }, (_, index) => (index + 1).toString(16).repeat(64).slice(0, 64))
@@ -16,6 +20,21 @@ const verdict = (validatorPubkey: string, claim: string, bidEventId = 'bid-1'): 
 
 const CONFIRM = 'valid_bid_placed'
 const CONDEMN = 'bid_invalid'
+
+/** Minimal acceptance matching the coordinate/commitment used by the cross-path test. */
+const acceptanceFor = (validatorPubkey: string): ParsedMultipartyValidatorAcceptance =>
+	({
+		id: `acceptance-${validatorPubkey.slice(0, 6)}`,
+		validator_pubkey: validatorPubkey,
+		auction_root_event_id: 'f'.repeat(64),
+		auction_coordinate: `30408:${'a'.repeat(64)}:auction-1`,
+		payout_schedule_commitment: 'b'.repeat(64),
+		schedule_index: 0,
+		payout_capability_event_id: '1'.repeat(64),
+		validator_offer_event_id: '2'.repeat(64),
+		allocation_bps: 500,
+		expires_at: 1_800_003_600,
+	}) as unknown as ParsedMultipartyValidatorAcceptance
 
 describe('Strict-majority quorum floor', () => {
 	test('the floor is the smallest count no disjoint group can match', () => {
@@ -138,5 +157,47 @@ describe('Strict-majority quorum floor', () => {
 		)
 		expect(result.confirmCount).toBe(1)
 		expect(result.hasPositiveVerdict).toBe(false)
+	})
+
+	test('every consumer applies the same requirement to one auction', () => {
+		// One auction: four validators, a declared quorum of two. Every path that
+		// decides whether a bid is valid must demand three, or the weakest path
+		// becomes the real rule.
+		const fourAuditors = pool(4)
+		const declaredQuorum = 2
+		const expected = 3
+		const [a, b, c] = fourAuditors
+
+		expect(effectiveVerdictQuorum(declaredQuorum, fourAuditors.length)).toBe(expected)
+
+		const tally = computeVerdictQuorum(
+			[verdict(a as string, CONFIRM), verdict(b as string, CONFIRM)],
+			'bid-1',
+			fourAuditors,
+			declaredQuorum,
+		)
+		expect(tally.requiredQuorum).toBe(expected)
+		expect(tally.hasPositiveVerdict).toBe(false)
+
+		const assessment = assessAuctionValidatorPolicy({
+			auditors: fourAuditors,
+			auditor_quorum: declaredQuorum,
+			settlement_policy: AUCTION_MULTIPARTY_SETTLEMENT_POLICY,
+		})
+		expect(assessment.requiredQuorum).toBe(expected)
+		expect(assessment.valid).toBe(false)
+
+		const participation = projectMultipartyParticipation({
+			root: {
+				coordinate: `30408:${'a'.repeat(64)}:auction-1`,
+				payout_schedule_commitment: 'b'.repeat(64),
+				auditors: fourAuditors,
+				auditor_quorum: declaredQuorum,
+			},
+			acceptances: [acceptanceFor(a as string), acceptanceFor(b as string), acceptanceFor(c as string)],
+			nowUnixSeconds: 1_800_000_000,
+		})
+		expect(participation.quorum).toBe(expected)
+		expect(participation.declaredQuorum).toBe(declaredQuorum)
 	})
 })
