@@ -33,6 +33,7 @@ import { useStore } from '@tanstack/react-store'
 import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 
 type BidGroup = {
 	key: string
@@ -221,6 +222,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/bids
 
 function BidsOverviewComponent() {
 	useDashboardTitle('Bids')
+	const cocoMode = isCocoV2AuctionMode()
 
 	const { user, isAuthenticated } = useStore(authStore)
 	const { pendingTokens } = useStore(nip60Store)
@@ -342,6 +344,7 @@ function BidsOverviewComponent() {
 	})
 
 	const handleRefreshBidStatuses = async () => {
+		if (cocoMode) return
 		setIsRefreshingBids(true)
 		try {
 			await nip60Actions.refresh({ consolidate: true })
@@ -351,6 +354,10 @@ function BidsOverviewComponent() {
 	}
 
 	const handleReclaimBidGroup = async (group: BidGroup, reclaimableTokens: PendingNip60Token[]) => {
+		if (cocoMode) {
+			toast.error('Coco v2 refunds are unavailable until Checkpoint C is supported.')
+			return
+		}
 		if (reclaimableTokens.length === 0) return
 
 		setReclaimingGroup(group.key)
@@ -389,6 +396,18 @@ function BidsOverviewComponent() {
 		return (
 			<div className="p-6 text-center">
 				<p>Please log in to manage your bids.</p>
+			</div>
+		)
+	}
+
+	if (cocoMode) {
+		return (
+			<div className="p-6 text-center">
+				<h1 className="text-2xl font-bold">Coco auction bids</h1>
+				<p className="mt-2 text-sm text-muted-foreground">
+					Bid preparation and publication are available on the auction page. Original-Send refunds remain unavailable until Checkpoint C can
+					be bound durably.
+				</p>
 			</div>
 		)
 	}

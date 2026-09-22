@@ -7,7 +7,8 @@ import {
 import type { CocoAuctionCommandRecord, CocoAuctionCommandRepository } from './commandRepository'
 import { IndexedDbCocoAuctionCommandRepository, projectCocoAuctionCommand } from './commandRepository'
 import type { CocoBidPublicationAdapter, CocoEngineBidProjection, CocoEnginePort } from './enginePort'
-import { UnavailableCocoV2EnginePort } from './enginePort'
+import { CocoV2AuctionEnginePort } from './cocoEngine'
+import { cocoRuntimeRegistry } from '@/lib/coco/runtime'
 import { assertFakeCocoAuctionMint, readCocoV2AuctionEnvironment, type CocoV2AuctionEnvironment } from './mode'
 import type {
 	CocoAuctionAccountIdentity,
@@ -54,6 +55,9 @@ const assertProjectionBinding = (
 	if (projection.operationId !== operationId) throw new Error('Coco returned a different operation identity')
 	if (projection.mintUrl !== intent.mintUrl) throw new Error('Coco operation mint does not match the durable command')
 	if (projection.unit !== intent.unit) throw new Error('Coco operation unit does not match the durable command')
+	if (projection.sellerPublicAuthority !== intent.sellerPublicAuthority) {
+		throw new Error('Coco operation seller authority does not match the durable command')
+	}
 	if (projection.grossAmount !== intent.grossAmount || projection.amount !== intent.amount) {
 		throw new Error('Coco operation amount does not match the durable command')
 	}
@@ -77,6 +81,7 @@ const commandFromIntent = (intent: CocoAuctionBidIntent, intentFingerprint: stri
 	auction: intent.auction,
 	bidderPubkey: intent.bidderPubkey,
 	sellerPubkey: intent.sellerPubkey,
+	sellerPublicAuthority: intent.sellerPublicAuthority,
 	mintUrl: intent.mintUrl,
 	unit: intent.unit,
 	grossAmount: intent.grossAmount,
@@ -125,6 +130,15 @@ export class PlebeianAuctionWalletHost {
 		}
 	}
 
+	async getBidProjection(input: { commandId: string; account: CocoAuctionAccountIdentity }): Promise<CocoAuctionBidProjection | null> {
+		const account = this.requireAccount(input.account)
+		const record = await this.commands.get(input.commandId)
+		if (!record) return null
+		if (!sameAccount(record.account, account)) throw new Error('Coco Auction command belongs to another account or environment')
+		if (!record.conditionFingerprint) return null
+		return projectCocoAuctionCommand(record)
+	}
+
 	private async prepareBidOnce(intent: CocoAuctionBidIntent, intentFingerprint: string): Promise<CocoAuctionBidProjection> {
 		const now = this.now()
 		const claimed = await this.commands.createOrGet(commandFromIntent(intent, intentFingerprint, now))
@@ -165,7 +179,7 @@ export class PlebeianAuctionWalletHost {
 			revision: current.revision + 1,
 			updatedAt: this.now(),
 		}))
-		await this.engine.cancelPreparedBid(record.operationId)
+		await this.engine.cancelPreparedBid(record.operationId, account)
 		const cancelled = await this.commands.update(record.commandId, (current) => ({
 			...current,
 			status: 'cancelled',
@@ -210,19 +224,23 @@ export class PlebeianAuctionWalletHost {
 		// Market canonical state is re-read immediately before the monetary
 		// transition. Render-time UI state is never accepted as authority.
 		await revalidate(projection)
-		await this.commands.update(intent.commandId, (current) => ({
+		const executing = await this.commands.update(intent.commandId, (current) => ({
 			...current,
 			status: 'executing',
+			publicationCreatedAt: current.publicationCreatedAt ?? Math.floor(this.now() / 1000),
 			revision: current.revision + 1,
 			updatedAt: this.now(),
 		}))
 
-		const executed = assertProjectionBinding(intent, intent.commandId, await this.engine.executeBid(intent.commandId))
+		const executed =
+			projection.status === 'executed'
+				? assertProjectionBinding(intent, intent.commandId, projection)
+				: assertProjectionBinding(intent, intent.commandId, await this.engine.executeBid({ ...intent, operationId: intent.commandId }))
 		await this.storeProjection(intent.commandId, executed, 'executed')
 
 		// Bearer-adjacent protocol material is scoped to this callback and is
 		// never returned by the host or stored in the Market command database.
-		const preparedEvent = await this.engine.withBidPublicationMaterial(intent.commandId, async (material) => {
+		const preparedEvent = await this.engine.withBidPublicationMaterial({ ...intent, operationId: intent.commandId }, async (material) => {
 			if (material.operationId !== intent.commandId) throw new Error('Bid publication material belongs to another Coco operation')
 			if (
 				material.conditionFingerprint !== executed.conditionFingerprint ||
@@ -230,7 +248,8 @@ export class PlebeianAuctionWalletHost {
 			) {
 				throw new Error('Bid publication material does not match the exact executed Coco operation')
 			}
-			return publisher.prepare(material, intent)
+			if (!executing.publicationCreatedAt) throw new Error('Coco Auction publication timestamp was not frozen before execute')
+			return publisher.prepare(material, intent, executing.publicationCreatedAt)
 		})
 		if (!HEX_32.test(preparedEvent.eventId.toLowerCase())) throw new Error('Prepared kind-1023 event id is invalid')
 		await this.commands.update(intent.commandId, (current) => ({
@@ -342,7 +361,7 @@ export const getPlebeianWalletHost = (): PlebeianWalletHost => {
 	if (!configuredHost) {
 		configuredHost = new PlebeianWalletHost(
 			new PlebeianAuctionWalletHost(
-				new UnavailableCocoV2EnginePort(),
+				new CocoV2AuctionEnginePort(cocoRuntimeRegistry),
 				new IndexedDbCocoAuctionCommandRepository(),
 				readCocoV2AuctionEnvironment(),
 			),

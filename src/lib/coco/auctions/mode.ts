@@ -8,8 +8,27 @@ export interface CocoV2AuctionEnvironment {
 	fakeMintAllowlist: readonly string[]
 }
 
+// Bun only exposes BUN_PUBLIC_* values to browser bundles when the property
+// access is statically discoverable. Keep these reads explicit; routing them
+// solely through process.env[name] makes server and browser select different
+// monetary engines.
+const BUN_PUBLIC_AUCTION_MONETARY_MODE = process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
+const BUN_PUBLIC_COCO_ENVIRONMENT_ID = process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID
+const BUN_PUBLIC_COCO_MONETARY_MODE = process.env.BUN_PUBLIC_COCO_MONETARY_MODE
+const BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST = process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
+
 const readEnv = (name: string): string | undefined => {
-	const value = process.env[name]
+	const staticallyExposedValue =
+		name === 'BUN_PUBLIC_AUCTION_MONETARY_MODE'
+			? BUN_PUBLIC_AUCTION_MONETARY_MODE
+			: name === 'BUN_PUBLIC_COCO_ENVIRONMENT_ID'
+				? BUN_PUBLIC_COCO_ENVIRONMENT_ID
+				: name === 'BUN_PUBLIC_COCO_MONETARY_MODE'
+					? BUN_PUBLIC_COCO_MONETARY_MODE
+					: name === 'BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST'
+						? BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
+						: undefined
+	const value = staticallyExposedValue ?? process.env[name]
 	return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
@@ -23,15 +42,15 @@ export const readCocoV2AuctionEnvironment = (): CocoV2AuctionEnvironment => {
 	if (monetaryMode !== 'fake') throw new Error('Coco v2 Auction mode is fake-funds-only; real monetary mode is forbidden')
 	const rawAllowlist = readEnv('BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST') ?? readEnv('APP_COCO_FAKE_MINT_ALLOWLIST')
 	const fakeMintAllowlist = Object.freeze(
-		[
-			...new Set(
+		Array.from(
+			new Set(
 				(rawAllowlist ?? '')
 					.split(',')
 					.map((mint) => mint.trim())
 					.filter(Boolean)
 					.map(normalizeCocoMintUrl),
 			),
-		].sort(),
+		).sort(),
 	)
 	if (!fakeMintAllowlist.length) throw new Error('Coco v2 Auction mode requires a non-empty fake mint allowlist')
 	return Object.freeze({ environmentId, monetaryMode: 'fake', fakeMintAllowlist })

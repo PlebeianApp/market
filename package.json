@@ -35,7 +35,10 @@
 		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {
+		"@cashu/coco-core": "file:vendor/coco-61e987aa097112e4ed4c0f47f8b1d38db9c846af/cashu-coco-core-2.0.0-pm1.tgz",
+		"@cashu/coco-indexeddb": "file:vendor/coco-61e987aa097112e4ed4c0f47f8b1d38db9c846af/cashu-coco-indexeddb-2.0.0-pm1.tgz",
 		"@cashu/cashu-ts": "^2.1",
+		"@plebeian-market/coco-cashu-ts": "npm:@cashu/cashu-ts@5.0.0-rc.4",
 		"@contextvm/sdk": "^0.11.10",
 		"@formkit/auto-animate": "^0.9.0",
 		"@getalby/lightning-tools": "^8.1.1",

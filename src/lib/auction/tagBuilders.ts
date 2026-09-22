@@ -157,6 +157,12 @@ export interface BidEventTagsInput {
 	bidNonce: string
 	prevBidId?: string
 	note?: string
+	/** Repo-local non-bearer binding to the durable Coco Send operation. */
+	cocoOperationId?: string
+	/** Public immutable-condition fingerprint projected by the sealed host. */
+	cocoConditionFingerprint?: string
+	/** Public locked-output commitment fingerprint projected by the sealed host. */
+	cocoCommitmentFingerprint?: string
 }
 
 export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
@@ -195,6 +201,9 @@ export const buildBidEventTags = (input: BidEventTagsInput): string[][] => {
 
 	if (input.prevBidId) tags.push(['prev_bid', input.prevBidId])
 	if (input.note) tags.push(['note', input.note])
+	if (input.cocoOperationId) tags.push(['coco_operation', input.cocoOperationId])
+	if (input.cocoConditionFingerprint) tags.push(['coco_condition', input.cocoConditionFingerprint])
+	if (input.cocoCommitmentFingerprint) tags.push(['coco_commitment', input.cocoCommitmentFingerprint])
 	return tags
 }
 

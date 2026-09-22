@@ -1,4 +1,5 @@
 export * from './canonical'
+export * from './cocoEngine'
 export * from './commandRepository'
 export * from './enginePort'
 export * from './mode'

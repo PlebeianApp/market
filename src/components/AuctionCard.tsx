@@ -17,7 +17,6 @@ import {
 	getAuctionImages,
 	getAuctionKeyScheme,
 	getAuctionMints,
-	getAuctionP2pkXpub,
 	getAuctionPathIssuer,
 	getAuctionRootEventId,
 	getAuctionStartAt,
@@ -56,7 +55,6 @@ export function AuctionCard({
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const acceptedMints = getAuctionMints(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
-	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const pathIssuerPubkey = getAuctionPathIssuer(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)

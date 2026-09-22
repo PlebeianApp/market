@@ -70,6 +70,7 @@ import {
 } from '@/queries/auctions'
 import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -234,6 +235,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 })
 
 function DashboardAuctionDetailRoute() {
+	const cocoMode = isCocoV2AuctionMode()
 	const { auctionId } = Route.useParams()
 	useDashboardTitle('Auction Details')
 	const { user } = useStore(authStore)
@@ -259,7 +261,7 @@ function DashboardAuctionDetailRoute() {
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
 	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
-	const p2pkXpub = getAuctionP2pkXpub(auction)
+	const p2pkXpub = cocoMode ? auction?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || '' : getAuctionP2pkXpub(auction)
 	const summary = getAuctionSummary(auction) || auction?.content || 'No summary provided yet.'
 	const previewImage = getAuctionImages(auction)[0]?.[1]
 
@@ -461,7 +463,7 @@ function DashboardAuctionDetailRoute() {
 		if (!topBid) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === topBid.id)
 	}, [pathReleases, topBid])
-	const canSettleNow = ended && !settlementLocked && !settlementWindowExpired && (hasPathReleaseForTopBid || !reserveMet)
+	const canSettleNow = !cocoMode && ended && !settlementLocked && !settlementWindowExpired && (hasPathReleaseForTopBid || !reserveMet)
 
 	// Settlement / claim ordering data — needed by both perspectives.
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
@@ -532,11 +534,23 @@ function DashboardAuctionDetailRoute() {
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
 	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
-	const canBidderReleaseNow = !!(isMyBidTop && ended && !myAlreadyReleased && !settlementWindowExpired && myTopBidEvent && myBidderRecord)
+	const canBidderReleaseNow = !!(
+		!cocoMode &&
+		isMyBidTop &&
+		ended &&
+		!myAlreadyReleased &&
+		!settlementWindowExpired &&
+		myTopBidEvent &&
+		myBidderRecord
+	)
 
 	const releaseQueryClient = useQueryClient()
 	const [isReleasing, setIsReleasing] = useState(false)
 	const releasePath = async () => {
+		if (cocoMode) {
+			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
+			return
+		}
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
@@ -554,6 +568,10 @@ function DashboardAuctionDetailRoute() {
 	}
 
 	const submitSettlement = async () => {
+		if (cocoMode) {
+			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
+			return
+		}
 		if (!auction) return
 		if (!isOwner) {
 			toast.error('Only the auction owner can settle this auction')

@@ -45,6 +45,8 @@ export interface CocoAuctionBidIntent {
 	auction: CocoAuctionReference
 	bidderPubkey: string
 	sellerPubkey: string
+	/** Seller HD xpub copied from the canonical kind-30408 event. */
+	sellerPublicAuthority: string
 	mintUrl: string
 	unit: CocoAuctionUnit
 	/** Cumulative kind-1023 bid amount. */
@@ -63,6 +65,7 @@ export interface CocoAuctionBidProjection {
 	auction: CocoAuctionReference
 	bidderPubkey: string
 	sellerPubkey: string
+	sellerPublicAuthority: string
 	mintUrl: string
 	unit: CocoAuctionUnit
 	grossAmount: number

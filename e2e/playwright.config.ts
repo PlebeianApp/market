@@ -4,6 +4,15 @@ import { defineConfig, devices } from '@playwright/test'
 import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const COCO_V2_WEB_SERVER_ENV =
+	process.env.COCO_V2_E2E === '1'
+		? {
+				BUN_PUBLIC_AUCTION_MONETARY_MODE: process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE ?? 'coco-v2',
+				BUN_PUBLIC_COCO_ENVIRONMENT_ID: process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID ?? 'local-e2e',
+				BUN_PUBLIC_COCO_MONETARY_MODE: process.env.BUN_PUBLIC_COCO_MONETARY_MODE ?? 'fake',
+				BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST: process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST ?? 'http://localhost:3338',
+			}
+		: {}
 
 export default defineConfig({
 	testDir: './tests',
@@ -78,6 +87,7 @@ export default defineConfig({
 					stdout: 'pipe',
 					stderr: 'pipe',
 					env: {
+						...COCO_V2_WEB_SERVER_ENV,
 						NODE_ENV: 'test',
 						PORT: String(TEST_PORT),
 						APP_RELAY_URL: RELAY_URL,

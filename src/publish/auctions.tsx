@@ -50,9 +50,14 @@ import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import {
 	assertLegacyAuctionMoneyAllowed,
+	deriveCocoAuctionBidCommandId,
 	getPlebeianWalletHost,
 	isCocoV2AuctionMode,
 	readCocoV2AuctionEnvironment,
+	type CocoAuctionBidIntent,
+	type CocoAuctionBidProjection,
+	type CocoBidPublicationAdapter,
+	type SealedCocoBidPublicationMaterial,
 } from '@/lib/coco/auctions'
 
 export interface AuctionSpecEntry {
@@ -448,6 +453,201 @@ const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: st
 	})[0]
 }
 
+const getEventTag = (event: NostrEventLike, name: string): string => event.tags.find((tag) => tag[0] === name)?.[1] ?? ''
+
+const resolveCocoBidCanonicalIntent = async (
+	formData: AuctionBidFormData,
+	expected?: CocoAuctionBidProjection,
+): Promise<CocoAuctionBidIntent> => {
+	if (!formData.auctionEventId || !formData.auctionCoordinates) throw new Error('Canonical Auction identity is required')
+	if (!formData.p2pkXpub || !formData.sellerPubkey) throw new Error('Canonical seller authority is required')
+	if (!Number.isSafeInteger(formData.amount) || formData.amount < AUCTION_MIN_BID_SATS) {
+		throw new Error(`Bid amount must be an integer of at least ${AUCTION_MIN_BID_SATS} sats`)
+	}
+	const bidder = await getUser()
+	if (!bidder?.pubkey) throw new Error('No active bidder identity')
+	if (expected && expected.bidderPubkey !== bidder.pubkey) throw new Error('Active bidder identity changed after Coco PREPARE')
+
+	const environment = readCocoV2AuctionEnvironment()
+	const [{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements }, { parseAuctionEvent }, { parseBidEvent }] = await Promise.all([
+		import('@/queries/auctions'),
+		import('@/lib/schemas/auction/auctionEvent'),
+		import('@/lib/schemas/auction/bidEvent'),
+	])
+	const currentAuction = await fetchAuction(formData.auctionEventId, true)
+	if (!currentAuction) throw new Error('Canonical Auction is unavailable or failed signature validation')
+	const parsedAuctionResult = parseAuctionEvent(toRawEvent(currentAuction))
+	if (!parsedAuctionResult.ok) throw new Error('Canonical Auction is malformed')
+	const parsedAuction = parsedAuctionResult.value
+	const currentRoot = getAuctionTagValue(currentAuction, 'auction_root_event_id') || currentAuction.id
+	const currentD = getAuctionTagValue(currentAuction, 'd')
+	const currentCoordinate = currentD ? `30408:${currentAuction.pubkey}:${currentD}` : ''
+	if (
+		currentRoot !== formData.auctionEventId ||
+		currentCoordinate !== formData.auctionCoordinates ||
+		currentAuction.pubkey !== formData.sellerPubkey
+	) {
+		throw new Error('Canonical Auction identity changed after the bid was composed')
+	}
+	if (getAuctionTagValue(currentAuction, 'p2pk_xpub') !== formData.p2pkXpub) {
+		throw new Error('Canonical Auction seller authority changed')
+	}
+	if (parsedAuction.maxEndAt !== formData.auctionEffectiveEndAt) throw new Error('Canonical Auction bidding cutoff changed')
+	const locktime = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+	if (locktime !== formData.auctionLocktimeAt + formData.settlementGraceSeconds) {
+		throw new Error('Canonical Auction refund locktime changed')
+	}
+	const now = Math.floor(Date.now() / 1000)
+	if (now < parsedAuction.startAt) throw new Error('Auction has not started yet')
+	if (now >= parsedAuction.maxEndAt) throw new Error('Auction already ended')
+
+	const selectedMint = formData.mintCandidates[0]
+	if (!selectedMint || !parsedAuction.mints.includes(selectedMint)) throw new Error('Selected mint is not trusted by the canonical Auction')
+	const terminalSettlements = await fetchAuctionSettlements(formData.auctionEventId, null, formData.auctionCoordinates, undefined, true)
+	if (terminalSettlements.length) throw new Error('Auction already has a terminal settlement event')
+
+	const signedBids = await fetchAuctionBids(formData.auctionEventId, null, formData.auctionCoordinates, true)
+	const ownCocoBids = signedBids
+		.filter((event) => event.pubkey === bidder.pubkey && !!getEventTag(event, 'coco_operation'))
+		.flatMap((event) => {
+			const parsed = parseBidEvent(toRawEvent(event))
+			return parsed.ok ? [{ event, amount: parsed.value.amount }] : []
+		})
+		.sort((left, right) => {
+			const amountDelta = right.amount - left.amount
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (right.event.created_at || 0) - (left.event.created_at || 0)
+			return timeDelta !== 0 ? timeDelta : right.event.id.localeCompare(left.event.id)
+		})
+	const previous = ownCocoBids[0]
+	const previousBidEventId = previous?.event.id
+	const previousAmount = previous?.amount ?? 0
+	if (formData.amount <= previousAmount) throw new Error('Coco rebid must exceed the bidder’s prior Coco bid')
+	const legAmount = formData.amount - previousAmount
+	if (!Number.isSafeInteger(legAmount) || legAmount < AUCTION_MIN_BID_LEG_SATS) {
+		throw new Error(`Bid raise must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
+	}
+
+	const identity = {
+		account: { accountPubkey: bidder.pubkey, environmentId: environment.environmentId },
+		auction: { rootEventId: formData.auctionEventId, coordinate: formData.auctionCoordinates },
+		bidderPubkey: bidder.pubkey,
+		sellerPubkey: formData.sellerPubkey,
+		sellerPublicAuthority: formData.p2pkXpub,
+		mintUrl: selectedMint,
+		unit: 'sat' as const,
+		grossAmount: formData.amount,
+		amount: legAmount,
+		locktime,
+		createdForEndAt: parsedAuction.maxEndAt,
+		...(previousBidEventId ? { previousBidEventId } : {}),
+	}
+	const intent: CocoAuctionBidIntent = { ...identity, commandId: deriveCocoAuctionBidCommandId(identity) }
+	if (expected) {
+		if (expected.commandId !== intent.commandId || expected.operationId !== intent.commandId) {
+			throw new Error('Current Auction state no longer matches the exact prepared Coco command')
+		}
+		if (
+			expected.grossAmount !== intent.grossAmount ||
+			expected.amount !== intent.amount ||
+			expected.mintUrl !== intent.mintUrl ||
+			expected.locktime !== intent.locktime ||
+			expected.sellerPublicAuthority !== intent.sellerPublicAuthority
+		) {
+			throw new Error('Current Auction monetary binding differs from Coco PREPARE')
+		}
+	}
+	return intent
+}
+
+class CocoAuctionBidPublisher implements CocoBidPublicationAdapter {
+	async prepare(
+		material: SealedCocoBidPublicationMaterial,
+		intent: CocoAuctionBidIntent,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }> {
+		const bidder = await getUser()
+		if (!bidder?.pubkey || bidder.pubkey !== intent.bidderPubkey) throw new Error('Active signer differs from the prepared Coco bidder')
+		const template: EventTemplate = {
+			kind: AUCTION_BID_KIND,
+			content: JSON.stringify({ type: 'auction_bid_v1', amount: intent.grossAmount, mint: material.mintUrl }),
+			tags: buildBidEventTags({
+				auctionRootEventId: intent.auction.rootEventId,
+				auctionCoordinate: intent.auction.coordinate,
+				sellerPubkey: intent.sellerPubkey,
+				amount: intent.grossAmount,
+				mint: material.mintUrl,
+				locktime: material.locktime,
+				refundPubkey: material.refundPublicAuthority,
+				childPubkey: material.recipientPublicAuthority,
+				lockSecrets: [...material.lockSecrets],
+				proofYs: [...material.proofYs],
+				createdForEndAt: intent.createdForEndAt,
+				bidNonce: intent.commandId,
+				prevBidId: intent.previousBidEventId,
+				cocoOperationId: material.operationId,
+				cocoConditionFingerprint: material.conditionFingerprint,
+				cocoCommitmentFingerprint: material.commitmentFingerprint,
+			}),
+			created_at: publicationCreatedAt,
+		}
+		const unsigned: NostrEvent = { ...template, pubkey: bidder.pubkey, id: '', sig: '' }
+		unsigned.id = getEventHash(unsigned)
+		cacheAuctionBidEventForRepublish(unsigned)
+		const signed = await signNostrEvent(template)
+		if (signed.id !== unsigned.id || getEventHash(signed) !== unsigned.id || signed.pubkey !== bidder.pubkey) {
+			throw new Error('Refusing Coco bid publication because signing changed the frozen event identity')
+		}
+		cacheAuctionBidEventForRepublish(signed)
+		return { eventId: signed.id }
+	}
+
+	async publish(eventId: string): Promise<void> {
+		const cached = loadAuctionBidRepublishCache()[eventId]
+		if (!cached || cached.payload.kind !== AUCTION_BID_KIND || cached.payload.id !== eventId || getEventHash(cached.payload) !== eventId) {
+			throw new Error('Exact cached Coco kind-1023 is unavailable or failed integrity validation')
+		}
+		if (!cached.payload.sig) throw new Error('Exact cached Coco kind-1023 is not signed')
+		await publishRequired(cached.payload)
+		discardAuctionBidEventRepublishCacheEntry(eventId)
+	}
+}
+
+const cocoBidPublisher = new CocoAuctionBidPublisher()
+
+export const prepareCocoAuctionBid = async (formData: AuctionBidFormData): Promise<CocoAuctionBidProjection> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	return getPlebeianWalletHost().auctions.prepareBid(await resolveCocoBidCanonicalIntent(formData))
+}
+
+export const getCocoAuctionBid = async (commandId: string, bidderPubkey: string): Promise<CocoAuctionBidProjection | null> => {
+	if (!isCocoV2AuctionMode()) return null
+	const environment = readCocoV2AuctionEnvironment()
+	return getPlebeianWalletHost().auctions.getBidProjection({
+		commandId,
+		account: { accountPubkey: bidderPubkey, environmentId: environment.environmentId },
+	})
+}
+
+export const cancelPreparedCocoAuctionBid = async (projection: CocoAuctionBidProjection): Promise<void> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	await getPlebeianWalletHost().auctions.cancelPreparedBid({ commandId: projection.commandId, account: projection.account })
+}
+
+export const executePreparedCocoAuctionBid = async (formData: AuctionBidFormData, prepared: CocoAuctionBidProjection): Promise<string> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const intent = await resolveCocoBidCanonicalIntent(formData, prepared)
+	const published = await getPlebeianWalletHost().auctions.executeBid(
+		intent,
+		async (projection) => {
+			await resolveCocoBidCanonicalIntent(formData, projection)
+		},
+		cocoBidPublisher,
+	)
+	if (!published.publicationEventId) throw new Error('Coco host published no kind-1023 identity')
+	return published.publicationEventId
+}
+
 /**
  * Publish a bidder-held-path bid (kind 1023) — AUCTIONS.md §4.2.
  *
@@ -469,6 +669,10 @@ const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: st
  * Returns the published bid event id.
  */
 export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<string> => {
+	if (isCocoV2AuctionMode()) {
+		const prepared = await prepareCocoAuctionBid(formData)
+		return executePreparedCocoAuctionBid(formData, prepared)
+	}
 	assertLegacyAuctionMoneyAllowed('publishAuctionBid')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')

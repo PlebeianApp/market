@@ -29,6 +29,7 @@ import type {
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 
 function useNow(intervalMs = 30_000): number {
 	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
@@ -82,6 +83,7 @@ export function AuctionSettlement({
 	auctionCoordinates,
 	className,
 }: AuctionSettlementProps) {
+	const cocoMode = isCocoV2AuctionMode()
 	const { user } = useStore(authStore)
 	const currentUserPubkey = user?.pubkey
 	const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false)
@@ -120,6 +122,10 @@ export function AuctionSettlement({
 
 	// Actions
 	const handleReleasePath = async () => {
+		if (cocoMode) {
+			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
+			return
+		}
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
@@ -164,6 +170,10 @@ export function AuctionSettlement({
 	}
 
 	const handleSubmitSettlement = async (status: 'reserve_not_met' | undefined) => {
+		if (cocoMode) {
+			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
+			return
+		}
 		try {
 			await settlementMutation.mutateAsync({
 				auctionEventId: auctionRootEventId,
@@ -266,7 +276,11 @@ export function AuctionSettlement({
 
 	const ctaHandler = dispatchCta(descriptor)
 	const ctaLabel = descriptor.cta?.label ?? ''
-	const ctaDisabled = isReleasing || settlementMutation.isPending || (descriptor.cta?.kind === 'release-path' && !!optimisticRelease)
+	const isCocoMonetaryCta =
+		cocoMode &&
+		(descriptor.cta?.kind === 'release-path' || descriptor.cta?.kind === 'submit-settlement' || descriptor.cta?.kind === 'close-auction')
+	const ctaDisabled =
+		isCocoMonetaryCta || isReleasing || settlementMutation.isPending || (descriptor.cta?.kind === 'release-path' && !!optimisticRelease)
 
 	return (
 		<>
@@ -296,7 +310,9 @@ export function AuctionSettlement({
 									? 'Releasing…'
 									: (descriptor.cta.kind === 'submit-settlement' || descriptor.cta.kind === 'close-auction') && settlementMutation.isPending
 										? 'Publishing…'
-										: ctaLabel}
+										: isCocoMonetaryCta
+											? 'Coco settlement unavailable'
+											: ctaLabel}
 							</Button>
 						)}
 					</div>
