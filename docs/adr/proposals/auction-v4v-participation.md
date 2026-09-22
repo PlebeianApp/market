@@ -193,6 +193,29 @@ This is deliberately **not** a protocol requirement:
 The check is therefore an obligation on our client, enforced at the point where it
 is cheap, and it must be explicit in the UI rather than silent.
 
+### D14 — One shared client wording per state
+
+An under-confirmed auction is a single state with a single explanation. Every surface
+that has to describe it — the publish screen, the auction page, the bid button, the
+validator service — **must** use one sentence, owned by one function:
+
+> Configured _N_ validator(s) with quorum _X_, only _Y_ confirmed (_Z_ not seen).
+> Bids may never become valid.
+
+The owner is `describeBidBlock` in `src/lib/auction/multipartyParticipation.ts`,
+which owns the participation state; the four check points in
+`src/lib/auction/multipartyCheckPoints.ts` delegate to it through
+`describeValidatorShortfall`. The sentence is gated on the participation **status**,
+never on the derived `bidAllowed` flag, so no caller can silence it by passing an
+inconsistent object.
+
+Two reasons this is a decision rather than an implementation detail:
+
+- the same state described differently on two surfaces reads as two different
+  problems, and the bidder is the one who pays for that confusion;
+- the sentence is the client's only lever on this state, so it is the one place
+  where the wording is worth fixing by spec.
+
 ## Consequences
 
 - The UI can be written against one encoding: the schedule, with capabilities and

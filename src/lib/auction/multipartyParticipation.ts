@@ -179,18 +179,27 @@ export const isValidatorVerdictCounted = (validatorPubkey: string, participation
 	participation.participatingAuditors.includes(validatorPubkey)
 
 /**
- * Client-facing reason text for a blocked bid. Kept here so the UI, the validator
- * service and tests share one wording.
+ * Client-facing reason text for an auction whose configured quorum cannot be
+ * reached.
+ *
+ * This is the **single owner** of that sentence. The four multiparty check points
+ * (`multipartyCheckPoints.ts`) delegate to it, so the publish screen, the auction
+ * page, the bid button and the validator service cannot describe one state in three
+ * different ways.
+ *
+ * It is gated on the participation *status* rather than on `bidAllowed`: the flag is
+ * derived from the status, and an auction whose quorum is unreachable is
+ * under-confirmed whatever a caller puts in the flag, so the warning cannot be
+ * silenced by an inconsistent input object.
  */
 export const describeBidBlock = (participation: MultipartyParticipation): string | null => {
-	if (participation.bidAllowed) {
+	if (participation.status !== 'quorum_not_met') {
 		return null
 	}
 	const missing = participation.missingAuditors.length
 	return (
-		`This auction configures ${participation.auditorCount} validator(s) with a quorum of ` +
-		`${participation.quorum}, but only ${participation.participatingAuditors.length} have ` +
-		`confirmed participation${missing > 0 ? ` (${missing} not seen)` : ''}. Bids may never ` +
-		'become valid, so bidding is not recommended.'
+		`Configured ${participation.auditorCount} validator(s) with quorum ${participation.quorum}, only ` +
+		`${participation.participatingAuditors.length} confirmed${missing > 0 ? ` (${missing} not seen)` : ''}. ` +
+		'Bids may never become valid.'
 	)
 }

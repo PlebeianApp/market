@@ -75,8 +75,9 @@ describe('Auction multiparty participation', () => {
 		expect(participation.bidAllowed).toBe(false)
 		expect(participation.warnings).toContain('validators_missing')
 		const reason = describeBidBlock(participation)
-		expect(reason).toContain('quorum of 2')
-		expect(reason).toContain('1 have confirmed participation')
+		expect(reason).toContain('quorum 2')
+		expect(reason).toContain('1 confirmed')
+		expect(reason).toContain('Bids may never become valid')
 	})
 
 	test('silence is a rejection: confirmations at quorum with a configured auditor absent', () => {

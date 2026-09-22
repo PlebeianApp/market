@@ -10,7 +10,7 @@ import {
 } from '../auction/multipartyCheckPoints'
 import { computeMultipartyLegFloor } from '../auction/multipartyLegFloor'
 import type { AuctionMultipartyCanonicalManifestRow } from '../auction/multipartyManifestWire'
-import type { MultipartyParticipation } from '../auction/multipartyParticipation'
+import { describeBidBlock, type MultipartyParticipation } from '../auction/multipartyParticipation'
 import type { MultipartyPublishReadiness } from '../auction/multipartyPublishReadiness'
 
 const utf8 = new TextEncoder()
@@ -231,6 +231,8 @@ describe('Multiparty check points', () => {
 	test('one state produces one sentence across the publish, read and bid gates', () => {
 		const short = participation({ status: 'quorum_not_met', quorum: 3, auditorCount: 3, bidAllowed: false })
 		const sentence = describeValidatorShortfall(short) as string
+		// The gate layer does not own a wording of its own: it delegates.
+		expect(sentence).toBe(describeBidBlock(short) as string)
 		expect(checkMultipartyPublishGate({ readiness: readiness(), participation: short }).shortfall).toBe(sentence)
 		expect(checkMultipartyReadStatus({ participation: short }).shortfall).toBe(sentence)
 		const bid = checkMultipartyBidGate({ participation: short, legFloor, bidAmountSats: 500 })

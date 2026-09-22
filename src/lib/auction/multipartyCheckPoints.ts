@@ -51,24 +51,11 @@ const freezeResult = (result: MultipartyCheckPointResult): MultipartyCheckPointR
 	})
 
 /**
- * One shared wording for the most common blocking condition, used by all four
- * check points.
- *
- * It is gated on the participation *status*, not on the bid flag: an auction whose
- * configured quorum is unreachable is under-confirmed whatever a caller puts in
- * `bidAllowed`, so the sentence cannot be silenced by an inconsistent input object.
+ * The gate layer's name for the shared sentence. It delegates to the participation
+ * projection, which owns the wording — one sentence, one implementation, used by
+ * every check point.
  */
-export const describeValidatorShortfall = (participation: MultipartyParticipation): string | null => {
-	if (participation.status !== 'quorum_not_met') {
-		return null
-	}
-	const missing = participation.missingAuditors.length
-	return (
-		`Configured ${participation.auditorCount} validator(s) with quorum ${participation.quorum}, only ` +
-		`${participation.participatingAuditors.length} confirmed${missing > 0 ? ` (${missing} not seen)` : ''}. ` +
-		'Bids may never become valid.'
-	)
-}
+export const describeValidatorShortfall = (participation: MultipartyParticipation): string | null => describeBidBlock(participation)
 
 const verdictOf = (reasons: readonly string[], messages: readonly string[]): MultipartyVerdict =>
 	reasons.length > 0 ? 'blocked' : messages.length > 0 ? 'warned' : 'allowed'
