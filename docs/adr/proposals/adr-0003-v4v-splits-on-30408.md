@@ -30,11 +30,13 @@ for validators, an exact validator-offer event ID (kind 1028). A
 `payout_schedule` blob plus `payout_schedule_commitment` on the root already do, with
 the ordering, uniqueness and resource limits fixed by the profile.
 
-**Harmonisation:** `['v4v_recipient', '<pubkey>', '<bps>']` tags MAY be emitted as a
-**non-authoritative display mirror** alongside the schedule, so that product and
-auction surfaces read alike and older clients degrade gracefully. They MUST NOT be
-parsed for authorization, ordering, totals, or as the source of any payout decision.
-Products keep their own encoding (kind 30078, percentages); auctions use basis points.
+**Discarded, not mirrored:** the tag encoding is dropped outright (maintainer
+direction 2026-09-22). Implementations MUST NOT emit `v4v_recipient` tags — a tag
+that looks authoritative but is not will eventually be parsed as if it were, and no
+auction ever carried a real V4V participation under this encoding, so nothing needs
+migrating. The authoritative form is the `payout_schedule` blob plus
+`payout_schedule_commitment` on the root. Products keep their own encoding (kind
+30078, percentages); auctions use basis points.
 
 See `docs/adr/proposals/auction-v4v-participation.md` D11 for the full record.
 

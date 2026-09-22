@@ -81,8 +81,9 @@ quorum satisfied, a client can rely on seeing that set's verdicts.
 
 ### D6 — Clients and validators check participation at four points
 
-1. **Auction publish (seller client)** — warn or block when scheduled recipients
-   have not confirmed.
+1. **Auction publish (seller client)** — run the draft-time liveness check of D13 and
+   block publishing while any scheduled entry is unconfirmed, rather than warning on
+   unconfirmed acceptances alone.
 2. **Auction read (any client)** — derive participation status and surface it.
 3. **Before bidding (bidder client)** — a bid requires quorum participation; if it
    is missing, the bid control warns explicitly that the auction's configured
@@ -152,17 +153,45 @@ role, and for validators an exact offer event ID — none of which a
 `(pubkey, bps)` tuple can express, and all of which the canonical
 `payout_schedule` + `payout_schedule_commitment` on the root already carry.
 
-Harmonisation, so that product and auction read similarly without weakening either:
-the `v4v_recipient` tags may be emitted as a **non-authoritative display mirror**
-alongside the schedule, clearly documented as never parsed for authorization. The
-authoritative form stays the schedule blob and commitment. Products keep their own
-encoding (kind 30078, percentages); the auction form is basis points.
+**Harmonisation: none. The tag is discarded outright.** An earlier draft proposed
+keeping `['v4v_recipient', '<pubkey>', '<bps>']` as a non-authoritative display
+mirror. Maintainer direction of 2026-09-22 drops it entirely, for two reasons:
+
+- a tag that looks authoritative but is not will eventually be parsed as if it were;
+- no auction ever carried a real V4V participation under that encoding, so nothing
+  depends on it and there is nothing to migrate.
+
+Implementations MUST NOT emit `v4v_recipient` tags. The authoritative form is the
+`payout_schedule` blob plus `payout_schedule_commitment` on the root. Products keep
+their own encoding (kind 30078, percentages); the auction form is basis points.
 
 ### D12 — Auto-settlement is deferred
 
 Recipient and seller auto-settlement (issues #1327 and #1328) are **not** built now.
 Participation stays manual; the presence/announcement machinery from #1328 is
 deferred with it. This is a staging-phase decision: keep the logic lean.
+
+### D13 — A draft-time liveness check is a client obligation, not a protocol rule
+
+Before an auction is published, the seller's client **must** check that every
+scheduled entry — validators and V4V recipients alike — is reachable and willing to
+take part, and must surface the result before publishing. An entry that cannot be
+confirmed is reported to the seller with its pubkey, and publishing is blocked by
+default while any entry is unconfirmed (the seller may override, and the override is
+recorded in the publish flow).
+
+This is deliberately **not** a protocol requirement:
+
+- nothing on the wire mandates a liveness signal, and no new event kind is
+  introduced for one;
+- a third-party client that skips the check produces a still-valid auction, it
+  simply publishes one more likely to have dead legs;
+- the check exists because auctions are time-sensitive and live: fixing a
+  dead-leg auction after publication means re-publishing the root, which changes
+  the schedule commitment that bidders' locks are bound to.
+
+The check is therefore an obligation on our client, enforced at the point where it
+is cheap, and it must be explicit in the UI rather than silent.
 
 ## Consequences
 
@@ -172,15 +201,19 @@ deferred with it. This is a staging-phase decision: keep the logic lean.
   which is the cheapest possible place to catch a dead auction.
 - Recipients gain a confirmation obligation that is symmetric with validators, at
   the cost of one more event per recipient per auction.
-- The `v4v_recipient` tag survives only as a display mirror, so nothing may parse
-  it for authority — a rule that must be enforced in review.
+- The seller's client gains a draft-time liveness obligation (D13) before publishing,
+  which needs no protocol support but does need a reachability probe per scheduled
+  entry.
+- `v4v_recipient` tags are never emitted, so there is no second encoding to keep
+  honest in review or to migrate later.
 
 ## Files affected
 
-- `docs/adr/proposals/adr-0003-v4v-splits-on-30408.md` — supersede the encoding, keep the intent.
+- `docs/adr/proposals/adr-0003-v4v-splits-on-30408.md` — supersede the encoding outright, keep the intent.
 - `docs/adr/proposals/auction-multiparty-wire-profile.md` — record D4–D7 and D9–D10.
 - `src/lib/auction/multipartyLegFloor.ts` — the per-leg floor (landed with this proposal).
 - `src/lib/auction/multipartyParticipation.ts` — participation and quorum status (landed with this proposal).
+- `src/lib/auction/multipartyPublishReadiness.ts` — the draft-time liveness obligation (landed with this proposal).
 - Later: the auction root tag builder, the bid manifest (Gate D2), the path release (Gate H), the validator service, and the auction detail UI.
 
 ## Open questions
@@ -193,10 +226,10 @@ deferred with it. This is a staging-phase decision: keep the logic lean.
   capabilities. With recipients registering on their own schedule, the intent needs
   restating: either require only `expires_at >= max_end_at`, or document the
   exclusion.
-- **Confirmation window.** Whether an unconfirmed recipient should block activation
-  (a pre-open confirmation window) or merely be marked unconfirmed at release.
-- **Presence.** Whether a draft-time liveness check replaces the heartbeat entirely,
-  and what event carries it. Deferred with D12.
+- **Liveness signal.** D13 fixes the obligation, not the mechanism: what the probe is
+  (a direct message, a capability read with a fresh timestamp, a presence event), its
+  timeout, and how many retries count as unconfirmed. Deferred with D12 but needed
+  before the pre-publish screen can be built.
 - **Fee estimation.** Per-mint NUT-02 `input_fee_ppk` estimates and mint minimums,
   to replace the padding heuristic in D10.
 - **Fallback settlement.** Undefined, intentionally deferred with D7.
