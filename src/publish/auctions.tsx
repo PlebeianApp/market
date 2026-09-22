@@ -148,6 +148,12 @@ export interface AuctionFormData {
 	 */
 	auditorPubkeys?: string
 	/**
+	 * The quorum the seller chose, when they chose one. Only offered from four
+	 * validators up, and never below the strict-majority floor — a seller can raise
+	 * the bar, never lower it (verdictMajority.ts).
+	 */
+	auditorQuorum?: number
+	/**
 	 * Multiparty payout recipients, one per line:
 	 * `role, pubkey, bps, capability_event_id[, offer_event_id]`
 	 * (`validator` needs the offer id; `v4v` must not carry one). Empty = the
@@ -302,6 +308,11 @@ export interface AuctionRootTagListInput {
 	specs: readonly AuctionSpecEntry[]
 	isNSFW?: boolean
 	enableLiveChat?: boolean
+	/**
+	 * The quorum the seller chose. Clamped to `[majorityFloor, poolSize]`: a seller may
+	 * raise the bar above the strict majority, never lower it below.
+	 */
+	auditorQuorum?: number
 }
 
 /**
@@ -360,11 +371,19 @@ export const buildAuctionRootTagList = (input: AuctionRootTagListInput): string[
 		// in src/lib/auction/constants.ts — emitting them explicitly
 		// makes the auction round-trip cleanly through compliant
 		// validators that strictly check tag presence.
-		// The declared quorum is the strict-majority floor, not unanimity: two
+		// The declared quorum is the strict-majority floor by default, not unanimity: two
 		// validators must agree either way, but a pool of three tolerates one being
-		// offline instead of stalling the auction. A seller may only ever raise it
-		// above this (verdictMajority.ts).
-		['auditor_quorum', String(requiredVerdictMajority(input.auditors.length))],
+		// offline instead of stalling the auction. The seller may raise it (the quorum
+		// slider, offered from four validators up) but never below the floor.
+		[
+			'auditor_quorum',
+			String(
+				Math.min(
+					Math.max(input.auditorQuorum ?? requiredVerdictMajority(input.auditors.length), requiredVerdictMajority(input.auditors.length)),
+					input.auditors.length,
+				),
+			),
+		],
 		['max_skew_sec', '120'],
 		['max_end_at', String(validated.maxEndAt)],
 		['settlement_grace', String(input.settlementGraceSeconds)],
@@ -446,6 +465,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 		specs: formData.specs ?? [],
 		isNSFW: formData.isNSFW,
 		enableLiveChat: formData.enableLiveChat,
+		auditorQuorum: formData.auditorQuorum,
 	})
 
 	// Multiparty payout (auction-v4v-participation, D2). The seller's recipient
@@ -465,7 +485,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	const workflow = resolveAuctionWorkflow({
 		mode: auctionId ? 'edit' : 'create',
 		auditors: auditorsList,
-		auditor_quorum: requiredVerdictMajority(auditorsList.length),
+		auditor_quorum: formData.auditorQuorum ?? requiredVerdictMajority(auditorsList.length),
 		settlement_policy: payout === null ? AUCTION_SETTLEMENT_POLICY : AUCTION_MULTIPARTY_SETTLEMENT_POLICY,
 		recipientLines: formData.payoutRecipients ?? '',
 		sellerPubkey,

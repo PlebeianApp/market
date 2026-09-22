@@ -38,13 +38,8 @@ import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/co
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
 import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
-import {
-	type MultipartyPickableRecipient,
-	type MultipartyPickableValidator,
-	recipientLine,
-	validatorRecipientLine,
-} from '@/lib/auction/multipartyAnnouncements'
 import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
+import { AuctionV4VEditorDialog } from '@/components/sheet-contents/auctions/AuctionV4VEditorDialog'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
@@ -1822,12 +1817,9 @@ export function AuctionFormContent() {
 		v4v: true,
 	}
 
-	// Tab at index i is reachable only if every tab before it is valid — except the
-	// V4V step, which the seller must be able to walk into at any point: it is where
-	// an incomplete validator set gets fixed, so disabling its trigger would hide the
-	// one screen that explains the problem.
+	// Tab at index i is reachable only if every tab before it is valid, so the form
+	// still walks the seller through in order.
 	const isTabReachable = (tabIndex: number): boolean => {
-		if (TAB_ORDER[tabIndex] === 'v4v') return true
 		for (let i = 0; i < tabIndex; i++) {
 			if (!tabValid[TAB_ORDER[i] as AuctionTab]) return false
 		}
@@ -1880,37 +1872,7 @@ export function AuctionFormContent() {
 		}
 	})()
 
-	// Adding from an announcement keeps the two inputs consistent: a validator's
-	// recipient line and its entry in the auditor list are written together, because
-	// a validator share whose pubkey is not an auditor would be refused at publish.
-	const appendRecipientLine = (line: string) => {
-		setFormData((prev) => {
-			const lines = (prev.payoutRecipients ?? '')
-				.split('\n')
-				.map((entry) => entry.trim())
-				.filter(Boolean)
-			if (lines.includes(line)) return prev
-			lines.push(line)
-			return { ...prev, payoutRecipients: lines.join('\n') }
-		})
-	}
-
-	const handleAddValidator = (validator: MultipartyPickableValidator) => {
-		appendRecipientLine(validatorRecipientLine(validator))
-		setFormData((prev) => {
-			const listed = (prev.auditorPubkeys ?? '')
-				.split('\n')
-				.map((entry) => entry.trim())
-				.filter(Boolean)
-			if (listed.includes(validator.pubkey)) return prev
-			listed.push(validator.pubkey)
-			return { ...prev, auditorPubkeys: listed.join('\n') }
-		})
-	}
-
-	const handleAddRecipient = (recipient: MultipartyPickableRecipient) => {
-		appendRecipientLine(recipientLine(recipient))
-	}
+	const [v4vEditorOpen, setV4vEditorOpen] = useState(false)
 
 	const handleClearDraft = () => {
 		draftGenerationRef.current++
@@ -2031,8 +1993,7 @@ export function AuctionFormContent() {
 								setFormData={setFormData}
 								auditors={resolvedAuditors}
 								resolution={v4vResolution}
-								onAddValidator={handleAddValidator}
-								onAddRecipient={handleAddRecipient}
+								onEditRecipients={() => setV4vEditorOpen(true)}
 							/>
 						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
@@ -2046,6 +2007,14 @@ export function AuctionFormContent() {
 					</div>
 				</Tabs>
 			</div>
+
+			<AuctionV4VEditorDialog
+				open={v4vEditorOpen}
+				onOpenChange={setV4vEditorOpen}
+				formData={formData}
+				setFormData={setFormData}
+				auditors={resolvedAuditors}
+			/>
 
 			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2 flex flex-col gap-2">
 				{hasDraft && (
