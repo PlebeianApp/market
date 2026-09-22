@@ -258,6 +258,21 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   is sufficient). MAY equal the count of `auditors` tags to require
   unanimity. Sellers running high-value auctions SHOULD raise this above
   `1` to dilute reliance on any one validator.
+
+  **Strict-majority floor (amendment 2026-09, ADR-0003).** Whatever the tag
+  declares, a compliant client MUST NOT accept an outcome unless it is confirmed
+  by **more than half of the auction's `auditors`** — `floor(P / 2) + 1` distinct
+  validators, where `P` counts **distinct** auditor pubkeys (a repeated pubkey
+  MUST NOT inflate the pool). The declared value may only raise this requirement,
+  never lower it: a declared quorum below the floor MUST be reported
+  (`quorum_below_majority`) and the floor applied in its place.
+
+  The reason is consensus safety, not preference. Were `floor(P / 2) + 1` not
+  enforced, two disjoint groups of validators could each reach quorum on opposite
+  outcomes, both outcomes would be "valid", and the auction would have no single
+  canonical result. Note the availability consequence: `P = 2` forces unanimity,
+  so a pool of **3** (floor 2) is the smallest that both resists forking and
+  tolerates one unavailable validator.
 - `max_skew_sec`: integer, default `120`. Maximum acceptable difference
   between a bid event's claimed `created_at` and the validator's own
   `observed_at`. Bids exceeding this are flagged `timestamp_skew`.

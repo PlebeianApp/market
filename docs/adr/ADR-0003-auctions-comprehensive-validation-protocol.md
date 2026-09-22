@@ -417,3 +417,46 @@ tolerance) likewise leaves the validity path.
 - Short-Circuit Evaluation: Validators must fail fast. If a structural check fails, do not proceed to expensive cryptographic or network checks.
 - Test Coverage: Every row in the Atomic Checklists must have at least one corresponding unit test (positive and negative).
 - Extensibility: New auction policies or curve shapes must add new rows to these checklists without altering existing logic.
+
+## Appendix D: Amendment — strict-majority quorum floor (2026-09)
+
+**Decision.** A quorum for a bid outcome is the strict majority of the auction's
+validator pool: `floor(P / 2) + 1` distinct auditor pubkeys, where `P` is the
+number of **distinct** pubkeys listed in the auction's `auditors` tags. The
+declared `auditor_quorum` may only raise this requirement, never lower it.
+
+**Why.** Without a majority floor, a pool splits: with four auditors and a
+declared quorum of two, validators `{A,B}` can confirm a bid while `{C,D}`
+condemn it, and both results satisfy the quorum. Two "valid" outcomes for one bid
+means no canonical winner, and every downstream decision that reads verdicts —
+ranking, display price, winner derivation, settlement and grief classification —
+becomes ambiguous. A majority floor makes the two groups impossible by
+construction: two disjoint sets cannot each exceed half of the pool.
+
+**Mechanism.**
+
+- Enforced at read time by every compliant client and validator, so a seller
+  cannot weaken an auction by declaring a low quorum. A declared value below the
+  floor is raised to the floor and reported (`quorum_below_majority` /
+  `declaredBelowMajority`).
+- Single-source implementation: `src/lib/auction/verdictMajority.ts`
+  (`requiredVerdictMajority`, `effectiveVerdictQuorum`), consumed by both the
+  verdict tally (`verdictQuorum.ts`) and the participation gate
+  (`multipartyParticipation.ts`), so the two cannot drift apart.
+- Pool size counts distinct pubkeys: duplicate `auditors` entries MUST NOT
+  inflate `P` and thereby weaken the floor.
+- `P ≤ 1` is unaffected (floor 1), so every existing single-validator auction
+  behaves exactly as before.
+
+**Consequences.**
+
+- Availability trades against pool size: `P = 2` requires unanimity, so one
+  unavailable validator stalls the auction. `P = 3` (floor 2) is the smallest
+  fork-proof pool that tolerates one absence; sellers wanting both properties
+  SHOULD list an odd number of validators ≥ 3, and MUST NOT expect a 2-validator
+  pool to survive a validator being offline.
+- A client that requires "at least 2 validators" MUST state the pool and quorum
+  separately: the count alone does not describe the requirement.
+- Supersedes the "quorum MAY equal the count to require unanimity" latitude: a
+  declared quorum equal to the count is still valid, it is simply not the only
+  admissible value.

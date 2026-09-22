@@ -166,4 +166,45 @@ describe('Auction multiparty participation', () => {
 		expect(forward.participatingAuditors).toEqual(reversed.participatingAuditors)
 		expect(forward.warnings).toEqual(reversed.warnings)
 	})
+
+	test('a declared quorum below the strict-majority floor is raised, and warns', () => {
+		const fourAuditors = ['c'.repeat(64), 'd'.repeat(64), 'e'.repeat(64), 'f'.repeat(64)]
+		const [a, b, c] = fourAuditors
+
+		// Pool of 4 with a declared quorum of 2 is forkable: two disjoint pairs could
+		// each reach quorum. The projection applies the floor (3) instead.
+		const twoOfFour = projectMultipartyParticipation({
+			root: root({ auditors: fourAuditors, auditor_quorum: 2 }),
+			acceptances: [acceptance(a as string), acceptance(b as string)],
+			nowUnixSeconds: NOW,
+		})
+		expect(twoOfFour.majorityFloor).toBe(3)
+		expect(twoOfFour.quorum).toBe(3)
+		expect(twoOfFour.declaredQuorum).toBe(2)
+		expect(twoOfFour.status).toBe('quorum_not_met')
+		expect(twoOfFour.bidAllowed).toBe(false)
+		expect(twoOfFour.warnings).toContain('quorum_below_majority')
+
+		const threeOfFour = projectMultipartyParticipation({
+			root: root({ auditors: fourAuditors, auditor_quorum: 2 }),
+			acceptances: [acceptance(a as string), acceptance(b as string), acceptance(c as string)],
+			nowUnixSeconds: NOW,
+		})
+		expect(threeOfFour.status).toBe('quorum_met')
+		expect(threeOfFour.bidAllowed).toBe(true)
+	})
+
+	test('a declared quorum above the floor is honoured and not flagged', () => {
+		const fourAuditors = ['c'.repeat(64), 'd'.repeat(64), 'e'.repeat(64), 'f'.repeat(64)]
+		const [a, b, c] = fourAuditors
+		const participation = projectMultipartyParticipation({
+			root: root({ auditors: fourAuditors, auditor_quorum: 4 }),
+			acceptances: [acceptance(a as string), acceptance(b as string), acceptance(c as string)],
+			nowUnixSeconds: NOW,
+		})
+		expect(participation.quorum).toBe(4)
+		expect(participation.majorityFloor).toBe(3)
+		expect(participation.status).toBe('quorum_not_met')
+		expect(participation.warnings).not.toContain('quorum_below_majority')
+	})
 })

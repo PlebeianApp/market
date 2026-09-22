@@ -64,10 +64,22 @@ describe('computeVerdictQuorum', () => {
 		expect(r.hasPositiveVerdict).toBe(false)
 	})
 
-	test('defaults auditorQuorum to 1', () => {
+	test('defaults auditorQuorum to 1 — for a single-validator pool', () => {
 		const verdicts = [verdict({ bidEventId: 'bid-1', validatorPubkey: 'auditor-1', claim: 'valid_bid_placed' })]
-		expect(computeVerdictQuorum(verdicts, 'bid-1', AUDITORS, undefined).hasPositiveVerdict).toBe(true)
-		expect(computeVerdictQuorum(verdicts, 'bid-1', AUDITORS, 0).hasPositiveVerdict).toBe(true)
+		expect(computeVerdictQuorum(verdicts, 'bid-1', ['auditor-1'], undefined).hasPositiveVerdict).toBe(true)
+		expect(computeVerdictQuorum(verdicts, 'bid-1', ['auditor-1'], 0).hasPositiveVerdict).toBe(true)
+	})
+
+	test('a three-validator pool raises the default to the strict-majority floor of 2', () => {
+		const one = [verdict({ bidEventId: 'bid-1', validatorPubkey: 'auditor-1', claim: 'valid_bid_placed' })]
+		const single = computeVerdictQuorum(one, 'bid-1', AUDITORS, undefined)
+		expect(single.majorityFloor).toBe(2)
+		expect(single.requiredQuorum).toBe(2)
+		expect(single.hasPositiveVerdict).toBe(false)
+		expect(single.hasNeutralVerdict).toBe(true)
+
+		const two = [...one, verdict({ bidEventId: 'bid-1', validatorPubkey: 'auditor-2', claim: 'valid_bid_placed' })]
+		expect(computeVerdictQuorum(two, 'bid-1', AUDITORS, undefined).hasPositiveVerdict).toBe(true)
 	})
 
 	test('binds to the exact bid event id — earlier leg verdict does not leak', () => {
@@ -80,7 +92,9 @@ describe('computeVerdictQuorum', () => {
 
 	test('without bidEventId, does not filter by bid (legacy/back-compat)', () => {
 		const verdicts = [verdict({ bidEventId: 'bid-old', validatorPubkey: 'auditor-1', claim: 'valid_bid_placed' })]
-		expect(computeVerdictQuorum(verdicts, undefined, AUDITORS, 1).hasPositiveVerdict).toBe(true)
+		// Single-validator pool: this test is about id filtering, not about the
+		// strict-majority floor (see auctionVerdictMajority.test.ts).
+		expect(computeVerdictQuorum(verdicts, undefined, ['auditor-1'], 1).hasPositiveVerdict).toBe(true)
 	})
 
 	test('ignores verdicts from non-configured auditors', () => {

@@ -27,6 +27,7 @@
  */
 
 import type { ParsedMultipartyRoot, ParsedMultipartyValidatorAcceptance } from './multipartyAuthorization'
+import { requiredVerdictMajority } from './verdictMajority'
 
 /** The subset of a parsed root this projection depends on. */
 export type MultipartyParticipationRoot = Pick<
@@ -37,6 +38,8 @@ export type MultipartyParticipationRoot = Pick<
 export const AUCTION_MULTIPARTY_PARTICIPATION_WARNINGS = [
 	'quorum_not_configured',
 	'quorum_exceeds_auditors',
+	/** The declared `auditor_quorum` is below the strict-majority floor (§4.1). */
+	'quorum_below_majority',
 	'acceptance_root_mismatch',
 	'acceptance_commitment_mismatch',
 	'acceptance_expired',
@@ -57,7 +60,12 @@ export type MultipartyParticipationStatus =
 
 export interface MultipartyParticipation {
 	readonly status: MultipartyParticipationStatus
+	/** The requirement applied: `max(declared auditor_quorum, majority floor)`. */
 	readonly quorum: number
+	/** The seller's declared `auditor_quorum` (0 when the tag is absent). */
+	readonly declaredQuorum: number
+	/** `floor(auditorCount / 2) + 1` — the count no disjoint set can match. */
+	readonly majorityFloor: number
 	readonly auditorCount: number
 	/** Auditors with a matching, unexpired acceptance, sorted for determinism. */
 	readonly participatingAuditors: readonly string[]
@@ -90,7 +98,11 @@ export const projectMultipartyParticipation = (input: MultipartyParticipationInp
 
 	const auditors = uniqSorted(root.auditors)
 	const auditorSet = new Set(auditors)
-	const quorum = Number.isSafeInteger(root.auditor_quorum) && root.auditor_quorum > 0 ? root.auditor_quorum : 0
+	const declaredQuorum = Number.isSafeInteger(root.auditor_quorum) && root.auditor_quorum > 0 ? root.auditor_quorum : 0
+	// The declared quorum may only raise the bar: a pool that disagrees with itself
+	// must never produce two valid outcomes (§4.1 amendment, verdictMajority.ts).
+	const majorityFloor = requiredVerdictMajority(auditors.length)
+	const quorum = auditors.length === 0 || declaredQuorum === 0 ? 0 : Math.max(declaredQuorum, majorityFloor)
 
 	const warnings = new Set<AuctionMultipartyParticipationWarning>()
 	const disregarded: { validatorPubkey: string; warning: AuctionMultipartyParticipationWarning }[] = []
@@ -135,6 +147,8 @@ export const projectMultipartyParticipation = (input: MultipartyParticipationInp
 		return Object.freeze({
 			status: 'not_required' as const,
 			quorum,
+			declaredQuorum,
+			majorityFloor,
 			auditorCount: auditors.length,
 			participatingAuditors,
 			missingAuditors,
@@ -144,6 +158,11 @@ export const projectMultipartyParticipation = (input: MultipartyParticipationInp
 		})
 	}
 
+	if (declaredQuorum > 0 && declaredQuorum < majorityFloor) {
+		// The seller declared a quorum a disjoint group could match. Clients apply the
+		// majority floor and say so, rather than honouring a forkable value (§4.1).
+		warnings.add('quorum_below_majority')
+	}
 	if (quorum > auditors.length) {
 		warnings.add('quorum_exceeds_auditors')
 	}
@@ -159,6 +178,8 @@ export const projectMultipartyParticipation = (input: MultipartyParticipationInp
 	return Object.freeze({
 		status: quorumMet ? ('quorum_met' as const) : ('quorum_not_met' as const),
 		quorum,
+		declaredQuorum,
+		majorityFloor,
 		auditorCount: auditors.length,
 		participatingAuditors,
 		missingAuditors,

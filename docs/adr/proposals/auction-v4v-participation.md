@@ -216,6 +216,43 @@ Two reasons this is a decision rather than an implementation detail:
 - the sentence is the client's only lever on this state, so it is the one place
   where the wording is worth fixing by spec.
 
+### D15 — Quorum is a strict majority of the validator pool
+
+A bid outcome is accepted only when confirmed by **more than half** of the
+auction's validators: `floor(P / 2) + 1` **distinct** auditor pubkeys, where `P`
+is the number of distinct pubkeys in the auction's `auditors` tags. The seller's
+declared `auditor_quorum` may only **raise** this requirement, never lower it; a
+declared value below the floor is raised to the floor and reported
+(`quorum_below_majority` / `declaredBelowMajority`).
+
+The reason is consensus safety. With a four-validator pool and a declared quorum
+of two, validators `{A,B}` can confirm a bid while `{C,D}` condemn the same bid,
+and _both_ results satisfy the quorum. An auction with two "valid" outcomes has no
+canonical winner, and every downstream read — ranking, display price, winner
+derivation, settlement, grief classification — becomes ambiguous. Two disjoint
+sets cannot each exceed half of a pool, so a majority floor removes the fork by
+construction.
+
+Recorded normatively in `AUCTIONS.md` §4.1 and `docs/adr/ADR-0003-…` Appendix D.
+Implemented once, in `src/lib/auction/verdictMajority.ts`, and consumed by both
+the verdict tally and the participation gate so the two cannot drift.
+
+Consequences that shape the product rules:
+
+- **Pool size is a real trade-off, and the count alone does not describe it.**
+  `P = 2` forces unanimity: one unavailable validator stalls the auction. `P = 3`
+  (floor 2) is the smallest pool that is both fork-proof and tolerates one
+  absence. A rule of "at least 2 validators" is therefore incomplete — it must be
+  stated with the quorum.
+- **Preferred mandate: at least 3 validators, odd where possible**, minimum 2.
+  Mandating 2 gives availability only if the quorum were 1, which the majority
+  floor forbids.
+- **Grandfathering: single-validator auctions keep working.** `P ≤ 1` has floor 1,
+  so every auction already published behaves exactly as before; the mandate and
+  the floor apply to auctions that declare more than one validator. Blocking
+  existing auctions on the day this ships would invalidate live sales for a rule
+  their sellers never had the chance to meet.
+
 ## Consequences
 
 - The UI can be written against one encoding: the schedule, with capabilities and
