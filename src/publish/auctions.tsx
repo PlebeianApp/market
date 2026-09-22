@@ -21,6 +21,9 @@ import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dl
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
 import { buildMultipartyRootTags } from '@/lib/auction/multipartyRootTags'
 import { parseMultipartyRecipientLines, resolveMultipartyPayoutSchedule } from '@/lib/auction/multipartyPublishSchedule'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
+import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
 import {
 	buildAuctionClaimPublicMarkerTags,
 	createPrivateAuctionClaimMessageForActiveSigner,
@@ -138,6 +141,13 @@ export interface AuctionFormData {
 	 */
 	auditorPubkey: string
 	/**
+	 * Validators for this auction, one pubkey per line. Preferred over
+	 * `auditorPubkey` when present. An auction needs at least two for corroboration
+	 * (three recommended: two must agree unanimously), and the V4V step refuses to
+	 * publish while the resolved pool is below the ruleset's minimum.
+	 */
+	auditorPubkeys?: string
+	/**
 	 * Multiparty payout recipients, one per line:
 	 * `role, pubkey, bps, capability_event_id[, offer_event_id]`
 	 * (`validator` needs the offer id; `v4v` must not carry one). Empty = the
@@ -228,12 +238,29 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
  * has no validator emitting kind-30440 verdicts, which means clients
  * have nothing to filter or aggregate against.
  */
-const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string): string[] => {
-	// Single auditor today; kind-30408 supports a list (multiple
-	// `auditors` tags). Phase 7 (reputation UI) is expected to grow this
-	// into a multi-select. Falls back to the app's configured validator
-	// pubkey when the form field is empty, so dev/seed flows that don't
-	// choose an auditor explicitly still get one.
+const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string, formAuditorPubkeys?: string): string[] => {
+	// Multi-validator first (the V4V step): one pubkey per line, blank lines and
+	// comments ignored, duplicates collapsed.
+	const listed = (formAuditorPubkeys ?? '')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0 && !line.startsWith('#'))
+		.map((line) => line.split(/[\s,]+/)[0] as string)
+
+	if (listed.length > 0) {
+		const invalid = listed.filter((pubkey) => !HEX_PUBKEY_RE.test(pubkey))
+		if (invalid.length > 0) {
+			throw new Error(
+				`Validator pubkey(s) not 32-byte hex: ${invalid.map((pubkey) => pubkey.slice(0, 12)).join(', ')}. One pubkey per line.`,
+			)
+		}
+		const unique = Array.from(new Set(listed))
+		if (unique.length !== listed.length) {
+			throw new Error('The same validator is listed more than once.')
+		}
+		return unique
+	}
+
 	const explicit = formAuditorPubkey?.trim()
 	if (explicit) {
 		if (!HEX_PUBKEY_RE.test(explicit)) {
@@ -333,7 +360,11 @@ export const buildAuctionRootTagList = (input: AuctionRootTagListInput): string[
 		// in src/lib/auction/constants.ts — emitting them explicitly
 		// makes the auction round-trip cleanly through compliant
 		// validators that strictly check tag presence.
-		['auditor_quorum', String(input.auditors.length)],
+		// The declared quorum is the strict-majority floor, not unanimity: two
+		// validators must agree either way, but a pool of three tolerates one being
+		// offline instead of stalling the auction. A seller may only ever raise it
+		// above this (verdictMajority.ts).
+		['auditor_quorum', String(requiredVerdictMajority(input.auditors.length))],
 		['max_skew_sec', '120'],
 		['max_end_at', String(validated.maxEndAt)],
 		['settlement_grace', String(input.settlementGraceSeconds)],
@@ -380,7 +411,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	// gives the seller a single field today and falls back to the app's
 	// configured default. Phase 7 (reputation UI) will grow this into a
 	// multi-select.
-	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
+	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey, formData.auditorPubkeys)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
@@ -426,6 +457,23 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 		auditors: auditorsList,
 		sellerPubkey,
 	})
+
+	// Fail closed. The publish path refuses a draft the V4V step has not completed
+	// rather than silently publishing a single-party auction: an inadmissible
+	// validator set, or a schedule that does not compile, must stop here and not
+	// reach a signature.
+	const workflow = resolveAuctionWorkflow({
+		mode: auctionId ? 'edit' : 'create',
+		auditors: auditorsList,
+		auditor_quorum: requiredVerdictMajority(auditorsList.length),
+		settlement_policy: payout === null ? AUCTION_SETTLEMENT_POLICY : AUCTION_MULTIPARTY_SETTLEMENT_POLICY,
+		recipientLines: formData.payoutRecipients ?? '',
+		sellerPubkey,
+	})
+	if (!workflow.v4vComplete) {
+		throw new Error(`Auction is not publishable yet: ${workflow.blockingMessages.join(' ')}`)
+	}
+
 	const tags = payout === null ? baseTags : buildMultipartyRootTags({ baseTags, schedule: payout.schedule })
 
 	return {

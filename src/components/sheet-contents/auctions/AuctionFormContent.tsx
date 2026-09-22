@@ -35,6 +35,10 @@ import {
 	type AuctionSpecEntry,
 } from '@/publish/auctions'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
+import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
+import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
+import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
@@ -46,7 +50,7 @@ import { Slider } from '@/components/ui/slider'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
-type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
+type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping' | 'v4v'
 type ValidationMessages = Partial<Record<AuctionPublishValidationField, string>>
 
 const INITIAL_FORM: AuctionFormData = {
@@ -1288,24 +1292,6 @@ function CategoryTab({
 					placeholder="Collectibles, Art, Bitcoin"
 				/>
 			</div>
-
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-payout-recipients">Multiparty payout recipients (optional, one per line)</Label>
-				<textarea
-					id="auction-payout-recipients"
-					value={formData.payoutRecipients ?? ''}
-					onChange={(e) => setFormData((prev) => ({ ...prev, payoutRecipients: e.target.value }))}
-					className="border-2 min-h-24 p-2 rounded-md font-mono text-xs"
-					placeholder={
-						'role, pubkey, bps, capability_event_id[, offer_event_id]\n' + 'validator, 2f…, 625, a1…, b2…\n' + 'v4v, 3c…, 313, c3…'
-					}
-				/>
-				<p className="text-muted-foreground text-xs">
-					Leave empty for a normal single-party auction. With recipients, the auction publishes the multiparty settlement policy plus the
-					payout schedule and its commitment. Every validator listed here must also be one of the auction&apos;s auditors, and the seller
-					keeps the remainder automatically.
-				</p>
-			</div>
 		</div>
 	)
 }
@@ -1624,7 +1610,7 @@ function ShippingTab({
 	)
 }
 
-const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping']
+const TAB_ORDER: AuctionTab[] = ['name', 'auction', 'category', 'spec', 'images', 'shipping', 'v4v']
 
 const VALIDATION_FIELD_LABELS: Record<AuctionPublishValidationField, string> = {
 	title: 'Title',
@@ -1692,6 +1678,39 @@ export function AuctionFormContent() {
 	const [startMode, setStartMode] = useState<StartMode>('immediate')
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
+
+	// The auditors this draft will actually list: the V4V step's list when the seller
+	// filled it, otherwise the single legacy field, otherwise the app's configured
+	// validator. Nothing here is authoritative — the publish path resolves the same
+	// list again and fails closed, so a stale render cannot publish a bad set.
+	const resolvedAuditors = useMemo(() => {
+		const listed = (formData.auditorPubkeys ?? '')
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0 && !line.startsWith('#'))
+			.map((line) => (line.split(/[\s,]+/)[0] ?? '').toLowerCase())
+			.filter((pubkey) => pubkey.length > 0)
+		if (listed.length > 0) return Array.from(new Set(listed))
+		const single = formData.auditorPubkey?.trim().toLowerCase()
+		if (single) return [single]
+		const fallback = configStore.state.config.cvmServerPubkey?.trim().toLowerCase()
+		return fallback ? [fallback] : []
+	}, [formData.auditorPubkeys, formData.auditorPubkey])
+
+	// The V4V step's own state: an admissible validator set, and a schedule that
+	// compiles. Publishing is refused while anything blocking stands here.
+	const v4vResolution = useMemo(
+		() =>
+			resolveAuctionWorkflow({
+				mode: 'create',
+				auditors: resolvedAuditors,
+				auditor_quorum: requiredVerdictMajority(resolvedAuditors.length),
+				settlement_policy: (formData.payoutRecipients ?? '').trim().length > 0 ? AUCTION_MULTIPARTY_SETTLEMENT_POLICY : undefined,
+				recipientLines: formData.payoutRecipients ?? '',
+				sellerPubkey: userPubkey.toLowerCase(),
+			}),
+		[resolvedAuditors, formData.payoutRecipients, userPubkey],
+	)
 
 	const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null)
 	const draftLoadedRef = useRef(false)
@@ -1792,6 +1811,9 @@ export function AuctionFormContent() {
 		spec: true,
 		images: hasValidImages,
 		shipping: Object.keys(shippingExtraCostErrors).length === 0,
+		// Reachable at any time; whether it is *complete* gates publishing rather
+		// than blocking navigation into it (the seller has to get in to fix it).
+		v4v: true,
 	}
 
 	// Tab at index i is reachable only if every tab before it is valid.
@@ -1868,6 +1890,14 @@ export function AuctionFormContent() {
 		const nowSeconds = Math.floor(Date.now() / 1000)
 		const nextFormData = buildPublishFormData(nowSeconds)
 
+		// Fail closed, in the UI as well as the publish path: an incomplete V4V step
+		// sends the seller back to the tab that explains why, instead of publishing a
+		// single-party auction (or an inadmissible validator set) by accident.
+		if (!v4vResolution.v4vComplete) {
+			setActiveTab('v4v')
+			return
+		}
+
 		try {
 			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
@@ -1891,6 +1921,7 @@ export function AuctionFormContent() {
 		{ value: 'spec', label: 'Spec', showAsterisk: false },
 		{ value: 'images', label: 'Images', showAsterisk: !hasValidImages },
 		{ value: 'shipping', label: 'Shipping', showAsterisk: Object.keys(shippingExtraCostErrors).length > 0 },
+		{ value: 'v4v', label: 'V4V', showAsterisk: !v4vResolution.v4vComplete },
 	]
 
 	return (
@@ -1951,6 +1982,9 @@ export function AuctionFormContent() {
 						</TabsContent>
 						<TabsContent value="images" className="mt-4">
 							<ImagesTab images={images} setImages={setImages} error={validationMessages.imageUrls} />
+						</TabsContent>
+						<TabsContent value="v4v" className="mt-4">
+							<AuctionV4VTab formData={formData} setFormData={setFormData} auditors={resolvedAuditors} resolution={v4vResolution} />
 						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
 							<ShippingTab
