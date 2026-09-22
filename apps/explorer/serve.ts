@@ -17,12 +17,9 @@ const server = Bun.serve({
 	development: true,
 	routes: {
 		'/': index,
-		'/health': new Response(
-			JSON.stringify({ ok: true, packages: ['product-event', 'product-query', 'browse-filter', 'nostr-access', 'browse-ui'] }),
-			{
-				headers: { 'content-type': 'application/json' },
-			},
-		),
+		'/health': new Response(JSON.stringify({ ok: true, packages: ['contract', 'web', 'napplet', 'product', 'browse'] }), {
+			headers: { 'content-type': 'application/json' },
+		}),
 	},
 })
 

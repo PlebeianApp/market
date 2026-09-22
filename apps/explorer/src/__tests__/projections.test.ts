@@ -14,8 +14,9 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { parseListing } from '@plebeian/product-event'
-import { createNappletEnvironment, createStaticEnvironment, type BrowseEnvironment, type RawEvent } from '@plebeian/nostr-access'
+import { parseListing } from '@plebeian/product'
+import { createStaticEnvironment, type ModuleEnvironment, type RawEvent } from '@plebeian/contract'
+import { createNappletEnvironment } from '@plebeian/napplet'
 
 import { fieldsFor, filterForManifest, findManifest, productGridManifest, resolvePageData, type PageDefinition } from '../cms'
 
@@ -48,7 +49,7 @@ const CATEGORY_EVENT: RawEvent = {
 const FIXTURES: readonly RawEvent[] = [listing('one'), listing('two'), CATEGORY_EVENT]
 
 /** The same fixtures, reached through the sandbox binding instead of memory. */
-const sandboxEnvironment = (events: readonly RawEvent[]): BrowseEnvironment =>
+const sandboxEnvironment = (events: readonly RawEvent[]): ModuleEnvironment =>
 	createNappletEnvironment({
 		runtime: {
 			outbox: { query: async () => events },
@@ -58,7 +59,7 @@ const sandboxEnvironment = (events: readonly RawEvent[]): BrowseEnvironment =>
 
 describe('CMS composition — generic over manifests', () => {
 	test('the manifest is the only place a component’s arguments and data needs live', () => {
-		expect(productGridManifest.dependencies.packages).toContain('@plebeian/product-query')
+		expect(productGridManifest.dependencies.packages).toContain('@plebeian/product')
 		expect(productGridManifest.dependencies.renderers).toEqual(['react'])
 		expect(Object.keys(productGridManifest.arguments).sort()).toEqual(['category', 'showOutOfStock', 'title'])
 		expect(productGridManifest.dataRequirements.kinds).toEqual([30402])
@@ -107,7 +108,7 @@ describe('cross-adapter invariant', () => {
 		const staticEnv = createStaticEnvironment({ events: FIXTURES })
 		const nappletEnv = sandboxEnvironment(FIXTURES)
 
-		const collect = async (env: BrowseEnvironment) => {
+		const collect = async (env: ModuleEnvironment) => {
 			const result = await env.nostr.read([{ kinds: [30402], limit: 40 }])
 			if (!result.ok) throw new Error(`expected ok, got ${result.reason}`)
 			return result.events

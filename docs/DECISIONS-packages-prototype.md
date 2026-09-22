@@ -1,5 +1,17 @@
 # Package prototype — decisions and evidence
 
+> **Superseded in part, 2026-09-22.** This records decisions as they were taken while building the first
+> prototype. The structure has since been restructured to the anatomy in `packages/CONTRACT.md` and
+> `packages/MODULARIZATION.md`, and the decisions that are **specification** rather than rationale now live
+> in the specs — D7 and D8 in particular belong in `browsing-explore-search.md` §2.3/§3.2 and are not there
+> yet (drift D-1/D-9 in `packages/ALIGNMENT.md`). Where this document and a spec disagree, **the spec wins**;
+> where this document records a decision the specs do not yet carry, that is a gap to close, not a source of
+> truth.
+>
+> Package names in the text below are the names at `91e55a23`: `product-event` + `product-query` are now
+> `@plebeian/product`; `browse-ui` + `browse-filter` are now `@plebeian/browse`; `nostr-access` is now
+> `@plebeian/contract` (the interface) plus `@plebeian/web` and `@plebeian/napplet` (the implementations).
+
 **2026-09-22 · branch `feat/browse-packages` · base `0a48b028` (`auctions`)**
 
 This records every decision taken while building the first working prototype of the browsing packages,

@@ -11,11 +11,11 @@
 		"noEmit": true,
 		"paths": {
 			"@/*": ["./src/*"],
-			"@plebeian/product-event": ["./packages/product-event/src/index.ts"],
-			"@plebeian/product-query": ["./packages/product-query/src/index.ts"],
-			"@plebeian/browse-filter": ["./packages/browse-filter/src/index.ts"],
-			"@plebeian/nostr-access": ["./packages/nostr-access/src/index.ts"],
-			"@plebeian/browse-ui": ["./packages/browse-ui/src/index.ts"]
+			"@plebeian/contract": ["./packages/contract/src/index.ts"],
+			"@plebeian/web": ["./packages/web/src/index.ts"],
+			"@plebeian/napplet": ["./packages/napplet/src/index.ts"],
+			"@plebeian/product": ["./packages/product/src/index.ts"],
+			"@plebeian/browse": ["./packages/browse/src/index.ts"]
 		}
 	},
 	"include": ["**/*.ts", "**/*.tsx", "scripts/**/*.ts"]

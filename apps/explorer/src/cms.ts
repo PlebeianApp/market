@@ -10,9 +10,9 @@
  * component hand-writes a prop interface, with nothing checking that the two agree
  * (`component-manifest-and-cms-contract.md` §2).
  */
-import type { ProductListing } from '@plebeian/product-event'
-import { collectionByDTagFilter, feedFilter, type QueryFilter } from '@plebeian/product-query'
-import type { BrowseEnvironment } from '@plebeian/nostr-access'
+import type { ProductListing } from '@plebeian/product'
+import { collectionByDTagFilter, feedFilter, type QueryFilter } from '@plebeian/product'
+import type { ModuleEnvironment } from '@plebeian/contract'
 
 /** Section 1 of a manifest: what the component depends on. */
 export interface ManifestDependencies {
@@ -60,7 +60,7 @@ export const productGridManifest: ComponentManifest<{ title: string; category: s
 	name: 'product-grid',
 	label: 'Product grid',
 	dependencies: {
-		packages: ['@plebeian/product-query', '@plebeian/browse-ui', '@plebeian/product-event'],
+		packages: ['@plebeian/product', '@plebeian/browse'],
 		renderers: ['react'],
 	},
 	arguments: {
@@ -75,7 +75,7 @@ export const collectionManifest: ComponentManifest<{ dTag: string; title: string
 	name: 'collection',
 	label: 'Collection',
 	dependencies: {
-		packages: ['@plebeian/product-query', '@plebeian/browse-ui'],
+		packages: ['@plebeian/product', '@plebeian/browse'],
 		renderers: ['react'],
 	},
 	arguments: {
@@ -113,14 +113,14 @@ export const fieldsFor = (manifest: ComponentManifest): Array<{ key: string; fie
 /** Resolve every block's data, so the renderer receives validated listings and no fetching. */
 export const resolvePageData = async (
 	page: PageDefinition,
-	env: BrowseEnvironment,
+	env: ModuleEnvironment,
 	parse: (raw: unknown) => { ok: true; value: ProductListing } | { ok: false },
 ): Promise<Map<number, ProductListing[]>> => {
 	const resolved = new Map<number, ProductListing[]>()
 	await Promise.all(
 		page.blocks.map(async (block, index) => {
 			const manifest = findManifest(block.component)
-			if (!manifest || !manifest.dependencies.packages.includes('@plebeian/product-query')) {
+			if (!manifest || !manifest.dependencies.packages.includes('@plebeian/product')) {
 				resolved.set(index, [])
 				return
 			}

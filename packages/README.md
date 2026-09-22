@@ -1,63 +1,52 @@
-# `@plebeian/*` packages — browsing prototype
+# `@plebeian/*` packages — the browsing prototype, restructured
 
-A first working realisation of the browsing, explore and search module as **pure packages plus three
-projections**. It is additive: no file under `src/` is modified, and the explorer imports nothing from
-the application.
-
-**Read `docs/DECISIONS-packages-prototype.md` first** — it records every decision, the evidence behind
-the data-driven ones, and the open questions.
+Five packages, one contract, two implementations, two modules. Read `CONTRACT.md` first; it is the
+overarching spec everything else is written against.
 
 ## The packages
 
-| Package                   | Layer       | What it is                                                                                                              |
-| ------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `@plebeian/product-event` | contract    | Validates an untrusted kind-30402 event into a typed view. No UI, no framework, no network. Zod is its only dependency. |
-| `@plebeian/product-query` | query       | Builds filters **as data**. Never executes them.                                                                        |
-| `@plebeian/browse-filter` | pure        | The viewer's filter and sort state. Gating deliberately excluded.                                                       |
-| `@plebeian/nostr-access`  | environment | The only layer that touches the world. One interface, three bindings.                                                   |
-| `@plebeian/browse-ui`     | UI          | Data in, markup out. No fetching, no validating, no store.                                                              |
+- **`contract`** — `@plebeian/contract`. The interface a module is handed, the shared vocabulary, the
+  injectable defaults, the fixture implementation used by every package's tests. Contains no I/O, no
+  framework, no host, and **no dependency on any other `@plebeian` package**.
+- **`web`** — `@plebeian/web`. The regular-web implementation, over `nostr-tools`. Boundary: `in-process`.
+- **`napplet`** — `@plebeian/napplet`. The sandboxed implementation, over a NIP-5D host's capability object.
+  Boundary: `napplet`. Shares **no code** with `web` — only the contract.
+- **`product`** — `@plebeian/product`. The product module: NIP-99 validation (`src/event.ts`) and filter
+  construction (`src/queries.ts`), merged into one package.
+- **`browse`** — `@plebeian/browse`. The browse module: the surfaces (`src/components.ts`) and the viewer's
+  filter state (`src/filter.ts`), merged into one package.
 
-The rule that separates them: **a contract package may not import a capability; a query package may not
-import a framework; a surface package may not fetch.**
+Every package has its own `SPEC.md` naming the feature-spec version it implements.
 
-## The three projections
+## The docs
 
-`apps/explorer` renders the same components under three different environments:
-
-1. **Live** — `createNostrToolsEnvironment` reading public relays.
-2. **CMS** — a page definition rendered through component **manifests**; nothing per component is
-   hand-written.
-3. **Sandbox (stub)** — `createNappletEnvironment` over a capability object instead of a network. The
-   stub deliberately fails, to show that _"the read failed"_ and _"there is nothing to show"_ are
-   different states. **It is a stub, not a real sandboxed frame.**
+- **`CONTRACT.md`** — the overarching spec. Interface, vocabulary, trust boundaries, versioning, conformance.
+- **`MODULARIZATION.md`** — how a module is made: behaviour versus policy, the three kinds, how the contract
+  reaches a package (bundled versus external), and what is verified.
+- **`ALIGNMENT.md`** — the Chapter 04 review: where the implementation aligned, where it drifted, and what the
+  restructure has fixed since.
+- **`<package>/SPEC.md`** — per-package spec.
 
 ## Running it
 
 ```bash
-bun run apps/explorer/serve.ts     # http://localhost:3333
-bun test packages/ apps/           # 72 tests
-bun run scripts/evidence-real-listings.ts   # the live-relay measurement (needs relay access)
+# tests: all five packages, plus the explorer's projection tests
+bun test packages/ apps/
+
+# the explorer — three projections of the same components
+bun run apps/explorer/serve.ts        # then http://localhost:3333/?view=live|cms|sandbox
 ```
 
-Requires public relay access for the live view. `bun run apps/explorer/serve.ts` must be run from the
-repository root, because the `@plebeian/*` aliases live in the root `tsconfig.json`.
+The explorer imports **nothing from `src/`**. That is the point: if it runs, the packages are real.
 
-## Layout
+## The dependency rule
 
 ```
-packages/product-event/   schemas, parser, typed view, 54 tests
-packages/product-query/   filter construction, 14 tests
-packages/browse-filter/   viewer filter/sort state, 13 tests
-packages/nostr-access/    environment interface + three bindings, 11 tests
-packages/browse-ui/       components + scoped CSS
-apps/explorer/            the consumer; no imports from src/
-scripts/evidence-real-listings.ts   the measurement that drove decisions D7 and D8
+components → core → contract          (modules)
+bindings → contract                   (implementations)
+contract → nothing @plebeian          (the shared vocabulary)
 ```
 
-## What is deliberately missing
-
-Gating (blacklist, test labels, deletions, NSFW) is **specified** in
-`rebuild-research/modules/browsing-explore-search.md` §3.3 and only partly implemented here: the gate is
-fail-closed by construction, but the inputs are application-side settings reads. That is the next slice,
-along with migrating the application itself onto these packages. See `docs/DECISIONS-packages-prototype.md`
-§Open questions.
+Modules never import an implementation, so **no module can tell which implementation it is running under**.
+That is checked statically in `packages/__tests__/conformance.test.ts`, along with the rule that only
+`contract` may contain colour values.

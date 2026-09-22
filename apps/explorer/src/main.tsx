@@ -6,7 +6,7 @@
  *
  * Three projections are demonstrated, in the order the architecture defines them:
  *
- *   1. **Live** — the in-process binding reading real relays through `@plebeian/nostr-access`.
+ *   1. **Live** — the web implementation (`@plebeian/web`) reading real relays.
  *   2. **CMS** — the same components composed from a page definition through component manifests,
  *      with no hand-written per-component code.
  *   3. **Sandbox (stub)** — the same components under the napplet binding, where the environment is a
@@ -15,19 +15,14 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import '../../../packages/browse-ui/src/styles.css'
+import '../../../packages/contract/src/tokens.css'
+import '../../../packages/browse/src/styles.css'
 
-import { defaultProductFilters, type ProductFilterState } from '@plebeian/browse-filter'
-import { ProductGrid, SurfaceStateView, type SurfaceState } from '@plebeian/browse-ui'
-import { parseListing, type ParseProblem, type ProductListing } from '@plebeian/product-event'
-import {
-	CONFIG_KEYS,
-	createNappletEnvironment,
-	createNostrToolsEnvironment,
-	type BrowseEnvironment,
-	type NappletRuntimeLike,
-	type RawEvent,
-} from '@plebeian/nostr-access'
+import { createNappletEnvironment, type NappletRuntimeLike } from '@plebeian/napplet'
+import { defaultProductFilters, ProductGrid, SurfaceStateView, type ProductFilterState, type SurfaceState } from '@plebeian/browse'
+import { parseListing, type ParseProblem, type ProductListing } from '@plebeian/product'
+import { CONFIG_KEYS, type ModuleEnvironment, type RawEvent } from '@plebeian/contract'
+import { createNostrToolsEnvironment } from '@plebeian/web'
 
 import { findManifest, resolvePageData, type PageDefinition } from './cms'
 
@@ -58,7 +53,7 @@ const parseAll = (events: readonly RawEvent[]): { listings: ProductListing[]; pr
 }
 
 /** Read a feed through the environment, mapping failures to the honest surface state. */
-const useFeed = (env: BrowseEnvironment, enabled: boolean) => {
+const useFeed = (env: ModuleEnvironment, enabled: boolean) => {
 	const [state, setState] = useState<SurfaceState>({ status: 'loading', what: 'the feed' })
 	const [listings, setListings] = useState<ProductListing[]>([])
 	const [problems, setProblems] = useState<Map<string, ParseProblem[]>>(new Map())
