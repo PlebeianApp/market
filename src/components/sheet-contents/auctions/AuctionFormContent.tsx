@@ -40,6 +40,17 @@ import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySc
 import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
 import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
 import { AuctionV4VEditorDialog } from '@/components/sheet-contents/auctions/AuctionV4VEditorDialog'
+
+/** Split a textarea of pubkeys (one per line, commas/spaces tolerated) into a deduped list. */
+const parsePubkeyList = (raw: string | undefined): string[] => {
+	const listed = (raw ?? '')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0 && !line.startsWith('#'))
+		.map((line) => (line.split(/[\s,]+/)[0] ?? '').toLowerCase())
+		.filter((pubkey) => pubkey.length > 0)
+	return Array.from(new Set(listed))
+}
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { clearAuctionFormDraft, getAuctionFormDraft, saveAuctionFormDraft } from '@/lib/utils/auctionFormStorage'
 import { useNavigate } from '@tanstack/react-router'
@@ -1684,14 +1695,14 @@ export function AuctionFormContent() {
 	// filled it, otherwise the single legacy field, otherwise the app's configured
 	// validator. Nothing here is authoritative — the publish path resolves the same
 	// list again and fails closed, so a stale render cannot publish a bad set.
+	// The seller's own selection in the V4V step — and nobody else. The app default is
+	// offered there as a suggestion, never injected into the list, so removing a
+	// validator always removes it: a row that Remove cannot affect is a dead control.
+	const selectedAuditors = useMemo(() => parsePubkeyList(formData.auditorPubkeys), [formData.auditorPubkeys])
+
 	const resolvedAuditors = useMemo(() => {
-		const listed = (formData.auditorPubkeys ?? '')
-			.split('\n')
-			.map((line) => line.trim())
-			.filter((line) => line.length > 0 && !line.startsWith('#'))
-			.map((line) => (line.split(/[\s,]+/)[0] ?? '').toLowerCase())
-			.filter((pubkey) => pubkey.length > 0)
-		if (listed.length > 0) return Array.from(new Set(listed))
+		const listed = parsePubkeyList(formData.auditorPubkeys)
+		if (listed.length > 0) return listed
 		const single = formData.auditorPubkey?.trim().toLowerCase()
 		if (single) return [single]
 		const fallback = configStore.state.config.cvmServerPubkey?.trim().toLowerCase()
@@ -1991,7 +2002,8 @@ export function AuctionFormContent() {
 							<AuctionV4VTab
 								formData={formData}
 								setFormData={setFormData}
-								auditors={resolvedAuditors}
+								auditors={selectedAuditors}
+								defaultValidator={configStore.state.config.cvmServerPubkey?.trim().toLowerCase()}
 								resolution={v4vResolution}
 								onEditRecipients={() => setV4vEditorOpen(true)}
 							/>
@@ -2042,23 +2054,6 @@ export function AuctionFormContent() {
 						))}
 					</ul>
 				)}
-				<div className="flex gap-2">
-					<Button
-						type="button"
-						variant={v4vResolution.v4vComplete ? 'outline' : 'destructive'}
-						size="sm"
-						className="w-full justify-between text-xs"
-						onClick={() => setActiveTab('v4v')}
-						data-testid="auction-v4v-status"
-					>
-						<span>
-							V4V:{' '}
-							{v4vResolution.validators.poolSize === 0 ? 'no validators resolved' : `${v4vResolution.validators.poolSize} validator(s)`}
-							{v4vResolution.recipients.length > 0 ? ` · ${v4vResolution.recipients.length} recipient(s)` : ' · seller keeps everything'}
-						</span>
-						<span>{v4vResolution.v4vComplete ? 'Set up ›' : 'Fix ›'}</span>
-					</Button>
-				</div>
 				<div className="flex gap-2">
 					{currentTabIndex > 0 && (
 						<Button

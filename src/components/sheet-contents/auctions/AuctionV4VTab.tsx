@@ -16,12 +16,16 @@ import type { AuctionWorkflowResolution } from '@/lib/workflow/auctionWorkflowRe
 export interface AuctionV4VTabProps {
 	formData: AuctionFormData
 	setFormData: Dispatch<SetStateAction<AuctionFormData>>
-	/** The auditors the root will list, after the app-default fallback. */
+	/** The validators the seller selected, and nobody else. */
 	auditors: readonly string[]
+	/** The app's configured default validator, offered only as a suggestion. */
+	defaultValidator?: string
 	resolution: AuctionWorkflowResolution
 	/** Open the V4V editor for the recipient list (validators stay fixed there). */
 	onEditRecipients: () => void
 }
+
+type ValidatorSort = 'name' | 'fee'
 
 const shortPubkey = (pubkey: string): string => `${pubkey.slice(0, 10)}…${pubkey.slice(-4)}`
 const formatBps = (bps: number): string => `${(bps / 100).toFixed(2)}%`
@@ -39,9 +43,10 @@ const PUBKEY_RE = /^[0-9a-f]{64}$/
  * Recipients who are not validators are deliberately not offered here: they belong
  * to the payout editor, which is where the shares are set.
  */
-export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onEditRecipients }: AuctionV4VTabProps) {
+export function AuctionV4VTab({ formData, setFormData, auditors, defaultValidator, resolution, onEditRecipients }: AuctionV4VTabProps) {
 	const announcements = useMultipartyAnnouncements()
 	const [search, setSearch] = useState('')
+	const [sort, setSort] = useState<ValidatorSort>('name')
 
 	const candidates = useMemo(() => (announcements.data?.validators ?? []) as MultipartyPickableValidator[], [announcements.data])
 	const selected = new Set(auditors.map((pubkey) => pubkey.toLowerCase()))
@@ -80,11 +85,13 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 		})
 	}
 
-	const addable = candidates.filter(
-		(candidate) =>
-			!selected.has(candidate.pubkey.toLowerCase()) &&
-			(term.length === 0 || (candidate.name ?? '').toLowerCase().includes(term) || candidate.pubkey.toLowerCase().includes(term)),
-	)
+	const addable = candidates
+		.filter(
+			(candidate) =>
+				!selected.has(candidate.pubkey.toLowerCase()) &&
+				(term.length === 0 || (candidate.name ?? '').toLowerCase().includes(term) || candidate.pubkey.toLowerCase().includes(term)),
+		)
+		.sort((a, b) => (sort === 'fee' ? a.feeBps - b.feeBps : (a.name ?? a.pubkey).localeCompare(b.name ?? b.pubkey)))
 
 	const selectedEntries = auditors.map((pubkey) => ({
 		pubkey,
@@ -110,8 +117,8 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 			<div>
 				<h3 className="text-sm font-semibold">Validators for this auction</h3>
 				<p className="mt-1 text-xs text-muted-foreground">
-					We recommend picking {AUCTION_RECOMMENDED_VALIDATOR_POOL}. Two validators must agree unanimously, so a pool of{' '}
-					{AUCTION_RECOMMENDED_VALIDATOR_POOL} is the smallest that still tolerates one being offline.
+					We recommend picking {AUCTION_RECOMMENDED_VALIDATOR_POOL} or more: a pool of {AUCTION_RECOMMENDED_VALIDATOR_POOL} validators is
+					the smallest that still tolerates one being offline, and the more validators you choose, the more resilient your auction can be.
 				</p>
 			</div>
 
@@ -121,9 +128,29 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 					{poolSize > 0 ? ` of ${AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS} max` : ''})
 				</Label>
 				{poolSize === 0 && (
-					<p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-						No validator selected yet. Without one there is nothing to corroborate a bid.
-					</p>
+					<>
+						<p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+							No validator selected yet. Without one there is nothing to corroborate a bid.
+						</p>
+						{defaultValidator && (
+							<div className="flex items-center gap-3 rounded-md border border-dashed p-2">
+								<div className="min-w-0 flex-1 text-xs text-muted-foreground">
+									This app's own default validator, <span className="font-mono">{shortPubkey(defaultValidator)}</span>, will be used if you
+									pick nobody. It is not an announcement, so it has no published terms.
+								</div>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="shrink-0 gap-1 text-xs"
+									onClick={() => addValidator(defaultValidator)}
+								>
+									<Plus className="h-3 w-3" />
+									Select
+								</Button>
+							</div>
+						)}
+					</>
 				)}
 				{selectedEntries.map(({ pubkey, announced }) => (
 					<div key={pubkey} className="flex items-start gap-3 rounded-md border p-2">
@@ -192,30 +219,58 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 					<p className="text-xs text-muted-foreground">No announced validator matches that.</p>
 				)}
 
-				{addable.map((candidate) => (
-					<div key={candidate.pubkey} className="flex items-start gap-3 rounded-md border p-2">
-						{candidate.picture ? (
-							<img src={candidate.picture} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" loading="lazy" />
-						) : (
-							<div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
-						)}
-						<div className="min-w-0 flex-1">
-							<div className="text-sm font-medium">{candidate.name ?? shortPubkey(candidate.pubkey)}</div>
-							<div className="text-xs text-muted-foreground">{describeValidatorTerms(candidate)}</div>
-							{candidate.about && <div className="mt-0.5 text-xs text-muted-foreground">{candidate.about}</div>}
-						</div>
+				{candidates.length > 1 && (
+					<div className="flex items-center justify-end gap-2 text-xs">
+						<span className="text-muted-foreground">Sort by</span>
 						<Button
 							type="button"
-							variant="outline"
+							variant={sort === 'name' ? 'secondary' : 'ghost'}
 							size="sm"
-							className="shrink-0 gap-1 text-xs"
-							onClick={() => addValidator(candidate.pubkey)}
+							className="h-6 px-2 text-xs"
+							onClick={() => setSort('name')}
 						>
-							<Plus className="h-3 w-3" />
-							Add
+							Name
+						</Button>
+						<Button
+							type="button"
+							variant={sort === 'fee' ? 'secondary' : 'ghost'}
+							size="sm"
+							className="h-6 px-2 text-xs"
+							onClick={() => setSort('fee')}
+						>
+							Percentage
 						</Button>
 					</div>
-				))}
+				)}
+
+				{/* A large pool should scroll inside its own box rather than pushing
+				    the rest of the step off screen. */}
+				<div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+					{addable.map((candidate) => (
+						<div key={candidate.pubkey} className="flex items-start gap-3 rounded-md border p-2">
+							{candidate.picture ? (
+								<img src={candidate.picture} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" loading="lazy" />
+							) : (
+								<div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
+							)}
+							<div className="min-w-0 flex-1">
+								<div className="text-sm font-medium">{candidate.name ?? shortPubkey(candidate.pubkey)}</div>
+								<div className="text-xs text-muted-foreground">{describeValidatorTerms(candidate)}</div>
+								{candidate.about && <div className="mt-0.5 text-xs text-muted-foreground">{candidate.about}</div>}
+							</div>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="shrink-0 gap-1 text-xs"
+								onClick={() => addValidator(candidate.pubkey)}
+							>
+								<Plus className="h-3 w-3" />
+								Add
+							</Button>
+						</div>
+					))}
+				</div>
 			</div>
 
 			{showQuorumSlider && (
