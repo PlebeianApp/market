@@ -175,7 +175,18 @@ jobs:
         # nak relay + dev server, so no new triggers, permissions, secrets, or
         # env are introduced. `src/lib/__tests__/e2e-workflow-gate-membership.test.ts`
         # fails if a describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
+        #
+        # `self-hosted instance` (e2e/tests/self-hosted-config.spec.ts,
+        # ADR-018) is gated here because it is ADR-018's stated completion
+        # criterion: a non-Plebeian instance must complete a browse, cart, and
+        # checkout path in the e2e suite, run on every PR, not just on
+        # schedule/manual. It runs on the same local relay/dev server as
+        # every other family in this job — the dev server for the whole run
+        # is self-hosted-configured via INSTANCE_HANDLER_ID above — so no new
+        # triggers, permissions, secrets, or env are introduced.
+        # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
+        # describe in that spec stops matching this pattern.
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions|self-hosted instance' --repeat-each=2
 
       - name: Show server logs on failure
         if: failure()
