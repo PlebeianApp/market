@@ -95,6 +95,8 @@ export const rulesetRequiredQuorum = (ruleset: AuctionValidatorRuleset, poolSize
 	poolSize <= 0 ? 0 : Math.ceil((poolSize * ruleset.minimum_quorum_percent) / 100)
 
 export const AUCTION_VALIDATOR_POLICY_ISSUE_CODES = [
+	/** No validator at all: nothing corroborates the outcome, so publishing refuses. */
+	'no_validator',
 	'pool_below_minimum',
 	'quorum_below_majority',
 	/** The declared quorum is below this validator's own ruleset requirement. */
@@ -164,17 +166,29 @@ export const assessAuctionValidatorPolicy = (
 
 	const issues: AuctionValidatorPolicyIssue[] = []
 
+	// A validator set with nobody in it is not a warning: without a validator there is
+	// nothing to corroborate a bid, so a new publish must refuse. Reported for both
+	// policies — the single-party policy grandfathers an *existing* one-validator
+	// auction, but it cannot wave through an auction that names nobody.
+	if (poolSize === 0) {
+		issues.push({
+			code: 'no_validator',
+			severity: 'invalid',
+			detail: 'No validator is selected. An auction needs at least one validator to corroborate its outcome.',
+		})
+	}
+
 	// Reported against the same threshold for both policies, so a grandfathered
 	// single-validator auction is still visible — it is merely not invalidated.
-	if (poolSize < ruleset.minimum_validators) {
+	if (poolSize > 0 && poolSize < ruleset.minimum_validators) {
 		issues.push({
 			code: 'pool_below_minimum',
 			severity: poolSeverity,
 			detail:
 				`This auction lists ${poolSize} validator(s); at least ${minimumPool} ` +
 				(isMultiparty ? 'are required.' : `is required, and this validator requires at least ${ruleset.minimum_validators}.`) +
-				` A pool of ${AUCTION_RECOMMENDED_VALIDATOR_POOL} is recommended, since two validators ` +
-				'must agree unanimously to form a majority.',
+				` A pool of ${AUCTION_RECOMMENDED_VALIDATOR_POOL} is the smallest that still tolerates one ` +
+				'being offline, and more validators make the outcome more resilient.',
 		})
 	}
 

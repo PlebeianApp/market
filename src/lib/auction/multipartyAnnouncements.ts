@@ -170,3 +170,22 @@ export const describeValidatorTerms = (validator: MultipartyPickableValidator): 
 	const terms = [fee, pool, quorum].filter((part): part is string => part !== null)
 	return terms.join(' · ')
 }
+
+/**
+ * The one number a seller actually compares — the row shows this and nothing else.
+ * The rest of the announcement (pool size, quorum) is detail, and detail belongs
+ * behind the info affordance, not in the list.
+ */
+export const validatorFeeLabel = (validator: MultipartyPickableValidator): string => `${(validator.feeBps / 100).toFixed(2)}%`
+
+/**
+ * The validator's own terms, for the info tooltip. Stated in the validator's words
+ * — what it accepts — rather than as a description of the auction.
+ */
+export const validatorRulesLabel = (validator: MultipartyPickableValidator): string => {
+	const fee = `Takes ${(validator.feeBps / 100).toFixed(2)}% of the settlement as its fee.`
+	const pool = validator.minValidators === undefined ? null : `Accepts pools of ${validator.minValidators} validators or more.`
+	const quorum =
+		validator.minQuorumPercent === undefined ? null : `Asks for a quorum of at least ${validator.minQuorumPercent}% of the pool.`
+	return [fee, pool, quorum].filter((part): part is string => part !== null).join(' ')
+}

@@ -1691,22 +1691,18 @@ export function AuctionFormContent() {
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
-	// The auditors this draft will actually list: the V4V step's list when the seller
-	// filled it, otherwise the single legacy field, otherwise the app's configured
-	// validator. Nothing here is authoritative — the publish path resolves the same
-	// list again and fails closed, so a stale render cannot publish a bad set.
-	// The seller's own selection in the V4V step — and nobody else. The app default is
-	// offered there as a suggestion, never injected into the list, so removing a
-	// validator always removes it: a row that Remove cannot affect is a dead control.
+	// The auditors this draft will actually list: the V4V step's selection, otherwise
+	// the single legacy field. There is deliberately NO app-default fallback — a
+	// validator the seller never chose must not be published on their behalf, and
+	// with none selected the resolver reports a blocking issue instead of quietly
+	// filling the gap (auctionValidatorPolicy: `no_validator`).
 	const selectedAuditors = useMemo(() => parsePubkeyList(formData.auditorPubkeys), [formData.auditorPubkeys])
 
 	const resolvedAuditors = useMemo(() => {
 		const listed = parsePubkeyList(formData.auditorPubkeys)
 		if (listed.length > 0) return listed
 		const single = formData.auditorPubkey?.trim().toLowerCase()
-		if (single) return [single]
-		const fallback = configStore.state.config.cvmServerPubkey?.trim().toLowerCase()
-		return fallback ? [fallback] : []
+		return single ? [single] : []
 	}, [formData.auditorPubkeys, formData.auditorPubkey])
 
 	// The V4V step's own state: an admissible validator set, and a schedule that
@@ -1950,13 +1946,13 @@ export function AuctionFormContent() {
 					}}
 					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
-					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+					<TabsList className="w-full bg-transparent h-auto p-0 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-[1px]">
 						{tabs.map((tab, index) => (
 							<TabsTrigger
 								key={tab.value}
 								value={tab.value}
 								disabled={!isTabReachable(index)}
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
+								className="px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none disabled:opacity-40 disabled:cursor-not-allowed"
 							>
 								{tab.label}
 								{tab.showAsterisk && <span className="ml-1 text-red-500">*</span>}
@@ -2003,7 +1999,6 @@ export function AuctionFormContent() {
 								formData={formData}
 								setFormData={setFormData}
 								auditors={selectedAuditors}
-								defaultValidator={configStore.state.config.cvmServerPubkey?.trim().toLowerCase()}
 								resolution={v4vResolution}
 								onEditRecipients={() => setV4vEditorOpen(true)}
 							/>

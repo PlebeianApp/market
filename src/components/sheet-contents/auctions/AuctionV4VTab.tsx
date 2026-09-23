@@ -9,7 +9,8 @@ import type { AuctionFormData } from '@/publish/auctions'
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
 import { AUCTION_RECOMMENDED_VALIDATOR_POOL, AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS } from '@/lib/auction/auctionValidatorPolicy'
 import type { MultipartyPickableValidator } from '@/lib/auction/multipartyAnnouncements'
-import { describeValidatorTerms } from '@/lib/auction/multipartyAnnouncements'
+import { validatorFeeLabel, validatorRulesLabel } from '@/lib/auction/multipartyAnnouncements'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import { useMultipartyAnnouncements } from '@/queries/multiparty'
 import type { AuctionWorkflowResolution } from '@/lib/workflow/auctionWorkflowResolver'
 
@@ -18,8 +19,6 @@ export interface AuctionV4VTabProps {
 	setFormData: Dispatch<SetStateAction<AuctionFormData>>
 	/** The validators the seller selected, and nobody else. */
 	auditors: readonly string[]
-	/** The app's configured default validator, offered only as a suggestion. */
-	defaultValidator?: string
 	resolution: AuctionWorkflowResolution
 	/** Open the V4V editor for the recipient list (validators stay fixed there). */
 	onEditRecipients: () => void
@@ -43,7 +42,7 @@ const PUBKEY_RE = /^[0-9a-f]{64}$/
  * Recipients who are not validators are deliberately not offered here: they belong
  * to the payout editor, which is where the shares are set.
  */
-export function AuctionV4VTab({ formData, setFormData, auditors, defaultValidator, resolution, onEditRecipients }: AuctionV4VTabProps) {
+export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onEditRecipients }: AuctionV4VTabProps) {
 	const announcements = useMultipartyAnnouncements()
 	const [search, setSearch] = useState('')
 	const [sort, setSort] = useState<ValidatorSort>('name')
@@ -128,29 +127,11 @@ export function AuctionV4VTab({ formData, setFormData, auditors, defaultValidato
 					{poolSize > 0 ? ` of ${AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS} max` : ''})
 				</Label>
 				{poolSize === 0 && (
-					<>
-						<p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-							No validator selected yet. Without one there is nothing to corroborate a bid.
-						</p>
-						{defaultValidator && (
-							<div className="flex items-center gap-3 rounded-md border border-dashed p-2">
-								<div className="min-w-0 flex-1 text-xs text-muted-foreground">
-									This app's own default validator, <span className="font-mono">{shortPubkey(defaultValidator)}</span>, will be used if you
-									pick nobody. It is not an announcement, so it has no published terms.
-								</div>
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									className="shrink-0 gap-1 text-xs"
-									onClick={() => addValidator(defaultValidator)}
-								>
-									<Plus className="h-3 w-3" />
-									Select
-								</Button>
-							</div>
-						)}
-					</>
+					<p className="rounded-md border border-dashed border-red-300 bg-red-50 p-3 text-xs text-red-800">
+						No validator is selected. An auction needs at least one validator to corroborate its outcome, so publishing stays blocked until
+						you pick one. There is no default validator and there is no fallback — the auction is published with the validators you choose
+						here, or not at all.
+					</p>
 				)}
 				{selectedEntries.map(({ pubkey, announced }) => (
 					<div key={pubkey} className="flex items-start gap-3 rounded-md border p-2">
@@ -163,8 +144,15 @@ export function AuctionV4VTab({ formData, setFormData, auditors, defaultValidato
 							<div className="text-sm font-medium">
 								{announced?.name ?? <span className="font-mono">{shortPubkey(pubkey)} (no announcement found)</span>}
 							</div>
-							<div className="text-xs text-muted-foreground">
-								{announced ? describeValidatorTerms(announced) : 'its share is set in the V4V editor'}
+							<div className="flex items-center gap-1 text-xs text-muted-foreground">
+								{announced ? (
+									<>
+										<span>{validatorFeeLabel(announced)} fee</span>
+										<InfoTooltip content={validatorRulesLabel(announced)} />
+									</>
+								) : (
+									<span>its share is set in the V4V editor</span>
+								)}
 							</div>
 						</div>
 						<Button
@@ -255,8 +243,10 @@ export function AuctionV4VTab({ formData, setFormData, auditors, defaultValidato
 							)}
 							<div className="min-w-0 flex-1">
 								<div className="text-sm font-medium">{candidate.name ?? shortPubkey(candidate.pubkey)}</div>
-								<div className="text-xs text-muted-foreground">{describeValidatorTerms(candidate)}</div>
-								{candidate.about && <div className="mt-0.5 text-xs text-muted-foreground">{candidate.about}</div>}
+								<div className="flex items-center gap-1 text-xs text-muted-foreground">
+									<span>{validatorFeeLabel(candidate)} fee</span>
+									<InfoTooltip content={validatorRulesLabel(candidate)} />
+								</div>
 							</div>
 							<Button
 								type="button"
