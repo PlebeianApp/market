@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
 
+// This opt-in fixture setting records both passing checkout flows under test-results for the CI artifact.
+test.use({ recordBuyerVideo: true })
+
 const seededPhysicalProducts = ['Bitcoin Hardware Wallet', 'Nostr T-Shirt']
 
 async function addSeededProductsAndOpenCheckout(page: Page, productNames: string[]): Promise<void> {
@@ -95,11 +98,9 @@ test.describe('Checkout unresolved shipping selection', () => {
 			'Delivery requirements could not be verified for the selected shipping options. Please reselect shipping before continuing.',
 		)
 
-		await expect(missingShippingWarning).toBeVisible()
-		await expect(unresolvedShippingError).not.toBeVisible()
-
-		await selectShippingForItem(buyerPage, 0, 'Unsupported E2E Delivery', 1)
-
+		// This single-option fixture is selected automatically when it enters the
+		// cart. Its unsupported delivery service must produce the unresolved state,
+		// not the missing-selection warning.
 		await expect(missingShippingWarning).not.toBeVisible()
 		await expect(unresolvedShippingError).toBeVisible({ timeout: 15_000 })
 		await expect(continueButton).toBeDisabled()
