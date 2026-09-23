@@ -1,5 +1,9 @@
 import { HDKey } from '@scure/bip32'
 
+// Frozen software identity (ADR-018): an input to auction HD key derivation,
+// not an instance-branding string. Changing it changes every derived auction
+// key, so it must stay identical across every deployment/fork rather than
+// resolve from instance config.
 export const AUCTION_HD_ROOT_CONTEXT = 'plebeian.market:auction-hd-root:v1'
 export const AUCTION_HD_ACCOUNT_PATH = "m/30408'/0'/0'"
 

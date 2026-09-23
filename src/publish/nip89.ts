@@ -15,6 +15,14 @@ export const COLLECTION_KIND = 30405
 export const PLEBEIAN_MARKET_URL = 'https://plebeian.market'
 export const PLEBEIAN_MARKET_RELAY = 'wss://relay.plebeian.market'
 
+// Frozen software identity (ADR-018): the NIP-89 `client` tag names the CODE
+// that published the event, not the deployment. It must stay identical across
+// every instance/fork so clients can group events by software regardless of
+// instance branding — the relay hint and handler coordinate carried alongside
+// it are instance-scoped and do resolve from config. Do not read this from
+// `configStore`/`displayName`.
+export const NIP89_CLIENT_SOFTWARE_NAME = 'Plebeian Market'
+
 /**
  * Resolve runtime metadata for a published handler event. The runtime config
  * is authoritative when it is available; the shipped Plebeian URLs remain as
@@ -150,6 +158,5 @@ export const publishHandlerInfo = async (
 export const createClientTag = (appPubkey: string, handlerId: string, relayUrl?: string): [string, string, string, string] => {
 	const effectiveRelayUrl = relayUrl || configStore.state.config.appRelay || PLEBEIAN_MARKET_RELAY
 	const effectiveHandlerId = handlerId || configStore.state.config.handlerId || DEFAULT_INSTANCE_CONFIG.handlerId
-	const effectiveName = configStore.state.config.displayName || configStore.state.config.name || DEFAULT_INSTANCE_CONFIG.displayName
-	return ['client', effectiveName, `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
+	return ['client', NIP89_CLIENT_SOFTWARE_NAME, `31990:${appPubkey}:${effectiveHandlerId}`, effectiveRelayUrl]
 }
