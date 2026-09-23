@@ -1889,6 +1889,9 @@ export function AuctionFormContent() {
 		const caution = describeValidatorPoolCaution(resolvedAuditors.length)
 		const resolverWarnings = v4vResolution.issues
 			.filter((entry) => entry.severity === 'warning')
+			// A small pool is already described by the caution above: the ruleset's own wording
+			// for the same condition would only repeat it in different words.
+			.filter((entry) => !(caution !== null && entry.code === 'pool_below_minimum'))
 			.map((entry) => entry.message)
 			.filter((message) => message !== caution && !currentTabErrors.includes(message))
 		return caution ? [caution, ...resolverWarnings] : resolverWarnings
