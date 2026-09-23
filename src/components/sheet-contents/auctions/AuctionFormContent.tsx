@@ -1807,7 +1807,7 @@ export function AuctionFormContent() {
 	const hasValidImages = !validationMessages.imageUrls
 	const hasValidMints = !validationMessages.trustedMints
 
-	const canSubmit = validationIssues.length === 0
+	const canSubmit = validationIssues.length === 0 && v4vResolution.v4vComplete
 
 	const currentTabIndex = TAB_ORDER.indexOf(activeTab)
 	const isLastTab = currentTabIndex === TAB_ORDER.length - 1
@@ -2049,6 +2049,17 @@ export function AuctionFormContent() {
 							</li>
 						))}
 					</ul>
+				)}
+				{!v4vResolution.v4vComplete && (
+					// The publish button is disabled by the same flag, so this is the only thing
+					// that tells the seller *why* — and the button that fixes it is a real control,
+					// not a hint.
+					<div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+						<span className="text-xs text-red-800">{v4vResolution.blockingMessages[0] ?? 'The V4V step is incomplete.'}</span>
+						<Button type="button" variant="outline" size="sm" className="shrink-0 text-xs" onClick={() => setActiveTab('v4v')}>
+							Fix ›
+						</Button>
+					</div>
 				)}
 				<div className="flex gap-2">
 					{currentTabIndex > 0 && (
