@@ -202,10 +202,13 @@ describe('runtime-config-aware handler metadata', () => {
 		expect(event.tags).toContainEqual(['d', 'custom-handler'])
 		expect(event.tags).toContainEqual(['web', 'https://selfhost.example/product/<bech32>', 'naddr'])
 		expect(event.tags).toContainEqual(['web', 'https://selfhost.example/collection/<bech32>', 'naddr'])
+		// The `client` tag's software name is frozen (ADR-018) — it identifies
+		// the code, not the instance, so it stays 'Plebeian Market' even though
+		// this instance's displayName is 'Self Host'.
 		const appPubkey = 'b'.repeat(64)
 		expect(createClientTag(appPubkey, 'custom-handler')).toEqual([
 			'client',
-			'Self Host',
+			'Plebeian Market',
 			`31990:${appPubkey}:custom-handler`,
 			'wss://selfhost.example',
 		])
