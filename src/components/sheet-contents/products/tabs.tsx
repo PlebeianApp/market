@@ -94,7 +94,6 @@ export function DetailTab() {
 			convertSatsToCurrencyValue,
 			{
 				currency,
-				currencyMode,
 				isFiatCurrency: currency !== 'SATS' && currency !== 'BTC',
 				hasExchangeRates,
 			},
@@ -137,33 +136,6 @@ export function DetailTab() {
 
 		// Set local currency mode state
 		setCurrencyMode(newCurrencyMode)
-	}
-
-	// Function to determine what gets published to the protocol
-	const getPublishCurrency = (): { price: string; currency: string } => {
-		if (currency === 'SATS' || currency === 'BTC') {
-			// When Bitcoin currency is selected, always publish in SATS
-			const bitcoinValue = parseFloat(price || '0')
-			if (bitcoinUnit === 'BTC') {
-				// Convert BTC to SATS for publishing
-				const satsValue = bitcoinValue * 100000000
-				return { price: satsValue.toString(), currency: 'SATS' }
-			} else {
-				// Already in SATS
-				return { price: price || '0', currency: 'SATS' }
-			}
-		} else {
-			// Fiat currency selected - check radio group selection
-			if (currencyMode === 'fiat') {
-				// Use fiat currency
-				return { price: fiatDisplayValue, currency: currency }
-			} else {
-				// Use sats as currency (calculated on spot)
-				const bitcoinValue = parseFloat(price || '0')
-				const satsValue = bitcoinUnit === 'BTC' ? bitcoinValue * 100000000 : bitcoinValue
-				return { price: satsValue.toString(), currency: 'SATS' }
-			}
-		}
 	}
 
 	// Toggle Bitcoin unit (SATS/BTC)

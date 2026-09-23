@@ -151,6 +151,14 @@ export function CartContent({ className = '' }: { className?: string }) {
 							<p className="text-sm">Subtotal:</p>
 							<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
 						</div>
+						<div className="flex justify-between">
+							<p className="text-sm">Shipping:</p>
+							<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
+						</div>
+						<div className="flex justify-between font-semibold">
+							<p className="text-sm">Total:</p>
+							<p className="text-sm">{formatSats(totalInSats)} sat</p>
+						</div>
 					</div>
 
 					{/* View Details temporarily hidden for design sync */}

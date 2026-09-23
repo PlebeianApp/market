@@ -69,7 +69,7 @@ describe('applyFiatPriceEdit', () => {
 })
 
 describe('applyBitcoinPriceEdit', () => {
-	test('keeps canonical fiat state in sync with a sats edit', () => {
+	test('keeps the fiat display value in sync with a sats edit', () => {
 		expect(
 			applyBitcoinPriceEdit(
 				'2500000',
@@ -77,7 +77,6 @@ describe('applyBitcoinPriceEdit', () => {
 				(sats) => sats / 100_000,
 				{
 					currency: 'USD',
-					currencyMode: 'fiat',
 					isFiatCurrency: true,
 					hasExchangeRates: true,
 				},
@@ -86,7 +85,7 @@ describe('applyBitcoinPriceEdit', () => {
 		).toEqual({ price: '2500000', fiatPrice: '25.00' })
 	})
 
-	test('clears the fiat authority when sats conversion is unavailable', () => {
+	test('clears the fiat display value when sats conversion is unavailable', () => {
 		expect(
 			applyBitcoinPriceEdit(
 				'2500000',
@@ -94,7 +93,6 @@ describe('applyBitcoinPriceEdit', () => {
 				() => 0,
 				{
 					currency: 'USD',
-					currencyMode: 'fiat',
 					isFiatCurrency: true,
 					hasExchangeRates: false,
 				},

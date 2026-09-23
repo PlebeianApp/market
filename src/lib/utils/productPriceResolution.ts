@@ -20,15 +20,15 @@ export type BitcoinPriceEditOutcome = {
 /**
  * Applies a Bitcoin price edit to the form state.
  *
- * In fiat-fixed mode, the fiat value is the publication authority, so it is
- * refreshed from the sats edit when possible and cleared when the conversion
- * cannot be confirmed. In sats-fixed mode the fiat value is display-only.
+ * The fiat display value is refreshed from the sats edit when possible and
+ * cleared when the conversion cannot be confirmed. Publication authority is
+ * resolved separately by resolvePublishPrice.
  */
 export function applyBitcoinPriceEdit(
 	rawValue: string,
 	bitcoinUnit: 'SATS' | 'BTC',
 	convert: (sats: number, currency: string) => number,
-	context: { currency: string; currencyMode: 'sats' | 'fiat'; isFiatCurrency: boolean; hasExchangeRates: boolean },
+	context: { currency: string; isFiatCurrency: boolean; hasExchangeRates: boolean },
 	convertBtcToSats: (btc: number) => number,
 ): BitcoinPriceEditOutcome {
 	if (rawValue === '') return { price: '', fiatPrice: '' }
