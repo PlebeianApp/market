@@ -2020,7 +2020,8 @@ export function AuctionFormContent() {
 				onOpenChange={setV4vEditorOpen}
 				formData={formData}
 				setFormData={setFormData}
-				auditors={resolvedAuditors}
+				auditors={selectedAuditors}
+				platformPubkey={configStore.state.config.appPublicKey?.trim().toLowerCase()}
 			/>
 
 			<div className="shrink-0 bg-white border-t pt-4 pb-2 mt-2 flex flex-col gap-2">
