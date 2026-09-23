@@ -152,6 +152,15 @@ export function getMainRelay(): string | undefined {
 }
 
 /**
+ * Relay for bug-report publish/read (ADR-018 `bugRelay`). Instances can
+ * route bug reports to a dedicated relay instead of their main app relay;
+ * falls back to the main relay when unconfigured.
+ */
+export function getBugRelay(): string | undefined {
+	return configStore.state.config.bugRelay || getMainRelay()
+}
+
+/**
  * Get the write relay(s) for the current stage. Thin wrapper around
  * `computeNdkConfig` for callers that only need the write set.
  * Staging/development → main relay only; production → all connected.
