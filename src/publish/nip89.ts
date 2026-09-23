@@ -111,9 +111,11 @@ export const createHandlerInfoEventData = (
 		['web', `${effectiveSiteUrl}/collection/<bech32>`, 'naddr'],
 	]
 
-	if (effectiveRelayUrl) {
-		tags.push(['r', effectiveRelayUrl])
-	}
+	// `effectiveRelayUrl` always resolves — `resolveHandlerMetadata` falls back
+	// to `PLEBEIAN_MARKET_RELAY` when no relay is configured — so the `r` tag
+	// is always present. No conditional here: an `if` on this value would
+	// never evaluate false and would misrepresent the tag as optional.
+	tags.push(['r', effectiveRelayUrl])
 
 	return {
 		kind: HANDLER_INFO_KIND,
