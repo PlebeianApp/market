@@ -1,0 +1,26 @@
+name: Instance Literals Guard
+
+# Prevents new Plebeian-specific literals from being hardcoded under src/
+# (ADR-018: docs/adr/ADR-018-instance-configuration-and-self-hosting.md).
+# New instance identity values must resolve from instance config instead.
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - auctions
+      - 'feature/**'
+      - 'chore/**'
+      - 'fix/**'
+  pull_request:
+    branches: [main, master, auctions]
+  workflow_dispatch:
+
+jobs:
+  instance-literals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check instance-literal footprint
+        run: bash scripts/check-instance-literals.sh

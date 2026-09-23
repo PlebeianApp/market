@@ -1,4 +1,6 @@
 import { test, expect } from '../fixtures'
+import { devUser2 } from '../../src/lib/fixtures'
+import { resetRemoteCartForUser } from '../scenarios'
 import { SELF_HOSTED_HANDLER_ID, SELF_HOSTED_INSTANCE_NAME, SELF_HOSTED_SITE_URL, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { filterByTag, getTagValue, queryRelayEvents } from '../utils/relay-query'
 
@@ -56,5 +58,45 @@ test.describe('self-hosted instance configuration', () => {
 		expect(content.name).toBe(SELF_HOSTED_INSTANCE_NAME)
 		expect(content.handlerId).toBe(SELF_HOSTED_HANDLER_ID)
 		expect(content.publicRelays).toEqual(['ws://localhost:10547'])
+	})
+})
+
+// ADR-018's stated completion criterion: "A non-Plebeian instance (distinct
+// namespace, relay, and app pubkey) must complete a browse, cart, and
+// checkout path in the e2e suite." This dev server runs the whole suite
+// self-hosted-configured (INSTANCE_HANDLER_ID, see playwright.config.ts),
+// so this proves the configured instance is actually usable end to end —
+// not just discoverable via /api/config, as the tests above only check.
+test.describe('self-hosted instance — browse, cart, and checkout path', () => {
+	test.use({ scenario: 'marketplace' })
+
+	test.beforeEach(async () => {
+		await resetRemoteCartForUser(devUser2.sk)
+	})
+
+	test('a buyer can browse, add to cart, and reach checkout', async ({ buyerPage }) => {
+		await buyerPage.goto('/products')
+
+		const wallet = buyerPage.locator('[data-testid="product-card"]').filter({ hasText: 'Bitcoin Hardware Wallet' })
+		await expect(wallet).toBeVisible({ timeout: 15_000 })
+		await wallet.getByRole('button', { name: /add to cart/i }).click()
+		await expect(wallet.getByRole('button', { name: /add/i })).toBeVisible()
+
+		await buyerPage
+			.getByRole('button')
+			.filter({ has: buyerPage.locator('.i-basket') })
+			.click()
+		await expect(buyerPage.getByRole('heading', { name: /your cart/i })).toBeVisible({ timeout: 10_000 })
+
+		const shippingTrigger = buyerPage.getByText('Select shipping method')
+		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
+		await shippingTrigger.click()
+		await buyerPage.getByText(/Worldwide Standard/).click()
+
+		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
+		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
+		await checkoutButton.click()
+
+		await expect(buyerPage.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 10_000 })
 	})
 })

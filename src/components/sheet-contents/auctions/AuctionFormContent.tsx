@@ -1650,7 +1650,10 @@ export function AuctionFormContent() {
 	const availableMints = useMemo(
 		() =>
 			Array.from(
-				new Set([...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS), ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])]),
+				new Set([
+					...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
+					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
+				]),
 			),
 		[configTrustedMints, walletDevMode],
 	)
