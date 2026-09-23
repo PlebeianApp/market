@@ -70,6 +70,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
+import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@/lib/auction/constants'
@@ -838,6 +839,12 @@ function AuctionDetailRoute() {
 								<TestLabelButton kind={AUCTION_KIND} pubkey={auction.pubkey} dTag={auctionDTag} itemLabel="Auction" />
 							</div>
 
+							{/* Spec validity (AUCTIONS.md §4.1): a malformed event is absent
+							    from the feed and the browse pages but reachable through this
+							    direct link, so name the offending tags here. Renders nothing
+							    for a valid event. */}
+							<InvalidAuctionNotice event={toRawEvent(auction)} itemLabel="Auction" />
+
 							<span>Posted by</span>
 							<UserCard pubkey={auction.pubkey} size="md" />
 
@@ -870,7 +877,15 @@ function AuctionDetailRoute() {
 								)}
 								{!ended && <span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(biddingCutoffAt, false)}</span>}
 							</div>
-							<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+							{/* Bid area: the only place an auction offers a bid control. It
+							    renders `InvalidAuctionBidBlock` instead of the panel when
+							    the event fails AUCTIONS.md §4.1 (see `AuctionBidder`), and
+							    the wrapper is the scope e2e asserts that on — cards for
+							    *other* auctions on this page are not bid controls for this
+							    one. */}
+							<div className="w-full" data-testid="auction-bid-area">
+								<AuctionBidder auction={auction} currentUserPubkey={activeUserPubkey} bids={bids} />
+							</div>
 							{parsedAuctionForSettlement && (
 								<AuctionSettlement
 									auction={parsedAuctionForSettlement}

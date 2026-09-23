@@ -93,9 +93,14 @@ async function seedAuction(relay: Relay, overrides: { mints: string[]; dTag?: st
 				['starting_bid', '100', 'SAT'],
 				['bid_increment', '50'],
 				['reserve', '0'],
-				['settlement_policy', 'cashu_p2pk_path_oracle_v1'],
+				// v1 policy literal + a listed auditor (AUCTIONS.md §4.1): the feed
+				// is gated on spec validity, so the v0 literal would make this
+				// fixture an event the app refuses to list.
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
 				['key_scheme', 'hd_p2pk'],
 				['p2pk_xpub', XPUB],
+				['auditors', TEST_APP_PUBLIC_KEY],
+				['auditor_quorum', '1'],
 				['path_issuer', TEST_APP_PUBLIC_KEY],
 				['settlement_grace', '7200'],
 				['extension_rule', 'none'],

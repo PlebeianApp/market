@@ -32,6 +32,8 @@ import {
 } from '@/queries/auctions'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
+import { inspectAuctionAdmission } from '@/lib/schemas/auction/auctionAdmission'
+import { InvalidAuctionBidBlock } from '@/components/InvalidAuctionNotice'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
 import { toRawEvent } from '@/lib/nostr/eventLike'
@@ -632,8 +634,22 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		openConfirmBidDialog()
 	}
 
+	// Spec validity (AUCTIONS.md §4.1). A malformed auction event is not
+	// biddable: the detail page resolves it by design (ADR-0009's reachability
+	// rule), so without this block the panel would let a bidder lock eCash to an
+	// auction the parser refuses — the bid is rejected downstream by the
+	// validators and the funds stay locked until the locktime. This component is
+	// the only place an auction bid control is rendered (the detail page and the
+	// compact card both mount it), so blocking here covers every auction
+	// surface. The reason list comes from the same admission the notice renders,
+	// so panel and badge cannot disagree.
+	const admission = useMemo(() => inspectAuctionAdmission(toRawEvent(auction)), [auction])
+	if (!admission.admissible) {
+		return <InvalidAuctionBidBlock admission={admission} itemLabel="auction" compact={compact} />
+	}
+
 	return (
-		<div className="flex flex-col gap-2 w-full">
+		<div className="flex flex-col gap-2 w-full" data-testid="auction-bidder">
 			<DepositLightningModal
 				open={isDepositOpen}
 				onClose={handleDepositModalClose}

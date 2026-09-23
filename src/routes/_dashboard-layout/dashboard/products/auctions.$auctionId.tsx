@@ -1,5 +1,6 @@
 import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { Media } from '@/components/Media'
+import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
 import { AUCTION_KIND } from '@/lib/auction/constants'
@@ -670,6 +671,13 @@ function DashboardAuctionDetailRoute() {
 								<TestLabelButton kind={AUCTION_KIND} pubkey={auction.pubkey} dTag={getAuctionId(auction)} itemLabel="Auction" />
 							</div>
 						)}
+
+						{/* Spec validity (AUCTIONS.md §4.1): this dashboard read is the
+						    owner surface, so it deliberately keeps a malformed event
+						    reachable (`includeInvalid` on the by-pubkey read) — an owner
+						    cannot republish a corrected event they cannot see. Name the
+						    offending tags here. Renders nothing for a valid event. */}
+						<InvalidAuctionNotice event={toRawEvent(auction)} itemLabel="Auction" />
 
 						<div className="grid gap-3 sm:grid-cols-2">
 							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />

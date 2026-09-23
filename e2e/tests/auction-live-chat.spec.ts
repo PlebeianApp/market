@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
-import { devUser1 } from '../../src/lib/fixtures'
+import { devUser1, devUser2 } from '../../src/lib/fixtures'
 
 test.use({ scenario: 'merchant' })
 
@@ -20,9 +20,14 @@ async function seedAuctionAndGetId() {
 			created_at: now,
 			content: 'Test auction for live chat',
 			tags: [
+				// Every REQUIRED tag (AUCTIONS.md §4.1) — the feed is gated on spec
+				// validity, so a fixture missing `starting_bid` would not be an
+				// auction the app is willing to list.
 				['d', dTag],
 				['title', 'NIP-53 Protocol Test Auction'],
 				['summary', 'Test auction for verifying NIP-53 protocol'],
+				['auction_type', 'english'],
+				['currency', 'SAT'],
 				['image', 'https://placehold.co/400x400'],
 				['price', '5000', 'SATS'],
 				['status', 'on-sale'],
@@ -30,6 +35,15 @@ async function seedAuctionAndGetId() {
 				['end_at', String(now + 86400)],
 				['max_end_at', String(now + 172800)],
 				['settlement_grace', '3600'],
+				['starting_bid', '5000'],
+				['bid_increment', '100'],
+				['reserve', '0'],
+				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['auditors', devUser2.pk],
+				['auditor_quorum', '1'],
+				['schema', 'auction_v1'],
 				['t', 'art'],
 				['mint', 'https://mint.minibits.cash/Bitcoin'],
 			],

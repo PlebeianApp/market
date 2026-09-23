@@ -16,9 +16,21 @@ async function publishEvent(relay: Relay, template: Parameters<typeof finalizeEv
 	return event
 }
 
-async function seedAuction(relay: Relay, sellerSk: string, sellerPk: string, title: string) {
+/**
+ * Seed a kind-30408 auction with every REQUIRED tag (AUCTIONS.md §4.1).
+ *
+ * The feed is gated on spec validity, so a fixture missing `starting_bid` or
+ * `auditors` would be absent from the "You Previously Bid" grid for a reason
+ * unrelated to what this suite asserts.
+ */
+async function seedAuction(relay: Relay, sellerSk: string, sellerPk: string, title: string, auditorPk: string = devUser2.pk) {
 	const now = Math.floor(Date.now() / 1000)
-	const dTag = `home-grid-${title}-${Date.now()}`
+	// The `d` tag is part of the NIP-01 address (`kind:pubkey:d`), and the repo's
+	// coordinate schema allows only `[A-Za-z0-9_-]` — so a title with spaces has
+	// to be slugged. Seeding `home-grid-My Own Auction-<ts>` made the event fail
+	// its own parser, and the feed gate (correctly) drops a spec-invalid event:
+	// this suite would then have been asserting the gate rather than the grids.
+	const dTag = `home-grid-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`
 	const event = await publishEvent(
 		relay,
 		{
@@ -29,6 +41,8 @@ async function seedAuction(relay: Relay, sellerSk: string, sellerPk: string, tit
 				['d', dTag],
 				['title', title],
 				['summary', `Test auction for ${title}`],
+				['auction_type', 'english'],
+				['currency', 'SAT'],
 				['image', 'https://placehold.co/400x400'],
 				['price', '5000', 'SATS'],
 				['status', 'on-sale'],
@@ -36,6 +50,15 @@ async function seedAuction(relay: Relay, sellerSk: string, sellerPk: string, tit
 				['end_at', String(now + 86400)],
 				['max_end_at', String(now + 172800)],
 				['settlement_grace', '3600'],
+				['starting_bid', '5000'],
+				['bid_increment', '100'],
+				['reserve', '0'],
+				['key_scheme', 'hd_p2pk'],
+				['p2pk_xpub', 'xpub' + '0'.repeat(100)],
+				['settlement_policy', 'cashu_p2pk_bidder_path_v1'],
+				['auditors', auditorPk],
+				['auditor_quorum', '1'],
+				['schema', 'auction_v1'],
 				['t', 'art'],
 				['mint', 'https://mint.minibits.cash/Bitcoin'],
 			],
@@ -90,7 +113,7 @@ test.describe('Auctions home page — Your Auctions & Previously Bid grids', () 
 		const relay = await Relay.connect(RELAY_URL)
 
 		// devUser2 sells an auction; devUser1 (merchant) bids on it
-		const { eventId, dTag } = await seedAuction(relay, devUser2.sk, devUser2.pk, 'Bid Target Auction')
+		const { eventId, dTag } = await seedAuction(relay, devUser2.sk, devUser2.pk, 'Bid Target Auction', devUser1.pk)
 		await seedBid(relay, devUser1.sk, eventId, `30408:${devUser2.pk}:${dTag}`)
 		await relay.close()
 

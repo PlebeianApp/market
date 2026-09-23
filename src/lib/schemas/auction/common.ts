@@ -27,6 +27,18 @@ export const addressableCoordinate = z
 /** Non-negative unix-seconds integer. */
 export const unixSeconds = z.number().int().nonnegative()
 
+/**
+ * Positive unix-seconds integer — a real wall-clock instant, never the epoch.
+ *
+ * Used for the kind-30408 timing tags (`start_at`, `end_at`, `max_end_at`).
+ * AUCTIONS.md §4.1 requires those tags to be present; §6.0 makes them the
+ * structural ordering invariant of the auction. `0` is neither: it is the
+ * absent value wearing a number, and a close time of `0` is what let a
+ * malformed event win the "Ending Soon" sort (see
+ * `src/lib/schemas/auction/auctionAdmission.ts`).
+ */
+export const positiveUnixSeconds = z.number().int().positive('must be a positive unix-seconds value')
+
 /** Non-negative integer (sats, counts, etc.). */
 export const nonNegativeInt = z.number().int().nonnegative()
 

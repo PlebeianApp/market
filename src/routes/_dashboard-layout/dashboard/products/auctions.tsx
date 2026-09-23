@@ -542,7 +542,11 @@ function AuctionsOverviewComponent() {
 		isLoading,
 		error,
 	} = useQuery({
-		...auctionsByPubkeyQueryOptions(user?.pubkey ?? ''),
+		// Owner surface: this list is the seller's own inventory, so it keeps
+		// malformed events visible (`includeInvalid`) while the public browse
+		// surfaces drop them. A seller has to see the event to republish a
+		// corrected version; the detail page carries the notice that says why.
+		...auctionsByPubkeyQueryOptions(user?.pubkey ?? '', 100, { includeInvalid: true }),
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
 
