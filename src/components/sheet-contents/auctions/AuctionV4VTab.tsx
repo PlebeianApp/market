@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { AlertTriangle, Check, Plus, Search, Trash2 } from 'lucide-react'
+import { Check, Plus, Search, Trash2 } from 'lucide-react'
 import type { AuctionFormData } from '@/publish/auctions'
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
 import { AUCTION_RECOMMENDED_VALIDATOR_POOL, AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS } from '@/lib/auction/auctionValidatorPolicy'
@@ -99,20 +99,6 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 
 	return (
 		<div className="space-y-6">
-			{resolution.blockingMessages.length > 0 && (
-				<div className="rounded-md border border-red-300 bg-red-50 p-3">
-					<div className="flex items-center gap-2 text-sm font-semibold text-red-800">
-						<AlertTriangle className="h-4 w-4" />
-						This auction cannot be published yet
-					</div>
-					<ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-red-800">
-						{resolution.blockingMessages.map((message) => (
-							<li key={message}>{message}</li>
-						))}
-					</ul>
-				</div>
-			)}
-
 			<div>
 				<h3 className="text-sm font-semibold">Validators for this auction</h3>
 				<p className="mt-1 text-xs text-muted-foreground">
@@ -127,10 +113,8 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 					{poolSize > 0 ? ` of ${AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS} max` : ''})
 				</Label>
 				{poolSize === 0 && (
-					<p className="rounded-md border border-dashed border-red-300 bg-red-50 p-3 text-xs text-red-800">
-						No validator is selected. An auction needs at least one validator to corroborate its outcome, so publishing stays blocked until
-						you pick one. There is no default validator and there is no fallback — the auction is published with the validators you choose
-						here, or not at all.
+					<p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
+						No Validators Selected
 					</p>
 				)}
 				{selectedEntries.map(({ pubkey, announced }) => (
@@ -318,18 +302,6 @@ export function AuctionV4VTab({ formData, setFormData, auditors, resolution, onE
 					</div>
 				)}
 			</div>
-
-			{poolSize > 0 && poolSize < AUCTION_RECOMMENDED_VALIDATOR_POOL && (
-				<div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-					<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-					<p>
-						{poolSize === 1
-							? 'With one validator this auction has no corroboration at all: that validator alone decides whether a bid is real, and its verdict cannot be checked against anyone else.'
-							: 'With two validators an outcome needs both of them, so a single validator being offline or unreachable stalls the auction entirely.'}{' '}
-						{AUCTION_RECOMMENDED_VALIDATOR_POOL} validators is the smallest pool that is both fork-proof and survives one being offline.
-					</p>
-				</div>
-			)}
 
 			{poolSize > 0 && resolution.validators.valid && (
 				<div className="flex items-center gap-2 text-xs text-green-700">

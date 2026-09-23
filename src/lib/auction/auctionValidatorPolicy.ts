@@ -94,6 +94,22 @@ export const sanitizeAuctionValidatorRuleset = (ruleset?: Partial<AuctionValidat
 export const rulesetRequiredQuorum = (ruleset: AuctionValidatorRuleset, poolSize: number): number =>
 	poolSize <= 0 ? 0 : Math.ceil((poolSize * ruleset.minimum_quorum_percent) / 100)
 
+/**
+ * The caution a pool of one or two validators deserves, or `null` when the pool is big
+ * enough to tolerate an absence.
+ *
+ * Copy, not policy: the ruleset decides whether a pool is *admissible*, this only states
+ * what a small pool costs. It lives here rather than in the form so the wording is one
+ * string with one owner, testable without a render.
+ */
+export const describeValidatorPoolCaution = (poolSize: number): string | null => {
+	if (poolSize <= 0 || poolSize >= AUCTION_RECOMMENDED_VALIDATOR_POOL) return null
+	if (poolSize === 1) {
+		return 'With one validator nothing corroborates its verdict: that validator alone decides whether a bid is real, and if it is offline the auction has no outcome at all.'
+	}
+	return `With two validators both must agree, so one of them being offline stalls the auction. A pool of ${AUCTION_RECOMMENDED_VALIDATOR_POOL} is the smallest that still tolerates an absence.`
+}
+
 export const AUCTION_VALIDATOR_POLICY_ISSUE_CODES = [
 	/** No validator at all: nothing corroborates the outcome, so publishing refuses. */
 	'no_validator',

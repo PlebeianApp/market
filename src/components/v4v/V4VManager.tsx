@@ -186,7 +186,7 @@ export const V4VManager = forwardRef<HTMLDivElement, V4VManagerProps>(function V
 					</div>
 				)}
 
-				<h2 className="mt-6 font-semibold text-xl">{labels.recipientsHeading}</h2>
+				<h2 className="mt-4 font-semibold text-xl">{labels.recipientsHeading}</h2>
 
 				{/* Second bar - split between recipients */}
 				{shares.length > 0 && total > 0 ? (
@@ -209,7 +209,7 @@ export const V4VManager = forwardRef<HTMLDivElement, V4VManagerProps>(function V
 				)}
 
 				{/* Recipients list */}
-				<div className="space-y-2 mt-4">
+				<div className="space-y-2 mt-2">
 					{shares.map((share) => (
 						<RecipientItem
 							key={share.id}

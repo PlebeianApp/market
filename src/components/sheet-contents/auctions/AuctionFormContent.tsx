@@ -36,6 +36,7 @@ import {
 } from '@/publish/auctions'
 import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '@/lib/auction/constants'
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { describeValidatorPoolCaution } from '@/lib/auction/auctionValidatorPolicy'
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
 import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
 import { AuctionV4VTab } from '@/components/sheet-contents/auctions/AuctionV4VTab'
@@ -1850,8 +1851,10 @@ export function AuctionFormContent() {
 
 	const currentTabErrors: string[] = (() => {
 		if (isLastTab) {
+			// The last tab is the V4V step, so it owns that step's blocking reasons as well as
+			// any missing auction field: the same list, in the same place, as every other tab.
 			const fieldsWithIssues = [...new Set(validationIssues.map((i) => i.field))]
-			return fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`)
+			return [...fieldsWithIssues.map((f) => `Missing ${VALIDATION_FIELD_LABELS[f]}`), ...v4vResolution.blockingMessages]
 		}
 		switch (activeTab) {
 			case 'name':
@@ -1877,6 +1880,18 @@ export function AuctionFormContent() {
 			default:
 				return []
 		}
+	})()
+
+	const currentTabWarnings: string[] = (() => {
+		if (!isLastTab) return []
+		// The V4V step's caution is a small validator pool: admissible, but it costs either
+		// corroboration or availability. Rendered with the errors, in a softer tone.
+		const caution = describeValidatorPoolCaution(resolvedAuditors.length)
+		const resolverWarnings = v4vResolution.issues
+			.filter((entry) => entry.severity === 'warning')
+			.map((entry) => entry.message)
+			.filter((message) => message !== caution && !currentTabErrors.includes(message))
+		return caution ? [caution, ...resolverWarnings] : resolverWarnings
 	})()
 
 	const [v4vEditorOpen, setV4vEditorOpen] = useState(false)
@@ -2050,16 +2065,15 @@ export function AuctionFormContent() {
 						))}
 					</ul>
 				)}
-				{!v4vResolution.v4vComplete && (
-					// The publish button is disabled by the same flag, so this is the only thing
-					// that tells the seller *why* — and the button that fixes it is a real control,
-					// not a hint.
-					<div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2">
-						<span className="text-xs text-red-800">{v4vResolution.blockingMessages[0] ?? 'The V4V step is incomplete.'}</span>
-						<Button type="button" variant="outline" size="sm" className="shrink-0 text-xs" onClick={() => setActiveTab('v4v')}>
-							Fix ›
-						</Button>
-					</div>
+				{currentTabWarnings.length > 0 && (
+					<ul className="mb-3 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+						{currentTabWarnings.map((warning, i) => (
+							<li key={i} className="flex items-center gap-1 text-xs text-amber-800">
+								<span>•</span>
+								{warning}
+							</li>
+						))}
+					</ul>
 				)}
 				<div className="flex gap-2">
 					{currentTabIndex > 0 && (
