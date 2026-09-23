@@ -1642,10 +1642,17 @@ export function AuctionFormContent() {
 	const userPubkey = authState.user?.pubkey || ''
 	const appStage = useStore(configStore, (state) => state.config.stage)
 	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	// Instance-configured allowlist (ADR-018) takes precedence; DEFAULT_TRUSTED_MINTS
+	// is only the shipped tier-3 fallback for before config loads or an instance
+	// that hasn't set its own list.
+	const configTrustedMints = useStore(configStore, (state) => state.config.trustedMints)
 
 	const availableMints = useMemo(
-		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
-		[walletDevMode],
+		() =>
+			Array.from(
+				new Set([...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS), ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])]),
+			),
+		[configTrustedMints, walletDevMode],
 	)
 
 	const prevAvailableMintsRef = useRef(availableMints)
