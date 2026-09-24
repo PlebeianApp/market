@@ -14,6 +14,27 @@
 /** Value of the auction event's `settlement_policy` tag — see §4.1. */
 export const AUCTION_SETTLEMENT_POLICY = 'cashu_p2pk_bidder_path_v1'
 
+/**
+ * Value of `settlement_policy` for an auction with a multiparty payout schedule — the
+ * V4V/validator split published in the root's `payout_schedule` tag.
+ *
+ * Canonical here, with the rest of the wire vocabulary; `multipartySchedule.ts` re-exports it
+ * because that module owns the schedule semantics.
+ */
+export const AUCTION_MULTIPARTY_SETTLEMENT_POLICY = 'cashu_p2pk_bidder_path_multiparty_v1'
+
+/**
+ * Every `settlement_policy` value a reader must accept.
+ *
+ * The reader is deliberately permissive across the two: an auction published under either
+ * scheme is a real auction, and refusing to parse one is not a safety property — it just makes
+ * the auction invisible (a multiparty root read as "unparseable" renders as an empty card).
+ * Anything outside this list is still refused.
+ */
+export const AUCTION_SETTLEMENT_POLICIES = [AUCTION_SETTLEMENT_POLICY, AUCTION_MULTIPARTY_SETTLEMENT_POLICY] as const
+
+export type AuctionSettlementPolicy = (typeof AUCTION_SETTLEMENT_POLICIES)[number]
+
 /** Value of the auction event's `key_scheme` tag — single supported scheme in v1. */
 export const AUCTION_KEY_SCHEME = 'hd_p2pk'
 

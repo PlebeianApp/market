@@ -12,6 +12,7 @@
 
 import type {
 	AuctionLevelValidatorClaim,
+	AuctionSettlementPolicy,
 	AuctionSettlementStatus,
 	Nut7ProofState,
 	PathReleaseReason,
@@ -70,7 +71,7 @@ export interface ParsedAuctionEvent {
 	minBidCurve: MinBidCurve
 
 	// Cashu / key
-	settlementPolicy: 'cashu_p2pk_bidder_path_v1'
+	settlementPolicy: AuctionSettlementPolicy
 	keyScheme: 'hd_p2pk'
 	/** Allowed mints — at least one required. */
 	mints: string[]

@@ -1,6 +1,13 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
-export const AUCTION_MULTIPARTY_SETTLEMENT_POLICY = 'cashu_p2pk_bidder_path_multiparty_v1'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from './constants'
+
+/**
+ * Canonical in `constants.ts`, which owns the wire vocabulary: the read side must accept both
+ * settlement policies, so the values live where the parsers can see them without pulling this
+ * module's schedule machinery in. Re-exported here because this module owns the semantics.
+ */
+export { AUCTION_MULTIPARTY_SETTLEMENT_POLICY }
 export const AUCTION_MULTIPARTY_SCHEDULE_OBJECT = 'payout_schedule'
 export const AUCTION_MULTIPARTY_SCHEDULE_VERSION = '1'
 export const AUCTION_MULTIPARTY_SCHEDULE_MAX_ENTRIES = 16
