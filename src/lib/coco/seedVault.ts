@@ -1,4 +1,4 @@
-const DB_NAME = 'plebeian-market-coco-v2-seed-vault-v1'
+export const COCO_SEED_VAULT_DATABASE_NAME = 'plebeian-market-coco-v2-seed-vault-v1'
 const STORE_NAME = 'seeds'
 
 interface CocoSeedVaultRow {
@@ -27,7 +27,7 @@ const openVault = (): Promise<IDBDatabase> => {
 		throw new Error('Secure browser storage is required for the Coco wallet seed')
 	}
 	return new Promise((resolve, reject) => {
-		const request = indexedDB.open(DB_NAME, 1)
+		const request = indexedDB.open(COCO_SEED_VAULT_DATABASE_NAME, 1)
 		request.onupgradeneeded = () => {
 			if (!request.result.objectStoreNames.contains(STORE_NAME)) {
 				request.result.createObjectStore(STORE_NAME, { keyPath: 'scope' })
@@ -36,6 +36,54 @@ const openVault = (): Promise<IDBDatabase> => {
 		request.onsuccess = () => resolve(request.result)
 		request.onerror = () => reject(request.error ?? new Error('Coco seed vault open failed'))
 	})
+}
+
+export interface CocoSeedVaultVerification {
+	roundTripVerified: boolean
+	keyExtractable: boolean
+	ciphertextCommitment: string
+}
+
+export const hasCocoSeedVaultRecord = async (scope: string): Promise<boolean> => {
+	const database = await openVault()
+	try {
+		return Boolean(await requestResult(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(scope)))
+	} finally {
+		database.close()
+	}
+}
+
+const digest = async (value: ArrayBuffer): Promise<string> => {
+	const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', value))
+	return `sha256:${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Verifies persistence and non-extractability without returning seed or key material. */
+export const verifyCocoSeedVaultRoundTrip = async (scope: string): Promise<Readonly<CocoSeedVaultVerification>> => {
+	const first = await loadOrCreateCocoSeed(scope)
+	const second = await loadOrCreateCocoSeed(scope)
+	let difference = first.length ^ second.length
+	for (let index = 0; index < Math.max(first.length, second.length); index++) difference |= (first[index] ?? 0) ^ (second[index] ?? 0)
+	first.fill(0)
+	second.fill(0)
+
+	const database = await openVault()
+	try {
+		const row = (await requestResult(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(scope))) as
+			| CocoSeedVaultRow
+			| undefined
+		if (!row || row.version !== 1 || !(row.wrappingKey instanceof CryptoKey)) throw new Error('Coco seed vault record is unavailable')
+		if (row.wrappingKey.algorithm.name !== 'AES-GCM' || !row.wrappingKey.usages.includes('decrypt')) {
+			throw new Error('Coco seed vault wrapping key has an invalid contract')
+		}
+		return Object.freeze({
+			roundTripVerified: difference === 0,
+			keyExtractable: row.wrappingKey.extractable,
+			ciphertextCommitment: await digest(row.ciphertext),
+		})
+	} finally {
+		database.close()
+	}
 }
 
 const decryptSeed = async (row: CocoSeedVaultRow): Promise<Uint8Array> => {

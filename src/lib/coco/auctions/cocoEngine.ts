@@ -9,6 +9,7 @@ import { schnorr } from '@noble/curves/secp256k1.js'
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionDerivationPath } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { type CocoAccountRuntime, CocoRuntimeRegistry } from '@/lib/coco/runtime'
+import { runBrowserFreshAuctionsdevCocoMutation } from '@/lib/coco/migration/runtimeGate'
 import { fingerprintCocoAuctionValue } from './canonical'
 import type {
 	CocoEngineBidProjection,
@@ -123,25 +124,27 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 	}
 
 	async prepareBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection> {
-		const runtime = await this.runtimes.get(input.account)
-		await ensureTrustedMint(runtime.manager, input.mintUrl)
-		const { recipient, refund } = await this.resolveAuthorities(runtime, input)
-		const operation = await runtime.manager.ops.send.prepare({
-			operationId: input.operationId,
-			mintUrl: input.mintUrl,
-			amount: input.amount,
-			unit: input.unit,
-			target: {
-				type: 'p2pk',
-				options: {
-					pubkey: recipient,
-					locktime: input.locktime,
-					refundKeys: [refund],
-					requiredRefundSignatures: 1,
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			await ensureTrustedMint(runtime.manager, input.mintUrl)
+			const { recipient, refund } = await this.resolveAuthorities(runtime, input)
+			const operation = await runtime.manager.ops.send.prepare({
+				operationId: input.operationId,
+				mintUrl: input.mintUrl,
+				amount: input.amount,
+				unit: input.unit,
+				target: {
+					type: 'p2pk',
+					options: {
+						pubkey: recipient,
+						locktime: input.locktime,
+						refundKeys: [refund],
+						requiredRefundSignatures: 1,
+					},
 				},
-			},
+			})
+			return this.project(input, operation, recipient, refund, 'prepared')
 		})
-		return this.project(input, operation, recipient, refund, 'prepared')
 	}
 
 	async inspectBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection | null> {
@@ -153,53 +156,59 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 	}
 
 	async cancelPreparedBid(operationId: string, account: CocoAuctionAccountIdentity): Promise<void> {
-		const runtime = await this.runtimes.get(account)
-		const operation = await runtime.manager.ops.send.get(operationId)
-		if (!operation || operation.state === 'rolled_back') return
-		if (operation.state !== 'prepared') throw new Error(`Coco Send cannot be cancelled from ${operation.state}`)
-		await runtime.manager.ops.send.cancel(operationId)
+		await this.authorize(account, async () => {
+			const runtime = await this.runtimes.get(account)
+			const operation = await runtime.manager.ops.send.get(operationId)
+			if (!operation || operation.state === 'rolled_back') return
+			if (operation.state !== 'prepared') throw new Error(`Coco Send cannot be cancelled from ${operation.state}`)
+			await runtime.manager.ops.send.cancel(operationId)
+		})
 	}
 
 	async executeBid(input: CocoAuctionBidIntent & { operationId: string }): Promise<CocoEngineBidProjection> {
-		const runtime = await this.runtimes.get(input.account)
-		const { recipient, refund } = await this.resolveAuthorities(runtime, input)
-		const current = await runtime.manager.ops.send.get(input.operationId)
-		if (!current) throw new Error('Coco Send operation does not exist')
-		requireOperationBinding(current, input, recipient, refund)
-		const operation = current.state === 'prepared' ? (await runtime.manager.ops.send.execute(input.operationId)).operation : current
-		if (operation.state !== 'pending' && operation.state !== 'finalized') {
-			throw new Error(`Coco Send did not reach a publishable state: ${operation.state}`)
-		}
-		return this.project(input, operation, recipient, refund, 'executed')
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			const { recipient, refund } = await this.resolveAuthorities(runtime, input)
+			const current = await runtime.manager.ops.send.get(input.operationId)
+			if (!current) throw new Error('Coco Send operation does not exist')
+			requireOperationBinding(current, input, recipient, refund)
+			const operation = current.state === 'prepared' ? (await runtime.manager.ops.send.execute(input.operationId)).operation : current
+			if (operation.state !== 'pending' && operation.state !== 'finalized') {
+				throw new Error(`Coco Send did not reach a publishable state: ${operation.state}`)
+			}
+			return this.project(input, operation, recipient, refund, 'executed')
+		})
 	}
 
 	async withBidPublicationMaterial<T>(
 		input: CocoAuctionBidIntent & { operationId: string },
 		use: (material: SealedCocoBidPublicationMaterial) => Promise<T>,
 	): Promise<T> {
-		const runtime = await this.runtimes.get(input.account)
-		const { recipient, refund } = await this.resolveAuthorities(runtime, input)
-		const operation = await runtime.manager.ops.send.get(input.operationId)
-		if (!operation || (operation.state !== 'pending' && operation.state !== 'finalized') || !operation.token) {
-			throw new Error('Coco Send has no executed publication material')
-		}
-		requireOperationBinding(operation, input, recipient, refund)
-		const lockSecrets = operation.token.proofs.map((proof) => proof.secret)
-		const proofYs = lockSecrets.map(hashToCurveHexFromString)
-		const projection = this.project(input, operation, recipient, refund, 'executed')
-		return use({
-			operationId: operation.id,
-			mintUrl: operation.mintUrl,
-			unit: 'sat',
-			grossAmount: input.grossAmount,
-			amount: input.amount,
-			locktime: input.locktime,
-			recipientPublicAuthority: recipient,
-			refundPublicAuthority: refund,
-			conditionFingerprint: projection.conditionFingerprint,
-			commitmentFingerprint: projection.commitmentFingerprint,
-			lockSecrets,
-			proofYs,
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			const { recipient, refund } = await this.resolveAuthorities(runtime, input)
+			const operation = await runtime.manager.ops.send.get(input.operationId)
+			if (!operation || (operation.state !== 'pending' && operation.state !== 'finalized') || !operation.token) {
+				throw new Error('Coco Send has no executed publication material')
+			}
+			requireOperationBinding(operation, input, recipient, refund)
+			const lockSecrets = operation.token.proofs.map((proof) => proof.secret)
+			const proofYs = lockSecrets.map(hashToCurveHexFromString)
+			const projection = this.project(input, operation, recipient, refund, 'executed')
+			return use({
+				operationId: operation.id,
+				mintUrl: operation.mintUrl,
+				unit: 'sat',
+				grossAmount: input.grossAmount,
+				amount: input.amount,
+				locktime: input.locktime,
+				recipientPublicAuthority: recipient,
+				refundPublicAuthority: refund,
+				conditionFingerprint: projection.conditionFingerprint,
+				commitmentFingerprint: projection.commitmentFingerprint,
+				lockSecrets,
+				proofYs,
+			})
 		})
 	}
 
@@ -207,69 +216,82 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 		input: CocoAuctionWinnerReleaseInput,
 		use: (material: SealedCocoWinnerReleaseMaterial) => Promise<T>,
 	): Promise<{ operationId: string; result: T }> {
-		const runtime = await this.runtimes.get(input.account)
-		const operation = await runtime.manager.ops.send.get(input.sendOperationId)
-		if (!operation || (operation.state !== 'pending' && operation.state !== 'finalized') || !operation.token) {
-			throw new Error('Winning Coco Send has no releasable token')
-		}
-		const path = deriveOperationPath(await runtime.loadSeed(), operation.id)
-		const result = await use({
-			operationId: operation.id,
-			derivationPath: path,
-			recipientPublicAuthority: getOperationRecipient(operation),
-			encodedToken: getEncodedToken(operation.token),
-			tokenFingerprint: fingerprintCocoAuctionValue({
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			const operation = await runtime.manager.ops.send.get(input.sendOperationId)
+			if (!operation || (operation.state !== 'pending' && operation.state !== 'finalized') || !operation.token) {
+				throw new Error('Winning Coco Send has no releasable token')
+			}
+			const path = deriveOperationPath(await runtime.loadSeed(), operation.id)
+			const result = await use({
 				operationId: operation.id,
-				proofYs: operation.token.proofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
-			}),
+				derivationPath: path,
+				recipientPublicAuthority: getOperationRecipient(operation),
+				encodedToken: getEncodedToken(operation.token),
+				tokenFingerprint: fingerprintCocoAuctionValue({
+					operationId: operation.id,
+					proofYs: operation.token.proofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
+				}),
+			})
+			return { operationId: operation.id, result }
 		})
-		return { operationId: operation.id, result }
 	}
 
 	async receiveWinner(input: CocoAuctionWinnerReceiveInput, encodedToken: string): Promise<{ operationId: string; state: 'finalized' }> {
-		const runtime = await this.runtimes.get(input.account)
-		await ensureTrustedMint(runtime.manager, input.mintUrl)
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			await ensureTrustedMint(runtime.manager, input.mintUrl)
 
-		const account = deriveAuctionAccount(await runtime.loadSeed())
-		const xpriv = account.privateExtendedKey
-		if (!xpriv) throw new Error('Seller Coco Auction account has no private authority')
-		const child = HDKey.fromExtendedKey(xpriv).derive(normalizeAuctionDerivationPath(input.derivationPath))
-		if (!child.privateKey || !child.publicKey) throw new Error('Failed to derive seller Coco Auction child authority')
-		const childPublicAuthority = bytesToHex(child.publicKey)
-		if (!auctionP2pkPubkeysMatch(childPublicAuthority, input.recipientPublicAuthority)) {
-			throw new Error('Seller Coco child authority does not match the canonical winning bid')
-		}
-		if (!(await runtime.manager.keyring.getKeyPair(childPublicAuthority))) {
-			const imported = await runtime.manager.keyring.addKeyPair(child.privateKey)
-			if (!auctionP2pkPubkeysMatch(imported.publicKeyHex, childPublicAuthority)) {
-				throw new Error('Coco imported a different seller child authority')
+			const account = deriveAuctionAccount(await runtime.loadSeed())
+			const xpriv = account.privateExtendedKey
+			if (!xpriv) throw new Error('Seller Coco Auction account has no private authority')
+			const child = HDKey.fromExtendedKey(xpriv).derive(normalizeAuctionDerivationPath(input.derivationPath))
+			if (!child.privateKey || !child.publicKey) throw new Error('Failed to derive seller Coco Auction child authority')
+			const childPublicAuthority = bytesToHex(child.publicKey)
+			if (!auctionP2pkPubkeysMatch(childPublicAuthority, input.recipientPublicAuthority)) {
+				throw new Error('Seller Coco child authority does not match the canonical winning bid')
 			}
-		}
+			if (!(await runtime.manager.keyring.getKeyPair(childPublicAuthority))) {
+				const imported = await runtime.manager.keyring.addKeyPair(child.privateKey)
+				if (!auctionP2pkPubkeysMatch(imported.publicKeyHex, childPublicAuthority)) {
+					throw new Error('Coco imported a different seller child authority')
+				}
+			}
 
-		const metadata = getTokenMetadata(encodedToken)
-		const tokenFingerprint = fingerprintCocoAuctionValue({
-			operationId: input.senderOperationId,
-			proofYs: metadata.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
+			const metadata = getTokenMetadata(encodedToken)
+			const tokenFingerprint = fingerprintCocoAuctionValue({
+				operationId: input.senderOperationId,
+				proofYs: metadata.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
+			})
+			if (tokenFingerprint !== input.tokenFingerprint) throw new Error('Winner token fingerprint does not match the path release command')
+
+			let operation = await runtime.manager.ops.receive.prepare({ operationId: input.commandId, token: encodedToken })
+			requireReceiveBinding(operation, input)
+			if (operation.state === 'executing') operation = await runtime.manager.ops.receive.refresh(operation.id)
+			if (operation.state === 'prepared') operation = await runtime.manager.ops.receive.execute(operation.id)
+			requireReceiveBinding(operation, input)
+			if (operation.state !== 'finalized') throw new Error(`Coco Receive did not finalize: ${operation.state}`)
+			return { operationId: operation.id, state: 'finalized' }
 		})
-		if (tokenFingerprint !== input.tokenFingerprint) throw new Error('Winner token fingerprint does not match the path release command')
-
-		let operation = await runtime.manager.ops.receive.prepare({ operationId: input.commandId, token: encodedToken })
-		requireReceiveBinding(operation, input)
-		if (operation.state === 'executing') operation = await runtime.manager.ops.receive.refresh(operation.id)
-		if (operation.state === 'prepared') operation = await runtime.manager.ops.receive.execute(operation.id)
-		requireReceiveBinding(operation, input)
-		if (operation.state !== 'finalized') throw new Error(`Coco Receive did not finalize: ${operation.state}`)
-		return { operationId: operation.id, state: 'finalized' }
 	}
 
 	async refundLosingBid(input: CocoAuctionRefundInput): Promise<{ operationId: string; state: 'refunded' }> {
-		const runtime = await this.runtimes.get(input.account)
-		const operation = await runtime.manager.ops.send.get(input.sendOperationId)
-		if (!operation || operation.state === 'rolled_back') return { operationId: input.sendOperationId, state: 'refunded' }
-		if (Math.floor(Date.now() / 1000) < input.locktime) throw new Error('Coco Auction refund timelock has not elapsed')
-		const reclaimed = await runtime.manager.ops.send.reclaim(input.sendOperationId, { spendingPath: 'refund' })
-		if (reclaimed.state !== 'rolled_back') throw new Error(`Coco refund did not finalize: ${reclaimed.state}`)
-		return { operationId: reclaimed.id, state: 'refunded' }
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			const operation = await runtime.manager.ops.send.get(input.sendOperationId)
+			if (!operation || operation.state === 'rolled_back') return { operationId: input.sendOperationId, state: 'refunded' }
+			if (Math.floor(Date.now() / 1000) < input.locktime) throw new Error('Coco Auction refund timelock has not elapsed')
+			const reclaimed = await runtime.manager.ops.send.reclaim(input.sendOperationId, { spendingPath: 'refund' })
+			if (reclaimed.state !== 'rolled_back') throw new Error(`Coco refund did not finalize: ${reclaimed.state}`)
+			return { operationId: reclaimed.id, state: 'refunded' }
+		})
+	}
+
+	private authorize<T>(account: CocoAuctionAccountIdentity, mutation: () => Promise<T>): Promise<T> {
+		return runBrowserFreshAuctionsdevCocoMutation(
+			{ account: account.accountPubkey, environment: account.environmentId as 'auctionsdev' | 'test' },
+			mutation,
+		)
 	}
 
 	private async resolveAuthorities(

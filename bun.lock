@@ -6,8 +6,8 @@
       "name": "plebeian.market",
       "dependencies": {
         "@cashu/cashu-ts": "5.0.0-rc.4",
-        "@cashu/coco-core": "file:vendor/coco-37b9454caf4d1019764899d7ce194bb8b2f5b0bf/cashu-coco-core-2.0.0.tgz",
-        "@cashu/coco-indexeddb": "file:vendor/coco-37b9454caf4d1019764899d7ce194bb8b2f5b0bf/cashu-coco-indexeddb-2.0.0.tgz",
+        "@cashu/coco-core": "file:vendor/coco-35941014a61af7dc112b31de8053db610b70085c/cashu-coco-core-2.0.0.tgz",
+        "@cashu/coco-indexeddb": "file:vendor/coco-35941014a61af7dc112b31de8053db610b70085c/cashu-coco-indexeddb-2.0.0.tgz",
         "@contextvm/sdk": "^0.11.10",
         "@formkit/auto-animate": "^0.9.0",
         "@getalby/lightning-tools": "^8.1.1",
@@ -68,6 +68,7 @@
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
         "bun": "1.4.2",
+        "fake-indexeddb": "^6.2.5",
         "mini-svg-data-uri": "^1.4.4",
         "playwright": "^1.60.0",
         "prettier": "^3.8.3",
@@ -124,9 +125,9 @@
 
     "@cashu/cashu-ts": ["@cashu/cashu-ts@5.0.0-rc.4", "", { "dependencies": { "@noble/curves": "^2.2.0", "@noble/hashes": "^2.2.0", "@scure/base": "^2.2.0", "@scure/bip32": "^2.2.0" } }, "sha512-6ck7cHdGnvg+ZNGQduaJ5YyNMrLh9Qf1534GR6IxEXX1OuF0SS7I2qXo8p6zD3kRaemynnjJPqjaHgs1EJhAWg=="],
 
-    "@cashu/coco-core": ["@cashu/coco-core@vendor/coco-37b9454caf4d1019764899d7ce194bb8b2f5b0bf/cashu-coco-core-2.0.0.tgz", { "dependencies": { "@cashu/cashu-ts": "5.0.0-rc.4", "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@scure/bip32": "^2.0.1" }, "peerDependencies": { "typescript": "^5" } }, "sha512-7yWFp+QZN2JEnpGwTMlaIBLl1UjXdAY2nYytPD9K97NqNySd0sb/cvSMuplixiZApJO1EZsoZHQ0oiecJhWkNw=="],
+    "@cashu/coco-core": ["@cashu/coco-core@vendor/coco-35941014a61af7dc112b31de8053db610b70085c/cashu-coco-core-2.0.0.tgz", { "dependencies": { "@cashu/cashu-ts": "5.0.0-rc.4", "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@scure/bip32": "^2.0.1" }, "peerDependencies": { "typescript": "^5" } }, "sha512-81sNbByNV1qqaxQVk+VB9KwSzMulwwkKobRwx9WE13/XJkMuJKAmNajcNPb1OOwxIMAuYfqqvZ0EV8cYV+DqRg=="],
 
-    "@cashu/coco-indexeddb": ["@cashu/coco-indexeddb@vendor/coco-37b9454caf4d1019764899d7ce194bb8b2f5b0bf/cashu-coco-indexeddb-2.0.0.tgz", { "dependencies": { "dexie": "^4.0.8" }, "peerDependencies": { "@cashu/cashu-ts": "5.0.0-rc.4", "@cashu/coco-core": "2.0.0", "typescript": "^5" } }, "sha512-mgcTcqb6gX59dEN7F8u7V2uHUxPDG0JelsWGHaHQONK+dN1kOEV7XUQ6TIuJgzEHf0AlBkG1iT5fKX4+b0wNgw=="],
+    "@cashu/coco-indexeddb": ["@cashu/coco-indexeddb@vendor/coco-35941014a61af7dc112b31de8053db610b70085c/cashu-coco-indexeddb-2.0.0.tgz", { "dependencies": { "dexie": "^4.0.8" }, "peerDependencies": { "@cashu/cashu-ts": "5.0.0-rc.4", "@cashu/coco-core": "2.0.0", "typescript": "^5" } }, "sha512-Bt2Tw87sK61E83J8BDWzKncTh69nUw0lz7/GxGdijwBimnENoaToQJt374phVR93aHwibVGIXsDJ1Nq0AAIYTQ=="],
 
     "@cashu/crypto": ["@cashu/crypto@0.3.4", "", { "dependencies": { "@noble/curves": "^1.6.0", "@noble/hashes": "^1.5.0", "@scure/bip32": "^1.5.0", "@scure/bip39": "^1.4.0", "buffer": "^6.0.3" } }, ""],
 
@@ -697,6 +698,8 @@
     "express": ["express@5.2.1", "", { "dependencies": { "accepts": "^2.0.0", "body-parser": "^2.2.1", "content-disposition": "^1.0.0", "content-type": "^1.0.5", "cookie": "^0.7.1", "cookie-signature": "^1.2.1", "debug": "^4.4.0", "depd": "^2.0.0", "encodeurl": "^2.0.0", "escape-html": "^1.0.3", "etag": "^1.8.1", "finalhandler": "^2.1.0", "fresh": "^2.0.0", "http-errors": "^2.0.0", "merge-descriptors": "^2.0.0", "mime-types": "^3.0.0", "on-finished": "^2.4.1", "once": "^1.4.0", "parseurl": "^1.3.3", "proxy-addr": "^2.0.7", "qs": "^6.14.0", "range-parser": "^1.2.1", "router": "^2.2.0", "send": "^1.1.0", "serve-static": "^2.2.0", "statuses": "^2.0.1", "type-is": "^2.0.1", "vary": "^1.1.2" } }, "sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw=="],
 
     "express-rate-limit": ["express-rate-limit@8.3.1", "", { "dependencies": { "ip-address": "10.1.0" }, "peerDependencies": { "express": ">= 4.11" } }, "sha512-D1dKN+cmyPWuvB+G2SREQDzPY1agpBIcTa9sJxOPMCNeH3gwzhqJRDWCXW3gg0y//+LQ/8j52JbMROWyrKdMdw=="],
+
+    "fake-indexeddb": ["fake-indexeddb@6.2.5", "", {}, "sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w=="],
 
     "fast-deep-equal": ["fast-deep-equal@3.1.3", "", {}, ""],
 

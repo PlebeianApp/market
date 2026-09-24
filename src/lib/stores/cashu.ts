@@ -11,8 +11,10 @@ import { initializeCoco, type Manager, getEncodedToken } from '@cashu/coco-core'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
-import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
+import { configStore } from './config'
+import { runBrowserCocoMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
 import { loadOrCreateCocoSeed } from '@/lib/coco/seedVault'
+import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
 
@@ -20,6 +22,8 @@ const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
 export type { PendingToken }
 
 export interface CashuState {
+	/** Exact account associated with this Coco runtime. */
+	account: string | null
 	manager: Manager | null
 	status: 'idle' | 'initializing' | 'ready' | 'error'
 	error: string | null
@@ -30,6 +34,7 @@ export interface CashuState {
 }
 
 const initialState: CashuState = {
+	account: null,
 	manager: null,
 	status: 'idle',
 	error: null,
@@ -57,13 +62,14 @@ async function getOrCreateSeed(): Promise<Uint8Array> {
 	return loadOrCreateCocoSeed(`legacy-ui:${pubkey.toLowerCase()}`)
 }
 
-export const cashuActions = {
+const cashuActionImplementations = {
 	/**
 	 * Initialize the coco manager with IndexedDB persistence
 	 */
 	initialize: async (): Promise<void> => {
 		const state = cashuStore.state
-		if (state.status === 'initializing' || state.status === 'ready') {
+		const currentAccount = authStore.state.user?.pubkey?.trim().toLowerCase()
+		if (state.status === 'initializing' || (state.status === 'ready' && state.account === currentAccount)) {
 			return
 		}
 
@@ -72,9 +78,12 @@ export const cashuActions = {
 			console.warn('[cashu] Cannot initialize without authenticated user')
 			return
 		}
+		const normalizedPubkey = pubkey.trim().toLowerCase()
+		if (!/^[0-9a-f]{64}$/.test(normalizedPubkey)) throw new Error('Coco wallet account must be a full Nostr pubkey')
 
 		cashuStore.setState((s) => ({
 			...s,
+			account: normalizedPubkey,
 			status: 'initializing',
 			error: null,
 		}))
@@ -84,7 +93,10 @@ export const cashuActions = {
 
 			// Create IndexedDB repositories with user-specific database name
 			const repos = new IndexedDbRepositories({
-				name: `cashu_wallet_${pubkey.slice(0, 8)}`,
+				// Existing database naming is retained for compatibility. Its
+				// truncated identity is classified UNATTRIBUTED by cutover
+				// inventory and cannot be accepted as a production baseline.
+				name: `cashu_wallet_${normalizedPubkey.slice(0, 8)}`,
 			})
 
 			const seed = await getOrCreateSeed()
@@ -422,3 +434,29 @@ export const cashuActions = {
 		cashuStore.setState(() => initialState)
 	},
 }
+
+const COCO_MUTATION_ACTIONS = new Set([
+	'initialize',
+	'syncMintsFromNip60',
+	'addMint',
+	'send',
+	'reclaimToken',
+	'receive',
+	'createMintQuote',
+	'redeemMintQuote',
+	'melt',
+])
+
+function runCurrentCocoMutation<T>(mutation: () => Promise<T>): Promise<T> {
+	const account = cashuStore.state.account ?? authStore.state.user?.pubkey
+	if (!account) throw new Error('Coco wallet is not bound to an exact account')
+	return runBrowserCocoMonetaryMutation({ account, environment: configStore.state.config.stage ?? 'development' }, mutation)
+}
+
+export const cashuActions = new Proxy(cashuActionImplementations, {
+	get(target, property, receiver) {
+		const value = Reflect.get(target, property, receiver)
+		if (typeof property !== 'string' || typeof value !== 'function' || !COCO_MUTATION_ACTIONS.has(property)) return value
+		return (...args: unknown[]) => runCurrentCocoMutation(async () => Reflect.apply(value, target, args))
+	},
+}) as typeof cashuActionImplementations

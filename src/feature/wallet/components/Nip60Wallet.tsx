@@ -62,6 +62,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
 import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
 import { getCocoAuctionBalances, type CocoAuctionBalanceProjection } from '@/lib/coco/runtime'
+import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
 
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
@@ -144,7 +145,9 @@ export function Nip60Wallet() {
 		let cancelled = false
 		const environmentId = readCocoV2AuctionEnvironment().environmentId
 		const refresh = () => {
-			void getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId })
+			if (environmentId !== 'auctionsdev' && environmentId !== 'test') return
+			void ensureBrowserFreshAuctionsdevPreflight({ account: user.pubkey, environment: environmentId })
+				.then(() => getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId }))
 				.then((next) => {
 					if (!cancelled) setCocoBalances(next)
 				})

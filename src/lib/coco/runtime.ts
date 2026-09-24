@@ -4,6 +4,7 @@ import { loadOrCreateCocoSeed } from './seedVault'
 import type { CocoAuctionAccountIdentity } from './auctions/types'
 import { assertFakeCocoAuctionMint, readCocoV2AuctionEnvironment } from './auctions/mode'
 import { assertCocoAuctionAccountIdentity } from './auctions/canonical'
+import { runBrowserFreshAuctionsdevCocoMutation } from './migration/runtimeGate'
 
 export interface CocoAccountRuntime {
 	account: CocoAuctionAccountIdentity
@@ -11,8 +12,8 @@ export interface CocoAccountRuntime {
 	loadSeed(): Promise<Uint8Array>
 }
 
-const runtimeKey = (account: CocoAuctionAccountIdentity): string => `${account.environmentId}:${account.accountPubkey}`
-const databaseName = (account: CocoAuctionAccountIdentity): string =>
+export const getCocoRuntimeScope = (account: CocoAuctionAccountIdentity): string => `${account.environmentId}:${account.accountPubkey}`
+export const getCocoDatabaseName = (account: CocoAuctionAccountIdentity): string =>
 	`plebeian_coco_v2_${account.environmentId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${account.accountPubkey}`
 
 export class CocoRuntimeRegistry {
@@ -20,7 +21,7 @@ export class CocoRuntimeRegistry {
 
 	get(accountInput: CocoAuctionAccountIdentity): Promise<CocoAccountRuntime> {
 		const account = assertCocoAuctionAccountIdentity(accountInput)
-		const key = runtimeKey(account)
+		const key = getCocoRuntimeScope(account)
 		const existing = this.runtimes.get(key)
 		if (existing) return existing
 		const creating = this.create(account).catch((error) => {
@@ -32,9 +33,9 @@ export class CocoRuntimeRegistry {
 	}
 
 	private async create(account: CocoAuctionAccountIdentity): Promise<CocoAccountRuntime> {
-		const scope = runtimeKey(account)
+		const scope = getCocoRuntimeScope(account)
 		const loadSeed = () => loadOrCreateCocoSeed(scope)
-		const repo = new IndexedDbRepositories({ name: databaseName(account) })
+		const repo = new IndexedDbRepositories({ name: getCocoDatabaseName(account) })
 		const manager = await initializeCoco({
 			repo,
 			seedGetter: loadSeed,
@@ -94,15 +95,20 @@ export const receiveCocoAuctionFakeFunds = async (
 ): Promise<CocoAuctionBalanceProjection> => {
 	const environment = readCocoV2AuctionEnvironment()
 	if (account.environmentId !== environment.environmentId) throw new Error('Coco receive account belongs to another environment')
-	const metadata = getTokenMetadata(encodedToken)
-	const mintUrl = assertFakeCocoAuctionMint(metadata.mint, environment)
-	const runtime = await cocoRuntimeRegistry.get(account)
-	await trustAllowlistedMint(runtime.manager, mintUrl)
-	const token = await runtime.manager.wallet.decodeToken(encodedToken, mintUrl)
-	if ((token.unit ?? 'sat').toLowerCase() !== 'sat') throw new Error('Coco Auction fake funding accepts sat tokens only')
-	await runtime.manager.wallet.receive(token)
-	const balances = await getCocoAuctionBalances(account)
-	const projection = balances.find((balance) => balance.mintUrl === mintUrl)
-	if (!projection) throw new Error('Coco did not project the received fake-funds balance')
-	return projection
+	return runBrowserFreshAuctionsdevCocoMutation(
+		{ account: account.accountPubkey, environment: account.environmentId as 'auctionsdev' | 'test' },
+		async () => {
+			const metadata = getTokenMetadata(encodedToken)
+			const mintUrl = assertFakeCocoAuctionMint(metadata.mint, environment)
+			const runtime = await cocoRuntimeRegistry.get(account)
+			await trustAllowlistedMint(runtime.manager, mintUrl)
+			const token = await runtime.manager.wallet.decodeToken(encodedToken, mintUrl)
+			if ((token.unit ?? 'sat').toLowerCase() !== 'sat') throw new Error('Coco Auction fake funding accepts sat tokens only')
+			await runtime.manager.wallet.receive(token)
+			const balances = await getCocoAuctionBalances(account)
+			const projection = balances.find((balance) => balance.mintUrl === mintUrl)
+			if (!projection) throw new Error('Coco did not project the received fake-funds balance')
+			return projection
+		},
+	)
 }

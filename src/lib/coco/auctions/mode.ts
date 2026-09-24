@@ -16,6 +16,8 @@ const BUN_PUBLIC_AUCTION_MONETARY_MODE = process.env.BUN_PUBLIC_AUCTION_MONETARY
 const BUN_PUBLIC_COCO_ENVIRONMENT_ID = process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID
 const BUN_PUBLIC_COCO_MONETARY_MODE = process.env.BUN_PUBLIC_COCO_MONETARY_MODE
 const BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST = process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
+const BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES = process.env.BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES
+const BUN_PUBLIC_MARKET_COMMIT_SHA = process.env.BUN_PUBLIC_MARKET_COMMIT_SHA
 
 const readEnv = (name: string): string | undefined => {
 	const staticallyExposedValue =
@@ -27,9 +29,36 @@ const readEnv = (name: string): string | undefined => {
 					? BUN_PUBLIC_COCO_MONETARY_MODE
 					: name === 'BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST'
 						? BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST
-						: undefined
+						: name === 'BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES'
+							? BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES
+							: name === 'BUN_PUBLIC_MARKET_COMMIT_SHA'
+								? BUN_PUBLIC_MARKET_COMMIT_SHA
+								: undefined
 	const value = staticallyExposedValue ?? process.env[name]
 	return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+export const readCocoFakeMintIdentityCommitments = (): ReadonlyMap<string, string> => {
+	const raw = readEnv('BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES') ?? readEnv('APP_COCO_FAKE_MINT_IDENTITIES') ?? ''
+	const entries = raw
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter(Boolean)
+		.map((entry) => {
+			const separator = entry.lastIndexOf('=sha256:')
+			if (separator < 0) throw new Error('Fake mint identity entries must be URL=sha256:<digest>')
+			const mint = normalizeCocoMintUrl(entry.slice(0, separator))
+			const commitment = entry.slice(separator + 1)
+			if (!/^sha256:[0-9a-f]{64}$/.test(commitment)) throw new Error('Fake mint identity commitment is invalid')
+			return [mint, commitment] as const
+		})
+	return new Map(entries)
+}
+
+export const readMarketCommitSha = (): string => {
+	const value = readEnv('BUN_PUBLIC_MARKET_COMMIT_SHA') ?? readEnv('APP_MARKET_COMMIT_SHA')
+	if (!value || !/^[0-9a-f]{40}$/.test(value)) throw new Error('Fresh AuctionsDev mode requires an exact lowercase Market Git SHA')
+	return value
 }
 
 export const isCocoV2AuctionMode = (): boolean =>

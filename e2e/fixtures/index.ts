@@ -4,6 +4,7 @@ import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 import { BASE_URL } from '../test-config'
+import { COCO_AUCTIONSDEV_FAKE_MINT_INFO, COCO_AUCTIONSDEV_SMOKE_SAFE } from '../coco-auctionsdev-smoke-contract'
 
 type TestFixtures = {
 	/** Page with devUser1 logged in (merchant / app owner) */
@@ -38,6 +39,11 @@ export const test = base.extend<TestFixtures>({
 	merchantPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
 		const context = await browser.newContext({ baseURL: BASE_URL })
+		if (process.env.COCO_V2_E2E === '1') {
+			await context.route(`${COCO_AUCTIONSDEV_SMOKE_SAFE.mintUrl}/v1/info`, (route) =>
+				route.fulfill({ json: COCO_AUCTIONSDEV_FAKE_MINT_INFO }),
+			)
+		}
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
@@ -55,6 +61,11 @@ export const test = base.extend<TestFixtures>({
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser2.sk)
 		const context = await browser.newContext({ baseURL: BASE_URL })
+		if (process.env.COCO_V2_E2E === '1') {
+			await context.route(`${COCO_AUCTIONSDEV_SMOKE_SAFE.mintUrl}/v1/info`, (route) =>
+				route.fulfill({ json: COCO_AUCTIONSDEV_FAKE_MINT_INFO }),
+			)
+		}
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
 
@@ -70,6 +81,11 @@ export const test = base.extend<TestFixtures>({
 		await ensureScenario(scenario)
 		await resetRemoteCartForUser(devUser3.sk)
 		const context = await browser.newContext({ baseURL: BASE_URL })
+		if (process.env.COCO_V2_E2E === '1') {
+			await context.route(`${COCO_AUCTIONSDEV_SMOKE_SAFE.mintUrl}/v1/info`, (route) =>
+				route.fulfill({ json: COCO_AUCTIONSDEV_FAKE_MINT_INFO }),
+			)
+		}
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
 
