@@ -5,7 +5,8 @@ import {
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
 import { normalizeMintUrl } from '@/lib/wallet'
-import { getDecodedToken, type MintKeyset } from '@cashu/cashu-ts'
+import { inspectCashuToken } from '@/lib/cashu/tokenInspection'
+import type { MintKeyset } from '@cashu/cashu-ts'
 import { AUCTION_MIN_BID_LEG_SATS } from './auction/constants'
 
 export interface AuctionSettlementP2pkPreflightInput {
@@ -115,9 +116,9 @@ export const preflightAuctionSettlementP2pk = (input: AuctionSettlementP2pkPrefl
 		throw new Error('Settlement plan child pubkey does not match auction p2pk_xpub + derivation path')
 	}
 
-	let decodedToken: ReturnType<typeof getDecodedToken>
+	let decodedToken: ReturnType<typeof inspectCashuToken>
 	try {
-		decodedToken = getDecodedToken(input.token, input.mintKeysets)
+		decodedToken = inspectCashuToken(input.token)
 	} catch (cause) {
 		// Surface diagnostic info — when this fires in production the
 		// raw cashu-ts error is the only signal that tells us whether

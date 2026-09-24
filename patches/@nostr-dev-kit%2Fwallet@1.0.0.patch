@@ -1,0 +1,50 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 152edc4..2489a7d 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -4,6 +4,8 @@ var ndk = require('@nostr-dev-kit/ndk');
+ var vanilla = require('zustand/vanilla');
+ var tseep = require('tseep');
+ var cashuTs = require('@cashu/cashu-ts');
++cashuTs.CashuMint ??= cashuTs.Mint;
++cashuTs.CashuWallet ??= cashuTs.Wallet;
+ var sync = require('@nostr-dev-kit/sync');
+ var createDebug = require('debug');
+ var lightBolt11Decoder = require('light-bolt11-decoder');
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+index a4631d9..e9f3958 100644
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -1,6 +1,6 @@
+ import * as zustand_vanilla from 'zustand/vanilla';
+ import * as NDK from '@nostr-dev-kit/ndk';
+ import NDK__default, { NDKMintRecommendation, NDKCacheAdapter, NDKEvent, NDKRelay, NDKWalletInterface, NDKZapDetails, LnPaymentInfo, NDKPaymentConfirmationLN, CashuPaymentInfo, NDKPaymentConfirmationCashu, NDKZapSplit, NDKPaymentConfirmation, NDKNutzap, NDKEventId, NDKNutzapState, NdkNutzapStatus, NDKRelaySet, NDKCashuMintList, NDKPrivateKeySigner, NDKUser, NDKFilter, NDKSubscriptionOptions, Hexpubkey, NDKTag, NDKCashuToken, NDKKind, NostrEvent, NDKPool } from '@nostr-dev-kit/ndk';
+-import { CashuWallet, GetInfoResponse, MintKeys, Proof, SendResponse } from '@cashu/cashu-ts';
++import { Wallet as CashuWallet, GetInfoResponse, MintKeys, Proof, SendResponse } from '@cashu/cashu-ts';
+ import { EventEmitter } from 'tseep';
+ import { WebLNProvider } from '@webbtc/webln-types';
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index a4631d9..e9f3958 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,6 +1,6 @@
+ import * as zustand_vanilla from 'zustand/vanilla';
+ import * as NDK from '@nostr-dev-kit/ndk';
+ import NDK__default, { NDKMintRecommendation, NDKCacheAdapter, NDKEvent, NDKRelay, NDKWalletInterface, NDKZapDetails, LnPaymentInfo, NDKPaymentConfirmationLN, CashuPaymentInfo, NDKPaymentConfirmationCashu, NDKZapSplit, NDKPaymentConfirmation, NDKNutzap, NDKEventId, NDKNutzapState, NdkNutzapStatus, NDKRelaySet, NDKCashuMintList, NDKPrivateKeySigner, NDKUser, NDKFilter, NDKSubscriptionOptions, Hexpubkey, NDKTag, NDKCashuToken, NDKKind, NostrEvent, NDKPool } from '@nostr-dev-kit/ndk';
+-import { CashuWallet, GetInfoResponse, MintKeys, Proof, SendResponse } from '@cashu/cashu-ts';
++import { Wallet as CashuWallet, GetInfoResponse, MintKeys, Proof, SendResponse } from '@cashu/cashu-ts';
+ import { EventEmitter } from 'tseep';
+ import { WebLNProvider } from '@webbtc/webln-types';
+diff --git a/dist/index.js b/dist/index.js
+index f14e640..ce26646 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,7 +1,7 @@
+ import { NDKEvent, NDKKind, NDKPrivateKeySigner, NDKRelaySet, NDKSubscriptionCacheUsage, NDKRelayList, NDKCashuMintList, NDKCashuWalletTx, NDKCashuToken, NDKUser, proofsTotalBalance, normalizeUrl, NDKMintRecommendation, NDKCashuMintAnnouncement, NdkNutzapStatus, NDKNutzap, proofP2pk, cashuPubkeyToNostrPubkey, NDKPool } from '@nostr-dev-kit/ndk';
+ import { createStore } from 'zustand/vanilla';
+ import { EventEmitter } from 'tseep';
+-import { getEncodedToken, getDecodedToken, CheckStateEnum, CashuMint, CashuWallet, MeltQuoteState } from '@cashu/cashu-ts';
++import { getEncodedToken, getDecodedToken, CheckStateEnum, Mint as CashuMint, Wallet as CashuWallet, MeltQuoteState } from '@cashu/cashu-ts';
+ import { NDKSync } from '@nostr-dev-kit/sync';
+ import createDebug from 'debug';
+ import { decode } from 'light-bolt11-decoder';

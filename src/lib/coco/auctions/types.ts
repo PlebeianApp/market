@@ -92,6 +92,7 @@ export interface CocoAuctionWinnerReleaseInput {
 	auction: CocoAuctionReference
 	winningBidEventId: string
 	winningBidderPubkey: string
+	sellerPubkey: string
 	sendOperationId: string
 }
 
@@ -107,18 +108,24 @@ export interface CocoAuctionWinnerReceiveInput {
 	account: CocoAuctionAccountIdentity
 	auction: CocoAuctionReference
 	winningBidEventId: string
+	winningBidderPubkey: string
+	sellerPubkey: string
 	pathReleaseEventId: string
 	senderOperationId: string
 	mintUrl: string
 	unit: CocoAuctionUnit
 	amount: number
 	conditionFingerprint: string
+	derivationPath: string
+	recipientPublicAuthority: string
+	tokenFingerprint: string
 }
 
 export interface CocoAuctionWinnerReceiveResult {
 	commandId: string
 	operationId: string
-	status: 'received'
+	settlementEventId: string
+	status: 'published'
 }
 
 export interface CocoAuctionRefundInput {
@@ -126,6 +133,7 @@ export interface CocoAuctionRefundInput {
 	account: CocoAuctionAccountIdentity
 	auction: CocoAuctionReference
 	bidEventId: string
+	bidderPubkey: string
 	sendOperationId: string
 	locktime: number
 }

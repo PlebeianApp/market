@@ -433,7 +433,7 @@ describe('validateSettlementCompleteness', () => {
 		}
 	})
 
-	test('rejects settlement with v2 keyset ID when mintKeysets are not provided', () => {
+	test('accepts settlement with v2 keyset ID without keysets via metadata-only inspection', () => {
 		const auction = buildAuction()
 		const bid = buildBid(auction, { id: '2'.repeat(64), amount: 100, path: 'm/0/0/0/0/0' })
 		const release: ParsedPathReleaseEvent = {
@@ -452,7 +452,6 @@ describe('validateSettlementCompleteness', () => {
 			winningBidNut7State: 'spent',
 		})
 
-		expect(result.isComplete).toBe(false)
-		if (!result.isComplete) expect(result.failureCode).toBe('path_release_invalid')
+		expect(result.isComplete).toBe(true)
 	})
 })

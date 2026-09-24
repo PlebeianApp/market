@@ -7,15 +7,15 @@
  * - Recovery of pending tokens on startup
  */
 import { Store } from '@tanstack/store'
-import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
-import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
+import { initializeCoco, type Manager, getEncodedToken } from '@cashu/coco-core'
+import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
 import { configStore } from './config'
 import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 import { runBrowserCocoMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
+import { loadOrCreateCocoSeed } from '@/lib/coco/seedVault'
 
-const CASHU_SEED_KEY = 'cashu_wallet_seed'
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
 
 // Re-export for backward compatibility
@@ -53,37 +53,13 @@ const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PEN
 
 const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
 
-/**
- * Get or generate a seed for the wallet.
- * The seed is stored in localStorage and used for deterministic key derivation.
- */
+/** Load the legacy UI wallet seed from the same non-extractable vault primitive. */
 async function getOrCreateSeed(): Promise<Uint8Array> {
 	const pubkey = authStore.state.user?.pubkey
 	if (!pubkey) {
 		throw new Error('User not authenticated')
 	}
-
-	// Use a user-specific key
-	const seedKey = `${CASHU_SEED_KEY}_${pubkey}`
-	let seedHex = localStorage.getItem(seedKey)
-
-	if (!seedHex) {
-		// Generate a new 64-byte seed
-		const seed = new Uint8Array(64)
-		crypto.getRandomValues(seed)
-		seedHex = Array.from(seed)
-			.map((b) => b.toString(16).padStart(2, '0'))
-			.join('')
-		localStorage.setItem(seedKey, seedHex)
-		console.log('[cashu] Generated new wallet seed')
-	}
-
-	// Convert hex string back to Uint8Array
-	const bytes = new Uint8Array(seedHex.length / 2)
-	for (let i = 0; i < bytes.length; i++) {
-		bytes[i] = parseInt(seedHex.slice(i * 2, i * 2 + 2), 16)
-	}
-	return bytes
+	return loadOrCreateCocoSeed(`legacy-ui:${pubkey.toLowerCase()}`)
 }
 
 const cashuActionImplementations = {
@@ -286,8 +262,6 @@ const cashuActionImplementations = {
 			...s,
 			pendingTokens,
 		}))
-
-		console.log('[cashu] Token generated and saved:', tokenString.slice(0, 50))
 
 		// Refresh balances
 		await cashuActions.refreshBalances()

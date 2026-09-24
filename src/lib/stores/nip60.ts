@@ -18,10 +18,9 @@ import {
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
-	CashuMint,
-	CashuWallet,
+	Mint as CashuMint,
+	Wallet as CashuWallet,
 	CheckStateEnum,
-	getDecodedToken,
 	getEncodedToken,
 	type MintKeys,
 	type MintKeyset,
@@ -29,6 +28,7 @@ import {
 } from '@cashu/cashu-ts'
 import { getP2PKLocktime } from '@/lib/utils/cashu'
 import { buildDleqProofs } from '@/lib/cashu/dleq'
+import { inspectCashuToken } from '@/lib/cashu/tokenInspection'
 import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
@@ -351,7 +351,7 @@ export const getAuctionReclaimReadyAt = (token: string, contextLocktime?: number
 	const fallback = contextLocktime && contextLocktime > 0 ? contextLocktime : 0
 	let maxLocktime = fallback
 	try {
-		const decoded = getDecodedToken(token)
+		const decoded = inspectCashuToken(token)
 		if (decoded?.proofs?.length) {
 			for (const proof of decoded.proofs) {
 				try {
@@ -923,7 +923,7 @@ const receiveTokenIntoWallet = async (
 	if (options?.mintUrl) {
 		mintUrl = normalizeMintUrl(options.mintUrl)
 	} else {
-		mintUrl = normalizeMintUrl(getDecodedToken(token).mint)
+		mintUrl = normalizeMintUrl(inspectCashuToken(token).mint)
 	}
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
@@ -992,14 +992,18 @@ const lockAuctionBidProofs = async (
 		throw new Error('Not enough funds available to send')
 	}
 
-	// cashu-ts 2.9 `send()` ignores `p2pk` when existing proofs exactly
-	// satisfy the amount. Use `swap()` so every auction bid always receives
-	// freshly minted NUT-11 P2PK proofs.
-	return cashuWallet.swap(amount, proofs, {
-		p2pk: {
-			pubkey: params.lockPubkey,
-			locktime: params.locktime,
-			refundKeys: [params.refundPubkey],
+	// cashu-ts v5 expresses recipient locks through the explicit send output
+	// configuration. This forces an online swap that creates fresh NUT-11
+	// P2PK proofs even when the selected inputs exactly match the amount.
+	return cashuWallet.send(amount, proofs, undefined, {
+		send: {
+			type: 'p2pk',
+			options: {
+				kind: 'P2PK',
+				data: params.lockPubkey,
+				locktime: params.locktime,
+				refundKeys: [params.refundPubkey],
+			},
 		},
 	})
 }

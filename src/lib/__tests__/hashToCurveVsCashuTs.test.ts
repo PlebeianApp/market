@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { hashToCurve as cashuTsHashToCurve } from '@cashu/cashu-ts/crypto/common'
+import { hashToCurve as cashuTsHashToCurve } from '@cashu/cashu-ts'
 import { hashToCurveHex, hashToCurveHexFromString } from '../cashu/hashToCurve'
 
 const enc = new TextEncoder()

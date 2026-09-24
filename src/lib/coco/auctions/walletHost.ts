@@ -1,14 +1,25 @@
 import {
 	assertCocoAuctionAccountIdentity,
+	assertCocoAuctionReference,
 	cocoAuctionBidIntentFingerprint,
+	deriveCocoAuctionCommandId,
 	deriveCocoAuctionBidCommandId,
+	fingerprintCocoAuctionValue,
 	normalizeCocoAuctionBidIntent,
 } from './canonical'
 import type { CocoAuctionCommandRecord, CocoAuctionCommandRepository } from './commandRepository'
 import { IndexedDbCocoAuctionCommandRepository, projectCocoAuctionCommand } from './commandRepository'
-import type { CocoBidPublicationAdapter, CocoEngineBidProjection, CocoEnginePort } from './enginePort'
+import type {
+	CocoBidPublicationAdapter,
+	CocoEngineBidProjection,
+	CocoEnginePort,
+	CocoSettlementPublicationAdapter,
+	CocoWinnerReleasePublicationAdapter,
+} from './enginePort'
 import { CocoV2AuctionEnginePort } from './cocoEngine'
 import { cocoRuntimeRegistry } from '@/lib/coco/runtime'
+import type { CocoAuctionLifecycleRecord, CocoAuctionLifecycleRepository } from './lifecycleRepository'
+import { IndexedDbCocoAuctionLifecycleRepository } from './lifecycleRepository'
 import { assertFakeCocoAuctionMint, readCocoV2AuctionEnvironment, type CocoV2AuctionEnvironment } from './mode'
 import type {
 	CocoAuctionAccountIdentity,
@@ -33,16 +44,8 @@ export class CocoAuctionCommandConflictError extends Error {
 	}
 }
 
-export class CocoAuctionCheckpointCUnavailableError extends Error {
-	constructor(action: string) {
-		super(
-			`${action} is not enabled: Checkpoint C requires the combined reviewed Coco v2 Send-ID, P2PK refund, and atomic Receive candidate`,
-		)
-		this.name = 'CocoAuctionCheckpointCUnavailableError'
-	}
-}
-
 export type CocoAuctionMarketRevalidator = (projection: CocoAuctionBidProjection) => Promise<void>
+export type CocoAuctionLifecycleRevalidator = () => Promise<void>
 
 const sameAccount = (left: CocoAuctionAccountIdentity, right: CocoAuctionAccountIdentity): boolean =>
 	left.accountPubkey === right.accountPubkey && left.environmentId === right.environmentId
@@ -104,6 +107,7 @@ export class PlebeianAuctionWalletHost {
 		private readonly commands: CocoAuctionCommandRepository,
 		private readonly environment: CocoV2AuctionEnvironment,
 		private readonly now: () => number = Date.now,
+		private readonly lifecycles: CocoAuctionLifecycleRepository = new IndexedDbCocoAuctionLifecycleRepository(),
 	) {}
 
 	async ensureSellerAuctionAuthority(accountInput: CocoAuctionAccountIdentity): Promise<CocoAuctionSellerAuthority> {
@@ -264,16 +268,258 @@ export class PlebeianAuctionWalletHost {
 		return projection
 	}
 
-	async releaseWinner(_input: CocoAuctionWinnerReleaseInput, ..._args: readonly unknown[]): Promise<CocoAuctionWinnerReleaseResult> {
-		throw new CocoAuctionCheckpointCUnavailableError('Winner release')
+	async releaseWinner(
+		input: CocoAuctionWinnerReleaseInput,
+		revalidate: CocoAuctionLifecycleRevalidator,
+		publisher: CocoWinnerReleasePublicationAdapter,
+	): Promise<CocoAuctionWinnerReleaseResult> {
+		const normalized = this.requireWinnerRelease(input)
+		const fingerprint = fingerprintCocoAuctionValue(normalized)
+		let record = await this.createLifecycle(normalized, 'winner-release', normalized.sendOperationId, fingerprint)
+		if (record.status === 'published' && record.publicationEventId) {
+			return this.projectRelease(record)
+		}
+		if (record.status === 'publication_ready' && record.publicationEventId) {
+			await publisher.publish(record.publicationEventId)
+			record = await this.markLifecyclePublished(record.commandId, record.publicationEventId)
+			return this.projectRelease(record)
+		}
+
+		await revalidate()
+		record = await this.lifecycles.update(record.commandId, (current) => ({
+			...current,
+			status: 'releasing',
+			publicationCreatedAt: current.publicationCreatedAt ?? Math.floor(this.now() / 1000),
+			revision: current.revision + 1,
+			updatedAt: this.now(),
+		}))
+		const released = await this.engine.releaseWinner(normalized, async (material) => {
+			if (material.operationId !== normalized.sendOperationId) throw new Error('Winner release used a different Coco Send')
+			if (!record.publicationCreatedAt) throw new Error('Path-release publication timestamp was not frozen before release')
+			return publisher.prepare(material, normalized, record.publicationCreatedAt)
+		})
+		if (released.operationId !== normalized.sendOperationId) throw new Error('Winner release returned a different Coco Send')
+		if (!HEX_32.test(released.result.eventId.toLowerCase())) throw new Error('Prepared kind-1025 event id is invalid')
+		record = await this.lifecycles.update(record.commandId, (current) => ({
+			...current,
+			status: 'publication_ready',
+			publicationEventId: released.result.eventId.toLowerCase(),
+			revision: current.revision + 1,
+			updatedAt: this.now(),
+		}))
+		await publisher.publish(record.publicationEventId!)
+		record = await this.markLifecyclePublished(record.commandId, record.publicationEventId!)
+		return this.projectRelease(record)
 	}
 
-	async receiveWinner(_input: CocoAuctionWinnerReceiveInput): Promise<CocoAuctionWinnerReceiveResult> {
-		throw new CocoAuctionCheckpointCUnavailableError('Winner Receive')
+	async receiveWinner(
+		input: CocoAuctionWinnerReceiveInput,
+		encodedToken: string,
+		revalidate: CocoAuctionLifecycleRevalidator,
+		publisher: CocoSettlementPublicationAdapter,
+	): Promise<CocoAuctionWinnerReceiveResult> {
+		const normalized = this.requireWinnerReceive(input)
+		const fingerprint = fingerprintCocoAuctionValue(normalized)
+		let record = await this.createLifecycle(normalized, 'winner-receive', normalized.commandId, fingerprint)
+		if (record.status === 'published' && record.publicationEventId) return this.projectReceive(record)
+		if (record.status === 'publication_ready' && record.publicationEventId) {
+			await publisher.publish(record.publicationEventId)
+			record = await this.markLifecyclePublished(record.commandId, record.publicationEventId)
+			return this.projectReceive(record)
+		}
+
+		await revalidate()
+		if (record.status !== 'received') {
+			record = await this.lifecycles.update(record.commandId, (current) => ({
+				...current,
+				status: 'receiving',
+				publicationCreatedAt: current.publicationCreatedAt ?? Math.floor(this.now() / 1000),
+				revision: current.revision + 1,
+				updatedAt: this.now(),
+			}))
+			const received = await this.engine.receiveWinner(normalized, encodedToken)
+			if (received.operationId !== normalized.commandId || received.state !== 'finalized') {
+				throw new Error('Coco Receive did not authoritatively finalize the exact settlement operation')
+			}
+			record = await this.lifecycles.update(record.commandId, (current) => ({
+				...current,
+				status: 'received',
+				revision: current.revision + 1,
+				updatedAt: this.now(),
+			}))
+		}
+		if (!record.publicationCreatedAt) throw new Error('Settlement publication timestamp was not frozen before Coco Receive')
+		const prepared = await publisher.prepare(normalized, record.publicationCreatedAt)
+		if (!HEX_32.test(prepared.eventId.toLowerCase())) throw new Error('Prepared kind-1024 event id is invalid')
+		record = await this.lifecycles.update(record.commandId, (current) => ({
+			...current,
+			status: 'publication_ready',
+			publicationEventId: prepared.eventId.toLowerCase(),
+			revision: current.revision + 1,
+			updatedAt: this.now(),
+		}))
+		await publisher.publish(record.publicationEventId!)
+		record = await this.markLifecyclePublished(record.commandId, record.publicationEventId!)
+		return this.projectReceive(record)
 	}
 
-	async refundLosingBid(_input: CocoAuctionRefundInput): Promise<CocoAuctionRefundResult> {
-		throw new CocoAuctionCheckpointCUnavailableError('Loser refund')
+	async refundLosingBid(input: CocoAuctionRefundInput, revalidate: CocoAuctionLifecycleRevalidator): Promise<CocoAuctionRefundResult> {
+		const normalized = this.requireRefund(input)
+		const fingerprint = fingerprintCocoAuctionValue(normalized)
+		let record = await this.createLifecycle(normalized, 'loser-refund', normalized.sendOperationId, fingerprint)
+		if (record.status === 'refunded') return { commandId: record.commandId, operationId: record.operationId, status: 'refunded' }
+		await revalidate()
+		record = await this.lifecycles.update(record.commandId, (current) => ({
+			...current,
+			status: 'refunding',
+			revision: current.revision + 1,
+			updatedAt: this.now(),
+		}))
+		const refunded = await this.engine.refundLosingBid(normalized)
+		if (refunded.operationId !== normalized.sendOperationId || refunded.state !== 'refunded') {
+			throw new Error('Coco did not refund the exact original Send operation')
+		}
+		record = await this.lifecycles.update(record.commandId, (current) => ({
+			...current,
+			status: 'refunded',
+			revision: current.revision + 1,
+			updatedAt: this.now(),
+		}))
+		return { commandId: record.commandId, operationId: record.operationId, status: 'refunded' }
+	}
+
+	private async createLifecycle(
+		input: CocoAuctionWinnerReleaseInput | CocoAuctionWinnerReceiveInput | CocoAuctionRefundInput,
+		kind: CocoAuctionLifecycleRecord['kind'],
+		operationId: string,
+		intentFingerprint: string,
+	): Promise<CocoAuctionLifecycleRecord> {
+		const now = this.now()
+		const bidEventId = 'winningBidEventId' in input ? input.winningBidEventId : input.bidEventId
+		const sendOperationId = 'sendOperationId' in input ? input.sendOperationId : input.senderOperationId
+		const candidate: CocoAuctionLifecycleRecord = {
+			schemaVersion: 1,
+			commandId: input.commandId,
+			kind,
+			operationId,
+			intentFingerprint,
+			account: input.account,
+			auction: input.auction,
+			bidEventId,
+			sendOperationId,
+			...('pathReleaseEventId' in input ? { pathReleaseEventId: input.pathReleaseEventId } : {}),
+			...('mintUrl' in input
+				? { mintUrl: input.mintUrl, unit: input.unit, amount: input.amount, conditionFingerprint: input.conditionFingerprint }
+				: {}),
+			status: 'requested',
+			revision: 0,
+			createdAt: now,
+			updatedAt: now,
+		}
+		const claimed = await this.lifecycles.createOrGet(candidate)
+		if (
+			claimed.record.kind !== kind ||
+			claimed.record.operationId !== operationId ||
+			claimed.record.intentFingerprint !== intentFingerprint ||
+			!sameAccount(claimed.record.account, input.account)
+		) {
+			throw new CocoAuctionCommandConflictError(input.commandId)
+		}
+		return claimed.record
+	}
+
+	private async markLifecyclePublished(commandId: string, eventId: string): Promise<CocoAuctionLifecycleRecord> {
+		return this.lifecycles.update(commandId, (current) => {
+			if (current.publicationEventId !== eventId) throw new Error('Coco Auction lifecycle publication identity changed')
+			return { ...current, status: 'published', revision: current.revision + 1, updatedAt: this.now() }
+		})
+	}
+
+	private projectRelease(record: CocoAuctionLifecycleRecord): CocoAuctionWinnerReleaseResult {
+		if (!record.publicationEventId) throw new Error('Winner release has no kind-1025 event')
+		return {
+			commandId: record.commandId,
+			operationId: record.operationId,
+			pathReleaseEventId: record.publicationEventId,
+			status: 'released',
+		}
+	}
+
+	private projectReceive(record: CocoAuctionLifecycleRecord): CocoAuctionWinnerReceiveResult {
+		if (!record.publicationEventId) throw new Error('Winner Receive has no kind-1024 event')
+		return {
+			commandId: record.commandId,
+			operationId: record.operationId,
+			settlementEventId: record.publicationEventId,
+			status: 'published',
+		}
+	}
+
+	private requireWinnerRelease(input: CocoAuctionWinnerReleaseInput): CocoAuctionWinnerReleaseInput {
+		const account = this.requireAccount(input.account)
+		const auction = assertCocoAuctionReference(input.auction)
+		if (!HEX_32.test(input.winningBidEventId) || !HEX_32.test(input.winningBidderPubkey) || !HEX_32.test(input.sellerPubkey)) {
+			throw new Error('Winner release event identities are invalid')
+		}
+		if (!input.sendOperationId) throw new Error('Winner release requires the exact Coco Send operation')
+		const normalized = { ...input, account, auction }
+		const expected = deriveCocoAuctionCommandId('winner-release', {
+			account,
+			auction,
+			winningBidEventId: input.winningBidEventId,
+			winningBidderPubkey: input.winningBidderPubkey,
+			sellerPubkey: input.sellerPubkey,
+			sendOperationId: input.sendOperationId,
+		})
+		if (input.commandId !== expected) throw new CocoAuctionCommandConflictError(input.commandId)
+		return normalized
+	}
+
+	private requireWinnerReceive(input: CocoAuctionWinnerReceiveInput): CocoAuctionWinnerReceiveInput {
+		const account = this.requireAccount(input.account)
+		const auction = assertCocoAuctionReference(input.auction)
+		const mintUrl = assertFakeCocoAuctionMint(input.mintUrl, this.environment)
+		if (account.accountPubkey !== input.sellerPubkey) throw new Error('Winner Receive account is not the Auction seller')
+		if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.unit !== 'sat')
+			throw new Error('Winner Receive amount is invalid')
+		if (!HEX_32.test(input.winningBidEventId) || !HEX_32.test(input.pathReleaseEventId)) {
+			throw new Error('Winner Receive event identities are invalid')
+		}
+		const normalized = { ...input, account, auction, mintUrl, unit: 'sat' as const }
+		const expected = deriveCocoAuctionCommandId('winner-receive', {
+			account,
+			auction,
+			winningBidEventId: input.winningBidEventId,
+			pathReleaseEventId: input.pathReleaseEventId,
+			senderOperationId: input.senderOperationId,
+			mintUrl,
+			unit: 'sat',
+			amount: input.amount,
+			conditionFingerprint: input.conditionFingerprint,
+			tokenFingerprint: input.tokenFingerprint,
+		})
+		if (input.commandId !== expected) throw new CocoAuctionCommandConflictError(input.commandId)
+		return normalized
+	}
+
+	private requireRefund(input: CocoAuctionRefundInput): CocoAuctionRefundInput {
+		const account = this.requireAccount(input.account)
+		const auction = assertCocoAuctionReference(input.auction)
+		if (account.accountPubkey !== input.bidderPubkey) throw new Error('Refund account is not the original bidder')
+		if (!input.sendOperationId || !HEX_32.test(input.bidEventId) || !Number.isSafeInteger(input.locktime)) {
+			throw new Error('Refund binding is invalid')
+		}
+		const normalized = { ...input, account, auction }
+		const expected = deriveCocoAuctionCommandId('loser-refund', {
+			account,
+			auction,
+			bidEventId: input.bidEventId,
+			bidderPubkey: input.bidderPubkey,
+			sendOperationId: input.sendOperationId,
+			locktime: input.locktime,
+		})
+		if (input.commandId !== expected) throw new CocoAuctionCommandConflictError(input.commandId)
+		return normalized
 	}
 
 	private requireAccount(input: CocoAuctionAccountIdentity): CocoAuctionAccountIdentity {
@@ -364,6 +610,8 @@ export const getPlebeianWalletHost = (): PlebeianWalletHost => {
 				new CocoV2AuctionEnginePort(cocoRuntimeRegistry),
 				new IndexedDbCocoAuctionCommandRepository(),
 				readCocoV2AuctionEnvironment(),
+				Date.now,
+				new IndexedDbCocoAuctionLifecycleRepository(),
 			),
 		)
 	}

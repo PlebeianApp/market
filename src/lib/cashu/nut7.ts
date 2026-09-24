@@ -24,7 +24,7 @@
  * downgrade individual readings to `'unknown'`, not crash the loop.
  */
 
-import { CashuMint, CheckStateEnum, type CheckStateResponse } from '@cashu/cashu-ts'
+import { Mint as CashuMint, CheckStateEnum, type CheckStateResponse } from '@cashu/cashu-ts'
 import type { Nut7ProofState } from '../auction/constants'
 
 // ---------- Configuration ------------------------------------------------
@@ -92,7 +92,8 @@ export const checkProofState = async (mintUrl: string, proofY: string, options: 
 
 export const checkMintReachability = async (mintUrl: string, options: CheckProofStateOptions = {}): Promise<boolean> => {
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
+	const mint =
+		options.mintClient ?? new CashuMint(mintUrl, options.customRequest ? { customRequest: options.customRequest as never } : undefined)
 
 	try {
 		const response = await withTimeout(mint.check({ Ys: [NUT7_REACHABILITY_PROBE_Y] }), timeoutMs, `NUT-7 reachability ${mintUrl}`)
@@ -122,7 +123,8 @@ export const checkProofStateBatch = async (
 	for (const y of proofYs) out.set(y.toLowerCase(), 'unknown')
 
 	const timeoutMs = options.timeoutMs ?? DEFAULT_NUT7_TIMEOUT_MS
-	const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
+	const mint =
+		options.mintClient ?? new CashuMint(mintUrl, options.customRequest ? { customRequest: options.customRequest as never } : undefined)
 
 	const batches: string[][] = []
 	for (let i = 0; i < proofYs.length; i += DEFAULT_NUT7_BATCH_SIZE) {

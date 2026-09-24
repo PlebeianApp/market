@@ -18,7 +18,7 @@ import { authStore } from '@/lib/stores/auth'
 import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { nip60Actions } from '@/lib/stores/nip60'
 import { findBidderRecord } from '@/lib/auction/bidderRecords'
-import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
+import { publishBidderPathRelease, usePublishAuctionSettlementMutation } from '@/publish/auctions'
 // B4: Imports for settlement validation
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
@@ -478,7 +478,7 @@ function DashboardAuctionDetailRoute() {
 		if (!topBid) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === topBid.id)
 	}, [pathReleases, topBid])
-	const canSettleNow = !cocoMode && ended && !settlementLocked && !settlementWindowExpired && (hasPathReleaseForTopBid || !reserveMet)
+	const canSettleNow = ended && !settlementLocked && !settlementWindowExpired && (hasPathReleaseForTopBid || !reserveMet)
 
 	// Settlement / claim ordering data — needed by both perspectives.
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
@@ -550,29 +550,22 @@ function DashboardAuctionDetailRoute() {
 	}, [pathReleases, myTopBidEvent])
 	const myBidderRecord = useMemo(() => (myTopBidEvent ? findBidderRecord(myTopBidEvent.id) : null), [myTopBidEvent])
 	const canBidderReleaseNow = !!(
-		!cocoMode &&
 		isMyBidTop &&
 		ended &&
 		!myAlreadyReleased &&
 		!settlementWindowExpired &&
 		myTopBidEvent &&
-		myBidderRecord
+		(cocoMode ? myTopBidEvent.tags.some((tag) => tag[0] === 'coco_operation') : myBidderRecord)
 	)
 
 	const releaseQueryClient = useQueryClient()
 	const [isReleasing, setIsReleasing] = useState(false)
 	const releasePath = async () => {
-		if (cocoMode) {
-			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
-			return
-		}
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
-			await nip60Actions.settleAuctionAsWinner({
-				bidEventId: myTopBidEvent.id,
-				releaseReason: 'settlement',
-			})
+			if (cocoMode) await publishBidderPathRelease({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
+			else await nip60Actions.settleAuctionAsWinner({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
 			toast.success('Path release published — the seller can now redeem and publish the settlement.')
 			await releaseQueryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(auctionRootEventId || auctionId) })
 		} catch (err) {
@@ -583,10 +576,6 @@ function DashboardAuctionDetailRoute() {
 	}
 
 	const submitSettlement = async () => {
-		if (cocoMode) {
-			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
-			return
-		}
 		if (!auction) return
 		if (!isOwner) {
 			toast.error('Only the auction owner can settle this auction')
@@ -946,7 +935,7 @@ function DashboardAuctionDetailRoute() {
 												branch from your wallet rather than completing the settlement here.
 											</p>
 										</div>
-									) : !myBidderRecord ? (
+									) : !cocoMode && !myBidderRecord ? (
 										<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
 											<p className="font-semibold">Local bidder record missing</p>
 											<p className="mt-1 text-xs leading-relaxed">

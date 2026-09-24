@@ -250,6 +250,12 @@ export interface PathReleaseTagsInput {
 	 * synthetic releases.
 	 */
 	cashuToken?: string
+	/** Repo-local binding to the exact Coco Send being released. */
+	cocoOperationId?: string
+	/** Durable Market command that owns this deterministic publication. */
+	cocoCommandId?: string
+	/** Fingerprint of the exact locked token without exposing it to Market state. */
+	cocoTokenFingerprint?: string
 }
 
 export const buildPathReleaseTags = (input: PathReleaseTagsInput): string[][] => {
@@ -269,6 +275,9 @@ export const buildPathReleaseTags = (input: PathReleaseTagsInput): string[][] =>
 	for (const ref of input.auditorRefs ?? []) tags.push(['auditor_ref', ref])
 	if (input.fallbackOfferId) tags.push(['fallback_offer', input.fallbackOfferId])
 	if (input.cashuToken) tags.push(['cashu_token', input.cashuToken])
+	if (input.cocoOperationId) tags.push(['coco_operation', input.cocoOperationId])
+	if (input.cocoCommandId) tags.push(['coco_release_command', input.cocoCommandId])
+	if (input.cocoTokenFingerprint) tags.push(['coco_token', input.cocoTokenFingerprint])
 
 	return tags
 }
@@ -289,6 +298,10 @@ export interface SettlementTagsInput {
 	fallbackChain?: AuctionFallbackChainEntry[]
 	reason?: string
 	payouts?: Array<{ bidEventId: string; amount: number; status: string }>
+	/** Exact caller-owned Coco Receive that finalized before publication. */
+	cocoReceiveOperationId?: string
+	/** Durable Market settlement command. */
+	cocoCommandId?: string
 }
 
 export const buildSettlementTags = (input: SettlementTagsInput): string[][] => {
@@ -309,6 +322,8 @@ export const buildSettlementTags = (input: SettlementTagsInput): string[][] => {
 		tags.push(['payout', payout.bidEventId, String(payout.amount), payout.status])
 	}
 	if (input.reason) tags.push(['reason', input.reason])
+	if (input.cocoReceiveOperationId) tags.push(['coco_receive_operation', input.cocoReceiveOperationId])
+	if (input.cocoCommandId) tags.push(['coco_settlement_command', input.cocoCommandId])
 	return tags
 }
 

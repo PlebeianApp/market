@@ -310,10 +310,14 @@ export function Nip60Wallet() {
 	}
 
 	if (cocoMode) {
+		const cocoEnvironment = readCocoV2AuctionEnvironment()
 		const spendable = cocoBalances.reduce((sum, item) => sum + item.spendable, 0)
 		const reserved = cocoBalances.reduce((sum, item) => sum + item.reserved, 0)
 		return (
 			<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
+				<div className="mb-3 rounded-md border border-amber-300/50 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-200">
+					FAKE FUNDS · {cocoEnvironment.environmentId} · {cocoEnvironment.fakeMintAllowlist.join(', ')}
+				</div>
 				<div className="mb-4 text-center">
 					<p className="mb-1 text-gray-400 text-sm">Coco Auction fake balance</p>
 					<p className="font-bold text-white text-2xl">{spendable.toLocaleString()} sats</p>
