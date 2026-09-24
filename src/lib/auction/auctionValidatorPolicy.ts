@@ -270,7 +270,13 @@ export const assessAuctionValidatorPolicy = (
  * inadmissible. Root-level: it is about the auction, not about one bid, so it is
  * deliberately NOT part of `VALIDATOR_CONDEMN_CLAIMS`, which condemn bids.
  */
-export const AUCTION_POLICY_INVALID_CLAIM = 'auction_policy_invalid'
+/**
+ * The claim a validator publishes when the auction's own validator policy is broken.
+ *
+ * Declared in `constants.ts` with the rest of the verdict vocabulary; re-exported here
+ * because this module owns the ruleset that decides when it is warranted.
+ */
+export { AUCTION_POLICY_INVALID_CLAIM } from './constants'
 
 /** Whether a bid may be treated as valid at all, given the auction's assessment. */
 export const bidSelectableUnderAuctionPolicy = (assessment: AuctionValidatorPolicyAssessment): boolean => assessment.valid
