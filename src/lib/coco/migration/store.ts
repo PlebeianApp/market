@@ -49,6 +49,7 @@ export function assertMetadataOnly(value: unknown, path = 'record'): void {
 const IDENTITY_FIELDS = ['namespace', 'account', 'environment', 'epoch'] as const
 const ROOT_FIELDS = [
 	...IDENTITY_FIELDS,
+	'authorityPurpose',
 	'phase',
 	'revision',
 	'inventorySeal',
@@ -65,6 +66,41 @@ const ROOT_FIELDS = [
 	'cocoCanonical',
 	'boundCocoGeneration',
 	'cutoverEvidenceCommitment',
+	'freshTestEvidence',
+	'freshTestSelectionCommitment',
+] as const
+const FRESH_TEST_EVIDENCE_FIELDS = [
+	...IDENTITY_FIELDS,
+	'schemaVersion',
+	'profile',
+	'marketCommit',
+	'frozenSnapshotId',
+	'collectedAtMs',
+	'fakeMintCount',
+	'fakeMintIdentityCommitment',
+	'fakeMintIdentityVerified',
+	'legacySpendableCount',
+	'legacyReservationCount',
+	'legacyPendingCount',
+	'legacyAuthorityCount',
+	'auctionRecoveryCount',
+	'truncatedStorageCount',
+	'truncatedDatabaseCount',
+	'activeLegacyWriterCount',
+	'legacyWriterGeneration',
+	'cocoBalanceAmount',
+	'cocoHistoryCount',
+	'cocoInFlightCount',
+	'cocoOrphanCount',
+	'hostCommandCount',
+	'authoritativeDatabaseCount',
+	'preexistingAuthoritativeDatabaseCount',
+	'preexistingVaultRecordCount',
+	'vaultRoundTripVerified',
+	'vaultKeyExtractable',
+	'plaintextSecretRecordCount',
+	'inventoryCommitment',
+	'evidenceCommitment',
 ] as const
 const INVENTORY_FIELDS = [
 	...IDENTITY_FIELDS,
@@ -213,6 +249,9 @@ export function assertMigrationControlRecordShape(value: unknown): asserts value
 			assertKnownObjectFields(operation, RECOVERY_OPERATION_FIELDS, 'recovery operation')
 		}
 	}
+	if (value.freshTestEvidence !== null && value.freshTestEvidence !== undefined) {
+		assertKnownObjectFields(value.freshTestEvidence, FRESH_TEST_EVIDENCE_FIELDS, 'fresh auctionsdev preflight evidence')
+	}
 	requireArray(value.lateDiscoveryIds, 'late discovery ids')
 	requireArray(value.orphanCocoOperationIds, 'orphan Coco operation ids')
 	requireArray(value.unboundHostCommandIds, 'unbound Host command ids')
@@ -280,6 +319,7 @@ export function createInitialControlRecord(identityInput: MigrationIdentity): Re
 	const identity = createMigrationIdentity(identityInput)
 	return Object.freeze({
 		...identity,
+		authorityPurpose: 'PRODUCTION_MIGRATION',
 		phase: 'LEGACY_ACTIVE',
 		revision: 0,
 		inventorySeal: null,
@@ -296,7 +336,45 @@ export function createInitialControlRecord(identityInput: MigrationIdentity): Re
 		cocoCanonical: false,
 		boundCocoGeneration: null,
 		cutoverEvidenceCommitment: null,
+		freshTestEvidence: null,
+		freshTestSelectionCommitment: null,
 	})
+}
+
+export function createInitialFreshTestControlRecord(identityInput: MigrationIdentity): Readonly<MigrationControlRecord> {
+	const identity = createMigrationIdentity(identityInput)
+	if (identity.environment !== 'auctionsdev' && identity.environment !== 'test') {
+		throw new MigrationSafetyError('INVALID_INPUT', 'fresh test authority is restricted to auctionsdev/test')
+	}
+	return Object.freeze({
+		...identity,
+		authorityPurpose: 'FRESH_AUCTIONSDEV_TEST',
+		phase: 'FRESH_TEST_PREPARING',
+		revision: 0,
+		inventorySeal: null,
+		accountingReport: null,
+		lateDiscoveryIds: Object.freeze([]),
+		activeLegacyWriters: Object.freeze([]),
+		legacyWriterGeneration: 0,
+		legacyQuiescenceCertificate: null,
+		orphanCocoOperationIds: Object.freeze([]),
+		unboundHostCommandIds: Object.freeze([]),
+		cocoAuthorityGeneration: null,
+		recoveryQuiescenceCertificate: null,
+		legacyMonetaryMutationAllowed: true,
+		cocoCanonical: false,
+		boundCocoGeneration: null,
+		cutoverEvidenceCommitment: null,
+		freshTestEvidence: null,
+		freshTestSelectionCommitment: null,
+	})
+}
+
+export function getMigrationAuthorityPurpose(
+	record: Pick<MigrationControlRecord, 'authorityPurpose'>,
+): MigrationControlRecord['authorityPurpose'] {
+	// Records written by the pre-purpose schema are production migration records.
+	return record.authorityPurpose ?? 'PRODUCTION_MIGRATION'
 }
 
 function assertExpected(record: MigrationControlRecord, identity: MigrationIdentity, expectedRevision: number): void {
@@ -313,6 +391,9 @@ export async function transitionMigrationPhase(
 ): Promise<Readonly<MigrationControlRecord>> {
 	return store.transact(identity.namespace, (record) => {
 		assertExpected(record, identity, expectedRevision)
+		if (getMigrationAuthorityPurpose(record) !== 'PRODUCTION_MIGRATION') {
+			throw new MigrationSafetyError('INVALID_PHASE', 'production migration phases cannot change fresh-test authority')
+		}
 		assertPhaseTransition(record.phase, nextPhase)
 		return Object.freeze({ ...record, phase: nextPhase, revision: record.revision + 1 })
 	})
@@ -337,6 +418,9 @@ export async function installReadinessEvidence(
 	const preflight = await store.get(identity.namespace)
 	if (!preflight) throw new MigrationSafetyError('STORAGE_FAILURE', 'control record does not exist')
 	assertExpected(preflight, identity, expectedRevision)
+	if (getMigrationAuthorityPurpose(preflight) !== 'PRODUCTION_MIGRATION') {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'production readiness evidence cannot be installed on fresh-test authority')
+	}
 	await verifyInventorySeal(update.inventorySeal)
 	await verifyAccountingReport(update.inventorySeal, update.accountingReport)
 	await verifyRecoveryQuiescenceCertificate(update.recoveryQuiescenceCertificate)
@@ -474,6 +558,9 @@ export async function commitCutover(
 	const preflight = await store.get(expected.namespace)
 	if (!preflight) throw new MigrationSafetyError('STORAGE_FAILURE', 'control record does not exist')
 	assertExpected(preflight, expected, expected.revision)
+	if (getMigrationAuthorityPurpose(preflight) !== 'PRODUCTION_MIGRATION') {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fresh-test authority cannot authorize production cutover')
+	}
 	if (!preflight.inventorySeal || !preflight.accountingReport || !preflight.recoveryQuiescenceCertificate) {
 		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'cutover evidence is incomplete')
 	}

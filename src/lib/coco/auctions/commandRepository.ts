@@ -34,6 +34,7 @@ export interface CocoAuctionCommandRecord {
 export interface CocoAuctionCommandRepository {
 	createOrGet(record: CocoAuctionCommandRecord): Promise<{ record: CocoAuctionCommandRecord; created: boolean }>
 	get(commandId: string): Promise<CocoAuctionCommandRecord | null>
+	listByAccount(account: CocoAuctionAccountIdentity): Promise<readonly CocoAuctionCommandRecord[]>
 	update(commandId: string, mutate: (current: CocoAuctionCommandRecord) => CocoAuctionCommandRecord): Promise<CocoAuctionCommandRecord>
 }
 
@@ -52,6 +53,12 @@ export class MemoryCocoAuctionCommandRepository implements CocoAuctionCommandRep
 	async get(commandId: string): Promise<CocoAuctionCommandRecord | null> {
 		const record = this.records.get(commandId)
 		return record ? clone(record) : null
+	}
+
+	async listByAccount(account: CocoAuctionAccountIdentity): Promise<readonly CocoAuctionCommandRecord[]> {
+		return Array.from(this.records.values())
+			.filter((record) => record.account.accountPubkey === account.accountPubkey && record.account.environmentId === account.environmentId)
+			.map(clone)
 	}
 
 	async update(
@@ -126,6 +133,20 @@ export class IndexedDbCocoAuctionCommandRepository implements CocoAuctionCommand
 		try {
 			const value = await requestResult(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(commandId))
 			return (value as CocoAuctionCommandRecord | undefined) ?? null
+		} finally {
+			database.close()
+		}
+	}
+
+	async listByAccount(account: CocoAuctionAccountIdentity): Promise<readonly CocoAuctionCommandRecord[]> {
+		const database = await openDatabase()
+		try {
+			const values = (await requestResult(
+				database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll(),
+			)) as CocoAuctionCommandRecord[]
+			return values.filter(
+				(record) => record.account.accountPubkey === account.accountPubkey && record.account.environmentId === account.environmentId,
+			)
 		} finally {
 			database.close()
 		}

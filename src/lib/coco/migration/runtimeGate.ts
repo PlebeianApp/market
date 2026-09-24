@@ -2,6 +2,7 @@ import { buildCanonicalWalletNamespace, normalizeAccount, normalizeEnvironment, 
 import { IndexedDbMigrationControlStore } from './indexedDbStore'
 import { MigrationSafetyError, type MigrationEnvironment, type MigrationIdentity } from './model'
 import type { MigrationControlStore } from './store'
+import { getMigrationAuthorityPurpose } from './store'
 import { runLegacyMonetaryMutation } from './legacyGate'
 
 export interface RuntimeLegacyMutationContext {
@@ -85,10 +86,52 @@ export async function runCocoMutationAgainstControlStore<T>(
 	const namespace = buildCanonicalWalletNamespace({ account, environment })
 	const record = await store.get(namespace)
 	if (!record) return mutation()
-	if (record.phase !== 'CUTOVER_COMMITTED' || !record.cocoCanonical || record.legacyMonetaryMutationAllowed) {
+	const authorityCommitted =
+		(getMigrationAuthorityPurpose(record) === 'PRODUCTION_MIGRATION' && record.phase === 'CUTOVER_COMMITTED') ||
+		(getMigrationAuthorityPurpose(record) === 'FRESH_AUCTIONSDEV_TEST' && record.phase === 'FRESH_TEST_COMMITTED')
+	if (!authorityCommitted || !record.cocoCanonical || record.legacyMonetaryMutationAllowed) {
 		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'direct Coco monetary mutation is disabled until cutover is committed')
 	}
 	return mutation()
+}
+
+/** Strict AuctionsDev/test gate: the durable fresh-wallet authority must exist and be committed. */
+export async function runFreshAuctionsdevCocoMutationAgainstControlStore<T>(
+	store: MigrationControlStore,
+	context: Pick<RuntimeLegacyMutationContext, 'account' | 'environment'>,
+	mutation: () => Promise<T>,
+): Promise<T> {
+	const account = normalizeAccount(context.account)
+	const environment = normalizeEnvironment(context.environment)
+	if (environment !== 'auctionsdev' && environment !== 'test') {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fresh AuctionsDev authority cannot authorize this environment')
+	}
+	const namespace = buildCanonicalWalletNamespace({ account, environment })
+	const record = await store.get(namespace)
+	if (
+		!record ||
+		getMigrationAuthorityPurpose(record) !== 'FRESH_AUCTIONSDEV_TEST' ||
+		record.phase !== 'FRESH_TEST_COMMITTED' ||
+		!record.freshTestEvidence ||
+		!record.freshTestSelectionCommitment ||
+		!record.cocoCanonical ||
+		record.legacyMonetaryMutationAllowed
+	) {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fresh AuctionsDev Coco authority is not durably committed')
+	}
+	return mutation()
+}
+
+export async function runBrowserFreshAuctionsdevCocoMutation<T>(
+	context: Pick<RuntimeLegacyMutationContext, 'account' | 'environment'>,
+	mutation: () => Promise<T>,
+): Promise<T> {
+	const environment = normalizeEnvironment(context.environment)
+	if (typeof indexedDB === 'undefined') {
+		throw new MigrationSafetyError('STORAGE_FAILURE', 'fresh AuctionsDev monetary authority requires durable IndexedDB')
+	}
+	browserControlStore ??= new IndexedDbMigrationControlStore()
+	return runFreshAuctionsdevCocoMutationAgainstControlStore(browserControlStore, { ...context, environment }, mutation)
 }
 
 export async function runBrowserCocoMonetaryMutation<T>(

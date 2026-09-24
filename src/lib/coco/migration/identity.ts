@@ -19,7 +19,7 @@ export function normalizeAccount(value: unknown): string {
 }
 
 export function normalizeEnvironment(value: unknown): MigrationEnvironment {
-	if (value === 'development' || value === 'test' || value === 'staging' || value === 'production') return value
+	if (value === 'development' || value === 'test' || value === 'auctionsdev' || value === 'staging' || value === 'production') return value
 	throw new MigrationSafetyError('INVALID_INPUT', 'environment is invalid')
 }
 

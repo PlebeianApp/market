@@ -1,18 +1,13 @@
+import { buildAccountingReport, createCocoDestinationEvidence, createVerifiedDispositionEvidence } from '../accounting'
 import {
-	buildAccountingReport,
-	createCocoDestinationEvidence,
-	createInitialControlRecord,
-	createLegacyQuiescenceCertificate,
-	createVerifiedDispositionEvidence,
 	enumerateProductionInventory,
 	sealProductionInventory,
 	type InventoryProjection,
 	type InventoryProjectionItem,
-	type MigrationControlRecord,
-	type MigrationIdentity,
-	type ProductionEnumerator,
 	type TrustedProductionInventoryPort,
-} from '..'
+} from '../inventory'
+import type { MigrationControlRecord, MigrationIdentity, ProductionEnumerator } from '../model'
+import { createInitialControlRecord, createLegacyQuiescenceCertificate } from '../store'
 import { createRecoveryQuiescenceCertificate } from '../../recovery'
 
 export const ACCOUNT = 'a'.repeat(64)
