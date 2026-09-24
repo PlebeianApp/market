@@ -20,6 +20,7 @@ function identityMatches(left: MigrationIdentity, right: MigrationIdentity): boo
 
 export function evaluateCutover(record: Readonly<MigrationControlRecord>): Readonly<CutoverAssessment> {
 	const blockers = new Set<CutoverBlocker>()
+	if ((record.authorityPurpose ?? 'PRODUCTION_MIGRATION') !== 'PRODUCTION_MIGRATION') blockers.add('WRONG_AUTHORITY_PURPOSE')
 	if (record.phase !== 'COCO_READY') blockers.add('WRONG_PHASE')
 	const seal = record.inventorySeal
 	if (!seal) {
@@ -79,8 +80,8 @@ export function assertPhaseTransition(current: MigrationPhase, next: MigrationPh
 	if (current === 'CUTOVER_COMMITTED') {
 		throw new MigrationSafetyError('INVALID_PHASE', 'CUTOVER_COMMITTED is irreversible')
 	}
-	const currentIndex = MIGRATION_PHASES.indexOf(current)
-	const nextIndex = MIGRATION_PHASES.indexOf(next)
+	const currentIndex = MIGRATION_PHASES.findIndex((phase) => phase === current)
+	const nextIndex = MIGRATION_PHASES.findIndex((phase) => phase === next)
 	if (currentIndex < 0 || nextIndex < 0) throw new MigrationSafetyError('INVALID_PHASE', 'migration phase is invalid')
 	const resolvingBranch = current === 'MIGRATION_SNAPSHOT_FROZEN' && next === 'RESOLVING'
 	const importingToVerifying = current === 'IMPORTING' && next === 'VERIFYING'

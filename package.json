@@ -32,6 +32,7 @@
 		"test:unit": "bun test --isolate $(find contextvm src -type f -name '*.test.ts' ! -name '*.integration.test.ts' ! -path 'src/ws.test.ts' ! -path 'src/lib/tests/newProduct.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch --isolate $(find contextvm src -type f -name '*.test.ts' ! -name '*.integration.test.ts' ! -path 'src/ws.test.ts' ! -path 'src/lib/tests/newProduct.test.ts' | sort)",
 		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)",
+		"preflight:auctionsdev:fresh-wallet": "bun run scripts/check-auctionsdev-fresh-wallet-preflight.ts",
 		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {

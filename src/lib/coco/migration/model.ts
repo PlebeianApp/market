@@ -8,8 +8,11 @@ export const MIGRATION_PHASES = [
 	'CUTOVER_COMMITTED',
 ] as const
 
-export type MigrationPhase = (typeof MIGRATION_PHASES)[number]
-export type MigrationEnvironment = 'development' | 'test' | 'staging' | 'production'
+export const FRESH_TEST_PHASES = ['FRESH_TEST_PREPARING', 'FRESH_TEST_ROLLED_BACK', 'FRESH_TEST_COMMITTED'] as const
+
+export type MigrationPhase = (typeof MIGRATION_PHASES)[number] | (typeof FRESH_TEST_PHASES)[number]
+export type MigrationEnvironment = 'development' | 'test' | 'auctionsdev' | 'staging' | 'production'
+export type MigrationAuthorityPurpose = 'PRODUCTION_MIGRATION' | 'FRESH_AUCTIONSDEV_TEST'
 
 export const REQUIRED_PRODUCTION_ENUMERATORS = [
 	'LEGACY_SPENDABLE_PROOFS',
@@ -145,7 +148,42 @@ export interface LegacyQuiescenceCertificate extends MigrationIdentity {
 	commitment: string
 }
 
+/** Public-only evidence for a fresh, fake-funded auctionsdev/test wallet. */
+export interface FreshAuctionsdevPreflightEvidence extends MigrationIdentity {
+	schemaVersion: 1
+	profile: 'FRESH_AUCTIONSDEV_TEST'
+	marketCommit: string
+	frozenSnapshotId: string
+	collectedAtMs: number
+	fakeMintCount: number
+	fakeMintIdentityCommitment: string
+	fakeMintIdentityVerified: boolean
+	legacySpendableCount: number
+	legacyReservationCount: number
+	legacyPendingCount: number
+	legacyAuthorityCount: number
+	auctionRecoveryCount: number
+	truncatedStorageCount: number
+	truncatedDatabaseCount: number
+	activeLegacyWriterCount: number
+	legacyWriterGeneration: number
+	cocoBalanceAmount: bigint
+	cocoHistoryCount: number
+	cocoInFlightCount: number
+	cocoOrphanCount: number
+	hostCommandCount: number
+	authoritativeDatabaseCount: number
+	preexistingAuthoritativeDatabaseCount: number
+	preexistingVaultRecordCount: number
+	vaultRoundTripVerified: boolean
+	vaultKeyExtractable: boolean
+	plaintextSecretRecordCount: number
+	inventoryCommitment: string
+	evidenceCommitment: string
+}
+
 export interface MigrationControlRecord extends MigrationIdentity {
+	authorityPurpose: MigrationAuthorityPurpose
 	phase: MigrationPhase
 	revision: number
 	inventorySeal: InventorySeal | null
@@ -162,6 +200,8 @@ export interface MigrationControlRecord extends MigrationIdentity {
 	cocoCanonical: boolean
 	boundCocoGeneration: number | null
 	cutoverEvidenceCommitment: string | null
+	freshTestEvidence: FreshAuctionsdevPreflightEvidence | null
+	freshTestSelectionCommitment: string | null
 }
 
 export interface CutoverExpectedState extends MigrationIdentity {
@@ -175,6 +215,7 @@ export interface CutoverExpectedState extends MigrationIdentity {
 }
 
 export type CutoverBlocker =
+	| 'WRONG_AUTHORITY_PURPOSE'
 	| 'WRONG_PHASE'
 	| 'INVENTORY_NOT_SEALED'
 	| 'REQUIRED_ENUMERATOR_INCOMPLETE'

@@ -1,0 +1,106 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://plebeian.market/schemas/fresh-auctionsdev-preflight-v1.schema.json",
+	"title": "Plebeian Market fresh AuctionsDev wallet preflight",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"schemaVersion",
+		"profile",
+		"verdict",
+		"blockers",
+		"marketCommit",
+		"environment",
+		"namespaceCommitment",
+		"evidenceCommitment",
+		"inventoryCommitment",
+		"frozenSnapshotId",
+		"fakeMintIdentityCommitment",
+		"selectionCommitment",
+		"counts",
+		"assertions",
+		"reportCommitment"
+	],
+	"properties": {
+		"schemaVersion": { "const": 1 },
+		"profile": { "const": "FRESH_AUCTIONSDEV_TEST" },
+		"verdict": { "const": "FRESH_AUCTIONSDEV_READY" },
+		"blockers": { "type": "array", "maxItems": 0 },
+		"marketCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+		"environment": { "enum": ["auctionsdev", "test"] },
+		"namespaceCommitment": { "$ref": "#/$defs/commitment" },
+		"evidenceCommitment": { "$ref": "#/$defs/commitment" },
+		"inventoryCommitment": { "$ref": "#/$defs/commitment" },
+		"frozenSnapshotId": { "$ref": "#/$defs/commitment" },
+		"fakeMintIdentityCommitment": { "$ref": "#/$defs/commitment" },
+		"selectionCommitment": { "$ref": "#/$defs/commitment" },
+		"reportCommitment": { "$ref": "#/$defs/commitment" },
+		"counts": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"fakeMints",
+				"legacySpendable",
+				"legacyReservations",
+				"legacyPending",
+				"legacyAuthorities",
+				"auctionRecovery",
+				"truncatedStorage",
+				"truncatedDatabases",
+				"activeLegacyWriters",
+				"cocoBalance",
+				"cocoHistory",
+				"cocoInFlight",
+				"cocoOrphans",
+				"hostCommands",
+				"authoritativeDatabases",
+				"preexistingAuthoritativeDatabases",
+				"preexistingVaultRecords",
+				"plaintextSecrets"
+			],
+			"properties": {
+				"fakeMints": { "type": "integer", "minimum": 1 },
+				"legacySpendable": { "const": 0 },
+				"legacyReservations": { "const": 0 },
+				"legacyPending": { "const": 0 },
+				"legacyAuthorities": { "const": 0 },
+				"auctionRecovery": { "const": 0 },
+				"truncatedStorage": { "const": 0 },
+				"truncatedDatabases": { "const": 0 },
+				"activeLegacyWriters": { "const": 0 },
+				"cocoBalance": { "const": "0" },
+				"cocoHistory": { "const": 0 },
+				"cocoInFlight": { "const": 0 },
+				"cocoOrphans": { "const": 0 },
+				"hostCommands": { "const": 0 },
+				"authoritativeDatabases": { "const": 1 },
+				"preexistingAuthoritativeDatabases": { "const": 0 },
+				"preexistingVaultRecords": { "const": 0 },
+				"plaintextSecrets": { "const": 0 }
+			}
+		},
+		"assertions": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"fullCanonicalNamespace",
+				"fakeMintIdentityVerified",
+				"protectedSeedRoundTrip",
+				"seedKeyNonExtractable",
+				"zeroStartingCocoBalance",
+				"legacyWritersDisabled"
+			],
+			"properties": {
+				"fullCanonicalNamespace": { "const": true },
+				"fakeMintIdentityVerified": { "const": true },
+				"protectedSeedRoundTrip": { "const": true },
+				"seedKeyNonExtractable": { "const": true },
+				"zeroStartingCocoBalance": { "const": true },
+				"legacyWritersDisabled": { "const": true }
+			}
+		}
+	},
+	"$defs": {
+		"commitment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+	}
+}
