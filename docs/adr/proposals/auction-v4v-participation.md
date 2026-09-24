@@ -279,6 +279,32 @@ Recorded normatively in the manifest profile's verification section
 (`docs/protocol/auction-multiparty-manifest-v1.md` §6), which is the same set of checks applied
 here on the near side of the mint call.
 
+### D17 — The construction journal holds the sequence, not the keys, and an attempt precedes the request
+
+Because a leg is N swaps (D16), the state that has to survive a crash is _which rows were sent_.
+Two records split that work and neither duplicates the other:
+
+- the **recovery record** (D16) protects the key material — each row's compressed child key, its
+  projection, its path, its amount — under the leg's one refund authority;
+- the **construction journal** protects the sequence: per row, whether it is `planned`, `attempted`,
+  `locked`, `failed_pre_mint` or `uncertain`. It is keyed by the same refund authority and stores
+  **no proofs and no keys**, so it is a second store, never a second spendable-proof authority.
+
+The rule that makes recovery possible: `planned → attempted` is written with **confirmed-write
+semantics before the swap is sent**, and there is no transition back. An attempted row is **never
+sent again** — a swap whose outcome is unknown may already have consumed its inputs, so a retry
+either double-spends them or locks the same amount twice. A row whose outcome cannot be determined
+stays `uncertain`, and the leg's verdict is then `uncertain` rather than `partial`, because claiming
+"partial" would assert that the unknown row is not locked.
+
+Resolution is **evidence, and only evidence**: proofs (verified against that row's own key before the
+row may be called locked), a failure proved to precede the mint call, or nothing — and nothing leaves
+the row uncertain. Silence is not evidence of failure, nor of success.
+
+The verdicts are `complete`, `partial`, `unsent` and `uncertain`, one sentence each (D14), and the
+summary names the locked rows, because on a partial leg those are exactly the ones a refund branch
+can reclaim once the locktime opens.
+
 ## Consequences
 
 - The UI can be written against one encoding: the schedule, with capabilities and
@@ -295,6 +321,8 @@ here on the near side of the mint call.
 - A multiparty leg costs **one swap per row** and its construction is not atomic
   across rows (D16); a partial lock is handled by the per-row recovery record and
   per-row verification rather than prevented.
+- A pending leg therefore occupies **two stores** (the record and the journal), each
+  fail-closed at its own bound (D17); whether they should share one budget is open.
 
 ## Files affected
 
@@ -306,6 +334,7 @@ here on the near side of the mint call.
 - `src/lib/auction/multipartyLegSwapPlan.ts` — the per-row swap requests and the disjoint input partition (D16).
 - `src/lib/auction/multipartyLegLockOutcome.ts` — per-row verification of what the mint returned (D16, manifest §6).
 - `src/lib/auction/multipartyRecoveryRecord.ts` — the multi-row pre-lock recovery record (D16).
+- `src/lib/auction/multipartyLegJournal.ts` — the construction journal: per-row sequence state, the attempt-before-request rule, and reconciliation against evidence (D17).
 - Later: the auction root tag builder, the bid manifest (Gate D2), the path release (Gate H), the validator service, and the auction detail UI.
 
 ## Open questions
