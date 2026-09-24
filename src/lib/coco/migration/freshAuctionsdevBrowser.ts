@@ -7,7 +7,7 @@ import { readCocoFakeMintIdentityCommitments, readCocoV2AuctionEnvironment, read
 import { cocoRuntimeRegistry, getCocoDatabaseName, getCocoRuntimeScope } from '../runtime'
 import { hasCocoSeedVaultRecord, verifyCocoSeedVaultRoundTrip } from '../seedVault'
 import { createCommitment } from './commitment'
-import { createMigrationIdentity } from './identity'
+import { buildCanonicalWalletNamespace, createMigrationIdentity } from './identity'
 import { IndexedDbMigrationControlStore } from './indexedDbStore'
 import { MigrationSafetyError, type FreshAuctionsdevPreflightEvidence, type MigrationIdentity } from './model'
 import { commitFreshAuctionsdevSelection, createFreshAuctionsdevEvidence } from './freshAuctionsdev'
@@ -22,6 +22,14 @@ const LEGACY_TRUNCATED_PREFIXES = [
 	'auction_bid_pre_lock_recovery_v1',
 	'auction_bid_republish_events_v1',
 ] as const
+
+export const FRESH_AUCTIONSDEV_PUBLIC_REPORT_STORAGE_KEY = 'plebeian-market:coco:v2:fresh-auctionsdev-public-report-v1'
+
+const exposePublicReport = (report: Readonly<FreshAuctionsdevPublicReport>): Readonly<FreshAuctionsdevPublicReport> => {
+	localStorage.setItem(FRESH_AUCTIONSDEV_PUBLIC_REPORT_STORAGE_KEY, JSON.stringify(report))
+	window.dispatchEvent(new CustomEvent('coco-fresh-auctionsdev-preflight-ready', { detail: report }))
+	return report
+}
 
 interface SnapshotCounts {
 	legacySpendableCount: number
@@ -256,4 +264,64 @@ export async function commitBrowserFreshAuctionsdevPreflight(
 	} finally {
 		defaultStore?.close()
 	}
+}
+
+/**
+ * Converges a fresh AuctionsDev/test browser namespace on the one durable
+ * authority record. A retry after reload reuses the persisted epoch and a
+ * retry after commit re-verifies the public report instead of mutating state.
+ */
+async function convergeBrowserFreshAuctionsdevPreflight(input: {
+	account: string
+	environment: 'auctionsdev' | 'test'
+}): Promise<Readonly<FreshAuctionsdevPublicReport>> {
+	const marketCommit = readMarketCommitSha()
+	const namespace = buildCanonicalWalletNamespace(input)
+	const store = new IndexedDbMigrationControlStore()
+	try {
+		const existing = await store.get(namespace)
+		if (existing?.phase === 'FRESH_TEST_COMMITTED') {
+			if (!existing.freshTestEvidence || !existing.freshTestSelectionCommitment) {
+				throw new MigrationSafetyError('STORAGE_FAILURE', 'committed fresh-test authority is missing durable evidence')
+			}
+			const report = await createFreshAuctionsdevPublicReport(existing.freshTestEvidence, {
+				legacyWritersDisabled: !existing.legacyMonetaryMutationAllowed,
+				selectionCommitment: existing.freshTestSelectionCommitment,
+			})
+			if (report.marketCommit !== marketCommit) {
+				throw new MigrationSafetyError('IDENTITY_MISMATCH', 'fresh-test authority is bound to another Market commit')
+			}
+			return exposePublicReport(report)
+		}
+		if (existing && (getMigrationAuthorityPurpose(existing) !== 'FRESH_AUCTIONSDEV_TEST' || existing.phase !== 'FRESH_TEST_PREPARING')) {
+			throw new MigrationSafetyError('INVALID_PHASE', 'wallet namespace is not eligible for fresh-test activation')
+		}
+		return exposePublicReport(
+			await commitBrowserFreshAuctionsdevPreflight(
+				{
+					account: input.account,
+					environment: input.environment,
+					namespace,
+					epoch: existing?.epoch ?? `fresh-${marketCommit}`,
+				},
+				{ store, marketCommit },
+			),
+		)
+	} finally {
+		store.close()
+	}
+}
+
+const freshPreflightInFlight = new Map<string, Promise<Readonly<FreshAuctionsdevPublicReport>>>()
+
+export function ensureBrowserFreshAuctionsdevPreflight(input: {
+	account: string
+	environment: 'auctionsdev' | 'test'
+}): Promise<Readonly<FreshAuctionsdevPublicReport>> {
+	const namespace = buildCanonicalWalletNamespace(input)
+	const current = freshPreflightInFlight.get(namespace)
+	if (current) return current
+	const converging = convergeBrowserFreshAuctionsdevPreflight(input).finally(() => freshPreflightInFlight.delete(namespace))
+	freshPreflightInFlight.set(namespace, converging)
+	return converging
 }

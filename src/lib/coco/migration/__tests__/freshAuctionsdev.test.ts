@@ -175,6 +175,16 @@ describe('fresh AuctionsDev wallet authority', () => {
 		expect({ legacyCalls, cocoCalls }).toEqual({ legacyCalls: 0, cocoCalls: 1 })
 	})
 
+	test('rejects local-e2e identity and blocks AuctionsDev Coco mutations before fresh commit', async () => {
+		const store = new InMemoryMigrationControlStore([createInitialFreshTestControlRecord(IDENTITY)])
+		await expect(
+			runFreshAuctionsdevCocoMutationAgainstControlStore(store, { account: ACCOUNT, environment: 'auctionsdev' }, async () => {}),
+		).rejects.toMatchObject({ code: 'CUTOVER_BLOCKED' })
+		await expect(
+			runFreshAuctionsdevCocoMutationAgainstControlStore(store, { account: ACCOUNT, environment: 'local-e2e' as never }, async () => {}),
+		).rejects.toMatchObject({ code: 'INVALID_INPUT' })
+	})
+
 	test('rolls back before commit but is irreversible after commit', async () => {
 		const rollbackStore = new InMemoryMigrationControlStore([createInitialFreshTestControlRecord(IDENTITY)])
 		expect((await rollbackFreshAuctionsdevSelection(rollbackStore, IDENTITY, 0)).phase).toBe('FRESH_TEST_ROLLED_BACK')

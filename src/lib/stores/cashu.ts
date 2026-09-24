@@ -12,9 +12,9 @@ import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
 import { configStore } from './config'
-import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 import { runBrowserCocoMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
 import { loadOrCreateCocoSeed } from '@/lib/coco/seedVault'
+import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
 

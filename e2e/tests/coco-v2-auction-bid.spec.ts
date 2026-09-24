@@ -7,10 +7,14 @@ import { finalizeEvent, type Event } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import WebSocket from 'ws'
 import { devUser1, devUser2, devUser3, XPUB } from '../../src/lib/fixtures'
+import { COCO_AUCTIONSDEV_FAKE_MINT_INFO, COCO_AUCTIONSDEV_SMOKE_SAFE } from '../coco-auctionsdev-smoke-contract'
+import { verifyFreshAuctionsdevPublicReport } from '../../src/lib/coco/migration/freshAuctionsdevReport'
+import { FRESH_AUCTIONSDEV_PUBLIC_REPORT_STORAGE_KEY } from '../../src/lib/coco/migration/freshAuctionsdevBrowser'
+import { writeFile } from 'node:fs/promises'
 
 useWebSocketImplementation(WebSocket)
 
-const MINT_URL = 'http://localhost:3338'
+const MINT_URL = COCO_AUCTIONSDEV_SMOKE_SAFE.mintUrl
 const COCO_E2E_ENABLED = process.env.COCO_V2_E2E === '1'
 const FULL_LIFECYCLE_TITLE = `Coco v2 Full Lifecycle ${Date.now()}`
 const markSmokeCheck = (check: string): void => console.log(`COCO_AUCTIONSDEV_SMOKE_CHECK=${check}`)
@@ -121,10 +125,10 @@ const receiveFakeFunds = async (page: Page, token: string): Promise<void> => {
 
 const placeCocoBid = async (page: Page, auction: Event, bidderPubkey: string, amount: number): Promise<void> => {
 	await page.evaluate((pubkey) => localStorage.setItem(`auction-rules-ack:v1:${pubkey}`, 'true'), bidderPubkey)
-	await page.goto('/auctions')
-	const auctionLink = page.getByRole('link', { name: FULL_LIFECYCLE_TITLE, exact: true }).first()
-	await expect(auctionLink).toBeVisible({ timeout: 30_000 })
-	await auctionLink.click()
+	// The create flow already returned the relay-acknowledged event. Open its
+	// normal public route directly so index-query propagation cannot make the
+	// monetary smoke flaky.
+	await page.goto(`/auctions/${auction.id}`)
 	await expect(page.getByRole('heading', { name: FULL_LIFECYCLE_TITLE })).toBeVisible({ timeout: 30_000 })
 	await page.locator('input[type="number"]').first().fill(String(amount))
 	await page
@@ -200,7 +204,7 @@ const createAuctionThroughNormalUi = async (page: Page, relay: Relay): Promise<E
 const readCocoOperations = async (page: Page, pubkey: string) =>
 	page.evaluate(
 		async ({ accountPubkey }) => {
-			const databaseName = `plebeian_coco_v2_local-e2e_${accountPubkey}`
+			const databaseName = `plebeian_coco_v2_test_${accountPubkey}`
 			const open = indexedDB.open(databaseName)
 			const database = await new Promise<IDBDatabase>((resolve, reject) => {
 				open.onsuccess = () => resolve(open.result)
@@ -278,13 +282,31 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 		merchantPage,
 		buyerPage,
 		newUserPage,
-	}) => {
+	}, testInfo) => {
 		test.setTimeout(10 * 60_000)
 		for (const page of [merchantPage, buyerPage, newUserPage]) page.setDefaultTimeout(20_000)
+		const pageErrors: string[] = []
+		for (const page of [merchantPage, buyerPage, newUserPage]) {
+			page.on('pageerror', (error) => pageErrors.push(error.message))
+			await page.route(`${MINT_URL}/v1/info`, (route) => route.fulfill({ json: COCO_AUCTIONSDEV_FAKE_MINT_INFO }))
+		}
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const [buyerToken, higherBidderToken] = await Promise.all([mintFakeToken(500), mintFakeToken(500)])
 			await Promise.all([receiveFakeFunds(buyerPage, buyerToken), receiveFakeFunds(newUserPage, higherBidderToken)])
+			const buyerPreflightReport = await buyerPage.evaluate((key) => {
+				const value = localStorage.getItem(key)
+				if (!value) throw new Error('fresh-wallet preflight public report is missing')
+				return JSON.parse(value) as unknown
+			}, FRESH_AUCTIONSDEV_PUBLIC_REPORT_STORAGE_KEY)
+			await verifyFreshAuctionsdevPublicReport(buyerPreflightReport, {
+				marketCommit: process.env.BUN_PUBLIC_MARKET_COMMIT_SHA!,
+				account: devUser2.pk,
+				environment: 'test',
+			})
+			const preflightReportPath = testInfo.outputPath('fresh-auctionsdev-preflight.json')
+			await writeFile(preflightReportPath, `${JSON.stringify(buyerPreflightReport, null, 2)}\n`, 'utf8')
+			console.log(`COCO_AUCTIONSDEV_PREFLIGHT_REPORT_PATH=${preflightReportPath}`)
 			markSmokeCheck('fund')
 
 			const auction = await createAuctionThroughNormalUi(merchantPage, relay)
@@ -339,23 +361,62 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 			markSmokeCheck('settlement')
 
 			const locktimeA = Number(bidA.tags.find((tag) => tag[0] === 'locktime')?.[1])
+			const sendAId = bidA.tags.find((tag) => tag[0] === 'coco_operation')?.[1]
+			const sendBId = bidB.tags.find((tag) => tag[0] === 'coco_operation')?.[1]
+			expect(sendAId).toBeTruthy()
+			expect(sendBId).toBeTruthy()
 			const refundWaitMs = Math.max(0, (locktimeA + 1) * 1000 - Date.now())
 			await buyerPage.waitForTimeout(refundWaitMs)
 			await buyerPage.goto('/dashboard/products/bids')
 			await expect(buyerPage.getByRole('button', { name: 'Refund original Send' })).toBeEnabled({ timeout: 30_000 })
 			await buyerPage.getByRole('button', { name: 'Refund original Send' }).click()
-			// The click starts an async Host command. Wait for its authoritative
-			// success signal before reloading so navigation cannot cancel the
-			// in-flight exact-Send reclaim.
-			await expect(buyerPage.getByText('Original Coco Send refunded.')).toBeVisible({ timeout: 30_000 })
+			// Toasts are intentionally ephemeral. Poll the authoritative operation
+			// instead, and do not navigate while the exact-Send reclaim is in flight.
+			try {
+				await expect
+					.poll(
+						async () => {
+							const operations = await readCocoOperations(buyerPage, devUser2.pk)
+							return operations.sends.find((operation) => operation.id === sendAId)?.state ?? 'missing'
+						},
+						{ timeout: 60_000, intervals: [250, 500, 1_000] },
+					)
+					.toBe('rolled_back')
+			} catch (error) {
+				const operations = await readCocoOperations(buyerPage, devUser2.pk)
+				const operation = operations.sends.find((candidate) => candidate.id === sendAId)
+				const reclaimData = (() => {
+					if (typeof operation?.reclaimDataJson !== 'string') return null
+					try {
+						const parsed = JSON.parse(operation.reclaimDataJson) as { spendingPath?: unknown }
+						return parsed && typeof parsed === 'object' ? parsed : null
+					} catch {
+						return null
+					}
+				})()
+				const errorToast = await buyerPage
+					.locator('[data-sonner-toast][data-type="error"]')
+					.last()
+					.textContent({ timeout: 2_000 })
+					.catch(() => null)
+				console.log(
+					`COCO_AUCTIONSDEV_REFUND_CAUSAL_ERROR=${JSON.stringify({
+						toast: errorToast,
+						operationId: sendAId,
+						state: operation?.state ?? 'missing',
+						revision: operation?.revision ?? null,
+						method: operation?.method ?? null,
+						reclaimSpendingPath: reclaimData?.spendingPath ?? null,
+					})}`,
+				)
+				throw error
+			}
 			await buyerPage.reload()
 
 			const [buyerOperations, winnerOperations] = await Promise.all([
 				readCocoOperations(buyerPage, devUser2.pk),
 				readCocoOperations(newUserPage, devUser3.pk),
 			])
-			const sendAId = bidA.tags.find((tag) => tag[0] === 'coco_operation')?.[1]
-			const sendBId = bidB.tags.find((tag) => tag[0] === 'coco_operation')?.[1]
 			expect(buyerOperations.sends.filter((operation) => operation.id === sendAId)).toHaveLength(1)
 			expect(buyerOperations.sends.find((operation) => operation.id === sendAId)?.state).toBe('rolled_back')
 			markSmokeCheck('loserOriginalSendRefund')
@@ -367,6 +428,7 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 			expect(readyBalance(buyerOperations)).toBe(500)
 			expect(readyBalance(winnerOperations) + readyBalance(sellerOperations)).toBe(500)
 			markSmokeCheck('conservation')
+			expect(pageErrors, `Unhandled browser errors: ${pageErrors.join(' | ')}`).toEqual([])
 		} finally {
 			relay.close()
 		}

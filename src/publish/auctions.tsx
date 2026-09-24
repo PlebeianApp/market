@@ -71,6 +71,7 @@ import {
 	type CocoAuctionWinnerReleaseInput,
 } from '@/lib/coco/auctions'
 import { runBrowserLegacyMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
+import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
 
 export interface AuctionSpecEntry {
 	key: string
@@ -307,6 +308,10 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 				const seller = await getUser()
 				if (!seller?.pubkey) throw new Error('No active seller identity')
 				const environment = readCocoV2AuctionEnvironment()
+				if (environment.environmentId !== 'auctionsdev' && environment.environmentId !== 'test') {
+					throw new Error('Fresh Coco Auction authority is restricted to auctionsdev/test')
+				}
+				await ensureBrowserFreshAuctionsdevPreflight({ account: seller.pubkey, environment: environment.environmentId })
 				const authority = await getPlebeianWalletHost().auctions.ensureSellerAuctionAuthority({
 					accountPubkey: seller.pubkey,
 					environmentId: environment.environmentId,

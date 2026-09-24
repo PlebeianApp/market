@@ -1,7 +1,7 @@
-# Pinned Coco candidate packages
+# Pinned Coco Round 9 packages
 
 These unchanged package archives were built from the exact Coco commit
-`37b9454caf4d1019764899d7ce194bb8b2f5b0bf`. They are repository-contained so
+`35941014a61af7dc112b31de8053db610b70085c`. They are repository-contained so
 the Market candidate does not depend on a developer checkout, symlink, mutable
 branch, or `NODE_PATH` override.
 
@@ -23,10 +23,9 @@ there is one physical Cashu implementation and no packaging rewrite.
 SHA-256:
 
 ```text
-d4afab3b6cf2715b576d48515dc849b81dfaeb29bfd6b2678b0948315fd19106  cashu-coco-core-2.0.0.tgz
-8376cf6ca67643da2cbdd27d2f4dcb9453da978fab634469782eb07e3d21412f  cashu-coco-indexeddb-2.0.0.tgz
+b306750ace7ec98b0d024264a585587064a0b92724978522d8c6be0e9152818c  cashu-coco-core-2.0.0.tgz
+2955d332da8e789360460611bac29272fd8654673463d5f3199b290a3207c4a9  cashu-coco-indexeddb-2.0.0.tgz
 ```
 
-This development candidate is fake-funds-only. Replace this directory with
-artifacts built at the approved Round 9 SHA and refresh the checksums and lockfile
-before the auctionsdev handoff.
+The archives contain no source maps, cocod, or NPC artifacts. This integrated
+candidate remains fake-funds-only.

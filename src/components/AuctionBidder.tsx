@@ -68,6 +68,7 @@ import { useAuctionBidFunding } from '@/hooks/useAuctionBidFunding'
 import { AuctionBidProgressDialog } from '@/components/AuctionBidProgressDialog'
 import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment, type CocoAuctionBidProjection } from '@/lib/coco/auctions'
 import { getCocoAuctionBalances } from '@/lib/coco/runtime'
+import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
 
 const AUCTION_RULES_ACK_VERSION = 'v1'
 
@@ -349,7 +350,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		let cancelled = false
 		const environmentId = readCocoV2AuctionEnvironment().environmentId
 		const refresh = () => {
-			void getCocoAuctionBalances({ accountPubkey: signedInBidderPubkey, environmentId })
+			if (environmentId !== 'auctionsdev' && environmentId !== 'test') return
+			void ensureBrowserFreshAuctionsdevPreflight({ account: signedInBidderPubkey, environment: environmentId })
+				.then(() => getCocoAuctionBalances({ accountPubkey: signedInBidderPubkey, environmentId }))
 				.then((balances) => {
 					if (!cancelled) setCocoMintBalances(Object.fromEntries(balances.map((balance) => [balance.mintUrl, balance.spendable])))
 				})

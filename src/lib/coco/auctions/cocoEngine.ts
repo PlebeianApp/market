@@ -238,39 +238,41 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 	}
 
 	async receiveWinner(input: CocoAuctionWinnerReceiveInput, encodedToken: string): Promise<{ operationId: string; state: 'finalized' }> {
-		const runtime = await this.runtimes.get(input.account)
-		await ensureTrustedMint(runtime.manager, input.mintUrl)
+		return this.authorize(input.account, async () => {
+			const runtime = await this.runtimes.get(input.account)
+			await ensureTrustedMint(runtime.manager, input.mintUrl)
 
-		const account = deriveAuctionAccount(await runtime.loadSeed())
-		const xpriv = account.privateExtendedKey
-		if (!xpriv) throw new Error('Seller Coco Auction account has no private authority')
-		const child = HDKey.fromExtendedKey(xpriv).derive(normalizeAuctionDerivationPath(input.derivationPath))
-		if (!child.privateKey || !child.publicKey) throw new Error('Failed to derive seller Coco Auction child authority')
-		const childPublicAuthority = bytesToHex(child.publicKey)
-		if (!auctionP2pkPubkeysMatch(childPublicAuthority, input.recipientPublicAuthority)) {
-			throw new Error('Seller Coco child authority does not match the canonical winning bid')
-		}
-		if (!(await runtime.manager.keyring.getKeyPair(childPublicAuthority))) {
-			const imported = await runtime.manager.keyring.addKeyPair(child.privateKey)
-			if (!auctionP2pkPubkeysMatch(imported.publicKeyHex, childPublicAuthority)) {
-				throw new Error('Coco imported a different seller child authority')
+			const account = deriveAuctionAccount(await runtime.loadSeed())
+			const xpriv = account.privateExtendedKey
+			if (!xpriv) throw new Error('Seller Coco Auction account has no private authority')
+			const child = HDKey.fromExtendedKey(xpriv).derive(normalizeAuctionDerivationPath(input.derivationPath))
+			if (!child.privateKey || !child.publicKey) throw new Error('Failed to derive seller Coco Auction child authority')
+			const childPublicAuthority = bytesToHex(child.publicKey)
+			if (!auctionP2pkPubkeysMatch(childPublicAuthority, input.recipientPublicAuthority)) {
+				throw new Error('Seller Coco child authority does not match the canonical winning bid')
 			}
-		}
+			if (!(await runtime.manager.keyring.getKeyPair(childPublicAuthority))) {
+				const imported = await runtime.manager.keyring.addKeyPair(child.privateKey)
+				if (!auctionP2pkPubkeysMatch(imported.publicKeyHex, childPublicAuthority)) {
+					throw new Error('Coco imported a different seller child authority')
+				}
+			}
 
-		const metadata = getTokenMetadata(encodedToken)
-		const tokenFingerprint = fingerprintCocoAuctionValue({
-			operationId: input.senderOperationId,
-			proofYs: metadata.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
+			const metadata = getTokenMetadata(encodedToken)
+			const tokenFingerprint = fingerprintCocoAuctionValue({
+				operationId: input.senderOperationId,
+				proofYs: metadata.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret)).sort(),
+			})
+			if (tokenFingerprint !== input.tokenFingerprint) throw new Error('Winner token fingerprint does not match the path release command')
+
+			let operation = await runtime.manager.ops.receive.prepare({ operationId: input.commandId, token: encodedToken })
+			requireReceiveBinding(operation, input)
+			if (operation.state === 'executing') operation = await runtime.manager.ops.receive.refresh(operation.id)
+			if (operation.state === 'prepared') operation = await runtime.manager.ops.receive.execute(operation.id)
+			requireReceiveBinding(operation, input)
+			if (operation.state !== 'finalized') throw new Error(`Coco Receive did not finalize: ${operation.state}`)
+			return { operationId: operation.id, state: 'finalized' }
 		})
-		if (tokenFingerprint !== input.tokenFingerprint) throw new Error('Winner token fingerprint does not match the path release command')
-
-		let operation = await runtime.manager.ops.receive.prepare({ operationId: input.commandId, token: encodedToken })
-		requireReceiveBinding(operation, input)
-		if (operation.state === 'executing') operation = await runtime.manager.ops.receive.refresh(operation.id)
-		if (operation.state === 'prepared') operation = await runtime.manager.ops.receive.execute(operation.id)
-		requireReceiveBinding(operation, input)
-		if (operation.state !== 'finalized') throw new Error(`Coco Receive did not finalize: ${operation.state}`)
-		return { operationId: operation.id, state: 'finalized' }
 	}
 
 	async refundLosingBid(input: CocoAuctionRefundInput): Promise<{ operationId: string; state: 'refunded' }> {

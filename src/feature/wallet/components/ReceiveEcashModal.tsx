@@ -10,6 +10,8 @@ import { Scanner } from '@yudiel/react-qr-scanner'
 import { authStore } from '@/lib/stores/auth'
 import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
 import { receiveCocoAuctionFakeFunds } from '@/lib/coco/runtime'
+import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
+import type { FreshAuctionsdevPublicReport } from '@/lib/coco/migration/freshAuctionsdevReport'
 
 interface ReceiveEcashModalProps {
 	open: boolean
@@ -25,6 +27,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 	const [isSuccess, setIsSuccess] = useState(false)
 	const [showScanner, setShowScanner] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [preflightReport, setPreflightReport] = useState<Readonly<FreshAuctionsdevPublicReport> | null>(null)
 
 	// Initialize cashu when modal opens
 	useEffect(() => {
@@ -32,6 +35,46 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 			cashuActions.initialize()
 		}
 	}, [open, cashuStatus, cocoMode])
+
+	const runFreshPreflight = async (): Promise<Readonly<FreshAuctionsdevPublicReport>> => {
+		if (!user?.pubkey) throw new Error('Sign in before running the fresh-wallet preflight')
+		const environment = readCocoV2AuctionEnvironment()
+		if (environment.environmentId !== 'auctionsdev' && environment.environmentId !== 'test') {
+			throw new Error('Fresh Coco Auction funding is restricted to auctionsdev/test')
+		}
+		const report = await ensureBrowserFreshAuctionsdevPreflight({
+			account: user.pubkey,
+			environment: environment.environmentId,
+		})
+		setPreflightReport(report)
+		console.info(`COCO_FRESH_AUCTIONSDEV_PREFLIGHT_REPORT=${JSON.stringify(report)}`)
+		return report
+	}
+
+	const handlePreflight = async () => {
+		setIsReceiving(true)
+		setError(null)
+		try {
+			await runFreshPreflight()
+			toast.success('Fresh wallet preflight ready')
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Fresh wallet preflight failed'
+			setError(message)
+			toast.error(message)
+		} finally {
+			setIsReceiving(false)
+		}
+	}
+
+	const downloadPreflightReport = () => {
+		if (!preflightReport) return
+		const url = URL.createObjectURL(new Blob([`${JSON.stringify(preflightReport, null, 2)}\n`], { type: 'application/json' }))
+		const anchor = document.createElement('a')
+		anchor.href = url
+		anchor.download = `fresh-auctionsdev-preflight-${preflightReport.marketCommit}.json`
+		anchor.click()
+		URL.revokeObjectURL(url)
+	}
 
 	const handleReceive = async () => {
 		if (!token.trim()) {
@@ -52,6 +95,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 			if (cocoMode) {
 				if (!user?.pubkey) throw new Error('Sign in before receiving Coco Auction fake funds')
 				const environment = readCocoV2AuctionEnvironment()
+				await runFreshPreflight()
 				await receiveCocoAuctionFakeFunds({ accountPubkey: user.pubkey, environmentId: environment.environmentId }, normalizedToken)
 				window.dispatchEvent(new Event('coco-auction-balance-changed'))
 			} else {
@@ -86,6 +130,7 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 		setIsSuccess(false)
 		setShowScanner(false)
 		setError(null)
+		setPreflightReport(null)
 		onClose()
 	}
 
@@ -131,6 +176,21 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 					</div>
 				) : (
 					<div className="space-y-4">
+						{cocoMode && (
+							<div className="rounded-md border border-amber-300/40 bg-amber-400/10 p-3 text-sm">
+								<p className="mb-2 text-amber-200">Fresh fake-funds wallet authority is required before any Coco mutation.</p>
+								<div className="flex flex-wrap gap-2">
+									<Button type="button" variant="outline" onClick={handlePreflight} disabled={isReceiving}>
+										Run fresh-wallet preflight
+									</Button>
+									{preflightReport && (
+										<Button type="button" variant="outline" onClick={downloadPreflightReport}>
+											Download public report
+										</Button>
+									)}
+								</div>
+							</div>
+						)}
 						<div className="space-y-2">
 							<label className="text-sm font-medium">Cashu Token</label>
 							<textarea

@@ -1,0 +1,107 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://plebeian.market/schemas/coco-auctionsdev-smoke-v2.schema.json",
+	"title": "Plebeian Market sealed Coco AuctionsDev smoke result",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"schemaVersion",
+		"suite",
+		"status",
+		"exitCode",
+		"durationMs",
+		"mode",
+		"environmentId",
+		"monetaryMode",
+		"baseUrl",
+		"relayUrl",
+		"mintUrl",
+		"publicRelayEffects",
+		"realFundsEnabled",
+		"appServerColdStart",
+		"candidate",
+		"checks"
+	],
+	"properties": {
+		"schemaVersion": { "const": 2 },
+		"suite": { "const": "coco-auctionsdev-smoke" },
+		"status": { "enum": ["passed", "failed", "refused"] },
+		"exitCode": { "type": "integer", "minimum": 0 },
+		"durationMs": { "type": "integer", "minimum": 0 },
+		"mode": { "const": "coco-v2" },
+		"environmentId": { "const": "test" },
+		"monetaryMode": { "const": "fake" },
+		"baseUrl": { "const": "http://localhost:34567" },
+		"relayUrl": { "const": "ws://localhost:10547" },
+		"mintUrl": { "const": "http://localhost:3338" },
+		"publicRelayEffects": { "const": 0 },
+		"realFundsEnabled": { "const": false },
+		"appServerColdStart": { "const": true },
+		"candidate": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["marketCommit", "coreSha", "coreInstalledContentHash", "indexeddbInstalledContentHash"],
+			"properties": {
+				"marketCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+				"coreSha": { "const": "35941014a61af7dc112b31de8053db610b70085c" },
+				"coreInstalledContentHash": { "const": "sha256:fd0b207c45ace25a74525df283b3a75183bba046faab5a0b7772df3dbb56e8eb" },
+				"indexeddbInstalledContentHash": { "const": "sha256:efa6b6cadfaa7da1847c7beecea0b29e4f65052549410353e6c1d73b7013de91" }
+			}
+		},
+		"checks": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"create",
+				"fund",
+				"bidA",
+				"bidB",
+				"hardReloadRecovery",
+				"winnerRelease",
+				"sellerReceiveFinalized",
+				"settlement",
+				"loserOriginalSendRefund",
+				"conservation"
+			],
+			"properties": {
+				"create": { "type": "boolean" },
+				"fund": { "type": "boolean" },
+				"bidA": { "type": "boolean" },
+				"bidB": { "type": "boolean" },
+				"hardReloadRecovery": { "type": "boolean" },
+				"winnerRelease": { "type": "boolean" },
+				"sellerReceiveFinalized": { "type": "boolean" },
+				"settlement": { "type": "boolean" },
+				"loserOriginalSendRefund": { "type": "boolean" },
+				"conservation": { "type": "boolean" }
+			}
+		},
+		"preflightReportPath": { "type": "string", "minLength": 1 },
+		"reason": { "type": "string" }
+	},
+	"allOf": [
+		{
+			"if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+			"then": {
+				"required": ["preflightReportPath"],
+				"properties": {
+					"exitCode": { "const": 0 },
+					"checks": {
+						"properties": {
+							"create": { "const": true },
+							"fund": { "const": true },
+							"bidA": { "const": true },
+							"bidB": { "const": true },
+							"hardReloadRecovery": { "const": true },
+							"winnerRelease": { "const": true },
+							"sellerReceiveFinalized": { "const": true },
+							"settlement": { "const": true },
+							"loserOriginalSendRefund": { "const": true },
+							"conservation": { "const": true }
+						}
+					}
+				}
+			}
+		}
+	]
+}
