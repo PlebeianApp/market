@@ -189,3 +189,47 @@ export const validatorRulesLabel = (validator: MultipartyPickableValidator): str
 		validator.minQuorumPercent === undefined ? null : `Asks for a quorum of at least ${validator.minQuorumPercent}% of the pool.`
 	return [fee, pool, quorum].filter((part): part is string => part !== null).join(' ')
 }
+
+/** One row of an auction's validator roster, as the auction page shows it. */
+export interface AuditorRosterRow {
+	readonly pubkey: string
+	/** False when this validator has announced nothing we can read. */
+	readonly announced: boolean
+	readonly name?: string
+	readonly picture?: string
+	/** The validator's fee, e.g. `2.00%` — absent when it has not announced. */
+	readonly feeLabel?: string
+	/** The validator's own terms, for an info affordance. Absent when it has not announced. */
+	readonly rulesLabel?: string
+}
+
+/**
+ * The validators an auction lists, joined with what they have announced about themselves.
+ *
+ * The auction root is authoritative for WHO the validators are (its `auditors` tags); the
+ * announcements only decorate that roster. So an auditor with no readable announcement still
+ * appears — as itself, unadorned — rather than being dropped: a buyer must be able to see
+ * every validator whose verdicts will count, including one that is silent. Order follows the
+ * auction's own tag order, and duplicates are collapsed because the pool is a set.
+ */
+export const auditorRoster = (auditorPubkeys: readonly string[], announcements: MultipartyAnnouncements): readonly AuditorRosterRow[] => {
+	const byPubkey = new Map(announcements.validators.map((validator) => [validator.pubkey.toLowerCase(), validator]))
+	const seen = new Set<string>()
+
+	const rows: AuditorRosterRow[] = []
+	for (const pubkey of auditorPubkeys) {
+		const key = pubkey.toLowerCase()
+		if (seen.has(key)) continue
+		seen.add(key)
+
+		const announced = byPubkey.get(key)
+		rows.push({
+			pubkey,
+			announced: announced !== undefined,
+			...(announced?.name ? { name: announced.name } : {}),
+			...(announced?.picture ? { picture: announced.picture } : {}),
+			...(announced ? { feeLabel: validatorFeeLabel(announced), rulesLabel: validatorRulesLabel(announced) } : {}),
+		})
+	}
+	return rows
+}

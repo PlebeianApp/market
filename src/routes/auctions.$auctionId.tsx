@@ -41,6 +41,7 @@ import {
 	getAuctionId,
 	getAuctionPathIssuer,
 	getAuctionAuditors,
+	getAuctionAuditorQuorum,
 	getAuctionImages,
 	getAuctionKeyScheme,
 	getAuctionMaxEndAt,
@@ -84,6 +85,10 @@ import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { useAuctionVerdicts } from '@/queries/auctions'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { auditorRoster } from '@/lib/auction/multipartyAnnouncements'
+import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { useMultipartyAnnouncements } from '@/queries/multiparty'
+import { InfoTooltip } from '@/components/shared/InfoTooltip'
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { AuctionSettlement } from '@/components/AuctionSettlement'
@@ -456,6 +461,21 @@ function AuctionDetailRoute() {
 	const countdown = useAuctionCountdown(biddingCutoffAt, { showSeconds: true })
 	const ended = countdown.isEnded
 	const auctionAuditorPubkeys = useMemo(() => getAuctionAuditors(auction), [auction])
+
+	// Who the validators are comes from the auction root; what they charge and demand comes
+	// from their own announcements. Kept as two sources on purpose: a validator that has
+	// announced nothing is still a validator whose verdict counts, and the page must not hide
+	// it (see `auditorRoster`).
+	const announcementsQuery = useMultipartyAnnouncements()
+	const auditorRows = useMemo(
+		() => auditorRoster(auctionAuditorPubkeys, announcementsQuery.data ?? { validators: [], recipients: [] }),
+		[auctionAuditorPubkeys, announcementsQuery.data],
+	)
+	const declaredAuditorQuorum = getAuctionAuditorQuorum(auction)
+	// What an outcome actually needs: whatever the root declared, but never less than a strict
+	// majority of the pool (D15). Below four validators the floor is unanimity, so this is the
+	// number a bidder has to care about.
+	const effectiveAuditorQuorum = Math.max(declaredAuditorQuorum, requiredVerdictMajority(auctionAuditorPubkeys.length))
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
 	const parsedVerdicts = useMemo(() => {
 		return (verdictsQuery.data ?? [])
@@ -1106,6 +1126,52 @@ function AuctionDetailRoute() {
 									)}
 								</section>
 							</div>
+
+							{auditorRows.length > 0 && (
+								<section className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<div className="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Validators</p>
+											<p className="mt-1 text-sm text-muted-foreground">
+												Independent parties that corroborate this auction's outcome. The auction pays their fees out of the settlement.
+											</p>
+										</div>
+										<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+											{effectiveAuditorQuorum} of {auditorRows.length} must agree
+										</Badge>
+									</div>
+
+									<ul className="mt-4 space-y-2">
+										{auditorRows.map((row) => (
+											<li
+												key={row.pubkey}
+												className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-background px-3 py-2"
+											>
+												<div className="flex min-w-0 items-center gap-2">
+													<UserCard pubkey={row.pubkey} size="sm" />
+												</div>
+												<div className="flex items-center gap-2">
+													{row.feeLabel ? (
+														<>
+															<span className="text-xs text-muted-foreground">{row.feeLabel} fee</span>
+															{row.rulesLabel && <InfoTooltip content={row.rulesLabel} />}
+														</>
+													) : (
+														<span className="text-xs text-muted-foreground">No announced terms</span>
+													)}
+												</div>
+											</li>
+										))}
+									</ul>
+
+									{auditorRows.some((row) => !row.announced) && (
+										<p className="mt-3 text-xs text-muted-foreground">
+											A validator that has announced nothing still counts towards the quorum — only its terms are unknown. Ask it to publish
+											its terms before relying on the outcome.
+										</p>
+									)}
+								</section>
+							)}
 
 							{settlementWinner && (
 								<section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-5">
