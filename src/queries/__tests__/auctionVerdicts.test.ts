@@ -67,7 +67,9 @@ const { fetchAuctionVerdicts } = await import('@/queries/auctions')
 // ndkActions mock above only satisfies the store import — applesauceIo falls
 // back to `explicitRelayUrls: []` and would resolve [] without network I/O.
 const injectedFetch = mock(async (filter: NostrFilter | NostrFilter[]) => {
-	fetchedFilters.push(filter as NostrFilter)
+	// `fetchAuctionVerdicts` may send one filter or several OR-ed branches; record them
+	// flattened so the assertions read the same either way.
+	fetchedFilters.push(...(Array.isArray(filter) ? filter : [filter]))
 	return [...relayEvents]
 })
 
@@ -111,15 +113,27 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 	test('backwards compatible: no auditors passed means no authors filter', async () => {
 		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 42, AUCTION_COORDINATE, undefined, injectedFetch)
 
+		// Two OR-ed branches, one per way of naming the auction. Never one filter carrying
+		// both `#e` and `#a`: a relay that does not index `#a` ANDs it into an empty result,
+		// which hides every verdict (verified against the staging relay).
 		expect(fetchedFilters).toEqual([
 			{
 				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
-				'#e': [AUCTION_ROOT_EVENT_ID],
-				'#a': [AUCTION_COORDINATE],
 				limit: 42,
+				'#e': [AUCTION_ROOT_EVENT_ID],
+			},
+			{
+				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
+				limit: 42,
+				'#a': [AUCTION_COORDINATE],
 			},
 		])
 		expect(fetchedFilters[0]).not.toHaveProperty('authors')
+		expect(fetchedFilters[1]).not.toHaveProperty('authors')
+		for (const filter of fetchedFilters) {
+			// The invariant: no branch ANDs the two ways of naming the auction together.
+			expect(Object.keys(filter).includes('#e') && Object.keys(filter).includes('#a')).toBe(false)
+		}
 	})
 
 	test('null limit omits the relay limit for complete win resolution', async () => {
@@ -130,6 +144,10 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
 				authors: [validatorPubkey],
 				'#e': [AUCTION_ROOT_EVENT_ID],
+			},
+			{
+				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
+				authors: [validatorPubkey],
 				'#a': [AUCTION_COORDINATE],
 			},
 		])
@@ -144,10 +162,13 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 			injectedFetch,
 		)
 
-		expect(fetchedFilters.length).toBe(1)
+		expect(fetchedFilters.length).toBe(2)
 		// The filter authors set is de-duplicated and sorted for a stable query key —
 		// derive the expected order rather than assuming a key generation order.
-		expect((fetchedFilters[0] as { authors?: string[] }).authors).toEqual([validatorPubkey, roguePubkey].sort())
+		// Every branch carries the same author set.
+		for (const filter of fetchedFilters) {
+			expect((filter as { authors?: string[] }).authors).toEqual([validatorPubkey, roguePubkey].sort())
+		}
 	})
 
 	test('fails closed: an empty auditor list authorizes nothing and never queries the relay', async () => {
