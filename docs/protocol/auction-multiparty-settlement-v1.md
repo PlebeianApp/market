@@ -105,7 +105,9 @@ A manual, one-shot generator — `scripts/generate-validator-payout-seed.ts`:
 The validator refuses to start unless all three pass:
 
 1. **No seed configured** → error naming both provisioning paths and the script.
-2. **Seed malformed** (not 64 hex, or not a valid key scalar) → error, never coerced.
+2. **Seed malformed** (not 64 hex characters) → error, never coerced. Any 32 bytes are a valid
+   BIP32 seed, so there is no scalar check to make — only a length and alphabet check, so a
+   truncated or quote-wrapped value fails loudly instead of deriving a different wallet.
 3. **Seed does not reproduce the xpub already announced** → error naming the announced xpub
    and the newly derived one. This is the case that looks healthy: everything is configured and
    the validator would silently publish a new xpub while funds remain locked under the old one.
