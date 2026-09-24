@@ -114,8 +114,9 @@ describe('auction verdict queries — trust boundary (review #1235 Should-fix 3)
 		await fetchAuctionVerdicts(AUCTION_ROOT_EVENT_ID, 42, AUCTION_COORDINATE, undefined, injectedFetch)
 
 		// Two OR-ed branches, one per way of naming the auction. Never one filter carrying
-		// both `#e` and `#a`: a relay that does not index `#a` ANDs it into an empty result,
-		// which hides every verdict (verified against the staging relay).
+		// both `#e` and `#a`: an `#a` value over 100 characters is not tag-indexed and the
+		// planner does not fall back to a scan, so the combined filter would lose events that
+		// `#e` alone finds (measured on the staging relay — 100 chars found, 101 not).
 		expect(fetchedFilters).toEqual([
 			{
 				kinds: [VALIDATOR_VERDICT_KIND as unknown as number],

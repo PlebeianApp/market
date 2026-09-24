@@ -600,10 +600,14 @@ export const fetchAuctionVerdicts = async (
 	if (auditorPubkeys && auditorPubkeys.length === 0) return []
 
 	// One filter per way of identifying the auction, OR-ed by the relay — never AND-ed into a
-	// single filter. Verified on the staging relay: `authors + #e + #a` returns NOTHING while
-	// `authors + #e` returns the very same events, because that relay does not index the `#a`
-	// tag. ANDing the two therefore hides every verdict on such a relay, silently (an empty
-	// verdict list is indistinguishable from "no verdicts yet").
+	// single filter. The storage backend indexes a tag only while the tag VALUE is at most 100
+	// characters, and the query planner builds an `#a` query from that index with no fallback
+	// scan, so an over-long coordinate is stored, indexed nowhere, and returns nothing. Measured
+	// on the staging relay, controlled A/B: an `a` value of 100 chars is found by an `#a`
+	// filter, a value of 101 chars is not, while a `#d` query finds both. An auction coordinate
+	// is `30408:<64-hex pubkey>:<d>` = 71 characters plus the d-tag, so ANY auction whose d-tag
+	// is 30 characters or longer is invisible to `#a`-filtered reads — and ANDing `#a` with `#e`
+	// loses the event even though `#e` alone finds it.
 	const base: NostrFilter = {
 		kinds: [VALIDATOR_VERDICT_KIND as unknown as number],
 		...(limit === null ? {} : { limit }),
