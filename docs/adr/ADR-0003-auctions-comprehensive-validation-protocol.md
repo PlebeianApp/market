@@ -499,6 +499,33 @@ The majority floor in the tally remains as a **backstop**: a client that fails t
 run the assessment still cannot accept an outcome with at most half the pool
 behind it.
 
+**Wire shape of the claim.** The claim is a kind-30440 event whose `claim` tag is
+`auction_policy_invalid`. It addresses the auction root, so it carries no `p` and no
+`bid` tag, and its `d` tag is `auction_policy:<auction_root_event_id>` — a namespace
+disjoint from the per-bid `<bidder>:<auction_root>:<bid>` by construction. Its content
+is `{ type: "auction_validator_policy_verdict_v1", pool_size, declared_quorum,
+required_quorum, issues: [{ code, detail }] }`: the assessment's own numbers, so a
+reader can re-derive the finding from the root and the validators' published rulesets
+rather than trusting the claim's wording. A validator publishes it only when the
+assessment is actually broken — a merely grandfathered legacy auction is not.
+
+Because both shapes share kind 30440, the per-bid parser **refuses** any event whose
+`claim` is auction-level, or whose `d` tag carries the `auction_policy:` prefix, with
+the code `auction_level_claim` — it never parses one into a bid verdict. An
+auction-level claim is parsed by `parseAuctionPolicyVerdictEvent` instead.
+
+Implementation: `src/lib/auction/auctionPolicyInvalidClaim.ts`
+(`assessAuctionPolicyClaim` → `buildAuctionPolicyInvalidClaimTags` →
+`verifyAuctionPolicyInvalidClaim`, the construct-then-verify discipline the multiparty
+publishers already use) and `src/lib/schemas/auction/validatorEvents.ts`.
+
+**Settlement policy is a set, not a literal, on the read path.** A reader must accept
+every `settlement_policy` a writer can emit: `cashu_p2pk_bidder_path_v1` and
+`cashu_p2pk_bidder_path_multiparty_v1` (`AUCTION_SETTLEMENT_POLICIES` in
+`src/lib/auction/constants.ts`). Pinning the read path to the single-party literal made
+the app unable to parse its own multiparty auctions — the root failed validation and the
+listing rendered as an empty card. Anything outside the set is still refused.
+
 ### Amendment — the auditor ruleset, and one quorum implementation (2026-09)
 
 **The ruleset.** The minimum validator pool and the quorum minimum are the
