@@ -9,7 +9,7 @@ import { nip60Actions } from '@/lib/stores/nip60'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
-import { usePublishAuctionSettlementMutation, type AuctionSettlementFormData } from '@/publish/auctions'
+import { publishBidderPathRelease, usePublishAuctionSettlementMutation, type AuctionSettlementFormData } from '@/publish/auctions'
 import {
 	getSettlementDescriptor,
 	type GetSettlementDescriptorInput,
@@ -122,17 +122,12 @@ export function AuctionSettlement({
 
 	// Actions
 	const handleReleasePath = async () => {
-		if (cocoMode) {
-			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
-			return
-		}
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
-			const result = await nip60Actions.settleAuctionAsWinner({
-				bidEventId: myTopBidEvent.id,
-				releaseReason: 'settlement',
-			})
+			const result = cocoMode
+				? await publishBidderPathRelease({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
+				: await nip60Actions.settleAuctionAsWinner({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
 			// Optimistic UI: append synthetic release so the descriptor transitions
 			// immediately to 'Path release published' (ADR-0004 Decision 4).
 			if (!optimisticReleaseRef.current) {
@@ -170,10 +165,6 @@ export function AuctionSettlement({
 	}
 
 	const handleSubmitSettlement = async (status: 'reserve_not_met' | undefined) => {
-		if (cocoMode) {
-			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
-			return
-		}
 		try {
 			await settlementMutation.mutateAsync({
 				auctionEventId: auctionRootEventId,
@@ -226,7 +217,7 @@ export function AuctionSettlement({
 			claimOrders,
 			currentUserPubkey: currentUserPubkey || undefined,
 			myTopBidEvent,
-			hasBidderRecord: !!myBidderRecord,
+			hasBidderRecord: cocoMode ? !!myTopBidEvent?.rawEvent.tags.some((tag) => tag[0] === 'coco_operation') : !!myBidderRecord,
 			hasPlacedBid,
 			now,
 		}),
@@ -241,6 +232,7 @@ export function AuctionSettlement({
 			currentUserPubkey,
 			myTopBidEvent,
 			myBidderRecord,
+			cocoMode,
 			hasPlacedBid,
 			now,
 		],
@@ -276,11 +268,7 @@ export function AuctionSettlement({
 
 	const ctaHandler = dispatchCta(descriptor)
 	const ctaLabel = descriptor.cta?.label ?? ''
-	const isCocoMonetaryCta =
-		cocoMode &&
-		(descriptor.cta?.kind === 'release-path' || descriptor.cta?.kind === 'submit-settlement' || descriptor.cta?.kind === 'close-auction')
-	const ctaDisabled =
-		isCocoMonetaryCta || isReleasing || settlementMutation.isPending || (descriptor.cta?.kind === 'release-path' && !!optimisticRelease)
+	const ctaDisabled = isReleasing || settlementMutation.isPending || (descriptor.cta?.kind === 'release-path' && !!optimisticRelease)
 
 	return (
 		<>
@@ -310,9 +298,7 @@ export function AuctionSettlement({
 									? 'Releasing…'
 									: (descriptor.cta.kind === 'submit-settlement' || descriptor.cta.kind === 'close-auction') && settlementMutation.isPending
 										? 'Publishing…'
-										: isCocoMonetaryCta
-											? 'Coco settlement unavailable'
-											: ctaLabel}
+										: ctaLabel}
 							</Button>
 						)}
 					</div>

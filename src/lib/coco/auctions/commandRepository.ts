@@ -92,9 +92,10 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 const openDatabase = (): Promise<IDBDatabase> => {
 	if (!globalThis.indexedDB) throw new Error('IndexedDB is required for durable Coco Auction commands')
 	return new Promise((resolve, reject) => {
-		const request = indexedDB.open(DB_NAME, 1)
+		const request = indexedDB.open(DB_NAME, 2)
 		request.onupgradeneeded = () => {
 			if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME, { keyPath: 'commandId' })
+			if (!request.result.objectStoreNames.contains('lifecycle')) request.result.createObjectStore('lifecycle', { keyPath: 'commandId' })
 		}
 		request.onsuccess = () => resolve(request.result)
 		request.onerror = () => reject(request.error ?? new Error('Coco Auction command database open failed'))

@@ -34,6 +34,7 @@ import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'luc
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
+import { refundCocoAuctionBid } from '@/publish/auctions'
 
 type BidGroup = {
 	key: string
@@ -402,12 +403,46 @@ function BidsOverviewComponent() {
 
 	if (cocoMode) {
 		return (
-			<div className="p-6 text-center">
-				<h1 className="text-2xl font-bold">Coco auction bids</h1>
-				<p className="mt-2 text-sm text-muted-foreground">
-					Bid preparation and publication are available on the auction page. Original-Send refunds remain unavailable until Checkpoint C can
-					be bound durably.
-				</p>
+			<div className="space-y-4 p-6">
+				<div>
+					<h1 className="text-2xl font-bold">Coco auction bids</h1>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Fake-funds only. Refund reclaims the exact original Coco Send after locktime.
+					</p>
+				</div>
+				{isLoading && <p className="text-sm text-muted-foreground">Loading bids…</p>}
+				{error && <p className="text-sm text-destructive">Failed to load bids.</p>}
+				{!isLoading && !error && !(myBids ?? []).length && <p className="rounded-lg border p-4 text-sm">No Coco bids yet.</p>}
+				<ul className="space-y-3">
+					{(myBids ?? []).map((bid) => {
+						const locktime = getBidLocktime(bid)
+						const ready = locktime > 0 && nowTick >= locktime
+						return (
+							<li key={bid.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-4">
+								<div>
+									<p className="font-semibold">{getBidAmount(bid).toLocaleString()} sats</p>
+									<p className="text-xs text-muted-foreground">
+										{ready ? 'Original-Send refund is available.' : `Refund unlocks ${formatMaybeDate(locktime)}.`}
+									</p>
+								</div>
+								<Button
+									variant="outline"
+									disabled={!ready || reclaimingGroup === bid.id || !bid.tags.some((tag) => tag[0] === 'coco_operation')}
+									onClick={() => {
+										setReclaimingGroup(bid.id)
+										void refundCocoAuctionBid(bid.id)
+											.then(() => toast.success('Original Coco Send refunded.'))
+											.catch((failure) => toast.error(failure instanceof Error ? failure.message : String(failure)))
+											.finally(() => setReclaimingGroup(null))
+									}}
+								>
+									{reclaimingGroup === bid.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+									Refund original Send
+								</Button>
+							</li>
+						)
+					})}
+				</ul>
 			</div>
 		)
 	}

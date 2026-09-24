@@ -1,4 +1,4 @@
-import { CashuMint, type MintKeyset } from '@cashu/cashu-ts'
+import { Mint as CashuMint, type MintKeyset } from '@cashu/cashu-ts'
 
 const mintKeysetCache = new Map<string, MintKeyset[]>()
 

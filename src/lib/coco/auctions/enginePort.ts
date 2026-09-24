@@ -52,7 +52,7 @@ export interface CocoEnginePort {
 		input: CocoAuctionWinnerReleaseInput,
 		use: (material: SealedCocoWinnerReleaseMaterial) => Promise<T>,
 	): Promise<{ operationId: string; result: T }>
-	receiveWinner(input: CocoAuctionWinnerReceiveInput): Promise<{ operationId: string; state: 'finalized' }>
+	receiveWinner(input: CocoAuctionWinnerReceiveInput, encodedToken: string): Promise<{ operationId: string; state: 'finalized' }>
 	refundLosingBid(input: CocoAuctionRefundInput): Promise<{ operationId: string; state: 'refunded' }>
 }
 
@@ -69,24 +69,32 @@ export interface CocoBidPublicationAdapter {
 
 export interface CocoWinnerReleasePublicationAdapter {
 	/** Build, sign, and durably cache one exact kind-1025 without broadcasting it. */
-	prepare(material: SealedCocoWinnerReleaseMaterial, input: CocoAuctionWinnerReleaseInput): Promise<{ eventId: string }>
+	prepare(
+		material: SealedCocoWinnerReleaseMaterial,
+		input: CocoAuctionWinnerReleaseInput,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }>
 	/** Broadcast the exact cached event. */
+	publish(eventId: string): Promise<void>
+}
+
+export interface CocoSettlementPublicationAdapter {
+	/** Build, sign, and durably cache one exact kind-1024 without broadcasting it. */
+	prepare(input: CocoAuctionWinnerReceiveInput, publicationCreatedAt: number): Promise<{ eventId: string }>
+	/** Broadcast the exact cached event and require a relay acknowledgement. */
 	publish(eventId: string): Promise<void>
 }
 
 export class CocoV2CoreUnavailableError extends Error {
 	constructor() {
-		super(
-			'Coco v2 Auction engine is unavailable: Market currently resolves coco-cashu-core 1.0.0-rc11, which lacks durable prepare/execute/cancel operations and caller-supplied Send operation IDs.',
-		)
+		super('Coco v2 Auction engine is unavailable: the pinned Core adapter could not be initialized.')
 		this.name = 'CocoV2CoreUnavailableError'
 	}
 }
 
 /**
- * Fail-closed placeholder used until the reviewed Coco v2 operation candidate
- * (including caller-supplied Send IDs and P2PK refund recovery) is consumable
- * as one pinned package. It never delegates to NIP-60.
+ * Fail-closed placeholder used when the sealed pinned Core adapter cannot be
+ * initialized. It never delegates to NIP-60.
  */
 export class UnavailableCocoV2EnginePort implements CocoEnginePort {
 	private unavailable(): never {

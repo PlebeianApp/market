@@ -39,7 +39,7 @@ import {
 	type Nut7ProofState,
 } from '@/lib/auction/constants'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
-import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { getEncodedToken, getDecodedToken, getTokenMetadata, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
@@ -50,14 +50,21 @@ import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import {
 	assertLegacyAuctionMoneyAllowed,
+	deriveCocoAuctionCommandId,
 	deriveCocoAuctionBidCommandId,
+	fingerprintCocoAuctionValue,
 	getPlebeianWalletHost,
 	isCocoV2AuctionMode,
 	readCocoV2AuctionEnvironment,
 	type CocoAuctionBidIntent,
 	type CocoAuctionBidProjection,
 	type CocoBidPublicationAdapter,
+	type CocoSettlementPublicationAdapter,
+	type CocoWinnerReleasePublicationAdapter,
 	type SealedCocoBidPublicationMaterial,
+	type SealedCocoWinnerReleaseMaterial,
+	type CocoAuctionWinnerReceiveInput,
+	type CocoAuctionWinnerReleaseInput,
 } from '@/lib/coco/auctions'
 
 export interface AuctionSpecEntry {
@@ -1378,6 +1385,361 @@ const bytesToLowerHex = (bytes: Uint8Array): string => {
 	return out
 }
 
+const AUCTION_COCO_LIFECYCLE_CACHE_KEY = 'auction_coco_lifecycle_events_v1'
+type CocoLifecycleEventCache = Record<string, { eventId: string; payload: NostrEvent; savedAt: number }>
+const cocoLifecycleMemoryCache: CocoLifecycleEventCache = {}
+
+const loadCocoLifecycleEventCache = (): CocoLifecycleEventCache => {
+	const persisted = loadUserData<CocoLifecycleEventCache>(AUCTION_COCO_LIFECYCLE_CACHE_KEY, {})
+	return { ...persisted, ...cocoLifecycleMemoryCache }
+}
+
+const cacheCocoLifecycleEvent = (event: NostrEvent): void => {
+	const cache = loadCocoLifecycleEventCache()
+	cache[event.id] = { eventId: event.id, payload: event, savedAt: Date.now() }
+	const entries = Object.entries(cache).sort(([, left], [, right]) => right.savedAt - left.savedAt)
+	const bounded = Object.fromEntries(entries.slice(0, 20)) as CocoLifecycleEventCache
+	for (const key of Object.keys(cocoLifecycleMemoryCache)) delete cocoLifecycleMemoryCache[key]
+	Object.assign(cocoLifecycleMemoryCache, bounded)
+	saveUserData(AUCTION_COCO_LIFECYCLE_CACHE_KEY, bounded)
+}
+
+const publishCachedCocoLifecycleEvent = async (eventId: string, kind: number): Promise<void> => {
+	const cached = loadCocoLifecycleEventCache()[eventId]
+	if (
+		!cached ||
+		cached.eventId !== eventId ||
+		cached.payload.kind !== kind ||
+		getEventHash(cached.payload) !== eventId ||
+		!cached.payload.sig
+	) {
+		throw new Error(`Exact cached Coco kind-${kind} is unavailable or failed integrity validation`)
+	}
+	await publishRequired(cached.payload)
+	const cache = loadCocoLifecycleEventCache()
+	delete cache[eventId]
+	delete cocoLifecycleMemoryCache[eventId]
+	saveUserData(AUCTION_COCO_LIFECYCLE_CACHE_KEY, cache)
+}
+
+const signAndCacheDeterministicEvent = async (template: EventTemplate, expectedPubkey: string): Promise<{ eventId: string }> => {
+	const unsigned: NostrEvent = { ...template, pubkey: expectedPubkey, id: '', sig: '' }
+	unsigned.id = getEventHash(unsigned)
+	const signed = await signNostrEvent(template)
+	if (signed.id !== unsigned.id || getEventHash(signed) !== unsigned.id || signed.pubkey !== expectedPubkey) {
+		throw new Error('Refusing Coco lifecycle publication because signing changed the frozen event identity')
+	}
+	cacheCocoLifecycleEvent(signed)
+	return { eventId: signed.id }
+}
+
+interface ResolvedCocoCanonicalWinner {
+	auction: import('@/lib/auction/events').ParsedAuctionEvent
+	auctionEvent: NostrEventLike
+	winner: import('@/lib/auction/events').ParsedBidEvent
+	winnerEvent: NostrEventLike
+}
+
+const resolveCocoCanonicalWinner = async (
+	auctionRootEventId: string,
+	auctionCoordinate: string,
+	expectedWinnerId?: string,
+): Promise<ResolvedCocoCanonicalWinner> => {
+	const [
+		{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdicts },
+		{ parseAuctionEvent },
+		{ parseBidEvent },
+		verdicts,
+		validation,
+	] = await Promise.all([
+		import('@/queries/auctions'),
+		import('@/lib/schemas/auction/auctionEvent'),
+		import('@/lib/schemas/auction/bidEvent'),
+		import('@/lib/schemas/auction/validatorEvents'),
+		import('@/lib/auction/bidValidation'),
+	])
+	const auctionEvent = await fetchAuction(auctionRootEventId, true)
+	if (!auctionEvent) throw new Error('Canonical Auction is unavailable or failed signature validation')
+	const parsedAuction = parseAuctionEvent(toRawEvent(auctionEvent))
+	if (!parsedAuction.ok) throw new Error('Canonical Auction is malformed')
+	if (parsedAuction.value.rootEventId !== auctionRootEventId || parsedAuction.value.coordinate !== auctionCoordinate) {
+		throw new Error('Canonical Auction identity changed')
+	}
+	const now = Math.floor(Date.now() / 1000)
+	if (now < parsedAuction.value.maxEndAt) throw new Error('Auction has not ended')
+	if (now >= parsedAuction.value.maxEndAt + parsedAuction.value.settlementGrace) throw new Error('Auction settlement window expired')
+	const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
+		fetchAuctionBids(auctionRootEventId, null, auctionCoordinate, true),
+		fetchAuctionVerdicts(auctionRootEventId, null, auctionCoordinate, parsedAuction.value.auditors),
+		fetchAuctionSettlements(auctionRootEventId, null, auctionCoordinate, undefined, true),
+	])
+	if (settlementEvents.length) throw new Error('Auction already has a terminal settlement')
+	const parsedBids = bidEvents
+		.map((event) => parseBidEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+		.map((result) => result.value)
+	const parsedVerdicts = verdictEvents
+		.map((event) => verdicts.parseValidatorVerdictEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+		.map((result) => result.value)
+	const validated = validation.computeValidatedBids({
+		auction: parsedAuction.value,
+		bids: parsedBids,
+		verdicts: parsedVerdicts,
+		postSettlement: false,
+	})
+	if (!validated.canonicalWinner) throw new Error('Validator quorum has not established a canonical winner')
+	if (expectedWinnerId && validated.canonicalWinner.id !== expectedWinnerId) throw new Error('Canonical Auction winner changed')
+	const winnerEvent = bidEvents.find((event) => event.id === validated.canonicalWinner!.id)
+	if (!winnerEvent) throw new Error('Canonical winning bid event is unavailable')
+	return { auction: parsedAuction.value, auctionEvent, winner: validated.canonicalWinner, winnerEvent }
+}
+
+class CocoWinnerReleasePublisher implements CocoWinnerReleasePublicationAdapter {
+	async prepare(
+		material: SealedCocoWinnerReleaseMaterial,
+		input: CocoAuctionWinnerReleaseInput,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }> {
+		const signer = await getUser()
+		if (!signer?.pubkey || signer.pubkey !== input.winningBidderPubkey) throw new Error('Active signer is not the canonical winner')
+		return signAndCacheDeterministicEvent(
+			{
+				kind: AUCTION_PATH_RELEASE_KIND,
+				content: '',
+				tags: buildPathReleaseTags({
+					bidEventId: input.winningBidEventId,
+					auctionCoordinate: input.auction.coordinate,
+					sellerPubkey: input.sellerPubkey,
+					derivationPath: material.derivationPath,
+					childPubkey: material.recipientPublicAuthority,
+					releaseReason: 'settlement',
+					cashuToken: material.encodedToken,
+					cocoOperationId: material.operationId,
+					cocoCommandId: input.commandId,
+					cocoTokenFingerprint: material.tokenFingerprint,
+				}),
+				created_at: publicationCreatedAt,
+			},
+			signer.pubkey,
+		)
+	}
+
+	publish(eventId: string): Promise<void> {
+		return publishCachedCocoLifecycleEvent(eventId, AUCTION_PATH_RELEASE_KIND)
+	}
+}
+
+class CocoSettlementPublisher implements CocoSettlementPublicationAdapter {
+	async prepare(input: CocoAuctionWinnerReceiveInput, publicationCreatedAt: number): Promise<{ eventId: string }> {
+		const signer = await getUser()
+		if (!signer?.pubkey || signer.pubkey !== input.sellerPubkey) throw new Error('Active signer is not the canonical Auction seller')
+		return signAndCacheDeterministicEvent(
+			{
+				kind: AUCTION_SETTLEMENT_KIND,
+				content: '',
+				tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
+					auctionRootEventId: input.auction.rootEventId,
+					auctionCoordinate: input.auction.coordinate,
+					status: 'settled',
+					closeAt: publicationCreatedAt,
+					finalAmount: input.amount,
+					winningBidId: input.winningBidEventId,
+					winnerPubkey: input.winningBidderPubkey,
+					pathReleaseEventId: input.pathReleaseEventId,
+					payouts: [{ bidEventId: input.winningBidEventId, amount: input.amount, status: 'redeemed' }],
+					cocoReceiveOperationId: input.commandId,
+					cocoCommandId: input.commandId,
+				}),
+				created_at: publicationCreatedAt,
+			},
+			signer.pubkey,
+		)
+	}
+
+	publish(eventId: string): Promise<void> {
+		return publishCachedCocoLifecycleEvent(eventId, AUCTION_SETTLEMENT_KIND)
+	}
+}
+
+const cocoWinnerReleasePublisher = new CocoWinnerReleasePublisher()
+const cocoSettlementPublisher = new CocoSettlementPublisher()
+
+export const publishCocoBidderPathRelease = async (bidEventId: string): Promise<PublishBidderPathReleaseResult> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active winner identity')
+	const { fetchAuctionBidsByBidder } = await import('@/queries/auctions')
+	const ownBids = await fetchAuctionBidsByBidder(signer.pubkey, null, true)
+	const bid = ownBids.find((event) => event.id === bidEventId)
+	if (!bid) throw new Error('Signed winning bid is unavailable for this account')
+	const auctionRootEventId = getEventTag(bid, 'e')
+	const auctionCoordinate = getEventTag(bid, 'a')
+	const canonical = await resolveCocoCanonicalWinner(auctionRootEventId, auctionCoordinate, bidEventId)
+	if (canonical.winner.bidderPubkey !== signer.pubkey) throw new Error('Active account is not the canonical winner')
+	if (canonical.winner.prevBidId) throw new Error('Coco rebid-chain settlement is not yet enabled; refusing partial winner release')
+	const sendOperationId = getEventTag(canonical.winnerEvent, 'coco_operation')
+	if (!sendOperationId) throw new Error('Canonical winning bid has no Coco Send binding')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: auctionRootEventId, coordinate: auctionCoordinate }
+	const identity = {
+		account,
+		auction,
+		winningBidEventId: bidEventId,
+		winningBidderPubkey: signer.pubkey,
+		sellerPubkey: canonical.auction.sellerPubkey,
+		sendOperationId,
+	}
+	const input: CocoAuctionWinnerReleaseInput = {
+		...identity,
+		commandId: deriveCocoAuctionCommandId('winner-release', identity),
+	}
+	const result = await getPlebeianWalletHost().auctions.releaseWinner(
+		input,
+		async () => {
+			const current = await resolveCocoCanonicalWinner(auctionRootEventId, auctionCoordinate, bidEventId)
+			if (getEventTag(current.winnerEvent, 'coco_operation') !== sendOperationId)
+				throw new Error('Canonical winner Coco Send binding changed')
+		},
+		cocoWinnerReleasePublisher,
+	)
+	return {
+		pathReleaseEventId: result.pathReleaseEventId,
+		derivationPath: '',
+		legsReleased: 1,
+		cumulativeBidAmount: canonical.winner.amount,
+	}
+}
+
+const proofAmountNumber = (amount: unknown): number =>
+	typeof amount === 'number' ? amount : Number((amount as { toString(): string }).toString())
+
+const resolveCocoWinnerReceive = async (
+	formData: AuctionSettlementFormData,
+): Promise<{
+	input: CocoAuctionWinnerReceiveInput
+	encodedToken: string
+}> => {
+	if (!formData.auctionCoordinates) throw new Error('Auction coordinate is required')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active seller identity')
+	const canonical = await resolveCocoCanonicalWinner(formData.auctionEventId, formData.auctionCoordinates, formData.winningBidEventId)
+	if (canonical.auction.sellerPubkey !== signer.pubkey) throw new Error('Only the canonical Auction seller can settle')
+	if (canonical.winner.prevBidId) throw new Error('Coco rebid-chain settlement is not yet enabled; refusing partial Receive')
+	const { fetchAuctionPathReleases } = await import('@/queries/auctions')
+	const { parsePathReleaseEvent } = await import('@/lib/schemas/auction/settlementEvents')
+	const releaseEvents = await fetchAuctionPathReleases(formData.auctionEventId, null, formData.auctionCoordinates, undefined, true)
+	const releaseEvent = releaseEvents.find((event) => getEventTag(event, 'e') === canonical.winner.id)
+	if (!releaseEvent) throw new Error('Canonical winner has no signed Coco path release')
+	const parsedRelease = parsePathReleaseEvent(toRawEvent(releaseEvent))
+	if (!parsedRelease.ok) throw new Error('Canonical Coco path release is malformed or has no locked token')
+	const release = parsedRelease.value
+	const encodedToken = release.cashuToken
+	if (!encodedToken) throw new Error('Canonical Coco path release is malformed or has no locked token')
+	if (release.bidderPubkey !== canonical.winner.bidderPubkey || release.sellerPubkey !== signer.pubkey) {
+		throw new Error('Coco path release signer binding is invalid')
+	}
+	const senderOperationId = getEventTag(canonical.winnerEvent, 'coco_operation')
+	const conditionFingerprint = getEventTag(canonical.winnerEvent, 'coco_condition')
+	if (!senderOperationId || !conditionFingerprint) throw new Error('Canonical winner lacks its exact Coco bindings')
+	if (getEventTag(releaseEvent, 'coco_operation') !== senderOperationId) throw new Error('Path release belongs to another Coco Send')
+	const derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(canonical.auction.p2pkXpub, release.derivationPath)
+	if (
+		derivedChild.toLowerCase() !== canonical.winner.childPubkey.toLowerCase() ||
+		derivedChild.toLowerCase() !== release.childPubkey.toLowerCase()
+	) {
+		throw new Error('Path release does not derive the canonical winner child authority')
+	}
+	const token = getTokenMetadata(encodedToken)
+	if (token.mint !== canonical.winner.mint) throw new Error('Released token mint differs from the canonical winner')
+	if (token.unit !== 'sat') throw new Error('Released token unit differs from the canonical winner')
+	const amount = proofAmountNumber(token.amount)
+	if (amount !== canonical.winner.amount) throw new Error('Released token amount differs from the canonical winning bid')
+	const tokenSecrets = token.incompleteProofs.map((proof) => proof.secret).sort()
+	const bidSecrets = [...canonical.winner.lockSecrets].sort()
+	if (tokenSecrets.length !== bidSecrets.length || tokenSecrets.some((secret, index) => secret !== bidSecrets[index])) {
+		throw new Error('Released token secrets differ from the canonical bid commitments')
+	}
+	const tokenProofYs = token.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret).toLowerCase()).sort()
+	const bidProofYs = [...canonical.winner.proofYs].map((value) => value.toLowerCase()).sort()
+	if (tokenProofYs.length !== bidProofYs.length || tokenProofYs.some((value, index) => value !== bidProofYs[index])) {
+		throw new Error('Released token proof commitments differ from the canonical bid')
+	}
+	const tokenFingerprint = fingerprintCocoAuctionValue({ operationId: senderOperationId, proofYs: tokenProofYs })
+	if (getEventTag(releaseEvent, 'coco_token') !== tokenFingerprint) throw new Error('Path release token fingerprint is invalid')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: formData.auctionEventId, coordinate: formData.auctionCoordinates }
+	const identity = {
+		account,
+		auction,
+		winningBidEventId: canonical.winner.id,
+		pathReleaseEventId: release.id,
+		senderOperationId,
+		mintUrl: canonical.winner.mint,
+		unit: 'sat' as const,
+		amount,
+		conditionFingerprint,
+		tokenFingerprint,
+	}
+	return {
+		encodedToken,
+		input: {
+			...identity,
+			commandId: deriveCocoAuctionCommandId('winner-receive', identity),
+			winningBidderPubkey: canonical.winner.bidderPubkey,
+			sellerPubkey: signer.pubkey,
+			derivationPath: release.derivationPath,
+			recipientPublicAuthority: release.childPubkey,
+		},
+	}
+}
+
+export const publishCocoAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	if (formData.status === 'reserve_not_met') throw new Error('Coco reserve-not-met closure is not enabled in this fake-funds candidate')
+	const resolved = await resolveCocoWinnerReceive(formData)
+	const result = await getPlebeianWalletHost().auctions.receiveWinner(
+		resolved.input,
+		resolved.encodedToken,
+		async () => {
+			const current = await resolveCocoWinnerReceive(formData)
+			if (current.input.commandId !== resolved.input.commandId || current.input.pathReleaseEventId !== resolved.input.pathReleaseEventId) {
+				throw new Error('Canonical winner Receive binding changed')
+			}
+		},
+		cocoSettlementPublisher,
+	)
+	return result.settlementEventId
+}
+
+export const refundCocoAuctionBid = async (bidEventId: string): Promise<void> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active bidder identity')
+	const { fetchAuctionBidsByBidder } = await import('@/queries/auctions')
+	const bids = await fetchAuctionBidsByBidder(signer.pubkey, null, true)
+	const bid = bids.find((event) => event.id === bidEventId)
+	if (!bid) throw new Error('Signed Coco bid is unavailable for this account')
+	const locktime = Number.parseInt(getEventTag(bid, 'locktime'), 10)
+	if (!Number.isSafeInteger(locktime) || Math.floor(Date.now() / 1000) < locktime)
+		throw new Error('Coco bid refund timelock has not elapsed')
+	const sendOperationId = getEventTag(bid, 'coco_operation')
+	if (!sendOperationId) throw new Error('Bid has no original Coco Send binding')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: getEventTag(bid, 'e'), coordinate: getEventTag(bid, 'a') }
+	const identity = { account, auction, bidEventId, bidderPubkey: signer.pubkey, sendOperationId, locktime }
+	await getPlebeianWalletHost().auctions.refundLosingBid(
+		{ ...identity, commandId: deriveCocoAuctionCommandId('loser-refund', identity) },
+		async () => {
+			const current = (await fetchAuctionBidsByBidder(signer.pubkey, null, true)).find((event) => event.id === bidEventId)
+			if (!current || getEventTag(current, 'coco_operation') !== sendOperationId || getEventTag(current, 'locktime') !== String(locktime)) {
+				throw new Error('Canonical Coco refund binding changed')
+			}
+			if (Math.floor(Date.now() / 1000) < locktime) throw new Error('Coco bid refund timelock has not elapsed')
+		},
+	)
+}
+
 // ============================================================================
 // Phase 5 — Bidder kind-1025 path release (AUCTIONS.md §4.3.1)
 // ============================================================================
@@ -1437,6 +1799,7 @@ export interface PublishBidderPathReleaseResult {
  * event, but the typical path returns early without re-emitting.
  */
 export const publishBidderPathRelease = async (input: PublishBidderPathReleaseInput): Promise<PublishBidderPathReleaseResult> => {
+	if (isCocoV2AuctionMode()) return publishCocoBidderPathRelease(input.bidEventId)
 	assertLegacyAuctionMoneyAllowed('publishBidderPathRelease')
 	if (!input.bidEventId) throw new Error('bidEventId is required')
 
@@ -1721,6 +2084,7 @@ export const useRepublishAuctionBidMutation = () => {
 // won, here's the path / I have a path, redeem".
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
+	if (isCocoV2AuctionMode()) return publishCocoAuctionSettlement(formData)
 	assertLegacyAuctionMoneyAllowed('publishAuctionSettlement')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 
@@ -1833,7 +2197,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
 			fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(toRawEvent(b)))
@@ -1900,7 +2264,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
 		fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
@@ -2110,7 +2474,10 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		}
 		let decodedToken
 		try {
-			decodedToken = getDecodedToken(leg.cashuToken, mintKeysetsByMint.get(leg.mintUrl))
+			decodedToken = getDecodedToken(
+				leg.cashuToken,
+				(mintKeysetsByMint.get(leg.mintUrl) ?? []).map((keyset) => keyset.id),
+			)
 		} catch (err) {
 			throw new Error(
 				`M7: Failed to decode cashu token for leg ${leg.bid.id.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`,

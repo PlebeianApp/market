@@ -26,7 +26,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import type { Proof, SendResponse, SwapOptions } from '@cashu/cashu-ts'
+import type { OutputConfig, Proof, SendConfig, SendResponse } from '@cashu/cashu-ts'
 import { authStore } from '../stores/auth'
 
 // =============================================================================
@@ -73,17 +73,15 @@ let wrongLockPubkeyForSwap: string | null = null
 /** Proof secret encoding a 1-of-1 P2PK lock to `lockPubkey` (compressed hex). */
 const p2pkSecret = (lockPubkey: string): string => `["P2PK",{"nonce":"lock-1","data":"${lockPubkey}","tags":[[]]}]`
 
-class StubbedCashuWallet extends actualCashu.CashuWallet {
+class StubbedCashuWallet extends actualCashu.Wallet {
 	override async loadMint(): Promise<void> {
 		// No keyset fetch in unit tests (ADR-0005) — swap() below is stubbed
 		// too, so no mint metadata is ever needed.
 	}
 
-	override async swap(amount: number, _proofs: Proof[], options?: SwapOptions): Promise<SendResponse> {
-		// cashu-ts types `p2pk.pubkey` as string | string[]; the lock flow
-		// always passes a single compressed pubkey.
-		const rawLockPubkey = options?.p2pk?.pubkey
-		const lockPubkey = Array.isArray(rawLockPubkey) ? rawLockPubkey[0] : rawLockPubkey
+	override async send(amount: number, _proofs: Proof[], _config?: SendConfig, outputConfig?: OutputConfig): Promise<SendResponse> {
+		const sendOutput = outputConfig?.send
+		const lockPubkey = sendOutput?.type === 'p2pk' ? sendOutput.options.data : undefined
 		swapCalls.push({ amount, lockPubkey })
 		const effectiveLockPubkey = wrongLockPubkeyForSwap ?? lockPubkey ?? '02' + 'a'.repeat(64)
 		const sendProof: Proof = {
@@ -98,7 +96,7 @@ class StubbedCashuWallet extends actualCashu.CashuWallet {
 
 mock.module('@cashu/cashu-ts', () => ({
 	...actualCashu,
-	CashuWallet: StubbedCashuWallet,
+	Wallet: StubbedCashuWallet,
 }))
 
 // Import the REAL store module via a UNIQUE query-string specifier: bun

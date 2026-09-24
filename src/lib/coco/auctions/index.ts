@@ -1,6 +1,7 @@
 export * from './canonical'
 export * from './cocoEngine'
 export * from './commandRepository'
+export * from './lifecycleRepository'
 export * from './enginePort'
 export * from './mode'
 export * from './types'

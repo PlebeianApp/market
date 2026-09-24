@@ -1,14 +1,19 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import {
 	CocoAuctionCommandConflictError,
+	deriveCocoAuctionCommandId,
 	deriveCocoAuctionBidCommandId,
 	MemoryCocoAuctionCommandRepository,
+	MemoryCocoAuctionLifecycleRepository,
 	PlebeianAuctionWalletHost,
 	type CocoAuctionBidIntent,
 	type CocoAuctionWinnerReceiveInput,
 	type CocoAuctionWinnerReleaseInput,
 	type CocoAuctionRefundInput,
 	type CocoBidPublicationAdapter,
+	type CocoSettlementPublicationAdapter,
+	type CocoWinnerReleasePublicationAdapter,
 	type CocoEngineBidProjection,
 	type CocoEnginePort,
 	type SealedCocoBidPublicationMaterial,
@@ -19,6 +24,9 @@ const ACCOUNT = '1'.repeat(64)
 const SELLER = '2'.repeat(64)
 const ROOT = '3'.repeat(64)
 const EVENT_ID = '4'.repeat(64)
+const WINNING_BID_ID = '8'.repeat(64)
+const RELEASE_EVENT_ID = '9'.repeat(64)
+const SETTLEMENT_EVENT_ID = 'a'.repeat(64)
 const MINT = 'http://localhost:3338'
 
 const BID_BUSINESS_INTENT: Omit<CocoAuctionBidIntent, 'commandId'> = {
@@ -64,6 +72,13 @@ class FakeEngine implements CocoEnginePort {
 	prepareCalls = 0
 	executeCalls = 0
 	cancelCalls = 0
+	releaseCalls = 0
+	receiveCalls = 0
+	receiveEffects = 0
+	refundCalls = 0
+	refundEffects = 0
+	private readonly finalizedReceives = new Set<string>()
+	private readonly finalizedRefunds = new Set<string>()
 	projection: CocoEngineBidProjection = engineProjection()
 
 	async ensureSellerAuctionAuthority() {
@@ -110,18 +125,84 @@ class FakeEngine implements CocoEnginePort {
 	}
 
 	async releaseWinner<T>(
-		_input: CocoAuctionWinnerReleaseInput,
-		_use: (material: SealedCocoWinnerReleaseMaterial) => Promise<T>,
+		input: CocoAuctionWinnerReleaseInput,
+		use: (material: SealedCocoWinnerReleaseMaterial) => Promise<T>,
 	): Promise<{ operationId: string; result: T }> {
-		throw new Error('not used')
+		this.releaseCalls += 1
+		return {
+			operationId: input.sendOperationId,
+			result: await use({
+				operationId: input.sendOperationId,
+				derivationPath: 'm/1/2/3/4/5',
+				recipientPublicAuthority: `02${'5'.repeat(64)}`,
+				encodedToken: 'cashuB-public-release-token',
+				tokenFingerprint: 'token-fingerprint',
+			}),
+		}
 	}
 
-	async receiveWinner(_input: CocoAuctionWinnerReceiveInput): Promise<{ operationId: string; state: 'finalized' }> {
-		throw new Error('not used')
+	async receiveWinner(input: CocoAuctionWinnerReceiveInput, _encodedToken: string): Promise<{ operationId: string; state: 'finalized' }> {
+		this.receiveCalls += 1
+		if (!this.finalizedReceives.has(input.commandId)) {
+			this.finalizedReceives.add(input.commandId)
+			this.receiveEffects += 1
+		}
+		return { operationId: input.commandId, state: 'finalized' }
 	}
 
-	async refundLosingBid(_input: CocoAuctionRefundInput): Promise<{ operationId: string; state: 'refunded' }> {
-		throw new Error('not used')
+	async refundLosingBid(input: CocoAuctionRefundInput): Promise<{ operationId: string; state: 'refunded' }> {
+		this.refundCalls += 1
+		if (!this.finalizedRefunds.has(input.sendOperationId)) {
+			this.finalizedRefunds.add(input.sendOperationId)
+			this.refundEffects += 1
+		}
+		return { operationId: input.sendOperationId, state: 'refunded' }
+	}
+}
+
+class FakeReleasePublisher implements CocoWinnerReleasePublicationAdapter {
+	prepareCalls = 0
+	publishCalls = 0
+	failPublishOnce = false
+
+	async prepare(): Promise<{ eventId: string }> {
+		this.prepareCalls += 1
+		return { eventId: RELEASE_EVENT_ID }
+	}
+
+	async publish(eventId: string): Promise<void> {
+		expect(eventId).toBe(RELEASE_EVENT_ID)
+		this.publishCalls += 1
+		if (this.failPublishOnce) {
+			this.failPublishOnce = false
+			throw new Error('release relay unavailable')
+		}
+	}
+}
+
+class FakeSettlementPublisher implements CocoSettlementPublicationAdapter {
+	prepareCalls = 0
+	publishCalls = 0
+	failPrepareOnce = false
+	readonly order: string[]
+
+	constructor(order: string[] = []) {
+		this.order = order
+	}
+
+	async prepare(): Promise<{ eventId: string }> {
+		this.prepareCalls += 1
+		this.order.push('settlement-prepare')
+		if (this.failPrepareOnce) {
+			this.failPrepareOnce = false
+			throw new Error('crash after finalized Receive')
+		}
+		return { eventId: SETTLEMENT_EVENT_ID }
+	}
+
+	async publish(eventId: string): Promise<void> {
+		expect(eventId).toBe(SETTLEMENT_EVENT_ID)
+		this.publishCalls += 1
 	}
 }
 
@@ -161,12 +242,66 @@ class FakePublisher implements CocoBidPublicationAdapter {
 const setup = () => {
 	const engine = new FakeEngine()
 	const commands = new MemoryCocoAuctionCommandRepository()
-	const host = new PlebeianAuctionWalletHost(engine, commands, {
-		environmentId: 'auctionsdev',
-		monetaryMode: 'fake',
-		fakeMintAllowlist: [MINT],
-	})
-	return { engine, commands, host }
+	const lifecycles = new MemoryCocoAuctionLifecycleRepository()
+	const host = new PlebeianAuctionWalletHost(
+		engine,
+		commands,
+		{
+			environmentId: 'auctionsdev',
+			monetaryMode: 'fake',
+			fakeMintAllowlist: [MINT],
+		},
+		Date.now,
+		lifecycles,
+	)
+	return { engine, commands, lifecycles, host }
+}
+
+const releaseInput = (): CocoAuctionWinnerReleaseInput => {
+	const identity = {
+		account: { accountPubkey: ACCOUNT, environmentId: 'auctionsdev' },
+		auction: BID_BUSINESS_INTENT.auction,
+		winningBidEventId: WINNING_BID_ID,
+		winningBidderPubkey: ACCOUNT,
+		sellerPubkey: SELLER,
+		sendOperationId: COMMAND,
+	}
+	return { ...identity, commandId: deriveCocoAuctionCommandId('winner-release', identity) }
+}
+
+const receiveInput = (): CocoAuctionWinnerReceiveInput => {
+	const identity = {
+		account: { accountPubkey: SELLER, environmentId: 'auctionsdev' },
+		auction: BID_BUSINESS_INTENT.auction,
+		winningBidEventId: WINNING_BID_ID,
+		pathReleaseEventId: RELEASE_EVENT_ID,
+		senderOperationId: COMMAND,
+		mintUrl: MINT,
+		unit: 'sat' as const,
+		amount: 32,
+		conditionFingerprint: 'condition-fingerprint',
+		tokenFingerprint: 'token-fingerprint',
+	}
+	return {
+		...identity,
+		commandId: deriveCocoAuctionCommandId('winner-receive', identity),
+		winningBidderPubkey: ACCOUNT,
+		sellerPubkey: SELLER,
+		derivationPath: 'm/1/2/3/4/5',
+		recipientPublicAuthority: `02${'5'.repeat(64)}`,
+	}
+}
+
+const refundInput = (): CocoAuctionRefundInput => {
+	const identity = {
+		account: { accountPubkey: ACCOUNT, environmentId: 'auctionsdev' },
+		auction: BID_BUSINESS_INTENT.auction,
+		bidEventId: WINNING_BID_ID,
+		bidderPubkey: ACCOUNT,
+		sendOperationId: COMMAND,
+		locktime: 2_000_000_000,
+	}
+	return { ...identity, commandId: deriveCocoAuctionCommandId('loser-refund', identity) }
 }
 
 describe('PlebeianWalletHost.auctions command boundary', () => {
@@ -314,7 +449,85 @@ describe('PlebeianWalletHost.auctions command boundary', () => {
 		expect(order).toEqual(['revalidate', 'execute'])
 	})
 
-	test('Coco mode routes normal bids to Coco and blocks the remaining legacy monetary publishers', async () => {
+	test('winner release replays one exact kind-1025 after a relay crash without reopening the Send', async () => {
+		const { engine, commands, lifecycles, host } = setup()
+		const publisher = new FakeReleasePublisher()
+		publisher.failPublishOnce = true
+		await expect(host.releaseWinner(releaseInput(), async () => {}, publisher)).rejects.toThrow('release relay unavailable')
+		expect(engine.releaseCalls).toBe(1)
+		expect(publisher.prepareCalls).toBe(1)
+
+		const reloaded = new PlebeianAuctionWalletHost(
+			engine,
+			commands,
+			{ environmentId: 'auctionsdev', monetaryMode: 'fake', fakeMintAllowlist: [MINT] },
+			Date.now,
+			lifecycles,
+		)
+		const result = await reloaded.releaseWinner(releaseInput(), async () => {}, publisher)
+		expect(result.pathReleaseEventId).toBe(RELEASE_EVENT_ID)
+		expect(engine.releaseCalls).toBe(1)
+		expect(publisher.prepareCalls).toBe(1)
+		expect(publisher.publishCalls).toBe(2)
+	})
+
+	test('caller-owned Receive is finalized before kind-1024 and recovery creates one remote effect', async () => {
+		const { engine, commands, lifecycles, host } = setup()
+		const order: string[] = []
+		const originalReceive = engine.receiveWinner.bind(engine)
+		engine.receiveWinner = async (input, token) => {
+			const result = await originalReceive(input, token)
+			order.push('receive-finalized')
+			return result
+		}
+		const publisher = new FakeSettlementPublisher(order)
+		publisher.failPrepareOnce = true
+		await expect(host.receiveWinner(receiveInput(), 'cashuB-public-release-token', async () => {}, publisher)).rejects.toThrow(
+			'crash after finalized Receive',
+		)
+		expect(order).toEqual(['receive-finalized', 'settlement-prepare'])
+		expect(engine.receiveCalls).toBe(1)
+		expect(engine.receiveEffects).toBe(1)
+
+		const reloaded = new PlebeianAuctionWalletHost(
+			engine,
+			commands,
+			{ environmentId: 'auctionsdev', monetaryMode: 'fake', fakeMintAllowlist: [MINT] },
+			Date.now,
+			lifecycles,
+		)
+		const result = await reloaded.receiveWinner(receiveInput(), 'cashuB-public-release-token', async () => {}, publisher)
+		expect(result.settlementEventId).toBe(SETTLEMENT_EVENT_ID)
+		expect(engine.receiveCalls).toBe(1)
+		expect(engine.receiveEffects).toBe(1)
+		expect(publisher.prepareCalls).toBe(2)
+		expect(publisher.publishCalls).toBe(1)
+		const stored = JSON.stringify(await lifecycles.get(receiveInput().commandId))
+		expect(stored).not.toContain('cashuB-public-release-token')
+		expect(stored).not.toMatch(/encodedToken|privateKey|privkey|witness|seed|proofs/i)
+	})
+
+	test('same caller-owned Receive ID rejects a changed settlement intent before Coco', async () => {
+		const { engine, host } = setup()
+		const publisher = new FakeSettlementPublisher()
+		await host.receiveWinner(receiveInput(), 'cashuB-public-release-token', async () => {}, publisher)
+		await expect(
+			host.receiveWinner({ ...receiveInput(), amount: 31 }, 'cashuB-public-release-token', async () => {}, publisher),
+		).rejects.toBeInstanceOf(CocoAuctionCommandConflictError)
+		expect(engine.receiveEffects).toBe(1)
+	})
+
+	test('loser refund reclaims the exact original Send once and is durable', async () => {
+		const { engine, host } = setup()
+		const first = await host.refundLosingBid(refundInput(), async () => {})
+		const second = await host.refundLosingBid(refundInput(), async () => {})
+		expect(first.operationId).toBe(COMMAND)
+		expect(second.operationId).toBe(COMMAND)
+		expect(engine.refundCalls).toBe(1)
+		expect(engine.refundEffects).toBe(1)
+	})
+
+	test('Coco mode routes normal bids, release, and settlement through the sealed Host', async () => {
 		const previousPublicMode = process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
 		const previousEnvironment = process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID
 		const previousMonetaryMode = process.env.BUN_PUBLIC_COCO_MONETARY_MODE
@@ -324,12 +537,20 @@ describe('PlebeianWalletHost.auctions command boundary', () => {
 		process.env.BUN_PUBLIC_COCO_MONETARY_MODE = 'fake'
 		process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST = MINT
 		try {
-			const { publishAuctionBid, publishAuctionSettlement, publishBidderPathRelease, republishAuctionBid } =
-				await import('@/publish/auctions')
+			const { publishAuctionBid, republishAuctionBid } = await import('@/publish/auctions')
 			await expect(publishAuctionBid({} as never)).rejects.toThrow('Canonical Auction identity is required')
 			await expect(republishAuctionBid(EVENT_ID)).rejects.toThrow('Legacy Auction monetary action')
-			await expect(publishBidderPathRelease({ bidEventId: EVENT_ID })).rejects.toThrow('Legacy Auction monetary action')
-			await expect(publishAuctionSettlement({ auctionEventId: ROOT })).rejects.toThrow('Legacy Auction monetary action')
+			// Keep this proof independent from publisher-module mocks used by the
+			// legacy retry suite. These source-order guards prove the two normal C
+			// entry points route to Coco before their legacy monetary paths, while
+			// the tests above exercise the sealed Host effects and idempotency.
+			const publishers = readFileSync(new URL('../../publish/auctions.tsx', import.meta.url), 'utf8')
+			expect(publishers).toContain(
+				"export const publishBidderPathRelease = async (input: PublishBidderPathReleaseInput): Promise<PublishBidderPathReleaseResult> => {\n\tif (isCocoV2AuctionMode()) return publishCocoBidderPathRelease(input.bidEventId)\n\tassertLegacyAuctionMoneyAllowed('publishBidderPathRelease')",
+			)
+			expect(publishers).toContain(
+				"export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {\n\tif (isCocoV2AuctionMode()) return publishCocoAuctionSettlement(formData)\n\tassertLegacyAuctionMoneyAllowed('publishAuctionSettlement')",
+			)
 		} finally {
 			if (previousPublicMode === undefined) delete process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
 			else process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE = previousPublicMode
