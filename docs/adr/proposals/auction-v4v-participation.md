@@ -253,6 +253,32 @@ Consequences that shape the product rules:
   existing auctions on the day this ships would invalidate live sales for a rule
   their sellers never had the chance to meet.
 
+### D16 — A leg is locked one swap per row, and no mint call is atomic across rows
+
+A multiparty leg is **one output per manifest row**, and cashu-ts `SwapOptions.p2pk` takes
+**one** lock configuration per call (`pubkey: string | string[]` is the n-of-m multisig form,
+not a per-output key map — cashu-ts 2.9.0, `lib/types/model/types/index.d.ts`). No single mint
+call can lock every row to its own child key, so a leg's construction is **N swaps at one
+mint**, in manifest index order:
+
+- each row's swap locks that row's amount to that row's **compressed** child key, carrying the
+  same `locktime` and the same per-leg `refundKeys`;
+- the rows must each be fundable from a **disjoint** subset of the leg's input proofs, and that
+  partition is settled _before_ the first swap is sent — a row that cannot be funded is a
+  refusal, never a partial lock;
+- a failure between rows leaves a **partially locked leg**. That state is inherent to the
+  construction rather than a defect to be hidden, and it is why the leg's pre-lock recovery
+  record carries every row (compressed key, x-only projection, path, amount) under the leg's
+  single refund authority, why each row's returned proofs are verified against **that row's own
+  key** before anything is published, and why a leg whose rows do not all come back is reported
+  as incomplete instead of published short.
+
+Multi-mint legs stay deferred (gates E/F): one mint per leg until that is decided.
+
+Recorded normatively in the manifest profile's verification section
+(`docs/protocol/auction-multiparty-manifest-v1.md` §6), which is the same set of checks applied
+here on the near side of the mint call.
+
 ## Consequences
 
 - The UI can be written against one encoding: the schedule, with capabilities and
@@ -266,6 +292,9 @@ Consequences that shape the product rules:
   entry.
 - `v4v_recipient` tags are never emitted, so there is no second encoding to keep
   honest in review or to migrate later.
+- A multiparty leg costs **one swap per row** and its construction is not atomic
+  across rows (D16); a partial lock is handled by the per-row recovery record and
+  per-row verification rather than prevented.
 
 ## Files affected
 
@@ -274,6 +303,9 @@ Consequences that shape the product rules:
 - `src/lib/auction/multipartyLegFloor.ts` — the per-leg floor (landed with this proposal).
 - `src/lib/auction/multipartyParticipation.ts` — participation and quorum status (landed with this proposal).
 - `src/lib/auction/multipartyPublishReadiness.ts` — the draft-time liveness obligation (landed with this proposal).
+- `src/lib/auction/multipartyLegSwapPlan.ts` — the per-row swap requests and the disjoint input partition (D16).
+- `src/lib/auction/multipartyLegLockOutcome.ts` — per-row verification of what the mint returned (D16, manifest §6).
+- `src/lib/auction/multipartyRecoveryRecord.ts` — the multi-row pre-lock recovery record (D16).
 - Later: the auction root tag builder, the bid manifest (Gate D2), the path release (Gate H), the validator service, and the auction detail UI.
 
 ## Open questions
