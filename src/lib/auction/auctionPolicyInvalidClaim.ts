@@ -175,3 +175,41 @@ export const verifyAuctionPolicyInvalidClaim = (
 
 	return { ok: reasons.length === 0, reasons }
 }
+
+/** What a page needs to say about the claims it found for one auction. */
+export interface AuctionPolicyInvalidSummary {
+	/** One claim per validator — the newest the caller supplied for each. */
+	readonly claims: readonly ParsedAuctionPolicyVerdictEvent[]
+	/** The union of the claimed issues, de-duplicated by code, in first-seen order. */
+	readonly issues: readonly { readonly code: string; readonly detail: string }[]
+}
+
+/**
+ * Collapse the auction-level claims observed for one auction into what a reader should see.
+ *
+ * Input order decides which claim wins for a validator: callers pass newest-first (the verdict
+ * query already sorts that way), and the first claim per validator is kept — the address
+ * `auction_policy:<root>` is parameterized-replaceable, so an older claim for the same
+ * validator is stale by construction.
+ *
+ * Issues are unioned by code, not concatenated: when several validators report the same broken
+ * rule, the reader should see the rule once, not once per validator. A reader therefore cannot
+ * conclude "three problems" from three validators agreeing on one.
+ */
+export const summarizeAuctionPolicyClaims = (claims: readonly ParsedAuctionPolicyVerdictEvent[]): AuctionPolicyInvalidSummary => {
+	const perValidator = new Map<string, ParsedAuctionPolicyVerdictEvent>()
+	const issues = new Map<string, string>()
+
+	for (const claim of claims) {
+		if (perValidator.has(claim.validatorPubkey)) continue
+		perValidator.set(claim.validatorPubkey, claim)
+		for (const issue of claim.document.issues) {
+			if (!issues.has(issue.code)) issues.set(issue.code, issue.detail)
+		}
+	}
+
+	return {
+		claims: Array.from(perValidator.values()),
+		issues: Array.from(issues.entries()).map(([code, detail]) => ({ code, detail })),
+	}
+}

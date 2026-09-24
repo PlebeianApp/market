@@ -71,7 +71,7 @@ import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, Gavel, Landmark, Radio, Trophy, Truck, UserRound } from 'lucide-react'
 import { InvalidAuctionNotice } from '@/components/InvalidAuctionNotice'
 import { TestListingNotice } from '@/components/TestListingNotice'
 import { TestLabelButton } from '@/components/dashboard/TestLabelButton'
@@ -84,12 +84,13 @@ import { LiveChatPanel } from '@/components/LiveChatPanel'
 import { UserCard } from '@/components/UserCard'
 import { AuctionVerdictPanel } from '@/components/AuctionVerdictPanel'
 import { useAuctionVerdicts } from '@/queries/auctions'
-import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { parseValidatorVerdictEvent, parseAuctionPolicyVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
+import { summarizeAuctionPolicyClaims } from '@/lib/auction/auctionPolicyInvalidClaim'
 import { auditorRoster } from '@/lib/auction/multipartyAnnouncements'
 import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
 import { useMultipartyAnnouncements } from '@/queries/multiparty'
 import { InfoTooltip } from '@/components/shared/InfoTooltip'
-import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
+import type { ParsedAuctionPolicyVerdictEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { AuctionSettlement } from '@/components/AuctionSettlement'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
@@ -477,6 +478,18 @@ function AuctionDetailRoute() {
 	// number a bidder has to care about.
 	const effectiveAuditorQuorum = Math.max(declaredAuditorQuorum, requiredVerdictMajority(auctionAuditorPubkeys.length))
 	const verdictsQuery = useAuctionVerdicts(auctionRootEventId || auctionId, 500, auctionCoordinates, auctionAuditorPubkeys)
+
+	// The same read serves both shapes of kind 30440. Per-bid verdicts go through the bid parser;
+	// auction-level claims (`auction_policy_invalid`) are a separate shape that names the auction
+	// rather than a bid, and the bid parser refuses them — so they are parsed here instead of
+	// being silently dropped. The query is newest-first, which is the order `summarize` expects.
+	const policyInvalid = useMemo(() => {
+		const claims = (verdictsQuery.data ?? [])
+			.map((event) => parseAuctionPolicyVerdictEvent(toRawEvent(event)))
+			.filter((result): result is { ok: true; value: ParsedAuctionPolicyVerdictEvent } => result.ok)
+			.map((result) => result.value)
+		return summarizeAuctionPolicyClaims(claims)
+	}, [verdictsQuery.data])
 	const parsedVerdicts = useMemo(() => {
 		return (verdictsQuery.data ?? [])
 			.map((e) =>
@@ -884,6 +897,38 @@ function AuctionDetailRoute() {
 
 							<span>Posted by</span>
 							<UserCard pubkey={auction.pubkey} size="md" />
+
+							{/* An auction-level claim from a validator: the auction's own configuration is
+							    inadmissible. It is deliberately NOT presented as a judgement about any bid —
+							    a broken policy does not condemn bids, it makes the outcome unreliable. */}
+							{policyInvalid.claims.length > 0 && (
+								<div className="rounded-md border border-red-300 bg-red-50 p-3">
+									<div className="flex items-center gap-2">
+										<AlertTriangle className="h-4 w-4 text-red-600" />
+										<p className="text-sm font-semibold text-red-800">
+											{policyInvalid.claims.length === 1
+												? 'A validator reports that this auction\u2019s policy is invalid'
+												: `${policyInvalid.claims.length} validators report that this auction\u2019s policy is invalid`}
+										</p>
+									</div>
+									<p className="mt-2 text-xs text-red-800">
+										The validator configuration this auction was published with does not satisfy the rules its validators apply, so its
+										outcome cannot be relied on. This is a finding about the auction, not a judgement about any bid.
+									</p>
+									<ul className="mt-2 space-y-1">
+										{policyInvalid.issues.map((issue) => (
+											<li key={issue.code} className="text-xs text-red-800">
+												• {issue.detail} <span className="font-mono opacity-60">({issue.code})</span>
+											</li>
+										))}
+									</ul>
+									<div className="mt-3 flex flex-wrap items-center gap-2">
+										{policyInvalid.claims.map((claim) => (
+											<UserCard key={claim.validatorPubkey} pubkey={claim.validatorPubkey} size="xs" />
+										))}
+									</div>
+								</div>
+							)}
 
 							<div className="text-lg">{summary || 'No summary provided.'}</div>
 
