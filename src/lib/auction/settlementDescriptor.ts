@@ -8,9 +8,9 @@ import type {
 } from './events'
 import type { AuctionSettlementStatus, Nut7ProofState } from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
-import type { MintKeyset } from '@cashu/cashu-ts'
+import type { MintKeys, MintKeyset } from '@cashu/cashu-ts'
 import { validatePathRelease, validateSettlementCompleteness, fetchMintKeysets } from './validation'
-import { computeValidatedBids } from './bidValidation'
+import { computeValidatedBids, type TrustedCollateralLeg } from './bidValidation'
 import type { SettlementChainLegContext } from './validation'
 
 export type SettlementParticipantRole = 'seller' | 'winning-bidder' | 'outbid-bidder' | 'non-participant'
@@ -84,6 +84,14 @@ export interface GetSettlementDescriptorInput {
 	 * bid's mint (bounded by a 2s timeout — see `fetchMintKeysets`).
 	 */
 	mintKeysets?: MintKeyset[]
+	/**
+	 * ADR-0011 Blocker 1: pre-fetched mint keysets for DLEQ verification,
+	 * keyed by `${mint}:${keysetId}`. When absent for a DLEQ-required auction,
+	 * bids that cannot be crypto-verified are treated as PENDING (not valid).
+	 */
+	dleqKeysets?: Map<string, MintKeys>
+	/** Terminal keyset misses (ADR-0011 review R3) — threaded to computeValidatedBids. */
+	dleqUnknownKeysets?: ReadonlySet<string>
 }
 
 interface DerivedState {
@@ -111,6 +119,7 @@ interface DerivedState {
 	isMyBidTop: boolean
 	myAlreadyReleased: boolean
 	hasPathReleaseForTopBid: boolean
+	hasCompleteTrustedReleaseChain: boolean
 	matchedClaimOrderId: string | undefined
 	hasMatchedClaimOrder: boolean
 	validatedTopBid: ParsedBidEvent | null
@@ -124,8 +133,9 @@ function isValidPathRelease(
 	now: number,
 	postCloseDecision: 'winner' | 'loser' | null,
 	mintKeysets?: MintKeyset[],
+	expectedTokenAmount?: number,
 ): boolean {
-	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets })
+	const result = validatePathRelease({ auction, bid, release, now, postCloseDecision, mintKeysets, expectedTokenAmount })
 	return result.isValid
 }
 
@@ -136,11 +146,12 @@ function isSettlementStructurallyValid(
 	settlement: ParsedSettlementEvent,
 	topBid: ParsedBidEvent | null,
 	validatedBids: ParsedBidEvent[],
+	trustedCollateralChain: readonly TrustedCollateralLeg[],
 	validatedPathReleases: ParsedPathReleaseEvent[],
 	rawPathReleases: ParsedPathReleaseEvent[],
 	now: number,
 	postCloseDecision: 'winner' | 'loser' | null,
-	nut7State?: Nut7ProofState,
+	nut7States?: ReadonlyMap<string, Nut7ProofState>,
 	mintKeysets?: MintKeyset[],
 ): SettlementValidity {
 	if (settlement.sellerPubkey.toLowerCase() !== auction.sellerPubkey.toLowerCase()) return 'invalid'
@@ -179,35 +190,39 @@ function isSettlementStructurallyValid(
 	// No matching release yet → may not have arrived
 	if (!matchingRelease) return 'pending'
 
-	if (!isValidPathRelease(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets)) return 'invalid'
-
-	// Build the bid chain by walking prevBidId links from the top bid.
-	// This lets validateSettlementCompleteness know about all legs so it
-	// can validate the correct number of payout tags.
-	const bidChain: SettlementChainLegContext[] = []
-	let current: ParsedBidEvent | undefined = topBid
-	const chainBids: ParsedBidEvent[] = []
-	while (current) {
-		chainBids.unshift(current)
-		current = current.prevBidId ? validatedBids.find((b) => b.id === current!.prevBidId) : undefined
+	const topLeg = trustedCollateralChain.find((leg) => leg.bid.id === topBid.id)
+	if (!topLeg || !isValidPathRelease(auction, topBid, matchingRelease, now, postCloseDecision, mintKeysets, topLeg.expectedAmount)) {
+		return 'invalid'
 	}
-	for (const bid of chainBids) {
-		const release = validatedPathReleases.find((pr) => pr.bidEventId === bid.id)
+
+	// Consume the exact root-to-winner collateral chain that made the winner
+	// economically authoritative. Ancestors need not have marketplace quorum,
+	// so reconstructing this from validatedBids would incorrectly drop them.
+	const bidChain: SettlementChainLegContext[] = []
+	for (const leg of trustedCollateralChain) {
+		const release = validatedPathReleases.find((pr) => pr.bidEventId === leg.bid.id)
 		if (release) {
-			bidChain.push({ bid, pathRelease: release, nut7State })
+			bidChain.push({
+				// validateSettlementCompleteness's existing chain seam reads the
+				// per-leg amount from legLockedAmount. Supply an immutable adapter
+				// copy; never rewrite the parsed event's cumulative placeholder.
+				bid: { ...leg.bid, legLockedAmount: leg.expectedAmount },
+				pathRelease: release,
+				nut7State: nut7States?.get(leg.bid.id),
+			})
 		}
 	}
 
 	// Check chain integrity: every leg in the chain must have a path release
 	// (don't shrink the chain — a partial chain is invalid)
-	if (chainBids.length > 0 && bidChain.length !== chainBids.length) return 'invalid'
+	if (trustedCollateralChain.length > 0 && bidChain.length !== trustedCollateralChain.length) return 'invalid'
 
 	const result = validateSettlementCompleteness({
 		auction,
 		settlement,
 		winningBid: topBid,
 		pathRelease: matchingRelease,
-		winningBidNut7State: nut7State,
+		winningBidNut7State: nut7States?.get(topBid.id),
 		mintKeysets,
 		bidChain: bidChain.length > 0 ? bidChain : undefined,
 	})
@@ -335,9 +350,13 @@ function deriveState(
 			nut7States: input.nut7States,
 			postSettlement: hasSettledSettlement,
 			settledBidIds,
+			dleqKeysets: input.dleqKeysets,
+			dleqUnknownKeysets: input.dleqUnknownKeysets,
 		})
 	const topBid = validatedBidSet.canonicalWinner
 	const validatedBids = validatedBidSet.validBids
+	const trustedCollateralChain = topBid ? (validatedBidSet.trustedCollateralChains?.get(topBid.id) ?? []) : []
+	const trustedLegByBidId = new Map(trustedCollateralChain.map((leg) => [leg.bid.id, leg]))
 
 	// 2. Determine postCloseDecision from structurally pre-filtered settlements.
 	// M1 FIX: The original code used rawSettlements[0]?.winnerPubkey directly,
@@ -378,9 +397,9 @@ function deriveState(
 				// otherwise `myAlreadyReleased` stays false and the UI does not
 				// flip to 'Path release published'.
 				if ((pr as { synthetic?: boolean }).synthetic === true) return true
-				const matchingBid = validatedBids.find((b) => b.id === pr.bidEventId)
-				const bidToValidate = matchingBid ?? topBid
-				const result = isValidPathRelease(auction, bidToValidate, pr, now, postCloseDecision, mintKeysets)
+				const matchingLeg = trustedLegByBidId.get(pr.bidEventId)
+				const bidToValidate = matchingLeg?.bid ?? topBid
+				const result = isValidPathRelease(auction, bidToValidate, pr, now, postCloseDecision, mintKeysets, matchingLeg?.expectedAmount)
 				return result
 			})
 		: []
@@ -393,11 +412,12 @@ function deriveState(
 			s,
 			topBid,
 			validatedBids,
+			trustedCollateralChain,
 			pathReleases,
 			rawPathReleases,
 			now,
 			postCloseDecision,
-			input.nut7States?.get(topBid?.id ?? ''),
+			input.nut7States,
 			mintKeysets,
 		)
 		settlementValidities.set(s.id, validity)
@@ -445,6 +465,8 @@ function deriveState(
 	const isMyBidTop = !!(myTopBidEvent && topBid && myTopBidEvent.id === topBid.id)
 	const myAlreadyReleased = !!myTopBidEvent && pathReleases.some((pr) => pr.bidEventId === myTopBidEvent.id)
 	const hasPathReleaseForTopBid = !!topBid && pathReleases.some((pr) => pr.bidEventId === topBid.id)
+	const hasCompleteTrustedReleaseChain =
+		trustedCollateralChain.length > 0 && trustedCollateralChain.every((leg) => pathReleases.some((pr) => pr.bidEventId === leg.bid.id))
 
 	// Match claim orders using 8-point validation instead of simple pubkey match.
 	// For seller view: match any claim order that validates against the latest settlement.
@@ -474,6 +496,7 @@ function deriveState(
 		isMyBidTop,
 		myAlreadyReleased,
 		hasPathReleaseForTopBid,
+		hasCompleteTrustedReleaseChain,
 		matchedClaimOrderId,
 		hasMatchedClaimOrder,
 		validatedTopBid: topBid,
@@ -553,6 +576,8 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 		nut7States: input.nut7States,
 		postSettlement: hasSettledSettlement,
 		settledBidIds,
+		dleqKeysets: input.dleqKeysets,
+		dleqUnknownKeysets: input.dleqUnknownKeysets,
 	})
 	const winnerBid = preValidated.canonicalWinner
 	// Resolve mint keysets deterministically: an injected value short-circuits
@@ -631,7 +656,7 @@ export async function getSettlementDescriptor(input: GetSettlementDescriptorInpu
 				)
 			}
 
-			if (d.hasPathReleaseForTopBid) {
+			if (d.hasCompleteTrustedReleaseChain) {
 				if (d.settlementWindowExpired) {
 					return build(
 						role,

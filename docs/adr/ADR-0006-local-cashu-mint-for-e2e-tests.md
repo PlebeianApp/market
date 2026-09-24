@@ -32,6 +32,10 @@ endpoint echoes `B_` as `C_` without real signatures — deliberately
 invalid, and only usable because the settlement tests stub the
 verification step. It is not a substitute for a real mint.
 
+**Removed 2026-09-18 (PR #1280):** the settlement tests migrated to the real
+local mint, so `e2e/utils/cashu-mint-mock.ts` has been deleted and the
+`receiveLockedEcash` stub removed.
+
 ## Decision
 
 Run a **real local Cashu mint** in the e2e suite:
@@ -57,7 +61,7 @@ The previous mock approach is **deprecated** for mint flows:
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | Inert mint URLs + `getEncodedToken`/pre-computed tokens (ADR-0005) | Superseded by the real mint for bid-funding tests; retained only for tests that need a mint URL as inert data      |
 | `e2e/utils/lightning-mock.ts` (wallet/mint deposit path)           | Superseded by the FakeWallet backend for mint-deposit tests; retained for non-wallet Lightning flows (zaps, LNURL) |
-| `e2e/utils/cashu-mint-mock.ts` (PR #1144)                          | Planned for removal once its settlement tests migrate to the real mint                                             |
+| `e2e/utils/cashu-mint-mock.ts` (PR #1144)                          | **Removed (2026-09-18, #1280)** — settlement tests now mint real P2PK-locked collateral from the local mint        |
 
 New auction bid-funding tests MUST target the real local mint
 (`http://localhost:3338`) rather than a mock.
@@ -68,8 +72,9 @@ New auction bid-funding tests MUST target the real local mint
 2. **Later** — migrate existing mint-adjacent tests (`auction-mint-state`,
    `auction-live-chat*`) off external mint URLs (`mint.minibits.cash`,
    `testnut.cashu.space`) onto the local mint.
-3. **Later** — remove `e2e/utils/cashu-mint-mock.ts` once the settlement
-   tests no longer depend on the invalid-signature stub.
+3. **Done (2026-09-18, #1280)** — `e2e/utils/cashu-mint-mock.ts` removed; the
+   settlement spec mints real P2PK-locked collateral (`@cashu/cashu-ts`
+   `CashuWallet.swap(..., { p2pk })`) and seeds one `dleq_proof` per lock_secret.
 4. **Retain** `lightning-mock.ts` for non-wallet Lightning flows (zaps,
    LNURL payments) indefinitely; only its mint-deposit role is deprecated.
 
@@ -94,4 +99,4 @@ Trade-offs:
 - ADR-0005: No External Service Dependencies in Tests
 - `e2e/start-local-mint.sh`, `e2e/playwright.config.ts`
 - `e2e/ARCHITECTURE.md` — "Local Cashu Mint" section
-- PR #1144 — `e2e/utils/cashu-mint-mock.ts` (to be retired)
+- PR #1144 — `e2e/utils/cashu-mint-mock.ts` (retired 2026-09-18, #1280)

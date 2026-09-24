@@ -13,7 +13,9 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 import { ProjectivePoint, etc } from '@noble/secp256k1'
 import { HDKey } from '@scure/bip32'
-import { getEncodedToken, type Proof, type MintKeyset } from '@cashu/cashu-ts'
+import { getEncodedToken, type Proof, type MintKeys, type MintKeyset } from '@cashu/cashu-ts'
+import { makeDleqKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
+import { parseBidEvent } from '../schemas/auction/bidEvent'
 
 const SELLER_PUBKEY = 'a'.repeat(64)
 const BUYER_PUBKEY = 'b'.repeat(64)
@@ -43,6 +45,25 @@ const LOCK_SECRET = JSON.stringify([
 	},
 ])
 const PROOF_Y = hashToCurveHexFromString(LOCK_SECRET)
+// A second, INDEPENDENT collateral pair. Bid collateral (`lock_secret` and the
+// `proof_y` it hashes to) is public in the bid event, so two different bidders
+// must lock DISTINCT proofs: sharing them would leave two bids authoritative
+// for the same coins while only one is redeemable (M5/A3 uniqueness rules).
+const LOCK_SECRET_2 = JSON.stringify([
+	'P2PK',
+	{
+		nonce: 'b'.repeat(16),
+		data: CHILD_PUBKEY,
+		tags: [
+			['n_sigs', '1'],
+			['locktime', String(AUCTION_LOCKTIME)],
+			['refund', REFUND_PUBKEY],
+			['n_sigs_refund', '1'],
+			['sigflag', 'SIG_INPUTS'],
+		],
+	},
+])
+const PROOF_Y_2 = hashToCurveHexFromString(LOCK_SECRET_2)
 const TEST_PROOF: Proof = {
 	amount: 50000,
 	secret: LOCK_SECRET,
@@ -87,6 +108,13 @@ function makeAuction(overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuction
 }
 
 function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
+	const amount = overrides.amount ?? 50000
+	const legLockedAmount = overrides.legLockedAmount ?? amount
+	const lockSecrets = overrides.lockSecrets ?? [LOCK_SECRET]
+	// DLEQ is unconditional (ADR-0011): every locked proof needs a matching
+	// honest proof, minted against the leg's own delta (the amount the client
+	// verification path uses as `legDelta`).
+	const dleqProofs = overrides.dleqProofs ?? lockSecrets.map((secret) => makeHonestDleqProof(legLockedAmount, secret))
 	return {
 		rawEvent: { id: 'bid-1', pubkey: BUYER_PUBKEY, kind: 1024, tags: [], content: '', created_at: 100 },
 		id: 'bid-1',
@@ -102,14 +130,59 @@ function makeBid(overrides: Partial<ParsedBidEvent> = {}): ParsedBidEvent {
 		locktime: AUCTION_LOCKTIME,
 		refundPubkey: REFUND_PUBKEY,
 		childPubkey: CHILD_PUBKEY,
-		lockSecrets: [LOCK_SECRET],
+		lockSecrets,
 		proofYs: [PROOF_Y],
+		dleqProofs,
 		createdForEndAt: AUCTION_END,
 		bidNonce: 'nonce-1',
 		keyScheme: 'hd_p2pk',
 		status: 'locked',
 		...overrides,
 	} as ParsedBidEvent
+}
+
+function parseProductionBid(
+	auction: ParsedAuctionEvent,
+	input: {
+		id: string
+		amount: number
+		expectedLegAmount: number
+		createdAt: number
+		secret: string
+		childPubkey: string
+		prevBidId?: string
+	},
+): ParsedBidEvent {
+	const proofY = hashToCurveHexFromString(input.secret)
+	const event: NostrEventLike = {
+		id: input.id,
+		pubkey: BUYER_PUBKEY,
+		kind: 1023,
+		created_at: input.createdAt,
+		content: '',
+		tags: [
+			['e', auction.rootEventId],
+			['a', auction.coordinate],
+			['p', auction.sellerPubkey],
+			['amount', String(input.amount), 'SAT'],
+			['currency', 'SAT'],
+			['mint', 'https://mint.example.com'],
+			['locktime', String(AUCTION_LOCKTIME)],
+			['refund_pubkey', REFUND_PUBKEY],
+			['child_pubkey', input.childPubkey],
+			['lock_secret', input.secret],
+			['proof_y', proofY],
+			['dleq_proof', JSON.stringify(makeHonestDleqProof(input.expectedLegAmount, input.secret))],
+			['created_for_end_at', String(AUCTION_END)],
+			['bid_nonce', `nonce-${input.id.slice(0, 8)}`],
+			['key_scheme', 'hd_p2pk'],
+			['status', 'locked'],
+			...(input.prevBidId ? [['prev_bid', input.prevBidId]] : []),
+		],
+	}
+	const parsed = parseBidEvent(event)
+	if (!parsed.ok) throw new Error(`production descriptor bid fixture failed to parse: ${JSON.stringify(parsed.error)}`)
+	return parsed.value
 }
 
 function makePathRelease(overrides: Partial<ParsedPathReleaseEvent> = {}): ParsedPathReleaseEvent {
@@ -210,6 +283,8 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 		now: 120,
 		nut7States: undefined,
 		mintKeysets: mockMintKeysets(),
+		dleqKeysets: undefined,
+		dleqUnknownKeysets: undefined,
 	}
 	for (const [k, v] of Object.entries(overrides)) {
 		if (hasKey(base as object, k) || k === 'currentUserPubkey' || k === 'myTopBidEvent') {
@@ -222,6 +297,20 @@ function makeInput(overrides: object = {}): GetSettlementDescriptorInput {
 	// explicitly (mirroring `spentNut7States`).
 	if (base.nut7States === undefined) {
 		delete base.nut7States
+	}
+	// DLEQ is unconditional (ADR-0011): the descriptor crypto-verifies every
+	// quorum-confirmed bid, so supply a keyset covering every proof amount the
+	// fixtures commit (keyed `${mint}:${proof.id}`). Tests that exercise the
+	// evidence-unavailable path can override `dleqKeysets` explicitly.
+	if (base.dleqKeysets === undefined && base.bids.length > 0) {
+		const amounts = new Set<number>()
+		for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) amounts.add(proof.amount)
+		if (amounts.size > 0) {
+			const keyset = makeDleqKeyset(Array.from(amounts))
+			const map = new Map<string, MintKeys>()
+			for (const bid of base.bids) for (const proof of bid.dleqProofs ?? []) map.set(`${bid.mint}:${proof.id}`, keyset)
+			base.dleqKeysets = map
+		}
 	}
 	// mintKeysets is ALWAYS injected (empty array) so the descriptor never makes
 	// an HTTP call to the inert fixture mint URL — matching ADR-0005's rule that
@@ -275,7 +364,15 @@ describe('getSettlementDescriptor', () => {
 		})
 
 		test('outbid-bidder: I have a validated bid but am not the top', async () => {
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const topBid = makeBid({ id: 'bid-top', bidderPubkey: BUYER_PUBKEY, amount: 50000 })
 			const d = await getSettlementDescriptor(
 				makeInput({
@@ -326,6 +423,41 @@ describe('getSettlementDescriptor', () => {
 				}),
 			)
 			expect(d?.role).toBe('seller')
+		})
+	})
+
+	describe('terminal keyset miss (ADR-0011 R3, review 2026-09-18 N2)', () => {
+		test('a reserve-meeting bid whose keyset is terminally unknown yields no canonical winner and no valid bids', async () => {
+			const topBid = makeBid({ amount: 50000 })
+			const terminalKeysetKey = `${topBid.mint}:${topBid.dleqProofs![0].id}`
+			const d = await getSettlementDescriptor(
+				makeInput({
+					auction: makeAuction({ reserve: 40000 }),
+					bids: [topBid],
+					verdicts: [verdictForBid(topBid.id)],
+					nut7States: unspentNut7States([topBid]),
+					currentUserPubkey: SELLER_PUBKEY,
+					// Empty keyset map + a TERMINAL miss for this proof's keyset. The
+					// descriptor's early pre-pass must thread `dleqUnknownKeysets` so the
+					// bid is `dleq_invalid` (never valid) rather than `pending`; the
+					// resulting classification feeds the reserve guard in the publish
+					// path (review 2026-09-18 N2).
+					dleqKeysets: new Map(),
+					dleqUnknownKeysets: new Set([terminalKeysetKey]),
+					now: 120,
+				}),
+			)
+			// With a terminal keyset miss and no other valid bid, there is no
+			// canonical winner, so the seller sees Reserve Not Met (close allowed).
+			// The descriptor result exposes only `validatedTopBid`/`validatedBids`
+			// (empty for both `pending` and `dleq_invalid`), so the invalid-vs-pending
+			// classification itself is pinned directly in
+			// `computeValidatedBids.test.ts`; this test drives the descriptor path
+			// with `dleqUnknownKeysets` supplied, covering the pre-pass threading
+			// (review 2026-09-18 N2).
+			expect(d?.title).toBe('Reserve Not Met')
+			expect(d?.validatedTopBid ?? null).toBeNull()
+			expect(d?.validatedBids ?? []).toHaveLength(0)
 		})
 	})
 
@@ -683,7 +815,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('refund: outbid bidder with reserve_not_met settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY, amount: 30000 })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					auction: makeAuction({ reserve: 40000 }),
@@ -709,7 +849,15 @@ describe('getSettlementDescriptor', () => {
 
 		test('no card: outbid with validated bid, no settlement', async () => {
 			const topBid = makeBid({ bidderPubkey: BUYER_PUBKEY })
-			const myBid = makeBid({ id: 'bid-low', bidderPubkey: OTHER_BIDDER_PUBKEY, amount: 20000, createdAt: 90 })
+			const myBid = makeBid({
+				id: 'bid-low',
+				bidderPubkey: OTHER_BIDDER_PUBKEY,
+				amount: 20000,
+				createdAt: 90,
+				// Distinct bidder → distinct collateral (see LOCK_SECRET_2).
+				lockSecrets: [LOCK_SECRET_2],
+				proofYs: [PROOF_Y_2],
+			})
 			const d = await getSettlementDescriptor(
 				makeInput({
 					bids: [topBid, myBid],
@@ -1101,6 +1249,106 @@ describe('rebid chain path release validation', () => {
 		cashuToken: TOKEN_2,
 	})
 
+	test('production-parsed direct-child-only chain validates both exact releases and complete settlement payouts', async () => {
+		const rootEventId = '1'.repeat(64)
+		const coordinate = `30408:${SELLER_PUBKEY}:descriptor-production`
+		const auction = makeAuction({ rootEventId, coordinate })
+		const root = parseProductionBid(auction, {
+			id: '2'.repeat(64),
+			amount: 5_000,
+			expectedLegAmount: 5_000,
+			createdAt: 80,
+			secret: SECRET_1,
+			childPubkey: CHILD_1,
+		})
+		const child = parseProductionBid(auction, {
+			id: '3'.repeat(64),
+			amount: 5_300,
+			expectedLegAmount: 300,
+			createdAt: 90,
+			secret: SECRET_2,
+			childPubkey: CHILD_2,
+			prevBidId: root.id,
+		})
+		const rootBefore = JSON.stringify(root)
+		const childBefore = JSON.stringify(child)
+		const rootToken = getEncodedToken({
+			mint: 'https://mint.example.com',
+			proofs: [{ amount: 5_000, secret: SECRET_1, C: TEST_PROOF.C, id: TEST_PROOF.id }],
+		})
+		const childToken = getEncodedToken({
+			mint: 'https://mint.example.com',
+			proofs: [
+				{
+					amount: 300,
+					secret: SECRET_2,
+					C: ProjectivePoint.fromPrivateKey(etc.hexToBytes('22'.repeat(32))).toHex(true),
+					id: TEST_PROOF.id,
+				},
+			],
+		})
+		const rootRelease = makePathRelease({
+			id: 'release-production-root',
+			bidEventId: root.id,
+			auctionCoordinate: coordinate,
+			derivationPath: PATH_1,
+			childPubkey: CHILD_1,
+			cashuToken: rootToken,
+		})
+		const childRelease = makePathRelease({
+			id: 'release-production-child',
+			bidEventId: child.id,
+			auctionCoordinate: coordinate,
+			derivationPath: PATH_2,
+			childPubkey: CHILD_2,
+			cashuToken: childToken,
+		})
+
+		expect(child.legLockedAmount).toBe(5_300)
+		const d = await getSettlementDescriptor(
+			makeInput({
+				auction,
+				bids: [root, child],
+				// Only the child has direct marketplace validator authority.
+				verdicts: [
+					verdictForBid(child.id, {
+						bidderPubkey: child.bidderPubkey,
+						auctionRootEventId: rootEventId,
+						auctionCoordinate: coordinate,
+						observedAt: child.createdAt,
+					}),
+				],
+				nut7States: spentNut7States([root, child]),
+				pathReleases: [rootRelease, childRelease],
+				settlements: [
+					makeSettlement({
+						auctionRootEventId: rootEventId,
+						auctionCoordinate: coordinate,
+						winningBidId: child.id,
+						winnerPubkey: child.bidderPubkey,
+						finalAmount: 5_300,
+						pathReleaseEventId: childRelease.id,
+						payouts: [
+							{ bidEventId: root.id, amount: 5_000, status: 'redeemed' },
+							{ bidEventId: child.id, amount: 300, status: 'redeemed' },
+						],
+					}),
+				],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+
+		// Acceptance proves the root release was checked against the root bid,
+		// the child token was checked as 300 (not its stale 5300 placeholder),
+		// and completeness retained the quorum-pending ancestor.
+		expect(d?.title).toBe('Awaiting Shipping Details')
+		expect(d?.verifiedBadge).toBe('settlement')
+		expect(JSON.stringify(root)).toBe(rootBefore)
+		expect(JSON.stringify(child)).toBe(childBefore)
+		expect(child.legLockedAmount).toBe(5_300)
+	})
+
 	test('seller sees Settlement Ready when both legs have valid path releases', async () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
@@ -1113,10 +1361,11 @@ describe('rebid chain path release validation', () => {
 			}),
 		)
 		expect(d?.title).toBe('Settlement Ready')
+		expect(d?.cta?.kind).toBe('submit-settlement')
 		expect(d?.verifiedBadge).toBe('path-release')
 	})
 
-	test('seller sees Settlement Ready when only the top bid leg has a path release', async () => {
+	test('seller sees Awaiting Path Release when only the top bid leg has a path release', async () => {
 		const d = await getSettlementDescriptor(
 			makeInput({
 				bids: [leg1, leg2],
@@ -1127,7 +1376,11 @@ describe('rebid chain path release validation', () => {
 				now: 120,
 			}),
 		)
-		expect(d?.title).toBe('Settlement Ready')
+		// The child release is valid (and still earns the path-release badge),
+		// but seller readiness requires the complete trusted collateral chain.
+		expect(d?.verifiedBadge).toBe('path-release')
+		expect(d?.title).toBe('Awaiting Path Release')
+		expect(d?.cta).toBeNull()
 	})
 
 	test('leg 1 path release is NOT rejected when validated against its own bid (not top bid)', async () => {
@@ -1145,6 +1398,28 @@ describe('rebid chain path release validation', () => {
 		// (it's valid against leg 1's bid). But the top bid (leg 2) has no release,
 		// so the seller stays on "Awaiting Path Release".
 		expect(d?.title).toBe('Awaiting Path Release')
+		expect(d?.cta).toBeNull()
+	})
+
+	test('seller sees Awaiting Path Release when the root release is raw but invalid', async () => {
+		const invalidRelease1 = makePathRelease({
+			...release1,
+			id: 'pr-leg-1-invalid',
+			cashuToken: 'not-a-valid-token',
+		})
+		const d = await getSettlementDescriptor(
+			makeInput({
+				bids: [leg1, leg2],
+				verdicts: [verdictForBid(leg1.id, { observedAt: 100 }), verdictForBid(leg2.id, { observedAt: 100 })],
+				nut7States: unspentNut7States([leg1, leg2]),
+				pathReleases: [invalidRelease1, release2],
+				currentUserPubkey: SELLER_PUBKEY,
+				now: 120,
+			}),
+		)
+		expect(d?.verifiedBadge).toBe('path-release')
+		expect(d?.title).toBe('Awaiting Path Release')
+		expect(d?.cta).toBeNull()
 	})
 
 	test('leg 2 path release with delta token amount is validated correctly', async () => {

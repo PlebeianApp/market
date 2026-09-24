@@ -3,6 +3,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { EventTemplate } from 'nostr-tools'
 import type { MinBidCurve, ParsedAuctionEvent, ParsedBidEvent } from '../auction/events'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
+import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import { createVerdictPublisher } from '../../server/auction-validator/publisher'
 import { createValidatorState, setAuctionMintReachability, upsertAuction, upsertBid } from '../../server/auction-validator/state'
 
@@ -83,6 +84,9 @@ const buildBid = (
 	childPubkey: COMPRESSED_PK,
 	lockSecrets: ['secret'],
 	proofYs: [input.proofY],
+	// DLEQ is unconditional (ADR-0011): the structural pipeline requires one
+	// dleq_proof per locked proof (crypto verification is client-side).
+	dleqProofs: [makeHonestDleqProof(input.amount, 'secret')],
 	createdForEndAt: auction.maxEndAt,
 	bidNonce: 'nonce',
 	keyScheme: 'hd_p2pk',

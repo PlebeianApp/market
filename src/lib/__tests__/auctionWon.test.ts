@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
 	hasFinalSettlementForAuctionWin,
+	getValidatedAuctionBids,
 	resolveAuctionWin,
 	selectValidatedAuctionWinner,
 	shouldUseNonBlockingAuctionWinPrompt,
@@ -10,7 +11,22 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
-import { getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { makeDleqKeyset, makeHonestDleqProof } from '@/lib/cashu/dleqFixture'
+import { getEncodedToken, type MintKeys, type Proof } from '@cashu/cashu-ts'
+
+/**
+ * DLEQ keysets covering every proof amount committed by `bids`, keyed
+ * `${mint}:${proof.id}`. DLEQ is unconditional, so the win-derivation paths
+ * need this evidence or every bid is pending.
+ */
+const dleqKeysetsFor = (...bids: ParsedBidEvent[]): Map<string, MintKeys> => {
+	const amounts = new Set<number>()
+	for (const bid of bids) for (const proof of bid.dleqProofs ?? []) amounts.add(proof.amount)
+	const keyset = makeDleqKeyset(Array.from(amounts))
+	const map = new Map<string, MintKeys>()
+	for (const bid of bids) for (const proof of bid.dleqProofs ?? []) map.set(`${bid.mint}:${proof.id}`, keyset)
+	return map
+}
 
 const AUCTION_ROOT_ID = 'a'.repeat(64)
 const OTHER_AUCTION_ROOT_ID = 'b'.repeat(64)
@@ -125,6 +141,7 @@ const makeParsedBid = (id: string, bidderPubkey: string, amount: number, created
 		childPubkey,
 		lockSecrets: [lockSecret],
 		proofYs: [hashToCurveHexFromString(lockSecret)],
+		dleqProofs: [makeHonestDleqProof(amount, lockSecret)],
 		createdForEndAt: parsedAuction.endAt,
 		bidNonce: id,
 		keyScheme: 'hd_p2pk',
@@ -182,6 +199,9 @@ const makeReleasedBid = (params: {
 		childPubkey,
 		lockSecrets: [lockSecret],
 		proofYs: [hashToCurveHexFromString(lockSecret)],
+		// The delta the DLEQ verification uses is the leg amount, not the
+		// cumulative bid amount.
+		dleqProofs: [makeHonestDleqProof(params.legAmount, lockSecret)],
 		prevBidId: params.prevBidId,
 	}
 	const release: ParsedPathReleaseEvent = {
@@ -323,6 +343,7 @@ describe('auction win candidate selection', () => {
 				[lowerBid.id, 'unspent'],
 				[unvalidatedHighBid.id, 'unspent'],
 			]),
+			dleqKeysetsFor(lowerBid, unvalidatedHighBid),
 		)
 
 		expect(winner?.id).toBe(lowerBid.id)
@@ -337,6 +358,7 @@ describe('auction win candidate selection', () => {
 				[lowerBid.id, 'unspent'],
 				[unvalidatedHighBid.id, 'spent'],
 			]),
+			dleqKeysetsFor(lowerBid, unvalidatedHighBid),
 		)
 
 		expect(winner?.id).toBe(lowerBid.id)
@@ -357,6 +379,7 @@ describe('auction win path-release resolution', () => {
 			new Map([[bid.id, 'unspent']]),
 			220,
 			new Map([[MINT_URL, []]]),
+			dleqKeysetsFor(bid),
 		)
 
 		expect(resolution.isActiveWinner).toBe(true)
@@ -373,11 +396,14 @@ describe('auction win path-release resolution', () => {
 			createdAt: 160,
 			prevBidId: first.bid.id,
 		})
+		// Production parsing leaves this placeholder cumulative. The trusted
+		// collateral chain, not this field, derives the child's 1000-sat delta.
+		const latestWithStaleLegPlaceholder = { ...latest.bid, legLockedAmount: latest.bid.amount }
 		const args = [
 			{ auctionRootEventId: AUCTION_ROOT_ID, bidEventId: latest.bid.id },
 			releaseAuction,
-			[first.bid, latest.bid],
-			[makeConfirmVerdict(latest.bid)],
+			[first.bid, latestWithStaleLegPlaceholder],
+			[makeConfirmVerdict(latestWithStaleLegPlaceholder)],
 		] as const
 		const nut7States = new Map([
 			[first.bid.id, 'unspent' as const],
@@ -385,11 +411,47 @@ describe('auction win path-release resolution', () => {
 		])
 		const keysets = new Map([[MINT_URL, []]])
 
-		const partial = await resolveAuctionWin(...args, [latest.release], nut7States, 220, keysets)
-		const complete = await resolveAuctionWin(...args, [first.release, latest.release], nut7States, 220, keysets)
+		const dleqKeysets = dleqKeysetsFor(first.bid, latestWithStaleLegPlaceholder)
+		const validated = getValidatedAuctionBids(
+			releaseAuction,
+			[first.bid, latestWithStaleLegPlaceholder],
+			[makeConfirmVerdict(latestWithStaleLegPlaceholder)],
+			nut7States,
+			dleqKeysets,
+		)
+		const trustedChain = validated.trustedCollateralChains?.get(latest.bid.id)
+
+		// Validator authority remains per-bid: the unattested root is pending and
+		// outside validBids, while its independently verified collateral remains
+		// in the canonical winner's trusted root-to-child chain.
+		expect(validated.canonicalWinner?.id).toBe(latest.bid.id)
+		expect(validated.classified.find(({ bid }) => bid.id === first.bid.id)?.classification).toBe('pending')
+		expect(validated.classified.find(({ bid }) => bid.id === latest.bid.id)?.classification).toBe('valid')
+		expect(validated.validBids.map((bid) => bid.id)).toEqual([latest.bid.id])
+		expect(trustedChain?.map((leg) => ({ id: leg.bid.id, expectedAmount: leg.expectedAmount }))).toEqual([
+			{ id: first.bid.id, expectedAmount: 2000 },
+			{ id: latest.bid.id, expectedAmount: 1000 },
+		])
+
+		const partial = await resolveAuctionWin(...args, [latest.release], nut7States, 220, keysets, dleqKeysets)
+		const complete = await resolveAuctionWin(...args, [first.release, latest.release], nut7States, 220, keysets, dleqKeysets)
+		const wrongChildProof: Proof = {
+			id: '0000000000000000',
+			amount: latest.bid.amount,
+			secret: latest.bid.lockSecrets[0],
+			C: '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa',
+		}
+		const wrongChildRelease: ParsedPathReleaseEvent = {
+			...latest.release,
+			id: 'b'.repeat(64),
+			cashuToken: getEncodedToken({ mint: MINT_URL, proofs: [wrongChildProof] }),
+		}
+		const wrongAmount = await resolveAuctionWin(...args, [first.release, wrongChildRelease], nut7States, 220, keysets, dleqKeysets)
 
 		expect(partial.hasReleasedPath).toBe(false)
 		expect(complete.hasReleasedPath).toBe(true)
+		expect(wrongAmount.hasReleasedPath).toBe(false)
+		expect(latestWithStaleLegPlaceholder.legLockedAmount).toBe(3000)
 	})
 })
 

@@ -70,17 +70,30 @@ kind-1025 path release already publishes full proofs at settlement.
    settlement CTAs" only when **both** pass; NUT-7 failure →
    `bid_pending_review`/`proof_spent`, DLEQ failure → `bid_invalid`/`fraudulent_bid`
    (`reason=dleq_invalid`).
-5. **Fail-closed mint compatibility.** Auctions starting after rollout REQUIRE
-   NUT-12 capable mints (checked via `CashuMint.getInfo().isSupported(12)`).
-   Non-DLEQ bids are **hard rejected** — the `nip60.ts` non-DLEQ silent fallback is
-   removed for post-rollout auctions.
+5. **Fail-closed mint compatibility.** Auctions REQUIRE NUT-12 capable mints
+   (checked via `CashuMint.getInfo().isSupported(12)`); this applies to **every**
+   auction — the rollout boundary was retired (see Decision 7). Non-DLEQ bids are
+   **hard rejected** — the `nip60.ts` non-DLEQ silent fallback is removed.
 6. **Client-side ownership at ingestion.** DLEQ verification is owned by the client
    (ingestion boundary), matching ADR-0004's NUT-7 ownership model. Validators do NOT
    verify DLEQ; they only enforce the NUT-12-mint allowlist (structural). This keeps
    the "validator is structural/opinion-only" architecture intact.
-7. **Migration by `start_at`.** Auctions with `start_at >= DLEQ_ROLLOUT_START_AT` require
-   the DLEQ path; live auctions (already open) are grandfathered under the legacy
-   non-DLEQ path so they are not broken mid-flight.
+   6a. **Bounded keyset acquisition (Amendment).** Every ingestion and settlement path that
+   calls `computeValidatedBids` MUST acquire the mint keysets needed to DLEQ-verify
+   bids (`fetchDleqKeysetsForBids`), bounded to the auction's `mint` allowlist. Missing
+   DLEQ evidence is NON-AUTHORITATIVE: a DLEQ-required bid whose keyset cannot be
+   gathered is classified `pending`, never valid. Without feeding evidence, a
+   DLEQ-required auction can never settle — fail-safe, not fail-open.
+7. **Unconditional requirement (2026-09-17).** DLEQ collateral verification is required
+   for **every** auction bid. There is no non-DLEQ path: a bid without one verifiable
+   `dleq_proof` per locked proof is `dleq_invalid`, and the lock path always requires
+   DLEQ on the newly issued outputs.
+
+   **Retired (2026-09-17).** The `dleq_required` auction tag and the
+   `APP_AUCTION_DLEQ_ROLLOUT_START_AT` / `start_at` migration boundary were removed.
+   A stray `dleq_required` tag is ignored and never read. This supersedes the former
+   Decisions 7/8 and the 8a/8b amendments (canonical activation, deployment boundary),
+   which were removed with the tag.
 
 ### Tag serialization (resolved per AUCTIONS.md §4.2)
 
