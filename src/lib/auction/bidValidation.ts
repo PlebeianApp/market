@@ -30,6 +30,11 @@ export interface ClassifiedBid {
 	pendingReason?: BidPendingReason
 }
 
+export interface TrustedCollateralLeg {
+	readonly bid: ParsedBidEvent
+	readonly expectedAmount: number
+}
+
 export interface ValidatedBidSet {
 	classified: ClassifiedBid[]
 	validBids: ParsedBidEvent[]
@@ -37,6 +42,8 @@ export interface ValidatedBidSet {
 	invalidBids: ParsedBidEvent[]
 	canonicalWinner: ParsedBidEvent | null
 	currentTopValidAmount: number
+	/** Root-to-candidate collateral metadata for economically accepted bids. */
+	trustedCollateralChains?: ReadonlyMap<string, readonly TrustedCollateralLeg[]>
 }
 
 /**
@@ -263,20 +270,89 @@ const collateralClaimKeys = (bid: ParsedBidEvent): string[] => [
 	...(bid.dleqProofs ?? []).flatMap((proof) => (proof.C ? [`dlequ_c:${proof.C.toLowerCase()}`] : [])),
 ]
 
-function computeLegLockedAmounts(bids: ParsedBidEvent[]): void {
-	const bidById = new Map(bids.map((b) => [b.id, b]))
+const MAX_COLLATERAL_CHAIN_LENGTH = 256
 
-	for (const bid of bids) {
-		if (bid.prevBidId) {
-			const prevBid = bidById.get(bid.prevBidId)
-			if (prevBid) {
-				bid.legLockedAmount = bid.amount - prevBid.amount
-			}
-			// If prevBid not found, legLockedAmount stays as-is (broken chain
-			// will be caught by validateBid's chain validation).
-		} else {
-			bid.legLockedAmount = bid.amount
+type CollateralChainResult = { status: 'valid'; chain: readonly TrustedCollateralLeg[] } | { status: 'pending' } | { status: 'invalid' }
+
+/**
+ * Verify the complete collateral history required to make `candidate.amount`
+ * economically authoritative. Validator verdicts remain per-bid: ancestors
+ * need no inferred quorum, but every sat credited from them must come from a
+ * structurally safe same-bidder/same-auction chain leg with valid NUT-12 DLEQ.
+ */
+function verifyBidCollateralChain(input: {
+	candidate: ParsedBidEvent
+	auction: ParsedAuctionEvent
+	bidsById: ReadonlyMap<string, ParsedBidEvent>
+	dleqKeysets?: Map<string, MintKeys>
+	dleqUnknownKeysets?: ReadonlySet<string>
+	disallowedCollateralBidIds: ReadonlySet<string>
+}): CollateralChainResult {
+	const { candidate, auction, bidsById, dleqKeysets, dleqUnknownKeysets, disallowedCollateralBidIds } = input
+	const bidder = candidate.bidderPubkey.toLowerCase()
+	const seen = new Set<string>()
+	const chain: Array<{ bid: ParsedBidEvent; requiredAmount: number }> = []
+	let current: ParsedBidEvent | undefined = candidate
+
+	while (current) {
+		if (chain.length >= MAX_COLLATERAL_CHAIN_LENGTH || seen.has(current.id)) return { status: 'invalid' }
+		seen.add(current.id)
+
+		if (
+			current.bidderPubkey.toLowerCase() !== bidder ||
+			current.auctionRootEventId !== auction.rootEventId ||
+			current.auctionCoordinate !== auction.coordinate ||
+			disallowedCollateralBidIds.has(current.id)
+		) {
+			return { status: 'invalid' }
 		}
+
+		// Parsed ancestors do not need validator quorum, but they must satisfy
+		// the same self-contained structural rules as the directly attested bid.
+		if (validateBid({ auction, bid: current, observedAt: current.createdAt }).claim !== 'valid_bid_placed') {
+			return { status: 'invalid' }
+		}
+
+		let requiredAmount = current.amount
+		if (current.prevBidId) {
+			const parent = bidsById.get(current.prevBidId)
+			if (!parent || parent.amount >= current.amount) return { status: 'invalid' }
+			requiredAmount = current.amount - parent.amount
+			chain.push({ bid: current, requiredAmount })
+			current = parent
+			continue
+		}
+
+		chain.push({ bid: current, requiredAmount })
+		break
+	}
+
+	// Keyset absence is classified before crypto verification so transiently
+	// incomplete evidence remains pending, preserving ADR-0011 Decision 6a.
+	if (!dleqKeysets) return { status: 'pending' }
+	let hasTransientMissingKeyset = false
+	for (const { bid } of chain) {
+		for (const proof of bid.dleqProofs ?? []) {
+			const key = `${bid.mint}:${proof.id}`
+			if (dleqKeysets.has(key)) continue
+			if (dleqUnknownKeysets?.has(key)) return { status: 'invalid' }
+			hasTransientMissingKeyset = true
+		}
+	}
+	if (hasTransientMissingKeyset) return { status: 'pending' }
+
+	for (const { bid, requiredAmount } of chain) {
+		const proofsWithSecrets: Array<DleqProof & { secret: string }> = (bid.dleqProofs ?? []).map((proof, index) => ({
+			...proof,
+			secret: bid.lockSecrets[index] ?? '',
+		}))
+		const result = verifyBidDleqWithKeysets({ mint: bid.mint, legDelta: requiredAmount, proofs: proofsWithSecrets }, dleqKeysets)
+		if (!result.ok) return { status: 'invalid' }
+	}
+
+	return {
+		status: 'valid',
+		chain: Object.freeze(chain.reverse().map(({ bid, requiredAmount }) => Object.freeze({ bid, expectedAmount: requiredAmount }))),
 	}
 }
 
@@ -301,12 +377,9 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	const { auction, bids, verdicts, nut7States } = input
 	const postSettlement = input.postSettlement ?? false
 
-	// Step 1: Compute legLockedAmount from signed chain before validation.
-	computeLegLockedAmounts(bids)
-
 	const bidsById = new Map(bids.map((b) => [b.id, b]))
 
-	// Step 2: Screen verdicts. Only auction auditors count, verdicts are
+	// Step 1: Screen verdicts. Only auction auditors count, verdicts are
 	// deduplicated per (validator, referenced bid) keeping the latest
 	// (kind-30440 is replaceable; multi-relay fetches can return stale copies),
 	// and confirm claims must be quorum-eligible (see isQuorumEligibleVerdict).
@@ -340,62 +413,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		eligibleConfirmsByBidId.set(v.bidEventId, arr)
 	}
 
-	// M3: Rebid-chain verdict backward-propagation (belt-and-braces).
-	// Kind-30440 is now parameterized replaceable on d = "bidder:auction:bid"
-	// (ADR-0003 §4.4.1 amendment), so each leg has its own replaceable
-	// address and a rebid no longer DELETES the prior leg's verdict on the
-	// relay — the collision this propagation was originally written to
-	// compensate for no longer occurs. The walk is retained as defense-in-
-	// depth for mixed-version relay state during rollout (old verdicts with
-	// the 2-part d-tag may still be present) and for the edge case where a
-	// validator observed a descendant but never published a standalone
-	// verdict for an ancestor leg.
-	//
-	// If bid B has quorum-eligible verdicts and B.prevBidId points to bid A,
-	// the same validators that confirmed B must have also seen and confirmed
-	// A (validators process the chain sequentially — they can't validate a
-	// rebid without first validating the leg it replaces). We propagate the
-	// verdict set backwards so earlier legs inherit the quorum-confirmed
-	// status. The walk only FILLS ancestors that lack their own eligible
-	// verdicts, so once a leg has its own surviving verdict (the norm under
-	// the per-bid d-tag scheme) this is a no-op.
-	//
-	// Propagated verdicts are NOT re-checked for timing eligibility against
-	// the ancestor's `created_at`: eligibility was already established
-	// against the descendant bid the validator actually observed, and the
-	// ancestor's own window membership is enforced by validateBid's
-	// `pre_start`/`post_end` checks when the leg is re-validated below.
-	// The propagation copies preserve every validator-supplied field
-	// (truthful data); only the `bidEventId` routing key is re-pointed.
-	//
-	// LIMITATION: This relies on the assumption that validators validate
-	// the full chain before emitting a verdict for the latest leg. If a
-	// validator only validates the delta without checking the previous
-	// leg, this propagation would be unsound. In practice, validateBid
-	// requires prevBid context (bidChainLegAmount) and validators fetch
-	// the full chain, so this assumption holds.
-	const parentOf = new Map<string, string | undefined>()
-	for (const bid of bids) {
-		parentOf.set(bid.id, bid.prevBidId)
-	}
-	for (const [bidId, directEligible] of [...eligibleConfirmsByBidId]) {
-		let currentId = parentOf.get(bidId)
-		const seen = new Set<string>([bidId])
-		while (currentId && !seen.has(currentId)) {
-			seen.add(currentId)
-			// Only fill ancestors that have no quorum-eligible verdicts of
-			// their own (direct eligible verdicts are always preferred).
-			if (!eligibleConfirmsByBidId.has(currentId)) {
-				eligibleConfirmsByBidId.set(
-					currentId,
-					directEligible.map((v: ParsedValidatorVerdictEvent) => ({ ...v, bidEventId: currentId })),
-				)
-			}
-			currentId = parentOf.get(currentId)
-		}
-	}
-
-	// Step 3: Classify each bid based on validator quorum.
+	// Step 2: Classify each bid based only on verdicts addressed to that bid.
 	const classified = bids.map((bid) =>
 		classifyBid(bid, auction, eligibleConfirmsByBidId.get(bid.id) ?? [], condemnByBidId.get(bid.id) ?? [], nut7States),
 	)
@@ -503,6 +521,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	const finalValid: ParsedBidEvent[] = []
 	const finalPending: ParsedBidEvent[] = []
 	const finalInvalid: ParsedBidEvent[] = []
+	const trustedCollateralChains = new Map<string, readonly TrustedCollateralLeg[]>()
 
 	for (const c of classified) {
 		if (c.classification === 'invalid') {
@@ -533,105 +552,45 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		})
 
 		if (verdict.claim === 'valid_bid_placed') {
-			// Structural checks passed. Apply DLEQ crypto verification
-			// (ADR-0011 C1) BEFORE NUT-7: a bid must pass both DLEQ and NUT-7
-			// to be fully valid. DLEQ follows the same client-side ownership
-			// model as NUT-7 (Decision 6) — when evidence is unavailable the
-			// bid stays quorum-valid; when evidence IS available and DLEQ
-			// fails, the bid is invalidated (Decision 4: dleq_invalid).
-			// DLEQ is required for every bid — there is no non-DLEQ path.
-			const dleqProofs = c.bid.dleqProofs
-			if (dleqProofs && dleqProofs.length > 0) {
-				const dleqKeysetMap = input.dleqKeysets
-				// Unavailable DLEQ evidence is NON-AUTHORITATIVE (Blocker 1):
-				// a bid we cannot crypto-verify must never be treated as
-				// valid. When the caller has not gathered keysets, the bid
-				// is PENDING (like an unconfirmed NUT-7 poll), not valid —
-				// otherwise structurally-valid garbage DLEQ stays
-				// authoritative merely because the map was omitted.
-				if (!dleqKeysetMap) {
-					c.classification = 'pending'
-					c.pendingReason = 'dlequ_evidence_unavailable'
-					finalPending.push(c.bid)
-					continue
-				}
-				// PR #1280 round 3: an entry ABSENT from a supplied map is
-				// also evidence-unavailable, not fraud. fetchDleqKeysetsForBids
-				// leaves a (mint, keyset) entry out precisely when its fetch
-				// failed (temporary mint/network failure), so a lookup miss
-				// here defers the bid to PENDING (ADR-0011 Decision 6a:
-				// "a DLEQ-required bid whose keyset cannot be gathered is
-				// classified pending, never valid") rather than condemning
-				// it as dleq_invalid. Fail-safe holds: pending is not a
-				// pass — the bid is excluded from validBids and the winner
-				// — and dleqProofs[].id being bidder-controlled still
-				// cannot skip verification, because a miss never verifies.
-				const missingProofs = dleqProofs.filter((dp) => !dleqKeysetMap.has(`${c.bid.mint}:${dp.id}`))
-				if (missingProofs.length > 0) {
-					const unknown = input.dleqUnknownKeysets
-					const terminalMiss = unknown ? missingProofs.some((dp) => unknown.has(`${c.bid.mint}:${dp.id}`)) : false
-					if (terminalMiss) {
-						// ADR-0011 review R3: the reachable mint does not advertise
-						// this keyset id, so the proof names fabricated/foreign
-						// collateral — invalid, not merely "evidence unavailable".
-						// This is what stops a crafted bid from blocking
-						// reserve_not_met forever.
-						c.classification = 'invalid'
-						c.invalidReason = 'dleq_invalid'
-						finalInvalid.push(c.bid)
-					} else {
-						c.classification = 'pending'
-						c.pendingReason = 'dlequ_evidence_unavailable'
-						finalPending.push(c.bid)
-					}
-					continue
-				}
-				{
-					const proofsWithSecrets: Array<DleqProof & { secret: string }> = dleqProofs.map((dp, i) => ({
-						...dp,
-						secret: c.bid.lockSecrets[i] ?? '',
-					}))
-					// Verify each proof against the keyset named by its OWN `id`
-					// (multi-keyset fix): a rebid leg may be funded by proofs from
-					// more than one keyset after a mint keyset rotation. This
-					// function is non-throwing and fail-closed; every keyset is
-					// known-present at this point (pre-checked above), so a
-					// failure here is a POSITIVE verification failure over
-					// complete evidence → dleq_invalid.
-					const dleqResult = verifyBidDleqWithKeysets(
-						{ mint: c.bid.mint, legDelta: c.bid.legLockedAmount, proofs: proofsWithSecrets },
-						dleqKeysetMap,
-					)
-					if (!dleqResult.ok) {
-						// Record the reason on the classified entry so
-						// downstream consumers can distinguish DLEQ
-						// failure from NUT-7 `spent` (reason=dleq_invalid,
-						// ADR-0011 Decision 4).
-						c.classification = 'invalid'
-						c.invalidReason = 'dleq_invalid'
-						finalInvalid.push(c.bid)
-						continue
-					}
-				}
+			// Economic authority is stricter than validator validity. A direct
+			// quorum confirms this exact bid only; cumulative backing comes from
+			// independently verifying every required DLEQ leg in its bounded chain.
+			const collateral = verifyBidCollateralChain({
+				candidate: c.bid,
+				auction,
+				bidsById,
+				dleqKeysets: input.dleqKeysets,
+				dleqUnknownKeysets: input.dleqUnknownKeysets,
+				disallowedCollateralBidIds: bidsWithDuplicateProofs,
+			})
+			if (collateral.status === 'pending') {
+				c.classification = 'pending'
+				c.pendingReason = 'dlequ_evidence_unavailable'
+				finalPending.push(c.bid)
+				continue
 			}
-			// A bid with no `dleq_proof` is already rejected by validateBid
-			// Step 3.5 (`dleq_invalid`), so this path only runs with proofs.
+			if (collateral.status === 'invalid') {
+				c.classification = 'invalid'
+				c.invalidReason = 'dleq_invalid'
+				finalInvalid.push(c.bid)
+				continue
+			}
 
-			// NUT-7 is applied here as
-			// fraud-detection evidence over the valid set — never as a
-			// validity gate, and never inside the verdict (ADR-0004).
-			// - `spent` pre-settlement = double-spend fraud → invalid.
-			// - `spent` post-settlement (recorded in the settlement) = expected
-			//   terminal redemption → valid (see spendExcusable below).
-			// - `undefined`/`pending`/`unknown` = no NUT-7 evidence yet → the
-			//   bid stays VALID (quorum-confirmed).
-			if (c.nut7State === 'spent') {
-				const spendExcusable = postSettlement && input.settledBidIds !== undefined && input.settledBidIds.has(c.bid.id)
-				if (spendExcusable) finalValid.push(c.bid)
-				else finalInvalid.push(c.bid)
+			// NUT-7 positive-spend evidence applies to every collateral leg whose
+			// value is credited to this cumulative bid. DLEQ proves authenticity,
+			// not that the proof remains unspent. The narrow post-settlement
+			// exception is therefore evaluated independently for each exact leg.
+			const hasDisqualifyingSpentLeg = collateral.chain.some(({ bid }) => {
+				if (nut7States?.get(bid.id) !== 'spent') return false
+				return !(postSettlement && input.settledBidIds?.has(bid.id))
+			})
+			if (hasDisqualifyingSpentLeg) {
+				c.classification = 'invalid'
+				finalInvalid.push(c.bid)
 				continue
 			}
 			// No NUT-7 evidence, or unspent → valid.
+			trustedCollateralChains.set(c.bid.id, collateral.chain)
 			finalValid.push(c.bid)
 			continue
 		}
@@ -658,5 +617,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 		invalidBids: finalInvalid,
 		canonicalWinner,
 		currentTopValidAmount,
+		trustedCollateralChains,
 	}
 }

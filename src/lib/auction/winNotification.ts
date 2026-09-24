@@ -129,18 +129,11 @@ export async function hasValidatedPathReleaseForAuctionWin(
 	const winner = validatedBids.canonicalWinner
 	if (!winner || winner.id !== win.bidEventId) return false
 
-	const chain: ParsedBidEvent[] = []
-	const seen = new Set<string>()
-	let current: ParsedBidEvent | undefined = winner
-	while (current && !seen.has(current.id)) {
-		seen.add(current.id)
-		chain.unshift(current)
-		if (!current.prevBidId) break
-		current = validatedBids.validBids.find((bid) => bid.id === current?.prevBidId)
-		if (!current) return false
-	}
+	const trustedChain = validatedBids.trustedCollateralChains?.get(winner.id)
+	if (!trustedChain?.length) return false
 
-	for (const bid of chain) {
+	for (const leg of trustedChain) {
+		const bid = leg.bid
 		const matchingReleases = pathReleases.filter((release) => release.bidEventId === bid.id)
 		if (matchingReleases.length === 0) return false
 		const keysets = mintKeysetsByMint?.get(bid.mint) ?? (await fetchMintKeysets(bid.mint))
@@ -153,12 +146,13 @@ export async function hasValidatedPathReleaseForAuctionWin(
 					now,
 					postCloseDecision: 'winner',
 					mintKeysets: keysets,
+					expectedTokenAmount: leg.expectedAmount,
 				}).isValid,
 		)
 		if (!hasValidRelease) return false
 	}
 
-	return chain.length > 0
+	return true
 }
 
 export const hasFinalSettlementForAuctionWin = (

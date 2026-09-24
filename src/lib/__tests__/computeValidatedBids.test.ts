@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { computeValidatedBids, validateBidChainNut7PrePublish } from '../auction/bidValidation'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedValidatorVerdictEvent, MinBidCurve } from '../auction/events'
 import type { Nut7ProofState } from '../auction/constants'
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeDleqKeyset as makeFixtureKeyset, makeHonestDleqProof } from '../cashu/dleqFixture'
-import { fetchDleqKeysetsForBidsDetailed, type DleqKeysetFetcher } from '../cashu/dleq'
+import { fetchDleqKeysetsForBidsDetailed, verifyBidDleqWithKeysets, type DleqKeysetFetcher } from '../cashu/dleq'
 import type { MintKeys } from '@cashu/cashu-ts'
+import { parseBidEvent } from '../schemas/auction/bidEvent'
+import type { NostrEventLike } from '../nostr/eventLike'
 
 // =============================================================================
 // computeValidatedBids — quorum eligibility, NUT-7 truthfulness, and
@@ -38,15 +39,14 @@ const NO_CURVE: MinBidCurve = { shape: 'none', peakMultiplier: 1, raw: '' }
 // rollout boundary no longer exists).
 const DLEQ_EPOCH = 1_700_000_000
 
-const stubRawEvent = (kind: number, pubkey: string): NDKEvent =>
-	({
-		kind,
-		pubkey,
-		content: '',
-		tags: [] as string[][],
-		id: 'stub',
-		created_at: 0,
-	}) as unknown as NDKEvent
+const stubRawEvent = (kind: number, pubkey: string): NostrEventLike => ({
+	kind,
+	pubkey,
+	content: '',
+	tags: [] as string[][],
+	id: 'stub',
+	created_at: 0,
+})
 
 const buildAuction = (overrides: Partial<ParsedAuctionEvent> = {}): ParsedAuctionEvent => {
 	const startAt = overrides.startAt ?? 1_000
@@ -138,6 +138,70 @@ const buildBid = (auction: ParsedAuctionEvent, overrides: Partial<ParsedBidEvent
 		status: 'locked',
 		prevBidId: overrides.prevBidId,
 	}
+}
+
+const parseProductionBid = (
+	auction: ParsedAuctionEvent,
+	input: {
+		id: string
+		amount: number
+		expectedLegAmount: number
+		createdAt: number
+		nonce: string
+		prevBidId?: string
+	},
+): ParsedBidEvent => {
+	const locktime = auction.maxEndAt + auction.settlementGrace
+	const secret = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, input.nonce)
+	const dleqProof = makeHonestDleqProof(input.expectedLegAmount, secret)
+	const event: NostrEventLike = {
+		id: input.id,
+		kind: 1023,
+		pubkey: BIDDER_PK,
+		created_at: input.createdAt,
+		content: '',
+		tags: [
+			['e', auction.rootEventId],
+			['a', auction.coordinate],
+			['p', auction.sellerPubkey],
+			['amount', String(input.amount), 'SAT'],
+			['currency', 'SAT'],
+			['mint', 'https://mint.test'],
+			['locktime', String(locktime)],
+			['refund_pubkey', REFUND_PK],
+			['child_pubkey', COMPRESSED_PK],
+			['lock_secret', secret],
+			['proof_y', hashToCurveHexFromString(secret)],
+			['dleq_proof', JSON.stringify(dleqProof)],
+			['created_for_end_at', String(auction.endAt)],
+			['bid_nonce', input.nonce],
+			['key_scheme', 'hd_p2pk'],
+			['status', 'locked'],
+			...(input.prevBidId ? [['prev_bid', input.prevBidId]] : []),
+		],
+	}
+	const parsed = parseBidEvent(event)
+	if (!parsed.ok) throw new Error(`production bid fixture failed to parse: ${JSON.stringify(parsed.error)}`)
+	return parsed.value
+}
+
+const buildProductionAdditiveChain = (auction: ParsedAuctionEvent): [ParsedBidEvent, ParsedBidEvent] => {
+	const root = parseProductionBid(auction, {
+		id: 'a'.repeat(64),
+		amount: 5_000,
+		expectedLegAmount: 5_000,
+		createdAt: 1_500,
+		nonce: 'production-root',
+	})
+	const child = parseProductionBid(auction, {
+		id: 'b'.repeat(64),
+		amount: 5_300,
+		expectedLegAmount: 300,
+		createdAt: 1_510,
+		nonce: 'production-child',
+		prevBidId: root.id,
+	})
+	return [root, child]
 }
 
 /**
@@ -408,12 +472,48 @@ describe('computeValidatedBids — condemn-claim quorum (symmetric anti-poisonin
 	})
 })
 
-describe('computeValidatedBids — rebid chain verdict propagation', () => {
-	test('latest-leg quorum verdicts confirm earlier legs (belt-and-braces propagation)', () => {
+describe('computeValidatedBids — rebid collateral-chain authority', () => {
+	test('same-author poison parent cannot subsidize a directly confirmed 1-sat child', () => {
+		const auction = buildAuction()
+		const parent = buildBid(auction, {
+			id: '7'.repeat(64),
+			amount: 100_000,
+			legLockedAmount: 1,
+		})
+		const child = buildBid(auction, {
+			id: '8'.repeat(64),
+			amount: 100_001,
+			createdAt: parent.createdAt + 10,
+			prevBidId: parent.id,
+			legLockedAmount: 1,
+		})
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+		const dleqKeysets = dleqKeysetsFor(parent, child)
+		const childProofs = child.dleqProofs!.map((proof, index) => ({ ...proof, secret: child.lockSecrets[index]! }))
+
+		// Non-vacuous: the child's one sat is genuinely DLEQ-backed and its own
+		// direct verdicts meet quorum. It fails only because the untrusted parent
+		// cannot turn that one sat into 100001 sats of cumulative authority.
+		expect(child.dleqProofs?.reduce((sum, proof) => sum + proof.amount, 0)).toBe(1)
+		expect(verifyBidDleqWithKeysets({ mint: child.mint, legDelta: 1, proofs: childProofs }, dleqKeysets).ok).toBe(true)
+		expect(new Set(verdicts.map((verdict) => verdict.validatorPubkey)).size).toBe(auction.auditorQuorum)
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [parent, child],
+			verdicts,
+			nut7States: unspent([parent, child]),
+			dleqKeysets,
+		})
+
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(child.id)
+		expect(result.invalidBids.map((bid) => bid.id)).toContain(child.id)
+		expect(result.canonicalWinner).toBeNull()
+	})
+
+	test('legitimate additive chain remains authoritative with direct child quorum only', () => {
 		const auction = buildAuction()
 		const leg1 = buildBid(auction, { id: 'a'.repeat(63) + '1', amount: 5_000, createdAt: 1_500, legLockedAmount: 5_000 })
-		// Leg 2's own delta is 5_300 - 5_000 = 300, so its DLEQ proof must be
-		// minted for 300 (the leg delta the client verifies).
 		const leg2 = buildBid(auction, {
 			id: 'a'.repeat(63) + '2',
 			amount: 5_300,
@@ -421,11 +521,6 @@ describe('computeValidatedBids — rebid chain verdict propagation', () => {
 			prevBidId: leg1.id,
 			legLockedAmount: 300,
 		})
-		// Only the latest leg has direct verdicts. Under the per-bid d-tag
-		// scheme (ADR-0003 §4.4.1 amendment) each leg has its own replaceable
-		// address so the earlier leg's verdict would normally survive on the
-		// relay; the backward-propagation is retained as belt-and-braces for
-		// the case where a validator only published for the latest leg.
 		const verdicts = [
 			buildVerdict(leg2, { validatorPubkey: V1, claim: 'won_pending_settlement' }),
 			buildVerdict(leg2, { validatorPubkey: V2, claim: 'won_pending_settlement' }),
@@ -437,8 +532,280 @@ describe('computeValidatedBids — rebid chain verdict propagation', () => {
 			nut7States: unspent([leg1, leg2]),
 			dleqKeysets: dleqKeysetsFor(leg1, leg2),
 		})
-		expect(result.validBids).toHaveLength(2)
+		expect(result.validBids.map((bid) => bid.id)).toEqual([leg2.id])
+		expect(result.pendingBids.map((bid) => bid.id)).toContain(leg1.id)
 		expect(result.canonicalWinner?.id).toBe(leg2.id)
+		expect(leg1.dleqProofs?.reduce((sum, proof) => sum + proof.amount, 0)).toBe(5_000)
+		expect(leg2.dleqProofs?.reduce((sum, proof) => sum + proof.amount, 0)).toBe(300)
+	})
+
+	test('production-parsed 5000 + 300 chain exposes immutable trusted leg amounts without synthesizing parent quorum', () => {
+		const auction = buildAuction()
+		const [root, child] = buildProductionAdditiveChain(auction)
+		const rootBefore = JSON.stringify(root)
+		const childBefore = JSON.stringify(child)
+		const verdicts = [
+			buildVerdict(child, { validatorPubkey: V1, claim: 'won_pending_settlement' }),
+			buildVerdict(child, { validatorPubkey: V2, claim: 'won_pending_settlement' }),
+		]
+
+		// The production parser initializes the child's placeholder from its
+		// cumulative amount. Economic authority must not depend on rewriting it.
+		expect(child.legLockedAmount).toBe(5_300)
+		const result = computeValidatedBids({
+			auction,
+			bids: [root, child],
+			verdicts,
+			nut7States: unspent([root, child]),
+			dleqKeysets: dleqKeysetsFor(root, child),
+		})
+
+		expect(result.classified.find((entry) => entry.bid.id === root.id)?.classification).toBe('pending')
+		expect(result.validBids.map((bid) => bid.id)).toEqual([child.id])
+		expect(result.canonicalWinner?.id).toBe(child.id)
+		expect(result.canonicalWinner?.amount).toBe(5_300)
+		expect(result.trustedCollateralChains?.get(child.id)?.map((leg) => [leg.bid.id, leg.expectedAmount])).toEqual([
+			[root.id, 5_000],
+			[child.id, 300],
+		])
+		expect(JSON.stringify(root)).toBe(rootBefore)
+		expect(JSON.stringify(child)).toBe(childBefore)
+		expect(child.legLockedAmount).toBe(5_300)
+	})
+
+	test('spent ancestor cannot contribute pre-settlement collateral credit', () => {
+		const auction = buildAuction()
+		const [root, child] = buildProductionAdditiveChain(auction)
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+		const result = computeValidatedBids({
+			auction,
+			bids: [root, child],
+			verdicts,
+			nut7States: new Map<string, Nut7ProofState>([
+				[root.id, 'spent'],
+				[child.id, 'unspent'],
+			]),
+			dleqKeysets: dleqKeysetsFor(root, child),
+		})
+
+		expect(result.classified.find((entry) => entry.bid.id === child.id)?.classification).toBe('invalid')
+		expect(result.invalidBids.map((bid) => bid.id)).toContain(child.id)
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(child.id)
+		expect(result.canonicalWinner).toBeNull()
+		expect(result.trustedCollateralChains?.has(child.id)).toBe(false)
+	})
+
+	test('post-settlement spent exception is scoped to every exact credited leg', () => {
+		const auction = buildAuction()
+		const [root, child] = buildProductionAdditiveChain(auction)
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+		const spent = new Map<string, Nut7ProofState>([
+			[root.id, 'spent'],
+			[child.id, 'spent'],
+		])
+		const accepted = computeValidatedBids({
+			auction,
+			bids: [root, child],
+			verdicts,
+			nut7States: spent,
+			postSettlement: true,
+			settledBidIds: new Set([root.id, child.id]),
+			dleqKeysets: dleqKeysetsFor(root, child),
+		})
+		expect(accepted.canonicalWinner?.id).toBe(child.id)
+		expect(accepted.validBids.map((bid) => bid.id)).toEqual([child.id])
+
+		const missingAncestorRecord = computeValidatedBids({
+			auction,
+			bids: [root, child],
+			verdicts,
+			nut7States: spent,
+			postSettlement: true,
+			settledBidIds: new Set([child.id]),
+			dleqKeysets: dleqKeysetsFor(root, child),
+		})
+		expect(missingAncestorRecord.classified.find((entry) => entry.bid.id === child.id)?.classification).toBe('invalid')
+		expect(missingAncestorRecord.invalidBids.map((bid) => bid.id)).toContain(child.id)
+		expect(missingAncestorRecord.canonicalWinner).toBeNull()
+	})
+
+	test('trusted collateral chain allows exactly 256 credited legs and rejects 257', () => {
+		const auction = buildAuction()
+		const chain: ParsedBidEvent[] = []
+		for (let index = 0; index < 257; index += 1) {
+			chain.push(
+				buildBid(auction, {
+					id: (index + 1).toString(16).padStart(64, '0'),
+					amount: 1_000 + index,
+					legLockedAmount: index === 0 ? 1_000 : 1,
+					prevBidId: index === 0 ? undefined : chain[index - 1]?.id,
+				}),
+			)
+		}
+		const run = (bids: ParsedBidEvent[]) => {
+			const candidate = bids[bids.length - 1]!
+			return computeValidatedBids({
+				auction,
+				bids,
+				verdicts: [buildVerdict(candidate, { validatorPubkey: V1 }), buildVerdict(candidate, { validatorPubkey: V2 })],
+				nut7States: unspent(bids),
+				dleqKeysets: dleqKeysetsFor(...bids),
+			})
+		}
+
+		const atLimit = run(chain.slice(0, 256))
+		expect(atLimit.canonicalWinner?.id).toBe(chain[255]?.id)
+		expect(atLimit.trustedCollateralChains?.get(chain[255]!.id)).toHaveLength(256)
+
+		const overLimit = run(chain)
+		expect(overLimit.invalidBids.map((bid) => bid.id)).toContain(chain[256]?.id)
+		expect(overLimit.canonicalWinner).toBeNull()
+	})
+
+	test('trusted collateral derivation is invariant to input-array permutation', () => {
+		const auction = buildAuction()
+		const [root, child] = buildProductionAdditiveChain(auction)
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+		const input = {
+			auction,
+			verdicts,
+			nut7States: unspent([root, child]),
+			dleqKeysets: dleqKeysetsFor(root, child),
+		}
+		const first = computeValidatedBids({ ...input, bids: [root, child] })
+		const second = computeValidatedBids({ ...input, bids: [child, root] })
+		const summarize = (result: ReturnType<typeof computeValidatedBids>) => ({
+			winner: result.canonicalWinner?.id,
+			valid: result.validBids.map((bid) => bid.id).sort(),
+			chain: result.trustedCollateralChains?.get(child.id)?.map((leg) => [leg.bid.id, leg.expectedAmount]),
+		})
+		expect(summarize(second)).toEqual(summarize(first))
+	})
+
+	test('child verdicts remain bound to the child and do not synthesize ancestor quorum', () => {
+		const auction = buildAuction()
+		const parent = buildBid(auction, { id: '3'.repeat(64), amount: 5_000, legLockedAmount: 5_000 })
+		const child = buildBid(auction, {
+			id: '4'.repeat(64),
+			amount: 5_300,
+			createdAt: parent.createdAt + 10,
+			prevBidId: parent.id,
+			legLockedAmount: 300,
+		})
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+
+		expect(verdicts.every((verdict) => verdict.bidEventId === child.id)).toBe(true)
+		const result = computeValidatedBids({
+			auction,
+			bids: [parent, child],
+			verdicts,
+			nut7States: unspent([parent, child]),
+			dleqKeysets: dleqKeysetsFor(parent, child),
+		})
+
+		expect(result.classified.find((entry) => entry.bid.id === parent.id)?.classification).toBe('pending')
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(parent.id)
+		expect(verdicts.every((verdict) => verdict.bidEventId === child.id)).toBe(true)
+	})
+
+	test('cross-author parent cannot contribute monetary credit to an attacker child', () => {
+		const auction = buildAuction()
+		const victim = buildBid(auction, {
+			id: '5'.repeat(64),
+			bidderPubkey: '1'.repeat(64),
+			amount: 100_000,
+			legLockedAmount: 100_000,
+		})
+		const attacker = buildBid(auction, {
+			id: '6'.repeat(64),
+			bidderPubkey: '2'.repeat(64),
+			amount: 100_001,
+			createdAt: victim.createdAt + 10,
+			prevBidId: victim.id,
+			legLockedAmount: 1,
+		})
+		const verdicts = [buildVerdict(attacker, { validatorPubkey: V1 }), buildVerdict(attacker, { validatorPubkey: V2 })]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [victim, attacker],
+			verdicts,
+			nut7States: unspent([victim, attacker]),
+			dleqKeysets: dleqKeysetsFor(victim, attacker),
+		})
+
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(attacker.id)
+		expect(result.invalidBids.map((bid) => bid.id)).toContain(attacker.id)
+		expect(result.canonicalWinner).toBeNull()
+	})
+
+	test('missing ancestor keyset evidence keeps the directly confirmed child pending', () => {
+		const auction = buildAuction()
+		const locktime = auction.maxEndAt + auction.settlementGrace
+		const parentKeysetId = '00aaaaaaaaaaaaaa'
+		const childKeysetId = '00bbbbbbbbbbbbbb'
+		const parentSecret = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'missing-ancestor-keyset')
+		const childSecret = buildLockSecret(COMPRESSED_PK, locktime, REFUND_PK, 'available-child-keyset')
+		const parent = buildBid(auction, {
+			id: '1'.repeat(64),
+			amount: 5_000,
+			lockSecrets: [parentSecret],
+			dleqProofs: [makeHonestDleqProof(5_000, parentSecret, { keysetId: parentKeysetId })],
+		})
+		const child = buildBid(auction, {
+			id: '2'.repeat(64),
+			amount: 5_300,
+			createdAt: parent.createdAt + 10,
+			prevBidId: parent.id,
+			legLockedAmount: 300,
+			lockSecrets: [childSecret],
+			dleqProofs: [makeHonestDleqProof(300, childSecret, { keysetId: childKeysetId })],
+		})
+		const verdicts = [buildVerdict(child, { validatorPubkey: V1 }), buildVerdict(child, { validatorPubkey: V2 })]
+		const childKeyset = makeFixtureKeyset([300], { keysetId: childKeysetId })
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [parent, child],
+			verdicts,
+			nut7States: unspent([parent, child]),
+			dleqKeysets: new Map([[`${child.mint}:${childKeysetId}`, childKeyset]]),
+		})
+
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(child.id)
+		expect(result.pendingBids.map((bid) => bid.id)).toContain(child.id)
+		expect(result.classified.find((entry) => entry.bid.id === child.id)?.pendingReason).toBe('dlequ_evidence_unavailable')
+		expect(result.canonicalWinner).toBeNull()
+	})
+
+	test('cyclic chain fails closed without using either parent amount as collateral credit', () => {
+		const auction = buildAuction()
+		const first = buildBid(auction, {
+			id: '9'.repeat(64),
+			amount: 5_000,
+			legLockedAmount: 300,
+		})
+		const second = buildBid(auction, {
+			id: '0'.repeat(64),
+			amount: 5_300,
+			createdAt: first.createdAt + 10,
+			prevBidId: first.id,
+			legLockedAmount: 300,
+		})
+		first.prevBidId = second.id
+		const verdicts = [buildVerdict(second, { validatorPubkey: V1 }), buildVerdict(second, { validatorPubkey: V2 })]
+
+		const result = computeValidatedBids({
+			auction,
+			bids: [first, second],
+			verdicts,
+			nut7States: unspent([first, second]),
+			dleqKeysets: dleqKeysetsFor(first, second),
+		})
+
+		expect(result.validBids.map((bid) => bid.id)).not.toContain(second.id)
+		expect(result.invalidBids.map((bid) => bid.id)).toContain(second.id)
+		expect(result.canonicalWinner).toBeNull()
 	})
 
 	test('stale + latest verdict copies from the same validator count once', () => {
