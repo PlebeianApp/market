@@ -22,7 +22,7 @@
  * floating-point arithmetic.
  */
 
-import { AUCTION_MULTIPARTY_SCHEDULE_MAX_ENTRIES } from './multipartySchedule'
+import { AUCTION_MULTIPARTY_SCHEDULE_MAX_ENTRIES, type AuctionMultipartyCanonicalSchedule } from './multipartySchedule'
 
 /** Default floor for a single payout leg, in sats. */
 export const AUCTION_MULTIPARTY_LEG_FLOOR_SATS = 10
@@ -133,3 +133,16 @@ export const computeMultipartyLegFloorFromSchedule = (
 	auxiliaryEntryCount: number,
 	options: Omit<MultipartyLegFloorInput, 'auxiliaryEntryCount'> = {},
 ): MultipartyLegFloor => computeMultipartyLegFloor({ auxiliaryEntryCount, ...options })
+
+/**
+ * Project the floor from a **parsed canonical schedule**.
+ *
+ * This is the one place the D1 rule is turned into arithmetic: the seller is implicit, so the
+ * schedule's entries are exactly the auxiliary entries the floor counts. Reading the count here
+ * rather than at each call site is what keeps a caller from accidentally counting the seller twice
+ * (once as an entry, once as the implicit index 0) and inflating the minimum bid.
+ */
+export const computeMultipartyLegFloorFromCanonicalSchedule = (
+	schedule: AuctionMultipartyCanonicalSchedule,
+	options: Omit<MultipartyLegFloorInput, 'auxiliaryEntryCount'> = {},
+): MultipartyLegFloor => computeMultipartyLegFloor({ auxiliaryEntryCount: schedule.entries.length, ...options })

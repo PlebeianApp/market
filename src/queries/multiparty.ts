@@ -46,8 +46,7 @@ const parseProfile = (event: NostrEventLike): MultipartyAnnouncementProfile | nu
 	try {
 		const content = JSON.parse(event.content) as { name?: unknown; display_name?: unknown; picture?: unknown; about?: unknown }
 		const name = typeof content.name === 'string' && content.name.trim() ? content.name.trim() : undefined
-		const displayName =
-			typeof content.display_name === 'string' && content.display_name.trim() ? content.display_name.trim() : undefined
+		const displayName = typeof content.display_name === 'string' && content.display_name.trim() ? content.display_name.trim() : undefined
 		const picture = typeof content.picture === 'string' && content.picture.trim() ? content.picture.trim() : undefined
 		const about = typeof content.about === 'string' && content.about.trim() ? content.about.trim() : undefined
 		const resolvedName = displayName ?? name
@@ -69,13 +68,9 @@ const parsePolicy = (event: NostrEventLike): MultipartyAnnouncementPolicy | null
 	try {
 		const content = JSON.parse(event.content) as { minValidators?: unknown; minQuorumPercent?: unknown; notes?: unknown }
 		const minValidators =
-			typeof content.minValidators === 'number' && Number.isSafeInteger(content.minValidators)
-				? content.minValidators
-				: undefined
+			typeof content.minValidators === 'number' && Number.isSafeInteger(content.minValidators) ? content.minValidators : undefined
 		const minQuorumPercent =
-			typeof content.minQuorumPercent === 'number' && Number.isSafeInteger(content.minQuorumPercent)
-				? content.minQuorumPercent
-				: undefined
+			typeof content.minQuorumPercent === 'number' && Number.isSafeInteger(content.minQuorumPercent) ? content.minQuorumPercent : undefined
 		const notes = typeof content.notes === 'string' && content.notes.trim() ? content.notes.trim() : undefined
 		return {
 			validatorPubkey: event.pubkey,
@@ -103,10 +98,7 @@ export const fetchMultipartyAnnouncements = async (): Promise<MultipartyAnnounce
 		applesauceIo.fetchEvents({ kinds: [VALIDATOR_POLICY_KIND], limit: ANNOUNCEMENT_LIMIT }),
 	])
 
-	const capabilities: ParsedMultipartyPayoutCapability[] = parseAll(
-		capabilityEvents.map(toRawEvent),
-		parseMultipartyPayoutCapability,
-	)
+	const capabilities: ParsedMultipartyPayoutCapability[] = parseAll(capabilityEvents.map(toRawEvent), parseMultipartyPayoutCapability)
 	const offers: ParsedMultipartyValidatorOffer[] = parseAll(offerEvents.map(toRawEvent), parseMultipartyValidatorOffer)
 	const policies = policyEvents
 		.map(toRawEvent)
@@ -120,9 +112,7 @@ export const fetchMultipartyAnnouncements = async (): Promise<MultipartyAnnounce
 	const profiles: MultipartyAnnouncementProfile[] =
 		authors.length === 0
 			? []
-			: (
-					await applesauceIo.fetchEvents({ kinds: [0], authors, limit: ANNOUNCEMENT_LIMIT })
-				)
+			: (await applesauceIo.fetchEvents({ kinds: [0], authors, limit: ANNOUNCEMENT_LIMIT }))
 					.map(toRawEvent)
 					.map(parseProfile)
 					.filter((profile): profile is MultipartyAnnouncementProfile => profile !== null)

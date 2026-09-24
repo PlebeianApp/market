@@ -3,9 +3,11 @@ import {
 	AUCTION_MULTIPARTY_LEG_FLOOR_SATS,
 	AuctionMultipartyLegFloorError,
 	computeMultipartyLegFloor,
+	computeMultipartyLegFloorFromCanonicalSchedule,
 	computeMultipartyLegFloorFromSchedule,
 	isLegLockedAmountAboveFloor,
 } from '../auction/multipartyLegFloor'
+import type { AuctionMultipartyCanonicalSchedule, AuctionMultipartyCanonicalScheduleEntry } from '../auction/multipartySchedule'
 
 describe('Auction multiparty leg floor', () => {
 	test('single-party auctions keep the historical per-bid floor', () => {
@@ -72,5 +74,34 @@ describe('Auction multiparty leg floor', () => {
 		expect(Object.isFrozen(floor)).toBe(true)
 		expect(computeMultipartyLegFloorFromSchedule(2)).toEqual(floor)
 		expect(computeMultipartyLegFloorFromSchedule(2, { legFloorSats: 5 }).minimumBidSats).toBe(15)
+	})
+
+	test('a parsed canonical schedule counts its entries as the auxiliary entries, seller excluded', () => {
+		// D1: the seller is implicit, so the schedule holds auxiliary entries only — counting the
+		// seller here as well would inflate the minimum by one leg.
+		const schedule = (entryCount: number): AuctionMultipartyCanonicalSchedule => ({
+			entries: Array.from(
+				{ length: entryCount },
+				(_, index): AuctionMultipartyCanonicalScheduleEntry => ({
+					schedule_index: index,
+					role: index % 2 === 0 ? 'validator' : 'v4v',
+					recipient_pubkey: `0${(index % 2) + 2}${index.toString(16).padStart(2, '0')}${'a'.repeat(60)}`,
+					payout_capability_event_id: 'p'.repeat(64),
+					allocation_bps: 100,
+				}),
+			),
+			auxiliary_allocation_bps: entryCount * 100,
+			seller_remainder_bps: 10_000 - entryCount * 100,
+			canonical_bytes: new Uint8Array(),
+			commitment_preimage: new Uint8Array(),
+			schedule_commitment: '0'.repeat(64),
+		})
+
+		expect(computeMultipartyLegFloorFromCanonicalSchedule(schedule(0))).toEqual(computeMultipartyLegFloor({ auxiliaryEntryCount: 0 }))
+		expect(computeMultipartyLegFloorFromCanonicalSchedule(schedule(3)).payoutLegCount).toBe(4)
+		expect(computeMultipartyLegFloorFromCanonicalSchedule(schedule(5)).minimumBidSats).toBe(60)
+		expect(computeMultipartyLegFloorFromCanonicalSchedule(schedule(5), { legFloorSats: 5 }).minimumBidSats).toBe(30)
+		// The wire limit still applies: 17 auxiliary entries is past the schedule's own bound.
+		expect(() => computeMultipartyLegFloorFromCanonicalSchedule(schedule(17))).toThrow(AuctionMultipartyLegFloorError)
 	})
 })

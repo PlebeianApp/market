@@ -159,14 +159,14 @@ describe('buildMultipartyBidManifest — the happy path', () => {
 		expect(result.locks.map((lock) => lock.amountSats)).toEqual(result.manifest.rows.map((row) => row.amount_sats))
 	})
 
+	// The file runs in well under a second on an idle machine, but the first schnorr use pays for
+	// curve precomputation — under load that has exceeded bun's 5s default here.
 	test('the manifest is what the wire codec produces for those rows', () => {
 		const result = buildMultipartyBidManifest(baseInput())
 		if (!result.ok) throw new Error('expected ok')
 		const recomputed = compileManifest(result.manifest.rows.map(({ manifest_index: _i, ...row }) => row))
 		expect(recomputed.manifest_commitment).toBe(result.manifest.manifest_commitment)
-	}, // The file runs in well under a second on an idle machine, but the first schnorr use pays
-	// for curve precomputation — under load that has exceeded bun's 5s default here.
-	30_000)
+	}, 30_000)
 })
 
 describe('buildMultipartyBidManifest — refusals', () => {
