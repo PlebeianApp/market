@@ -14,7 +14,7 @@ import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvents'
-import { assertAuctionOrderFixtureValid, buildAuctionClaimOrderTags, buildAuctionOrderFixture } from './index'
+import { assertAuctionOrderFixtureValid, buildAuctionClaimOrderTags, buildAuctionOrderFixture } from '@/lib/auction/auctionOrderFixture'
 
 /**
  * Cross-event validation for the auction order fixture.

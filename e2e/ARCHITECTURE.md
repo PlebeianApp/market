@@ -399,8 +399,9 @@ For CI, the relay always starts fresh. For local dev, `reuseExistingServer: true
 ### Production-Valid Fixture Chains
 
 A multi-event fixture must be something a real client could have published.
-`buildAuctionOrderFixture()` (`e2e/scenarios/index.ts`) therefore returns only
-after `assertAuctionOrderFixtureValid()` has pushed every seeded event through
+`buildAuctionOrderFixture()` (`src/lib/auction/auctionOrderFixture.ts`) therefore
+returns only after `assertAuctionOrderFixtureValid()` has pushed every seeded
+event through
 the **production** parsers (`parseAuctionEvent`, `parseBidEvent`,
 `parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`)
 and the production **cross-event** validators (`computeValidatedBids`,
@@ -413,8 +414,8 @@ reference - proves only that the UI reacts to events no client would publish.
 The fixture asserts against the parsers and validators production uses, not a
 hand-rolled copy, so parser drift fails the fixture instead of silently
 weakening the test. Follow the same shape for any new multi-event fixture;
-`e2e/scenarios/auctionOrderFixture.test.ts` covers both the valid chain and the
-gate's rejections.
+`src/lib/__tests__/auctionOrderFixture.test.ts` covers both the valid chain and
+the gate's rejections.
 
 The fixture is only half of the chain: a valid bid → path release → settlement
 proves the _auction_ is real, not that the _order_ on top of it is. `seedOrder('auction', …)`
@@ -439,8 +440,22 @@ client produces _and_ let the auction e2e pass through the generic
 `PENDING`, and `Order Details - Seller View - Auctions` asserts exactly that,
 with `Process Order` reachable at `PENDING`.
 
-The fixture test runs in the unit suite (`bun run test:unit` includes
-`e2e/scenarios/`), so the publish-time gate is enforced on every PR rather than
+### Where the fixture lives
+
+The fixture builder is pure event construction: it signs and validates locally,
+opens no relay, and never reads the e2e test config
+(`e2e/test-config.ts`). It therefore lives outside the e2e harness, in
+`src/lib/auction/auctionOrderFixture.ts`, beside the production builders and
+validators it is written against, and `e2e/scenarios/index.ts` imports it. That
+keeps the dependency pointing the right way: `e2e/` consumes `src/`, never the
+reverse. It also keeps the fixture reachable from the unit suite without
+importing `e2e/scenarios/index.ts`, which installs a global `ws` WebSocket
+implementation for `nostr-tools` at module scope — a process-wide side effect
+that does not belong in the unit run.
+
+The gate test is `src/lib/__tests__/auctionOrderFixture.test.ts`. Because the
+unit glob already covers everything under `src/`, the publish-time gate runs on
+every PR (`bun run test:unit`) with no change to `package.json`, rather than
 only when the Playwright suite happens to execute.
 
 ---
