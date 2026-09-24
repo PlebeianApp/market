@@ -31,6 +31,7 @@
 
 import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from './multipartySchedule'
 import { requiredVerdictMajority } from './verdictMajority'
+import type { ValidatorPolicyDocument } from './events'
 
 /** A multiparty auction MUST list at least this many validators. */
 export const AUCTION_MINIMUM_VALIDATORS = 2
@@ -88,6 +89,23 @@ export const sanitizeAuctionValidatorRuleset = (ruleset?: Partial<AuctionValidat
 			: DEFAULT_AUCTION_VALIDATOR_RULESET.minimum_quorum_percent
 
 	return Object.freeze({ minimum_validators: minimumValidators, minimum_quorum_percent: minimumQuorumPercent })
+}
+
+/**
+ * A validator's published policy document → the ruleset it applies, in the one place both the
+ * client and the validator service read it from.
+ *
+ * Returns a `Partial`, because an announcement that declares neither field must fall back to
+ * the protocol defaults rather than claim a ruleset it never stated; `sanitizeAuctionValidatorRuleset`
+ * stays the authority (a policy document is untrusted third-party data).
+ */
+export const auctionValidatorRulesetFromPolicy = (
+	policy: Pick<ValidatorPolicyDocument, 'minValidators' | 'minQuorumPercent'>,
+): Partial<AuctionValidatorRuleset> => {
+	const ruleset: { minimum_validators?: number; minimum_quorum_percent?: number } = {}
+	if (typeof policy.minValidators === 'number') ruleset.minimum_validators = policy.minValidators
+	if (typeof policy.minQuorumPercent === 'number') ruleset.minimum_quorum_percent = policy.minQuorumPercent
+	return ruleset
 }
 
 /** The count a ruleset's percentage demands of a pool: `ceil(P × percent / 100)`. */

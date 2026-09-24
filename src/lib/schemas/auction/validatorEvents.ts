@@ -28,6 +28,7 @@ import {
 	type Nut7ProofState,
 	type ValidatorClaim,
 } from '../../auction/constants'
+import { AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS } from '../../auction/auctionValidatorPolicy'
 import type {
 	AuctionPolicyVerdictDocument,
 	BidderAggregateReputationDocument,
@@ -294,6 +295,14 @@ export const ValidatorPolicyDocumentSchema = z.object({
 		])
 		.optional(),
 	griefingDecayDays: z.number().int().nonnegative().optional(),
+	// The validator's ruleset — what it demands of the auctions it audits. Declared in
+	// `ValidatorPolicyDocument` since the ruleset amendment, but absent from this schema,
+	// which meant Zod silently stripped both fields and the declared ruleset was
+	// unreadable on the wire: a client could see a validator's fee and name but never the
+	// pool and quorum it requires. Bounds mirror `sanitizeAuctionValidatorRuleset`, which
+	// remains the authority at the point of use (a ruleset is untrusted data).
+	minValidators: z.number().int().positive().max(AUCTION_VALIDATOR_RULESET_MAX_VALIDATORS).optional(),
+	minQuorumPercent: z.number().int().positive().max(100).optional(),
 	notes: z.string().optional(),
 }) satisfies z.ZodType<ValidatorPolicyDocument>
 
