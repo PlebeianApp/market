@@ -287,8 +287,14 @@ Two records split that work and neither duplicates the other:
 - the **recovery record** (D16) protects the key material — each row's compressed child key, its
   projection, its path, its amount — under the leg's one refund authority;
 - the **construction journal** protects the sequence: per row, whether it is `planned`, `attempted`,
-  `locked`, `failed_pre_mint` or `uncertain`. It is keyed by the same refund authority and stores
-  **no proofs and no keys**, so it is a second store, never a second spendable-proof authority.
+  `locked`, `failed_pre_mint`, `locked_to_foreign_key` or `uncertain`. It is keyed by the same refund
+  authority and stores **no proofs and no keys**, so it is a second store, never a second
+  spendable-proof authority.
+
+`locked_to_foreign_key` is its own state because a mint that returns a row's proofs locked to a key
+that is **not** that row's has given a definite, bad answer rather than an unknown one: the send set
+exists and is reclaimable through the refund branch once the locktime opens. Calling it `locked` would
+hide a leg that cannot settle; calling it `uncertain` would hide that it can be reclaimed.
 
 The rule that makes recovery possible: `planned → attempted` is written with **confirmed-write
 semantics before the swap is sent**, and there is no transition back. An attempted row is **never
@@ -297,13 +303,22 @@ either double-spends them or locks the same amount twice. A row whose outcome ca
 stays `uncertain`, and the leg's verdict is then `uncertain` rather than `partial`, because claiming
 "partial" would assert that the unknown row is not locked.
 
+One exception, and it is narrow: a row settled as `failed_pre_mint` — a failure proved to precede the
+mint call, so its inputs were never consumed — **may** be returned to `planned` and attempted again.
+Nothing else may be reopened: `uncertain` because the outcome is unknown, `locked` and
+`locked_to_foreign_key` because the inputs are gone.
+
 Resolution is **evidence, and only evidence**: proofs (verified against that row's own key before the
 row may be called locked), a failure proved to precede the mint call, or nothing — and nothing leaves
 the row uncertain. Silence is not evidence of failure, nor of success.
 
-The verdicts are `complete`, `partial`, `unsent` and `uncertain`, one sentence each (D14), and the
-summary names the locked rows, because on a partial leg those are exactly the ones a refund branch
-can reclaim once the locktime opens.
+The verdicts are `complete`, `partial`, `unsent` and `uncertain`, one sentence each (D14), with the
+counts substituted. `complete` and `unsent` are exact — every row locked, or no row sent at all — and
+everything else is `partial`, deliberately including a leg whose rows were all sent and none of which
+locked: "partial" with a locked count of zero is the honest description of a leg that consumed inputs
+and holds nothing usable, and the counts carry that without needing a fifth name. The summary names
+the locked rows (which can settle) and the foreign-key rows (which can be reclaimed after the
+locktime), because those two sets lead to different actions.
 
 ## Consequences
 
@@ -335,6 +350,8 @@ can reclaim once the locktime opens.
 - `src/lib/auction/multipartyLegLockOutcome.ts` — per-row verification of what the mint returned (D16, manifest §6).
 - `src/lib/auction/multipartyRecoveryRecord.ts` — the multi-row pre-lock recovery record (D16).
 - `src/lib/auction/multipartyLegJournal.ts` — the construction journal: per-row sequence state, the attempt-before-request rule, and reconciliation against evidence (D17).
+- `src/lib/auction/multipartyLegConstruction.ts` — the construction loop over an injected mint seam (D16/D17, unwired).
+- `docs/handoffs/auction-multiparty-construction-log-2026-09-24.md` — the staged construction log: what each stage did and the decisions taken.
 - Later: the auction root tag builder, the bid manifest (Gate D2), the path release (Gate H), the validator service, and the auction detail UI.
 
 ## Open questions
