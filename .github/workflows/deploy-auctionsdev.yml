@@ -421,19 +421,39 @@ jobs:
               /home/deployer/incoming/market-auctionsdev-*) ;;
               *) echo 'Refusing unsafe abandoned incoming path' >&2; exit 1 ;;
             esac
-            test -d "$STALE"
-            test ! -L "$STALE"
-            test "$(readlink -f "$STALE")" = "$STALE"
+            if [[ -L "$STALE" ]]; then
+              echo 'Refusing symlinked abandoned incoming path' >&2
+              exit 1
+            fi
+            if [[ ! -e "$STALE" ]]; then
+              echo 'Authorized abandoned incoming directory is already absent'
+              exit 0
+            fi
+            if [[ ! -d "$STALE" ]]; then
+              echo 'Refusing non-directory abandoned incoming path' >&2
+              exit 1
+            fi
+            if [[ "$(readlink -f "$STALE")" != "$STALE" ]]; then
+              echo 'Refusing abandoned incoming realpath mismatch' >&2
+              exit 1
+            fi
             ACTIVE_RELEASE="$(readlink -f /home/deployer/market-auctionsdev 2>/dev/null || true)"
-            test "$ACTIVE_RELEASE" != "$STALE"
+            if [[ "$ACTIVE_RELEASE" = "$STALE" ]]; then
+              echo 'Refusing active abandoned incoming directory' >&2
+              exit 1
+            fi
             PM2_STATE="$(pm2 jlist 2>/dev/null || true)"
             if grep -Fq "$STALE" <<<"$PM2_STATE"; then
               echo 'Abandoned incoming directory is referenced by PM2' >&2
               exit 1
             fi
-            test -z "$(find "$STALE" -mindepth 1 -maxdepth 1 -print -quit)"
+            if [[ -n "$(find "$STALE" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+              echo 'Refusing nonempty abandoned incoming directory' >&2
+              exit 1
+            fi
             rmdir "$STALE"
             test ! -e "$STALE"
+            echo 'Authorized abandoned incoming directory removed'
 
       - name: Prepare isolated incoming directory
         uses: appleboy/ssh-action@v1.0.3
