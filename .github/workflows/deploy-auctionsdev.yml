@@ -408,53 +408,6 @@ jobs:
           rm -f runtime.env
           test ! -e runtime.env
 
-      - name: Clean authorized abandoned incoming directory
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          script: |
-            set -euo pipefail
-            STALE='/home/deployer/incoming/market-auctionsdev-34c568066631-36101312739-1'
-            case "$STALE" in
-              /home/deployer/incoming/market-auctionsdev-*) ;;
-              *) echo 'Refusing unsafe abandoned incoming path' >&2; exit 1 ;;
-            esac
-            if [[ -L "$STALE" ]]; then
-              echo 'Refusing symlinked abandoned incoming path' >&2
-              exit 1
-            fi
-            if [[ ! -e "$STALE" ]]; then
-              echo 'Authorized abandoned incoming directory is already absent'
-              exit 0
-            fi
-            if [[ ! -d "$STALE" ]]; then
-              echo 'Refusing non-directory abandoned incoming path' >&2
-              exit 1
-            fi
-            if [[ "$(readlink -f "$STALE")" != "$STALE" ]]; then
-              echo 'Refusing abandoned incoming realpath mismatch' >&2
-              exit 1
-            fi
-            ACTIVE_RELEASE="$(readlink -f /home/deployer/market-auctionsdev 2>/dev/null || true)"
-            if [[ "$ACTIVE_RELEASE" = "$STALE" ]]; then
-              echo 'Refusing active abandoned incoming directory' >&2
-              exit 1
-            fi
-            PM2_STATE="$(pm2 jlist 2>/dev/null || true)"
-            if grep -Fq "$STALE" <<<"$PM2_STATE"; then
-              echo 'Abandoned incoming directory is referenced by PM2' >&2
-              exit 1
-            fi
-            if [[ -n "$(find "$STALE" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
-              echo 'Refusing nonempty abandoned incoming directory' >&2
-              exit 1
-            fi
-            rmdir "$STALE"
-            test ! -e "$STALE"
-            echo 'Authorized abandoned incoming directory removed'
-
       - name: Prepare isolated incoming directory
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -463,7 +416,17 @@ jobs:
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             set -euo pipefail
-            INCOMING='/home/deployer/incoming/${{ needs.build.outputs.release_name }}'
+            MARKET_SHA='${{ needs.build.outputs.market_sha }}'
+            RELEASE_NAME='${{ needs.build.outputs.release_name }}'
+            EXPECTED_RELEASE_NAME="market-auctionsdev-${MARKET_SHA:0:12}-${{ github.run_id }}-${{ github.run_attempt }}"
+            test "$RELEASE_NAME" = "$EXPECTED_RELEASE_NAME"
+            [[ "$RELEASE_NAME" =~ ^market-auctionsdev-[0-9a-f]{12}-[0-9]+-[0-9]+$ ]]
+            INCOMING="/home/deployer/incoming/$RELEASE_NAME"
+            case "$INCOMING" in
+              /home/deployer/incoming/market-auctionsdev-*) ;;
+              *) echo 'Unsafe incoming release directory' >&2; exit 1 ;;
+            esac
+            test "$(dirname -- "$INCOMING")" = '/home/deployer/incoming'
             test ! -e "$INCOMING"
             mkdir -p "$INCOMING" /home/deployer/releases /home/deployer/logs /home/deployer/market-auctionsdev-fake-mint
             chmod 0700 "$INCOMING" /home/deployer/market-auctionsdev-fake-mint
@@ -494,7 +457,11 @@ jobs:
           command_timeout: 10m
           script: |
             set -euo pipefail
+            MARKET_SHA='${{ needs.build.outputs.market_sha }}'
             RELEASE_NAME='${{ needs.build.outputs.release_name }}'
+            EXPECTED_RELEASE_NAME="market-auctionsdev-${MARKET_SHA:0:12}-${{ github.run_id }}-${{ github.run_attempt }}"
+            test "$RELEASE_NAME" = "$EXPECTED_RELEASE_NAME"
+            [[ "$RELEASE_NAME" =~ ^market-auctionsdev-[0-9a-f]{12}-[0-9]+-[0-9]+$ ]]
             INCOMING="/home/deployer/incoming/$RELEASE_NAME"
             RELEASE_DIR="/home/deployer/releases/$RELEASE_NAME"
             CANDIDATE_DIR="/home/deployer/releases/.candidate-$RELEASE_NAME"
@@ -512,6 +479,7 @@ jobs:
               /home/deployer/incoming/market-auctionsdev-*) ;;
               *) echo 'Unsafe incoming release directory' >&2; exit 1 ;;
             esac
+            test "$(dirname -- "$INCOMING")" = '/home/deployer/incoming'
             test -d "$INCOMING"
             test ! -L "$INCOMING"
             test "$(readlink -f "$INCOMING")" = "$INCOMING"
