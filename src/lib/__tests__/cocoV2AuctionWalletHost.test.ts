@@ -561,6 +561,9 @@ describe('PlebeianWalletHost.auctions command boundary', () => {
 			expect(publishers).toContain(
 				"export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {\n\tif (isCocoV2AuctionMode()) return publishCocoAuctionSettlement(formData)\n\tassertLegacyAuctionMoneyAllowed('publishAuctionSettlement')",
 			)
+			expect(publishers).toContain('const dleqAcquisition = await fetchDleqKeysetsForBidsDetailed(parsedBids, parsedAuction.value.mints)')
+			expect(publishers).toContain('dleqKeysets: dleqAcquisition.keysets')
+			expect(publishers).toContain('dleqUnknownKeysets: dleqAcquisition.unknownKeysets')
 		} finally {
 			if (previousPublicMode === undefined) delete process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE
 			else process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE = previousPublicMode

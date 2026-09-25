@@ -1526,11 +1526,19 @@ const resolveCocoCanonicalWinner = async (
 		.map((event) => verdicts.parseValidatorVerdictEvent(toRawEvent(event)))
 		.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
 		.map((result) => result.value)
+	// ADR-0011 requires complete mint-keyset evidence before a bid may become
+	// authoritative. The Coco lifecycle revalidates at every durable boundary,
+	// so it must acquire the same bounded, auction-allowlisted DLEQ evidence as
+	// the legacy release and seller-settlement guards below. Omitting it leaves
+	// every honest post-rollout bid pending and makes winner release impossible.
+	const dleqAcquisition = await fetchDleqKeysetsForBidsDetailed(parsedBids, parsedAuction.value.mints)
 	const validated = validation.computeValidatedBids({
 		auction: parsedAuction.value,
 		bids: parsedBids,
 		verdicts: parsedVerdicts,
 		postSettlement: false,
+		dleqKeysets: dleqAcquisition.keysets,
+		dleqUnknownKeysets: dleqAcquisition.unknownKeysets,
 	})
 	if (!validated.canonicalWinner) throw new Error('Validator quorum has not established a canonical winner')
 	if (expectedWinnerId && validated.canonicalWinner.id !== expectedWinnerId) throw new Error('Canonical Auction winner changed')

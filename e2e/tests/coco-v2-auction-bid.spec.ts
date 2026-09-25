@@ -204,6 +204,20 @@ const createAuctionThroughNormalUi = async (page: Page, relay: Relay): Promise<E
 	await expect(dialog.getByText(/Runs for:\s*2 minutes/i)).toBeVisible()
 	await dialog.getByRole('button', { name: 'Advanced' }).click()
 	await dialog.getByRole('button', { name: /5 min.*tight/i }).click()
+	while ((await dialog.locator('button[title="Remove mint"]').count()) > 0) {
+		const removeButtons = dialog.locator('button[title="Remove mint"]')
+		let removedNonLocalMint = false
+		for (let index = 0; index < (await removeButtons.count()); index++) {
+			const button = removeButtons.nth(index)
+			if ((await button.locator('..').innerText()).includes(MINT_URL)) continue
+			await button.click()
+			removedNonLocalMint = true
+			break
+		}
+		if (!removedNonLocalMint) throw new Error('Could not isolate the local fake mint in the normal auction form')
+	}
+	const soleMintRow = dialog.getByText(MINT_URL, { exact: true }).locator('..')
+	await expect(soleMintRow.getByTitle('At least one mint is required')).toBeVisible()
 	await dialog.getByRole('button', { name: 'Next' }).click()
 	await dialog.getByRole('button', { name: 'Next' }).click()
 	await dialog.getByRole('button', { name: 'Next' }).click()
@@ -332,7 +346,7 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 			const settlementGrace = Number(auction.tags.find((tag) => tag[0] === 'settlement_grace')?.[1])
 			expect(Number.isSafeInteger(maxEndAt)).toBe(true)
 			expect(settlementGrace).toBe(300)
-			expect(auction.tags.some((tag) => tag[0] === 'mint' && tag[1] === MINT_URL)).toBe(true)
+			expect(auction.tags.filter((tag) => tag[0] === 'mint').map((tag) => tag[1])).toEqual([MINT_URL])
 			expect(auction.tags.some((tag) => tag[0] === 'p2pk_xpub' && tag[1]?.startsWith('xpub'))).toBe(true)
 
 			await placeCocoBid(buyerPage, auction, devUser2.pk, 100)
@@ -353,11 +367,28 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 			const endWaitMs = Math.max(0, (maxEndAt + 1) * 1000 - Date.now())
 			await newUserPage.waitForTimeout(endWaitMs)
 			await newUserPage.goto(`/dashboard/products/auctions/${auction.id}`)
-			await expect(newUserPage.getByRole('button', { name: 'Release path & settle' })).toBeEnabled({ timeout: 30_000 })
-			await newUserPage.getByRole('button', { name: 'Release path & settle' }).click()
-			const release = await waitForRelayEvent(relay, { kinds: [1025], '#a': [coordinate] }, (event) =>
-				event.tags.some((tag) => tag[0] === 'e' && tag[1] === bidB.id),
-			)
+			const winnerModalSettlement = newUserPage.getByRole('button', { name: 'Settle Auction' })
+			const winnerModalAppeared = await winnerModalSettlement
+				.waitFor({ state: 'visible', timeout: 5_000 })
+				.then(() => true)
+				.catch(() => false)
+			if (winnerModalAppeared) {
+				await winnerModalSettlement.click()
+			} else {
+				await expect(newUserPage.getByRole('button', { name: 'Release path & settle' })).toBeEnabled({ timeout: 30_000 })
+				await newUserPage.getByRole('button', { name: 'Release path & settle' }).click()
+			}
+			const settlementFailure = newUserPage
+				.getByText(/Failed to settle auction:|This auction is no longer available for settlement\./)
+				.first()
+			const release = await Promise.race([
+				waitForRelayEvent(relay, { kinds: [1025], '#a': [coordinate] }, (event) =>
+					event.tags.some((tag) => tag[0] === 'e' && tag[1] === bidB.id),
+				),
+				settlementFailure.waitFor({ state: 'visible', timeout: 30_000 }).then(async () => {
+					throw new Error((await settlementFailure.textContent()) ?? 'Winner settlement failed without an error message')
+				}),
+			])
 			markSmokeCheck('winnerRelease')
 			await newUserPage.reload()
 			await expect(newUserPage.getByText('Path release published')).toBeVisible({ timeout: 30_000 })
