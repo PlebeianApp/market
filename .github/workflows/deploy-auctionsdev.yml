@@ -31,6 +31,7 @@ on:
         options:
           - PREPARE_ONLY
           - ACTIVATE_AUCTIONSDEV
+          - INSPECT_ABANDONED
       dual_red_team_core:
         description: 'Required only for activation after both Core Red Teams pass'
         required: true
@@ -64,8 +65,144 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  inspect_abandoned:
+    name: Inspect authorized abandoned incoming directory
+    if: ${{ inputs.release_action == 'INSPECT_ABANDONED' }}
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Report bounded read-only inventory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            set -euo pipefail
+            TARGET='/home/deployer/incoming/market-auctionsdev-34c568066631-36101312739-1'
+            case "$TARGET" in
+              /home/deployer/incoming/market-auctionsdev-*) ;;
+              *) echo 'Refusing unsafe abandoned incoming path' >&2; exit 1 ;;
+            esac
+            test -e "$TARGET"
+            test ! -L "$TARGET"
+            test -d "$TARGET"
+            test "$(readlink -f "$TARGET")" = "$TARGET"
+
+            ACTIVE_RELEASE="$(readlink -f /home/deployer/market-auctionsdev 2>/dev/null || true)"
+            if [[ "$ACTIVE_RELEASE" = "$TARGET" ]]; then
+              echo 'Refusing to inspect active release as abandoned' >&2
+              exit 1
+            fi
+            command -v pm2 >/dev/null
+            PM2_STATE="$(pm2 jlist)"
+            if grep -Fq "$TARGET" <<<"$PM2_STATE"; then
+              echo 'Refusing to inspect PM2-referenced directory as abandoned' >&2
+              exit 1
+            fi
+
+            export AUCTIONSDEV_INVENTORY_ROOT="$TARGET"
+            python3 - <<'PY'
+            import datetime
+            import hashlib
+            import json
+            import os
+            import stat
+
+            requested_root = os.environ['AUCTIONSDEV_INVENTORY_ROOT']
+            expected_root = '/home/deployer/incoming/market-auctionsdev-34c568066631-36101312739-1'
+            if requested_root != expected_root:
+                raise SystemExit('inventory root mismatch')
+            root = os.path.realpath(requested_root)
+            if root != expected_root:
+                raise SystemExit('inventory root realpath mismatch')
+            root_stat = os.lstat(root)
+            if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+                raise SystemExit('inventory root is not a real directory')
+
+            root_device = root_stat.st_dev
+            pending = [root]
+            inventory = []
+            while pending:
+                current = pending.pop()
+                current_real = os.path.realpath(current)
+                if os.path.commonpath((root, current_real)) != root:
+                    raise SystemExit('directory traversal refused')
+                with os.scandir(current) as iterator:
+                    children = sorted(iterator, key=lambda entry: entry.name)
+                for entry in children:
+                    path = entry.path
+                    relative = os.path.relpath(path, root)
+                    normalized = os.path.normpath(relative)
+                    if normalized in ('', '.', '..') or normalized.startswith('../') or os.path.isabs(normalized):
+                        raise SystemExit('entry traversal refused')
+                    if os.path.commonpath((root, os.path.abspath(path))) != root:
+                        raise SystemExit('entry escaped inventory root')
+
+                    metadata = os.lstat(path)
+                    if metadata.st_dev != root_device:
+                        raise SystemExit('cross-device entry refused')
+                    record = {
+                        'path': normalized,
+                        'mode': format(stat.S_IMODE(metadata.st_mode), '04o'),
+                        'uid': metadata.st_uid,
+                        'gid': metadata.st_gid,
+                        'size': metadata.st_size,
+                        'mtime': datetime.datetime.fromtimestamp(
+                            metadata.st_mtime, datetime.timezone.utc
+                        ).isoformat().replace('+00:00', 'Z'),
+                    }
+
+                    if stat.S_ISREG(metadata.st_mode):
+                        record['type'] = 'regular'
+                        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                        try:
+                            opened = os.fstat(descriptor)
+                            if not stat.S_ISREG(opened.st_mode):
+                                raise SystemExit('regular file changed type during inventory')
+                            if (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino):
+                                raise SystemExit('regular file changed during inventory')
+                            digest = hashlib.sha256()
+                            with os.fdopen(descriptor, 'rb', closefd=False) as source:
+                                for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                                    digest.update(chunk)
+                            record['sha256'] = digest.hexdigest()
+                        finally:
+                            os.close(descriptor)
+                    elif stat.S_ISDIR(metadata.st_mode):
+                        record['type'] = 'directory'
+                        pending.append(path)
+                    elif stat.S_ISLNK(metadata.st_mode):
+                        record['type'] = 'symlink'
+                        target = os.readlink(path)
+                        record['symlinkTarget'] = target
+                        if os.path.isabs(target):
+                            raise SystemExit('absolute symlink traversal refused')
+                        if '..' in target.split('/'):
+                            raise SystemExit('parent symlink traversal refused')
+                        resolved_target = os.path.realpath(os.path.join(os.path.dirname(path), target))
+                        if os.path.commonpath((root, resolved_target)) != root:
+                            raise SystemExit('symlink traversal refused')
+                    elif stat.S_ISSOCK(metadata.st_mode):
+                        raise SystemExit('socket entry refused')
+                    elif stat.S_ISCHR(metadata.st_mode) or stat.S_ISBLK(metadata.st_mode):
+                        raise SystemExit('device entry refused')
+                    else:
+                        raise SystemExit('unsupported special entry refused')
+                    inventory.append(record)
+
+            inventory.sort(key=lambda record: record['path'])
+            print('AUCTIONSDEV_ABANDONED_INVENTORY_BEGIN')
+            for record in inventory:
+                print(json.dumps(record, ensure_ascii=True, sort_keys=True, separators=(',', ':')))
+            print('AUCTIONSDEV_ABANDONED_INVENTORY_END')
+            print(f'AUCTIONSDEV_ABANDONED_INVENTORY_COUNT={len(inventory)}')
+            PY
+
   build:
     name: Build exact production candidate
+    if: ${{ inputs.release_action != 'INSPECT_ABANDONED' }}
     runs-on: ubuntu-latest
     outputs:
       coco_identity: ${{ steps.identity.outputs.coco_identity }}
