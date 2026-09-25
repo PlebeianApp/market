@@ -7,7 +7,7 @@
  * - Recovery of pending tokens on startup
  */
 import { Store } from '@tanstack/store'
-import { initializeCoco, Manager, getEncodedToken } from '@cashu/coco-core'
+import { initializeCoco, Manager, getEncodedToken, type Repositories } from '@cashu/coco-core'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
@@ -83,9 +83,15 @@ async function getOrCreateSeed(): Promise<Uint8Array> {
 
 export const cashuActions = {
 	/**
-	 * Initialize the coco manager with IndexedDB persistence
+	 * Initialize the coco manager with IndexedDB persistence.
+	 *
+	 * `repositories` is a narrow first-party seam for tests: bun has no
+	 * `indexedDB` global and AGENTS.md forbids `mock.module()`-ing a third-party
+	 * package (bun applies module mocks process-wide), so a unit test injects
+	 * coco's own `MemoryRepositories` instead of mocking `@cashu/coco-core`.
+	 * Production callers pass nothing and keep `IndexedDbRepositories`.
 	 */
-	initialize: async (): Promise<void> => {
+	initialize: async (options?: { repositories?: Repositories }): Promise<void> => {
 		const state = cashuStore.state
 		if (state.status === 'initializing' || state.status === 'ready') {
 			return
@@ -106,10 +112,13 @@ export const cashuActions = {
 		try {
 			console.log('[cashu] Initializing coco manager...')
 
-			// Create IndexedDB repositories with user-specific database name
-			const repos = new IndexedDbRepositories({
-				name: `cashu_wallet_${pubkey.slice(0, 8)}`,
-			})
+			// Create IndexedDB repositories with user-specific database name,
+			// unless a caller (a test) injected its own repository implementation.
+			const repos =
+				options?.repositories ??
+				new IndexedDbRepositories({
+					name: `cashu_wallet_${pubkey.slice(0, 8)}`,
+				})
 
 			const seed = await getOrCreateSeed()
 
