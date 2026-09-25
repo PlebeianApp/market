@@ -92,3 +92,16 @@ export async function purchaseNip05ForPubkey(
 		amountSats: options.amountSats,
 	})
 }
+
+export async function purchaseStorefrontIdentity(
+	ctx: PurchaseContext,
+	options: { name: string; amountSats: number },
+): Promise<ZapPurchaseInvoiceResult> {
+	return zapPurchase({
+		...ctx,
+		zapLabel: 'storefront-register',
+		registryTag: 'name',
+		registryKey: options.name.toLowerCase(),
+		amountSats: options.amountSats,
+	})
+}
