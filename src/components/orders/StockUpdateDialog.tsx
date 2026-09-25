@@ -8,6 +8,7 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
+import { productFormTypeFromTag } from '@/lib/utils/productType'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
 	getProductTitle,
@@ -167,7 +168,7 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 					quantity: product.newStock.toString(),
 					currency: priceTag?.[2] || 'USD',
 					status: (visibilityTag?.[1] || 'on-sale') as 'hidden' | 'on-sale' | 'pre-order',
-					productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
+					...productFormTypeFromTag(typeTag),
 					mainCategory: categories[0]?.[1] || '',
 					selectedCollection: collectionTag,
 					categories: categories.slice(1).map((cat) => ({

@@ -1,6 +1,7 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
+import { productTypeTag, type ProductFormat } from '@/lib/utils/productType'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -17,6 +18,7 @@ export interface ProductFormData {
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
+	format?: ProductFormat
 	mainCategory: string
 	selectedCollection: string | null
 	categories: Array<{ key: string; name: string; checked: boolean }>
@@ -87,7 +89,7 @@ export const createProductEvent = (
 		['d', id], // Product identifier - this is the key for updates!
 		['title', formData.name],
 		['price', formData.price, formData.currency],
-		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
+		productTypeTag(formData.productType, formData.format),
 		['visibility', formData.status],
 		['stock', formData.quantity],
 		...(formData.summary ? [['summary', formData.summary] as NDKTag] : []),
