@@ -114,10 +114,11 @@ as it is in a single-file run.
 
 ---
 
-## Stage G — held before implementation: which wallet does the leg bind to?
+## Stage G — the NIP-60 transition, built as data after the wallet-base check
 
-**Status:** researched, not implemented. The maintainer asked for this check before G, because a Coco
-wallet migration is in flight and the question is whether the multiparty work should be based on
+**Status:** implemented as a store-agnostic projection; the wallet _binding_ is the only part left, and
+it is one small adapter. The maintainer asked for the wallet-base check before G, because a Coco wallet
+migration is in flight and the question is whether the multiparty work should be based on
 `feat/coco-v2-wallet-auction-lifecycle` instead of NIP-60.
 
 ### What the multiparty layer actually needs from a wallet
@@ -169,6 +170,51 @@ Stage G will therefore produce the transition as **data** — per-row lock recor
 mapping, and the leg's change/consumed sets — with persistence behind a thin adapter, exactly as the
 mint interaction already is. On NIP-60 those records become pending tokens; on Coco they become the
 command bindings and recovery metadata. Nothing in the contract changes.
+
+### What changed
+
+- `multipartyLegWalletTransition.ts` — the leg → wallet projection, as **data**: one record per locked
+  row (its `send` set, its change, its encoded token, and a context carrying the leg's facts plus _that
+  row's_ compressed key), plus the leg's proof delta (`store` = every row's change, `destroy` = every
+  consumed input). The NIP-60 binding is the last, smallest export in the file: `toNip60PendingTokens`,
+  one pending token per row.
+- `src/lib/wallet/types.ts` — `AuctionMultipartyBidPendingTokenContext`, a context `kind` of its own,
+  added to the `PendingTokenContext` union. Its own kind rather than extra fields on the single-party
+  context, because a multiparty leg is one token per row and the single-party shape carries exactly one
+  lock key: extra fields would leave every existing reader reading a token that describes only one row.
+  Committed separately (`9c75df34`) so it can be judged or reverted on its own.
+
+### Decisions taken in the implementation
+
+1. **Data before calls.** Both candidate wallets need the same three facts about a leg (N locks, each
+   one's key, which proofs moved) and phrase them differently. The projection therefore produces the
+   records and the delta, and only the final adapter knows which store consumes them.
+2. **The delta's two sets must be disjoint, and that is a refusal, not a tidy-up.** A proof that is
+   simultaneously kept and destroyed makes a balance wrong in both directions; an input destroyed twice
+   is the same contradiction with a different cause. Both are refused with their own code rather than
+   silently deduplicated.
+3. **A row's `send` set must sum to the row's recorded amount.** A wallet told otherwise holds a token
+   whose amount is a lie, and the lie surfaces later as a settlement that does not add up.
+4. **Compressed keys only.** The row record carries `rowChildPubkeyCompressed` and nothing x-only: the
+   parity cannot be rebuilt from x-only, and a reclaim without it locks — or fails to lock — the wrong
+   output. Same rule as D16, one layer up.
+5. **The token id is injected, and a collision is fatal.** Two rows sharing a token id make a reclaim
+   address the wrong row, so the id factory's output is checked rather than assumed unique.
+6. **A partial leg transitions only the rows that were sent.** The delta must cover exactly those rows:
+   destroying an untouched row's inputs would remove proofs the wallet still holds.
+
+### Evidence
+
+- 15 focused tests in `multipartyLegWalletTransition.test.ts`, all passing; suite numbers in the commit
+  and the PR body's update section. The two to read first are the delta-disjointness ones.
+
+### Left open
+
+- **The binding.** `toNip60PendingTokens` is the NIP-60 adapter; on a Coco-style engine the same row
+  records would become send-operation bindings and there would be no delta to hand over, because the
+  engine owns the proofs. Written to be the only thing that changes.
+- **Whether the bids surface shows multiparty legs.** Every reader that lists a bid leg filters
+  `context?.kind === 'auction_bid'`, so the new kind is invisible there until that is decided.
 
 ### Questions this hands to the Coco work
 
