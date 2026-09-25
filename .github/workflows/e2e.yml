@@ -146,13 +146,6 @@ jobs:
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
           APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
-          # Must match SELF_HOSTED_HANDLER_ID in e2e/test-config.ts. On CI the
-          # workflow starts the dev server directly (playwright.config.ts's
-          # own webServer env, which sets this same var, is skipped whenever
-          # process.env.CI is set — see "servers are started manually in the
-          # workflow" there), so self-hosted-config.spec.ts needs it set here
-          # too or /api/config falls back to the shipped default handler.
-          INSTANCE_HANDLER_ID: self-hosted-test-handler
 
       - name: Run E2E tests
         # Deterministic families gate every PR/push, each test run twice to
@@ -183,17 +176,34 @@ jobs:
         # env are introduced. `src/lib/__tests__/e2e-workflow-gate-membership.test.ts`
         # fails if a describe in that spec stops matching this pattern.
         #
-        # `self-hosted instance` (e2e/tests/self-hosted-config.spec.ts,
-        # ADR-018) is gated here because it is ADR-018's stated completion
-        # criterion: a non-Plebeian instance must complete a browse, cart, and
-        # checkout path in the e2e suite, run on every PR, not just on
-        # schedule/manual. It runs on the same local relay/dev server as
-        # every other family in this job — the dev server for the whole run
-        # is self-hosted-configured via INSTANCE_HANDLER_ID above — so no new
-        # triggers, permissions, secrets, or env are introduced.
-        # `src/lib/__tests__/e2e-workflow-gate-membership.test.ts` fails if a
-        # describe in that spec stops matching this pattern.
-        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions|self-hosted instance' --repeat-each=2
+        run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
+
+      - name: Run self-hosted instance E2E test
+        run: |
+          E2E_TEST_PORT=34568 bun e2e/seed-relay.ts
+          PORT=34568 INSTANCE_HANDLER_ID=self-hosted-test-handler nohup bun dev > /tmp/self-hosted-devserver.log 2>&1 &
+          echo "Waiting for self-hosted dev server on port 34568..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:34568/api/config > /dev/null 2>&1; then
+              echo "Self-hosted dev server is ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:34568/api/config > /dev/null 2>&1; then
+            echo "::error::Self-hosted dev server failed to start. Logs:"
+            cat /tmp/self-hosted-devserver.log
+            exit 1
+          fi
+          E2E_TEST_PORT=34568 bun run test:e2e:self-hosted -- --repeat-each=2
+        env:
+          NODE_ENV: test
+          APP_RELAY_URL: ws://localhost:10547
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+          CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
+          LOCAL_RELAY_ONLY: 'true'
+          NIP46_RELAY_URL: ws://localhost:10547
+          APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
 
       - name: Show server logs on failure
         if: failure()

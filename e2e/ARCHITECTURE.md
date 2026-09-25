@@ -103,12 +103,13 @@ The dev server **caches `appSettings` at startup** by fetching Kind 31990 from t
 
 This is why we use `seed-relay.ts` as part of the webServer command (step 2) rather than publishing in globalSetup (step 3, too late).
 
-The self-hosted configuration spec uses the same startup path with
-`INSTANCE_HANDLER_ID=self-hosted-test-handler`. `seed-relay.ts` publishes both
-the custom handler event and the legacy `plebeian-market-handler` event before
-the app starts. This verifies custom discovery while keeping the historical
-d-tag available for fallback coverage. The scenario uses only the local relay
-and local app; its HTTPS fixture URLs are inert values and are not fetched.
+`seed-relay.ts` publishes both the default `plebeian-market-handler` event and
+a custom self-hosted handler event before the app starts. Regular E2E runs use
+the default handler. The self-hosted configuration spec runs separately with
+`INSTANCE_HANDLER_ID=self-hosted-test-handler` and its own app process, so its
+identity cannot affect unrelated test families. The scenario uses only the
+local relay and local app; its HTTPS fixture URLs are inert values and are not
+fetched.
 
 ```mermaid
 sequenceDiagram
