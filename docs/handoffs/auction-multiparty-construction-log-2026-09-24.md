@@ -114,6 +114,76 @@ as it is in a single-file run.
 
 ---
 
+## Stage K — restart recovery, and the E2E the gates still hold
+
+**Status:** the restart half implemented as a test over the real modules; the full Playwright E2E is
+**withheld by the production gate** and its plan is recorded below rather than quietly skipped.
+
+### What changed
+
+- `multipartyLegRestartRecovery.test.ts` — six scenarios that answer the question the journal exists for:
+  after the process dies mid-leg, is the persisted state **alone** enough to finish or recover it? Every
+  step re-reads from storage, so nothing in the file depends on in-memory state surviving:
+  1. a leg that stopped at an unknown row is recoverable from storage alone;
+  2. a restarted pass never re-sends a row that was already sent;
+  3. evidence resolves the unknown row, and the leg then finishes on a new pass;
+  4. a row proved never sent is reopened and re-attempted, and nothing else is;
+  5. the journal and the recovery record still describe the same leg after a restart;
+  6. nothing about the leg lives in memory: a second read returns the same thing.
+- `multipartyLegJournal.ts` — **a defect this stage found and fixed**, below.
+- D17 — the resolution rule made explicit: a row settled as `uncertain` is unresolved rather than done.
+
+### The defect the restart test found
+
+The journal's own promise was that a row whose outcome could not be determined _"stays `uncertain` until
+evidence resolves it"_. Two guards contradicted it: `reconcileMultipartyLeg` skipped every row that was
+not `attempted` (so an `uncertain` row was never looked at), and `settleMultipartyLegRow` refused any
+transition that did not start from `attempted` (so it could not have been resolved even if it had been
+looked at). A row the construction had already marked `uncertain` was therefore **permanently
+unresolvable** — the exact state a crash leaves behind, and the one the journal exists for.
+
+Both guards are fixed: reconciliation reaches `uncertain` rows, and settling one resolves it once (to
+`locked` or `failed_pre_mint`), while re-marking it `uncertain` remains refused because that write changes
+nothing. A journal-level test now covers the resolution path directly, so it does not rest on the restart
+file alone. Found by asking the E2E-shaped question at unit level, which is the argument for writing the
+recovery scenario even when the full E2E is gated.
+
+### Decisions taken
+
+1. **The restart scenario is a unit-level test over the real modules, not a mock.** The point is that the
+   persisted state is sufficient, so the test must go through the real storage helpers, the real journal
+   and the real reconciliation — with only the mint seam faked (no network, ADR-0005).
+2. **Storage is the only memory the test permits itself.** Each "restart" re-reads the journal from
+   storage; nothing is carried in a variable across the boundary. That is what makes the test evidence
+   about recovery rather than about a happy path.
+3. **The E2E is not written, and the reason is a gate rather than effort.** A Playwright spec for this leg
+   would have to construct a leg against a mint and publish a release — wallet mutation and relay
+   publication, the two things the schedule wire profile's production gate withholds until focused
+   approval — and running an e2e suite also needs the local services and explicit approval per the repo's
+   own AGENTS.md. Writing a spec that cannot run would read as coverage while proving nothing.
+
+### The E2E that remains, as a plan
+
+1. Local services as the repo's e2e recipe requires (relay, nutshell mint with the FakeWallet backend, dev
+   server), started per `references/local-e2e-reproduction.md`.
+2. A bid that locks a multi-row leg, driven through the **live** construction path — which needs the
+   wiring this thread has deliberately left out (stages E/G/J's live halves).
+3. A **mid-leg kill** between row swaps: the journal must be on disk with the attempted row and the
+   pre-lock recovery record present.
+4. A **restart** of the app, then the recovery pass: the row states must resolve exactly as the unit-level
+   scenario asserts here, with the seam calls observed from the mint's side.
+5. Evidence per the Feature Quality Gate: a screenshot per step plus one recording of the walk, published
+   to this PR, with the spec path linked.
+
+### Left open, and now the only thing left on this thread
+
+- **The live bindings** (E's adapter, G's wallet persistence, J's verdict publication) plus the E2E above.
+  All three are behind the same gate, so they are one decision rather than three.
+- **The settlement packet's §5–§7 rulings** (transport, lifecycle, confirmation), which the E2E's steps
+  4–5 will depend on.
+
+---
+
 ## Stage J — the validator's settlement attestation
 
 **Status:** implemented as an unwired composition; nothing publishes a verdict from it yet.

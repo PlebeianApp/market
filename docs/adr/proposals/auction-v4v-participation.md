@@ -310,7 +310,9 @@ Nothing else may be reopened: `uncertain` because the outcome is unknown, `locke
 
 Resolution is **evidence, and only evidence**: proofs (verified against that row's own key before the
 row may be called locked), a failure proved to precede the mint call, or nothing — and nothing leaves
-the row uncertain. Silence is not evidence of failure, nor of success.
+the row uncertain. Silence is not evidence of failure, nor of success. A row settled as `uncertain` is
+therefore **unresolved rather than done**: it stays resolvable, and evidence may resolve it once (to
+`locked` or `failed_pre_mint`), which is what makes a restart recoverable rather than merely recorded.
 
 The verdicts are `complete`, `partial`, `unsent` and `uncertain`, one sentence each (D14), with the
 counts substituted. `complete` and `unsent` are exact — every row locked, or no row sent at all — and
