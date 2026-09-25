@@ -426,12 +426,6 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 	// proofs committed in a lower-amount bid. Mark any bid whose
 	// lock_secret/proof_y multiset collides with an earlier-observed bid
 	// as invalid. We process in order of observedAt (earliest wins).
-	// M5: Exclude bids with duplicate proofs (same-bidder only).
-	// A bid that claims the same lock_secret/proof_y as an earlier-observed
-	// bid from the same bidder is likely reusing proofs committed in a
-	// lower-amount bid. Different bidders can legitimately share proof_y
-	// values (they lock proofs at the same mint). We process in order of
-	// observedAt (earliest wins).
 	const seenLockSecretsByBidder = new Map<string, Set<string>>()
 	const seenProofYsByBidder = new Map<string, Set<string>>()
 	const seenDleqCsByBidder = new Map<string, Set<string>>()
