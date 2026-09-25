@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
 import { RELAY_URL, SELF_HOSTED_HANDLER_ID, TEST_APP_PRIVATE_KEY, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const selfHostedOnly = process.env.E2E_SELF_HOSTED_INSTANCE === 'true'
 
 export default defineConfig({
 	testDir: './tests',
@@ -12,7 +13,8 @@ export default defineConfig({
 	retries: process.env.CI ? 2 : 0,
 	workers: 1,
 	reporter: process.env.CI ? 'github' : 'list',
-	testMatch: /.*\.spec\.ts$/,
+	testMatch: selfHostedOnly ? /self-hosted-config\.spec\.ts$/ : /.*\.spec\.ts$/,
+	testIgnore: selfHostedOnly ? undefined : /self-hosted-config\.spec\.ts$/,
 
 	use: {
 		baseURL: BASE_URL,
@@ -89,7 +91,7 @@ export default defineConfig({
 						// Playwright-managed local run could never get past startup,
 						// which is what pushed local runs onto a reused dev server.
 						CVM_SERVER_KEY: 'e2e2222222222222222222222222222222222222222222222222222222222222',
-						INSTANCE_HANDLER_ID: SELF_HOSTED_HANDLER_ID,
+						...(selfHostedOnly ? { INSTANCE_HANDLER_ID: SELF_HOSTED_HANDLER_ID } : {}),
 						LOCAL_RELAY_ONLY: 'true',
 						NIP46_RELAY_URL: RELAY_URL,
 						APP_DEV_TEST_MINT_URL: 'http://localhost:3338',

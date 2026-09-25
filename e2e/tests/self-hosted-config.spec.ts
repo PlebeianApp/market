@@ -63,10 +63,10 @@ test.describe('self-hosted instance configuration', () => {
 
 // ADR-018's stated completion criterion: "A non-Plebeian instance (distinct
 // namespace, relay, and app pubkey) must complete a browse, cart, and
-// checkout path in the e2e suite." This dev server runs the whole suite
-// self-hosted-configured (INSTANCE_HANDLER_ID, see playwright.config.ts),
-// so this proves the configured instance is actually usable end to end —
-// not just discoverable via /api/config, as the tests above only check.
+// checkout path in the e2e suite." This spec runs against a dedicated
+// self-hosted-configured dev server (see playwright.config.ts), so it proves
+// the configured instance is usable end to end without changing the identity
+// seen by unrelated test families.
 test.describe('self-hosted instance — browse, cart, and checkout path', () => {
 	test.use({ scenario: 'marketplace' })
 

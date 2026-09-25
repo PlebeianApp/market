@@ -7,9 +7,9 @@
  * deterministic test families on every pull request / push; that gate is the
  * only place the `OG Meta Tags` specs are exercised on a PR (the scheduled
  * `e2e-full` job also runs them, but it is not a merge gate). It is the only
- * merge gate for the `Test listing labels — auctions` spec, and the only
- * merge gate for `self-hosted-config.spec.ts` (ADR-018's stated completion
- * criterion), at all.
+ * merge gate for the `Test listing labels — auctions` spec. The self-hosted
+ * config spec has a dedicated server process because its instance identity
+ * must not leak into the shared test server.
  *
  * A family that is renamed or added to `e2e/tests/og-meta-tags.spec.ts`,
  * `e2e/tests/test-labels-auctions.spec.ts`, or `e2e/tests/self-hosted-config.spec.ts`
@@ -113,16 +113,13 @@ describe('e2e-full exclusion list stays inside the per-PR gate', () => {
 })
 
 describe('e2e-grep gate membership (self-hosted instance family)', () => {
-	test('every self-hosted-config describe title is matched by the per-PR gate pattern', async () => {
-		const [pattern, titles] = await Promise.all([gatePattern(), describeTitles(SELF_HOSTED_CONFIG_SPEC_PATH)])
+	test('the per-PR gate runs the isolated self-hosted-config spec', async () => {
+		const [yaml, spec] = await Promise.all([readFile(WORKFLOW_PATH, 'utf8'), readFile(SELF_HOSTED_CONFIG_SPEC_PATH, 'utf8')])
 		// Two describes: instance-config discovery/branding, and the ADR-018
 		// browse/cart/checkout completion criterion.
-		expect(titles.length).toBeGreaterThanOrEqual(2)
-		const gate = new RegExp(pattern)
-		const ungated = titles.filter((title) => !gate.test(title))
-		// Removing the `|self-hosted instance` term, or renaming a describe in
-		// that spec away from the `self-hosted instance...` prefix, fails here
-		// with the ungated title named.
-		expect(ungated).toEqual([])
+		expect([...spec.matchAll(/test\.describe\(\s*'([^']+)'/g)]).toHaveLength(2)
+		// The command enables the isolated project mode, which accepts only this
+		// spec and starts an app process with the self-hosted handler ID.
+		expect(yaml).toContain('E2E_TEST_PORT=34568 bun run test:e2e:self-hosted -- --repeat-each=2')
 	})
 })

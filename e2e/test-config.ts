@@ -17,6 +17,6 @@ export const SELF_HOSTED_HANDLER_ID = 'self-hosted-test-handler'
 export const SELF_HOSTED_INSTANCE_NAME = 'Self Hosted Market'
 // Use a dedicated high port to prevent reusing a production-connected dev server
 // and to avoid common local conflicts on more frequently used low ports.
-export const TEST_PORT = 34567
+export const TEST_PORT = Number(process.env.E2E_TEST_PORT || '34567')
 export const BASE_URL = `http://localhost:${TEST_PORT}`
 export const SELF_HOSTED_SITE_URL = BASE_URL

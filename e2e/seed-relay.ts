@@ -59,8 +59,31 @@ async function main() {
 		return event
 	}
 
-	// Publish the custom self-hosted event first. The dev server is configured
-	// with INSTANCE_HANDLER_ID, so this event should win over the legacy event.
+	// Keep the default settings event available for the shared E2E server. The
+	// dedicated self-hosted run selects the custom event below via its handler ID.
+	await publish({
+		kind: 31990,
+		created_at: Math.floor(Date.now() / 1000) - 1,
+		content: JSON.stringify({
+			name: 'Test Market',
+			displayName: 'Test Market',
+			picture: 'https://example.invalid/test-market-logo.svg',
+			banner: 'https://example.invalid/test-market-banner.png',
+			ownerPk: TEST_APP_PUBLIC_KEY,
+			allowRegister: true,
+			defaultCurrency: 'USD',
+		}),
+		tags: [
+			['d', 'plebeian-market-handler'],
+			['k', '30402'],
+			['k', '30405'],
+			['k', '30406'],
+		],
+	})
+	console.log('  Published default app settings (Kind 31990)')
+
+	// Publish a distinct self-hosted event for the isolated self-hosted test
+	// command. The event uses BASE_URL so its links match that command's port.
 	await publish({
 		kind: 31990,
 		created_at: Math.floor(Date.now() / 1000),
@@ -96,30 +119,7 @@ async function main() {
 			['r', RELAY_URL],
 		],
 	})
-	console.log('  Published custom app settings (Kind 31990)')
-
-	// Keep the historical event present so the fallback chain is exercised by
-	// the same local relay and remains compatible with existing deployments.
-	await publish({
-		kind: 31990,
-		created_at: Math.floor(Date.now() / 1000) - 1,
-		content: JSON.stringify({
-			name: 'Legacy Test Market',
-			displayName: 'Legacy Test Market',
-			picture: 'https://example.invalid/legacy-logo.svg',
-			banner: 'https://example.invalid/legacy-banner.png',
-			ownerPk: TEST_APP_PUBLIC_KEY,
-			allowRegister: true,
-			defaultCurrency: 'USD',
-		}),
-		tags: [
-			['d', 'plebeian-market-handler'],
-			['k', '30402'],
-			['k', '30405'],
-			['k', '30406'],
-		],
-	})
-	console.log('  Published legacy fallback app settings (Kind 31990)')
+	console.log('  Published self-hosted app settings (Kind 31990)')
 
 	// Publish Kind 30000 (Admin List)
 	// Include devUser1 so the server recognises them as admin at startup.
