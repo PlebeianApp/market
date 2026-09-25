@@ -12,13 +12,15 @@ import {
 } from '../orders'
 
 const CREATED_AT = 1_700_000_000
+const PRIVATE_POSTCODE_MARKER = 'private-postcode::90210::plaintext-only'
+const HEX_IDENTIFIER_WITH_POSTCODE = `${'a'.repeat(29)}90210${'b'.repeat(30)}`
 const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	PRIVATE_POSTCODE_MARKER,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -94,7 +96,7 @@ function privateOrderDetails(
 				firstLineOfAddress: '123 Main Street',
 				additionalInformation: 'Apt Secret Notes',
 				city: 'Los Angeles',
-				zipPostcode: '90210',
+				zipPostcode: PRIVATE_POSTCODE_MARKER,
 				country: 'United States',
 			},
 		},
@@ -179,6 +181,12 @@ function expectNoPii(value: unknown): void {
 }
 
 describe('seller private order details query helpers', () => {
+	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
+		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
+		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
+		expect(() => expectNoPii({ content: PRIVATE_POSTCODE_MARKER })).toThrow()
+	})
+
 	test('valid kind 1059 gift wrap decrypts and attaches private details to the matching public order', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()

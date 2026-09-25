@@ -13,13 +13,15 @@ import {
 } from './privateOrderMessage'
 
 const CREATED_AT = 1_700_000_000
+const PRIVATE_POSTCODE_MARKER = 'private-postcode::90210::plaintext-only'
+const HEX_IDENTIFIER_WITH_POSTCODE = `${'a'.repeat(29)}90210${'b'.repeat(30)}`
 const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	PRIVATE_POSTCODE_MARKER,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -92,7 +94,7 @@ function privateOrderDetails(
 				firstLineOfAddress: '123 Main Street',
 				additionalInformation: 'Apt Secret Notes',
 				city: 'Los Angeles',
-				zipPostcode: '90210',
+				zipPostcode: PRIVATE_POSTCODE_MARKER,
 				country: 'United States',
 			},
 		},
@@ -127,6 +129,12 @@ function canonicalRumorId(rumor: { pubkey: string; created_at: number; kind: num
 }
 
 describe('private order message helper', () => {
+	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
+		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
+		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
+		expect(() => expectNoPii({ content: PRIVATE_POSTCODE_MARKER })).toThrow()
+	})
+
 	test('creates valid Gamma-compatible unsigned kind 16/type=1 order details rumor', () => {
 		const buyer = keyPair()
 		const seller = keyPair()
@@ -147,7 +155,10 @@ describe('private order message helper', () => {
 		expect(rumor.tags).toContainEqual(['item', `30402:${seller.pubkey}:product-1`, '2'])
 		expect(rumor.tags).toContainEqual(['shipping', `30406:${seller.pubkey}:standard`])
 		expect(rumor.tags).toContainEqual(['name', 'Satoshi Nakamoto'])
-		expect(rumor.tags).toContainEqual(['address', '123 Main Street\nApt Secret Notes\nLos Angeles\n90210\nUnited States'])
+		expect(rumor.tags).toContainEqual([
+			'address',
+			`123 Main Street\nApt Secret Notes\nLos Angeles\n${PRIVATE_POSTCODE_MARKER}\nUnited States`,
+		])
 		expect(rumor.tags).toContainEqual(['email', 'buyer@example.com'])
 		expect(rumor.tags).toContainEqual(['phone', '+15551234567'])
 		expect(rumor.content).toBe('Leave the package behind the planter')
@@ -432,11 +443,11 @@ describe('private order message helper', () => {
 			firstLineOfAddress: '123 Main Street',
 			additionalInformation: 'Apt Secret Notes',
 			city: 'Los Angeles',
-			zipPostcode: '90210',
+			zipPostcode: PRIVATE_POSTCODE_MARKER,
 			country: 'United States',
 		})
 
-		expect(addressString).toBe('123 Main Street\nApt Secret Notes\nLos Angeles\n90210\nUnited States')
+		expect(addressString).toBe(`123 Main Street\nApt Secret Notes\nLos Angeles\n${PRIVATE_POSTCODE_MARKER}\nUnited States`)
 	})
 
 	test('private order details can omit optional buyer fields', () => {
