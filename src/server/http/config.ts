@@ -76,14 +76,15 @@ export const configRoutes: BunRoutes = {
 
 			const appPubkey = getAppPublicKeyOrThrow()
 			const timestamp = Math.floor(Date.now() / 1000)
+			const settings = { ...settingsResult.data, handlerId: getInstanceConfig().handlerId }
 			const eventTemplates = [
 				{ kind: 30000, created_at: timestamp, tags: [['d', 'admins'], ...payload.admins.map((pubkey) => ['p', pubkey])], content: '' },
 				{ kind: 30000, created_at: timestamp, tags: [['d', 'editors'], ...payload.editors.map((pubkey) => ['p', pubkey])], content: '' },
 				{
 					kind: 31990,
 					created_at: timestamp,
-					tags: [['d', settingsResult.data.handlerId || 'plebeian-market-handler']],
-					content: JSON.stringify(settingsResult.data),
+					tags: [['d', settings.handlerId]],
+					content: JSON.stringify(settings),
 				},
 			]
 
@@ -97,7 +98,7 @@ export const configRoutes: BunRoutes = {
 				const relay = await Relay.connect(RELAY_URL as string)
 				for (const event of signedEvents) await relay.publish(event as Parameters<typeof relay.publish>[0])
 				relay.close()
-				setAppSettings(settingsResult.data)
+				setAppSettings(settings)
 				return Response.json({ ok: true })
 			} catch (error) {
 				return Response.json({ error: error instanceof Error ? error.message : 'Failed to publish setup events' }, { status: 502 })
