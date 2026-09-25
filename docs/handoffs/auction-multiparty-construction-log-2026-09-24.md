@@ -111,3 +111,78 @@ as it is in a single-file run.
   unifying them changes live copy, which is the maintainer's call.
 - **The two stores' bounds.** A pending leg occupies one entry in the recovery record and one in the
   journal, each fail-closed at 25. Whether one budget should cover both is recorded in D17 as open.
+
+---
+
+## Stage G — held before implementation: which wallet does the leg bind to?
+
+**Status:** researched, not implemented. The maintainer asked for this check before G, because a Coco
+wallet migration is in flight and the question is whether the multiparty work should be based on
+`feat/coco-v2-wallet-auction-lifecycle` instead of NIP-60.
+
+### What the multiparty layer actually needs from a wallet
+
+Checked by reading what the modules import. **Two of the five touch wallet code at all, and only one
+helper**: `multipartyLegJournal` and `multipartyRecoveryRecord` use `loadUserData`/`saveUserData`
+(`src/lib/wallet/storage.ts`), which both wallet stores already share. `multipartyLegConstruction`
+touches the wallet through an **injected seam** (`MultipartyLegMintSeam.swap`) that mirrors one library
+call. The plan, the parity rule, the outcome verification, the state machine, the refusal codes and
+every test are wallet-free.
+
+So the wallet surface of this work is three interfaces, not a dependency:
+
+| Interface               | Today (NIP-60)                                                                                              | On Coco (branch)                                                                                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lock N outputs          | `CashuWallet.swap(amount, inputs, { p2pk: { pubkey, locktime, refundKeys } })`, once per row                | `manager.ops.send.prepare({ operationId, mintUrl, amount, target: { type: 'p2pk', options: { pubkey, locktime, refundKeys, requiredRefundSignatures } } })` then `.execute(operationId)` — once per row |
+| Leg recovery            | `PendingToken[]` under `nip60_pending_tokens`, `AuctionBidPendingTokenContext` (a shape this branch widens) | Coco's IndexedDB operation store + `src/lib/coco/recovery/metadata.ts` (`RecoveryMetadata`: `cocoOperationId`, `derivationPurpose/Version/Reference`, `auctionBinding`, `conditionFingerprint`, status) |
+| Proof-state bookkeeping | `wallet.state.update({ mint, store: change, destroy: inputs })` — the caller hands the wallet its delta     | none: the engine owns proofs, change and reclaim. Nothing to hand it                                                                                                                                    |
+| Reclaim                 | `nip60` refund flow with the leg's refund private key                                                       | `manager.ops.send.reclaim(operationId, { spendingPath: 'refund' })`                                                                                                                                     |
+
+### Verdict
+
+**Not "renaming API calls", and not "fundamental" either.** Three interfaces differ in kind (a
+one-shot swap vs a prepare/execute operation with a caller-supplied id; a pending-token list vs a
+recovery-metadata model; a caller-supplied proof delta vs no delta at all), and the `PendingToken`
+shape this branch depends on is NIP-60's store, not a shared abstraction. But the _protocol_ work —
+which is most of what has been built — is already backend-neutral, and Coco's model supplies **more**
+of the durability story than NIP-60 does: `prepare` is durable before `execute`, and the engine runs
+recovery sweeps, which is the same problem the leg journal hand-rolled at the leg level.
+
+That last point is the useful one: on Coco the leg journal **narrows** to the row↔operation mapping and
+the leg verdict, because the per-operation durability stops being ours.
+
+### Decision taken
+
+**Do not rebase this work onto the Coco branch, and keep stage G store-agnostic.** Reasons, all
+checkable on the branch:
+
+- the Coco auction path is **env-gated** (`BUN_PUBLIC_AUCTION_MONETARY_MODE=coco-v2` plus a fake-mint
+  allowlist, `src/lib/coco/auctions/mode.ts`), i.e. a fake-funds staging integration, not a merged
+  wallet;
+- it is large and in flight (126 files, ~17k insertions vs `auctions`), so the multiparty feature would
+  join a moving review surface and lose the clean one it has now;
+- it contains **zero** multiparty/V4V concepts — `git grep -i multiparty` over `src/lib/coco` is empty —
+  so basing the work there means introducing a new protocol shape into an unmerged integration instead
+  of onto a stable base and adapting later.
+
+Stage G will therefore produce the transition as **data** — per-row lock records, the row↔operation
+mapping, and the leg's change/consumed sets — with persistence behind a thin adapter, exactly as the
+mint interaction already is. On NIP-60 those records become pending tokens; on Coco they become the
+command bindings and recovery metadata. Nothing in the contract changes.
+
+### Questions this hands to the Coco work
+
+1. **Is a multiparty leg N send operations (one per manifest row), or does the Coco operation model
+   want a single multi-output send?** One per row is what the wire requires (one output per row, each
+   locked to its own key) and what Coco's `p2pk` target expresses today; a single send with per-output
+   keys does not exist in either library.
+2. **Every surface that lists a bid leg filters `context?.kind === 'auction_bid'`** (`nip60.ts`, the
+   bids dashboard). A multiparty leg carries its own kind, so those readers decide explicitly whether
+   multiparty legs appear there — silence would make them invisible.
+
+### Correction recorded
+
+My earlier Coco notes said no refund-claiming path exists upstream. That was true of the upstream
+master snapshot and is **wrong for the pinned Round 16**: `ops.send.reclaim(id, { spendingPath:
+'refund' })` exists and the auction engine port calls it. The stale claim is corrected in the skill's
+Coco reference so it is not repeated as a blocker.
