@@ -592,9 +592,13 @@ export const fetchAuctionVerdicts = async (
 
 /**
  * Retry budget for a publish-path verdict read: a bounded window with a
- * fixed step. Sized to cover relay propagation lag (a verdict published
- * moments ago is not necessarily visible to the next read) without holding
- * a seller's/bidder's publish action open indefinitely.
+ * fixed step, sized to cover relay propagation lag — a verdict published
+ * moments ago is not necessarily visible to the next read.
+ *
+ * That premise is INFERRED from the code path above, not observed: no
+ * captured failing read with the relay's response backs it (PR #1380,
+ * review 5260334866). What the window is measured to do either way is keep
+ * a seller's/bidder's publish action from being held open indefinitely.
  */
 export const AUCTION_VERDICT_RETRY_WINDOW_MS = 2500
 export const AUCTION_VERDICT_RETRY_STEP_MS = 300
