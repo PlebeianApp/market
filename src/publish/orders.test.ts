@@ -185,13 +185,15 @@ import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
 
+const ZIP_POSTCODE_PII_SENTINEL = 'buyer-postcode::90210::plaintext-only'
+
 const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	ZIP_POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -201,7 +203,7 @@ const baseShippingData: CheckoutFormData = {
 	email: 'buyer@example.com',
 	phone: '+15551234567',
 	firstLineOfAddress: '123 Main Street',
-	zipPostcode: '90210',
+	zipPostcode: ZIP_POSTCODE_PII_SENTINEL,
 	city: 'Los Angeles',
 	country: 'United States',
 	additionalInformation: 'Apt Secret Notes',
@@ -319,6 +321,13 @@ async function decryptGiftWrapForSeller(event: PublishedEvent, seller: TestKeyPa
 describe('public order privacy guard', () => {
 	beforeEach(() => {
 		resetTestState()
+	})
+
+	test('distinguishes unrelated hex identifiers from the plaintext postcode sentinel', () => {
+		const unrelatedHexIdentifier = `${'a'.repeat(20)}90210${'b'.repeat(39)}`
+		expect(unrelatedHexIdentifier).toHaveLength(64)
+		expect(() => expectNoBuyerPii({ id: unrelatedHexIdentifier })).not.toThrow()
+		expect(() => expectNoBuyerPii({ content: ZIP_POSTCODE_PII_SENTINEL })).toThrow()
 	})
 
 	test('sanitizes the spec order creation constructor', async () => {
