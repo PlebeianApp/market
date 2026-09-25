@@ -5,8 +5,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CountryCombobox, isValidCountry } from '@/components/checkout/CountryCombobox'
 import { CityCombobox } from '@/components/checkout/CityCombobox'
+import { isValidDigitalDeliveryContact } from '@/lib/checkout/deliveryRequirements'
 import { usePublishAuctionClaimOrderMutation, type AuctionClaimFormData } from '@/publish/auctions'
-import { useState } from 'react'
+import { useForm } from '@tanstack/react-form'
 
 interface AuctionClaimDialogProps {
 	open: boolean
@@ -18,6 +19,8 @@ interface AuctionClaimDialogProps {
 	finalAmount: number
 }
 
+type ValidationField = 'name' | 'email' | 'firstLineOfAddress' | 'city' | 'zipPostcode' | 'country'
+
 export function AuctionClaimDialog({
 	open,
 	onOpenChange,
@@ -28,50 +31,55 @@ export function AuctionClaimDialog({
 	finalAmount,
 }: AuctionClaimDialogProps) {
 	const claimMutation = usePublishAuctionClaimOrderMutation()
+	const form = useForm({
+		defaultValues: {
+			name: '',
+			email: '',
+			firstLineOfAddress: '',
+			city: '',
+			zipPostcode: '',
+			country: '',
+			additionalInformation: '',
+			notes: '',
+		},
+		onSubmit: async ({ value }) => {
+			const data: AuctionClaimFormData = {
+				auctionEventId,
+				auctionCoordinates,
+				settlementEventId,
+				sellerPubkey,
+				finalAmount,
+				shippingAddress: {
+					name: value.name.trim(),
+					firstLineOfAddress: value.firstLineOfAddress.trim(),
+					city: value.city.trim(),
+					zipPostcode: value.zipPostcode.trim(),
+					country: value.country,
+					additionalInformation: value.additionalInformation.trim() || undefined,
+				},
+				email: value.email.trim() || undefined,
+				notes: value.notes.trim() || undefined,
+			}
 
-	const [name, setName] = useState('')
-	const [firstLineOfAddress, setFirstLineOfAddress] = useState('')
-	const [city, setCity] = useState('')
-	const [zipPostcode, setZipPostcode] = useState('')
-	const [country, setCountry] = useState('')
-	const [additionalInformation, setAdditionalInformation] = useState('')
-	const [email, setEmail] = useState('')
-	const [notes, setNotes] = useState('')
+			try {
+				await claimMutation.mutateAsync(data)
+				handleOpenChange(false)
+			} catch {
+				// Error toast handled by mutation
+			}
+		},
+	})
 
-	const isValid =
-		name.trim().length >= 2 && firstLineOfAddress.trim().length >= 5 && city.trim() && zipPostcode.trim() && isValidCountry(country)
-
-	const handleSubmit = async () => {
-		if (!isValid) return
-
-		const data: AuctionClaimFormData = {
-			auctionEventId,
-			auctionCoordinates,
-			settlementEventId,
-			sellerPubkey,
-			finalAmount,
-			shippingAddress: {
-				name: name.trim(),
-				firstLineOfAddress: firstLineOfAddress.trim(),
-				city: city.trim(),
-				zipPostcode: zipPostcode.trim(),
-				country,
-				additionalInformation: additionalInformation.trim() || undefined,
-			},
-			email: email.trim() || undefined,
-			notes: notes.trim() || undefined,
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (!nextOpen) {
+			form.reset()
 		}
 
-		try {
-			await claimMutation.mutateAsync(data)
-			onOpenChange(false)
-		} catch {
-			// Error toast handled by mutation
-		}
+		onOpenChange(nextOpen)
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Claim Your Auction Win</DialogTitle>
@@ -81,96 +89,235 @@ export function AuctionClaimDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-4 py-2">
-					<div>
-						<Label htmlFor="claim-name">
-							Full Name <span className="text-red-500">*</span>
-						</Label>
-						<Input id="claim-name" placeholder="e.g. Satoshi Nakamoto" value={name} onChange={(e) => setName(e.target.value)} />
-					</div>
+				<form
+					noValidate
+					onSubmit={(e) => {
+						e.preventDefault()
+						e.stopPropagation()
+						form.handleSubmit()
+					}}
+					className="space-y-4 py-2"
+				>
+					<form.Subscribe selector={(state) => state.submissionAttempts > 0}>
+						{(hasAttemptedSubmit) => (
+							<>
+								<form.Field
+									name={'name' satisfies ValidationField}
+									validators={{
+										onChange: ({ value }: { value: string }) => {
+											if (/\d/.test(value)) return 'Name cannot contain numbers'
+											if (value.trim().length < 2) return 'Name must be at least 2 characters'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-name">
+												Full Name <span className="text-red-500">*</span>
+											</Label>
+											<Input
+												id="claim-name"
+												placeholder="e.g. Satoshi Nakamoto"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+											/>
+											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+											)}
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-email">Email (optional)</Label>
-						<Input
-							id="claim-email"
-							type="email"
-							placeholder="e.g. satoshi@example.com"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-						/>
-					</div>
+								<form.Field
+									name={'email' satisfies ValidationField}
+									validators={{
+										onChange: ({ value }: { value: string }) => {
+											if (value.trim() && !isValidDigitalDeliveryContact(value)) return 'Please enter a valid email address'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-email">Email (optional)</Label>
+											<Input
+												id="claim-email"
+												type="email"
+												placeholder="e.g. satoshi@example.com"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+											/>
+											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+											)}
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-address">
-							Street Address <span className="text-red-500">*</span>
-						</Label>
-						<Input
-							id="claim-address"
-							placeholder="e.g. 123 Main Street, Apt 4B"
-							value={firstLineOfAddress}
-							onChange={(e) => setFirstLineOfAddress(e.target.value)}
-						/>
-					</div>
+								<form.Field
+									name={'firstLineOfAddress' satisfies ValidationField}
+									validators={{
+										onChange: ({ value }: { value: string }) => {
+											if (value.trim().length < 5) return 'Address must be at least 5 characters'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-address">
+												Street Address <span className="text-red-500">*</span>
+											</Label>
+											<Input
+												id="claim-address"
+												placeholder="e.g. 123 Main Street, Apt 4B"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+											/>
+											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+											)}
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-city">
-							City <span className="text-red-500">*</span>
-						</Label>
-						<CityCombobox
-							id="claim-city"
-							value={city}
-							onChange={setCity}
-							placeholder="e.g. San Francisco"
-							required
-							selectedCountry={country}
-						/>
-					</div>
+								<form.Subscribe selector={(state) => state.values.country}>
+									{(selectedCountry) => (
+										<form.Field
+											name={'city' satisfies ValidationField}
+											validators={{
+												onChange: ({ value }: { value: string }) => {
+													if (!value.trim()) return 'City is required'
+													return undefined
+												},
+											}}
+										>
+											{(field) => (
+												<div>
+													<Label htmlFor="claim-city">
+														City <span className="text-red-500">*</span>
+													</Label>
+													<CityCombobox
+														id="claim-city"
+														value={field.state.value}
+														onChange={(value) => field.handleChange(value)}
+														onBlur={field.handleBlur}
+														placeholder="e.g. San Francisco"
+														selectedCountry={selectedCountry}
+													/>
+													{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+														<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+													)}
+												</div>
+											)}
+										</form.Field>
+									)}
+								</form.Subscribe>
 
-					<div>
-						<Label htmlFor="claim-zip">
-							ZIP/Postal Code <span className="text-red-500">*</span>
-						</Label>
-						<Input id="claim-zip" placeholder="e.g. 90210" value={zipPostcode} onChange={(e) => setZipPostcode(e.target.value)} />
-					</div>
+								<form.Field
+									name={'zipPostcode' satisfies ValidationField}
+									validators={{
+										onChange: ({ value }: { value: string }) => {
+											if (!value.trim()) return 'ZIP/Postal code is required'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-zip">
+												ZIP/Postal Code <span className="text-red-500">*</span>
+											</Label>
+											<Input
+												id="claim-zip"
+												placeholder="e.g. 90210"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+											/>
+											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+											)}
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-country">
-							Country <span className="text-red-500">*</span>
-						</Label>
-						<CountryCombobox id="claim-country" value={country} onChange={setCountry} placeholder="e.g. United States" required />
-					</div>
+								<form.Field
+									name={'country' satisfies ValidationField}
+									validators={{
+										onChange: ({ value }: { value: string }) => {
+											if (!isValidCountry(value)) return 'Please select a valid country'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-country">
+												Country <span className="text-red-500">*</span>
+											</Label>
+											<CountryCombobox
+												id="claim-country"
+												value={field.state.value}
+												onChange={(value) => field.handleChange(value)}
+												onBlur={field.handleBlur}
+												placeholder="e.g. United States"
+											/>
+											{(field.state.meta.isTouched || hasAttemptedSubmit) && field.state.meta.errors.length > 0 && (
+												<p className="mt-1 text-xs text-red-500">{field.state.meta.errors[0]}</p>
+											)}
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-notes">Delivery Notes (optional)</Label>
-						<Textarea
-							id="claim-notes"
-							placeholder="Any special delivery instructions"
-							value={additionalInformation}
-							onChange={(e) => setAdditionalInformation(e.target.value)}
-							rows={2}
-						/>
-					</div>
+								<form.Field name="additionalInformation">
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-notes">Delivery Notes (optional)</Label>
+											<Textarea
+												id="claim-notes"
+												placeholder="Any special delivery instructions"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+												rows={2}
+											/>
+										</div>
+									)}
+								</form.Field>
 
-					<div>
-						<Label htmlFor="claim-message">Message to Seller (optional)</Label>
-						<Textarea
-							id="claim-message"
-							placeholder="e.g. Looking forward to the item!"
-							value={notes}
-							onChange={(e) => setNotes(e.target.value)}
-							rows={2}
-						/>
-					</div>
-				</div>
+								<form.Field name="notes">
+									{(field) => (
+										<div>
+											<Label htmlFor="claim-message">Message to Seller (optional)</Label>
+											<Textarea
+												id="claim-message"
+												placeholder="e.g. Looking forward to the item!"
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+												rows={2}
+											/>
+										</div>
+									)}
+								</form.Field>
+							</>
+						)}
+					</form.Subscribe>
 
-				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						Cancel
-					</Button>
-					<Button onClick={() => void handleSubmit()} disabled={!isValid || claimMutation.isPending}>
-						{claimMutation.isPending ? 'Submitting...' : 'Submit Shipping Details'}
-					</Button>
-				</DialogFooter>
+					<DialogFooter>
+						<Button variant="outline" type="button" onClick={() => handleOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={claimMutation.isPending}>
+							{claimMutation.isPending ? 'Submitting...' : 'Submit Shipping Details'}
+						</Button>
+					</DialogFooter>
+				</form>
 			</DialogContent>
 		</Dialog>
 	)
