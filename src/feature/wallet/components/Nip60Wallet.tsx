@@ -63,8 +63,15 @@ import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
 import { cn } from '@/lib/utils'
 import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
-import { getCocoAuctionBalances, type CocoAuctionBalanceProjection } from '@/lib/coco/runtime'
-import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
+import {
+	addCocoAuctionTestFunds,
+	assertCocoTestFundingAllowed,
+	COCO_DEFAULT_FAKE_FUNDING_AMOUNT,
+	COCO_MAX_FAKE_FUNDING_AMOUNT,
+	getCocoAuctionBalances,
+	type CocoAuctionBalanceProjection,
+} from '@/lib/coco/runtime'
+import { ensureBrowserFreshAuctionsdevPreflight, resetBrowserCocoAuctionTestState } from '@/lib/coco/migration/freshAuctionsdevBrowser'
 
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
@@ -100,6 +107,11 @@ export function Nip60Wallet() {
 	)
 	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<UnifiedPendingToken | null>(null)
 	const [cocoBalances, setCocoBalances] = useState<readonly CocoAuctionBalanceProjection[]>([])
+	const [isAddingCocoFunds, setIsAddingCocoFunds] = useState(false)
+	const [cocoFundingAmount, setCocoFundingAmount] = useState(String(COCO_DEFAULT_FAKE_FUNDING_AMOUNT))
+	const [cocoFundingMint, setCocoFundingMint] = useState('')
+	const [cocoSetupBlocked, setCocoSetupBlocked] = useState(false)
+	const [isResettingCocoTestWallet, setIsResettingCocoTestWallet] = useState(false)
 
 	// Combine pending tokens from both stores
 	const activePendingTokens: UnifiedPendingToken[] = useMemo(
@@ -149,11 +161,16 @@ export function Nip60Wallet() {
 		const refresh = () => {
 			if (environmentId !== 'auctionsdev' && environmentId !== 'test') return
 			void ensureBrowserFreshAuctionsdevPreflight({ account: user.pubkey, environment: environmentId })
-				.then(() => getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId }))
+				.then(() => {
+					setCocoSetupBlocked(false)
+					return getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId })
+				})
 				.then((next) => {
 					if (!cancelled) setCocoBalances(next)
 				})
-				.catch(() => undefined)
+				.catch(() => {
+					if (!cancelled) setCocoSetupBlocked(true)
+				})
 		}
 		refresh()
 		window.addEventListener('coco-auction-balance-changed', refresh)
@@ -296,12 +313,59 @@ export function Nip60Wallet() {
 		await handleReclaim(token)
 	}
 
+	const handleAddCocoFakeFunds = async () => {
+		if (!user?.pubkey) {
+			toast.error('Sign in before funding the test wallet')
+			return
+		}
+		setIsAddingCocoFunds(true)
+		try {
+			const environment = readCocoV2AuctionEnvironment()
+			const amount = Number(cocoFundingAmount.trim())
+			const mintUrl = cocoFundingMint || environment.fakeMintAllowlist[0]
+			assertCocoTestFundingAllowed(environment, amount, mintUrl)
+			await ensureBrowserFreshAuctionsdevPreflight({ account: user.pubkey, environment: environment.environmentId })
+			setCocoSetupBlocked(false)
+			await addCocoAuctionTestFunds({ accountPubkey: user.pubkey, environmentId: environment.environmentId }, amount, mintUrl)
+			const nextBalances = await getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId: environment.environmentId })
+			setCocoBalances(nextBalances)
+			window.dispatchEvent(new Event('coco-auction-balance-changed'))
+			toast.success(`${amount.toLocaleString()} fake sats added — ready to test an auction`)
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Could not fund the test wallet'
+			if (message.includes('fresh AuctionsDev preflight blocked')) {
+				setCocoSetupBlocked(true)
+				toast.error('Old local test data is blocking this wallet. Reset the test wallet, then add funds again.')
+			} else {
+				toast.error(message)
+			}
+		} finally {
+			setIsAddingCocoFunds(false)
+		}
+	}
+
+	const handleResetCocoTestWallet = async () => {
+		if (!user?.pubkey) {
+			toast.error('Sign in before resetting the test wallet')
+			return
+		}
+		setIsResettingCocoTestWallet(true)
+		try {
+			const environment = readCocoV2AuctionEnvironment()
+			await resetBrowserCocoAuctionTestState({ account: user.pubkey, environment: environment.environmentId })
+			window.location.reload()
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not reset the test wallet')
+			setIsResettingCocoTestWallet(false)
+		}
+	}
+
 	const classNameGhost = 'text-white/50 hover:bg-white/10 hover:text-white'
 	const classNameMuted = 'bg-white/10 text-white hover:bg-white/15'
 	const classNameActive = 'bg-white/15 text-white'
 	const classNameDestructive = 'bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300'
 	const walletShell =
-		'relative max-w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.22),transparent_42%),radial-gradient(circle_at_top_left,rgba(250,204,21,0.08),transparent_34%),#0b0b0e] text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]'
+		'relative isolate max-w-full overflow-hidden rounded-[1.75rem] border border-white/15 bg-black text-white shadow-[0_28px_80px_rgba(0,0,0,0.72)]'
 
 	if (!isAuthenticated) {
 		return (
@@ -320,51 +384,155 @@ export function Nip60Wallet() {
 
 	if (cocoMode) {
 		const cocoEnvironment = readCocoV2AuctionEnvironment()
+		const selectedCocoMint = cocoEnvironment.fakeMintAllowlist.includes(cocoFundingMint)
+			? cocoFundingMint
+			: cocoEnvironment.fakeMintAllowlist[0]
 		const spendable = cocoBalances.reduce((sum, item) => sum + item.spendable, 0)
 		const reserved = cocoBalances.reduce((sum, item) => sum + item.reserved, 0)
 		return (
-			<div className={cn(walletShell, 'p-4')}>
-				<div className="flex items-center justify-between">
+			<div
+				className={cn(walletShell, 'p-5 sm:p-6')}
+				style={{
+					backgroundColor: '#07080a',
+					backgroundImage:
+						'radial-gradient(circle at 82% 0%, rgba(236, 72, 153, 0.22), transparent 46%), radial-gradient(circle at 12% 12%, rgba(250, 204, 21, 0.1), transparent 34%)',
+				}}
+			>
+				<div className="flex items-center justify-between gap-3">
 					<div className="flex items-center gap-2.5">
-						<div className="flex size-9 items-center justify-center rounded-xl bg-pink-500 text-black shadow-[0_8px_24px_rgba(236,72,153,0.3)]">
+						<div className="flex size-10 items-center justify-center rounded-2xl bg-pink-500 text-black shadow-[0_8px_24px_rgba(236,72,153,0.35)]">
 							<Coins className="size-5" />
 						</div>
 						<div>
-							<p className="text-[10px] font-semibold tracking-[0.18em] text-white/45">PLEBEIAN CASH</p>
+							<p className="text-[10px] font-semibold tracking-[0.2em] text-white/55">PLEBEIAN CASH</p>
 							<p className="text-sm font-semibold">Auction wallet</p>
 						</div>
 					</div>
-					<span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+					<span className="shrink-0 rounded-full border border-yellow-300/30 bg-yellow-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-yellow-200">
 						Fake funds
 					</span>
 				</div>
 
-				<div className="pb-5 pt-8 text-center">
-					<p className="text-xs font-medium text-white/45">Available for bids</p>
-					<p className="mt-1 text-[2.5rem] font-bold leading-none tracking-tight">
+				<div className="pb-7 pt-10 text-center">
+					<p className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">Available for bids</p>
+					<p data-testid="coco-spendable-balance" className="mt-3 text-5xl font-semibold leading-none tracking-[-0.04em] sm:text-[3.5rem]">
 						{spendable.toLocaleString()}
-						<span className="ml-2 text-base font-medium text-white/45">sats</span>
+						<span className="ml-2 text-base font-medium tracking-normal text-white/45">sats</span>
 					</p>
 					{reserved > 0 && (
-						<p className="mt-3 inline-flex rounded-full bg-amber-300/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+						<p className="mt-4 inline-flex rounded-full border border-amber-300/15 bg-amber-300/10 px-3 py-1.5 text-[11px] font-medium text-amber-200">
 							{reserved.toLocaleString()} sats held for active bids
 						</p>
 					)}
 				</div>
 
+				<div className="rounded-2xl border border-white/10 p-3.5" style={{ backgroundColor: '#141519' }}>
+					<div className="mb-3 flex items-center gap-2.5">
+						<span className="flex size-9 items-center justify-center rounded-xl bg-yellow-300 text-black">
+							<Zap className="size-4 fill-current" />
+						</span>
+						<div>
+							<p className="text-sm font-semibold">Fund with test mint</p>
+							<p className="text-[11px] text-white/45">Choose any amount of fake sats for auction testing</p>
+						</div>
+					</div>
+					<div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5">
+						<div className="min-w-0">
+							<p className="text-[10px] font-medium uppercase tracking-wide text-white/40">Testnet mint</p>
+							<p className="truncate text-xs font-semibold text-white">{getMintHostname(selectedCocoMint)}</p>
+						</div>
+						{cocoEnvironment.fakeMintAllowlist.length > 1 && (
+							<Select value={selectedCocoMint} onValueChange={setCocoFundingMint}>
+								<SelectTrigger
+									aria-label="Cashu testnet mint"
+									className="h-9 w-36 rounded-lg border-white/10 bg-white/5 text-xs text-white"
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{cocoEnvironment.fakeMintAllowlist.map((mintUrl) => (
+										<SelectItem key={mintUrl} value={mintUrl}>
+											{getMintHostname(mintUrl)}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
+					</div>
+					<div className="flex gap-2">
+						<div className="relative min-w-0 flex-1">
+							<Input
+								aria-label="Fake sats amount"
+								data-testid="coco-test-funding-amount"
+								type="number"
+								inputMode="numeric"
+								min={1}
+								max={COCO_MAX_FAKE_FUNDING_AMOUNT}
+								step={1}
+								value={cocoFundingAmount}
+								onChange={(event) => setCocoFundingAmount(event.target.value)}
+								disabled={isAddingCocoFunds}
+								className="h-12 rounded-xl border-white/10 bg-black pr-12 text-lg font-semibold text-white placeholder:text-white/25 focus-visible:border-yellow-300/60 focus-visible:ring-yellow-300/20"
+								style={{ backgroundColor: '#08090c' }}
+							/>
+							<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-white/35">sats</span>
+						</div>
+						<Button
+							aria-label="Add fake sats from test mint"
+							data-testid="coco-test-fund-button"
+							className="h-12 shrink-0 rounded-xl bg-yellow-300 px-4 font-semibold text-black shadow-[0_12px_28px_rgba(250,204,21,0.16)] hover:bg-yellow-200"
+							onClick={() => void handleAddCocoFakeFunds()}
+							disabled={isAddingCocoFunds || !cocoFundingAmount.trim()}
+						>
+							{isAddingCocoFunds ? <Loader2 className="size-4 animate-spin" /> : 'Add funds'}
+						</Button>
+					</div>
+					<p className="mt-2 text-[10px] text-white/35">Test only · 1–{COCO_MAX_FAKE_FUNDING_AMOUNT.toLocaleString()} sats per top-up</p>
+				</div>
+
+				{cocoSetupBlocked && (
+					<div className="mt-3 rounded-2xl border border-yellow-300/25 bg-yellow-300/10 p-3.5">
+						<p className="text-sm font-semibold text-yellow-100">Fresh test setup required</p>
+						<p className="mt-1 text-[11px] leading-relaxed text-yellow-100/65">
+							This browser has older fake-wallet or interrupted auction data. Resetting removes local Coco test data only; real funds are
+							never involved.
+						</p>
+						<Button
+							data-testid="coco-reset-test-wallet"
+							className="mt-3 h-10 w-full rounded-xl bg-yellow-300 font-semibold text-black hover:bg-yellow-200"
+							onClick={() => void handleResetCocoTestWallet()}
+							disabled={isResettingCocoTestWallet || isAddingCocoFunds}
+						>
+							{isResettingCocoTestWallet ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+							Reset test wallet
+						</Button>
+					</div>
+				)}
+
 				<Button
-					className="h-12 w-full rounded-xl bg-pink-500 font-semibold text-black shadow-[0_12px_28px_rgba(236,72,153,0.22)] hover:bg-pink-400"
+					aria-label="Receive fake eCash"
+					className="mt-3 h-12 w-full rounded-2xl border border-white/12 bg-black font-semibold text-white shadow-none hover:bg-white/10"
+					style={{ backgroundColor: '#17181c' }}
 					onClick={() => setOpenModal('receive')}
 				>
-					<QrCode className="size-4" />
-					Receive fake eCash
+					<QrCode className="size-5 text-pink-400" />
+					Receive eCash token
 				</Button>
 
-				<div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2.5 text-xs">
-					<span className="flex items-center gap-2 font-medium text-emerald-300">
-						<ShieldCheck className="size-4" /> Auction-ready
+				<div
+					className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-3.5 py-3 text-xs"
+					style={{ backgroundColor: '#111216' }}
+				>
+					<span className={cn('flex items-center gap-2 font-medium', cocoSetupBlocked ? 'text-yellow-200' : 'text-emerald-300')}>
+						<span
+							className={cn(
+								'size-2 rounded-full',
+								cocoSetupBlocked ? 'bg-yellow-300' : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.75)]',
+							)}
+						/>
+						<ShieldCheck className="size-4" /> {cocoSetupBlocked ? 'Reset required' : 'Ready to test bids'}
 					</span>
-					<span className="text-white/40">{cocoEnvironment.environmentId} · test only</span>
+					<span className="shrink-0 text-white/40">{cocoEnvironment.environmentId} · fake sats</span>
 				</div>
 				<ReceiveEcashModal open={openModal === 'receive'} onClose={() => setOpenModal(null)} />
 			</div>

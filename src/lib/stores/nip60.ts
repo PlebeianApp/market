@@ -17,15 +17,7 @@ import {
 } from '@/lib/auctionP2pk'
 import { AUCTION_MIN_BID_LEG_SATS } from '@/lib/auction/constants'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
-import {
-	Mint as CashuMint,
-	Wallet as CashuWallet,
-	CheckStateEnum,
-	getEncodedToken,
-	type MintKeys,
-	type MintKeyset,
-	type Proof,
-} from '@cashu/cashu-ts'
+import { Wallet as CashuWallet, CheckStateEnum, getEncodedToken, type Proof } from '@cashu/cashu-ts'
 import { getP2PKLocktime } from '@/lib/utils/cashu'
 import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { inspectCashuToken } from '@/lib/cashu/tokenInspection'
@@ -46,6 +38,7 @@ import {
 	removePreLockRecoveryRecord,
 } from '@/lib/auction/bidderRecords'
 import type { SaveUserDataOptions } from '@/lib/wallet/storage'
+import { CASHU_PUBLIC_TESTNET_MINTS, createCashuTestMintWallet, waitForCashuTestMintQuotePaid } from '@/lib/cashu/testMint'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -215,7 +208,7 @@ export const NIP60_DEV_TEST_MINTS = Array.from(
 			DEV_TEST_MINT_URL,
 			'http://localhost:3338',
 			'http://127.0.0.1:3338',
-			'https://testnut.cashu.space',
+			...CASHU_PUBLIC_TESTNET_MINTS.map((mint) => mint.url),
 			'https://nofees.testnut.cashu.space',
 		]
 			.map((mint) => mint.trim().replace(/\/$/, ''))
@@ -443,8 +436,6 @@ const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
 	return Array.from(new Set([...preferred, ...NIP60_DEV_TEST_MINTS].filter(Boolean)))
 }
 
-const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
-
 const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 const computePaddedDepositAmount = (
@@ -492,50 +483,11 @@ const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk'
 	}
 }
 
-const getDevTestMintKeyset = async (cashuMint: CashuMint, targetMint: string): Promise<{ keysets: MintKeyset[]; mintKeys: MintKeys }> => {
-	const keysetResponse = await cashuMint.getKeySets()
-	const satKeysets = keysetResponse.keysets.filter((keyset) => keyset.unit === 'sat')
-	const activeSatKeyset = satKeysets.find((keyset) => keyset.active) ?? satKeysets[0]
-	if (!activeSatKeyset) {
-		throw new Error(`Mint ${getMintHostname(targetMint)} has no sat keysets`)
-	}
-
-	const keysResponse = await cashuMint.getKeys(activeSatKeyset.id)
-	const mintKeys = keysResponse.keysets.find((keyset) => keyset.id === activeSatKeyset.id) ?? keysResponse.keysets[0]
-	if (!mintKeys) {
-		throw new Error(`Mint ${getMintHostname(targetMint)} returned no keys for keyset ${activeSatKeyset.id}`)
-	}
-
-	return {
-		keysets: satKeysets,
-		mintKeys,
-	}
-}
-
 const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWallet: CashuWallet; keysetId?: string }> => {
 	const normalizedTargetMint = normalizeMintUrl(targetMint)
-	const cashuMint = new CashuMint(normalizedTargetMint)
-	const cashuWallet = new CashuWallet(cashuMint)
-
-	try {
-		await cashuWallet.loadMint()
-		return { cashuWallet }
-	} catch (err) {
-		if (!isNip60WalletDevModeEnabled() || !NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint) || !isKeysetVerificationError(err)) {
-			throw err
-		}
-
-		// testnut is currently serving a keyset ID that cashu-ts rejects. Seed the dev wallet
-		// with the raw keyset metadata so we can keep exercising the faucet flow in dev mode.
-		const { keysets, mintKeys } = await getDevTestMintKeyset(cashuMint, normalizedTargetMint)
-		return {
-			cashuWallet: new CashuWallet(cashuMint, {
-				keysets,
-				keys: mintKeys,
-			}),
-			keysetId: mintKeys.id,
-		}
-	}
+	return createCashuTestMintWallet(normalizedTargetMint, {
+		allowKeysetFallback: isNip60WalletDevModeEnabled() && NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint),
+	})
 }
 
 const primeDevTestMintDepositWalletCache = async (wallet: NDKCashuWallet, targetMint: string): Promise<void> => {
@@ -2540,6 +2492,7 @@ const nip60ActionImplementations = {
 			try {
 				const { cashuWallet, keysetId } = await createCashuWalletForMint(targetMint)
 				const quote = await cashuWallet.createMintQuote(mintAmount)
+				await waitForCashuTestMintQuotePaid(cashuWallet, quote)
 				const proofs = await cashuWallet.mintProofs(mintAmount, quote.quote, keysetId ? { keysetId } : undefined)
 
 				if (!proofs.length) {

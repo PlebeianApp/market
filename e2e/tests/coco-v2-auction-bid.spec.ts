@@ -265,15 +265,11 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 		const relay = await Relay.connect(RELAY_URL)
 		try {
 			const auction = await seedAuction(relay)
-			const token = await mintFakeToken(1_000)
 
 			await buyerPage.getByTestId('wallet-button').click()
-			await buyerPage.getByRole('button', { name: 'Receive fake eCash' }).click()
-			const receiveDialog = buyerPage.getByRole('dialog', { name: 'Receive eCash' })
-			await receiveDialog.locator('textarea').fill(token)
-			await receiveDialog.getByRole('button', { name: 'Receive', exact: true }).click()
-			await expect(receiveDialog.getByText('eCash Received!')).toBeVisible({ timeout: 30_000 })
-			await receiveDialog.getByRole('button', { name: 'Done' }).click()
+			await buyerPage.getByTestId('coco-test-funding-amount').fill('1000')
+			await buyerPage.getByTestId('coco-test-fund-button').click()
+			await expect(buyerPage.getByTestId('coco-spendable-balance')).toContainText('1,000', { timeout: 30_000 })
 
 			await buyerPage.evaluate((pubkey) => {
 				localStorage.setItem(`auction-rules-ack:v1:${pubkey}`, 'true')

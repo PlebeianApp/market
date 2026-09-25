@@ -1,5 +1,7 @@
 import { getTokenMetadata, initializeCoco, type Manager } from '@cashu/coco-core'
 import { IndexedDbRepositories } from '@cashu/coco-indexeddb'
+import { getEncodedToken } from '@cashu/cashu-ts'
+import { createCashuTestMintWallet, waitForCashuTestMintQuotePaid } from '@/lib/cashu/testMint'
 import { loadOrCreateCocoSeed } from './seedVault'
 import type { CocoAuctionAccountIdentity } from './auctions/types'
 import { assertFakeCocoAuctionMint, readCocoV2AuctionEnvironment } from './auctions/mode'
@@ -52,6 +54,15 @@ export class CocoRuntimeRegistry {
 		})
 		return { account, manager, loadSeed }
 	}
+
+	async dispose(accountInput: CocoAuctionAccountIdentity): Promise<void> {
+		const account = assertCocoAuctionAccountIdentity(accountInput)
+		const key = getCocoRuntimeScope(account)
+		const runtime = this.runtimes.get(key)
+		if (!runtime) return
+		this.runtimes.delete(key)
+		;(await runtime).manager.dispose()
+	}
 }
 
 export const cocoRuntimeRegistry = new CocoRuntimeRegistry()
@@ -62,6 +73,31 @@ export interface CocoAuctionBalanceProjection {
 	spendable: number
 	reserved: number
 	total: number
+}
+
+export const COCO_DEFAULT_FAKE_FUNDING_AMOUNT = 500
+export const COCO_MAX_FAKE_FUNDING_AMOUNT = 100_000
+
+export const assertCocoTestFundingAllowed = (
+	environment: {
+		environmentId: string
+		monetaryMode: string
+		fakeMintAllowlist: readonly string[]
+	},
+	amount: number,
+	requestedMintUrl?: string,
+): string => {
+	if (environment.monetaryMode !== 'fake') throw new Error('Coco test-mint funding is restricted to fake funds')
+	if (environment.environmentId !== 'auctionsdev' && environment.environmentId !== 'test') {
+		throw new Error('Coco test-mint funding is restricted to auctionsdev/test')
+	}
+	if (!Number.isSafeInteger(amount) || amount < 1 || amount > COCO_MAX_FAKE_FUNDING_AMOUNT) {
+		throw new Error(`Test funding must be a whole number between 1 and ${COCO_MAX_FAKE_FUNDING_AMOUNT.toLocaleString()} sats`)
+	}
+	const mintUrl = requestedMintUrl?.trim().replace(/\/$/, '') || environment.fakeMintAllowlist[0]
+	if (!mintUrl) throw new Error('Coco test-mint funding requires an allowlisted fake mint')
+	if (!environment.fakeMintAllowlist.includes(mintUrl)) throw new Error('Selected test mint is not in the Coco fake-mint allowlist')
+	return mintUrl
 }
 
 const trustAllowlistedMint = async (manager: Manager, mintUrl: string): Promise<void> => {
@@ -111,4 +147,29 @@ export const receiveCocoAuctionFakeFunds = async (
 			return projection
 		},
 	)
+}
+
+/**
+ * Convenience funding for the fake-funds Auction profile. The test mint issues
+ * an encoded token, then the normal fenced Coco receive path verifies and
+ * persists it. This cannot run in a real-funds or non-test environment.
+ */
+export const addCocoAuctionTestFunds = async (
+	account: CocoAuctionAccountIdentity,
+	amount: number,
+	requestedMintUrl?: string,
+): Promise<CocoAuctionBalanceProjection> => {
+	const environment = readCocoV2AuctionEnvironment()
+	if (account.environmentId !== environment.environmentId) throw new Error('Coco funding account belongs to another environment')
+	const mintUrl = assertCocoTestFundingAllowed(environment, amount, requestedMintUrl)
+	const { cashuWallet: wallet, keysetId } = await createCashuTestMintWallet(mintUrl, { allowKeysetFallback: true })
+	const quote = await wallet.createMintQuoteBolt11(amount)
+	await waitForCashuTestMintQuotePaid(wallet, quote)
+	const proofs = await wallet.mintProofsBolt11(amount, quote, keysetId ? { keysetId } : undefined)
+	const receivedAmount = proofs.reduce((total, proof) => total + proof.amount.toNumber(), 0)
+	if (receivedAmount !== amount) {
+		throw new Error('Fake mint returned an unexpected funding amount')
+	}
+	const token = getEncodedToken({ mint: mintUrl, proofs, unit: 'sat' })
+	return receiveCocoAuctionFakeFunds(account, token)
 }

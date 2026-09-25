@@ -160,7 +160,8 @@ function WalletButton() {
 			</PopoverTrigger>
 
 			<PopoverContent
-				className="w-[calc(100vw-1rem)] max-w-[25rem] overflow-hidden rounded-[1.5rem] border-0 bg-transparent p-0 shadow-2xl"
+				className="w-[calc(100vw-1rem)] max-w-[25rem] overflow-hidden rounded-[1.75rem] border border-white/15 bg-black p-0"
+				style={{ backgroundColor: '#07080a', boxShadow: '0 30px 90px rgba(0, 0, 0, 0.78)' }}
 				align="end"
 				sideOffset={10}
 			>

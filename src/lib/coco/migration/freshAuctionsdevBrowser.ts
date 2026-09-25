@@ -4,7 +4,7 @@ import { nip60Store } from '@/lib/stores/nip60'
 import { getLegacyTruncatedUserScopedKey } from '@/lib/wallet/storage'
 import { IndexedDbCocoAuctionCommandRepository } from '../auctions/commandRepository'
 import { readCocoFakeMintIdentityCommitments, readCocoV2AuctionEnvironment, readMarketCommitSha } from '../auctions/mode'
-import { cocoRuntimeRegistry, getCocoDatabaseName, getCocoRuntimeScope } from '../runtime'
+import { assertCocoTestFundingAllowed, cocoRuntimeRegistry, getCocoDatabaseName, getCocoRuntimeScope } from '../runtime'
 import { hasCocoSeedVaultRecord, verifyCocoSeedVaultRoundTrip } from '../seedVault'
 import { createCommitment } from './commitment'
 import { buildCanonicalWalletNamespace, createMigrationIdentity } from './identity'
@@ -13,6 +13,7 @@ import { MigrationSafetyError, type FreshAuctionsdevPreflightEvidence, type Migr
 import { commitFreshAuctionsdevSelection, createFreshAuctionsdevEvidence } from './freshAuctionsdev'
 import { createFreshAuctionsdevPublicReport, type FreshAuctionsdevPublicReport } from './freshAuctionsdevReport'
 import { createInitialFreshTestControlRecord, getMigrationAuthorityPurpose, type MigrationControlStore } from './store'
+import { closeBrowserLegacyMutationGate } from './runtimeGate'
 
 const LEGACY_TRUNCATED_PREFIXES = [
 	'nip60_pending_tokens',
@@ -144,6 +145,17 @@ async function collectCounts(
 	}
 }
 
+export function canonicalizeFakeMintIdentityInfo(info: unknown): Readonly<Record<string, unknown>> {
+	if (!info || typeof info !== 'object' || Array.isArray(info)) {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fake mint identity document is invalid')
+	}
+	const record = info as Record<string, unknown>
+	if (!Number.isSafeInteger(record.time) || (record.time as number) < 0) {
+		throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fake mint identity time is invalid')
+	}
+	return Object.freeze({ ...record, time: 0 })
+}
+
 async function verifyFakeMints(fetcher: typeof fetch) {
 	const environment = readCocoV2AuctionEnvironment()
 	if (environment.environmentId !== 'auctionsdev' && environment.environmentId !== 'test') {
@@ -156,7 +168,7 @@ async function verifyFakeMints(fetcher: typeof fetch) {
 		if (!expected) throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fake mint has no pinned public identity commitment')
 		const response = await fetcher(`${mint}/v1/info`, { cache: 'no-store', credentials: 'omit' })
 		if (!response.ok) throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fake mint identity endpoint is unavailable')
-		const info = (await response.json()) as unknown
+		const info = canonicalizeFakeMintIdentityInfo((await response.json()) as unknown)
 		const actual = await createCommitment('market-coco-v2-fake-mint-info-v1', { mintUrl: mint, info })
 		if (actual !== expected) throw new MigrationSafetyError('CUTOVER_BLOCKED', 'fake mint identity does not match its pinned commitment')
 		verified.push({ mintCommitment: await createCommitment('market-coco-v2-fake-mint-url-v1', mint), identityCommitment: actual })
@@ -313,6 +325,47 @@ async function convergeBrowserFreshAuctionsdevPreflight(input: {
 }
 
 const freshPreflightInFlight = new Map<string, Promise<Readonly<FreshAuctionsdevPublicReport>>>()
+
+const deleteDatabase = (name: string): Promise<void> =>
+	new Promise((resolve, reject) => {
+		const request = indexedDB.deleteDatabase(name)
+		request.onsuccess = () => resolve()
+		request.onerror = () => reject(request.error ?? new Error(`Failed to reset ${name}`))
+		request.onblocked = () => reject(new Error(`Close other Plebeian Market tabs before resetting ${name}`))
+	})
+
+/**
+ * Explicit recovery for a disposable fake-funds browser profile. This is not
+ * part of the sealed preflight: it removes local Coco/test authority and the
+ * current account's legacy test markers, then the caller reloads and runs the
+ * unchanged fresh-wallet preflight from zero.
+ */
+export async function resetBrowserCocoAuctionTestState(input: { account: string; environment: 'auctionsdev' | 'test' }): Promise<void> {
+	if (typeof indexedDB === 'undefined' || typeof localStorage === 'undefined') {
+		throw new MigrationSafetyError('STORAGE_FAILURE', 'browser storage is required to reset the test wallet')
+	}
+	const environment = readCocoV2AuctionEnvironment()
+	if (environment.environmentId !== input.environment) {
+		throw new MigrationSafetyError('IDENTITY_MISMATCH', 'test-wallet reset environment does not match the runtime')
+	}
+	assertCocoTestFundingAllowed(environment, 1)
+	const namespace = buildCanonicalWalletNamespace(input)
+	const account = { accountPubkey: input.account, environmentId: input.environment }
+
+	await cocoRuntimeRegistry.dispose(account)
+	closeBrowserLegacyMutationGate()
+	freshPreflightInFlight.delete(namespace)
+
+	for (const prefix of LEGACY_TRUNCATED_PREFIXES) {
+		localStorage.removeItem(getLegacyTruncatedUserScopedKey(prefix, input.account))
+	}
+	localStorage.removeItem(FRESH_AUCTIONSDEV_PUBLIC_REPORT_STORAGE_KEY)
+
+	const databases = await databaseNames()
+	const accountDatabase = getCocoDatabaseName(account)
+	const disposable = databases.filter((name) => name === accountDatabase || name.startsWith('plebeian-market-coco-v2-'))
+	for (const name of disposable) await deleteDatabase(name)
+}
 
 export function ensureBrowserFreshAuctionsdevPreflight(input: {
 	account: string
