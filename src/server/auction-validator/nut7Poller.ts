@@ -128,7 +128,13 @@ const expandProofEntries = (
 	return out
 }
 
-const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: ValidatorBidState): ValidatorBidState[] => {
+/**
+ * Walk a bid's `prev_bid` chain back to its root, keeping only legs that
+ * belong to the same bidder in the same auction (see `isSameBidderLeg`).
+ * Exported for its unit tests — see `buildSettlementChain` in `lifecycle.ts`
+ * for why the scope rule needs a direct test.
+ */
+export const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: ValidatorBidState): ValidatorBidState[] => {
 	const chain: ValidatorBidState[] = []
 	const seen = new Set<string>()
 	let current: ValidatorBidState | undefined = latestBidState

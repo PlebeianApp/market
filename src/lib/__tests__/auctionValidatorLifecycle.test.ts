@@ -17,11 +17,13 @@ import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { NostrEventLike } from '../nostr/eventLike'
 import {
 	assignCloseRoles,
+	buildSettlementChain,
 	deriveBidLegAmount,
 	deriveVerdict,
 	pickWinningBid,
 	verdictChanged,
 } from '../../server/auction-validator/lifecycle'
+import { buildBidChain } from '../../server/auction-validator/nut7Poller'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
 import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '../../server/auction-validator/state'
 
@@ -1353,5 +1355,100 @@ describe('deriveBidLegAmount — ancestor scope', () => {
 	test('an unresolvable prev_bid → fall back to the bid amount (unchanged behaviour)', () => {
 		const auction = buildAuction()
 		expect(legAmount(buildBid(auction, { amount: 1_100, prevBidId: '9'.repeat(64) }), undefined, auction)).toBe(1_100)
+	})
+})
+
+// ============================================================================
+// Walk scoping — a foreign prev_bid stops buildBidChain / buildSettlementChain
+//
+// Both walks resolve `prev_bid` by event id (nut7Poller `buildBidChain`,
+// lifecycle `buildSettlementChain`). #1280's same-bidder rule
+// (`verifyBidCollateralChain`, `src/lib/auction/bidValidation.ts`) makes a
+// parent from another bidder — or from another auction — not a predecessor at
+// all, so the walk must stop rather than follow the reference into another
+// bidder's release/NUT-7 evidence.
+//
+// Every foreign case is paired with an own-parent control in the same suite:
+// the assertion has to prove the walk still follows a legitimate predecessor,
+// otherwise a walk that always stops would pass just as well.
+// ============================================================================
+
+describe('buildBidChain — ancestor scope', () => {
+	const chainIds = (auction: ParsedAuctionEvent, bids: ParsedBidEvent[], head: ParsedBidEvent): string[] => {
+		const states = new Map(bids.map((b) => [b.id, buildBidState(b, b.createdAt)]))
+		const state = buildAuctionState(auction, { bids: states })
+		return buildBidChain(state, states.get(head.id)!).map((leg) => leg.bid.id)
+	}
+
+	test('an own parent (same bidder, same auction) is followed to the root', () => {
+		const auction = buildAuction()
+		const root = buildBid(auction, { id: '5'.repeat(64), amount: 1_000 })
+		const head = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: root.id })
+		expect(chainIds(auction, [root, head], head)).toEqual([head.id, root.id])
+	})
+
+	test('a parent from ANOTHER bidder stops the walk', () => {
+		const auction = buildAuction()
+		const foreign = buildBid(auction, { id: '5'.repeat(64), amount: 9_000, bidderPubkey: BIDDER_B })
+		const head = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: foreign.id })
+		// Without the guard the walk follows the reference into BIDDER_B's bid
+		// and returns [head.id, foreign.id].
+		expect(chainIds(auction, [foreign, head], head)).toEqual([head.id])
+	})
+
+	test('a parent from ANOTHER auction stops the walk', () => {
+		const auction = buildAuction()
+		const otherAuction = buildAuction({ coordinate: `30408:${'f'.repeat(64)}:other` })
+		const foreign = buildBid(otherAuction, { id: '5'.repeat(64), amount: 1_000 })
+		const head = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: foreign.id })
+		expect(chainIds(auction, [foreign, head], head)).toEqual([head.id])
+	})
+})
+
+describe('buildSettlementChain — ancestor scope', () => {
+	// A leg appears in the settlement chain only when it has canonical release
+	// evidence, so seed one release per leg under test. Release *validity* is a
+	// separate axis: `selectCanonicalEvidence` returns a candidate release for
+	// any leg that has one, which is what makes the walk observable here.
+	const chainIds = (
+		auction: ParsedAuctionEvent,
+		bids: ParsedBidEvent[],
+		head: ParsedBidEvent,
+		releaseFor: Array<[string, string]>,
+	): string[] => {
+		const states = new Map(bids.map((b) => [b.id, buildBidState(b, b.createdAt)]))
+		const state = buildAuctionState(auction, { bids: states })
+		for (const [bidId, releaseId] of releaseFor) {
+			const bid = bids.find((b) => b.id === bidId)!
+			seedRelease(state, bidId, buildPathRelease(bid, { id: releaseId }))
+		}
+		return buildSettlementChain(state, states.get(head.id)!, auction.maxEndAt + 60).map((leg) => leg.bid.id)
+	}
+
+	test('an own parent with release evidence is kept in the chain (control)', () => {
+		const auction = buildAuction()
+		const root = buildBid(auction, { id: '5'.repeat(64), amount: 1_000 })
+		const head = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: root.id })
+		expect(
+			chainIds(auction, [root, head], head, [
+				[root.id, 'a'.repeat(64)],
+				[head.id, 'b'.repeat(64)],
+			]),
+		).toEqual([root.id, head.id])
+	})
+
+	test('a foreign parent with release evidence is NOT pulled into the chain', () => {
+		const auction = buildAuction()
+		const foreign = buildBid(auction, { id: '5'.repeat(64), amount: 9_000, bidderPubkey: BIDDER_B })
+		const head = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: foreign.id })
+		// Both legs have release evidence. Without the guard the walk adopts the
+		// foreign leg, so the chain becomes [foreign.id, head.id] — another
+		// bidder's release counted as this settlement's evidence.
+		expect(
+			chainIds(auction, [foreign, head], head, [
+				[foreign.id, 'a'.repeat(64)],
+				[head.id, 'b'.repeat(64)],
+			]),
+		).toEqual([head.id])
 	})
 })

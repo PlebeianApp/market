@@ -288,7 +288,18 @@ const deriveSettlementVerdict = (
 	return { claim: 'settled_promptly' }
 }
 
-const buildSettlementChain = (
+/**
+ * Walk a bid's `prev_bid` chain back to its root, keeping only legs that
+ * belong to the same bidder in the same auction (see `isSameBidderLeg`),
+ * then project each kept leg to the canonical (release, NUT-7) evidence
+ * the settlement-completeness check consumes.
+ *
+ * Exported for its unit tests: the scope rule the walk applies (a parent
+ * from another bidder or auction is not a predecessor) is not observable
+ * through `deriveVerdict` alone, because a foreign leg with its own valid
+ * release would silently widen the chain.
+ */
+export const buildSettlementChain = (
 	auctionState: ValidatorAuctionState,
 	bidState: ValidatorBidState,
 	now: number,
