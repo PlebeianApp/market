@@ -66,7 +66,7 @@ export function evaluateReserveNotMetGuard(
 const isEvidenceUnavailableReserveBid =
 	(reserve: number) =>
 	(c: ClassifiedBid): boolean =>
-		c.classification === 'pending' && c.pendingReason === 'dlequ_evidence_unavailable' && c.bid.amount >= reserve
+		c.classification === 'pending' && c.pendingReason === 'dleq_evidence_unavailable' && c.bid.amount >= reserve
 
 /** Outcome of the `reserve_not_met` publish guard + seller-override decision. */
 export type ReserveNotMetPublishDecision = { action: 'throw'; message: string } | { action: 'publish'; overrideReason?: string }
@@ -99,10 +99,10 @@ export function resolveReserveNotMetPublish(guard: ReserveNotMetGuardDecision, a
 					'Cannot publish reserve_not_met: DLEQ evidence is unavailable for reserve-meeting ' +
 					`bid(s) ${guard.bidIds.join(', ')} (up to ${guard.maxPendingAmount} sats). ` +
 					'Retry once the mint keyset fetch succeeds, or publish anyway with the seller override ' +
-					'(dlequEvidenceOverride) to record the unresolved evidence on the terminal event.',
+					'(dleqEvidenceOverride) to record the unresolved evidence on the terminal event.',
 			}
 		}
-		return { action: 'publish', overrideReason: `dlequ_evidence_unavailable:${guard.bidIds.join(',')}` }
+		return { action: 'publish', overrideReason: `dleq_evidence_unavailable:${guard.bidIds.join(',')}` }
 	}
 	return { action: 'publish' }
 }

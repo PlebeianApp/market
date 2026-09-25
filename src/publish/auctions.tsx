@@ -202,7 +202,7 @@ export interface AuctionSettlementFormData {
 	 * tag so the override is auditable on the relay. It never overrides the
 	 * `blocked` case (a validated reserve-meeting winner already exists).
 	 */
-	dlequEvidenceOverride?: boolean
+	dleqEvidenceOverride?: boolean
 }
 
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
@@ -1692,7 +1692,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// auditable. This never bypasses the `blocked` case (a validated
 		// reserve-meeting winner), only `evidence-unavailable`. The decision is a
 		// pure helper (`resolveReserveNotMetPublish`) so it is unit-tested.
-		const rnmDecision = resolveReserveNotMetPublish(rnmGuard, formData.dlequEvidenceOverride === true)
+		const rnmDecision = resolveReserveNotMetPublish(rnmGuard, formData.dleqEvidenceOverride === true)
 		if (rnmDecision.action === 'throw') throw new Error(rnmDecision.message)
 		const rnmOverrideReason = rnmDecision.overrideReason
 
@@ -2133,7 +2133,7 @@ export const usePublishAuctionSettlementMutation = () => {
 
 	// ADR-0011 review R3: capture the mutate fn so the error toast's
 	// "Publish anyway" action can re-run the SAME settlement with the seller
-	// override (`dlequEvidenceOverride`), which records the unresolved DLEQ
+	// override (`dleqEvidenceOverride`), which records the unresolved DLEQ
 	// evidence on the terminal event instead of leaving the seller stuck.
 	const overrideRef = useRef<((variables: AuctionSettlementFormData) => void) | null>(null)
 
@@ -2153,7 +2153,7 @@ export const usePublishAuctionSettlementMutation = () => {
 				toast.error(`Failed to publish settlement: ${message}`, {
 					action: {
 						label: 'Publish anyway',
-						onClick: () => overrideRef.current?.({ ...variables, dlequEvidenceOverride: true }),
+						onClick: () => overrideRef.current?.({ ...variables, dleqEvidenceOverride: true }),
 					},
 				})
 				return

@@ -63,9 +63,10 @@ export const BidEventSchema = z
 		auctionCoordinate: addressableCoordinate,
 		sellerPubkey: nostrPubkeyHex,
 		amount: positiveInt,
-		// Placeholder at parse time: initialized from the `amount` tag
-		// (cumulative) and ALWAYS overwritten by `computeLegLockedAmounts`
-		// with the signed chain delta before any validation reads it.
+		// Cumulative value of the `amount` tag as published. NOT the leg's locked
+		// delta: `verifyBidCollateralChain` derives each leg's economic authority
+		// from the signed chain's per-leg DLEQ evidence, and nothing overwrites
+		// this field.
 		legLockedAmount: positiveInt,
 		currency: z.literal('SAT', { message: 'currency must be SAT' }),
 		mint: z.string().url({ message: 'mint must be a URL' }),

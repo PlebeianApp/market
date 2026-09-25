@@ -40,7 +40,7 @@ export const getValidatedAuctionBids = (
 	/**
 	 * DLEQ keysets (keyed `${mint}:${keysetId}`) for the unconditional DLEQ
 	 * crypto check. Without them every DLEQ-bearing bid is `pending`
-	 * (`dlequ_evidence_unavailable`) and no canonical winner can be derived.
+	 * (`dleq_evidence_unavailable`) and no canonical winner can be derived.
 	 */
 	dleqKeysets?: Map<string, MintKeys>,
 	/** Terminal keyset misses (ADR-0011 review R3) — threaded to computeValidatedBids. */
