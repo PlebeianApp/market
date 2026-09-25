@@ -24,6 +24,7 @@ import {
 	persistMultipartyLegJournal,
 	reconcileMultipartyLeg,
 	removeMultipartyLegJournal,
+	reopenMultipartyLegRow,
 	settleMultipartyLegRow,
 	summarizeMultipartyLeg,
 	type MultipartyLegJournalEntry,
@@ -225,8 +226,8 @@ describe('multiparty leg journal', () => {
 		expect(noTime.code).toBe('journal_attempt_time_invalid')
 	})
 
-	test('settles an attempted row as locked, failed pre-mint, or uncertain', () => {
-		for (const outcome of ['locked', 'failed_pre_mint', 'uncertain'] as const) {
+	test('settles an attempted row as locked, failed pre-mint, locked to a foreign key, or uncertain', () => {
+		for (const outcome of ['locked', 'failed_pre_mint', 'locked_to_foreign_key', 'uncertain'] as const) {
 			const result = settleMultipartyLegRow(attempted(), { manifestIndex: 2, outcome, at: AT + 9 })
 			expect(result.ok).toBe(true)
 			if (!result.ok) continue
@@ -291,11 +292,68 @@ describe('multiparty leg journal', () => {
 		expect(summary.lockedRowCount).toBe(1)
 	})
 
-	test('a leg with nothing attempted is unsent', () => {
-		const entry = settleAll(attempted(), 'failed_pre_mint')
+	test('a leg whose rows were all sent and all settled as not locked is partial with zero locked', () => {
+		// `unsent` is reserved for a leg where nothing was sent at all: inputs WERE consumed here, so
+		// "nothing has to be recovered" would be false.
+		const allFailed = settleAll(attempted(), 'failed_pre_mint')
+		const summary = summarizeMultipartyLeg(allFailed)
 
 		expect(summarizeMultipartyLeg(openJournal()).verdict).toBe('unsent')
-		expect(summarizeMultipartyLeg(entry).verdict).toBe('unsent')
+		expect(summary.verdict).toBe('partial')
+		expect(summary.lockedRowCount).toBe(0)
+		expect(describeMultipartyLegVerdict(summary)).toContain('Only 0 of 3')
+	})
+
+	test('a foreign-key row is settled, not uncertain, and its sentence names the refund branch', () => {
+		let entry = settleMultipartyLegRow(attempted(), { manifestIndex: 0, outcome: 'locked', at: AT + 2 })
+		if (!entry.ok) throw new Error('fixture settle refused')
+		const settled = settleMultipartyLegRow(entry.entry, { manifestIndex: 1, outcome: 'locked_to_foreign_key', at: AT + 3 })
+		if (!settled.ok) throw new Error('fixture settle refused')
+		const last = settleMultipartyLegRow(settled.entry, { manifestIndex: 2, outcome: 'failed_pre_mint', at: AT + 4 })
+		if (!last.ok) throw new Error('fixture settle refused')
+
+		const summary = summarizeMultipartyLeg(last.entry)
+
+		expect(summary.verdict).toBe('partial')
+		expect(summary.foreignKeyRowIndexes).toEqual([1])
+		expect(summary.attemptedRowCount).toBe(0)
+		expect(describeMultipartyLegVerdict(summary)).toContain('reclaimable through the refund branch')
+	})
+
+	test('reopens only a row proved not to have reached the mint', () => {
+		const settled = settleMultipartyLegRow(attempted(), { manifestIndex: 1, outcome: 'failed_pre_mint', at: AT + 2 })
+		if (!settled.ok) throw new Error('fixture settle refused')
+
+		const reopened = reopenMultipartyLegRow(settled.entry, { manifestIndex: 1, at: AT + 3 })
+
+		expect(reopened.ok).toBe(true)
+		if (!reopened.ok) return
+		expect(reopened.entry.rows[1].state).toBe('planned')
+		expect(reopened.entry.rows[1].attemptedAt).toBeUndefined()
+		// And it can be attempted again, which is the whole point of reopening it.
+		const again = markMultipartyLegRowAttempted(reopened.entry, { manifestIndex: 1, at: AT + 4 })
+		expect(again.ok).toBe(true)
+	})
+
+	test('refuses to reopen an uncertain, locked, or foreign-key row', () => {
+		for (const outcome of ['uncertain', 'locked', 'locked_to_foreign_key'] as const) {
+			const settled = settleMultipartyLegRow(attempted(), { manifestIndex: 0, outcome, at: AT + 2 })
+			if (!settled.ok) throw new Error('fixture settle refused')
+
+			const reopened = reopenMultipartyLegRow(settled.entry, { manifestIndex: 0, at: AT + 3 })
+
+			expect(reopened.ok).toBe(false)
+			if (reopened.ok) continue
+			expect(reopened.code).toBe('journal_row_not_reopenable')
+		}
+
+		const unknown = reopenMultipartyLegRow(openJournal(), { manifestIndex: 9, at: AT + 3 })
+		const noTime = reopenMultipartyLegRow(openJournal(), { manifestIndex: 0, at: 0 })
+		expect(unknown.ok).toBe(false)
+		expect(noTime.ok).toBe(false)
+		if (unknown.ok || noTime.ok) return
+		expect(unknown.code).toBe('journal_row_unknown')
+		expect(noTime.code).toBe('journal_reopen_time_invalid')
 	})
 
 	test('every verdict has one sentence, and the uncertain one says it will not be retried', () => {

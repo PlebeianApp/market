@@ -18,7 +18,9 @@
  * unknown may already have consumed its inputs, so a second request would either double-spend them
  * or lock the same amount twice. A row that was attempted and whose outcome cannot be determined
  * stays `uncertain` until evidence (the proofs the wallet holds, or a failure proved to precede the
- * mint call) resolves it. There is deliberately no transition back to `planned`.
+ * mint call) resolves it. There is deliberately no transition back to `planned`, with exactly one
+ * exception: a row settled as `failed_pre_mint` was proved never to have reached the mint, its inputs
+ * are untouched, and `reopenMultipartyLegRow` may return it to `planned` so it can be attempted again.
  *
  * ## What this module does NOT hold
  *
@@ -52,15 +54,29 @@ const COMPRESSED = /^0[23][0-9a-f]{64}$/
 
 /**
  * A row's state. `planned` and `attempted` are the only ones with an outgoing transition; the other
- * three are settled for the row as far as the journal is concerned, and only reconciliation may
+ * four are settled for the row as far as the journal is concerned, and only reconciliation may
  * resolve `uncertain` further.
+ *
+ * `locked_to_foreign_key` exists because a mint that returns a row's proofs locked to a key that is
+ * **not** that row's has not given an unknown answer — it has given a definite, bad one. The swap
+ * consumed the row's inputs and the send set exists, so the row is neither `locked` (the leg cannot
+ * settle from it) nor `uncertain` (nothing is unknown). It is reclaimable through the refund branch
+ * once the locktime opens, which is what makes it worth naming separately rather than folding into
+ * either neighbour.
  */
-export const MULTIPARTY_LEG_ROW_STATES = ['planned', 'attempted', 'locked', 'failed_pre_mint', 'uncertain'] as const
+export const MULTIPARTY_LEG_ROW_STATES = [
+	'planned',
+	'attempted',
+	'locked',
+	'failed_pre_mint',
+	'locked_to_foreign_key',
+	'uncertain',
+] as const
 
 export type MultipartyLegRowState = (typeof MULTIPARTY_LEG_ROW_STATES)[number]
 
 /** What a row's swap settled as, once its outcome is known. Never `planned`, never `attempted`. */
-export type MultipartyLegRowOutcome = Extract<MultipartyLegRowState, 'locked' | 'failed_pre_mint' | 'uncertain'>
+export type MultipartyLegRowOutcome = Extract<MultipartyLegRowState, 'locked' | 'failed_pre_mint' | 'locked_to_foreign_key' | 'uncertain'>
 
 export interface MultipartyLegRowProgress {
 	readonly manifestIndex: number
@@ -204,6 +220,43 @@ export const settleMultipartyLegRow = (
 	}
 }
 
+/**
+ * Return a row settled as `failed_pre_mint` to `planned`, so it may be attempted again.
+ *
+ * This is the single exception to "an attempted row is never sent again", and it earns the exception
+ * because `failed_pre_mint` is not a guess: the failure was proved to precede the mint call, so the
+ * row's inputs were never consumed and a retry is legitimate — the same reasoning the single-party
+ * flow uses when it lets a provably pre-mint failure stay retryable. Nothing else may be reopened:
+ * `uncertain` because the outcome is unknown, and `locked` or `locked_to_foreign_key` because the
+ * inputs are gone.
+ */
+export const reopenMultipartyLegRow = (
+	entry: MultipartyLegJournalEntry,
+	input: { readonly manifestIndex: number; readonly at: number },
+): MultipartyLegJournalResult => {
+	const row = rowAt(entry, input.manifestIndex)
+	if (!row) return fail('journal_row_unknown', `row ${input.manifestIndex} is not part of this leg`)
+	if (!isPositiveInteger(input.at))
+		return fail('journal_reopen_time_invalid', `the reopen time must be a positive unix ms; got ${input.at}`)
+	if (row.state !== 'failed_pre_mint') {
+		return fail(
+			'journal_row_not_reopenable',
+			`row ${input.manifestIndex} is ${row.state}; only a row proved not to have reached the mint may be attempted again`,
+		)
+	}
+
+	return {
+		ok: true,
+		entry: freezeEntry({
+			...entry,
+			updatedAt: input.at,
+			rows: entry.rows.map((candidate) =>
+				candidate.manifestIndex === input.manifestIndex ? { manifestIndex: candidate.manifestIndex, state: 'planned' as const } : candidate,
+			),
+		}),
+	}
+}
+
 export type MultipartyLegVerdict = 'complete' | 'partial' | 'unsent' | 'uncertain'
 
 export interface MultipartyLegSummary {
@@ -211,26 +264,40 @@ export interface MultipartyLegSummary {
 	readonly rowCount: number
 	readonly lockedRowCount: number
 	readonly attemptedRowCount: number
-	/** The rows that are locked — for a partial leg these are the reclaimable ones. */
+	/** The rows that are locked — for a partial leg these are the ones that can settle. */
 	readonly lockedRowIndexes: readonly number[]
+	/**
+	 * Rows the mint returned locked to a foreign key: not usable by the leg, and reclaimable through
+	 * the refund branch once the locktime opens. Kept separate from the locked rows because the two
+	 * sets lead to different actions.
+	 */
+	readonly foreignKeyRowIndexes: readonly number[]
 }
 
 /**
  * The leg's verdict from its rows alone.
  *
  * `uncertain` dominates: if any row's outcome is unknown the leg's true state is unknown, and saying
- * "partial" would assert that the uncertain row is not locked. `complete` and `unsent` are exact.
- * `partial` means what a partial lock is — some rows locked, the rest settled as not-locked — and the
- * summary names the locked rows, because they are the ones a refund branch can reclaim after the
- * locktime.
+ * "partial" would assert that the uncertain row is not locked. `complete` and `unsent` are exact —
+ * every row locked, or no row sent at all. Everything else is `partial`, which deliberately includes
+ * the case of a leg whose rows were all sent and none of which locked: "partial" with a locked count
+ * of zero is the honest description of a leg that consumed inputs and holds nothing usable, and the
+ * counts carry that, so the verdict does not need a fifth name.
  */
 export const summarizeMultipartyLeg = (entry: MultipartyLegJournalEntry): MultipartyLegSummary => {
 	const lockedRowIndexes = entry.rows.filter((row) => row.state === 'locked').map((row) => row.manifestIndex)
+	const foreignKeyRowIndexes = entry.rows.filter((row) => row.state === 'locked_to_foreign_key').map((row) => row.manifestIndex)
 	const attemptedRowCount = entry.rows.filter((row) => row.state === 'attempted' || row.state === 'uncertain').length
-	const noneLocked = lockedRowIndexes.length === 0
+	const everyRowPlanned = entry.rows.every((row) => row.state === 'planned')
 
 	const verdict: MultipartyLegVerdict =
-		attemptedRowCount > 0 ? 'uncertain' : lockedRowIndexes.length === entry.rows.length ? 'complete' : noneLocked ? 'unsent' : 'partial'
+		attemptedRowCount > 0
+			? 'uncertain'
+			: lockedRowIndexes.length === entry.rows.length
+				? 'complete'
+				: everyRowPlanned
+					? 'unsent'
+					: 'partial'
 
 	return Object.freeze({
 		verdict,
@@ -238,24 +305,32 @@ export const summarizeMultipartyLeg = (entry: MultipartyLegJournalEntry): Multip
 		lockedRowCount: lockedRowIndexes.length,
 		attemptedRowCount,
 		lockedRowIndexes: Object.freeze(lockedRowIndexes) as readonly number[],
+		foreignKeyRowIndexes: Object.freeze(foreignKeyRowIndexes) as readonly number[],
 	})
 }
 
 /**
- * One shared sentence per verdict (D14). This is the new layer's wording for the states it owns; the
- * single-party flow's own sentence for an uncertain lock is untouched and remains its own — see the
- * slice report for the question of unifying them.
+ * One shared sentence per verdict (D14), with the counts substituted so the same function answers for
+ * a leg of one row and a leg of seventeen. This is the new layer's own wording for the states it owns;
+ * the single-party flow's sentence for an uncertain lock is untouched and remains its own — see the
+ * stage report for the question of unifying them.
  */
 export const describeMultipartyLegVerdict = (summary: MultipartyLegSummary): string => {
+	const legs = summary.rowCount === 1 ? 'payout leg' : 'payout legs'
 	switch (summary.verdict) {
 		case 'complete':
-			return `All ${summary.rowCount} payout leg${summary.rowCount === 1 ? '' : 's'} are locked.`
-		case 'partial':
-			return `Only ${summary.lockedRowCount} of ${summary.rowCount} payout legs are locked; the locked legs stay reclaimable after the refund timelock opens.`
+			return `All ${summary.rowCount} ${legs} are locked.`
+		case 'partial': {
+			const reclaim =
+				summary.foreignKeyRowIndexes.length > 0
+					? ' The rows locked to a foreign key stay reclaimable through the refund branch once the locktime opens.'
+					: ''
+			return `Only ${summary.lockedRowCount} of ${summary.rowCount} ${legs} are locked.${reclaim}`
+		}
 		case 'unsent':
 			return 'No swap was sent yet, so nothing was locked and nothing has to be recovered.'
 		case 'uncertain':
-			return `The outcome of ${summary.attemptedRowCount} payout leg${summary.attemptedRowCount === 1 ? '' : 's'} is unknown and will not be retried; ${
+			return `The outcome of ${summary.attemptedRowCount} ${summary.attemptedRowCount === 1 ? 'payout leg' : 'payout legs'} is unknown and will not be retried; ${
 				summary.lockedRowCount
 			} of ${summary.rowCount} are known locked.`
 	}
