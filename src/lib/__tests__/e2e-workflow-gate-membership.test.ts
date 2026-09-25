@@ -120,6 +120,6 @@ describe('e2e-grep gate membership (self-hosted instance family)', () => {
 		expect([...spec.matchAll(/test\.describe\(\s*'([^']+)'/g)]).toHaveLength(2)
 		// The command enables the isolated project mode, which accepts only this
 		// spec and starts an app process with the self-hosted handler ID.
-		expect(yaml).toContain('E2E_TEST_PORT=34568 bun run test:e2e:self-hosted -- --repeat-each=2')
+		expect(yaml).toContain('E2E_TEST_PORT=34569 bun run test:e2e:self-hosted -- --repeat-each=2')
 	})
 })
