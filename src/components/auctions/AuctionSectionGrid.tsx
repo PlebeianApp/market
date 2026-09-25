@@ -1,4 +1,4 @@
-import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCard } from '@/components/auctions/AuctionCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { cn } from '@/lib/utils'
 import { getAuctionRootEventId } from '@/queries/auctions'

@@ -2,7 +2,7 @@ import type { NostrEventLike } from '@/lib/nostr/eventLike'
 import { toRawEvent } from '@/lib/nostr/eventLike'
 import { parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
 import { computeValidatedBids, type ValidatedBidSet } from '@/lib/auction/bidValidation'
-import type { Nut7ProofState } from '@/lib/auction/constants'
+import type { AuctionSettlementStatus, Nut7ProofState } from '@/lib/auction/constants'
 import type { ParsedAuctionEvent, ParsedBidEvent, ParsedPathReleaseEvent, ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { fetchMintKeysets, validatePathRelease } from '@/lib/auction/validation'
 import { fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
@@ -155,19 +155,63 @@ export async function hasValidatedPathReleaseForAuctionWin(
 	return true
 }
 
+/**
+ * Any settlement the auction's seller published for this auction (+coordinate)
+ * closes the *read* side of the win flow, whatever its `status`:
+ * `publishBidderPathRelease` refuses to release a path once any seller
+ * settlement exists for the auction (`src/publish/auctions.tsx` — "Auction
+ * already has a settlement"), so a queued win that keeps inviting a settle
+ * action for a `reserve_not_met` / `cancelled` / `griefed_no_fallback`
+ * settlement is an action the publish layer always rejects - and it blocks the
+ * head of the win queue while it does.
+ *
+ * Pass `{ statuses: ['settled'] }` (see `hasFinalSettlementForAuctionWin`) when
+ * the question is specifically "did the sale complete".
+ *
+ * The seller comparison lowercases both sides, matching the publish gate this
+ * predicate has to agree with (`src/publish/auctions.tsx` — the "already has a
+ * settlement" check) and the other seller-binding comparisons in
+ * `src/lib/auction/events.ts` and `src/lib/auction/settlementDescriptor.ts`.
+ * `nostrPubkeyHex` accepts upper- and lower-case hex without normalising, and
+ * `sellerPubkey` comes straight from `event.pubkey`, so a raw `===` here would
+ * reject an upper-case settlement author the gate accepts — leaving the prompt
+ * inviting an action that always fails, which is the failure this predicate
+ * exists to close.
+ */
+export const hasSellerSettlementForAuctionWin = (
+	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
+	auction: NostrEventLike,
+	auctionCoordinate: string,
+	settlements: NostrEventLike[],
+	options?: { statuses?: AuctionSettlementStatus[] },
+): boolean => {
+	const statuses = options?.statuses
+	const sellerPubkey = auction.pubkey?.toLowerCase() ?? ''
+	return settlements.some((event) => {
+		const parsed = parseSettlementEvent(toRawEvent(event))
+		return (
+			parsed.ok &&
+			(statuses === undefined || statuses.includes(parsed.value.status)) &&
+			parsed.value.sellerPubkey.toLowerCase() === sellerPubkey &&
+			parsed.value.auctionRootEventId === win.auctionRootEventId &&
+			parsed.value.auctionCoordinate === auctionCoordinate
+		)
+	})
+}
+
+/**
+ * The `status: 'settled'`-only variant of `hasSellerSettlementForAuctionWin`,
+ * kept as the named answer to the different question "did the sale complete?",
+ * which the seller-side surfaces have so far asked inline and independently.
+ *
+ * Deliberately narrow: a `cancelled` / `reserve_not_met` / `griefed_no_fallback`
+ * settlement closes the win prompt (see above) but did **not** complete a sale,
+ * so a caller must not use this predicate to mean "not settled ⇒ still
+ * actionable". No production surface consumes it today.
+ */
 export const hasFinalSettlementForAuctionWin = (
 	win: Pick<QueuedAuctionWin, 'auctionRootEventId'>,
 	auction: NostrEventLike,
 	auctionCoordinate: string,
 	settlements: NostrEventLike[],
-): boolean =>
-	settlements.some((event) => {
-		const parsed = parseSettlementEvent(toRawEvent(event))
-		return (
-			parsed.ok &&
-			parsed.value.status === 'settled' &&
-			parsed.value.sellerPubkey === auction.pubkey &&
-			parsed.value.auctionRootEventId === win.auctionRootEventId &&
-			parsed.value.auctionCoordinate === auctionCoordinate
-		)
-	})
+): boolean => hasSellerSettlementForAuctionWin(win, auction, auctionCoordinate, settlements, { statuses: ['settled'] })

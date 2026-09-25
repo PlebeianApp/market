@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { formatAuctionStartsIn } from '../auctionCountdownLabels'
-import { computePreStartProgress } from '@/components/AuctionCountdown'
+import { computePreStartProgress } from '@/components/auctions/AuctionCountdown'
 
 // ---------------------------------------------------------------------------
 // formatAuctionStartsIn

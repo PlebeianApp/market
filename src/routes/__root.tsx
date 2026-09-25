@@ -21,7 +21,7 @@ import { notificationActions } from '@/lib/stores/notifications'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
 import { PIIExposureModal } from '@/components/pii/PIIExposureModal' // Add this import
-import { AuctionWonModal } from '@/components/AuctionWonModal'
+import { AuctionWonModal } from '@/components/auctions/AuctionWonModal'
 import type { PIIScanResult } from '@/lib/utils/piiScanner'
 
 export const Route = createRootRoute({

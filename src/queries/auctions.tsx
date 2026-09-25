@@ -13,6 +13,7 @@ import {
 	AUCTION_ROOT_EVENT_ID_TAG,
 	AUCTION_SETTLEMENT_KIND,
 	getAuctionBiddingCutoffAt as getAuctionBiddingCutoffAtValue,
+	getAuctionCoordinate,
 	getAuctionCurrentPrice as computeAuctionCurrentPrice,
 	getAuctionEffectiveEndAt as computeAuctionEffectiveEndAt,
 	getAuctionEndAt as getAuctionEndAtValue,
@@ -24,6 +25,7 @@ import {
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
 } from '@/lib/auctionSettlement'
+import { resolveAuctionWinFromEvents, type QueuedAuctionWin } from '@/lib/auction/winNotification'
 import { NIP59_GIFT_WRAP_KIND } from '@/lib/nostr/nip59'
 import { applesauceIo } from '@/lib/nostr/io'
 import type { NostrFilter } from '@/lib/nostr/io'
@@ -787,6 +789,40 @@ export const auctionVerdictsQueryOptions = (
 		],
 		queryFn: () => fetchAuctionVerdicts(auctionEventId, limit, auctionCoordinates, validatorPubkeys),
 		enabled: !!(auctionEventId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
+
+/**
+ * Resolve whether the queued win for `win` is still actionable for `auction`'s
+ * winner: who the canonical winner is, whether the bidder already released the
+ * path, and whether the release chain is still valid.
+ *
+ * This is the win-prompt read path. It lives here rather than in the component
+ * because it performs relay reads through the auction fetch helpers and
+ * combines three event families (`fetchAuctionBids` / `fetchAuctionVerdicts` /
+ * `fetchAuctionPathReleases`) before running the shared resolution in
+ * `@/lib/auction/winNotification`. Components consume the adapter's result.
+ *
+ * `enabled` is deliberately permissive (any win + auction with a coordinate);
+ * callers that need a narrower gate — e.g. only for the active bidder — spread
+ * these options and override `enabled`, as the win prompt does.
+ */
+export const auctionWinResolutionQueryOptions = (win: QueuedAuctionWin | null, auction: NostrEventLike | null) =>
+	queryOptions({
+		queryKey: auctionKeys.winResolution(win?.auctionRootEventId ?? '', win?.bidEventId ?? ''),
+		enabled: !!(win && auction && getAuctionCoordinate(auction)),
+		queryFn: async () => {
+			if (!win || !auction) throw new Error('Auction win is unavailable')
+			const auctionCoordinate = getAuctionCoordinate(auction)
+			const auditorPubkeys = getAuctionAuditors(auction)
+			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
+				fetchAuctionBids(win.auctionRootEventId, null, auctionCoordinate, true),
+				fetchAuctionVerdicts(win.auctionRootEventId, null, auctionCoordinate, auditorPubkeys),
+				fetchAuctionPathReleases(win.auctionRootEventId, null, auctionCoordinate, undefined, true),
+			])
+			return resolveAuctionWinFromEvents(win, auction, bidEvents, verdictEvents, pathReleaseEvents, Math.floor(Date.now() / 1000))
+		},
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})

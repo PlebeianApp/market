@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
@@ -18,25 +18,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Media } from '@/components/Media'
 import { UserCard } from '@/components/UserCard'
-import { ConfettiBurst } from '@/components/ConfettiBurst'
+import { ConfettiBurst } from '@/components/shared/ConfettiBurst'
 import { auctionWonActions, auctionWonStore } from '@/lib/stores/auctionWon'
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions } from '@/lib/stores/nip60'
-import { useAuctionCountdown } from '@/components/AuctionCountdown'
+import { useAuctionCountdown } from '@/components/auctions/AuctionCountdown'
 import { getAuctionCoordinate } from '@/lib/auctionSettlement'
-import {
-	hasFinalSettlementForAuctionWin,
-	resolveAuctionWinFromEvents,
-	shouldUseNonBlockingAuctionWinPrompt,
-} from '@/lib/auction/winNotification'
+import { hasSellerSettlementForAuctionWin, shouldUseNonBlockingAuctionWinPrompt } from '@/lib/auction/winNotification'
 import {
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
-	fetchAuctionBids,
-	fetchAuctionPathReleases,
-	fetchAuctionVerdicts,
+	auctionWinResolutionQueryOptions,
 	getAuctionBiddingCutoffAt,
-	getAuctionAuditors,
 	getAuctionImages,
 	getAuctionSettlementGrace,
 	getAuctionTitle,
@@ -56,6 +49,9 @@ export function AuctionWonModal() {
 	const [isSettling, setIsSettling] = useState(false)
 	const [isClosingAfterSettlement, setIsClosingAfterSettlement] = useState(false)
 	const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false)
+	// Tracks the win whose auto-close notice has already been shown, so the
+	// dismissal effect cannot repeat the toast for the same win.
+	const shownCloseNoticeRef = useRef<string | null>(null)
 
 	const auctionQuery = useQuery({
 		...auctionQueryOptions(active?.auctionRootEventId ?? '', true, true),
@@ -73,22 +69,12 @@ export function AuctionWonModal() {
 		refetchInterval: 5000,
 		refetchOnWindowFocus: true,
 	})
+	// Win resolution is a read-path adapter in `@/queries/auctions`; the
+	// component-level gate (active bidder only) is applied by overriding
+	// `enabled`, which the adapter documents as the intended usage.
 	const winResolutionQuery = useQuery({
-		queryKey: auctionKeys.winResolution(active?.auctionRootEventId ?? '', active?.bidEventId ?? ''),
+		...auctionWinResolutionQueryOptions(active, auction),
 		enabled: !!(active && auction && auctionCoordinate && isActiveBidder),
-		queryFn: async () => {
-			if (!active || !auction) throw new Error('Auction win is unavailable')
-			const auctionCoordinate = getAuctionCoordinate(auction)
-			const auditorPubkeys = getAuctionAuditors(auction)
-			const [bidEvents, verdictEvents, pathReleaseEvents] = await Promise.all([
-				fetchAuctionBids(active.auctionRootEventId, null, auctionCoordinate, true),
-				fetchAuctionVerdicts(active.auctionRootEventId, null, auctionCoordinate, auditorPubkeys),
-				fetchAuctionPathReleases(active.auctionRootEventId, null, auctionCoordinate, undefined, true),
-			])
-			return resolveAuctionWinFromEvents(active, auction, bidEvents, verdictEvents, pathReleaseEvents, Math.floor(Date.now() / 1000))
-		},
-		staleTime: 5000,
-		refetchInterval: 5000,
 	})
 	const title = getAuctionTitle(auction)
 	const imageUrl = getAuctionImages(auction)[0]?.[1]
@@ -96,8 +82,11 @@ export function AuctionWonModal() {
 	const settlementDeadlineAt = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 	const settlementCountdown = useAuctionCountdown(settlementDeadlineAt, { showSeconds: true })
 	const hasSettlementExpired = auction !== null && settlementDeadlineAt > 0 && settlementCountdown.isEnded
-	const hasFinalSettlement =
-		active !== null && auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
+	// Any seller settlement for this auction (not only `status: settled`) closes the win prompt:
+	// `publishBidderPathRelease` rejects every release once one exists, so keeping the prompt up
+	// would invite an action that always fails and would hold the head of the win queue.
+	const hasSellerSettlement =
+		active !== null && auction !== null && hasSellerSettlementForAuctionWin(active, auction, auctionCoordinate, settlementsQuery.data ?? [])
 	const hasReleasedPath = winResolutionQuery.data?.hasReleasedPath === true
 	const isNoLongerWinner = !!winResolutionQuery.data?.canonicalWinner && !winResolutionQuery.data.isActiveWinner
 	const hasVerifiedUnresolved =
@@ -105,7 +94,7 @@ export function AuctionWonModal() {
 		settlementsQuery.isSuccess &&
 		winResolutionQuery.isSuccess &&
 		winResolutionQuery.data.isActiveWinner &&
-		!hasFinalSettlement &&
+		!hasSellerSettlement &&
 		!hasReleasedPath
 	const useNonBlockingPrompt = shouldUseNonBlockingAuctionWinPrompt(location.pathname)
 
@@ -116,10 +105,23 @@ export function AuctionWonModal() {
 	}, [active?.auctionRootEventId])
 
 	useEffect(() => {
-		if (active && !isClosingAfterSettlement && (hasSettlementExpired || hasFinalSettlement || hasReleasedPath || isNoLongerWinner)) {
-			auctionWonActions.dismissActive()
+		if (!active || isClosingAfterSettlement) return
+		const closedBySellerSettlement = hasSellerSettlement
+		const closedByReleasedPath = hasReleasedPath
+		const closedByWinnerChange = isNoLongerWinner
+		if (!hasSettlementExpired && !closedBySellerSettlement && !closedByReleasedPath && !closedByWinnerChange) return
+
+		// Expiry is visible in the countdown the bidder is already watching, so it
+		// closes silently. The other three close the prompt out from under the
+		// bidder, so say why, using the same copy the manual settle path already
+		// uses. Guarded per win so a re-render cannot repeat the notice.
+		const noticeKey = `${active.auctionRootEventId}:${active.bidEventId}`
+		if ((closedBySellerSettlement || closedByReleasedPath || closedByWinnerChange) && shownCloseNoticeRef.current !== noticeKey) {
+			shownCloseNoticeRef.current = noticeKey
+			toast.info('This auction is no longer available for settlement.')
 		}
-	}, [active, hasFinalSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
+		auctionWonActions.dismissActive()
+	}, [active, hasSellerSettlement, hasReleasedPath, hasSettlementExpired, isClosingAfterSettlement, isNoLongerWinner])
 
 	if (
 		!active ||
@@ -151,7 +153,7 @@ export function AuctionWonModal() {
 			const latestDeadline = getAuctionBiddingCutoffAt(auction) + getAuctionSettlementGrace(auction)
 			const latestSettlementExpired = latestDeadline > 0 && Math.floor(Date.now() / 1000) >= latestDeadline
 			const latestSettlementExists =
-				auction !== null && hasFinalSettlementForAuctionWin(active, auction, auctionCoordinate, latestSettlements.data ?? [])
+				auction !== null && hasSellerSettlementForAuctionWin(active, auction, auctionCoordinate, latestSettlements.data ?? [])
 			if (
 				!latestResolution.data?.isActiveWinner ||
 				latestResolution.data.hasReleasedPath ||

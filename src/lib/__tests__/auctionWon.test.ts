@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
 	hasFinalSettlementForAuctionWin,
 	getValidatedAuctionBids,
+	hasSellerSettlementForAuctionWin,
 	resolveAuctionWin,
 	selectValidatedAuctionWinner,
 	shouldUseNonBlockingAuctionWinPrompt,
@@ -327,6 +328,57 @@ describe('auction win settlement verification', () => {
 			})
 			expect(hasFinalSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [nonSettled])).toBe(false)
 		}
+	})
+})
+
+describe('auction win seller-closure verification', () => {
+	const settlementWithStatus = (status: string): NostrEventLike =>
+		makeSettlement({ tags: makeSettlement().tags.map((tag) => (tag[0] === 'status' ? ['status', status] : tag)) })
+
+	test('treats every terminal seller settlement as closure of the queued win', () => {
+		for (const status of ['settled', 'reserve_not_met', 'cancelled', 'griefed_no_fallback']) {
+			expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [settlementWithStatus(status)])).toBe(true)
+		}
+	})
+
+	test('keeps the queued win open while the seller has published no settlement', () => {
+		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [])).toBe(false)
+	})
+
+	test('ignores settlements from another seller or auction', () => {
+		const wrongSeller = makeSettlement({ pubkey: OTHER_SELLER_PUBKEY })
+		const wrongAuction = makeSettlement({
+			tags: makeSettlement().tags.map((tag) => (tag[0] === 'e' ? ['e', OTHER_AUCTION_ROOT_ID] : tag)),
+		})
+		const wrongCoordinate = makeSettlement({
+			tags: makeSettlement().tags.map((tag) => (tag[0] === 'a' ? ['a', `30408:${SELLER_PUBKEY}:another-auction`] : tag)),
+		})
+
+		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [wrongSeller, wrongAuction, wrongCoordinate])).toBe(false)
+	})
+
+	test('ignores malformed settlement events', () => {
+		const malformed = makeSettlement({ tags: makeSettlement().tags.filter((tag) => tag[0] !== 'status') })
+
+		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [malformed])).toBe(false)
+	})
+
+	test('matches an upper-case-hex settlement author the way the publish gate does', () => {
+		// `nostrPubkeyHex` accepts upper- and lower-case hex without normalising, and
+		// `sellerPubkey` comes straight from `event.pubkey` — while the publish gate
+		// this predicate must agree with lowercases both sides. A raw `===` here would
+		// not close the prompt for an upper-case author, leaving the bidder inviting a
+		// settle action the gate then rejects.
+		const upperCaseSeller = makeSettlement({ pubkey: SELLER_PUBKEY.toUpperCase() })
+
+		expect(hasSellerSettlementForAuctionWin(win, auction, AUCTION_COORDINATE, [upperCaseSeller])).toBe(true)
+	})
+
+	test('matches a lower-case settlement against an upper-case-hex auction author', () => {
+		// The mirror direction: the auction event carries the upper-case hex.
+		const upperCaseAuction: NostrEventLike = { ...auction, pubkey: SELLER_PUBKEY.toUpperCase() }
+
+		expect(hasSellerSettlementForAuctionWin(win, upperCaseAuction, AUCTION_COORDINATE, [makeSettlement()])).toBe(true)
 	})
 })
 

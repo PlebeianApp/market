@@ -6,7 +6,7 @@ import {
 	getAuctionCountdownLabels,
 } from '@/lib/auctionCountdownLabels'
 import { useEffect, useMemo, useState } from 'react'
-import ProgressBar from './shared/ProgressBar'
+import ProgressBar from '@/components/shared/ProgressBar'
 import type { NDKEvent } from '@/lib/nostr/ndk-events'
 import { getAuctionBiddingCutoffAt, getAuctionStartAt } from '@/queries/auctions'
 
