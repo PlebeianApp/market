@@ -6,6 +6,8 @@
       "name": "plebeian.market",
       "dependencies": {
         "@cashu/cashu-ts": "^2.1",
+        "@cashu/coco-core": "1.0.1",
+        "@cashu/coco-indexeddb": "1.0.1",
         "@contextvm/sdk": "^0.8.0",
         "@formkit/auto-animate": "^0.9.0",
         "@getalby/lightning-tools": "^8.1.1",
@@ -36,8 +38,6 @@
         "bun-plugin-tailwind": "^0.1.2",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
-        "coco-cashu-core": "^1.0.0-rc11",
-        "coco-cashu-indexeddb": "^1.0.0-rc11",
         "date-fns": "^4.1.0",
         "embla-carousel-react": "^8.6.0",
         "light-bolt11-decoder": "^3.2.0",
@@ -127,6 +127,10 @@
     "@capacitor/core": ["@capacitor/core@7.6.9", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-4DOh/xySC9S5ryhUIqpOppasIyi2WiTdF0JuZ/2DEs+vf5eunRzHDdNYBp1snA3faHciTw/3SVGXfR+WkYxsMA=="],
 
     "@cashu/cashu-ts": ["@cashu/cashu-ts@2.9.0", "", { "dependencies": { "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@scure/bip32": "^1.5.0" } }, "sha512-UesYcBkkJAGPbob2I/SX0aht4MQlfxUVPzI+NQqLKSg2l3m0EnmMznvnXZQnDZnhGy0Hd6rkgwAJTVOYcr0v/Q=="],
+
+    "@cashu/coco-core": ["@cashu/coco-core@1.0.1", "", { "dependencies": { "@cashu/cashu-ts": "^3.5.0", "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@scure/bip32": "^2.0.1" }, "peerDependencies": { "typescript": "^5" } }, "sha512-Nv0T9+K49X+jqnrqn65Vgn/4Id+271JyHTgjwP/URdgShIJX3O8aGH4uidNphKnuBEa0EZKWPiFRn5K4mXh9jA=="],
+
+    "@cashu/coco-indexeddb": ["@cashu/coco-indexeddb@1.0.1", "", { "dependencies": { "dexie": "^4.0.8" }, "peerDependencies": { "@cashu/coco-core": "1.0.1", "typescript": "^5" } }, "sha512-ESDhmexHOA2S1RZIuYK8oTaNGa8a3lErX2FKz/gkbNCYz/75cw/gLyr7RFtsMvtQsCcJpFZ0YNpiS1G6L12hSw=="],
 
     "@cashu/crypto": ["@cashu/crypto@0.3.4", "", { "dependencies": { "@noble/curves": "^1.6.0", "@noble/hashes": "^1.5.0", "@scure/bip32": "^1.5.0", "@scure/bip39": "^1.4.0", "buffer": "^6.0.3" } }, ""],
 
@@ -534,10 +538,6 @@
     "cliui": ["cliui@8.0.1", "", { "dependencies": { "string-width": "^4.2.0", "strip-ansi": "^6.0.1", "wrap-ansi": "^7.0.0" } }, ""],
 
     "clsx": ["clsx@2.1.1", "", {}, ""],
-
-    "coco-cashu-core": ["coco-cashu-core@1.0.0-rc11", "", { "dependencies": { "@cashu/cashu-ts": "^2.7.2" }, "peerDependencies": { "typescript": "^5" } }, "sha512-I1bqKoaUUtj/WTQ2GIoQaINg7sEbeQmCQ73kbbStHaIowEhByiNlSElC+Q/4VD2AdKSu9RePU1fF5aY/YdePtw=="],
-
-    "coco-cashu-indexeddb": ["coco-cashu-indexeddb@1.0.0-rc11", "", { "dependencies": { "dexie": "^4.0.8" }, "peerDependencies": { "coco-cashu-core": "^1.0.0-rc9", "typescript": "^5" } }, "sha512-vn2LiEVbO6V7NzYhC0BahJrLMcnkspNoxIQBU+YPlXgHuAe4g/1yFOO1h/jaV1y9eJYgoFokHU9lVgtUGL/rjA=="],
 
     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, ""],
 
@@ -1129,6 +1129,10 @@
 
     "@cashu/cashu-ts/@scure/bip32": ["@scure/bip32@1.6.2", "", { "dependencies": { "@noble/curves": "~1.8.1", "@noble/hashes": "~1.7.1", "@scure/base": "~1.2.2" } }, ""],
 
+    "@cashu/coco-core/@cashu/cashu-ts": ["@cashu/cashu-ts@3.7.2", "", { "dependencies": { "@noble/curves": "^2.4.0", "@noble/hashes": "^2.4.0", "@scure/base": "^2.4.0", "@scure/bip32": "^2.4.0" } }, "sha512-85Mkf0R0pWaK9XOiQY7pCmPDeqaNaRYe6/TclBU5Q7rW7Z4GuxuEVup+ounNG6RTDo/tcYthJmN+Mg2hKB4sYQ=="],
+
+    "@cashu/coco-core/@noble/curves": ["@noble/curves@2.2.0", "", { "dependencies": { "@noble/hashes": "2.2.0" } }, "sha512-T/BoHgFXirb0ENSPBquzX0rcjXeM6Lo892a2jlYJkqk83LqZx0l1Of7DzlKJ6jkpvMrkHSnAcgb5JegL8SeIkQ=="],
+
     "@cashu/crypto/@noble/curves": ["@noble/curves@1.8.1", "", { "dependencies": { "@noble/hashes": "1.7.1" } }, ""],
 
     "@cashu/crypto/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, ""],
@@ -1246,6 +1250,14 @@
     "@cashu/cashu-ts/@scure/bip32/@noble/hashes": ["@noble/hashes@1.7.1", "", {}, ""],
 
     "@cashu/cashu-ts/@scure/bip32/@scure/base": ["@scure/base@1.2.4", "", {}, ""],
+
+    "@cashu/coco-core/@cashu/cashu-ts/@noble/curves": ["@noble/curves@2.4.0", "", { "dependencies": { "@noble/hashes": "2.4.0" } }, "sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew=="],
+
+    "@cashu/coco-core/@cashu/cashu-ts/@noble/hashes": ["@noble/hashes@2.4.0", "", {}, "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA=="],
+
+    "@cashu/coco-core/@cashu/cashu-ts/@scure/base": ["@scure/base@2.4.0", "", {}, "sha512-thZ1TuJwFwBblOhgsjDKvvGirBxNp+wSvY/DR6tJBJOTDhdAAcHJ8Vbr2eFnqaxeca4+t0i9KBf+uHYGWwZORg=="],
+
+    "@cashu/coco-core/@cashu/cashu-ts/@scure/bip32": ["@scure/bip32@2.4.0", "", { "dependencies": { "@noble/curves": "2.4.0", "@noble/hashes": "2.4.0", "@scure/base": "2.4.0" } }, "sha512-i3DS0CptAocyvqE4n3SUkpzeQK4vJMFwWLofTwRiiKo2aWojBOfyMCgfKw9HVpO6fSY5AK86sHS/Uzn8kK9Few=="],
 
     "@cashu/crypto/@scure/bip32/@scure/base": ["@scure/base@1.2.4", "", {}, ""],
 
