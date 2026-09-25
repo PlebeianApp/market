@@ -2,7 +2,7 @@ import { createConnection } from 'node:net'
 import {
 	COCO_CORE_INSTALLED_CONTENT_HASH,
 	COCO_INDEXEDDB_INSTALLED_CONTENT_HASH,
-	COCO_ROUND_14_SHA,
+	COCO_CORE_SHA,
 	installedContentHash,
 } from '../scripts/coco-artifact-contract'
 import { COCO_AUCTIONSDEV_FAKE_MINT_INFO_COMMITMENT, COCO_AUCTIONSDEV_SMOKE_SAFE as SAFE } from './coco-auctionsdev-smoke-contract'
@@ -84,7 +84,7 @@ const portIsOpen = (url: string): Promise<boolean> => {
 const startedAt = Date.now()
 let candidate: CandidateIdentity = {
 	marketCommit: '0'.repeat(40),
-	coreSha: COCO_ROUND_14_SHA,
+	coreSha: COCO_CORE_SHA,
 	coreInstalledContentHash: COCO_CORE_INSTALLED_CONTENT_HASH,
 	indexeddbInstalledContentHash: COCO_INDEXEDDB_INSTALLED_CONTENT_HASH,
 }

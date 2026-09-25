@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto'
 import { lstat, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
-export const COCO_ROUND_14_SHA = '34f968f7032b8b2120ccd8eccdf60542a61a1aad' as const
-export const COCO_VENDOR_DIRECTORY = `vendor/coco-${COCO_ROUND_14_SHA}` as const
-export const COCO_CORE_ARCHIVE_SHA256 = '1cbb354810f47072190a1da725c6ba4da92e724da703c8a86eab31e57922d2b9' as const
-export const COCO_INDEXEDDB_ARCHIVE_SHA256 = '79239d876820f3f3f5eaccaa0765e0f7a84ac8be5ca78baa9fcfa0a11e2a6953' as const
-export const COCO_CORE_INSTALLED_CONTENT_HASH = 'sha256:70602fc9ce09751502977e64434ca3e2a475d700a46d0f2a4e95ed50f157f796' as const
+export const COCO_CORE_SHA = '60b7b070393eaad8746cb74a03c42017186da647' as const
+export const COCO_VENDOR_DIRECTORY = `vendor/coco-${COCO_CORE_SHA}` as const
+export const COCO_CORE_ARCHIVE_SHA256 = 'c41c4b95f90e360cee66b06e6abe354419567f38c798abfcf6202a610200b090' as const
+export const COCO_INDEXEDDB_ARCHIVE_SHA256 = 'b3c70d4d9d655e055f216afcf7882cfd1825bc1a7754fd801616f27ced9daabf' as const
+export const COCO_CORE_INSTALLED_CONTENT_HASH = 'sha256:0819c057889e55f8093dc9803b5646be628cfca6bb054f69d2037620d5dcc105' as const
 export const COCO_INDEXEDDB_INSTALLED_CONTENT_HASH = 'sha256:7507ff64326da39f1758fde233b318e454984142bb5e7e6ae5cac72a85e790fd' as const
 
 export async function installedContentHash(root: string): Promise<string> {

@@ -7,7 +7,7 @@ import {
 	COCO_CORE_INSTALLED_CONTENT_HASH,
 	COCO_INDEXEDDB_ARCHIVE_SHA256,
 	COCO_INDEXEDDB_INSTALLED_CONTENT_HASH,
-	COCO_ROUND_14_SHA,
+	COCO_CORE_SHA,
 	COCO_VENDOR_DIRECTORY,
 	installedContentHash,
 } from './coco-artifact-contract'
@@ -79,8 +79,11 @@ async function auditArtifacts(): Promise<void> {
 	const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> }
 	const expectedCorePin = `file:${COCO_VENDOR_DIRECTORY}/cashu-coco-core-2.0.0.tgz`
 	const expectedIndexedDbPin = `file:${COCO_VENDOR_DIRECTORY}/cashu-coco-indexeddb-2.0.0.tgz`
-	invariant(packageJson.dependencies?.['@cashu/coco-core'] === expectedCorePin, 'Core dependency is not pinned to Round 14')
-	invariant(packageJson.dependencies?.['@cashu/coco-indexeddb'] === expectedIndexedDbPin, 'IndexedDB dependency is not pinned to Round 14')
+	invariant(packageJson.dependencies?.['@cashu/coco-core'] === expectedCorePin, 'Core dependency is not pinned to the exact candidate')
+	invariant(
+		packageJson.dependencies?.['@cashu/coco-indexeddb'] === expectedIndexedDbPin,
+		'IndexedDB dependency is not pinned to the exact candidate',
+	)
 	for (const [name, specifier] of Object.entries(packageJson.dependencies ?? {})) {
 		if (name === '@cashu/coco-core' || name === '@cashu/coco-indexeddb') continue
 		invariant(!/^\s*(?:file:|link:|workspace:|\/|\.\.?\/)/.test(specifier), `${name} uses a forbidden local runtime dependency specifier`)
@@ -90,7 +93,7 @@ async function auditArtifacts(): Promise<void> {
 		.filter((entry) => entry.isDirectory() && entry.name.startsWith('coco-'))
 		.map((entry) => entry.name)
 	invariant(
-		vendorDirectories.length === 1 && vendorDirectories[0] === `coco-${COCO_ROUND_14_SHA}`,
+		vendorDirectories.length === 1 && vendorDirectories[0] === `coco-${COCO_CORE_SHA}`,
 		`unexpected Coco vendor directories: ${vendorDirectories.join(', ')}`,
 	)
 
@@ -193,7 +196,7 @@ export async function auditCocoProductionProfile(): Promise<void> {
 	console.log(
 		JSON.stringify({
 			status: 'COCO_PRODUCTION_PROFILE_ACCEPTED',
-			coreGitSha: COCO_ROUND_14_SHA,
+			coreGitSha: COCO_CORE_SHA,
 			coreInstalledContentHash: COCO_CORE_INSTALLED_CONTENT_HASH,
 			indexeddbInstalledContentHash: COCO_INDEXEDDB_INSTALLED_CONTENT_HASH,
 			persistence: 'IndexedDbRepositories',
