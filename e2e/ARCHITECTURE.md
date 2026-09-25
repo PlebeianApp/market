@@ -408,6 +408,14 @@ and the production **cross-event** validators (`computeValidatedBids`,
 `validatePathRelease`, `validateSettlementCompleteness`). A fixture that cannot
 represent a real relay history throws while it is being built.
 
+Two arguments make this gate slightly narrower than the production paths, and
+both are deliberate: the gate's `validatePathRelease` call passes
+`skipCashuTokenCheck: true` (the same skip the production validator service
+uses, and the settlement-completeness validator re-decodes the token anyway),
+and the gate declares `winningBidNut7State: 'spent'` instead of waiting for mint
+evidence. The keyset injection point is used, so the gate never contacts a mint
+URL.
+
 This matters because a green E2E run over impossible relay data - an auction
 that is still open, a settlement below the reserve, a placeholder bid
 reference - proves only that the UI reacts to events no client would publish.
