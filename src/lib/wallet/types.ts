@@ -23,7 +23,40 @@ export interface AuctionBidPendingTokenContext {
 	grantId?: string
 }
 
-export type PendingTokenContext = AuctionBidPendingTokenContext
+/**
+ * A multiparty (V4V) bid leg's pending-token context.
+ *
+ * Its own `kind` rather than extra optional fields on the single-party context, because a multiparty
+ * leg is **one token per manifest row** and the lock key is per row: the single-party shape carries one
+ * `lockPubkey`/`childPubkey` pair, and bolting a row index onto it would leave every existing reader
+ * reading a token that describes only one of the leg's rows. Kept additive — no existing reader is
+ * changed by adding a kind to the union, and nothing constructs this one yet.
+ */
+export interface AuctionMultipartyBidPendingTokenContext {
+	kind: 'auction_bid_multiparty'
+	auctionEventId: string
+	auctionCoordinates?: string
+	bidEventId?: string
+	sellerPubkey: string
+	pathIssuerPubkey: string
+	/** The leg's refund authority (compressed secp256k1 hex) — the same on every row of the leg. */
+	refundPubkey: string
+	/** The leg's shared locktime, identical on every row. */
+	locktime: number
+	/** The leg's shared derivation path (D8: one path, per-recipient xpub). */
+	derivationPath: string
+	/** The manifest row this token's proofs belong to. */
+	rowManifestIndex: number
+	/**
+	 * This row's lock key, **compressed** — the form that carries the parity, and the one a reclaim
+	 * needs to rebuild the row's lock secret. The x-only projection is not stored: it can be derived
+	 * from this, and only this direction is safe.
+	 */
+	rowChildPubkeyCompressed: string
+	grantId?: string
+}
+
+export type PendingTokenContext = AuctionBidPendingTokenContext | AuctionMultipartyBidPendingTokenContext
 
 /**
  * Pending token that has been generated but not yet claimed.
