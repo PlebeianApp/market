@@ -17,8 +17,39 @@ import type { NostrSigner } from '@contextvm/sdk'
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
 import { DEFAULT_MAX_SKEW_SECONDS, VALIDATOR_POLICY_KIND, VALIDATOR_POLICY_SCHEMA_TYPE } from '../../lib/auction/constants'
 import { buildValidatorPolicyContent, buildValidatorPolicyTags } from '../../lib/auction/tagBuilders'
-import type { ValidatorAdmissionPolicy, ValidatorPolicyDocument } from '../../lib/auction/events'
+import type { ValidatorAdmissionLimits, ValidatorAdmissionPolicy, ValidatorPolicyDocument } from '../../lib/auction/events'
 import { resolveBidSpamPolicy, type BidSpamPolicy } from './spamPolicy'
+
+/**
+ * Compile-time guard that the published admission block carries EXACTLY the
+ * fields the validator enforces — both directions, so a renamed or removed
+ * field fails too. If `BidSpamPolicy` grows a limit, this type resolves to
+ * `never` and every holder of `AdmissionPolicyFieldParity` (see the
+ * policy-admission test) stops compiling until the published document and
+ * its parser are updated as well.
+ */
+type EnforcedAdmissionField = keyof BidSpamPolicy
+type PublishedAdmissionField = keyof ValidatorAdmissionLimits
+export type AdmissionPolicyFieldParity = [EnforcedAdmissionField] extends [PublishedAdmissionField]
+	? [PublishedAdmissionField] extends [EnforcedAdmissionField]
+		? 'parity'
+		: never
+	: never
+
+/**
+ * The ONE mapping from the enforced policy to the published declaration.
+ *
+ * Deliberately a spread of the resolved policy rather than a hand-written
+ * field list: the declaration carries every field of whatever `BidSpamPolicy`
+ * is in force, so a limit cannot be left out of it. The companion
+ * `AdmissionPolicyFieldParity` guard turns "enforced but never published" —
+ * or the reverse — into a compile error at every holder, and the spread means
+ * no value can be advertised other than the one in force.
+ */
+export const toValidatorAdmissionPolicy = (policy: BidSpamPolicy): ValidatorAdmissionPolicy => ({
+	enabled: true,
+	...policy,
+})
 
 export interface PublishValidatorPolicyDeps {
 	signer: NostrSigner
@@ -36,26 +67,7 @@ export const resolvePublishedAdmissionPolicy = (
 	declared?: ValidatorAdmissionPolicy,
 ): ValidatorAdmissionPolicy => {
 	if (declared?.enabled === false) return declared
-	const resolved = resolveBidSpamPolicy(policy)
-	return {
-		enabled: true,
-		maxBidsPerWindow: resolved.maxBidsPerWindow,
-		rateWindowSec: resolved.rateWindowSec,
-		maxTrackedChildSubscriptions: resolved.maxTrackedChildSubscriptions,
-		childReplayLookbackSec: resolved.childReplayLookbackSec,
-		lateSettlementObservationSec: resolved.lateSettlementObservationSec,
-		maxTrackedBidsPerAuction: resolved.maxTrackedBidsPerAuction,
-		maxSeenEventIds: resolved.maxSeenEventIds,
-		maxPendingEventsPerKey: resolved.maxPendingEventsPerKey,
-		maxPendingKeys: resolved.maxPendingKeys,
-		maxPendingEvents: resolved.maxPendingEvents,
-		pendingTtlSec: resolved.pendingTtlSec,
-		maxEventBytes: resolved.maxEventBytes,
-		maxTagCount: resolved.maxTagCount,
-		maxNonceLength: resolved.maxNonceLength,
-		maxProofCount: resolved.maxProofCount,
-		maxContentBytes: resolved.maxContentBytes,
-	}
+	return toValidatorAdmissionPolicy(resolveBidSpamPolicy(policy))
 }
 
 export const resolvePublishedValidatorPolicyDocument = (deps: {

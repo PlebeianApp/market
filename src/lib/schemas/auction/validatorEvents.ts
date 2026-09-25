@@ -30,6 +30,7 @@ import type {
 	ParsedBidderAggregateReputationEvent,
 	ParsedValidatorPolicyEvent,
 	ParsedValidatorVerdictEvent,
+	ValidatorAdmissionPolicy,
 	ValidatorPolicyDocument,
 } from '../../auction/events'
 import type { NostrEventLike } from '../../nostr/eventLike'
@@ -134,6 +135,42 @@ export const parseValidatorVerdictEvent = (event: NostrEventLike): ParseValidato
 // kind 30441 — Validator policy
 // =========================================================================
 
+const admissionLimitSchema = z.number().int().nonnegative()
+
+/**
+ * The relay-facing admission declaration of a kind-30441 policy document.
+ *
+ * Every limit is required in the `enabled: true` shape except
+ * `lateSettlementObservationSec`, which stays optional so documents published
+ * before that bound existed still parse: a reader must never have to fall back
+ * to private defaults to learn what is enforced. Both shapes are strict, so a
+ * document cannot claim "no admission checks" and list limits in the same
+ * breath — that declaration contradicts itself.
+ */
+export const ValidatorAdmissionPolicySchema = z.discriminatedUnion('enabled', [
+	z.strictObject({ enabled: z.literal(false) }),
+	z.strictObject({
+		enabled: z.literal(true),
+		maxBidsPerWindow: admissionLimitSchema,
+		rateWindowSec: admissionLimitSchema,
+		maxTrackedChildSubscriptions: admissionLimitSchema,
+		childReplayLookbackSec: admissionLimitSchema,
+		/** Optional for compatibility with policy events published before this bound was introduced. */
+		lateSettlementObservationSec: admissionLimitSchema.optional(),
+		maxTrackedBidsPerAuction: admissionLimitSchema,
+		maxSeenEventIds: admissionLimitSchema,
+		maxPendingEventsPerKey: admissionLimitSchema,
+		maxPendingKeys: admissionLimitSchema,
+		maxPendingEvents: admissionLimitSchema,
+		pendingTtlSec: admissionLimitSchema,
+		maxEventBytes: admissionLimitSchema,
+		maxTagCount: admissionLimitSchema,
+		maxNonceLength: admissionLimitSchema,
+		maxProofCount: admissionLimitSchema,
+		maxContentBytes: admissionLimitSchema,
+	}),
+]) satisfies z.ZodType<ValidatorAdmissionPolicy>
+
 export const ValidatorPolicyDocumentSchema = z.object({
 	type: z.literal(VALIDATOR_POLICY_SCHEMA_TYPE),
 	relatrMinScore: z.number().optional(),
@@ -145,30 +182,7 @@ export const ValidatorPolicyDocumentSchema = z.object({
 	categoryAllowlist: z.array(z.string()).optional(),
 	categoryDenylist: z.array(z.string()).optional(),
 	maxAcceptableSkewSec: z.number().int().nonnegative().optional(),
-	admission: z
-		.discriminatedUnion('enabled', [
-			z.object({ enabled: z.literal(false) }),
-			z.object({
-				enabled: z.literal(true),
-				maxBidsPerWindow: z.number().int().nonnegative(),
-				rateWindowSec: z.number().int().nonnegative(),
-				maxTrackedChildSubscriptions: z.number().int().nonnegative(),
-				childReplayLookbackSec: z.number().int().nonnegative(),
-				lateSettlementObservationSec: z.number().int().nonnegative().optional(),
-				maxTrackedBidsPerAuction: z.number().int().nonnegative(),
-				maxSeenEventIds: z.number().int().nonnegative(),
-				maxPendingEventsPerKey: z.number().int().nonnegative(),
-				maxPendingKeys: z.number().int().nonnegative(),
-				maxPendingEvents: z.number().int().nonnegative(),
-				pendingTtlSec: z.number().int().nonnegative(),
-				maxEventBytes: z.number().int().nonnegative(),
-				maxTagCount: z.number().int().nonnegative(),
-				maxNonceLength: z.number().int().nonnegative(),
-				maxProofCount: z.number().int().nonnegative(),
-				maxContentBytes: z.number().int().nonnegative(),
-			}),
-		])
-		.optional(),
+	admission: ValidatorAdmissionPolicySchema.optional(),
 	griefingDecayDays: z.number().int().nonnegative().optional(),
 	notes: z.string().optional(),
 }) satisfies z.ZodType<ValidatorPolicyDocument>

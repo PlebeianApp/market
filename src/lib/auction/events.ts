@@ -319,28 +319,37 @@ export interface ParsedValidatorVerdictEvent {
 // kind 30441 — Validator policy declaration — §4.4.2
 // =========================================================================
 
-export type ValidatorAdmissionPolicy =
-	| { enabled: false }
-	| {
-			enabled: true
-			maxBidsPerWindow: number
-			rateWindowSec: number
-			maxTrackedChildSubscriptions: number
-			childReplayLookbackSec: number
-			/** Optional for compatibility with policy events published before this bound was introduced. */
-			lateSettlementObservationSec?: number
-			maxTrackedBidsPerAuction: number
-			maxSeenEventIds: number
-			maxPendingEventsPerKey: number
-			maxPendingKeys: number
-			maxPendingEvents: number
-			pendingTtlSec: number
-			maxEventBytes: number
-			maxTagCount: number
-			maxNonceLength: number
-			maxProofCount: number
-			maxContentBytes: number
-	  }
+/**
+ * Admission limits a validator applies to relay-fed auction events BEFORE
+ * any auction rule is evaluated — the bounds resolved from `BidSpamPolicy`
+ * in `src/server/auction-validator/spamPolicy.ts`.
+ *
+ * The field set is kept in exact parity with `BidSpamPolicy` (the policy
+ * the validator actually enforces) by the compile-time guard in
+ * `src/server/auction-validator/policy.ts`, so the published declaration
+ * cannot advertise a different set of knobs than the ones in force.
+ */
+export interface ValidatorAdmissionLimits {
+	maxBidsPerWindow: number
+	rateWindowSec: number
+	maxTrackedChildSubscriptions: number
+	childReplayLookbackSec: number
+	/** Optional for compatibility with policy events published before this bound was introduced. */
+	lateSettlementObservationSec?: number
+	maxTrackedBidsPerAuction: number
+	maxSeenEventIds: number
+	maxPendingEventsPerKey: number
+	maxPendingKeys: number
+	maxPendingEvents: number
+	pendingTtlSec: number
+	maxEventBytes: number
+	maxTagCount: number
+	maxNonceLength: number
+	maxProofCount: number
+	maxContentBytes: number
+}
+
+export type ValidatorAdmissionPolicy = { enabled: false } | ({ enabled: true } & ValidatorAdmissionLimits)
 
 export interface ValidatorPolicyDocument {
 	type: 'auction_validator_policy_v1'
