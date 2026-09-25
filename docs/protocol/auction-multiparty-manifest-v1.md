@@ -122,6 +122,37 @@ so a release cannot be replayed against a different schedule, a different manife
 or a different bid. `path_commitment` MUST be carried when the bid carried it
 (section 5).
 
+### 4.1 How a leg's rows travel (added 2026-09-25)
+
+A leg is **one bid that locked N outputs**, so one release event carries the whole
+leg, and the manifest is already an indexed list. The row tags are therefore
+repeated **in manifest index order**:
+
+```
+['child_pubkey', '<row 0 x-only>']
+['child_pubkey', '<row 1 x-only>']
+…
+['cashu_token', '<row 0 token>']     # optional as a group; see below
+['cashu_token', '<row 1 token>']
+…
+```
+
+A reader matches them positionally against the manifest's rows. Two rules make the
+counts checkable rather than assumed:
+
+- if any `child_pubkey` tag is present there MUST be **exactly one per manifest row**,
+  and a release whose row count disagrees with the manifest is refused — not partially
+  accepted, because a leg that settles from three rows of four paid three of its four
+  recipients;
+- `cashu_token` MAY be absent entirely (a synthetic or non-redeemable release, as
+  §4 already allows for the single-party case) or present **exactly once per row**;
+  emitting it for some rows and not others is refused, since the release either
+  redeems every row or none.
+
+Splitting a release across N events is deliberately not the shape: every event would
+repeat the same commitments, a missing one would be indistinguishable from "not
+released yet", and "all rows released or none" would stop being checkable on one event.
+
 ## 5. Path commitment (optional, recommended)
 
 ```

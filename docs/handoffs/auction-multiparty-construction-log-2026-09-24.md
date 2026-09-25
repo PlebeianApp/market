@@ -114,6 +114,62 @@ as it is in a single-file run.
 
 ---
 
+## Stage H — the multiparty path release
+
+**Status:** implemented as an unwired wire packet (builder + reader + binding check). Nothing publishes
+it.
+
+### What changed
+
+- `multipartyReleasePacket.ts` — the kind-1025 release for a leg, written and read: the leg-level tags
+  the manifest profile's §4 requires (`payout_schedule_commitment`, `payout_manifest_commitment`, the
+  shared `derivation_path`, `path_commitment` when the bid committed one), plus the per-row tags, plus
+  `multipartyReleaseBindsLeg` — the replay protection, which compares the release's commitments against
+  values the _reader_ holds rather than against anything the release says about itself.
+- `docs/protocol/auction-multiparty-manifest-v1.md` §4.1 — the wire decision the section was missing:
+  how a leg's N child keys and N tokens travel.
+
+### Decisions taken
+
+1. **One release event per bid, rows repeated in manifest index order.** A leg is one bid that locked N
+   outputs, and the manifest is already an indexed list, so positional matching against it is the check.
+   Splitting the release across N events would repeat the commitments in every event, make a missing one
+   indistinguishable from "not released yet", and destroy the one property worth having: that "all rows
+   released or none" is checkable on a single event. Recorded in the profile itself, because it is a wire
+   decision rather than a client one.
+2. **A partial row set is a refusal, not a partial read.** A release naming three rows of a four-row leg
+   is refused outright, because a leg that settles from three rows paid three of its four recipients.
+   The same count rule applies to the tokens: absent as a group, or exactly one per row.
+3. **The commitments are checked against the reader's own values.** The release carrying a commitment is
+   no evidence that it is the right one — the leg's own schedule and manifest commitments, and the bid's
+   path commitment when it made one, are what it is compared to. A release that _invents_ a path
+   commitment the bid never made is refused as well as one that omits it, since both let a releaser
+   choose which binding applies.
+4. **A single-party release read as multiparty is refused.** The reader requires both commitments, so a
+   §4-era release (path only) cannot be mistaken for a multiparty one — the refusal is explicit rather
+   than a reader falling back to a weaker check.
+5. **The row keys are x-only, and only x-only.** The manifest records x-only and the verifier derives
+   against it, so the packet refuses a compressed key here; the compressed form lives in the bidder's
+   records, where a reclaim needs the parity. Same rule as D16, applied at the wire.
+
+### Evidence
+
+- 14 focused tests in `multipartyReleasePacket.test.ts`; suite numbers in the commit and the PR body's
+  update section. The two to read first: the partial-row-set refusal, and the binding checks that fail
+  on a different bid, schedule, manifest or row count.
+
+### Left open
+
+- **Who publishes the release, and when.** The packet is the event's tag set; the flow that decides a
+  winner, derives the shared path and signs the release is the settlement side (stage J) plus the
+  release's own trigger, and it is also the point where the production gate applies — publishing is
+  relay publication.
+- **How a recipient discovers its row.** The profile's deferred list has said "delivery is the release
+  plus discovery" since before this stage; the packet makes a row's token findable in the release, but
+  the discovery order (which event a recipient watches, on which relay) is still open.
+
+---
+
 ## Stage G — the NIP-60 transition, built as data after the wallet-base check
 
 **Status:** implemented as a store-agnostic projection; the wallet _binding_ is the only part left, and
