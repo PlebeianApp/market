@@ -20,6 +20,8 @@ import {
 const CLIENT_PK = 'aa'.repeat(32)
 const RELAY = 'wss://relay.example.com'
 const SECRET = 'hunter2'
+/** The remote signer's pubkey — the value NIP-46 puts at `params[0]`. */
+const REMOTE_PK = 'cc'.repeat(32)
 
 describe('buildNostrConnectUri (ADR-0002 amendment B-4 / #807)', () => {
 	test('emits the secret via the spec "secret" query param (not legacy "token")', () => {
@@ -64,16 +66,31 @@ describe('isMatchingConnectSecret (ADR-0002 amendment B-4 / #807)', () => {
 		expect(isMatchingConnectSecret({ secret: SECRET }, SECRET)).toBe(true)
 	})
 
-	test('accepts the SPEC positional-array params shape (NIP-46: params is an array of strings)', () => {
-		// nips/46.md: connect → [<remote-signer-pubkey>, <optional_secret>, …].
-		// A real signer sends the secret positionally; the object form above is
-		// this app's own legacy/mock shape. Both must be honoured.
+	test("accepts the app's own positional-array shorthand and the secret in either admitted position", () => {
+		// The app's own `[<secret>, …]` shorthand (index 0) keeps working…
 		expect(isMatchingConnectSecret([SECRET], SECRET)).toBe(true)
 		expect(isMatchingConnectSecret([SECRET, 'sign_event'], SECRET)).toBe(true)
 		expect(isMatchingConnectSecret([], SECRET)).toBe(false)
 		expect(isMatchingConnectSecret([''], SECRET)).toBe(false)
 		expect(isMatchingConnectSecret([SECRET], 'other-secret')).toBe(false)
 		expect(isMatchingConnectSecret(['wrong', 'sign_event'], SECRET)).toBe(false)
+	})
+
+	test('REGRESSION (review 5260467763 Required 1): accepts the SPEC positional array [<remote-signer-pubkey>, <secret>, …]', () => {
+		// nips/46.md: connect → [<remote-signer-pubkey>, <optional_secret>,
+		// <optional_requested_perms>, <optional_client_metadata>], i.e. the
+		// secret is at index 1. Reading index 0 returned the signer's PUBKEY,
+		// so a spec-conformant sender was never admitted by the array branch.
+		expect(isMatchingConnectSecret([REMOTE_PK, SECRET], SECRET)).toBe(true)
+		expect(extractConnectSecret([REMOTE_PK, SECRET])).toBe(SECRET)
+		expect(isMatchingConnectSecret([REMOTE_PK, SECRET, 'sign_event'], SECRET)).toBe(true)
+		expect(isMatchingConnectSecret([REMOTE_PK, SECRET, 'sign_event', '{"name":"x"}'], SECRET)).toBe(true)
+
+		// A wrong secret at BOTH positions is still rejected — the union widens
+		// which position may carry the secret, never whether the secret must match.
+		expect(isMatchingConnectSecret([REMOTE_PK, 'other-secret'], SECRET)).toBe(false)
+		expect(isMatchingConnectSecret([REMOTE_PK, ''], SECRET)).toBe(false)
+		expect(isMatchingConnectSecret(['other-secret'], SECRET)).toBe(false)
 	})
 
 	test('rejects a legacy "token"-only connect request (no secret param)', () => {
@@ -90,10 +107,14 @@ describe('isMatchingConnectSecret (ADR-0002 amendment B-4 / #807)', () => {
 	})
 
 	test('extractConnectSecret reads the secret from either shape and never from `token`', () => {
-		expect(extractConnectSecret([SECRET, 'perms'])).toBe(SECRET)
+		// Array form: the secret is at the SPEC position (index 1) when the array
+		// has one; index 0 is the app's own `[<secret>]` shorthand.
+		expect(extractConnectSecret([REMOTE_PK, SECRET])).toBe(SECRET)
+		expect(extractConnectSecret([SECRET])).toBe(SECRET)
 		expect(extractConnectSecret({ secret: SECRET })).toBe(SECRET)
 		expect(extractConnectSecret({ token: SECRET })).toBeUndefined()
 		expect(extractConnectSecret([123])).toBeUndefined()
+		expect(extractConnectSecret([''])).toBeUndefined()
 		expect(extractConnectSecret(undefined)).toBeUndefined()
 	})
 })

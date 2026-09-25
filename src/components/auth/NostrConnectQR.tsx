@@ -263,10 +263,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							processedRequestIds.add(request.id)
 						}
 
-						// #807 (ADR-0002 amendment B-4): the connect request must echo the secret via the
-						// spec `secret` param (positional array per NIP-46; the object form the
-						// app's own mock uses is accepted too). A legacy `token`-only request is a
-						// mismatch (fail closed) — isMatchingConnectSecret reads ONLY `secret`.
+						// #807 (ADR-0002 amendment B-4): the connect request must carry the spec
+						// `secret` — index 1 of the NIP-46 positional array
+						// `[<remote-signer-pubkey>, <optional_secret>, …]`, or index 0 of this
+						// app's own `[<secret>]` shorthand, or the object form its fixtures use.
+						// A legacy `token`-only request is a mismatch (fail closed) —
+						// isMatchingConnectSecret reads ONLY `secret`.
 						if (isMatchingConnectSecret(request.params, tempSecret)) {
 							// This signer proved it holds the temp secret — it is the only
 							// pubkey allowed to bind the session afterwards (#1290).

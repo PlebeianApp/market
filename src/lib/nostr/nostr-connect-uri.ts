@@ -56,26 +56,56 @@ export function buildNostrConnectUri({ clientPubkey, relay, secret, metadata }: 
 }
 
 /**
+ * Positions in the NIP-46 positional-array `params` form that this app admits
+ * as the connect secret.
+ *
+ * nips/46.md defines `connect` as
+ * `[<remote-signer-pubkey>, <optional_secret>, <optional_requested_perms>,
+ * <optional_client_metadata>]`, so the spec position for the secret is index
+ * **1**. Index **0** is this app's own `[<secret>, …]` shorthand (the shape
+ * this repo's NIP-46 fixtures use). A match at either position still requires
+ * the exact temp secret, so the union admits no sender that could not already
+ * produce the secret — it widens reachability, never the credential.
+ */
+const CONNECT_SECRET_ARRAY_POSITIONS = [1, 0] as const
+
+/** A non-empty string, or `undefined` — the only value any secret slot may yield. */
+function readSecretSlot(value: unknown): string | undefined {
+	return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
  * Extract the connection secret from an inbound `connect` message's `params`.
  *
- * NIP-46 defines `params` as a POSITIONAL ARRAY of strings and the
- * signer-initiated `connect` carries the secret first
- * (`connect` → `[<remote-signer-pubkey>, <optional_secret>, …]`), so the array
- * form is the spec shape. The app's own NIP-46 e2e mock (and the pre-#1252
- * lane) used an object `{ secret }`; both shapes are accepted, because a real
- * signer may use either. A legacy `token`-only request is NEVER accepted
- * (ADR-0002 B-4 / #807 — fail closed). Returns `undefined` when no secret is
- * present, which the caller treats as "not approved".
+ * Accepted shapes (ADR-0002 B-4 / #807 — reads `secret` only, NEVER a legacy
+ * `token`):
+ *
+ * - the spec positional array `[<remote-signer-pubkey>, <secret>, …]` — the
+ *   secret is at index 1 (nips/46.md), with the signer's pubkey at index 0;
+ * - the app's own single-element `[<secret>]` shorthand — the secret is at
+ *   index 0, and is the only element;
+ * - the object `{ secret }` form this repo's NIP-46 fixtures and the e2e mock
+ *   use.
+ *
+ * This is the single-value reader. `isMatchingConnectSecret` is the gate and
+ * checks BOTH array positions, so the app's `[<secret>]` shorthand keeps
+ * working. Returns `undefined` when no secret is present, which the caller
+ * treats as "not approved".
  */
 export function extractConnectSecret(params: unknown): string | undefined {
 	if (Array.isArray(params)) {
-		const [secret] = params
-		return typeof secret === 'string' && secret.length > 0 ? secret : undefined
+		// Spec position first (index 1), then the app's own `[<secret>]`
+		// shorthand (index 0).
+		for (const index of CONNECT_SECRET_ARRAY_POSITIONS) {
+			const secret = readSecretSlot(params[index])
+			if (secret !== undefined) return secret
+		}
+		return undefined
 	}
 
 	if (params && typeof params === 'object') {
 		const { secret } = params as Record<string, unknown>
-		return typeof secret === 'string' && secret.length > 0 ? secret : undefined
+		return readSecretSlot(secret)
 	}
 
 	return undefined
@@ -83,13 +113,18 @@ export function extractConnectSecret(params: unknown): string | undefined {
 
 /**
  * Validate a decrypted connect request's params against the expected secret.
- * Accepts ONLY the spec `secret` (positional array or object form) — a legacy
- * `token`-only request is a mismatch (fail closed, ADR-0002 B-4 / #807).
+ * Accepts ONLY the spec `secret` (positional array at index 1, the app's own
+ * index-0 shorthand, or the object form) — a legacy `token`-only request is a
+ * mismatch (fail closed, ADR-0002 B-4 / #807).
  */
 export function isMatchingConnectSecret(params: unknown, tempSecret: string): boolean {
 	if (!tempSecret) return false
-	const secret = extractConnectSecret(params)
-	return secret !== undefined && secret === tempSecret
+
+	if (Array.isArray(params)) {
+		return CONNECT_SECRET_ARRAY_POSITIONS.some((index) => readSecretSlot(params[index]) === tempSecret)
+	}
+
+	return extractConnectSecret(params) === tempSecret
 }
 
 /**
