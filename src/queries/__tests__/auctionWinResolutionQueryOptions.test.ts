@@ -45,11 +45,17 @@ describe('auctionWinResolutionQueryOptions', () => {
 	test('keys on the auction and bid ids via auctionKeys.winResolution', () => {
 		// Exact-value regression: the prompt invalidates and refetches by this key,
 		// so the adapter must not invent its own shape.
-		expect(auctionWinResolutionQueryOptions(win, auction).queryKey).toEqual([...auctionKeys.winResolution(AUCTION_ROOT_ID, BID_ID)])
+		// `queryOptions` brands `queryKey` with TanStack's DataTag symbol, so a
+		// branded key handed straight to `toEqual` makes the matcher demand the
+		// brand on the expected literal and matches no overload (TS2769).
+		// Spreading into a fresh array drops the compile-time-only brand and
+		// preserves the element (literal) types for the comparison.
+		expect([...auctionWinResolutionQueryOptions(win, auction).queryKey]).toEqual([...auctionKeys.winResolution(AUCTION_ROOT_ID, BID_ID)])
 	})
 
 	test('keys on empty ids when no win is queued (never a shared undefined key)', () => {
-		expect(auctionWinResolutionQueryOptions(null, null).queryKey).toEqual([...auctionKeys.winResolution('', '')])
+		// Same DataTag-brand widening as the keying test above.
+		expect([...auctionWinResolutionQueryOptions(null, null).queryKey]).toEqual([...auctionKeys.winResolution('', '')])
 	})
 
 	test('caller composition: spreading and overriding enabled narrows the gate', () => {
