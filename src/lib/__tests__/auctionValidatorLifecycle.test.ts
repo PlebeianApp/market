@@ -15,7 +15,13 @@ import { AUCTION_MIN_BID_LEG_SATS, AUCTION_MIN_BID_SATS } from '../auction/const
 import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { makeHonestDleqProof } from '../cashu/dleqFixture'
 import type { NostrEventLike } from '../nostr/eventLike'
-import { deriveVerdict, assignCloseRoles, pickWinningBid, verdictChanged } from '../../server/auction-validator/lifecycle'
+import {
+	assignCloseRoles,
+	deriveBidLegAmount,
+	deriveVerdict,
+	pickWinningBid,
+	verdictChanged,
+} from '../../server/auction-validator/lifecycle'
 import type { ValidatorAuctionState, ValidatorBidState } from '../../server/auction-validator/state'
 import { MAX_REPLACEMENT_CHAIN_DEPTH, recordNut7State, recordSettlement } from '../../server/auction-validator/state'
 
@@ -1289,5 +1295,63 @@ describe('verdictChanged', () => {
 	test('detail-only difference → false (detail is informational only)', () => {
 		const a = { claim: 'bid_invalid' as const, reason: 'pre_start' as const, detail: 'created_at=500' }
 		expect(verdictChanged(a, 'bid_invalid', 'pre_start')).toBe(false)
+	})
+})
+
+// ============================================================================
+// deriveBidLegAmount — a leg's predecessor must be this bidder's own, in this auction
+//
+// #1280 tightened the client's rule (`verifyBidCollateralChain`): a bid's
+// `prev_bid` must name the same bidder's leg in the same auction. The
+// validator resolved the parent by event id alone, so citing another bidder's
+// bid made that amount this leg's predecessor.
+// ============================================================================
+
+describe('deriveBidLegAmount — ancestor scope', () => {
+	const legAmount = (bid: ParsedBidEvent, parent?: ParsedBidEvent, auction?: ParsedAuctionEvent): number => {
+		const a = auction ?? buildAuction()
+		const bids = new Map<string, ValidatorBidState>([[bid.id, buildBidState(bid, bid.createdAt)]])
+		if (parent) bids.set(parent.id, buildBidState(parent, parent.createdAt))
+		return deriveBidLegAmount(buildAuctionState(a, { bids }), buildBidState(bid, bid.createdAt))
+	}
+
+	test('no prev_bid → the bid is its own leg', () => {
+		const auction = buildAuction()
+		expect(legAmount(buildBid(auction, { amount: 1_100 }), undefined, auction)).toBe(1_100)
+	})
+
+	test('own parent below this amount → the signed delta', () => {
+		const auction = buildAuction()
+		const parent = buildBid(auction, { id: '5'.repeat(64), amount: 1_000 })
+		const rebid = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: parent.id })
+		expect(legAmount(rebid, parent, auction)).toBe(100)
+	})
+
+	test("a parent from ANOTHER bidder → this bid's own amount, never the foreign difference", () => {
+		const auction = buildAuction()
+		const victim = buildBid(auction, { id: '5'.repeat(64), amount: 1_000, bidderPubkey: BIDDER_B })
+		const attacker = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: victim.id })
+		// Without the same-bidder rule this returns 100 — a delta this leg never locked.
+		expect(legAmount(attacker, victim, auction)).toBe(1_100)
+	})
+
+	test("a parent from another auction → this bid's own amount", () => {
+		const auction = buildAuction()
+		const otherAuction = buildAuction({ coordinate: '30408:' + 'f'.repeat(64) + ':other' })
+		const foreign = buildBid(otherAuction, { id: '5'.repeat(64), amount: 1_000 })
+		const attacker = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: foreign.id })
+		expect(legAmount(attacker, foreign, auction)).toBe(1_100)
+	})
+
+	test('a parent at or above this amount → fall back to the bid amount (never a non-positive leg)', () => {
+		const auction = buildAuction()
+		const parent = buildBid(auction, { id: '5'.repeat(64), amount: 1_100 })
+		const rebid = buildBid(auction, { id: '6'.repeat(64), amount: 1_100, prevBidId: parent.id })
+		expect(legAmount(rebid, parent, auction)).toBe(1_100)
+	})
+
+	test('an unresolvable prev_bid → fall back to the bid amount (unchanged behaviour)', () => {
+		const auction = buildAuction()
+		expect(legAmount(buildBid(auction, { amount: 1_100, prevBidId: '9'.repeat(64) }), undefined, auction)).toBe(1_100)
 	})
 })
