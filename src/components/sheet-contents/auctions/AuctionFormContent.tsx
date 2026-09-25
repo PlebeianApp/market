@@ -16,7 +16,9 @@ import {
 	type AuctionPublishValidationField,
 	type AuctionPublishValidationIssue,
 } from '@/lib/auctionPublishValidation'
+import { reconcileCocoAuctionTrustedMints, resolveAuctionFormAvailableMints } from '@/lib/auctionMintProfile'
 import { syncMintSelection } from '@/lib/auctionMintSync'
+import { isCocoV2AuctionMode, readCocoV2AuctionEnvironment } from '@/lib/coco/auctions'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
@@ -1642,10 +1644,13 @@ export function AuctionFormContent() {
 	const userPubkey = authState.user?.pubkey || ''
 	const appStage = useStore(configStore, (state) => state.config.stage)
 	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	const cocoMode = isCocoV2AuctionMode()
+	const cocoFakeMintAllowlist = useMemo(() => (cocoMode ? [...readCocoV2AuctionEnvironment().fakeMintAllowlist] : null), [cocoMode])
 
 	const availableMints = useMemo(
-		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
-		[walletDevMode],
+		() =>
+			resolveAuctionFormAvailableMints(cocoFakeMintAllowlist, [...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])]),
+		[cocoFakeMintAllowlist, walletDevMode],
 	)
 
 	const prevAvailableMintsRef = useRef(availableMints)
@@ -1661,11 +1666,13 @@ export function AuctionFormContent() {
 
 		setFormData((prevForm) => ({
 			...prevForm,
-			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints, userRemovedMintsRef.current),
+			trustedMints: cocoMode
+				? reconcileCocoAuctionTrustedMints(prevForm.trustedMints, availableMints)
+				: syncMintSelection(prev, availableMints, prevForm.trustedMints, userRemovedMintsRef.current),
 		}))
 
 		prevAvailableMintsRef.current = availableMints
-	}, [availableMints])
+	}, [availableMints, cocoMode])
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
 	const [images, setImages] = useState<AuctionImage[]>([])
@@ -1689,13 +1696,16 @@ export function AuctionFormContent() {
 		const draft = getAuctionFormDraft(userPubkey)
 		if (!draft) return
 		setDraftSavedAt(draft.savedAt)
-		setFormData(draft.formData)
+		setFormData({
+			...draft.formData,
+			trustedMints: cocoMode ? reconcileCocoAuctionTrustedMints(draft.formData.trustedMints, availableMints) : draft.formData.trustedMints,
+		})
 		setImages(draft.images)
 		setStartMode(draft.startMode)
 		setEndMode(draft.endMode)
 		setDurationSeconds(draft.durationSeconds)
 		setSubCategoryInput(draft.subCategoryInput)
-	}, [userPubkey])
+	}, [availableMints, cocoMode, userPubkey])
 
 	useEffect(() => {
 		if (!userPubkey || !draftLoadedRef.current) return
