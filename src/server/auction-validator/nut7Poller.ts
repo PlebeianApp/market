@@ -32,6 +32,7 @@ import {
 	type ValidatorAuctionState,
 	type ValidatorBidState,
 	type ValidatorState,
+	isSameBidderLeg,
 } from './state'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
@@ -127,7 +128,13 @@ const expandProofEntries = (
 	return out
 }
 
-const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: ValidatorBidState): ValidatorBidState[] => {
+/**
+ * Walk a bid's `prev_bid` chain back to its root, keeping only legs that
+ * belong to the same bidder in the same auction (see `isSameBidderLeg`).
+ * Exported for its unit tests — see `buildSettlementChain` in `lifecycle.ts`
+ * for why the scope rule needs a direct test.
+ */
+export const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: ValidatorBidState): ValidatorBidState[] => {
 	const chain: ValidatorBidState[] = []
 	const seen = new Set<string>()
 	let current: ValidatorBidState | undefined = latestBidState
@@ -138,7 +145,10 @@ const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: Vali
 		chain.push(current)
 		const prevBidId = current.bid.prevBidId?.trim()
 		if (!prevBidId) break
-		current = auctionState.bids.get(prevBidId)
+		const parent = auctionState.bids.get(prevBidId)
+		// Only this bidder's own legs belong to this chain (see isSameBidderLeg).
+		if (!parent || !isSameBidderLeg(current.bid, parent.bid)) break
+		current = parent
 	}
 	return chain
 }
