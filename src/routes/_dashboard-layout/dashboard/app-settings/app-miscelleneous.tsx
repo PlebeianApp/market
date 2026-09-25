@@ -13,9 +13,10 @@ import { configKeys } from '@/queries/queryKeyFactory'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createHandlerInfoEventData } from '@/publish/nip89'
+import { sign } from '@/lib/nostr/io'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
-import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
+import { nip19 } from 'nostr-tools'
 import { Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -149,8 +150,7 @@ function AppMiscelleneousComponent() {
 					handlerId,
 					value.siteUrl,
 				)
-				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
-				await submitAppSettings(handlerEvent)
+				await submitAppSettings(await sign(handlerEvent))
 
 				// Wait a bit for the event to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))
