@@ -146,6 +146,13 @@ jobs:
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
           APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
+          # Must match SELF_HOSTED_HANDLER_ID in e2e/test-config.ts. On CI the
+          # workflow starts the dev server directly (playwright.config.ts's
+          # own webServer env, which sets this same var, is skipped whenever
+          # process.env.CI is set — see "servers are started manually in the
+          # workflow" there), so self-hosted-config.spec.ts needs it set here
+          # too or /api/config falls back to the shipped default handler.
+          INSTANCE_HANDLER_ID: self-hosted-test-handler
 
       - name: Run E2E tests
         # Deterministic families gate every PR/push, each test run twice to
@@ -315,6 +322,9 @@ jobs:
           APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
+          # See the e2e-grep job's "Seed relay and start dev server" step for why
+          # this is needed on CI (must match SELF_HOSTED_HANDLER_ID in e2e/test-config.ts).
+          INSTANCE_HANDLER_ID: self-hosted-test-handler
 
       - name: Run remaining E2E tests
         env:
