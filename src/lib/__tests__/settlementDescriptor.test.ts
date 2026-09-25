@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { getSettlementDescriptor, type GetSettlementDescriptorInput, type SettlementParticipantRole } from '../auction/settlementDescriptor'
+import {
+	claimOrderAuthorizesFulfillment,
+	getAuctionFulfillmentAuthority,
+	getSettlementDescriptor,
+	type GetSettlementDescriptorInput,
+	type SettlementParticipantRole,
+} from '../auction/settlementDescriptor'
 import type {
 	ParsedAuctionEvent,
 	ParsedBidEvent,
@@ -1536,5 +1542,183 @@ describe('rebid chain path release validation', () => {
 		// seller falls back to "Settlement Ready" (both path releases are valid).
 		expect(d?.title).toBe('Settlement Ready')
 		expect(d?.verifiedBadge).toBe('path-release')
+	})
+})
+
+describe('getAuctionFulfillmentAuthority', () => {
+	// A fully validated settled chain: the auditor-confirmed canonical winner
+	// released its path, and the seller's kind-1024 settled settlement pays that
+	// exact winning leg. This is the ONLY shape that may authorize fulfillment.
+	const settledInput = (extra: InputOverrides = {}): GetSettlementDescriptorInput =>
+		makeInput({
+			bids: [winningBid],
+			verdicts: [verdictForBid(winningBid.id)],
+			nut7States: unspentNut7States([winningBid]),
+			pathReleases: [makePathRelease({ bidEventId: winningBid.id })],
+			settlements: [
+				makeSettlement({
+					winningBidId: winningBid.id,
+					finalAmount: 50000,
+					pathReleaseEventId: 'pr-1',
+					payouts: [{ bidEventId: winningBid.id, amount: 50000, status: 'redeemed' }],
+				}),
+			],
+			// The seller is the party that fulfills, so authority is requested
+			// from the seller's perspective (the claim order is the buyer's).
+			currentUserPubkey: SELLER_PUBKEY,
+			now: 120,
+			...extra,
+		})
+
+	test('a validated settled chain with no claim order is NOT fulfillment-ready', async () => {
+		const input = settledInput()
+		// Precondition: the descriptor itself classifies this chain as settled.
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(false)
+		expect(authority.settlementEventId).toBe('settle-1')
+		expect(authority.claimOrderId).toBeUndefined()
+	})
+
+	test('a validated settled chain plus its canonical claim order IS fulfillment-ready', async () => {
+		const input = settledInput({ claimOrders: [makeClaimOrder()] })
+		expect((await getSettlementDescriptor(input))?.phase).toBe('settled')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+		expect(authority.settlementEventId).toBe('settle-1')
+	})
+
+	test('a forged marker naming a settlement that does not exist grants NO fulfillment authority', async () => {
+		// The exact forgery the claim marker alone must never unlock: a
+		// well-formed marker whose 'settlement' e tag points at 64 hex chars
+		// that resolve to no validated settlement event.
+		const forged = makeClaimOrder({
+			id: 'order-forged',
+			tags: [
+				['p', SELLER_PUBKEY],
+				['type', 'order_creation'],
+				['order', 'order-forged'],
+				['amount', '50000'],
+				['a', '30408:seller:d-tag'],
+				['e', 'auction-root'],
+				['e', 'f'.repeat(64), '', 'settlement'],
+			],
+		})
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [forged] }))
+		expect(authority.fulfillmentReady).toBe(false)
+		expect(authority.claimOrderId).toBeUndefined()
+	})
+
+	test('a claim order whose author is not the settlement winner grants NO fulfillment authority', async () => {
+		const wrongAuthor = makeClaimOrder({ id: 'order-wrong-author', pubkey: OTHER_BIDDER_PUBKEY })
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [wrongAuthor] }))
+		expect(authority.fulfillmentReady).toBe(false)
+	})
+
+	test('a claim order whose amount disagrees with the settlement grants NO fulfillment authority', async () => {
+		const wrongAmount = makeClaimOrder({
+			id: 'order-wrong-amount',
+			tags: makeClaimOrder().tags.map((tag) => (tag[0] === 'amount' ? ['amount', '1'] : tag)),
+		})
+		const authority = getAuctionFulfillmentAuthority(settledInput({ claimOrders: [wrongAmount] }))
+		expect(authority.fulfillmentReady).toBe(false)
+	})
+
+	test('an unsettled auction is never fulfillment-ready, even with a claim order', async () => {
+		// Reserve not met: the claim order validates against nothing, and the
+		// terminal non-settled outcome must not unlock fulfillment.
+		const input = settledInput({
+			auction: makeAuction({ reserve: 90000 }),
+			settlements: [makeSettlement({ status: 'reserve_not_met', winnerPubkey: undefined, finalAmount: 0, payouts: [] })],
+			claimOrders: [makeClaimOrder()],
+		})
+		const descriptor = await getSettlementDescriptor(input)
+		expect(descriptor?.phase).toBe('reserve-not-met')
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: a `pending` settlement is not authority -------------
+	// Re-review of the order-detail work (2026-09-13): `deriveState()` retains a
+	// settlement that passed the seller/root/coordinate checks but is still
+	// `pending` because its required matching path release has not been
+	// validated/observed yet; `classifyPhase()` then reads `settled`. Authority
+	// must fail closed on that shape — only an explicitly `valid` settlement may
+	// authorize fulfillment.
+	test('a PENDING settlement (matching path release not valid/observed) grants NO fulfillment authority', async () => {
+		const input = settledInput({
+			// The seller published the settled kind-1024, the canonical claim order
+			// exists, but no (valid) path release has been observed yet.
+			pathReleases: [],
+			claimOrders: [makeClaimOrder()],
+		})
+		// The descriptor still reports the settled phase and flags the settlement
+		// as unverified (`verifying`) — that is the exact state the reviewer
+		// flagged as able to authorize fulfillment.
+		const descriptor = await getSettlementDescriptor(input)
+		expect(descriptor?.phase).toBe('settled')
+		expect(descriptor?.verifiedBadge).toBe('verifying')
+
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(false)
+		// Identity is still reported — it grants nothing on its own, and no order
+		// may be bound to it while `fulfillmentReady` is false.
+		expect(authority.settlementEventId).toBe('settle-1')
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(false)
+	})
+
+	test('a settlement whose matching path release is fraudulent (invalid) grants NO fulfillment authority', async () => {
+		// Raw release present but rejected by `validatePathRelease` → the
+		// settlement is classified `invalid` and filtered out of the validated
+		// set, so nothing settles and authority stays closed.
+		const fraudulentRelease = makePathRelease({ bidEventId: winningBid.id, cashuToken: 'garbage' })
+		const input = settledInput({
+			pathReleases: [fraudulentRelease],
+			claimOrders: [makeClaimOrder()],
+		})
+		expect(getAuctionFulfillmentAuthority(input).fulfillmentReady).toBe(false)
+	})
+
+	// --- P1 regression: authority is bound to the order that earned it ------
+	// One auction coordinate can carry more than one kind-16 order event, so the
+	// authority object must survive to the action boundary intact and be bound to
+	// the order id being mutated — never collapsed to a bare boolean.
+	test('authority names its canonical claim order, and authorizes ONLY that order id', () => {
+		const input = settledInput({ claimOrders: [makeClaimOrder()] })
+		const authority = getAuctionFulfillmentAuthority(input)
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(true)
+		// A sibling order carrying the same auction coordinate never inherits it.
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-2')).toBe(false)
+	})
+
+	test('a sibling order on the same coordinate stays non-fulfillable when claim A is canonical', () => {
+		// Two well-formed claim orders on the same auction coordinate. The
+		// authority resolves one canonical claim (the first validated match) and
+		// must refuse to authorize the sibling — the reviewer's A/B regression.
+		const sibling = makeClaimOrder({ id: 'order-2' })
+		const input = settledInput({ claimOrders: [makeClaimOrder(), sibling] })
+		const authority = getAuctionFulfillmentAuthority(input)
+
+		expect(authority.fulfillmentReady).toBe(true)
+		expect(authority.claimOrderId).toBe('order-1')
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-1')).toBe(true)
+		expect(claimOrderAuthorizesFulfillment(authority, 'order-2')).toBe(false)
+	})
+
+	test('claimOrderAuthorizesFulfillment fails closed on missing or partial authority', () => {
+		expect(claimOrderAuthorizesFulfillment(null, 'order-1')).toBe(false)
+		expect(claimOrderAuthorizesFulfillment(undefined, 'order-1')).toBe(false)
+		// Not fulfillment-ready → no binding, even with a matching id.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: false, claimOrderId: 'order-1' }, 'order-1')).toBe(false)
+		// No claim order id recorded → nothing can be bound to it.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true }, 'order-1')).toBe(false)
+		// No order id to bind to.
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true, claimOrderId: 'order-1' }, '')).toBe(false)
+		expect(claimOrderAuthorizesFulfillment({ fulfillmentReady: true, claimOrderId: 'order-1' }, undefined)).toBe(false)
 	})
 })
