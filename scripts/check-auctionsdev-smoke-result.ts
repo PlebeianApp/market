@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
 import path from 'node:path'
 
 const RESULT_PREFIX = 'COCO_AUCTIONSDEV_SMOKE_RESULT='
@@ -41,7 +42,7 @@ export interface CocoAuctionsdevSmokeResult {
 	exitCode: 0
 	durationMs: number
 	mode: 'coco-v2'
-	environmentId: 'local-e2e'
+	environmentId: 'test'
 	monetaryMode: 'fake'
 	baseUrl: 'http://localhost:34567'
 	relayUrl: 'ws://localhost:10547'
@@ -103,6 +104,32 @@ const canonicalJson = (value: unknown): string =>
 export const createSmokeEnvelopeCommitment = (payload: Omit<BoundCocoAuctionsdevSmokeEvidence, 'envelopeCommitment'>): string =>
 	`sha256:${createHash('sha256').update(canonicalJson(payload)).digest('hex')}`
 
+const isStrictDescendant = (root: string, candidate: string): boolean => {
+	const relative = path.relative(root, candidate)
+	return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+}
+
+export const resolveCheckoutContainedReportPath = async (checkoutRoot: string, reportPath: string): Promise<string> => {
+	if (typeof reportPath !== 'string' || reportPath.trim() === '' || reportPath.includes('\0')) {
+		throw new Error('Smoke fresh-wallet preflight report path is invalid')
+	}
+	if (reportPath.split(/[\\/]+/).includes('..')) {
+		throw new Error('Smoke fresh-wallet preflight report path contains traversal')
+	}
+
+	const realCheckoutRoot = await realpath(checkoutRoot)
+	const lexicalReportPath = path.isAbsolute(reportPath) ? path.resolve(reportPath) : path.resolve(realCheckoutRoot, reportPath)
+	if (!isStrictDescendant(realCheckoutRoot, lexicalReportPath)) {
+		throw new Error('Smoke fresh-wallet preflight report path escapes the prepared checkout')
+	}
+
+	const realReportPath = await realpath(lexicalReportPath)
+	if (!isStrictDescendant(realCheckoutRoot, realReportPath)) {
+		throw new Error('Smoke fresh-wallet preflight report real path escapes the prepared checkout')
+	}
+	return realReportPath
+}
+
 export const validateAuctionsdevSmokeResult = (value: unknown): CocoAuctionsdevSmokeResult => {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Smoke result must be an object')
 	const result = value as Record<string, unknown>
@@ -113,7 +140,7 @@ export const validateAuctionsdevSmokeResult = (value: unknown): CocoAuctionsdevS
 	if (!Number.isSafeInteger(result.durationMs) || (result.durationMs as number) < 0) {
 		throw new Error('Smoke duration must be a non-negative safe integer')
 	}
-	if (result.mode !== 'coco-v2' || result.environmentId !== 'local-e2e' || result.monetaryMode !== 'fake') {
+	if (result.mode !== 'coco-v2' || result.environmentId !== 'test' || result.monetaryMode !== 'fake') {
 		throw new Error('Smoke must use the sealed Coco v2 local fake-money mode')
 	}
 	if (
@@ -142,12 +169,12 @@ export const validateAuctionsdevSmokeResult = (value: unknown): CocoAuctionsdevS
 	for (const field of ['coreInstalledContentHash', 'indexeddbInstalledContentHash'] as const) {
 		if (!/^sha256:[0-9a-f]{64}$/.test(String(candidate[field]))) throw new Error(`Smoke candidate ${field} is invalid`)
 	}
-	if (typeof result.preflightReportPath !== 'string' || !result.preflightReportPath) {
+	if (
+		typeof result.preflightReportPath !== 'string' ||
+		result.preflightReportPath.trim() === '' ||
+		result.preflightReportPath.includes('\0')
+	) {
 		throw new Error('Smoke result must identify its strict fresh-wallet preflight report')
-	}
-	const normalizedReportPath = path.normalize(result.preflightReportPath)
-	if (path.isAbsolute(normalizedReportPath) || normalizedReportPath === '..' || normalizedReportPath.startsWith(`..${path.sep}`)) {
-		throw new Error('Smoke fresh-wallet preflight report must stay inside the prepared checkout')
 	}
 	if (!result.checks || typeof result.checks !== 'object' || Array.isArray(result.checks)) {
 		throw new Error('Smoke checks must be an object')

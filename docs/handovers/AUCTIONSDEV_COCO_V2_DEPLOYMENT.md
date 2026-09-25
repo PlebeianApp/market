@@ -55,7 +55,11 @@ It cold-starts the application from the exact clean checkout, uses only the
 local relay and fake mint, executes the browser preflight for the disposable
 authenticated test account, and returns the path of the public report. The
 deployment-owned wrapper copies only that public report. It does not accept a
-pre-existing app server.
+pre-existing app server. The smoke result must identify the exact `test`
+environment. Its report path may be relative or absolute, but the wrapper
+resolves both the lexical path and filesystem real path against the real
+checkout root and rejects traversal, outside paths, and symlink escapes before
+reading or copying the report.
 
 The authoritative strict offline verifier is separate:
 

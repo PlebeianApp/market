@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import {
 	createSmokeEnvelopeCommitment,
 	parseAuctionsdevSmokeOutput,
+	resolveCheckoutContainedReportPath,
 	validateAuctionsdevSmokeResult,
 	validateBoundAuctionsdevSmokeEvidence,
 } from './check-auctionsdev-smoke-result'
@@ -17,7 +21,7 @@ const validResult = {
 	exitCode: 0,
 	durationMs: 1234,
 	mode: 'coco-v2',
-	environmentId: 'local-e2e',
+	environmentId: 'test',
 	monetaryMode: 'fake',
 	baseUrl: 'http://localhost:34567',
 	relayUrl: 'ws://localhost:10547',
@@ -65,10 +69,66 @@ describe('validateAuctionsdevSmokeResult', () => {
 		).toThrow('loserOriginalSendRefund')
 	})
 
-	test('rejects a preflight report outside the prepared checkout', () => {
-		expect(() => validateAuctionsdevSmokeResult({ ...validResult, preflightReportPath: '/tmp/stale-report.json' })).toThrow(
-			'inside the prepared checkout',
+	test('accepts an absolute preflight path for bound-runner containment validation', () => {
+		expect(validateAuctionsdevSmokeResult({ ...validResult, preflightReportPath: '/tmp/canonical-report.json' })).toEqual({
+			...validResult,
+			preflightReportPath: '/tmp/canonical-report.json',
+		})
+	})
+
+	test('rejects an invalid preflight report path string', () => {
+		expect(() => validateAuctionsdevSmokeResult({ ...validResult, preflightReportPath: '   ' })).toThrow(
+			'must identify its strict fresh-wallet preflight report',
 		)
+	})
+})
+
+describe('resolveCheckoutContainedReportPath', () => {
+	test('accepts relative and absolute report paths lexically and physically inside the real checkout', async () => {
+		const checkout = await mkdtemp(path.join(tmpdir(), 'auctionsdev-smoke-checkout-'))
+		try {
+			const report = path.join(checkout, 'test-results', 'fresh-report.json')
+			await Bun.write(report, '{}\n')
+			expect(await resolveCheckoutContainedReportPath(checkout, path.relative(checkout, report))).toBe(await realpath(report))
+			expect(await resolveCheckoutContainedReportPath(checkout, report)).toBe(await realpath(report))
+		} finally {
+			await rm(checkout, { recursive: true, force: true })
+		}
+	})
+
+	test('rejects an absolute report path outside the real checkout', async () => {
+		const checkout = await mkdtemp(path.join(tmpdir(), 'auctionsdev-smoke-checkout-'))
+		const outside = `${checkout}-outside.json`
+		try {
+			await writeFile(outside, '{}\n')
+			await expect(resolveCheckoutContainedReportPath(checkout, outside)).rejects.toThrow('escapes the prepared checkout')
+		} finally {
+			await rm(checkout, { recursive: true, force: true })
+			await rm(outside, { force: true })
+		}
+	})
+
+	test('rejects traversal segments before filesystem resolution', async () => {
+		const checkout = await mkdtemp(path.join(tmpdir(), 'auctionsdev-smoke-checkout-'))
+		try {
+			await expect(resolveCheckoutContainedReportPath(checkout, 'test-results/../fresh-report.json')).rejects.toThrow('contains traversal')
+		} finally {
+			await rm(checkout, { recursive: true, force: true })
+		}
+	})
+
+	test('rejects a symlink whose real target escapes the checkout', async () => {
+		const checkout = await mkdtemp(path.join(tmpdir(), 'auctionsdev-smoke-checkout-'))
+		const outside = `${checkout}-outside.json`
+		try {
+			await writeFile(outside, '{}\n')
+			const linkedReport = path.join(checkout, 'fresh-report.json')
+			await symlink(outside, linkedReport)
+			await expect(resolveCheckoutContainedReportPath(checkout, linkedReport)).rejects.toThrow('real path escapes the prepared checkout')
+		} finally {
+			await rm(checkout, { recursive: true, force: true })
+			await rm(outside, { force: true })
+		}
 	})
 })
 

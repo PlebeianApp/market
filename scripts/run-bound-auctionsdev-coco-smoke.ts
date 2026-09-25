@@ -4,6 +4,7 @@ import path from 'node:path'
 import {
 	createSmokeEnvelopeCommitment,
 	parseAuctionsdevSmokeOutput,
+	resolveCheckoutContainedReportPath,
 	validateBoundAuctionsdevSmokeEvidence,
 } from './check-auctionsdev-smoke-result'
 import { hashPackageDirectory } from './verify-auctionsdev-package'
@@ -97,12 +98,7 @@ const main = async (): Promise<void> => {
 	process.stderr.write(stderr)
 	if (exitCode !== 0) throw new Error(`Canonical smoke command failed with exit code ${exitCode}`)
 	const smoke = parseAuctionsdevSmokeOutput(stdout)
-	const producedReportPath = path.resolve(process.cwd(), smoke.preflightReportPath)
-	const reportRelativePath = path.relative(process.cwd(), producedReportPath)
-	if (reportRelativePath.startsWith('..') || path.isAbsolute(reportRelativePath)) {
-		throw new Error('Canonical smoke fresh-wallet report path escapes the prepared checkout')
-	}
-	if (!(await Bun.file(producedReportPath).exists())) throw new Error('Canonical smoke fresh-wallet public report is missing')
+	const producedReportPath = await resolveCheckoutContainedReportPath(process.cwd(), smoke.preflightReportPath)
 	await Bun.write(freshPublicReportOutput, await Bun.file(producedReportPath).arrayBuffer())
 
 	const payload = {
