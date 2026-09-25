@@ -88,12 +88,11 @@ test.describe('self-hosted instance — browse, cart, and checkout path', () => 
 			.click()
 		await expect(buyerPage.getByRole('heading', { name: /your cart/i })).toBeVisible({ timeout: 10_000 })
 
-		const shippingTrigger = buyerPage.getByText('Select shipping method')
-		await expect(shippingTrigger).toBeVisible({ timeout: 10_000 })
-		await shippingTrigger.click()
-		await buyerPage.getByText(/Worldwide Standard/).click()
-
-		const checkoutButton = buyerPage.getByRole('button', { name: /Checkout/i })
+		// The cart no longer selects shipping inline — it defers to the checkout
+		// page (CartContent renders CartItem with hideShipping) and the
+		// Checkout button is enabled purely on cart contents, so click straight
+		// through.
+		const checkoutButton = buyerPage.getByRole('button', { name: /^Checkout$/i })
 		await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 		await checkoutButton.click()
 
