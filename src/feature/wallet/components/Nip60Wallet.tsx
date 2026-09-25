@@ -15,7 +15,6 @@ import { useStore } from '@tanstack/react-store'
 import {
 	ArrowDownLeft,
 	ArrowUpRight,
-	ArrowUpDown,
 	Loader2,
 	Landmark,
 	Plus,
@@ -35,6 +34,9 @@ import {
 	Check,
 	RotateCcw,
 	Trash2,
+	History,
+	Settings2,
+	ShieldCheck,
 } from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
 import { DepositLightningModal } from './DepositLightningModal'
@@ -294,20 +296,24 @@ export function Nip60Wallet() {
 		await handleReclaim(token)
 	}
 
-	// Button appearance class definitions
-
-	const classNameGhost = 'hover:bg-white/10 text-gray-400 hover:text-white'
-	const classNameSubtle = 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'
-	const classNameMuted = 'bg-white/10 hover:bg-white/20 text-white'
-	const classNameActive = 'bg-white/20 text-white'
-	const classNameSuccess = 'bg-green-600 hover:bg-green-700 text-white'
-	const classNameWarning = 'bg-orange-600 hover:bg-orange-700 text-white'
+	const classNameGhost = 'text-white/50 hover:bg-white/10 hover:text-white'
+	const classNameMuted = 'bg-white/10 text-white hover:bg-white/15'
+	const classNameActive = 'bg-white/15 text-white'
 	const classNameDestructive = 'bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300'
+	const walletShell =
+		'relative max-w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.22),transparent_42%),radial-gradient(circle_at_top_left,rgba(250,204,21,0.08),transparent_34%),#0b0b0e] text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]'
 
 	if (!isAuthenticated) {
 		return (
-			<div className="bg-primary p-4 rounded-lg text-gray-400 text-center">
-				<p>Please log in to view your wallet</p>
+			<div className={walletShell}>
+				<div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.22),transparent_62%)]" />
+				<div className="relative p-6 text-center">
+					<div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-white/10">
+						<Coins className="size-6 text-pink-400" />
+					</div>
+					<p className="font-semibold">Your private Cashu wallet</p>
+					<p className="mt-1 text-sm text-white/50">Log in to see your balance and pay for auctions.</p>
+				</div>
 			</div>
 		)
 	}
@@ -317,19 +323,49 @@ export function Nip60Wallet() {
 		const spendable = cocoBalances.reduce((sum, item) => sum + item.spendable, 0)
 		const reserved = cocoBalances.reduce((sum, item) => sum + item.reserved, 0)
 		return (
-			<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
-				<div className="mb-3 rounded-md border border-amber-300/50 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-200">
-					FAKE FUNDS · {cocoEnvironment.environmentId} · {cocoEnvironment.fakeMintAllowlist.join(', ')}
+			<div className={cn(walletShell, 'p-4')}>
+				<div className="flex items-center justify-between">
+					<div className="flex items-center gap-2.5">
+						<div className="flex size-9 items-center justify-center rounded-xl bg-pink-500 text-black shadow-[0_8px_24px_rgba(236,72,153,0.3)]">
+							<Coins className="size-5" />
+						</div>
+						<div>
+							<p className="text-[10px] font-semibold tracking-[0.18em] text-white/45">PLEBEIAN CASH</p>
+							<p className="text-sm font-semibold">Auction wallet</p>
+						</div>
+					</div>
+					<span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+						Fake funds
+					</span>
 				</div>
-				<div className="mb-4 text-center">
-					<p className="mb-1 text-gray-400 text-sm">Coco Auction fake balance</p>
-					<p className="font-bold text-white text-2xl">{spendable.toLocaleString()} sats</p>
-					{reserved > 0 && <p className="mt-1 text-xs text-amber-300">{reserved.toLocaleString()} sats reserved</p>}
+
+				<div className="pb-5 pt-8 text-center">
+					<p className="text-xs font-medium text-white/45">Available for bids</p>
+					<p className="mt-1 text-[2.5rem] font-bold leading-none tracking-tight">
+						{spendable.toLocaleString()}
+						<span className="ml-2 text-base font-medium text-white/45">sats</span>
+					</p>
+					{reserved > 0 && (
+						<p className="mt-3 inline-flex rounded-full bg-amber-300/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+							{reserved.toLocaleString()} sats held for active bids
+						</p>
+					)}
 				</div>
-				<Button className="w-full bg-white/10 hover:bg-white/20 text-white" size="sm" onClick={() => setOpenModal('receive')}>
-					<QrCode className="w-4 h-4" />
+
+				<Button
+					className="h-12 w-full rounded-xl bg-pink-500 font-semibold text-black shadow-[0_12px_28px_rgba(236,72,153,0.22)] hover:bg-pink-400"
+					onClick={() => setOpenModal('receive')}
+				>
+					<QrCode className="size-4" />
 					Receive fake eCash
 				</Button>
+
+				<div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2.5 text-xs">
+					<span className="flex items-center gap-2 font-medium text-emerald-300">
+						<ShieldCheck className="size-4" /> Auction-ready
+					</span>
+					<span className="text-white/40">{cocoEnvironment.environmentId} · test only</span>
+				</div>
 				<ReceiveEcashModal open={openModal === 'receive'} onClose={() => setOpenModal(null)} />
 			</div>
 		)
@@ -337,223 +373,224 @@ export function Nip60Wallet() {
 
 	if (status === 'idle' || status === 'initializing') {
 		return (
-			<div className="flex justify-center items-center bg-primary p-4 rounded-lg">
-				<Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+			<div className={cn(walletShell, 'flex min-h-44 items-center justify-center')}>
+				<Loader2 className="size-6 animate-spin text-pink-400" />
 			</div>
 		)
 	}
 
 	if (status === 'error') {
 		return (
-			<div className="bg-primary p-4 rounded-lg text-red-400 text-center">
-				<p>{error}</p>
+			<div className={cn(walletShell, 'p-6 text-center')}>
+				<p className="font-medium text-red-300">Wallet unavailable</p>
+				<p className="mt-1 text-sm text-white/50">{error}</p>
 			</div>
 		)
 	}
 
 	if (status === 'no_wallet') {
 		return (
-			<div className="bg-primary p-4 rounded-lg w-80 text-center">
-				<p className="mb-4 text-gray-400">No Cashu wallet found</p>
-				<Button onClick={handleCreateWallet} disabled={isCreating} variant="secondary">
-					{isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-					Create Wallet
-				</Button>
+			<div className={walletShell}>
+				<div className="absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.25),transparent_62%)]" />
+				<div className="relative p-6 text-center">
+					<div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-pink-500 text-black">
+						<Coins className="size-6" />
+					</div>
+					<p className="font-semibold">Create your private wallet</p>
+					<p className="mx-auto mt-1 max-w-64 text-sm text-white/50">Pay and get paid with Cashu, right inside Plebeian Market.</p>
+					<Button
+						onClick={handleCreateWallet}
+						disabled={isCreating}
+						className="mt-5 h-11 w-full rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400"
+					>
+						{isCreating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+						Create wallet
+					</Button>
+				</div>
 			</div>
 		)
 	}
 
 	return (
-		<div className="bg-primary p-4 rounded-lg max-w-full overflow-hidden text-white">
-			<div className="relative mb-4 text-center">
-				<div className="top-0 right-0 absolute flex gap-1">
-					<Button className={classNameGhost} size="icon" onClick={handleRefresh} disabled={isRefreshing} title="Refresh & sync wallet">
-						<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-					</Button>
+		<div className={cn(walletShell, 'p-4')}>
+			<div className="flex items-center justify-between">
+				<div className="flex items-center gap-2.5">
+					<div className="flex size-9 items-center justify-center rounded-xl bg-pink-500 text-black shadow-[0_8px_24px_rgba(236,72,153,0.3)]">
+						<Coins className="size-5" />
+					</div>
+					<div>
+						<p className="text-[10px] font-semibold tracking-[0.18em] text-white/45">PLEBEIAN CASH</p>
+						<p className="text-sm font-semibold">Private Cashu wallet</p>
+					</div>
 				</div>
-				<p className="mb-1 text-gray-400 text-sm">Balance</p>
-				<p className="font-bold text-white text-2xl">{balance.toLocaleString()} sats</p>
-			</div>
-
-			{/* Action Buttons */}
-			<div className="gap-2 grid grid-cols-2 mb-4">
-				<Button className={classNameSuccess} size="sm" onClick={() => setOpenModal('deposit')}>
-					<Zap className="w-4 h-4" />
-					Deposit
-				</Button>
-				<Button className={classNameWarning} size="sm" onClick={() => setOpenModal('withdraw')} disabled={balance === 0}>
-					<Zap className="w-4 h-4" />
-					Withdraw
-				</Button>
-				<Button className={classNameMuted} size="sm" onClick={() => setOpenModal('receive')}>
-					<QrCode className="w-4 h-4" />
-					Receive eCash
-				</Button>
-				<Button className={classNameMuted} size="sm" onClick={() => setOpenModal('send')} disabled={balance === 0}>
-					<Send className="w-4 h-4" />
-					Send eCash
+				<Button
+					className={cn(classNameGhost, 'size-9 rounded-xl')}
+					size="icon"
+					onClick={handleRefresh}
+					disabled={isRefreshing}
+					title="Refresh & sync wallet"
+				>
+					<RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
 				</Button>
 			</div>
 
-			{walletDevMode && (
-				<div className="mb-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 space-y-2">
-					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Test Tools</p>
-					<p className="text-xs text-amber-100/80">Available on staging and local dev for seeded auctions and fallback testnut mints.</p>
-
-					<div className="flex gap-2">
-						<Input
-							type="number"
-							min={1}
-							step={1}
-							value={devMintAmount}
-							onChange={(e) => setDevMintAmount(e.target.value)}
-							placeholder="Mint sats"
-							className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-gray-500"
-						/>
-						<Button
-							variant="dark-active"
-							size="sm"
-							onClick={() => void handleDevMintTestEcash()}
-							disabled={isDevMinting}
-							icon={isDevMinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Coins className="h-3.5 w-3.5" />}
-						>
-							Mint Test
-						</Button>
-					</div>
-
-					<div className="flex gap-2">
-						<Input
-							type="number"
-							min={1}
-							step={1}
-							value={devBidAmount}
-							onChange={(e) => setDevBidAmount(e.target.value)}
-							placeholder="Bid sats (optional)"
-							className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-gray-500"
-						/>
-						<Button
-							variant="dark-active"
-							size="sm"
-							onClick={() => void handleDevBidSeededAuction()}
-							disabled={isDevBidding}
-							icon={isDevBidding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gavel className="h-3.5 w-3.5" />}
-						>
-							Bid Seeded
-						</Button>
-					</div>
-
-					{lastDevMint && (
-						<p className="text-[11px] text-amber-100/90">
-							Last mint: {lastDevMint.amount.toLocaleString()} sats via {getMintHostname(lastDevMint.mintUrl)}
-						</p>
-					)}
-					{lastDevBid && (
-						<p className="text-[11px] text-amber-100/90 break-words">
-							Last bid: {lastDevBid.bidAmount.toLocaleString()} sats on {lastDevBid.auctionTitle}
-						</p>
-					)}
-				</div>
-			)}
-
-			{/* Default Mint Selector */}
-			<div className="mb-2 pt-2 overflow-hidden">
-				<p className="mb-2 font-medium text-gray-300 text-sm">Default Mint</p>
-				{mints.length > 0 ? (
-					<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
-						<SelectTrigger className="bg-white/10 hover:bg-white/15 border-white/20 w-full text-white">
-							<SelectValue placeholder="Select a default mint">
-								{defaultMint ? (
-									<span className="flex items-center gap-2 truncate">
-										<Star className="fill-current w-4 h-4 text-yellow-500 shrink-0" />
-										<span className="truncate">{getMintHostname(defaultMint)}</span>
-										{mintBalances[defaultMint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
-										)}
-									</span>
-								) : (
-									'Select a default mint'
-								)}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent className="bg-primary border-white/20 max-w-[calc(100vw-2rem)]">
-							{mints.map((mint) => (
-								<SelectItem key={mint} value={mint} className="hover:bg-white/10 focus:bg-white/10 text-white focus:text-white">
-									<div className="flex items-center gap-2">
-										<Landmark className="w-4 h-4 shrink-0" />
-										<span className="truncate">{getMintHostname(mint)}</span>
-										{mintBalances[mint] !== undefined && (
-											<span className="text-gray-400 shrink-0">({mintBalances[mint].toLocaleString()})</span>
-										)}
-									</div>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				) : (
-					<p className="text-gray-400 text-sm">No mints configured</p>
+			<div className="pb-5 pt-8 text-center">
+				<p className="text-xs font-medium text-white/45">Available balance</p>
+				<p className="mt-1 text-[2.5rem] font-bold leading-none tracking-tight">
+					{balance.toLocaleString()}
+					<span className="ml-2 text-base font-medium text-white/45">sats</span>
+				</p>
+				{defaultMint && (
+					<p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/55">
+						<ShieldCheck className="size-3.5 text-emerald-300" /> {getMintHostname(defaultMint)}
+					</p>
 				)}
 			</div>
 
-			{/* Toggle Row: Mints, Transactions, Proofs */}
-			<div className="pt-2 overflow-hidden">
-				{/* Toggle buttons row */}
-				<div className="flex gap-1 mb-2">
-					<Button
-						className={cn(openSection === 'mints' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-						size="sm"
-						onClick={() => setOpenSection(openSection === 'mints' ? null : 'mints')}
-						title="Manage mints"
-					>
-						<Landmark className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{mints.length}</span>
-					</Button>
-					<Button
-						className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-						size="sm"
-						onClick={() => setOpenSection(openSection === 'transactions' ? null : 'transactions')}
-						title="Transactions"
-					>
-						<ArrowUpDown className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{transactions.length}</span>
-					</Button>
-					<Button
-						className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-						size="sm"
-						onClick={() => setOpenSection(openSection === 'proofs' ? null : 'proofs')}
-						title="Proofs"
-					>
-						<Coins className="w-4 h-4 shrink-0" />
-						<span className="text-xs">{Array.from(proofsByMint.values()).flat().length}</span>
-					</Button>
-					{activePendingTokens.length > 0 && (
-						<Button
-							className={cn(openSection === 'transactions' ? classNameActive : classNameSubtle, 'flex-1 gap-1.5 px-2')}
-							size="sm"
-							onClick={() => setOpenSection(openSection === 'pending' ? null : 'pending')}
-							title="Pending tokens"
-						>
-							<Clock className="w-4 h-4 shrink-0" />
-							<span className="text-xs">{activePendingTokens.length}</span>
-						</Button>
-					)}
-				</div>
+			<div className="mb-5 grid grid-cols-4 gap-1">
+				<Button
+					aria-label="Deposit"
+					className="h-auto flex-col gap-2 bg-transparent px-1 py-1.5 text-[11px] font-medium text-white/70 hover:bg-transparent hover:text-white"
+					onClick={() => setOpenModal('deposit')}
+				>
+					<span className="flex size-12 items-center justify-center rounded-2xl bg-emerald-400 text-black transition-transform hover:scale-105">
+						<Zap className="size-5" />
+					</span>
+					Add
+				</Button>
+				<Button
+					aria-label="Send eCash"
+					className="h-auto flex-col gap-2 bg-transparent px-1 py-1.5 text-[11px] font-medium text-white/70 hover:bg-transparent hover:text-white"
+					onClick={() => setOpenModal('send')}
+					disabled={balance === 0}
+				>
+					<span className="flex size-12 items-center justify-center rounded-2xl bg-pink-500 text-black transition-transform hover:scale-105">
+						<ArrowUpRight className="size-5" />
+					</span>
+					Send
+				</Button>
+				<Button
+					aria-label="Receive eCash"
+					className="h-auto flex-col gap-2 bg-transparent px-1 py-1.5 text-[11px] font-medium text-white/70 hover:bg-transparent hover:text-white"
+					onClick={() => setOpenModal('receive')}
+				>
+					<span className="flex size-12 items-center justify-center rounded-2xl bg-yellow-300 text-black transition-transform hover:scale-105">
+						<ArrowDownLeft className="size-5" />
+					</span>
+					Receive
+				</Button>
+				<Button
+					aria-label="Withdraw"
+					className="h-auto flex-col gap-2 bg-transparent px-1 py-1.5 text-[11px] font-medium text-white/70 hover:bg-transparent hover:text-white"
+					onClick={() => setOpenModal('withdraw')}
+					disabled={balance === 0}
+				>
+					<span className="flex size-12 items-center justify-center rounded-2xl bg-white/10 text-white transition-transform hover:scale-105">
+						<Landmark className="size-5" />
+					</span>
+					Cash out
+				</Button>
+			</div>
 
+			<div className="space-y-1.5">
+				<Button
+					className={cn(
+						'w-full justify-start gap-3 rounded-xl border border-white/[0.07] px-3 py-3 text-white hover:bg-white/10',
+						openSection === 'transactions' ? 'bg-white/10' : 'bg-white/[0.04]',
+					)}
+					onClick={() => setOpenSection(openSection === 'transactions' ? null : 'transactions')}
+				>
+					<span className="flex size-8 items-center justify-center rounded-lg bg-white/[0.07]">
+						<History className="size-4" />
+					</span>
+					<span className="flex-1 text-left text-sm font-medium">Activity</span>
+					<span className="text-xs text-white/35">{transactions.length}</span>
+					<ChevronRight className={cn('size-4 text-white/30 transition-transform', openSection === 'transactions' && 'rotate-90')} />
+				</Button>
+				{activePendingTokens.length > 0 && (
+					<Button
+						className={cn(
+							'w-full justify-start gap-3 rounded-xl border border-amber-300/10 px-3 py-3 text-white hover:bg-white/10',
+							openSection === 'pending' ? 'bg-white/10' : 'bg-amber-300/[0.04]',
+						)}
+						onClick={() => setOpenSection(openSection === 'pending' ? null : 'pending')}
+					>
+						<span className="flex size-8 items-center justify-center rounded-lg bg-amber-300/10 text-amber-200">
+							<Clock className="size-4" />
+						</span>
+						<span className="flex-1 text-left text-sm font-medium">Pending sends</span>
+						<span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-xs text-amber-200">{activePendingTokens.length}</span>
+						<ChevronRight className={cn('size-4 text-white/30 transition-transform', openSection === 'pending' && 'rotate-90')} />
+					</Button>
+				)}
+				<Button
+					className={cn(
+						'w-full justify-start gap-3 rounded-xl border border-white/[0.07] px-3 py-3 text-white hover:bg-white/10',
+						openSection === 'mints' || openSection === 'proofs' ? 'bg-white/10' : 'bg-white/[0.04]',
+					)}
+					onClick={() => setOpenSection(openSection === 'mints' ? null : 'mints')}
+				>
+					<span className="flex size-8 items-center justify-center rounded-lg bg-white/[0.07]">
+						<Settings2 className="size-4" />
+					</span>
+					<span className="flex-1 text-left text-sm font-medium">Wallet settings</span>
+					<ChevronRight className={cn('size-4 text-white/30 transition-transform', openSection === 'mints' && 'rotate-90')} />
+				</Button>
+			</div>
+
+			<div className="overflow-hidden">
 				{/* Content panels */}
 				{openSection === 'mints' && (
-					<div className="space-y-2 pt-2 border-white/10 border-t overflow-hidden">
-						{mints.map((mint) => (
-							<div key={mint} className="flex justify-between items-center gap-2 text-sm">
-								<span className="min-w-0 text-gray-300 truncate" title={mint}>
-									{getMintHostname(mint)}
-								</span>
-								<div className="flex items-center gap-1 shrink-0">
-									{mintBalances[mint] !== undefined && <span className="text-gray-400 text-xs">{mintBalances[mint].toLocaleString()}</span>}
-									<Button className={cn(classNameGhost, 'w-6 h-6')} size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint">
-										<X className="w-3 h-3" />
-									</Button>
+					<div className="mt-3 space-y-3 rounded-xl border border-white/[0.07] bg-black/25 p-3">
+						<div>
+							<p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">Default mint</p>
+							{mints.length > 0 ? (
+								<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
+									<SelectTrigger className="w-full border-white/10 bg-white/[0.06] text-white hover:bg-white/10">
+										<SelectValue placeholder="Choose a mint">
+											{defaultMint ? (
+												<span className="flex items-center gap-2 truncate">
+													<Star className="size-3.5 shrink-0 fill-current text-yellow-300" />
+													<span className="truncate">{getMintHostname(defaultMint)}</span>
+												</span>
+											) : (
+												'Choose a mint'
+											)}
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent className="max-w-[calc(100vw-2rem)] border-white/20 bg-[#15151a]">
+										{mints.map((mint) => (
+											<SelectItem key={mint} value={mint} className="text-white focus:bg-white/10 focus:text-white">
+												<div className="flex items-center gap-2">
+													<Landmark className="size-4 shrink-0" />
+													<span className="truncate">{getMintHostname(mint)}</span>
+													<span className="text-white/40">{(mintBalances[mint] ?? 0).toLocaleString()}</span>
+												</div>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							) : (
+								<p className="text-sm text-white/45">No mints configured</p>
+							)}
+						</div>
+
+						<div className="border-t border-white/[0.07] pt-3">
+							<p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">Trusted mints</p>
+							{mints.map((mint) => (
+								<div key={mint} className="flex items-center justify-between gap-2 py-1 text-sm">
+									<span className="min-w-0 truncate text-white/70" title={mint}>
+										{getMintHostname(mint)}
+									</span>
+									<div className="flex shrink-0 items-center gap-1">
+										<span className="text-xs text-white/35">{(mintBalances[mint] ?? 0).toLocaleString()} sats</span>
+										<Button className={cn(classNameGhost, 'size-7')} size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint">
+											<X className="size-3" />
+										</Button>
+									</div>
 								</div>
-							</div>
-						))}
+							))}
+						</div>
 						<div className="flex gap-2">
 							<Input
 								type="url"
@@ -561,16 +598,86 @@ export function Nip60Wallet() {
 								onChange={(e) => setNewMintUrl(e.target.value)}
 								onKeyDown={(e) => e.key === 'Enter' && handleAddMint()}
 								placeholder="https://mint.example.com"
-								className="flex-1 bg-white/10 border-white/20 min-w-0 h-8 text-white placeholder:text-gray-500 text-sm"
+								className="h-9 min-w-0 flex-1 border-white/10 bg-white/[0.06] text-sm text-white placeholder:text-white/25"
 							/>
-							<Button className={cn(classNameMuted, 'px-2 h-8 shrink-0')} size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()}>
+							<Button className={cn(classNameMuted, 'h-9 shrink-0 px-3')} size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()}>
 								<Plus className="w-4 h-4" />
 							</Button>
 						</div>
-						<Button className={cn(classNameActive, 'w-full')} size="sm" onClick={handleSaveWallet} disabled={isSaving}>
+						<Button className={cn(classNameActive, 'w-full rounded-lg')} size="sm" onClick={handleSaveWallet} disabled={isSaving}>
 							{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
 							Save Wallet
 						</Button>
+
+						<Button
+							className="w-full justify-between rounded-lg bg-transparent px-2 text-xs text-white/45 hover:bg-white/[0.06] hover:text-white"
+							size="sm"
+							onClick={() => setOpenSection('proofs')}
+						>
+							<span className="flex items-center gap-2">
+								<Coins className="size-3.5" /> Cashu proof details
+							</span>
+							<span>{Array.from(proofsByMint.values()).flat().length}</span>
+						</Button>
+
+						{walletDevMode && (
+							<details className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3">
+								<summary className="cursor-pointer text-xs font-semibold text-amber-200">Auction test tools</summary>
+								<div className="mt-3 space-y-2">
+									<p className="text-[11px] leading-relaxed text-amber-100/60">For seeded auctions and local test mints.</p>
+									<div className="flex gap-2">
+										<Input
+											type="number"
+											min={1}
+											step={1}
+											value={devMintAmount}
+											onChange={(e) => setDevMintAmount(e.target.value)}
+											placeholder="Mint sats"
+											className="h-8 border-white/10 bg-white/[0.06] text-sm text-white placeholder:text-white/25"
+										/>
+										<Button
+											variant="dark-active"
+											size="sm"
+											onClick={() => void handleDevMintTestEcash()}
+											disabled={isDevMinting}
+											icon={isDevMinting ? <Loader2 className="size-3.5 animate-spin" /> : <Coins className="size-3.5" />}
+										>
+											Mint test
+										</Button>
+									</div>
+									<div className="flex gap-2">
+										<Input
+											type="number"
+											min={1}
+											step={1}
+											value={devBidAmount}
+											onChange={(e) => setDevBidAmount(e.target.value)}
+											placeholder="Bid sats (optional)"
+											className="h-8 border-white/10 bg-white/[0.06] text-sm text-white placeholder:text-white/25"
+										/>
+										<Button
+											variant="dark-active"
+											size="sm"
+											onClick={() => void handleDevBidSeededAuction()}
+											disabled={isDevBidding}
+											icon={isDevBidding ? <Loader2 className="size-3.5 animate-spin" /> : <Gavel className="size-3.5" />}
+										>
+											Bid seeded
+										</Button>
+									</div>
+									{lastDevMint && (
+										<p className="text-[11px] text-amber-100/70">
+											Last mint: {lastDevMint.amount.toLocaleString()} sats via {getMintHostname(lastDevMint.mintUrl)}
+										</p>
+									)}
+									{lastDevBid && (
+										<p className="break-words text-[11px] text-amber-100/70">
+											Last bid: {lastDevBid.bidAmount.toLocaleString()} sats on {lastDevBid.auctionTitle}
+										</p>
+									)}
+								</div>
+							</details>
+						)}
 					</div>
 				)}
 

@@ -136,29 +136,31 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
+			<DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0d0d11] p-5 text-white shadow-2xl sm:max-w-md">
+				<DialogHeader className="pr-8 text-left">
 					<DialogTitle className="flex items-center gap-2">
-						<QrCode className="w-5 h-5 text-blue-500" />
+						<span className="flex size-9 items-center justify-center rounded-xl bg-yellow-300 text-black">
+							<QrCode className="size-4" />
+						</span>
 						Receive eCash
 					</DialogTitle>
-					<DialogDescription>Scan or paste a Cashu token to receive eCash</DialogDescription>
+					<DialogDescription className="text-white/45">Scan or paste a Cashu token. It lands in your wallet instantly.</DialogDescription>
 				</DialogHeader>
 
 				{isSuccess ? (
 					<div className="py-6 text-center">
-						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-							<Check className="w-6 h-6 text-green-600" />
+						<div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-emerald-400/15">
+							<Check className="size-7 text-emerald-300" />
 						</div>
-						<p className="text-lg font-medium text-green-600">eCash Received!</p>
-						<p className="text-sm text-muted-foreground mt-2">The tokens have been added to your wallet</p>
-						<Button onClick={handleClose} className="mt-4">
+						<p className="text-lg font-semibold text-emerald-300">eCash Received!</p>
+						<p className="mt-2 text-sm text-white/45">Your balance is ready to use.</p>
+						<Button onClick={handleClose} className="mt-5 w-full rounded-xl bg-pink-500 text-black hover:bg-pink-400">
 							Done
 						</Button>
 					</div>
 				) : showScanner ? (
 					<div className="space-y-4">
-						<div className="relative w-full aspect-square overflow-hidden rounded-lg">
+						<div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/10">
 							<Scanner
 								onScan={handleScan}
 								onError={(err) => {
@@ -169,7 +171,11 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 							/>
 						</div>
 						<div className="flex justify-end">
-							<Button variant="outline" onClick={() => setShowScanner(false)}>
+							<Button
+								className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10"
+								variant="outline"
+								onClick={() => setShowScanner(false)}
+							>
 								Cancel
 							</Button>
 						</div>
@@ -177,30 +183,49 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 				) : (
 					<div className="space-y-4">
 						{cocoMode && (
-							<div className="rounded-md border border-amber-300/40 bg-amber-400/10 p-3 text-sm">
-								<p className="mb-2 text-amber-200">Fresh fake-funds wallet authority is required before any Coco mutation.</p>
-								<div className="flex flex-wrap gap-2">
-									<Button type="button" variant="outline" onClick={handlePreflight} disabled={isReceiving}>
-										Run fresh-wallet preflight
+							<details className="rounded-xl border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2.5 text-sm">
+								<summary className="cursor-pointer text-xs font-medium text-amber-200">Test wallet details</summary>
+								<p className="mt-2 text-xs leading-relaxed text-amber-100/60">
+									Fake funds are verified automatically before they enter this wallet.
+								</p>
+								<div className="mt-3 flex flex-wrap gap-2">
+									<Button
+										type="button"
+										className="border-amber-200/20 bg-transparent text-amber-100 hover:bg-amber-200/10"
+										variant="outline"
+										onClick={handlePreflight}
+										disabled={isReceiving}
+									>
+										Verify now
 									</Button>
 									{preflightReport && (
-										<Button type="button" variant="outline" onClick={downloadPreflightReport}>
-											Download public report
+										<Button
+											type="button"
+											className="border-amber-200/20 bg-transparent text-amber-100 hover:bg-amber-200/10"
+											variant="outline"
+											onClick={downloadPreflightReport}
+										>
+											Download report
 										</Button>
 									)}
 								</div>
-							</div>
+							</details>
 						)}
 						<div className="space-y-2">
-							<label className="text-sm font-medium">Cashu Token</label>
+							<label className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Cashu token</label>
 							<textarea
 								value={token}
 								onChange={(e) => setToken(e.target.value)}
 								placeholder="cashuA..."
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background font-mono resize-none h-24"
+								className="h-28 w-full resize-none rounded-xl border border-white/10 bg-white/[0.06] px-3 py-3 font-mono text-sm text-white outline-none placeholder:text-white/20 focus:border-pink-400/50"
 							/>
 							<div className="flex justify-end">
-								<Button variant="ghost" size="sm" onClick={() => setShowScanner(true)} className="gap-2">
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => setShowScanner(true)}
+									className="gap-2 text-white/55 hover:bg-white/10 hover:text-white"
+								>
 									<ScanLine className="w-4 h-4" />
 									Scan QR
 								</Button>
@@ -208,19 +233,23 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 						</div>
 
 						{!cocoMode && cashuStatus === 'initializing' && (
-							<p className="text-sm text-muted-foreground flex items-center gap-2">
+							<p className="flex items-center gap-2 text-sm text-white/45">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
 							</p>
 						)}
 
-						{error && <p className="text-sm text-destructive">{error}</p>}
+						{error && <p className="rounded-lg bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
 
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
+						<div className="grid grid-cols-2 gap-2">
+							<Button className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10" variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleReceive} disabled={isReceiving || !token.trim() || (!cocoMode && cashuStatus === 'initializing')}>
+							<Button
+								className="rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400"
+								onClick={handleReceive}
+								disabled={isReceiving || !token.trim() || (!cocoMode && cashuStatus === 'initializing')}
+							>
 								{isReceiving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Receive
 							</Button>

@@ -385,25 +385,27 @@ export function DepositLightningModal({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
+			<DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0d0d11] p-5 text-white shadow-2xl sm:max-w-md">
+				<DialogHeader className="pr-8 text-left">
 					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-yellow-500" />
+						<span className="flex size-9 items-center justify-center rounded-xl bg-emerald-400 text-black">
+							<Zap className="size-4" />
+						</span>
 						{isBidQuickView ? 'Bid with lightning' : 'Deposit Lightning'}
 					</DialogTitle>
-					<DialogDescription>
+					<DialogDescription className="text-white/45">
 						{isBidQuickView ? 'Pay this invoice to lock your bid.' : 'Generate a Lightning invoice to mint eCash'}
 					</DialogDescription>
 				</DialogHeader>
 
 				{depositStatus === 'success' ? (
 					<div className="py-6 text-center">
-						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-							<Check className="w-6 h-6 text-green-600" />
+						<div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-emerald-400/15">
+							<Check className="size-7 text-emerald-300" />
 						</div>
-						<p className="text-lg font-medium text-green-600">Deposit Successful!</p>
-						<p className="text-sm text-muted-foreground mt-2">Your eCash has been minted</p>
-						<Button onClick={handleClose} className="mt-4">
+						<p className="text-lg font-semibold text-emerald-300">Deposit Successful!</p>
+						<p className="mt-2 text-sm text-white/45">Your eCash is ready to use.</p>
+						<Button onClick={handleClose} className="mt-5 w-full rounded-xl bg-pink-500 text-black hover:bg-pink-400">
 							Done
 						</Button>
 					</div>
@@ -435,7 +437,7 @@ export function DepositLightningModal({
 										type="text"
 										value={depositInvoice}
 										readOnly
-										className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono truncate"
+										className="flex-1 truncate rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 font-mono text-sm text-white"
 									/>
 									<Button variant="outline" size="icon" onClick={handleCopyInvoice} title="Copy invoice">
 										{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -505,7 +507,7 @@ export function DepositLightningModal({
 							</div>
 						</div>
 						{savedNwcWallets.length > 0 && (
-							<div className="space-y-2 rounded-md border p-3">
+							<div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-3">
 								<label className="text-sm font-medium" htmlFor="deposit-nwc-wallet">
 									Pay with connected wallet
 								</label>
@@ -514,7 +516,7 @@ export function DepositLightningModal({
 									value={selectedNwcWalletId}
 									onChange={(e) => setSelectedNwcWalletId(e.target.value)}
 									disabled={isPayingWithNwc || nwcPaymentAttempted}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full rounded-xl border border-white/10 bg-[#19191f] px-3 py-2 text-sm text-white"
 								>
 									{savedNwcWallets.map((wallet) => (
 										<option key={wallet.id} value={wallet.id}>
@@ -566,7 +568,7 @@ export function DepositLightningModal({
 								value={amount}
 								onChange={(e) => setAmount(e.target.value)}
 								placeholder="Enter amount in sats"
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-3 text-lg font-semibold text-white outline-none placeholder:text-white/20 focus:border-pink-400/50"
 								min="1"
 							/>
 						</div>
@@ -577,7 +579,7 @@ export function DepositLightningModal({
 								<select
 									value={selectedMint}
 									onChange={(e) => setSelectedMint(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full rounded-xl border border-white/10 bg-[#19191f] px-3 py-2.5 text-sm text-white"
 								>
 									{filteredMints.map((mint) => (
 										<option key={mint} value={mint}>
@@ -596,11 +598,15 @@ export function DepositLightningModal({
 							<p className="text-sm text-destructive">{depositError || 'Failed to generate invoice. Please try again.'}</p>
 						)}
 
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
+						<div className="grid grid-cols-2 gap-2">
+							<Button className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10" variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleGenerateInvoice} disabled={isGenerating || !amount || !selectedMint || !hasAllowedMints}>
+							<Button
+								className="rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400"
+								onClick={handleGenerateInvoice}
+								disabled={isGenerating || !amount || !selectedMint || !hasAllowedMints}
+							>
 								{isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Generate Invoice
 							</Button>

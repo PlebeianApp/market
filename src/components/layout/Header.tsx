@@ -159,7 +159,11 @@ function WalletButton() {
 				</TooltipButton>
 			</PopoverTrigger>
 
-			<PopoverContent className="bg-primary rounded-lg w-[calc(100vw-2rem)] md:w-96" align="end">
+			<PopoverContent
+				className="w-[calc(100vw-1rem)] max-w-[25rem] overflow-hidden rounded-[1.5rem] border-0 bg-transparent p-0 shadow-2xl"
+				align="end"
+				sideOffset={10}
+			>
 				<Nip60Wallet />
 			</PopoverContent>
 		</Popover>
