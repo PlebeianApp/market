@@ -166,12 +166,29 @@ here: the exact claim, whether confirmation is required for completion or only r
 the expiry/replay rules. Note the zero-leg rule from the schedule packet: a zero-fee validator
 has a logical leg but no proofs, and is excluded from redemption-completion requirements.
 
-## 8. Redemption isolation and fallback — OPEN
+## 8. Redemption isolation and fallback — FIRST HALF IMPLEMENTED
 
 Gates H/I/J. One payee failing (offline, mint down, lost key) must not strand the others.
-Open: whether each leg is redeemable independently by construction (expected, given per-leg
-child keys), what the seller/validator does when one leg is never redeemed, and how this
-interacts with D7 grief.
+
+**Isolation holds by construction, and is now checked rather than assumed.**
+`src/lib/auction/multipartyRedemptionIsolation.ts` verifies, per row: `derive(payout_xpub, path)`
+reproduces the row's `child_pubkey` (so the row is this payee's and not another's); every proof in the
+row's token is P2PK-locked to that key (a proof locked to a foreign key is refused as
+`redemption_row_foreign_proof` — the isolation violation); every proof is reclaimable under the **leg's**
+refund authority, so a payee that cannot redeem now can still reclaim after the locktime; the amounts sum
+to the manifest's row amount; and the token is from the leg's mint. Each refusal has its own code.
+
+**What is NOT decided here, deliberately: the fallback.** What the seller does with a leg that is never
+redeemed — settle, hold, or classify the missing rows as grief under D7 — remains open, and no client
+policy should assume an answer.
+
+**The rule that constrains any answer:** _spent is never completion on its own._ A spent proof is
+ambiguous between the payee redeeming and the bidder reclaiming after the locktime. The assessment
+therefore reports `unspent` / `spent` / `unknown` per row and requires the payee's **confirmation** for
+`complete`; a fully spent but unconfirmed leg is `spent_awaiting_confirmation`, which is not terminal. A
+row with no proofs (the zero-fee logical leg) is excluded from the completion requirement, and a leg with
+nothing to redeem reports `nothing_to_redeem` rather than an empty success. The transport (§5) and the
+confirmation claim (§7) still need rulings before the second half of this section can be written.
 
 ## 9. Validator verification of the split
 

@@ -114,6 +114,54 @@ as it is in a single-file run.
 
 ---
 
+## Stage I — redemption isolation
+
+**Status:** the isolation half implemented, unwired; the fallback half deliberately not decided.
+
+### What changed
+
+- `multipartyRedemptionIsolation.ts` — per-row redeemability (`verifyMultipartyRowRedemption`) and the
+  leg-level observation (`assessMultipartyLegRedemption`) with one sentence per state.
+- `docs/protocol/auction-multiparty-settlement-v1.md` §8 — was `OPEN`; now records what is implemented,
+  what is deliberately left to a ruling, and the one rule that constrains any answer.
+
+### Decisions taken
+
+1. **Isolation is a property, so it is checked rather than assumed.** The settlement packet expected
+   per-leg redeemability "given per-leg child keys" — true, but the assumption is worth a refusal: a row's
+   token holding a proof locked to a **foreign** key is refused (`redemption_row_foreign_proof`), which is
+   the isolation violation itself.
+2. **The row must be _this_ payee's before anything else is checked.** `derive(payout_xpub, path)` must
+   reproduce the row's child key; otherwise the row belongs to another payee and every later check would
+   be answering the wrong question.
+3. **A proof must be reclaimable under the leg's refund authority, not just locked to the row's key.**
+   Both live in the same NUT-11 secret. Without this check a payee could hold a row it can redeem _now_
+   but could not reclaim after the locktime — the fallback nobody would notice until it was needed.
+4. **Spent is never completion on its own.** A spent proof is ambiguous between the payee redeeming and
+   the bidder reclaiming after the locktime, and `bidValidation.ts` already carries that ambiguity for the
+   single-party case. So `complete` requires the payee's confirmation, and a fully spent but unconfirmed
+   leg reports `spent_awaiting_confirmation`, explicitly not terminal.
+5. **A zero-fee logical row is excluded from completion, and a leg with nothing to redeem says so.**
+   The schedule packet's zero-leg rule is implemented as `proofBearing: false` being ignored by the
+   completion requirement, and `nothing_to_redeem` rather than an empty success.
+6. **The fallback is left open on purpose.** What the seller does with a never-redeemed leg (settle, hold,
+   or treat the rows as D7 grief) is a ruling, and the module says nothing about it — a client policy here
+   would be an assumption the protocol has not made.
+
+### Evidence
+
+- 15 focused tests in `multipartyRedemptionIsolation.test.ts`; suite numbers in the commit and the PR
+  body. The two to read first: the foreign-proof refusal, and `spent_awaiting_confirmation` staying
+  non-terminal.
+
+### Left open
+
+- **The fallback policy** (§8's second half), pending the transport (§5) and confirmation (§7) rulings.
+- **Whether a validator attests redemption at all**, which is §9's business and interacts with this
+  assessment: the observation above is a _client_ view of mint state, not a verdict.
+
+---
+
 ## Stage H — the multiparty path release
 
 **Status:** implemented as an unwired wire packet (builder + reader + binding check). Nothing publishes
