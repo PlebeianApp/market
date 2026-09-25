@@ -12,14 +12,14 @@ export type BidClassification = 'valid' | 'pending' | 'invalid'
  * act on differently from ordinary quorum-pending (ADR-0011 review A2,
  * PR #1280 discussion_r3999446834).
  *
- * `dlequ_evidence_unavailable` means the bid is quorum-confirmed and
+ * `dleq_evidence_unavailable` means the bid is quorum-confirmed and
  * structurally valid, but the keyset evidence needed to crypto-verify its
  * collateral could not be gathered (mint unreachable). That is a RETRY signal,
  * never a terminal verdict: such a bid is absent from `canonicalWinner`, so
  * consumers that ask "did anything meet the reserve?" must consult this field
  * or they will read "unavailable evidence" as "no such bid".
  */
-export type BidPendingReason = 'dlequ_evidence_unavailable'
+export type BidPendingReason = 'dleq_evidence_unavailable'
 
 export interface ClassifiedBid {
 	bid: ParsedBidEvent
@@ -267,7 +267,7 @@ function classifyBid(
 const collateralClaimKeys = (bid: ParsedBidEvent): string[] => [
 	...bid.lockSecrets.map((secret) => `lock_secret:${secret.toLowerCase()}`),
 	...bid.proofYs.map((proofY) => `proof_y:${proofY.toLowerCase()}`),
-	...(bid.dleqProofs ?? []).flatMap((proof) => (proof.C ? [`dlequ_c:${proof.C.toLowerCase()}`] : [])),
+	...(bid.dleqProofs ?? []).flatMap((proof) => (proof.C ? [`dleq_c:${proof.C.toLowerCase()}`] : [])),
 ]
 
 const MAX_COLLATERAL_CHAIN_LENGTH = 256
@@ -559,7 +559,7 @@ export function computeValidatedBids(input: ComputeValidatedBidsInput): Validate
 			})
 			if (collateral.status === 'pending') {
 				c.classification = 'pending'
-				c.pendingReason = 'dlequ_evidence_unavailable'
+				c.pendingReason = 'dleq_evidence_unavailable'
 				finalPending.push(c.bid)
 				continue
 			}

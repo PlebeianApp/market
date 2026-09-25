@@ -160,7 +160,7 @@ describe('reserve_not_met guard — unresolved DLEQ evidence blocks a terminal p
 		// it is absent from the winner because its DLEQ evidence is unresolved.
 		const classified = result.classified.find((c) => c.bid.id === bid.id)
 		expect(classified?.classification).toBe('pending')
-		expect(classified?.pendingReason).toBe('dlequ_evidence_unavailable')
+		expect(classified?.pendingReason).toBe('dleq_evidence_unavailable')
 		expect(result.canonicalWinner).toBeNull()
 
 		expect(evaluateReserveNotMetGuard(result, auction.reserve)).toEqual({
@@ -182,7 +182,7 @@ describe('reserve_not_met guard — unresolved DLEQ evidence blocks a terminal p
 			// fetch failed — that is temporary infrastructure state.
 			dleqKeysets: new Map<string, MintKeys>(),
 		})
-		expect(result.classified.find((c) => c.bid.id === bid.id)?.pendingReason).toBe('dlequ_evidence_unavailable')
+		expect(result.classified.find((c) => c.bid.id === bid.id)?.pendingReason).toBe('dleq_evidence_unavailable')
 		expect(evaluateReserveNotMetGuard(result, auction.reserve).kind).toBe('evidence-unavailable')
 	})
 
@@ -256,7 +256,7 @@ describe('reserve_not_met guard — unresolved DLEQ evidence blocks a terminal p
 /**
  * `resolveReserveNotMetPublish` — the seller-override decision (ADR-0011 review
  * R3, review 2026-09-18 N3). Pure: given the guard decision and whether the
- * caller set `dlequEvidenceOverride`, it either throws or yields the publish
+ * caller set `dleqEvidenceOverride`, it either throws or yields the publish
  * reason. The `blocked` case is never overridable.
  */
 describe('resolveReserveNotMetPublish (seller override)', () => {
@@ -274,7 +274,7 @@ describe('resolveReserveNotMetPublish (seller override)', () => {
 		const decision = resolveReserveNotMetPublish({ kind: 'evidence-unavailable', bidIds: ['b1', 'b2'], maxPendingAmount: 50000 }, true)
 		expect(decision.action).toBe('publish')
 		if (decision.action !== 'publish') throw new Error('unreachable')
-		expect(decision.overrideReason).toBe('dlequ_evidence_unavailable:b1,b2')
+		expect(decision.overrideReason).toBe('dleq_evidence_unavailable:b1,b2')
 	})
 
 	test('clear → publish with no override reason', () => {

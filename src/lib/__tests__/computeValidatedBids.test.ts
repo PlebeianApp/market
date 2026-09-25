@@ -774,7 +774,7 @@ describe('computeValidatedBids — rebid collateral-chain authority', () => {
 
 		expect(result.validBids.map((bid) => bid.id)).not.toContain(child.id)
 		expect(result.pendingBids.map((bid) => bid.id)).toContain(child.id)
-		expect(result.classified.find((entry) => entry.bid.id === child.id)?.pendingReason).toBe('dlequ_evidence_unavailable')
+		expect(result.classified.find((entry) => entry.bid.id === child.id)?.pendingReason).toBe('dleq_evidence_unavailable')
 		expect(result.canonicalWinner).toBeNull()
 	})
 
