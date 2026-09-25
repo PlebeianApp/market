@@ -16,7 +16,8 @@
 		"start:production": "NODE_ENV=production bun src/index.tsx",
 		"start:staging": "NODE_ENV=production bun src/index.tsx",
 		"build": "bun run generate-routes && bun run build.ts",
-		"build:production": "NODE_ENV=production bun run generate-routes && bun run build.ts --minify --source-map=none",
+		"build:production": "NODE_ENV=production bun run generate-routes && bun run build.ts --minify --no-sourcemap && bun run audit:coco-production-profile",
+		"audit:coco-production-profile": "bun run scripts/audit-coco-production-profile.ts",
 		"deploy:staging": "bash scripts/deploy-staging.sh",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
@@ -24,6 +25,7 @@
 		"startup": "bun run scripts/startup.ts",
 		"build-icons": "bun run scripts/build-icons.ts",
 		"test:e2e": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
+		"test:e2e:coco-auctionsdev-smoke": "bun e2e/run-coco-auctionsdev-smoke.ts",
 		"test:e2e:self-hosted": "E2E_SELF_HOSTED_INSTANCE=true NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts",
 		"test:e2e:headed": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --headed",
 		"test:e2e:ui": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e/playwright.config.ts --ui",
@@ -33,10 +35,13 @@
 		"test:unit": "bun test --isolate $(find contextvm src -type f -name '*.test.ts' ! -name '*.integration.test.ts' ! -path 'src/ws.test.ts' ! -path 'src/lib/tests/newProduct.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch --isolate $(find contextvm src -type f -name '*.test.ts' ! -name '*.integration.test.ts' ! -path 'src/ws.test.ts' ! -path 'src/lib/tests/newProduct.test.ts' | sort)",
 		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)",
+		"preflight:auctionsdev:fresh-wallet": "bun run scripts/check-auctionsdev-fresh-wallet-preflight.ts",
 		"prepare": "ln -sf ../../scripts/git-hooks/pre-commit .git/hooks/pre-commit 2>/dev/null; chmod +x scripts/git-hooks/pre-commit 2>/dev/null; true"
 	},
 	"dependencies": {
-		"@cashu/cashu-ts": "^2.1",
+		"@cashu/coco-core": "file:vendor/coco-60b7b070393eaad8746cb74a03c42017186da647/cashu-coco-core-2.0.0.tgz",
+		"@cashu/coco-indexeddb": "file:vendor/coco-60b7b070393eaad8746cb74a03c42017186da647/cashu-coco-indexeddb-2.0.0.tgz",
+		"@cashu/cashu-ts": "5.0.0-rc.4",
 		"@contextvm/sdk": "^0.11.10",
 		"@formkit/auto-animate": "^0.9.0",
 		"@getalby/lightning-tools": "^8.1.1",
@@ -66,8 +71,6 @@
 		"bun-plugin-tailwind": "^0.1.2",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
-		"coco-cashu-core": "^1.0.0-rc11",
-		"coco-cashu-indexeddb": "^1.0.0-rc11",
 		"date-fns": "^4.1.0",
 		"embla-carousel-react": "^8.6.0",
 		"light-bolt11-decoder": "^3.2.0",
@@ -99,6 +102,7 @@
 		"@types/react-dom": "^19.2.3",
 		"@types/ws": "^8.18.1",
 		"bun": "1.4.2",
+		"fake-indexeddb": "^6.2.5",
 		"mini-svg-data-uri": "^1.4.4",
 		"playwright": "^1.60.0",
 		"prettier": "^3.8.3",
@@ -106,5 +110,8 @@
 		"tailwindcss": "^4.3.0",
 		"tailwindcss-animate": "^1.0.7",
 		"ws": "^8.20.1"
+	},
+	"patchedDependencies": {
+		"@nostr-dev-kit/wallet@1.0.0": "patches/@nostr-dev-kit%2Fwallet@1.0.0.patch"
 	}
 }

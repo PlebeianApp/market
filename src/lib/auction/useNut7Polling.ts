@@ -20,7 +20,14 @@ export async function fetchBidNut7States(
 	const byMint = new Map<string, { bidId: string; proofYs: string[] }[]>()
 
 	for (const bid of bids) {
-		if (!bid.proofYs.length || !allowedMints.has(normalizeMintUrl(bid.mint))) continue
+		// Some Coco UI projections deliberately omit the legacy proofYs array.
+		// Runtime-check the boundary instead of trusting the legacy ParsedBidEvent
+		// shape. Auction validation remains strict; this only prevents an optional
+		// observer from dereferencing an absent projection field.
+		if (!Array.isArray(bid.proofYs) || bid.proofYs.length === 0 || !bid.proofYs.every((proofY) => typeof proofY === 'string')) {
+			continue
+		}
+		if (!allowedMints.has(normalizeMintUrl(bid.mint))) continue
 		const existing = byMint.get(bid.mint) ?? []
 		existing.push({ bidId: bid.id, proofYs: bid.proofYs })
 		byMint.set(bid.mint, existing)

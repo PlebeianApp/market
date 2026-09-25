@@ -161,21 +161,26 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
+			<DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0d0d11] p-5 text-white shadow-2xl sm:max-w-md">
+				<DialogHeader className="pr-8 text-left">
 					<DialogTitle className="flex items-center gap-2">
-						<Send className="w-5 h-5 text-purple-500" />
+						<span className="flex size-9 items-center justify-center rounded-xl bg-pink-500 text-black">
+							<Send className="size-4" />
+						</span>
 						Send eCash
 					</DialogTitle>
-					<DialogDescription>Generate a Cashu token to send eCash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
+					<DialogDescription className="text-white/45">Create a private, single-use Cashu token to share.</DialogDescription>
 				</DialogHeader>
 
 				{view === 'token' && generatedToken ? (
 					<div className="space-y-4">
+						<div className="rounded-xl border border-emerald-300/10 bg-emerald-300/[0.05] px-3 py-2 text-center text-xs text-emerald-200">
+							Token ready · {amount} sats
+						</div>
 						{/* QR Code with Error Boundary — if rendering fails (overflow), show fallback */}
 						{!tokenTooLargeForQR ? (
 							<div className="flex justify-center">
-								<div className="p-4 bg-white rounded-lg">
+								<div className="w-full max-w-[304px] rounded-2xl bg-white p-3">
 									<QRErrorBoundary
 										fallback={
 											<div className="flex flex-col items-center gap-2 p-8 text-center">
@@ -186,12 +191,12 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 											</div>
 										}
 									>
-										<QRCodeSVG value={generatedToken} size={360} marginSize={4} level="L" />
+										<QRCodeSVG className="h-auto w-full" value={generatedToken} size={280} marginSize={4} level="L" />
 									</QRErrorBoundary>
 								</div>
 							</div>
 						) : (
-							<div className="flex flex-col items-center gap-2 p-6 text-center border rounded-lg bg-muted/50">
+							<div className="flex flex-col items-center gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center">
 								<AlertTriangle className="w-8 h-8 text-yellow-500" />
 								<p className="text-sm font-medium">Token too large for QR code</p>
 								<p className="text-xs text-muted-foreground">
@@ -201,54 +206,87 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 						)}
 
 						<div className="space-y-2">
-							<p className="text-sm font-medium">Cashu Token</p>
+							<p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Cashu token</p>
 							<div className="flex gap-2">
 								<textarea
 									value={generatedToken}
 									readOnly
-									className="flex-1 px-3 py-2 text-sm bg-muted rounded-md font-mono resize-none h-24"
+									className="h-24 flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 font-mono text-sm text-white"
 								/>
 							</div>
 							<div className="flex justify-end">
-								<Button variant="outline" size="sm" onClick={handleCopyToken} className="gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={handleCopyToken}
+									className="gap-2 border-white/10 bg-white/[0.06] text-white hover:bg-white/10"
+								>
 									{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
 									{copied ? 'Copied!' : 'Copy Token'}
 								</Button>
 							</div>
 						</div>
-						<p className="text-sm text-muted-foreground text-center">Share this token with the recipient. It can only be redeemed once.</p>
-						<p className="text-xs text-muted-foreground text-center">
+						<p className="text-center text-sm text-white/55">Share it with the recipient. It can only be redeemed once.</p>
+						<p className="text-center text-xs text-white/35">
 							Token saved to pending list. You can reclaim it if the recipient doesn't claim it.
 						</p>
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={() => setView('form')}>
+						<div className="grid grid-cols-2 gap-2">
+							<Button
+								className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10"
+								variant="outline"
+								onClick={() => setView('form')}
+							>
 								Send Another
 							</Button>
-							<Button onClick={handleClose}>Done</Button>
+							<Button className="rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400" onClick={handleClose}>
+								Done
+							</Button>
 						</div>
 					</div>
 				) : (
 					<div className="space-y-4">
-						<div className="space-y-2">
-							<label className="text-sm font-medium">Amount (sats)</label>
-							<input
-								type="number"
-								value={amount}
-								onChange={(e) => setAmount(e.target.value)}
-								placeholder="Enter amount in sats"
-								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-								min="1"
-								max={totalBalance}
-							/>
+						<div className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 text-center">
+							<label className="text-xs font-semibold uppercase tracking-[0.12em] text-white/40">Amount to send</label>
+							<div className="mt-3 flex items-baseline justify-center gap-2">
+								<input
+									type="number"
+									value={amount}
+									onChange={(e) => setAmount(e.target.value)}
+									placeholder="0"
+									aria-label="Amount in sats"
+									className="w-32 border-0 bg-transparent text-right text-4xl font-bold tracking-tight text-white outline-none placeholder:text-white/20"
+									min="1"
+									max={totalBalance}
+								/>
+								<span className="text-sm text-white/40">sats</span>
+							</div>
+							<p className="mt-1 text-xs text-white/35">Available: {totalBalance.toLocaleString()} sats</p>
+							<div className="mt-3 grid grid-cols-3 gap-2">
+								{[
+									{ label: '25%', value: Math.max(1, Math.floor(totalBalance * 0.25)) },
+									{ label: '50%', value: Math.max(1, Math.floor(totalBalance * 0.5)) },
+									{ label: 'Max', value: totalBalance },
+								].map((option) => (
+									<Button
+										key={option.label}
+										type="button"
+										className="h-8 rounded-lg bg-white/[0.07] text-xs text-white/70 hover:bg-white/15 hover:text-white"
+										onClick={() => setAmount(String(option.value))}
+										disabled={totalBalance === 0}
+									>
+										{option.label}
+									</Button>
+								))}
+							</div>
 						</div>
 
 						{mintsWithBalance.length > 0 && (
 							<div className="space-y-2">
-								<label className="text-sm font-medium">From Mint</label>
+								<label className="text-xs font-semibold uppercase tracking-[0.12em] text-white/40">Pay from</label>
 								<select
 									value={selectedMint}
 									onChange={(e) => setSelectedMint(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full rounded-xl border border-white/10 bg-[#19191f] px-3 py-2.5 text-sm text-white"
 								>
 									{mintsWithBalance.map((mint) => (
 										<option key={mint} value={mint}>
@@ -260,19 +298,23 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 						)}
 
 						{cashuStatus === 'initializing' && (
-							<p className="text-sm text-muted-foreground flex items-center gap-2">
+							<p className="flex items-center gap-2 text-sm text-white/45">
 								<Loader2 className="w-4 h-4 animate-spin" />
 								Initializing wallet...
 							</p>
 						)}
 
-						{error && <p className="text-sm text-destructive">{error}</p>}
+						{error && <p className="rounded-lg bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
 
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
+						<div className="grid grid-cols-2 gap-2">
+							<Button className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10" variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleGenerate} disabled={isGenerating || !amount || !selectedMint || cashuStatus === 'initializing'}>
+							<Button
+								className="rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400"
+								onClick={handleGenerate}
+								disabled={isGenerating || !amount || !selectedMint || cashuStatus === 'initializing'}
+							>
 								{isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Generate Token
 							</Button>

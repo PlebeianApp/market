@@ -9,7 +9,7 @@ import { nip60Actions } from '@/lib/stores/nip60'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { auctionKeys } from '@/queries/queryKeyFactory'
-import { usePublishAuctionSettlementMutation, type AuctionSettlementFormData } from '@/publish/auctions'
+import { publishBidderPathRelease, usePublishAuctionSettlementMutation, type AuctionSettlementFormData } from '@/publish/auctions'
 import {
 	getSettlementDescriptor,
 	type GetSettlementDescriptorInput,
@@ -30,6 +30,7 @@ import type {
 import { Clock, CheckCircle, Ban, Truck, Gavel, Trophy, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { AuctionClaimDialog } from './AuctionClaimDialog'
 import { useNavigate } from '@tanstack/react-router'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 
 function useNow(intervalMs = 30_000): number {
 	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
@@ -83,6 +84,7 @@ export function AuctionSettlement({
 	auctionCoordinates,
 	className,
 }: AuctionSettlementProps) {
+	const cocoMode = isCocoV2AuctionMode()
 	const { user } = useStore(authStore)
 	const currentUserPubkey = user?.pubkey
 	const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false)
@@ -124,10 +126,9 @@ export function AuctionSettlement({
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {
-			const result = await nip60Actions.settleAuctionAsWinner({
-				bidEventId: myTopBidEvent.id,
-				releaseReason: 'settlement',
-			})
+			const result = cocoMode
+				? await publishBidderPathRelease({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
+				: await nip60Actions.settleAuctionAsWinner({ bidEventId: myTopBidEvent.id, releaseReason: 'settlement' })
 			// Optimistic UI: append synthetic release so the descriptor transitions
 			// immediately to 'Path release published' (ADR-0004 Decision 4).
 			if (!optimisticReleaseRef.current) {
@@ -223,7 +224,7 @@ export function AuctionSettlement({
 			claimOrders,
 			currentUserPubkey: currentUserPubkey || undefined,
 			myTopBidEvent,
-			hasBidderRecord: !!myBidderRecord,
+			hasBidderRecord: cocoMode ? !!myTopBidEvent?.rawEvent.tags.some((tag) => tag[0] === 'coco_operation') : !!myBidderRecord,
 			hasPlacedBid,
 			now,
 		}),
@@ -240,6 +241,7 @@ export function AuctionSettlement({
 			currentUserPubkey,
 			myTopBidEvent,
 			myBidderRecord,
+			cocoMode,
 			hasPlacedBid,
 			now,
 		],

@@ -51,6 +51,8 @@ jobs:
           # `Script not found: /home/.../market-auctionsdev/contextvm/server.ts`.
           cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
+          cp -r patches deploy-package/
+          cp -r vendor deploy-package/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

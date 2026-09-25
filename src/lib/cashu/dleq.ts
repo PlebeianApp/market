@@ -22,7 +22,7 @@
  * polling many bids should not crash on a single bad proof.
  */
 
-import { CashuMint, hasValidDleq, type MintKeys, type Proof } from '@cashu/cashu-ts'
+import { Amount, Mint as CashuMint, hasValidDleq, type MintKeys, type Proof } from '@cashu/cashu-ts'
 import type { CashuCustomRequest } from './nut7'
 
 // ---------- Public types ----------------------------------------------------
@@ -142,9 +142,13 @@ export const buildDleqProofs = (proofs: Proof[]): DleqProof[] => {
 				`buildDleqProofs: locked proof at index ${index} lacks a NUT-12 DLEQ proof (or blinding factor r) — refusing to publish unverifiable collateral (ADR-0011)`,
 			)
 		}
+		const amount = Amount.from(proof.amount).toNumber()
+		if (!Number.isSafeInteger(amount) || amount <= 0) {
+			throw new Error(`buildDleqProofs: locked proof at index ${index} has an invalid amount`)
+		}
 		return {
 			id: proof.id,
-			amount: proof.amount,
+			amount,
 			C: proof.C,
 			e: dleq.e,
 			s: dleq.s,
@@ -185,7 +189,7 @@ export const verifyProofDleq = (proof: DleqProof & { secret: string }, keyset: M
 			},
 		}
 
-		return hasValidDleq(p, keyset)
+		return hasValidDleq(p, keyset, { require: true })
 	} catch {
 		// Any throw → false (fail-closed). `hasValidDleq` throws when
 		// `amount` has no corresponding key in `keyset.keys`, but any
@@ -307,7 +311,7 @@ export const verifyBidDleqWithKeysets = (bid: DleqKeysetVerifyInput, keysets: Ma
  *   or a keyset whose `unit` is not `sat`.
  */
 export const getMintKeyset = async (mintUrl: string, keysetId: string, opts?: GetMintKeysetOptions): Promise<MintKeys> => {
-	const mint = new CashuMint(mintUrl, opts?.customRequest as never)
+	const mint = new CashuMint(mintUrl, opts?.customRequest ? { customRequest: opts.customRequest as never } : undefined)
 	const timeoutMs = opts?.timeoutMs ?? DEFAULT_DLEQ_KEYSET_TIMEOUT_MS
 	// Bound the mint call (R3): a reachable-but-slow mint must not hang, and a
 	// timeout is TRANSIENT (evidence may arrive later), not terminal.

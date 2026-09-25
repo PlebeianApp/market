@@ -87,6 +87,7 @@ import { parseValidatorVerdictEvent } from '@/lib/schemas/auction/validatorEvent
 import type { ParsedValidatorVerdictEvent } from '@/lib/auction/events'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { AuctionSettlement } from '@/components/AuctionSettlement'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
@@ -347,6 +348,7 @@ export const Route = createFileRoute('/auctions/$auctionId')({
 })
 
 function AuctionDetailRoute() {
+	const cocoMode = isCocoV2AuctionMode()
 	const { auctionId } = Route.useParams()
 	const { showNSFWContent } = useStore(uiStore)
 	const { user: authUser } = useStore(authStore)
@@ -394,7 +396,7 @@ function AuctionDetailRoute() {
 	const trustedMints = useMemo(() => getAuctionMints(auction), [auction])
 	const pathIssuerPubkey = getAuctionPathIssuer(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
-	const p2pkXpub = getAuctionP2pkXpub(auction)
+	const p2pkXpub = cocoMode ? auction?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || '' : getAuctionP2pkXpub(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
@@ -677,18 +679,24 @@ function AuctionDetailRoute() {
 		if (!myTopBidEvent) return false
 		return pathReleases.some((pr) => pr.tags.find((t) => t[0] === 'e')?.[1] === myTopBidEvent.id)
 	}, [pathReleases, myTopBidEvent])
-	const canReleaseNow = validatedSet
-		? !!(
-				validatedSet.canonicalWinner?.bidderPubkey === activeUserPubkey &&
-				ended &&
-				!myAlreadyReleased &&
-				myTopBidEvent &&
-				findBidderRecord(myTopBidEvent.id)
-			)
-		: !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id))
+	const canReleaseNow =
+		!cocoMode &&
+		(validatedSet
+			? !!(
+					validatedSet.canonicalWinner?.bidderPubkey === activeUserPubkey &&
+					ended &&
+					!myAlreadyReleased &&
+					myTopBidEvent &&
+					findBidderRecord(myTopBidEvent.id)
+				)
+			: !!(isMyBidTop && ended && !myAlreadyReleased && myTopBidEvent && findBidderRecord(myTopBidEvent.id)))
 	const [isReleasing, setIsReleasing] = useState(false)
 
 	const handleReleasePath = async () => {
+		if (cocoMode) {
+			toast.error('Coco v2 settlement is unavailable until durable Receive IDs are supported.')
+			return
+		}
 		if (!myTopBidEvent) return
 		setIsReleasing(true)
 		try {

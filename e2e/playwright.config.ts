@@ -4,6 +4,17 @@ import { defineConfig, devices } from '@playwright/test'
 import { RELAY_URL, SELF_HOSTED_HANDLER_ID, TEST_APP_PRIVATE_KEY, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const COCO_V2_WEB_SERVER_ENV =
+	process.env.COCO_V2_E2E === '1'
+		? {
+				BUN_PUBLIC_AUCTION_MONETARY_MODE: process.env.BUN_PUBLIC_AUCTION_MONETARY_MODE ?? 'coco-v2',
+				BUN_PUBLIC_COCO_ENVIRONMENT_ID: process.env.BUN_PUBLIC_COCO_ENVIRONMENT_ID ?? 'test',
+				BUN_PUBLIC_COCO_MONETARY_MODE: process.env.BUN_PUBLIC_COCO_MONETARY_MODE ?? 'fake',
+				BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST: process.env.BUN_PUBLIC_COCO_FAKE_MINT_ALLOWLIST ?? 'http://localhost:3338',
+				BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES: process.env.BUN_PUBLIC_COCO_FAKE_MINT_IDENTITIES ?? '',
+				BUN_PUBLIC_MARKET_COMMIT_SHA: process.env.BUN_PUBLIC_MARKET_COMMIT_SHA ?? '',
+			}
+		: {}
 const selfHostedOnly = process.env.E2E_SELF_HOSTED_INSTANCE === 'true'
 
 export default defineConfig({
@@ -80,6 +91,7 @@ export default defineConfig({
 					stdout: 'pipe',
 					stderr: 'pipe',
 					env: {
+						...COCO_V2_WEB_SERVER_ENV,
 						NODE_ENV: 'test',
 						PORT: String(TEST_PORT),
 						APP_RELAY_URL: RELAY_URL,

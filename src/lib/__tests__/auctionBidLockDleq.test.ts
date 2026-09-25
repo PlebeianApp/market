@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
-import { CashuWallet } from '@cashu/cashu-ts'
+import { Wallet } from '@cashu/cashu-ts'
 
 // Track `swap` invocations + control the swap outputs so we can assert the
 // ADR-0011 Blocker 2 behaviour: the DLEQ security property lives on the
@@ -8,18 +8,18 @@ import { CashuWallet } from '@cashu/cashu-ts'
 // grandfathered auction) and then validate OUTPUT DLEQ.
 let swapCalls = 0
 let nextSwapResult: { send: unknown[]; keep: unknown[] } = { send: [], keep: [] }
-let originalLoadMint: typeof CashuWallet.prototype.loadMint | undefined
-let originalSwap: typeof CashuWallet.prototype.swap | undefined
+let originalLoadMint: typeof Wallet.prototype.loadMint | undefined
+let originalSend: typeof Wallet.prototype.send | undefined
 
 beforeEach(() => {
 	swapCalls = 0
 	nextSwapResult = { send: [], keep: [] }
-	originalLoadMint = CashuWallet.prototype.loadMint
-	originalSwap = CashuWallet.prototype.swap
+	originalLoadMint = Wallet.prototype.loadMint
+	originalSend = Wallet.prototype.send
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	;(CashuWallet.prototype as any).loadMint = async (): Promise<void> => {}
+	;(Wallet.prototype as any).loadMint = async (): Promise<void> => {}
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	;(CashuWallet.prototype as any).swap = async (
+	;(Wallet.prototype as any).send = async (
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		_amount: number,
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -33,10 +33,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-	if (originalLoadMint) CashuWallet.prototype.loadMint = originalLoadMint
-	if (originalSwap) CashuWallet.prototype.swap = originalSwap
+	if (originalLoadMint) Wallet.prototype.loadMint = originalLoadMint
+	if (originalSend) Wallet.prototype.send = originalSend
 	originalLoadMint = undefined
-	originalSwap = undefined
+	originalSend = undefined
 })
 
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'

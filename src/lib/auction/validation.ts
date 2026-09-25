@@ -50,7 +50,8 @@ import { hashToCurveHexFromString } from '../cashu/hashToCurve'
 import { parseAuctionLockSecret } from '../cashu/p2pkSecret'
 import type { DleqProof } from '../cashu/dleq'
 import { mintSupportsDleq, type MintDleqSupportOptions } from '../cashu/mintCapability'
-import { getDecodedToken, type MintKeyset, type Token, CashuMint } from '@cashu/cashu-ts'
+import { type MintKeyset, Mint as CashuMint } from '@cashu/cashu-ts'
+import { inspectCashuToken, type InspectedCashuToken } from '../cashu/tokenInspection'
 import { addAuctionSettlementProofAmount } from '../auctionSettlementP2pk'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../auctionP2pk'
 
@@ -122,7 +123,7 @@ export async function fetchMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	}
 	let keysets: MintKeyset[]
 	try {
-		const response = await CashuMint.getKeySets(mintUrl, requestWithTimeout)
+		const response = await new CashuMint(mintUrl).getKeySets(requestWithTimeout)
 		keysets = response.keysets
 	} catch (err) {
 		// Never silently swallow — operators must be able to distinguish a dead
@@ -767,9 +768,9 @@ export const validatePathRelease = (input: ValidatePathReleaseInput): ReleaseVal
 		return invalidRelease('cashu_token_missing', releaseTiming, 'kind-1025 is missing the cashu_token tag required for redemption')
 	}
 
-	let decodedToken: Token
+	let decodedToken: InspectedCashuToken
 	try {
-		decodedToken = getDecodedToken(release.cashuToken, input.mintKeysets)
+		decodedToken = inspectCashuToken(release.cashuToken)
 	} catch (err) {
 		return invalidRelease(
 			'cashu_token_decode_failed',

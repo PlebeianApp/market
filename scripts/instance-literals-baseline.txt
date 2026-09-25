@@ -10,6 +10,22 @@ src/lib/__tests__/server-bootstrap-persistence.test.ts|plebeian-market|1
 src/lib/appSettings.ts|Plebeian Market|1
 src/lib/appSettings.ts|plebeian-market|3
 src/lib/auctionHd.ts|plebeian.market|1
+# Frozen Coco protocol/storage identities: changing these values would orphan
+# existing browser databases, recovery records, or cryptographic commitments.
+src/lib/coco/auctions/cocoEngine.ts|plebeian.market|2
+src/lib/coco/auctions/commandRepository.ts|plebeian-market|1
+src/lib/coco/auctions/lifecycleRepository.ts|plebeian-market|1
+src/lib/coco/migration/__tests__/fixtures.ts|plebeian-market|1
+src/lib/coco/migration/__tests__/indexedDbContract.test.ts|plebeian-market|2
+src/lib/coco/migration/__tests__/productionAdapter.test.ts|plebeian-market|1
+src/lib/coco/migration/freshAuctionsdevBrowser.ts|plebeian-market|2
+src/lib/coco/migration/identity.ts|plebeian-market|1
+src/lib/coco/migration/indexedDbStore.ts|plebeian-market|1
+src/lib/coco/migration/legacyDisableSignal.ts|plebeian-market|1
+src/lib/coco/migration/productionAdapter.ts|plebeian-market|1
+src/lib/coco/recovery/__tests__/metadata.test.ts|plebeian-market|1
+src/lib/coco/recovery/indexedDbStore.ts|plebeian-market|1
+src/lib/coco/seedVault.ts|plebeian-market|1
 src/lib/constants.ts|plebeian.market|6
 src/lib/constants/testLabels.ts|Plebeian Market|1
 src/lib/constants/testLabels.ts|plebeian.market|1

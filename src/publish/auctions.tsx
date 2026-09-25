@@ -42,7 +42,7 @@ import {
 } from '@/lib/auction/constants'
 import { assertAuctionMintsSupportDleq } from '@/lib/auction/validation'
 import { preflightAuctionSettlementP2pkChain } from '@/lib/auctionSettlementP2pk'
-import { getEncodedToken, getDecodedToken, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { getEncodedToken, getDecodedToken, getTokenMetadata, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { getPublicKey } from '@noble/secp256k1'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import { getUser, publish as publishNostrEvent, sign as signNostrEvent } from '@/lib/nostr/io'
@@ -52,6 +52,26 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
+import {
+	assertLegacyAuctionMoneyAllowed,
+	deriveCocoAuctionCommandId,
+	deriveCocoAuctionBidCommandId,
+	fingerprintCocoAuctionValue,
+	getPlebeianWalletHost,
+	isCocoV2AuctionMode,
+	readCocoV2AuctionEnvironment,
+	type CocoAuctionBidIntent,
+	type CocoAuctionBidProjection,
+	type CocoBidPublicationAdapter,
+	type CocoSettlementPublicationAdapter,
+	type CocoWinnerReleasePublicationAdapter,
+	type SealedCocoBidPublicationMaterial,
+	type SealedCocoWinnerReleaseMaterial,
+	type CocoAuctionWinnerReceiveInput,
+	type CocoAuctionWinnerReleaseInput,
+} from '@/lib/coco/auctions'
+import { runBrowserLegacyMonetaryMutation } from '@/lib/coco/migration/runtimeGate'
+import { ensureBrowserFreshAuctionsdevPreflight } from '@/lib/coco/migration/freshAuctionsdevBrowser'
 
 export interface AuctionSpecEntry {
 	key: string
@@ -283,7 +303,22 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	// configured default. Phase 7 (reputation UI) will grow this into a
 	// multi-select.
 	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
-	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
+	const p2pkXpub = isCocoV2AuctionMode()
+		? await (async () => {
+				const seller = await getUser()
+				if (!seller?.pubkey) throw new Error('No active seller identity')
+				const environment = readCocoV2AuctionEnvironment()
+				if (environment.environmentId !== 'auctionsdev' && environment.environmentId !== 'test') {
+					throw new Error('Fresh Coco Auction authority is restricted to auctionsdev/test')
+				}
+				await ensureBrowserFreshAuctionsdevPreflight({ account: seller.pubkey, environment: environment.environmentId })
+				const authority = await getPlebeianWalletHost().auctions.ensureSellerAuctionAuthority({
+					accountPubkey: seller.pubkey,
+					environmentId: environment.environmentId,
+				})
+				return authority.publicP2pkAuthority
+			})()
+		: await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
 	const categoryTags: string[][] = []
@@ -450,6 +485,202 @@ const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: st
 	})[0]
 }
 
+const getEventTag = (event: NostrEventLike, name: string): string => event.tags.find((tag) => tag[0] === name)?.[1] ?? ''
+
+const resolveCocoBidCanonicalIntent = async (
+	formData: AuctionBidFormData,
+	expected?: CocoAuctionBidProjection,
+): Promise<CocoAuctionBidIntent> => {
+	if (!formData.auctionEventId || !formData.auctionCoordinates) throw new Error('Canonical Auction identity is required')
+	if (!formData.p2pkXpub || !formData.sellerPubkey) throw new Error('Canonical seller authority is required')
+	if (!Number.isSafeInteger(formData.amount) || formData.amount < AUCTION_MIN_BID_SATS) {
+		throw new Error(`Bid amount must be an integer of at least ${AUCTION_MIN_BID_SATS} sats`)
+	}
+	const bidder = await getUser()
+	if (!bidder?.pubkey) throw new Error('No active bidder identity')
+	if (expected && expected.bidderPubkey !== bidder.pubkey) throw new Error('Active bidder identity changed after Coco PREPARE')
+
+	const environment = readCocoV2AuctionEnvironment()
+	const [{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements }, { parseAuctionEvent }, { parseBidEvent }] = await Promise.all([
+		import('@/queries/auctions'),
+		import('@/lib/schemas/auction/auctionEvent'),
+		import('@/lib/schemas/auction/bidEvent'),
+	])
+	const currentAuction = await fetchAuction(formData.auctionEventId, true)
+	if (!currentAuction) throw new Error('Canonical Auction is unavailable or failed signature validation')
+	const parsedAuctionResult = parseAuctionEvent(toRawEvent(currentAuction))
+	if (!parsedAuctionResult.ok) throw new Error('Canonical Auction is malformed')
+	const parsedAuction = parsedAuctionResult.value
+	const currentRoot = getAuctionTagValue(currentAuction, 'auction_root_event_id') || currentAuction.id
+	const currentD = getAuctionTagValue(currentAuction, 'd')
+	const currentCoordinate = currentD ? `30408:${currentAuction.pubkey}:${currentD}` : ''
+	if (
+		currentRoot !== formData.auctionEventId ||
+		currentCoordinate !== formData.auctionCoordinates ||
+		currentAuction.pubkey !== formData.sellerPubkey
+	) {
+		throw new Error('Canonical Auction identity changed after the bid was composed')
+	}
+	if (getAuctionTagValue(currentAuction, 'p2pk_xpub') !== formData.p2pkXpub) {
+		throw new Error('Canonical Auction seller authority changed')
+	}
+	if (parsedAuction.maxEndAt !== formData.auctionEffectiveEndAt) throw new Error('Canonical Auction bidding cutoff changed')
+	const locktime = parsedAuction.maxEndAt + parsedAuction.settlementGrace
+	if (locktime !== formData.auctionLocktimeAt + formData.settlementGraceSeconds) {
+		throw new Error('Canonical Auction refund locktime changed')
+	}
+	const now = Math.floor(Date.now() / 1000)
+	if (now < parsedAuction.startAt) throw new Error('Auction has not started yet')
+	if (now >= parsedAuction.maxEndAt) throw new Error('Auction already ended')
+
+	const selectedMint = formData.mintCandidates[0]
+	if (!selectedMint || !parsedAuction.mints.includes(selectedMint)) throw new Error('Selected mint is not trusted by the canonical Auction')
+	const terminalSettlements = await fetchAuctionSettlements(formData.auctionEventId, null, formData.auctionCoordinates, undefined, true)
+	if (terminalSettlements.length) throw new Error('Auction already has a terminal settlement event')
+
+	const signedBids = await fetchAuctionBids(formData.auctionEventId, null, formData.auctionCoordinates, true)
+	const ownCocoBids = signedBids
+		.filter((event) => event.pubkey === bidder.pubkey && !!getEventTag(event, 'coco_operation'))
+		.flatMap((event) => {
+			const parsed = parseBidEvent(toRawEvent(event))
+			return parsed.ok ? [{ event, amount: parsed.value.amount }] : []
+		})
+		.sort((left, right) => {
+			const amountDelta = right.amount - left.amount
+			if (amountDelta !== 0) return amountDelta
+			const timeDelta = (right.event.created_at || 0) - (left.event.created_at || 0)
+			return timeDelta !== 0 ? timeDelta : right.event.id.localeCompare(left.event.id)
+		})
+	const previous = ownCocoBids[0]
+	const previousBidEventId = previous?.event.id
+	const previousAmount = previous?.amount ?? 0
+	if (formData.amount <= previousAmount) throw new Error('Coco rebid must exceed the bidder’s prior Coco bid')
+	const legAmount = formData.amount - previousAmount
+	if (!Number.isSafeInteger(legAmount) || legAmount < AUCTION_MIN_BID_LEG_SATS) {
+		throw new Error(`Bid raise must be an integer of at least ${AUCTION_MIN_BID_LEG_SATS} sats`)
+	}
+
+	const identity = {
+		account: { accountPubkey: bidder.pubkey, environmentId: environment.environmentId },
+		auction: { rootEventId: formData.auctionEventId, coordinate: formData.auctionCoordinates },
+		bidderPubkey: bidder.pubkey,
+		sellerPubkey: formData.sellerPubkey,
+		sellerPublicAuthority: formData.p2pkXpub,
+		mintUrl: selectedMint,
+		unit: 'sat' as const,
+		grossAmount: formData.amount,
+		amount: legAmount,
+		locktime,
+		createdForEndAt: parsedAuction.maxEndAt,
+		...(previousBidEventId ? { previousBidEventId } : {}),
+	}
+	const intent: CocoAuctionBidIntent = { ...identity, commandId: deriveCocoAuctionBidCommandId(identity) }
+	if (expected) {
+		if (expected.commandId !== intent.commandId || expected.operationId !== intent.commandId) {
+			throw new Error('Current Auction state no longer matches the exact prepared Coco command')
+		}
+		if (
+			expected.grossAmount !== intent.grossAmount ||
+			expected.amount !== intent.amount ||
+			expected.mintUrl !== intent.mintUrl ||
+			expected.locktime !== intent.locktime ||
+			expected.sellerPublicAuthority !== intent.sellerPublicAuthority
+		) {
+			throw new Error('Current Auction monetary binding differs from Coco PREPARE')
+		}
+	}
+	return intent
+}
+
+class CocoAuctionBidPublisher implements CocoBidPublicationAdapter {
+	async prepare(
+		material: SealedCocoBidPublicationMaterial,
+		intent: CocoAuctionBidIntent,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }> {
+		const bidder = await getUser()
+		if (!bidder?.pubkey || bidder.pubkey !== intent.bidderPubkey) throw new Error('Active signer differs from the prepared Coco bidder')
+		const template: EventTemplate = {
+			kind: AUCTION_BID_KIND,
+			content: JSON.stringify({ type: 'auction_bid_v1', amount: intent.grossAmount, mint: material.mintUrl }),
+			tags: buildBidEventTags({
+				auctionRootEventId: intent.auction.rootEventId,
+				auctionCoordinate: intent.auction.coordinate,
+				sellerPubkey: intent.sellerPubkey,
+				amount: intent.grossAmount,
+				mint: material.mintUrl,
+				locktime: material.locktime,
+				refundPubkey: material.refundPublicAuthority,
+				childPubkey: material.recipientPublicAuthority,
+				lockSecrets: [...material.lockSecrets],
+				proofYs: [...material.proofYs],
+				dleqProofs: [...material.dleqProofs],
+				createdForEndAt: intent.createdForEndAt,
+				bidNonce: intent.commandId,
+				prevBidId: intent.previousBidEventId,
+				cocoOperationId: material.operationId,
+				cocoConditionFingerprint: material.conditionFingerprint,
+				cocoCommitmentFingerprint: material.commitmentFingerprint,
+			}),
+			created_at: publicationCreatedAt,
+		}
+		const unsigned: NostrEvent = { ...template, pubkey: bidder.pubkey, id: '', sig: '' }
+		unsigned.id = getEventHash(unsigned)
+		cacheAuctionBidEventForRepublish(unsigned)
+		const signed = await signNostrEvent(template)
+		if (signed.id !== unsigned.id || getEventHash(signed) !== unsigned.id || signed.pubkey !== bidder.pubkey) {
+			throw new Error('Refusing Coco bid publication because signing changed the frozen event identity')
+		}
+		cacheAuctionBidEventForRepublish(signed)
+		return { eventId: signed.id }
+	}
+
+	async publish(eventId: string): Promise<void> {
+		const cached = loadAuctionBidRepublishCache()[eventId]
+		if (!cached || cached.payload.kind !== AUCTION_BID_KIND || cached.payload.id !== eventId || getEventHash(cached.payload) !== eventId) {
+			throw new Error('Exact cached Coco kind-1023 is unavailable or failed integrity validation')
+		}
+		if (!cached.payload.sig) throw new Error('Exact cached Coco kind-1023 is not signed')
+		await publishRequired(cached.payload)
+		discardAuctionBidEventRepublishCacheEntry(eventId)
+	}
+}
+
+const cocoBidPublisher = new CocoAuctionBidPublisher()
+
+export const prepareCocoAuctionBid = async (formData: AuctionBidFormData): Promise<CocoAuctionBidProjection> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	return getPlebeianWalletHost().auctions.prepareBid(await resolveCocoBidCanonicalIntent(formData))
+}
+
+export const getCocoAuctionBid = async (commandId: string, bidderPubkey: string): Promise<CocoAuctionBidProjection | null> => {
+	if (!isCocoV2AuctionMode()) return null
+	const environment = readCocoV2AuctionEnvironment()
+	return getPlebeianWalletHost().auctions.getBidProjection({
+		commandId,
+		account: { accountPubkey: bidderPubkey, environmentId: environment.environmentId },
+	})
+}
+
+export const cancelPreparedCocoAuctionBid = async (projection: CocoAuctionBidProjection): Promise<void> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	await getPlebeianWalletHost().auctions.cancelPreparedBid({ commandId: projection.commandId, account: projection.account })
+}
+
+export const executePreparedCocoAuctionBid = async (formData: AuctionBidFormData, prepared: CocoAuctionBidProjection): Promise<string> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const intent = await resolveCocoBidCanonicalIntent(formData, prepared)
+	const published = await getPlebeianWalletHost().auctions.executeBid(
+		intent,
+		async (projection) => {
+			await resolveCocoBidCanonicalIntent(formData, projection)
+		},
+		cocoBidPublisher,
+	)
+	if (!published.publicationEventId) throw new Error('Coco host published no kind-1023 identity')
+	return published.publicationEventId
+}
+
 /**
  * Publish a bidder-held-path bid (kind 1023) — AUCTIONS.md §4.2.
  *
@@ -471,6 +702,11 @@ const resolveLatestActiveBidByBidder = (bids: NostrEventLike[], bidderPubkey: st
  * Returns the published bid event id.
  */
 export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<string> => {
+	if (isCocoV2AuctionMode()) {
+		const prepared = await prepareCocoAuctionBid(formData)
+		return executePreparedCocoAuctionBid(formData, prepared)
+	}
+	assertLegacyAuctionMoneyAllowed('publishAuctionBid')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
@@ -564,286 +800,295 @@ export const publishAuctionBid = async (formData: AuctionBidFormData): Promise<s
 	// not even timelock-reclaimable. `persistPreLockRecoveryRecord` uses
 	// CONFIRMED-WRITE semantics (strict save + read-back equality): if the
 	// record is not durably present, we must NOT proceed to the mint.
-	const preLockRecoveryRecordId = uuidv4()
-	const preLockRecoveryRecord: AuctionBidPreLockRecoveryRecord = {
-		id: preLockRecoveryRecordId,
-		createdAt: Date.now(),
-		auctionEventId: formData.auctionEventId,
-		auctionCoordinates: formData.auctionCoordinates,
-		sellerPubkey: formData.sellerPubkey,
-		p2pkXpub: formData.p2pkXpub,
-		derivationPath,
-		childPubkey,
-		refundPubkey,
-		refundPrivateKey,
-		// Best-effort pre-lock diagnostic: the authoritative mint is selected
-		// inside lockAuctionBidFunds and is recorded on the wallet's pending
-		// token + the bidder record once the lock returns.
-		mintUrl: mintCandidates[0] ?? '',
-		legLockAmount,
-		cumulativeAmount: formData.amount,
-		locktime,
-		prevBidEventId: prevLeg?.bidEventId ?? null,
-	}
-	try {
-		persistPreLockRecoveryRecord(preLockRecoveryRecord)
-	} catch (error) {
-		// Fail closed BEFORE any mint interaction: nothing was locked, nothing
-		// was mutated. The funding lifecycle's existing bare-error path handles
-		// this class and its full re-submit fallback is provably safe here.
-		throw new AuctionBidPreLockRecordWriteFailedError(refundPubkey, error)
-	}
-
-	// Step 5 — lock at the mint. Wrapped so the two post-lock realities are
-	// distinguishable to every layer above:
-	//   - AuctionBidLockMutationPossibleError (nip60, round-3 B1): a swap
-	//     request may already have been sent — rethrow as
-	//     AuctionBidLockOutcomeUncertainError carrying the pre-lock recovery
-	//     record id. The PRE-LOCK RECORD SURVIVES (it is the refund
-	//     authority for the uncertain leg).
-	//   - any RAW error (nip60's pre-try validation: amount / wallet /
-	//     balance / selection): provably nothing was mutated — remove the
-	//     pre-lock record and rethrow raw; a full re-submit stays
-	//     legitimate.
-	let lockResult: Awaited<ReturnType<typeof nip60Actions.lockAuctionBidFunds>>
-	try {
-		lockResult = await nip60Actions.lockAuctionBidFunds({
-			amount: legLockAmount,
-			preferredMints: mintCandidates,
-			locktime,
-			refundPubkey,
-			lockPubkey: childPubkey,
-			auctionEventId: formData.auctionEventId,
-			auctionCoordinates: formData.auctionCoordinates,
-			sellerPubkey: formData.sellerPubkey,
-			// Bidder-held-path scheme: no path issuer to record; supply the
-			// path/child here so the wallet's pending-token diagnostics can
-			// surface them for the bidder.
-			derivationPath,
-			childPubkey,
-		})
-	} catch (error) {
-		if (error instanceof AuctionBidLockMutationPossibleError) {
-			throw new AuctionBidLockOutcomeUncertainError({
-				recoveryRecordId: preLockRecoveryRecordId,
-				mintUrl: error.mintUrl,
-				legAmount: error.amount,
-				refundPubkey,
-				cause: error,
-				// #1235 round-3 fix 5: the reclaim promise is only honest when the
-				// wallet durably observed the proofs — thread the flag through.
-				pendingTokenPersisted: error.pendingTokenPersisted,
-			})
-		}
-		removePreLockRecoveryRecord(refundPubkey)
-		throw error
-	}
-
-	// #1235 follow-up (post-lock error model): from the moment the lock
-	// above succeeds, the leg's sats are locked at the mint and every step
-	// below can still fail. Two failure tiers with DIFFERENT recovery
-	// semantics, which the funding lifecycle must be able to distinguish:
-	//
-	//   1. Sign/broadcast failure AFTER the durable recovery record + the
-	//      rebroadcast cache were persisted (inner try below) →
-	//      AuctionBidPublishFailedError(bidEvent.id): the leg is safely
-	//      retryable by rebroadcasting the exact cached signed event.
-	//
-	//   2. ANY other post-lock failure (proof extraction, event
-	//      finalization, the STRICT recovery-record write, cache write)
-	//      → AuctionBidLockedButUnpublishedError(lockResult.tokenId):
-	//      funds are locked but there is no durably-recoverable publishable
-	//      kind-1023. Retrying MUST NOT fall back to the full pipeline —
-	//      that would re-derive a fresh path and RE-LOCK the delta
-	//      (double-lock). Recovery for this leg is RECLAIM-ONLY.
-	let finalizedBidEventId: string | null = null
-	try {
-		// Step 6 — extract lock_secret + proof_y directly from the locked
-		// proofs. We pull `proofs` off the lock result rather than
-		// decoding the encoded `token` because token decode fails on v2
-		// short keyset IDs without a mint keyset map — see
-		// AUCTIONS.md §5 history and `LockAuctionBidFundsResult.proofs`.
-		const proofs = lockResult.proofs
-		if (!proofs.length) throw new Error('Lock result contained no proofs')
-		const lockSecrets = proofs.map((proof: Proof) => proof.secret)
-		const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
-
-		// Stamp the bid at signing time, NOT at pre-flight. `now` above was
-		// captured before `lockAuctionBidFunds` (a Cashu mint swap); reusing it
-		// here would spend the bid's own `max_skew_sec` budget on the lock
-		// latency. A lock+sign round trip slower than the configured skew makes
-		// `created_at` stale relative to every validator's `observed_at`, so the
-		// verdicts the bid needs for quorum become ineligible and the funded bid
-		// can never be confirmed. Base filled `created_at` in at finalization
-		// (i.e. post-lock); the seam preserves whatever the template carries, so
-		// the timestamp must be taken here (review 2026-09-18, item 1).
-		const publishedAt = Math.floor(Date.now() / 1000)
-
-		// ADR-0011 Decision 1/8 — bids on DLEQ-REQUIRED auctions MUST publish
-		// `dleq_proof` tags (one per locked proof, parallel to lock_secret/
-		// proof_y). Build them from the locked proofs' DLEQ metadata;
-		// `buildDleqProofs` is fail-closed and throws if any locked proof
-		// lacks a DLEQ proof (or its blinding factor `r`). DLEQ is required
-		// for every bid, so this always runs.
-		const dleqProofs = buildDleqProofs(proofs)
-
-		// Step 7 — publish kind-1023. `amount` is the cumulative bid value
-		// (what the validator uses for the min-increment check); the lock
-		// itself is only the delta. `prev_bid` chains the leg to the
-		// previous one when this is a rebid.
-		const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
-		const bidTemplate: EventTemplate = {
-			kind: AUCTION_BID_KIND,
-			content: JSON.stringify({
-				type: 'auction_bid_v1',
-				amount: formData.amount,
-				mint: lockResult.mintUrl,
-			}),
-			tags: buildBidEventTags({
-				auctionRootEventId: formData.auctionEventId,
-				auctionCoordinate: formData.auctionCoordinates,
+	return runBrowserLegacyMonetaryMutation(
+		{
+			account: bidderPubkey,
+			environment: configStore.state.config.stage ?? 'development',
+			writerId: 'auction-bid-lock-publish',
+		},
+		async () => {
+			const preLockRecoveryRecordId = uuidv4()
+			const preLockRecoveryRecord: AuctionBidPreLockRecoveryRecord = {
+				id: preLockRecoveryRecordId,
+				createdAt: Date.now(),
+				auctionEventId: formData.auctionEventId,
+				auctionCoordinates: formData.auctionCoordinates,
 				sellerPubkey: formData.sellerPubkey,
-				amount: formData.amount,
-				mint: lockResult.mintUrl,
-				locktime,
-				refundPubkey,
+				p2pkXpub: formData.p2pkXpub,
+				derivationPath,
 				childPubkey,
-				lockSecrets,
-				proofYs,
-				dleqProofs,
-				createdForEndAt: formData.auctionEffectiveEndAt,
-				bidNonce,
-				prevBidId: prevLeg?.bidEventId,
-			}),
-			created_at: publishedAt,
-		}
-
-		// Step 7a — finalize the event fields WITHOUT signing. The NIP-01 event
-		// id covers `pubkey`/`created_at`/`kind`/`tags`/`content` and does NOT
-		// depend on the signature, so the id computed here is exactly the id the
-		// signed event keeps. Finalizing before the publish attempt lets us
-		// persist the durable recovery record and the retry cache ahead of any
-		// sign/broadcast failure (#1235 Blocking 1).
-		//
-		// Latent, fail-closed (review 2026-09-18): the frozen id is computed from
-		// the template via nostr-tools `getEventHash`, but signing goes through
-		// NDK (`signNostrEvent` → `NDKEvent.sign`), whose `toNostrEvent` runs
-		// `generateTags()` first and appends a `["client", …]` tag when
-		// `ndk.clientName`/`clientNip89` is set. If either were ever set on the
-		// singleton, the signed id would differ from this frozen id and the
-		// post-sign drift guard below would refuse every bid (fail-closed, never
-		// wrong). `clientName` is unset everywhere under `src/` today, so the ids
-		// match; derive the id from the signed event, or assert the client tag is
-		// absent, if that invariant is ever weakened.
-		const unsignedBidEvent: NostrEvent = {
-			...bidTemplate,
-			pubkey: bidderPubkey,
-			created_at: bidTemplate.created_at ?? publishedAt,
-			id: '',
-			sig: '',
-		}
-		unsignedBidEvent.id = getEventHash(unsignedBidEvent)
-		finalizedBidEventId = unsignedBidEvent.id
-
-		// Step 7b — durable recovery state BEFORE the publish attempt
-		// (#1235 Blocking 1, prescription 2). Until this record is written the
-		// refund private key exists only in a local variable; if signing or
-		// publishing threw first, the locked leg would not even be
-		// locktime-reclaimable (the refund branch requires the refund privkey).
-		// The record also carries the full locked proofs, so the leg is
-		// recoverable from the moment the lock exists — even when publish throws.
-		// #1235 follow-up: the write is STRICT (fail-closed) — a storage
-		// failure here must abort the publish rather than silently strand
-		// the locked leg with no recoverable refund key while the bid still
-		// broadcasts.
-		// NOTE: bidderRecords is plaintext localStorage; encrypt-at-rest is a
-		// named follow-up (review Should-fix 7) and is intentionally out of
-		// scope here.
-		upsertBidderRecord({
-			bidEventId: unsignedBidEvent.id,
-			auctionRootEventId: formData.auctionEventId,
-			auctionCoordinate: formData.auctionCoordinates,
-			sellerPubkey: formData.sellerPubkey,
-			p2pkXpub: formData.p2pkXpub,
-			derivationPath,
-			childPubkey,
-			refundPubkey,
-			refundPrivateKey,
-			mintUrl: lockResult.mintUrl,
-			amount: formData.amount, // cumulative bid value
-			legLockedAmount: lockResult.amount, // sats actually locked by this leg
-			prevBidEventId: prevLeg?.bidEventId ?? null,
-			locktime,
-			proofs,
-			lockSecrets,
-			proofYs,
-			createdAt: now,
-			status: 'live',
-		})
-		// #1235 round-3 B1 — the full bidder record (refund key + proofs +
-		// chain context) now durably supersedes the pre-lock recovery record;
-		// drop the latter. (Removal is best-effort — a stale leftover is
-		// harmless: it still points at the same refund authority.)
-		removePreLockRecoveryRecord(refundPubkey)
-		const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
-			kind: 'auction_bid',
-			auctionEventId: formData.auctionEventId,
-			auctionCoordinates: formData.auctionCoordinates,
-			bidEventId: unsignedBidEvent.id,
-			sellerPubkey: formData.sellerPubkey,
-			pathIssuerPubkey: '',
-			lockPubkey: lockResult.lockPubkey,
-			refundPubkey: lockResult.refundPubkey,
-			locktime: lockResult.locktime,
-			derivationPath: lockResult.derivationPath,
-			childPubkey: lockResult.childPubkey,
-			grantId: lockResult.grantId,
-		})
-		if (!updatedPendingToken) {
-			console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
-		}
-
-		// Step 7c — cache the event so a retry can rebroadcast it VERBATIM
-		// (#1235 Blocking 1, prescription 1). The cache entry is written before
-		// signing (so even a sign failure is retryable via re-signing the same
-		// event) and refreshed with the signature once signing completes.
-		cacheAuctionBidEventForRepublish(unsignedBidEvent)
-		try {
-			const signedBidEvent = await signNostrEvent(bidTemplate)
-			// #1235 round-3 B2 — same invariant as republishAuctionBid's
-			// post-sign guard: a signer whose identity drifted since
-			// `bidderPubkey` was captured would re-key the event and change its
-			// id. Refuse to broadcast a foreign event; the cached UNSIGNED event
-			// (serialized pre-sign, still keyed to the original id) is preserved.
-			if (signedBidEvent.id !== finalizedBidEventId || getEventHash(signedBidEvent) !== finalizedBidEventId) {
-				throw new Error(
-					`Refusing to publish auction bid: signing changed the event identity (expected ${finalizedBidEventId}, got ${signedBidEvent.id}). Nothing was published.`,
-				)
+				refundPubkey,
+				refundPrivateKey,
+				// Best-effort pre-lock diagnostic: the authoritative mint is selected
+				// inside lockAuctionBidFunds and is recorded on the wallet's pending
+				// token + the bidder record once the lock returns.
+				mintUrl: mintCandidates[0] ?? '',
+				legLockAmount,
+				cumulativeAmount: formData.amount,
+				locktime,
+				prevBidEventId: prevLeg?.bidEventId ?? null,
 			}
-			cacheAuctionBidEventForRepublish(signedBidEvent)
-			await publishRequired(signedBidEvent)
-		} catch (error) {
-			// The recovery record and the signed (or signable) event are already
-			// persisted — surface the event id so the funding lifecycle retries
-			// with a pure rebroadcast (republishAuctionBid) instead of re-running
-			// the lock pipeline (which would swap/lock funds a second time).
-			// #1235 round-3 B2: the FINALIZED id (captured pre-sign), never the
-			// possibly-drifted signed id — a drift must not poison the retry
-			// tracker with a foreign event id.
-			throw new AuctionBidPublishFailedError(finalizedBidEventId ?? unsignedBidEvent.id, error)
-		}
-		// Published — the rebroadcast cache entry is no longer needed.
-		discardAuctionBidEventRepublishCacheEntry(unsignedBidEvent.id)
+			try {
+				persistPreLockRecoveryRecord(preLockRecoveryRecord)
+			} catch (error) {
+				// Fail closed BEFORE any mint interaction: nothing was locked, nothing
+				// was mutated. The funding lifecycle's existing bare-error path handles
+				// this class and its full re-submit fallback is provably safe here.
+				throw new AuctionBidPreLockRecordWriteFailedError(refundPubkey, error)
+			}
 
-		return unsignedBidEvent.id
-	} catch (error) {
-		// Tier 1 — already correctly modeled by the inner try above.
-		if (error instanceof AuctionBidPublishFailedError) throw error
-		// Tier 2 — post-lock but NOT safely publishable: surface the distinct
-		// locked-but-unpublished error carrying the lock token id, so the
-		// funding lifecycle NEVER falls back to the full re-locking pipeline.
-		throw new AuctionBidLockedButUnpublishedError(lockResult.tokenId, error, finalizedBidEventId)
-	}
+			// Step 5 — lock at the mint. Wrapped so the two post-lock realities are
+			// distinguishable to every layer above:
+			//   - AuctionBidLockMutationPossibleError (nip60, round-3 B1): a swap
+			//     request may already have been sent — rethrow as
+			//     AuctionBidLockOutcomeUncertainError carrying the pre-lock recovery
+			//     record id. The PRE-LOCK RECORD SURVIVES (it is the refund
+			//     authority for the uncertain leg).
+			//   - any RAW error (nip60's pre-try validation: amount / wallet /
+			//     balance / selection): provably nothing was mutated — remove the
+			//     pre-lock record and rethrow raw; a full re-submit stays
+			//     legitimate.
+			let lockResult: Awaited<ReturnType<typeof nip60Actions.lockAuctionBidFunds>>
+			try {
+				lockResult = await nip60Actions.lockAuctionBidFunds({
+					amount: legLockAmount,
+					preferredMints: mintCandidates,
+					locktime,
+					refundPubkey,
+					lockPubkey: childPubkey,
+					auctionEventId: formData.auctionEventId,
+					auctionCoordinates: formData.auctionCoordinates,
+					sellerPubkey: formData.sellerPubkey,
+					// Bidder-held-path scheme: no path issuer to record; supply the
+					// path/child here so the wallet's pending-token diagnostics can
+					// surface them for the bidder.
+					derivationPath,
+					childPubkey,
+				})
+			} catch (error) {
+				if (error instanceof AuctionBidLockMutationPossibleError) {
+					throw new AuctionBidLockOutcomeUncertainError({
+						recoveryRecordId: preLockRecoveryRecordId,
+						mintUrl: error.mintUrl,
+						legAmount: error.amount,
+						refundPubkey,
+						cause: error,
+						// #1235 round-3 fix 5: the reclaim promise is only honest when the
+						// wallet durably observed the proofs — thread the flag through.
+						pendingTokenPersisted: error.pendingTokenPersisted,
+					})
+				}
+				removePreLockRecoveryRecord(refundPubkey)
+				throw error
+			}
+
+			// #1235 follow-up (post-lock error model): from the moment the lock
+			// above succeeds, the leg's sats are locked at the mint and every step
+			// below can still fail. Two failure tiers with DIFFERENT recovery
+			// semantics, which the funding lifecycle must be able to distinguish:
+			//
+			//   1. Sign/broadcast failure AFTER the durable recovery record + the
+			//      rebroadcast cache were persisted (inner try below) →
+			//      AuctionBidPublishFailedError(bidEvent.id): the leg is safely
+			//      retryable by rebroadcasting the exact cached signed event.
+			//
+			//   2. ANY other post-lock failure (proof extraction, event
+			//      finalization, the STRICT recovery-record write, cache write)
+			//      → AuctionBidLockedButUnpublishedError(lockResult.tokenId):
+			//      funds are locked but there is no durably-recoverable publishable
+			//      kind-1023. Retrying MUST NOT fall back to the full pipeline —
+			//      that would re-derive a fresh path and RE-LOCK the delta
+			//      (double-lock). Recovery for this leg is RECLAIM-ONLY.
+			let finalizedBidEventId: string | null = null
+			try {
+				// Step 6 — extract lock_secret + proof_y directly from the locked
+				// proofs. We pull `proofs` off the lock result rather than
+				// decoding the encoded `token` because token decode fails on v2
+				// short keyset IDs without a mint keyset map — see
+				// AUCTIONS.md §5 history and `LockAuctionBidFundsResult.proofs`.
+				const proofs = lockResult.proofs
+				if (!proofs.length) throw new Error('Lock result contained no proofs')
+				const lockSecrets = proofs.map((proof: Proof) => proof.secret)
+				const proofYs = proofs.map((proof: Proof) => hashToCurveHexFromString(proof.secret))
+
+				// Stamp the bid at signing time, NOT at pre-flight. `now` above was
+				// captured before `lockAuctionBidFunds` (a Cashu mint swap); reusing it
+				// here would spend the bid's own `max_skew_sec` budget on the lock
+				// latency. A lock+sign round trip slower than the configured skew makes
+				// `created_at` stale relative to every validator's `observed_at`, so the
+				// verdicts the bid needs for quorum become ineligible and the funded bid
+				// can never be confirmed. Base filled `created_at` in at finalization
+				// (i.e. post-lock); the seam preserves whatever the template carries, so
+				// the timestamp must be taken here (review 2026-09-18, item 1).
+				const publishedAt = Math.floor(Date.now() / 1000)
+
+				// ADR-0011 Decision 1/8 — bids on DLEQ-REQUIRED auctions MUST publish
+				// `dleq_proof` tags (one per locked proof, parallel to lock_secret/
+				// proof_y). Build them from the locked proofs' DLEQ metadata;
+				// `buildDleqProofs` is fail-closed and throws if any locked proof
+				// lacks a DLEQ proof (or its blinding factor `r`). DLEQ is required
+				// for every bid, so this always runs.
+				const dleqProofs = buildDleqProofs(proofs)
+
+				// Step 7 — publish kind-1023. `amount` is the cumulative bid value
+				// (what the validator uses for the min-increment check); the lock
+				// itself is only the delta. `prev_bid` chains the leg to the
+				// previous one when this is a rebid.
+				const bidNonce = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`).toString()
+				const bidTemplate: EventTemplate = {
+					kind: AUCTION_BID_KIND,
+					content: JSON.stringify({
+						type: 'auction_bid_v1',
+						amount: formData.amount,
+						mint: lockResult.mintUrl,
+					}),
+					tags: buildBidEventTags({
+						auctionRootEventId: formData.auctionEventId,
+						auctionCoordinate: formData.auctionCoordinates,
+						sellerPubkey: formData.sellerPubkey,
+						amount: formData.amount,
+						mint: lockResult.mintUrl,
+						locktime,
+						refundPubkey,
+						childPubkey,
+						lockSecrets,
+						proofYs,
+						dleqProofs,
+						createdForEndAt: formData.auctionEffectiveEndAt,
+						bidNonce,
+						prevBidId: prevLeg?.bidEventId,
+					}),
+					created_at: publishedAt,
+				}
+
+				// Step 7a — finalize the event fields WITHOUT signing. The NIP-01 event
+				// id covers `pubkey`/`created_at`/`kind`/`tags`/`content` and does NOT
+				// depend on the signature, so the id computed here is exactly the id the
+				// signed event keeps. Finalizing before the publish attempt lets us
+				// persist the durable recovery record and the retry cache ahead of any
+				// sign/broadcast failure (#1235 Blocking 1).
+				//
+				// Latent, fail-closed (review 2026-09-18): the frozen id is computed from
+				// the template via nostr-tools `getEventHash`, but signing goes through
+				// NDK (`signNostrEvent` → `NDKEvent.sign`), whose `toNostrEvent` runs
+				// `generateTags()` first and appends a `["client", …]` tag when
+				// `ndk.clientName`/`clientNip89` is set. If either were ever set on the
+				// singleton, the signed id would differ from this frozen id and the
+				// post-sign drift guard below would refuse every bid (fail-closed, never
+				// wrong). `clientName` is unset everywhere under `src/` today, so the ids
+				// match; derive the id from the signed event, or assert the client tag is
+				// absent, if that invariant is ever weakened.
+				const unsignedBidEvent: NostrEvent = {
+					...bidTemplate,
+					pubkey: bidderPubkey,
+					created_at: bidTemplate.created_at ?? publishedAt,
+					id: '',
+					sig: '',
+				}
+				unsignedBidEvent.id = getEventHash(unsignedBidEvent)
+				finalizedBidEventId = unsignedBidEvent.id
+
+				// Step 7b — durable recovery state BEFORE the publish attempt
+				// (#1235 Blocking 1, prescription 2). Until this record is written the
+				// refund private key exists only in a local variable; if signing or
+				// publishing threw first, the locked leg would not even be
+				// locktime-reclaimable (the refund branch requires the refund privkey).
+				// The record also carries the full locked proofs, so the leg is
+				// recoverable from the moment the lock exists — even when publish throws.
+				// #1235 follow-up: the write is STRICT (fail-closed) — a storage
+				// failure here must abort the publish rather than silently strand
+				// the locked leg with no recoverable refund key while the bid still
+				// broadcasts.
+				// NOTE: bidderRecords is plaintext localStorage; encrypt-at-rest is a
+				// named follow-up (review Should-fix 7) and is intentionally out of
+				// scope here.
+				upsertBidderRecord({
+					bidEventId: unsignedBidEvent.id,
+					auctionRootEventId: formData.auctionEventId,
+					auctionCoordinate: formData.auctionCoordinates,
+					sellerPubkey: formData.sellerPubkey,
+					p2pkXpub: formData.p2pkXpub,
+					derivationPath,
+					childPubkey,
+					refundPubkey,
+					refundPrivateKey,
+					mintUrl: lockResult.mintUrl,
+					amount: formData.amount, // cumulative bid value
+					legLockedAmount: lockResult.amount, // sats actually locked by this leg
+					prevBidEventId: prevLeg?.bidEventId ?? null,
+					locktime,
+					proofs,
+					lockSecrets,
+					proofYs,
+					createdAt: now,
+					status: 'live',
+				})
+				// #1235 round-3 B1 — the full bidder record (refund key + proofs +
+				// chain context) now durably supersedes the pre-lock recovery record;
+				// drop the latter. (Removal is best-effort — a stale leftover is
+				// harmless: it still points at the same refund authority.)
+				removePreLockRecoveryRecord(refundPubkey)
+				const updatedPendingToken = nip60Actions.updatePendingTokenContext(lockResult.tokenId, {
+					kind: 'auction_bid',
+					auctionEventId: formData.auctionEventId,
+					auctionCoordinates: formData.auctionCoordinates,
+					bidEventId: unsignedBidEvent.id,
+					sellerPubkey: formData.sellerPubkey,
+					pathIssuerPubkey: '',
+					lockPubkey: lockResult.lockPubkey,
+					refundPubkey: lockResult.refundPubkey,
+					locktime: lockResult.locktime,
+					derivationPath: lockResult.derivationPath,
+					childPubkey: lockResult.childPubkey,
+					grantId: lockResult.grantId,
+				})
+				if (!updatedPendingToken) {
+					console.warn('[auctions] Locked auction bid but could not attach bid event id to the local pending lock record before publishing')
+				}
+
+				// Step 7c — cache the event so a retry can rebroadcast it VERBATIM
+				// (#1235 Blocking 1, prescription 1). The cache entry is written before
+				// signing (so even a sign failure is retryable via re-signing the same
+				// event) and refreshed with the signature once signing completes.
+				cacheAuctionBidEventForRepublish(unsignedBidEvent)
+				try {
+					const signedBidEvent = await signNostrEvent(bidTemplate)
+					// #1235 round-3 B2 — same invariant as republishAuctionBid's
+					// post-sign guard: a signer whose identity drifted since
+					// `bidderPubkey` was captured would re-key the event and change its
+					// id. Refuse to broadcast a foreign event; the cached UNSIGNED event
+					// (serialized pre-sign, still keyed to the original id) is preserved.
+					if (signedBidEvent.id !== finalizedBidEventId || getEventHash(signedBidEvent) !== finalizedBidEventId) {
+						throw new Error(
+							`Refusing to publish auction bid: signing changed the event identity (expected ${finalizedBidEventId}, got ${signedBidEvent.id}). Nothing was published.`,
+						)
+					}
+					cacheAuctionBidEventForRepublish(signedBidEvent)
+					await publishRequired(signedBidEvent)
+				} catch (error) {
+					// The recovery record and the signed (or signable) event are already
+					// persisted — surface the event id so the funding lifecycle retries
+					// with a pure rebroadcast (republishAuctionBid) instead of re-running
+					// the lock pipeline (which would swap/lock funds a second time).
+					// #1235 round-3 B2: the FINALIZED id (captured pre-sign), never the
+					// possibly-drifted signed id — a drift must not poison the retry
+					// tracker with a foreign event id.
+					throw new AuctionBidPublishFailedError(finalizedBidEventId ?? unsignedBidEvent.id, error)
+				}
+				// Published — the rebroadcast cache entry is no longer needed.
+				discardAuctionBidEventRepublishCacheEntry(unsignedBidEvent.id)
+
+				return unsignedBidEvent.id
+			} catch (error) {
+				// Tier 1 — already correctly modeled by the inner try above.
+				if (error instanceof AuctionBidPublishFailedError) throw error
+				// Tier 2 — post-lock but NOT safely publishable: surface the distinct
+				// locked-but-unpublished error carrying the lock token id, so the
+				// funding lifecycle NEVER falls back to the full re-locking pipeline.
+				throw new AuctionBidLockedButUnpublishedError(lockResult.tokenId, error, finalizedBidEventId)
+			}
+		},
+	)
 }
 
 /**
@@ -1117,6 +1362,7 @@ const discardAuctionBidEventRepublishCacheEntry = (bidEventId: string): void => 
  *         (corrupted/tampered cache), or the rebroadcast fails
  */
 export const republishAuctionBid = async (bidEventId: string): Promise<string> => {
+	assertLegacyAuctionMoneyAllowed('republishAuctionBid')
 	if (!bidEventId) throw new Error('Cannot rebroadcast auction bid: bidEventId is empty')
 	const cached = loadAuctionBidRepublishCache()[bidEventId]
 	if (!cached) {
@@ -1183,6 +1429,369 @@ const bytesToLowerHex = (bytes: Uint8Array): string => {
 	return out
 }
 
+const AUCTION_COCO_LIFECYCLE_CACHE_KEY = 'auction_coco_lifecycle_events_v1'
+type CocoLifecycleEventCache = Record<string, { eventId: string; payload: NostrEvent; savedAt: number }>
+const cocoLifecycleMemoryCache: CocoLifecycleEventCache = {}
+
+const loadCocoLifecycleEventCache = (): CocoLifecycleEventCache => {
+	const persisted = loadUserData<CocoLifecycleEventCache>(AUCTION_COCO_LIFECYCLE_CACHE_KEY, {})
+	return { ...persisted, ...cocoLifecycleMemoryCache }
+}
+
+const cacheCocoLifecycleEvent = (event: NostrEvent): void => {
+	const cache = loadCocoLifecycleEventCache()
+	cache[event.id] = { eventId: event.id, payload: event, savedAt: Date.now() }
+	const entries = Object.entries(cache).sort(([, left], [, right]) => right.savedAt - left.savedAt)
+	const bounded = Object.fromEntries(entries.slice(0, 20)) as CocoLifecycleEventCache
+	for (const key of Object.keys(cocoLifecycleMemoryCache)) delete cocoLifecycleMemoryCache[key]
+	Object.assign(cocoLifecycleMemoryCache, bounded)
+	saveUserData(AUCTION_COCO_LIFECYCLE_CACHE_KEY, bounded)
+}
+
+const publishCachedCocoLifecycleEvent = async (eventId: string, kind: number): Promise<void> => {
+	const cached = loadCocoLifecycleEventCache()[eventId]
+	if (
+		!cached ||
+		cached.eventId !== eventId ||
+		cached.payload.kind !== kind ||
+		getEventHash(cached.payload) !== eventId ||
+		!cached.payload.sig
+	) {
+		throw new Error(`Exact cached Coco kind-${kind} is unavailable or failed integrity validation`)
+	}
+	await publishRequired(cached.payload)
+	const cache = loadCocoLifecycleEventCache()
+	delete cache[eventId]
+	delete cocoLifecycleMemoryCache[eventId]
+	saveUserData(AUCTION_COCO_LIFECYCLE_CACHE_KEY, cache)
+}
+
+const signAndCacheDeterministicEvent = async (template: EventTemplate, expectedPubkey: string): Promise<{ eventId: string }> => {
+	const unsigned: NostrEvent = { ...template, pubkey: expectedPubkey, id: '', sig: '' }
+	unsigned.id = getEventHash(unsigned)
+	const signed = await signNostrEvent(template)
+	if (signed.id !== unsigned.id || getEventHash(signed) !== unsigned.id || signed.pubkey !== expectedPubkey) {
+		throw new Error('Refusing Coco lifecycle publication because signing changed the frozen event identity')
+	}
+	cacheCocoLifecycleEvent(signed)
+	return { eventId: signed.id }
+}
+
+interface ResolvedCocoCanonicalWinner {
+	auction: import('@/lib/auction/events').ParsedAuctionEvent
+	auctionEvent: NostrEventLike
+	winner: import('@/lib/auction/events').ParsedBidEvent
+	winnerEvent: NostrEventLike
+}
+
+const resolveCocoCanonicalWinner = async (
+	auctionRootEventId: string,
+	auctionCoordinate: string,
+	expectedWinnerId?: string,
+): Promise<ResolvedCocoCanonicalWinner> => {
+	const [
+		{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdicts },
+		{ parseAuctionEvent },
+		{ parseBidEvent },
+		verdicts,
+		validation,
+	] = await Promise.all([
+		import('@/queries/auctions'),
+		import('@/lib/schemas/auction/auctionEvent'),
+		import('@/lib/schemas/auction/bidEvent'),
+		import('@/lib/schemas/auction/validatorEvents'),
+		import('@/lib/auction/bidValidation'),
+	])
+	const auctionEvent = await fetchAuction(auctionRootEventId, true)
+	if (!auctionEvent) throw new Error('Canonical Auction is unavailable or failed signature validation')
+	const parsedAuction = parseAuctionEvent(toRawEvent(auctionEvent))
+	if (!parsedAuction.ok) throw new Error('Canonical Auction is malformed')
+	if (parsedAuction.value.rootEventId !== auctionRootEventId || parsedAuction.value.coordinate !== auctionCoordinate) {
+		throw new Error('Canonical Auction identity changed')
+	}
+	const now = Math.floor(Date.now() / 1000)
+	if (now < parsedAuction.value.maxEndAt) throw new Error('Auction has not ended')
+	if (now >= parsedAuction.value.maxEndAt + parsedAuction.value.settlementGrace) throw new Error('Auction settlement window expired')
+	const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
+		fetchAuctionBids(auctionRootEventId, null, auctionCoordinate, true),
+		fetchAuctionVerdicts(auctionRootEventId, null, auctionCoordinate, parsedAuction.value.auditors),
+		fetchAuctionSettlements(auctionRootEventId, null, auctionCoordinate, undefined, true),
+	])
+	if (settlementEvents.length) throw new Error('Auction already has a terminal settlement')
+	const parsedBids = bidEvents
+		.map((event) => parseBidEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedBidEvent } => result.ok)
+		.map((result) => result.value)
+	const parsedVerdicts = verdictEvents
+		.map((event) => verdicts.parseValidatorVerdictEvent(toRawEvent(event)))
+		.filter((result): result is { ok: true; value: import('@/lib/auction/events').ParsedValidatorVerdictEvent } => result.ok)
+		.map((result) => result.value)
+	// ADR-0011 requires complete mint-keyset evidence before a bid may become
+	// authoritative. The Coco lifecycle revalidates at every durable boundary,
+	// so it must acquire the same bounded, auction-allowlisted DLEQ evidence as
+	// the legacy release and seller-settlement guards below. Omitting it leaves
+	// every honest post-rollout bid pending and makes winner release impossible.
+	const dleqAcquisition = await fetchDleqKeysetsForBidsDetailed(parsedBids, parsedAuction.value.mints)
+	const validated = validation.computeValidatedBids({
+		auction: parsedAuction.value,
+		bids: parsedBids,
+		verdicts: parsedVerdicts,
+		postSettlement: false,
+		dleqKeysets: dleqAcquisition.keysets,
+		dleqUnknownKeysets: dleqAcquisition.unknownKeysets,
+	})
+	if (!validated.canonicalWinner) throw new Error('Validator quorum has not established a canonical winner')
+	if (expectedWinnerId && validated.canonicalWinner.id !== expectedWinnerId) throw new Error('Canonical Auction winner changed')
+	const winnerEvent = bidEvents.find((event) => event.id === validated.canonicalWinner!.id)
+	if (!winnerEvent) throw new Error('Canonical winning bid event is unavailable')
+	return { auction: parsedAuction.value, auctionEvent, winner: validated.canonicalWinner, winnerEvent }
+}
+
+class CocoWinnerReleasePublisher implements CocoWinnerReleasePublicationAdapter {
+	async prepare(
+		material: SealedCocoWinnerReleaseMaterial,
+		input: CocoAuctionWinnerReleaseInput,
+		publicationCreatedAt: number,
+	): Promise<{ eventId: string }> {
+		const signer = await getUser()
+		if (!signer?.pubkey || signer.pubkey !== input.winningBidderPubkey) throw new Error('Active signer is not the canonical winner')
+		return signAndCacheDeterministicEvent(
+			{
+				kind: AUCTION_PATH_RELEASE_KIND,
+				content: '',
+				tags: buildPathReleaseTags({
+					bidEventId: input.winningBidEventId,
+					auctionCoordinate: input.auction.coordinate,
+					sellerPubkey: input.sellerPubkey,
+					derivationPath: material.derivationPath,
+					childPubkey: material.recipientPublicAuthority,
+					releaseReason: 'settlement',
+					cashuToken: material.encodedToken,
+					cocoOperationId: material.operationId,
+					cocoCommandId: input.commandId,
+					cocoTokenFingerprint: material.tokenFingerprint,
+				}),
+				created_at: publicationCreatedAt,
+			},
+			signer.pubkey,
+		)
+	}
+
+	publish(eventId: string): Promise<void> {
+		return publishCachedCocoLifecycleEvent(eventId, AUCTION_PATH_RELEASE_KIND)
+	}
+}
+
+class CocoSettlementPublisher implements CocoSettlementPublicationAdapter {
+	async prepare(input: CocoAuctionWinnerReceiveInput, publicationCreatedAt: number): Promise<{ eventId: string }> {
+		const signer = await getUser()
+		if (!signer?.pubkey || signer.pubkey !== input.sellerPubkey) throw new Error('Active signer is not the canonical Auction seller')
+		return signAndCacheDeterministicEvent(
+			{
+				kind: AUCTION_SETTLEMENT_KIND,
+				content: '',
+				tags: (await import('@/lib/auction/tagBuilders')).buildSettlementTags({
+					auctionRootEventId: input.auction.rootEventId,
+					auctionCoordinate: input.auction.coordinate,
+					status: 'settled',
+					closeAt: publicationCreatedAt,
+					finalAmount: input.amount,
+					winningBidId: input.winningBidEventId,
+					winnerPubkey: input.winningBidderPubkey,
+					pathReleaseEventId: input.pathReleaseEventId,
+					payouts: [{ bidEventId: input.winningBidEventId, amount: input.amount, status: 'redeemed' }],
+					cocoReceiveOperationId: input.commandId,
+					cocoCommandId: input.commandId,
+				}),
+				created_at: publicationCreatedAt,
+			},
+			signer.pubkey,
+		)
+	}
+
+	publish(eventId: string): Promise<void> {
+		return publishCachedCocoLifecycleEvent(eventId, AUCTION_SETTLEMENT_KIND)
+	}
+}
+
+const cocoWinnerReleasePublisher = new CocoWinnerReleasePublisher()
+const cocoSettlementPublisher = new CocoSettlementPublisher()
+
+export const publishCocoBidderPathRelease = async (bidEventId: string): Promise<PublishBidderPathReleaseResult> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active winner identity')
+	const { fetchAuctionBidsByBidder } = await import('@/queries/auctions')
+	const ownBids = await fetchAuctionBidsByBidder(signer.pubkey, null, true)
+	const bid = ownBids.find((event) => event.id === bidEventId)
+	if (!bid) throw new Error('Signed winning bid is unavailable for this account')
+	const auctionRootEventId = getEventTag(bid, 'e')
+	const auctionCoordinate = getEventTag(bid, 'a')
+	const canonical = await resolveCocoCanonicalWinner(auctionRootEventId, auctionCoordinate, bidEventId)
+	if (canonical.winner.bidderPubkey !== signer.pubkey) throw new Error('Active account is not the canonical winner')
+	if (canonical.winner.prevBidId) throw new Error('Coco rebid-chain settlement is not yet enabled; refusing partial winner release')
+	const sendOperationId = getEventTag(canonical.winnerEvent, 'coco_operation')
+	if (!sendOperationId) throw new Error('Canonical winning bid has no Coco Send binding')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: auctionRootEventId, coordinate: auctionCoordinate }
+	const identity = {
+		account,
+		auction,
+		winningBidEventId: bidEventId,
+		winningBidderPubkey: signer.pubkey,
+		sellerPubkey: canonical.auction.sellerPubkey,
+		sendOperationId,
+	}
+	const input: CocoAuctionWinnerReleaseInput = {
+		...identity,
+		commandId: deriveCocoAuctionCommandId('winner-release', identity),
+	}
+	const result = await getPlebeianWalletHost().auctions.releaseWinner(
+		input,
+		async () => {
+			const current = await resolveCocoCanonicalWinner(auctionRootEventId, auctionCoordinate, bidEventId)
+			if (getEventTag(current.winnerEvent, 'coco_operation') !== sendOperationId)
+				throw new Error('Canonical winner Coco Send binding changed')
+		},
+		cocoWinnerReleasePublisher,
+	)
+	return {
+		pathReleaseEventId: result.pathReleaseEventId,
+		derivationPath: '',
+		legsReleased: 1,
+		cumulativeBidAmount: canonical.winner.amount,
+	}
+}
+
+const proofAmountNumber = (amount: unknown): number =>
+	typeof amount === 'number' ? amount : Number((amount as { toString(): string }).toString())
+
+const resolveCocoWinnerReceive = async (
+	formData: AuctionSettlementFormData,
+): Promise<{
+	input: CocoAuctionWinnerReceiveInput
+	encodedToken: string
+}> => {
+	if (!formData.auctionCoordinates) throw new Error('Auction coordinate is required')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active seller identity')
+	const canonical = await resolveCocoCanonicalWinner(formData.auctionEventId, formData.auctionCoordinates, formData.winningBidEventId)
+	if (canonical.auction.sellerPubkey !== signer.pubkey) throw new Error('Only the canonical Auction seller can settle')
+	if (canonical.winner.prevBidId) throw new Error('Coco rebid-chain settlement is not yet enabled; refusing partial Receive')
+	const { fetchAuctionPathReleases } = await import('@/queries/auctions')
+	const { parsePathReleaseEvent } = await import('@/lib/schemas/auction/settlementEvents')
+	const releaseEvents = await fetchAuctionPathReleases(formData.auctionEventId, null, formData.auctionCoordinates, undefined, true)
+	const releaseEvent = releaseEvents.find((event) => getEventTag(event, 'e') === canonical.winner.id)
+	if (!releaseEvent) throw new Error('Canonical winner has no signed Coco path release')
+	const parsedRelease = parsePathReleaseEvent(toRawEvent(releaseEvent))
+	if (!parsedRelease.ok) throw new Error('Canonical Coco path release is malformed or has no locked token')
+	const release = parsedRelease.value
+	const encodedToken = release.cashuToken
+	if (!encodedToken) throw new Error('Canonical Coco path release is malformed or has no locked token')
+	if (release.bidderPubkey !== canonical.winner.bidderPubkey || release.sellerPubkey !== signer.pubkey) {
+		throw new Error('Coco path release signer binding is invalid')
+	}
+	const senderOperationId = getEventTag(canonical.winnerEvent, 'coco_operation')
+	const conditionFingerprint = getEventTag(canonical.winnerEvent, 'coco_condition')
+	if (!senderOperationId || !conditionFingerprint) throw new Error('Canonical winner lacks its exact Coco bindings')
+	if (getEventTag(releaseEvent, 'coco_operation') !== senderOperationId) throw new Error('Path release belongs to another Coco Send')
+	const derivedChild = deriveAuctionChildP2pkPubkeyFromXpub(canonical.auction.p2pkXpub, release.derivationPath)
+	if (
+		derivedChild.toLowerCase() !== canonical.winner.childPubkey.toLowerCase() ||
+		derivedChild.toLowerCase() !== release.childPubkey.toLowerCase()
+	) {
+		throw new Error('Path release does not derive the canonical winner child authority')
+	}
+	const token = getTokenMetadata(encodedToken)
+	if (token.mint !== canonical.winner.mint) throw new Error('Released token mint differs from the canonical winner')
+	if (token.unit !== 'sat') throw new Error('Released token unit differs from the canonical winner')
+	const amount = proofAmountNumber(token.amount)
+	if (amount !== canonical.winner.amount) throw new Error('Released token amount differs from the canonical winning bid')
+	const tokenSecrets = token.incompleteProofs.map((proof) => proof.secret).sort()
+	const bidSecrets = [...canonical.winner.lockSecrets].sort()
+	if (tokenSecrets.length !== bidSecrets.length || tokenSecrets.some((secret, index) => secret !== bidSecrets[index])) {
+		throw new Error('Released token secrets differ from the canonical bid commitments')
+	}
+	const tokenProofYs = token.incompleteProofs.map((proof) => hashToCurveHexFromString(proof.secret).toLowerCase()).sort()
+	const bidProofYs = [...canonical.winner.proofYs].map((value) => value.toLowerCase()).sort()
+	if (tokenProofYs.length !== bidProofYs.length || tokenProofYs.some((value, index) => value !== bidProofYs[index])) {
+		throw new Error('Released token proof commitments differ from the canonical bid')
+	}
+	const tokenFingerprint = fingerprintCocoAuctionValue({ operationId: senderOperationId, proofYs: tokenProofYs })
+	if (getEventTag(releaseEvent, 'coco_token') !== tokenFingerprint) throw new Error('Path release token fingerprint is invalid')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: formData.auctionEventId, coordinate: formData.auctionCoordinates }
+	const identity = {
+		account,
+		auction,
+		winningBidEventId: canonical.winner.id,
+		pathReleaseEventId: release.id,
+		senderOperationId,
+		mintUrl: canonical.winner.mint,
+		unit: 'sat' as const,
+		amount,
+		conditionFingerprint,
+		tokenFingerprint,
+	}
+	return {
+		encodedToken,
+		input: {
+			...identity,
+			commandId: deriveCocoAuctionCommandId('winner-receive', identity),
+			winningBidderPubkey: canonical.winner.bidderPubkey,
+			sellerPubkey: signer.pubkey,
+			derivationPath: release.derivationPath,
+			recipientPublicAuthority: release.childPubkey,
+		},
+	}
+}
+
+export const publishCocoAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	if (formData.status === 'reserve_not_met') throw new Error('Coco reserve-not-met closure is not enabled in this fake-funds candidate')
+	const resolved = await resolveCocoWinnerReceive(formData)
+	const result = await getPlebeianWalletHost().auctions.receiveWinner(
+		resolved.input,
+		resolved.encodedToken,
+		async () => {
+			const current = await resolveCocoWinnerReceive(formData)
+			if (current.input.commandId !== resolved.input.commandId || current.input.pathReleaseEventId !== resolved.input.pathReleaseEventId) {
+				throw new Error('Canonical winner Receive binding changed')
+			}
+		},
+		cocoSettlementPublisher,
+	)
+	return result.settlementEventId
+}
+
+export const refundCocoAuctionBid = async (bidEventId: string): Promise<void> => {
+	if (!isCocoV2AuctionMode()) throw new Error('Coco v2 Auction mode is not active')
+	const signer = await getUser()
+	if (!signer?.pubkey) throw new Error('No active bidder identity')
+	const { fetchAuctionBidsByBidder } = await import('@/queries/auctions')
+	const bids = await fetchAuctionBidsByBidder(signer.pubkey, null, true)
+	const bid = bids.find((event) => event.id === bidEventId)
+	if (!bid) throw new Error('Signed Coco bid is unavailable for this account')
+	const locktime = Number.parseInt(getEventTag(bid, 'locktime'), 10)
+	if (!Number.isSafeInteger(locktime) || Math.floor(Date.now() / 1000) < locktime)
+		throw new Error('Coco bid refund timelock has not elapsed')
+	const sendOperationId = getEventTag(bid, 'coco_operation')
+	if (!sendOperationId) throw new Error('Bid has no original Coco Send binding')
+	const account = { accountPubkey: signer.pubkey, environmentId: readCocoV2AuctionEnvironment().environmentId }
+	const auction = { rootEventId: getEventTag(bid, 'e'), coordinate: getEventTag(bid, 'a') }
+	const identity = { account, auction, bidEventId, bidderPubkey: signer.pubkey, sendOperationId, locktime }
+	await getPlebeianWalletHost().auctions.refundLosingBid(
+		{ ...identity, commandId: deriveCocoAuctionCommandId('loser-refund', identity) },
+		async () => {
+			const current = (await fetchAuctionBidsByBidder(signer.pubkey, null, true)).find((event) => event.id === bidEventId)
+			if (!current || getEventTag(current, 'coco_operation') !== sendOperationId || getEventTag(current, 'locktime') !== String(locktime)) {
+				throw new Error('Canonical Coco refund binding changed')
+			}
+			if (Math.floor(Date.now() / 1000) < locktime) throw new Error('Coco bid refund timelock has not elapsed')
+		},
+	)
+}
+
 // ============================================================================
 // Phase 5 — Bidder kind-1025 path release (AUCTIONS.md §4.3.1)
 // ============================================================================
@@ -1242,6 +1851,8 @@ export interface PublishBidderPathReleaseResult {
  * event, but the typical path returns early without re-emitting.
  */
 export const publishBidderPathRelease = async (input: PublishBidderPathReleaseInput): Promise<PublishBidderPathReleaseResult> => {
+	if (isCocoV2AuctionMode()) return publishCocoBidderPathRelease(input.bidEventId)
+	assertLegacyAuctionMoneyAllowed('publishBidderPathRelease')
 	if (!input.bidEventId) throw new Error('bidEventId is required')
 
 	// Walk the rebid chain. For a single-leg bid this returns one
@@ -1540,6 +2151,8 @@ export const useRepublishAuctionBidMutation = () => {
 // won, here's the path / I have a path, redeem".
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData): Promise<string> => {
+	if (isCocoV2AuctionMode()) return publishCocoAuctionSettlement(formData)
+	assertLegacyAuctionMoneyAllowed('publishAuctionSettlement')
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 
 	// Lazy imports to avoid pulling settlement-only deps into the bid
@@ -1651,7 +2264,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
 			fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(toRawEvent(b)))
@@ -1735,7 +2348,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
 		fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
@@ -1951,7 +2564,10 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		}
 		let decodedToken
 		try {
-			decodedToken = getDecodedToken(leg.cashuToken, mintKeysetsByMint.get(leg.mintUrl))
+			decodedToken = getDecodedToken(
+				leg.cashuToken,
+				(mintKeysetsByMint.get(leg.mintUrl) ?? []).map((keyset) => keyset.id),
+			)
 		} catch (err) {
 			throw new Error(
 				`M7: Failed to decode cashu token for leg ${leg.bid.id.slice(0, 8)}…: ${err instanceof Error ? err.message : String(err)}`,

@@ -113,23 +113,27 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
+			<DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0d0d11] p-5 text-white shadow-2xl sm:max-w-md">
+				<DialogHeader className="pr-8 text-left">
 					<DialogTitle className="flex items-center gap-2">
-						<Zap className="w-5 h-5 text-orange-500" />
+						<span className="flex size-9 items-center justify-center rounded-xl bg-white/10 text-white">
+							<Zap className="size-4" />
+						</span>
 						Withdraw to Lightning
 					</DialogTitle>
-					<DialogDescription>Pay a Lightning invoice using your eCash (Balance: {balance.toLocaleString()} sats)</DialogDescription>
+					<DialogDescription className="text-white/45">
+						Pay a Lightning invoice from your {balance.toLocaleString()} sat balance.
+					</DialogDescription>
 				</DialogHeader>
 
 				{isSuccess ? (
 					<div className="py-6 text-center">
-						<div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-							<Check className="w-6 h-6 text-green-600" />
+						<div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-emerald-400/15">
+							<Check className="size-7 text-emerald-300" />
 						</div>
-						<p className="text-lg font-medium text-green-600">Withdrawal Successful!</p>
-						<p className="text-sm text-muted-foreground mt-2">Your Lightning invoice has been paid</p>
-						<Button onClick={handleClose} className="mt-4">
+						<p className="text-lg font-semibold text-emerald-300">Withdrawal Successful!</p>
+						<p className="mt-2 text-sm text-white/45">Your Lightning invoice has been paid.</p>
+						<Button onClick={handleClose} className="mt-5 w-full rounded-xl bg-pink-500 text-black hover:bg-pink-400">
 							Done
 						</Button>
 					</div>
@@ -159,7 +163,7 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 								<select
 									value={selectedMint}
 									onChange={(e) => setSelectedMint(e.target.value)}
-									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+									className="w-full rounded-xl border border-white/10 bg-[#19191f] px-3 py-2.5 text-sm text-white"
 								>
 									{mintsWithBalance.map((mint) => (
 										<option key={mint} value={mint}>
@@ -177,7 +181,7 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 									value={invoice}
 									onChange={(e) => setInvoice(e.target.value)}
 									placeholder="lnbc..."
-									className="flex-1 px-3 py-2 text-sm border rounded-md bg-background font-mono resize-none h-24"
+									className="h-28 flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.06] px-3 py-3 font-mono text-sm text-white outline-none placeholder:text-white/20 focus:border-pink-400/50"
 								/>
 							</div>
 							<div className="flex justify-end">
@@ -195,13 +199,14 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 							</p>
 						)}
 
-						{error && <p className="text-sm text-destructive">{error}</p>}
+						{error && <p className="rounded-lg bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
 
-						<div className="flex justify-end gap-2">
-							<Button variant="outline" onClick={handleClose}>
+						<div className="grid grid-cols-2 gap-2">
+							<Button className="border-white/10 bg-white/[0.06] text-white hover:bg-white/10" variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
 							<Button
+								className="rounded-xl bg-pink-500 font-semibold text-black hover:bg-pink-400"
 								onClick={handleWithdraw}
 								disabled={isWithdrawing || !invoice.trim() || !selectedMint || cashuStatus === 'initializing'}
 							>

@@ -43,10 +43,13 @@ import {
 } from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import { formatSats } from '@/lib/wallet/display'
+import { isCocoV2AuctionMode } from '@/lib/coco/auctions'
+import { publishBidderPathRelease } from '@/publish/auctions'
 
 const SETTLEMENT_CLOSE_DELAY_MS = 1500
 
 export function AuctionWonModal() {
+	const cocoMode = isCocoV2AuctionMode()
 	const { queue } = useStore(auctionWonStore)
 	const { isAuthenticated, user } = useStore(authStore)
 	const location = useLocation()
@@ -163,10 +166,8 @@ export function AuctionWonModal() {
 				return
 			}
 
-			await nip60Actions.settleAuctionAsWinner({
-				bidEventId: active.bidEventId,
-				releaseReason: 'settlement',
-			})
+			if (cocoMode) await publishBidderPathRelease({ bidEventId: active.bidEventId, releaseReason: 'settlement' })
+			else await nip60Actions.settleAuctionAsWinner({ bidEventId: active.bidEventId, releaseReason: 'settlement' })
 			setIsClosingAfterSettlement(true)
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: auctionKeys.pathReleases(active.auctionRootEventId) }),
