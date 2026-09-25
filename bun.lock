@@ -6,8 +6,8 @@
       "name": "plebeian.market",
       "dependencies": {
         "@cashu/cashu-ts": "^2.1",
-        "@cashu/coco-core": "^1.0.1",
-        "@cashu/coco-indexeddb": "^1.0.1",
+        "@cashu/coco-core": "1.0.1",
+        "@cashu/coco-indexeddb": "1.0.1",
         "@contextvm/sdk": "^0.8.0",
         "@formkit/auto-animate": "^0.9.0",
         "@getalby/lightning-tools": "^8.1.1",
