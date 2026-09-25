@@ -3,6 +3,8 @@ import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { buildLiveActivityDTag } from '../../src/lib/nip53'
+import { TEST_CVM_PRIVATE_KEY } from '../test-config'
 
 test.use({ scenario: 'merchant' })
 
@@ -58,8 +60,12 @@ async function seedAuctionAndGetId() {
 
 async function seedLiveActivity(dTag: string) {
 	const relay = await Relay.connect(RELAY_URL)
-	const skBytes = hexToBytes(devUser1.sk)
+	// Authored by the configured ContextVM identity — the reader fails closed on
+	// any other author, so signing with the seller's key would make every
+	// "chat is visible" assertion below observe the "not available" fallback.
+	const skBytes = hexToBytes(TEST_CVM_PRIVATE_KEY)
 	const now = Math.floor(Date.now() / 1000)
+	const auctionCoord = `30408:${devUser1.pk}:${dTag}`
 
 	const liveEvent = finalizeEvent(
 		{
@@ -67,8 +73,10 @@ async function seedLiveActivity(dTag: string) {
 			created_at: now,
 			content: '',
 			tags: [
-				['d', dTag],
-				['a', `30408:${devUser1.pk}:${dTag}`],
+				// Derived digest, not the auction's bare `d` — see
+				// buildLiveActivityDTag.
+				['d', buildLiveActivityDTag(auctionCoord)],
+				['a', auctionCoord],
 				['title', 'Live Chat E2E Auction'],
 				['status', 'live'],
 				['client', 'plebeian.market'],

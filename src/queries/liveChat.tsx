@@ -30,10 +30,12 @@ export const fetchLiveActivity = async (event: NDKEvent): Promise<LiveActivity |
 	const coord = `${AUCTION_KIND}:${event.pubkey}:${dTag}`
 
 	// The kind-30311 live-activity event's canonical `d` tag is derived from the
-	// auction coordinate via buildLiveActivityDTag (currently
-	// `auction:<seller-prefix>:<auction-d>`), NOT the auction's bare `d`.
-	// Filtering on the bare `d` makes a conforming relay return zero events even
-	// when the live-activity event exists.
+	// auction coordinate via buildLiveActivityDTag (`auction:<12-hex digest>`),
+	// NOT the auction's bare `d` and not the retired
+	// `auction:<seller-prefix>:<auction-d>` form. The digest keeps the activity's
+	// own coordinate inside the relay tag-index budget, so the `a` value chat
+	// messages carry is actually indexable — filtering on the bare `d` makes a
+	// conforming relay return zero events even when the activity exists.
 	const expectedActivityD = buildLiveActivityDTag(coord)
 
 	// Fail closed: only accept live activity events from the expected CVM server.

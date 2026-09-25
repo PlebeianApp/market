@@ -51,7 +51,11 @@ function liveActivityEvent(
 		created_at: overrides.created_at ?? Math.floor(Date.now() / 1000) - 10,
 		content: '',
 		tags: overrides.tags ?? [
-			['d', overrides.dTag ?? `auction:${SELLER_PUBKEY.slice(0, 16)}:auction-1`],
+			// The canonical derived d tag (`auction:<12-hex digest>`) — what the
+			// CVM worker actually publishes. A fixture carrying the auction's
+			// bare d tag would be rejected by the reader, and the suite would
+			// pass for a reason unrelated to what it asserts.
+			['d', overrides.dTag ?? buildLiveActivityDTag(AUCTION_COORDINATE)],
 			['a', AUCTION_COORDINATE],
 			['status', 'live'],
 			['title', 'Test Auction'],
@@ -179,7 +183,7 @@ describe('liveChat queries', () => {
 
 		test('🔴 post-fetch validation: rejects candidate whose d tag belongs to a different auction', async () => {
 			verifyEventResult = () => true
-			relayEvents.add(liveActivityEvent({ dTag: `auction:${SELLER_PUBKEY.slice(0, 16)}:other-auction` }))
+			relayEvents.add(liveActivityEvent({ dTag: buildLiveActivityDTag(`30408:${SELLER_PUBKEY}:other-auction`) }))
 			const result = await fetchLiveActivity(auctionEvent())
 			expect(result).toBeNull()
 		})

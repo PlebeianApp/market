@@ -3,6 +3,8 @@ import { finalizeEvent } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { LIVE_ACTIVITY_KIND, buildLiveActivityDTag, isWithinRelayTagIndexBudget } from '../../src/lib/nip53'
+import { TEST_CVM_PRIVATE_KEY, TEST_CVM_PUBLIC_KEY } from '../test-config'
 
 test.use({ scenario: 'merchant' })
 
@@ -58,8 +60,16 @@ async function seedAuctionAndGetId() {
 
 async function seedLiveActivity(dTag: string) {
 	const relay = await Relay.connect(RELAY_URL)
-	const skBytes = hexToBytes(devUser1.sk)
+	// The activity is authored by the configured ContextVM identity, not by the
+	// seller: the reader fails closed on any other author. See
+	// TEST_CVM_PRIVATE_KEY.
+	const skBytes = hexToBytes(TEST_CVM_PRIVATE_KEY)
 	const now = Math.floor(Date.now() / 1000)
+	const auctionCoord = `30408:${devUser1.pk}:${dTag}`
+	// The activity's `d` is derived from the auction coordinate
+	// (`auction:<12-hex digest>`), and the activity's `a` tag carries the full
+	// auction coordinate back. Both stay inside the relay tag-index budget.
+	const activityDTag = buildLiveActivityDTag(auctionCoord)
 
 	const liveEvent = finalizeEvent(
 		{
@@ -67,8 +77,8 @@ async function seedLiveActivity(dTag: string) {
 			created_at: now,
 			content: '',
 			tags: [
-				['d', dTag],
-				['a', `30408:${devUser1.pk}:${dTag}`],
+				['d', activityDTag],
+				['a', auctionCoord],
 				['title', 'NIP-53 Protocol Test Auction'],
 				['status', 'live'],
 				['client', 'plebeian.market'],
@@ -151,5 +161,20 @@ test.describe('Auction Live Chat', () => {
 		expect(liveEvent.tags.some((t) => t[0] === 'title')).toBe(true)
 		expect(liveEvent.tags.some((t) => t[0] === 'status')).toBe(true)
 		expect(liveEvent.tags.some((t) => t[0] === 'client' && t[1] === 'plebeian.market')).toBe(true)
+
+		// Addressing contract: the activity's `d` is the digest derived from the
+		// auction coordinate, the `a` tag is that full coordinate (2-way
+		// reachability), and the activity's own coordinate — the value chat
+		// messages carry in their `a` tag — fits the relay tag-index budget. The
+		// retired format produced 123 characters here and was therefore
+		// unreachable through any `#a` lookup on our relays.
+		const auctionCoord = `30408:${devUser1.pk}:${dTag}`
+		const activityCoord = `${LIVE_ACTIVITY_KIND}:${TEST_CVM_PUBLIC_KEY}:${buildLiveActivityDTag(auctionCoord)}`
+
+		expect(liveEvent.pubkey).toBe(TEST_CVM_PUBLIC_KEY)
+		expect(liveEvent.tags.find((t) => t[0] === 'd')?.[1]).toBe(buildLiveActivityDTag(auctionCoord))
+		expect(liveEvent.tags.find((t) => t[0] === 'a')?.[1]).toBe(auctionCoord)
+		expect(isWithinRelayTagIndexBudget(activityCoord)).toBe(true)
+		expect(activityCoord.length).toBeLessThanOrEqual(100)
 	})
 })
