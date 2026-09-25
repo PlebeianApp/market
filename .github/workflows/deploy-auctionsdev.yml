@@ -394,6 +394,46 @@ jobs:
             printf 'CDK_MINTD_MNEMONIC=%q\n' "$FAKE_MINT_MNEMONIC"
           } > runtime.env
           test -s runtime.env
+          test "$(stat -c '%a' runtime.env)" = '600'
+
+          RUNTIME_TRANSPORT='runtime.env.transport.tar.gz'
+          tar --format=posix --owner=0 --group=0 --numeric-owner --mode='u=rw,go=' \
+            -czf "$RUNTIME_TRANSPORT" runtime.env
+          test -s "$RUNTIME_TRANSPORT"
+          test "$(tar -tzf "$RUNTIME_TRANSPORT" | wc -l)" = '1'
+          test "$(tar -tzf "$RUNTIME_TRANSPORT")" = 'runtime.env'
+          test "$(tar -tvzf "$RUNTIME_TRANSPORT" | awk 'NR == 1 { print $1 }')" = '-rw-------'
+          chmod 0644 "$RUNTIME_TRANSPORT"
+          test "$(stat -c '%a' "$RUNTIME_TRANSPORT")" = '644'
+          rm -f runtime.env
+          test ! -e runtime.env
+
+      - name: Clean authorized abandoned incoming directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            set -euo pipefail
+            STALE='/home/deployer/incoming/market-auctionsdev-34c568066631-36101312739-1'
+            case "$STALE" in
+              /home/deployer/incoming/market-auctionsdev-*) ;;
+              *) echo 'Refusing unsafe abandoned incoming path' >&2; exit 1 ;;
+            esac
+            test -d "$STALE"
+            test ! -L "$STALE"
+            test "$(readlink -f "$STALE")" = "$STALE"
+            ACTIVE_RELEASE="$(readlink -f /home/deployer/market-auctionsdev 2>/dev/null || true)"
+            test "$ACTIVE_RELEASE" != "$STALE"
+            PM2_STATE="$(pm2 jlist 2>/dev/null || true)"
+            if grep -Fq "$STALE" <<<"$PM2_STATE"; then
+              echo 'Abandoned incoming directory is referenced by PM2' >&2
+              exit 1
+            fi
+            test -z "$(find "$STALE" -mindepth 1 -maxdepth 1 -print -quit)"
+            rmdir "$STALE"
+            test ! -e "$STALE"
 
       - name: Prepare isolated incoming directory
         uses: appleboy/ssh-action@v1.0.3
@@ -414,9 +454,16 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
-          source: 'release.tar.gz,release.tar.gz.sha256,runtime.env'
+          source: 'release.tar.gz,release.tar.gz.sha256,runtime.env.transport.tar.gz'
           target: '/home/deployer/incoming/${{ needs.build.outputs.release_name }}'
           tar_tmp_path: '/home/deployer/incoming/${{ needs.build.outputs.release_name }}.upload.tar.gz'
+
+      - name: Remove runner secret transport
+        if: always()
+        run: |
+          rm -f runtime.env runtime.env.transport.tar.gz
+          test ! -e runtime.env
+          test ! -e runtime.env.transport.tar.gz
 
       - name: Server preflight and atomic activation
         uses: appleboy/ssh-action@v1.0.3
@@ -431,14 +478,59 @@ jobs:
             INCOMING="/home/deployer/incoming/$RELEASE_NAME"
             RELEASE_DIR="/home/deployer/releases/$RELEASE_NAME"
             CANDIDATE_DIR="/home/deployer/releases/.candidate-$RELEASE_NAME"
+            RUNTIME_TRANSPORT="$INCOMING/runtime.env.transport.tar.gz"
+            RUNTIME_EXTRACT_DIR="$INCOMING/.runtime-env-extract"
+
+            cleanup_runtime_transport() {
+              rm -f "$RUNTIME_TRANSPORT" 2>/dev/null || true
+              rm -f "$RUNTIME_EXTRACT_DIR/runtime.env" 2>/dev/null || true
+              rmdir "$RUNTIME_EXTRACT_DIR" 2>/dev/null || true
+            }
+            trap cleanup_runtime_transport EXIT
+
+            case "$INCOMING" in
+              /home/deployer/incoming/market-auctionsdev-*) ;;
+              *) echo 'Unsafe incoming release directory' >&2; exit 1 ;;
+            esac
+            test -d "$INCOMING"
+            test ! -L "$INCOMING"
+            test "$(readlink -f "$INCOMING")" = "$INCOMING"
 
             cd "$INCOMING"
             sha256sum --check release.tar.gz.sha256
+            test -f "$RUNTIME_TRANSPORT"
+            test ! -L "$RUNTIME_TRANSPORT"
+            test "$(tar -tzf "$RUNTIME_TRANSPORT" | wc -l)" = '1'
+            RUNTIME_MEMBER="$(tar -tzf "$RUNTIME_TRANSPORT")"
+            test "$RUNTIME_MEMBER" = 'runtime.env'
+            case "$RUNTIME_MEMBER" in
+              /* | *../* | ../* | */..) echo 'Unsafe runtime transport member' >&2; exit 1 ;;
+              runtime.env) ;;
+              *) echo 'Unexpected runtime transport member' >&2; exit 1 ;;
+            esac
+            RUNTIME_MEMBER_MODE="$(tar -tvzf "$RUNTIME_TRANSPORT" | awk 'NR == 1 { print $1 }')"
+            test "${RUNTIME_MEMBER_MODE:0:1}" = '-'
+            test "$RUNTIME_MEMBER_MODE" = '-rw-------'
+            test ! -e "$RUNTIME_EXTRACT_DIR"
+            install -d -m 0700 "$RUNTIME_EXTRACT_DIR"
+            tar --extract --gzip --file "$RUNTIME_TRANSPORT" --directory "$RUNTIME_EXTRACT_DIR" \
+              --no-same-owner --no-same-permissions
+            test -f "$RUNTIME_EXTRACT_DIR/runtime.env"
+            test ! -L "$RUNTIME_EXTRACT_DIR/runtime.env"
+            chmod 0600 "$RUNTIME_EXTRACT_DIR/runtime.env"
+            test "$(stat -c '%a' "$RUNTIME_EXTRACT_DIR/runtime.env")" = '600'
             test ! -e "$RELEASE_DIR"
             test ! -e "$CANDIDATE_DIR"
             mkdir "$CANDIDATE_DIR"
             tar -xzf release.tar.gz -C "$CANDIDATE_DIR"
-            install -m 0600 runtime.env "$CANDIDATE_DIR/.env.runtime"
+            install -m 0600 "$RUNTIME_EXTRACT_DIR/runtime.env" "$CANDIDATE_DIR/.env.runtime"
+            test -f "$CANDIDATE_DIR/.env.runtime"
+            test ! -L "$CANDIDATE_DIR/.env.runtime"
+            test "$(stat -c '%a' "$CANDIDATE_DIR/.env.runtime")" = '600'
+            cleanup_runtime_transport
+            trap - EXIT
+            test ! -e "$RUNTIME_TRANSPORT"
+            test ! -e "$RUNTIME_EXTRACT_DIR"
             mv "$CANDIDATE_DIR" "$RELEASE_DIR"
 
             bash "$RELEASE_DIR/deploy-simple/auctionsdev/activate-release.sh" "$RELEASE_DIR" '${{ needs.build.outputs.market_sha }}' '${{ needs.build.outputs.core_sha256 }}' '${{ needs.build.outputs.indexeddb_sha256 }}' '${{ needs.build.outputs.fresh_test_sha256 }}' '${{ needs.build.outputs.smoke_result_sha256 }}' '${{ needs.build.outputs.core_git_sha }}' '${{ needs.build.outputs.market_tree }}'
