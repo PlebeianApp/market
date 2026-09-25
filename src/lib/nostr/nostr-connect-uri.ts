@@ -128,18 +128,32 @@ export function isMatchingConnectSecret(params: unknown, tempSecret: string): bo
 }
 
 /**
- * Signer-approval gate for the `nostrconnect://` (QR) lane (#1290).
+ * Signer-approval gate for the `nostrconnect://` (QR) lane (#1290; review
+ * 5260467763 Required 2).
  *
- * A response may only bind the login when its AUTHOR is a signer that already
- * proved it holds the temp secret (`approvedSignerPubkeys`, populated when that
- * signer's `connect` echoed the secret) and the decrypted `result` is either
- * the secret echo or the approval `ack`.
+ * Two shapes may bind the login:
  *
- * Without this gate a bare `ack` from ANY relay peer that can encrypt to the
- * (public) client pubkey would start the login and bind the session to that
- * peer's bunker — the secret would never be checked. The gate is what makes
- * `secret` the authentication factor the spec says it is (nips/46.md:
- * "`secret` value MUST be provided to avoid connection spoofing").
+ * 1. **A secret echo** — the decrypted `result` equals the temp secret. The
+ *    secret IS the factor (nips/46.md: "`secret` value MUST be provided to
+ *    avoid connection spoofing"), only the signer that received the
+ *    `nostrconnect://` URI knows it, and the message author is therefore the
+ *    discovered remote-signer pubkey. This is the shape the spec prescribes
+ *    for the client-initiated flow: the signer "then sends `connect`
+ *    *response* event to the `client-pubkey` … client MUST validate the
+ *    `secret` returned by `connect` response" (nips/46.md:67). Such a response
+ *    carries no `method`, so it can never reach the component's
+ *    `method === 'connect'` branch that populates the approved set; requiring
+ *    membership here dropped the spec-conformant signer and left the lane to
+ *    the 5-minute timeout.
+ * 2. **A bare `ack`** — only from a signer that already echoed the temp secret
+ *    in a signer-initiated `connect` (`approvedSignerPubkeys`). Unchanged: a
+ *    peer that cannot produce the secret can never bind the session to its own
+ *    bunker endpoint with `{"result":"ack"}`.
+ *
+ * Fail closed: an absent expected secret admits nothing, and any other
+ * `result` (including a non-string) is rejected. The secret-echo path is not a
+ * weaker check than the `ack` path — it requires the exact secret rather than
+ * prior proof of it.
  */
 export function isApprovedNostrConnectResponse(
 	result: unknown,
@@ -147,5 +161,7 @@ export function isApprovedNostrConnectResponse(
 	signerPubkey: string,
 	approvedSignerPubkeys: ReadonlySet<string>,
 ): boolean {
-	return approvedSignerPubkeys.has(signerPubkey) && (result === tempSecret || result === 'ack')
+	if (!tempSecret) return false
+	if (result === tempSecret) return true
+	return approvedSignerPubkeys.has(signerPubkey) && result === 'ack'
 }

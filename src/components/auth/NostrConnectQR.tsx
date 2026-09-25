@@ -229,10 +229,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			const processedRequestIds = new Set<string>()
 			const processedResponseIds = new Set<string>()
-			// #1290 signer-approval gate: only a signer that echoed the temp secret
-			// in its `connect` may later bind the session (see
+			// #1290 signer-approval gate: a signer that echoed the temp secret in
+			// its `connect` is admitted to bind the session on a bare `ack` (see
 			// isApprovedNostrConnectResponse). A bare `ack` from anybody else must
-			// never start the login.
+			// never start the login. A response that echoes the secret itself is
+			// admitted without this set — the secret is its own proof, and that is
+			// the shape nips/46.md prescribes for the client-initiated flow.
 			const approvedSignerPubkeys = new Set<string>()
 
 			const sub = ndk.subscribe(
@@ -300,6 +302,12 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							}
 						}
 					} else if (isApprovedNostrConnectResponse(request.result, tempSecret, event.pubkey, approvedSignerPubkeys)) {
+						// Bind only the two shapes the gate admits: a signer-initiated
+						// `connect` response whose result echoes the temp secret, or a
+						// bare `ack` from a signer that already echoed it above. The
+						// secret echo carries no `method`, so it arrives here (nips/46.md
+						// prescribes it for the client-initiated flow) — review
+						// 5260467763 Required 2.
 						if (processedResponseIds.has(event.id)) {
 							return
 						}

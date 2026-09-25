@@ -119,32 +119,48 @@ describe('isMatchingConnectSecret (ADR-0002 amendment B-4 / #807)', () => {
 	})
 })
 
-describe('isApprovedNostrConnectResponse (QR signer-approval gate, ported from #1290)', () => {
+describe('isApprovedNostrConnectResponse (QR signer-approval gate, #1290 + review 5260467763)', () => {
 	const APPROVED = 'aa'.repeat(32)
 	const UNAPPROVED = 'bb'.repeat(32)
 	const approvedSignerPubkeys = new Set([APPROVED])
 
-	test('accepts the secret echo and the approval ack from an APPROVED signer', () => {
-		expect(isApprovedNostrConnectResponse(SECRET, SECRET, APPROVED, approvedSignerPubkeys)).toBe(true)
+	test('REGRESSION (review 5260467763 Required 2): a connect RESPONSE echoing the secret self-approves', () => {
+		// nips/46.md:67 (client-initiated flow): "…which then sends `connect`
+		// *response* event to the `client-pubkey` … `secret` value MUST be
+		// provided to avoid connection spoofing, client MUST validate the
+		// `secret` returned by `connect` response." That response carries NO
+		// `method`, so it can never reach the branch that populates the approved
+		// set — requiring membership there dropped the spec-conformant signer
+		// and left the lane to the 5-minute timeout. The secret IS the factor,
+		// and its author is the discovered remote-signer pubkey.
+		expect(isApprovedNostrConnectResponse(SECRET, SECRET, UNAPPROVED, new Set())).toBe(true)
+		expect(isApprovedNostrConnectResponse(SECRET, SECRET, UNAPPROVED, approvedSignerPubkeys)).toBe(true)
+		expect(isApprovedNostrConnectResponse(SECRET, SECRET, APPROVED, new Set())).toBe(true)
+	})
+
+	test('the bare `ack` still requires a signer that already echoed the secret', () => {
+		// Unchanged by the above: without prior proof of the secret, an `ack`
+		// from any relay peer that can encrypt to the (public) client pubkey
+		// must never bind the session to its own bunker endpoint.
+		expect(isApprovedNostrConnectResponse('ack', SECRET, UNAPPROVED, approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse('ack', SECRET, APPROVED, new Set())).toBe(false)
+		// …and it still binds when that signer did echo the secret.
 		expect(isApprovedNostrConnectResponse('ack', SECRET, APPROVED, approvedSignerPubkeys)).toBe(true)
 	})
 
-	test('never binds an UNAPPROVED signer — a bare ack from a relay peer is not approval', () => {
-		// Without this gate, any peer able to encrypt to the (public) client
-		// pubkey could send `{"result":"ack"}` and bind the session to its own
-		// bunker endpoint without ever knowing the secret.
-		expect(isApprovedNostrConnectResponse('ack', SECRET, UNAPPROVED, approvedSignerPubkeys)).toBe(false)
-		expect(isApprovedNostrConnectResponse(SECRET, SECRET, UNAPPROVED, approvedSignerPubkeys)).toBe(false)
-	})
-
-	test('rejects a non-matching result even from an approved signer', () => {
+	test('rejects any other result, whatever the author or the approved set', () => {
 		expect(isApprovedNostrConnectResponse('not-the-secret', SECRET, APPROVED, approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse('not-the-secret', SECRET, UNAPPROVED, new Set())).toBe(false)
 		expect(isApprovedNostrConnectResponse(undefined, SECRET, APPROVED, approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse(null, SECRET, UNAPPROVED, new Set())).toBe(false)
+		expect(isApprovedNostrConnectResponse({ result: SECRET }, SECRET, UNAPPROVED, new Set())).toBe(false)
 	})
 
-	test('no approved signers yet → nothing is accepted', () => {
-		const none = new Set<string>()
-		expect(isApprovedNostrConnectResponse('ack', SECRET, APPROVED, none)).toBe(false)
-		expect(isApprovedNostrConnectResponse(SECRET, SECRET, APPROVED, none)).toBe(false)
+	test('fails closed when there is no expected secret to validate against', () => {
+		// An empty expected secret must admit nothing — not even an empty result
+		// from an approved signer (which the previous form accepted).
+		expect(isApprovedNostrConnectResponse('', '', APPROVED, approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse('ack', '', APPROVED, approvedSignerPubkeys)).toBe(false)
+		expect(isApprovedNostrConnectResponse(SECRET, '', APPROVED, approvedSignerPubkeys)).toBe(false)
 	})
 })
