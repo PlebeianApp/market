@@ -156,6 +156,11 @@ export function Nip60Wallet() {
 
 	useEffect(() => {
 		if (!cocoMode || !isAuthenticated || !user?.pubkey) return
+		// The sealed fresh-test preflight inventories the legacy NIP-60 wallet.
+		// Signer onboarding loads that wallet asynchronously, so checking before
+		// it reaches a terminal state creates a false reset requirement that never
+		// retries. Wait for the exact account inventory to be ready first.
+		if ((status !== 'ready' && status !== 'no_wallet') || nip60Store.state.account !== user.pubkey.trim().toLowerCase()) return
 		let cancelled = false
 		const environmentId = readCocoV2AuctionEnvironment().environmentId
 		const refresh = () => {
@@ -178,7 +183,7 @@ export function Nip60Wallet() {
 			cancelled = true
 			window.removeEventListener('coco-auction-balance-changed', refresh)
 		}
-	}, [cocoMode, isAuthenticated, user?.pubkey])
+	}, [cocoMode, isAuthenticated, user?.pubkey, status])
 
 	const handleCreateWallet = async () => {
 		setIsCreating(true)
@@ -353,9 +358,21 @@ export function Nip60Wallet() {
 		try {
 			const environment = readCocoV2AuctionEnvironment()
 			await resetBrowserCocoAuctionTestState({ account: user.pubkey, environment: environment.environmentId })
-			window.location.reload()
+			// Keep the authenticated signer session alive. A forced reload logs out
+			// non-persistent signers and can race NIP-60 onboarding, leaving the user
+			// in the same Reset required state. Recommit the fresh authority now and
+			// show success only after the durable record and empty balance both read
+			// back successfully.
+			await ensureBrowserFreshAuctionsdevPreflight({ account: user.pubkey, environment: environment.environmentId })
+			const nextBalances = await getCocoAuctionBalances({ accountPubkey: user.pubkey, environmentId: environment.environmentId })
+			setCocoBalances(nextBalances)
+			setCocoSetupBlocked(false)
+			window.dispatchEvent(new Event('coco-auction-balance-changed'))
+			toast.success('Test wallet reset — add fake sats when you are ready')
 		} catch (err) {
+			setCocoSetupBlocked(true)
 			toast.error(err instanceof Error ? err.message : 'Could not reset the test wallet')
+		} finally {
 			setIsResettingCocoTestWallet(false)
 		}
 	}
