@@ -1,213 +1,401 @@
-name: Deploy AuctionsDev
+name: Prepare or activate AuctionsDev production candidate
 
 on:
-  push:
-    branches: ['auctions']
   workflow_dispatch:
+    inputs:
+      market_sha:
+        description: 'Exact reviewed 40-character final Market integration SHA'
+        required: true
+        type: string
+      core_git_sha:
+        description: 'Exact reviewed 40-character final Coco Core Git SHA'
+        required: true
+        type: string
+      core_sha256:
+        description: 'Exact SHA-256 of installed @cashu/coco-core artifact contents'
+        required: true
+        type: string
+      indexeddb_sha256:
+        description: 'Exact SHA-256 of installed @cashu/coco-indexeddb artifact contents'
+        required: true
+        type: string
+      fresh_wallet_account_pubkey:
+        description: 'Exact lowercase 64-character public account bound by the fresh-wallet report'
+        required: true
+        type: string
+      release_action:
+        description: 'Prepare only unless final activation is explicitly authorized'
+        required: true
+        default: PREPARE_ONLY
+        type: choice
+        options:
+          - PREPARE_ONLY
+          - ACTIVATE_AUCTIONSDEV
+      dual_red_team_core:
+        description: 'Required only for activation after both Core Red Teams pass'
+        required: true
+        default: PENDING
+        type: choice
+        options:
+          - PENDING
+          - DUAL_RED_TEAM_CORE_PASS
+      no_real_funds:
+        description: 'Confirm this candidate uses only the AuctionsDev fake mint'
+        required: true
+        type: choice
+        options:
+          - NO_REAL_FUNDS
+
+permissions:
+  contents: read
 
 env:
-  BUN_VERSION: 'latest'
+  BUN_VERSION: '1.4.2'
+  CASHU_TS_VERSION: '5.0.0-rc.4'
+  CDK_MINTD_VERSION: '0.17.0-rc.0'
+  SEALED_CORE_GIT_SHA: '60b7b070393eaad8746cb74a03c42017186da647'
+  SEALED_CORE_ARCHIVE_SHA256: 'c41c4b95f90e360cee66b06e6abe354419567f38c798abfcf6202a610200b090'
+  SEALED_INDEXEDDB_ARCHIVE_SHA256: 'b3c70d4d9d655e055f216afcf7882cfd1825bc1a7754fd801616f27ced9daabf'
+  SEALED_CORE_SHA256: '0819c057889e55f8093dc9803b5646be628cfca6bb054f69d2037620d5dcc105'
+  SEALED_INDEXEDDB_SHA256: '7507ff64326da39f1758fde233b318e454984142bb5e7e6ae5cac72a85e790fd'
 
 concurrency:
-  group: deploy-auctionsdev
-  cancel-in-progress: true
+  group: deploy-auctionsdev-production-candidate
+  cancel-in-progress: false
 
 jobs:
   build:
-    name: Build
+    name: Build exact production candidate
     runs-on: ubuntu-latest
     outputs:
-      release_name: ${{ steps.release.outputs.name }}
+      coco_identity: ${{ steps.identity.outputs.coco_identity }}
+      core_archive_sha256: ${{ steps.identity.outputs.core_archive_sha256 }}
+      core_sha256: ${{ steps.identity.outputs.core_sha256 }}
+      core_git_sha: ${{ steps.identity.outputs.core_git_sha }}
+      indexeddb_sha256: ${{ steps.identity.outputs.indexeddb_sha256 }}
+      indexeddb_archive_sha256: ${{ steps.identity.outputs.indexeddb_archive_sha256 }}
+      cashu_ts_sha256: ${{ steps.identity.outputs.cashu_ts_sha256 }}
+      fresh_test_sha256: ${{ steps.identity.outputs.fresh_test_sha256 }}
+      fresh_namespace_commitment: ${{ steps.identity.outputs.fresh_namespace_commitment }}
+      fresh_report_commitment: ${{ steps.identity.outputs.fresh_report_commitment }}
+      fresh_envelope_commitment: ${{ steps.identity.outputs.fresh_envelope_commitment }}
+      smoke_result_sha256: ${{ steps.identity.outputs.smoke_result_sha256 }}
+      smoke_envelope_commitment: ${{ steps.identity.outputs.smoke_envelope_commitment }}
+      market_sha: ${{ steps.exact_sha.outputs.market_sha }}
+      market_tree: ${{ steps.exact_sha.outputs.market_tree }}
+      release_name: ${{ steps.release.outputs.release_name }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Validate immutable release inputs
+        env:
+          REQUESTED_SHA: ${{ inputs.market_sha }}
+          CORE_SHA256: ${{ inputs.core_sha256 }}
+          CORE_GIT_SHA: ${{ inputs.core_git_sha }}
+          INDEXEDDB_SHA256: ${{ inputs.indexeddb_sha256 }}
+          FRESH_WALLET_ACCOUNT_PUBKEY: ${{ inputs.fresh_wallet_account_pubkey }}
+          RELEASE_ACTION: ${{ inputs.release_action }}
+          DUAL_RED_TEAM_CORE: ${{ inputs.dual_red_team_core }}
+          NO_REAL_FUNDS: ${{ inputs.no_real_funds }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'market_sha must be a full lowercase 40-character Git SHA' >&2; exit 1; }
+          [[ "$CORE_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'core_sha256 must be a lowercase SHA-256 digest' >&2; exit 1; }
+          [[ "$CORE_GIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'core_git_sha must be a full lowercase 40-character Git SHA' >&2; exit 1; }
+          [[ "$INDEXEDDB_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo 'indexeddb_sha256 must be a lowercase SHA-256 digest' >&2; exit 1; }
+          [[ "$FRESH_WALLET_ACCOUNT_PUBKEY" =~ ^[0-9a-f]{64}$ ]] || { echo 'fresh_wallet_account_pubkey must be 64 lowercase hexadecimal characters' >&2; exit 1; }
+          test "$CORE_GIT_SHA" = "$SEALED_CORE_GIT_SHA"
+          test "$CORE_SHA256" = "$SEALED_CORE_SHA256"
+          test "$INDEXEDDB_SHA256" = "$SEALED_INDEXEDDB_SHA256"
+          test "$NO_REAL_FUNDS" = 'NO_REAL_FUNDS'
+          if [[ "$RELEASE_ACTION" = 'ACTIVATE_AUCTIONSDEV' ]]; then
+            test "$DUAL_RED_TEAM_CORE" = 'DUAL_RED_TEAM_CORE_PASS'
+          fi
 
-      - name: Setup Bun
+      - name: Checkout exact reviewed SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.market_sha }}
+          fetch-depth: 1
+
+      - name: Prove exact checkout
+        id: exact_sha
+        env:
+          REQUESTED_SHA: ${{ inputs.market_sha }}
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          ACTUAL_TREE="$(git rev-parse 'HEAD^{tree}')"
+          test "$ACTUAL_SHA" = "$REQUESTED_SHA"
+          test -f deploy-simple/auctionsdev/activate-release.sh
+          test -f scripts/verify-auctionsdev-package.ts
+          test -f scripts/run-fresh-auctionsdev-test.ts
+          test -f scripts/run-bound-auctionsdev-fresh-wallet.ts
+          test -f scripts/check-auctionsdev-fresh-wallet-preflight.ts
+          test -f scripts/schemas/fresh-auctionsdev-preflight-v1.schema.json
+          test -f scripts/run-auctionsdev-coco-smoke.ts
+          test -f scripts/run-bound-auctionsdev-coco-smoke.ts
+          test -f e2e/run-coco-auctionsdev-smoke.ts
+          node -e "const p=require('./package.json'); if(p.scripts['preflight:auctionsdev:fresh-wallet']!=='bun run scripts/check-auctionsdev-fresh-wallet-preflight.ts'||p.scripts['test:e2e:coco-auctionsdev-smoke']!=='bun e2e/run-coco-auctionsdev-smoke.ts') process.exit(1)"
+          echo "market_sha=$ACTUAL_SHA" >> "$GITHUB_OUTPUT"
+          echo "market_tree=$ACTUAL_TREE" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pinned Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build application
+      - name: Frozen development install without lockfile mutation
         run: |
-          bun run generate-routes
-          bun run build
+          set -euo pipefail
+          test "$(bun --version)" = "$BUN_VERSION"
+          cp package.json /tmp/market-package.json.before
+          cp bun.lock /tmp/market-bun.lock.before
+          bun install --frozen-lockfile
+          cmp package.json /tmp/market-package.json.before
+          cmp bun.lock /tmp/market-bun.lock.before
+          git diff --exit-code -- package.json bun.lock
 
-      - name: Generate release name
-        id: release
-        run: echo "name=market-auctionsdev-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+      - name: Setup isolated smoke dependencies
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22'
 
-      - name: Create deployment package
+      - name: Install pinned local relay
         run: |
-          mkdir -p deploy-package
-          cp -r dist deploy-package/
-          cp -r src deploy-package/
-          # `contextvm/` ships the path-oracle CVM server (`contextvm/server.ts`)
-          # which PM2 launches as `market-contextvm-auctionsdev`. Without
-          # this, the rollback log shows
-          # `Script not found: /home/.../market-auctionsdev/contextvm/server.ts`.
-          cp -r contextvm deploy-package/
+          set -euo pipefail
+          git clone https://github.com/fiatjaf/nak.git /tmp/nak
+          git -C /tmp/nak checkout b65683886b58382890888fbdda90e5c2129df488
+          GOBIN="$(go env GOPATH)/bin"
+          mkdir -p "$GOBIN"
+          go -C /tmp/nak build -o "$GOBIN/nak" .
+          echo "$GOBIN" >> "$GITHUB_PATH"
+
+      - name: Install Chromium for canonical smoke
+        run: bunx playwright install --with-deps chromium
+
+      - name: Setup Python for isolated fake mint
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install canonical smoke fake-mint dependencies
+        run: pip install cashu 'marshmallow<4.0.0' 'limits<5.0.0'
+
+      - name: Test candidate
+        env:
+          CVM_SERVER_KEY: '1111111111111111111111111111111111111111111111111111111111111111'
+        run: |
+          bun run test:unit
+          bun run test:integration
+          bun test src/server/deploymentIdentity.test.ts scripts/verify-auctionsdev-package.test.ts scripts/check-auctionsdev-fresh-wallet-result.test.ts scripts/check-auctionsdev-smoke-result.test.ts
+
+      - name: Run exact bound Coco AuctionsDev smoke and browser preflight producer
+        env:
+          MARKET_SHA: ${{ steps.exact_sha.outputs.market_sha }}
+          MARKET_TREE: ${{ steps.exact_sha.outputs.market_tree }}
+          CORE_SHA256: ${{ inputs.core_sha256 }}
+          CORE_GIT_SHA: ${{ inputs.core_git_sha }}
+          INDEXEDDB_SHA256: ${{ inputs.indexeddb_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p .validation
+          bun scripts/run-bound-auctionsdev-coco-smoke.ts --market-sha "$MARKET_SHA" --core-git-sha "$CORE_GIT_SHA" --core-sha256 "$CORE_SHA256" --indexeddb-sha256 "$INDEXEDDB_SHA256" --fresh-public-report-output .validation/fresh-auctionsdev-public-report.json --output .validation/coco-auctionsdev-smoke-result.json
+          test -s .validation/fresh-auctionsdev-public-report.json
+          test -s .validation/coco-auctionsdev-smoke-result.json
+
+      - name: Verify and bind required fresh AuctionsDev public report
+        env:
+          MARKET_SHA: ${{ steps.exact_sha.outputs.market_sha }}
+          MARKET_TREE: ${{ steps.exact_sha.outputs.market_tree }}
+          CORE_SHA256: ${{ inputs.core_sha256 }}
+          CORE_GIT_SHA: ${{ inputs.core_git_sha }}
+          INDEXEDDB_SHA256: ${{ inputs.indexeddb_sha256 }}
+          AUCTIONSDEV_ACCOUNT_PUBKEY: ${{ inputs.fresh_wallet_account_pubkey }}
+        run: |
+          set -euo pipefail
+          bun scripts/run-bound-auctionsdev-fresh-wallet.ts --market-sha "$MARKET_SHA" --core-git-sha "$CORE_GIT_SHA" --core-sha256 "$CORE_SHA256" --indexeddb-sha256 "$INDEXEDDB_SHA256" --account-pubkey "$AUCTIONSDEV_ACCOUNT_PUBKEY" --raw-report .validation/fresh-auctionsdev-public-report.json --output .validation/fresh-auctionsdev-test.json
+          test -s .validation/fresh-auctionsdev-test.json
+
+      - name: Build production application
+        run: |
+          bun run build:production
+          if find dist -type f -name '*.map' -print -quit | grep -q .; then
+            echo 'Production build must not contain source maps' >&2
+            exit 1
+          fi
+
+      - name: Validate Caddy syntax independently
+        run: |
+          scripts/download-caddy-validator.sh .validation-tools/caddy
+          .validation-tools/caddy validate --config deploy-simple/caddyfiles/Caddyfile.staging --adapter caddyfile
+
+      - name: Fetch pinned fake mint binary
+        run: scripts/download-auctionsdev-fake-mint.sh runtime/cdk-mintd
+
+      - name: Assemble and verify production release
+        env:
+          MARKET_SHA: ${{ steps.exact_sha.outputs.market_sha }}
+          MARKET_TREE: ${{ steps.exact_sha.outputs.market_tree }}
+          CORE_SHA256: ${{ inputs.core_sha256 }}
+          CORE_GIT_SHA: ${{ inputs.core_git_sha }}
+          INDEXEDDB_SHA256: ${{ inputs.indexeddb_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p deploy-package/runtime deploy-package/scripts deploy-package/deploy-simple
+          cp -R dist src contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
+          cp -R patches deploy-package/
+          cp -R vendor deploy-package/
+          cp .validation/fresh-auctionsdev-public-report.json deploy-package/
+          cp .validation/fresh-auctionsdev-test.json deploy-package/
+          cp .validation/coco-auctionsdev-smoke-result.json deploy-package/
+          cp scripts/verify-auctionsdev-package.ts deploy-package/scripts/
+          cp scripts/check-auctionsdev-fresh-wallet-result.ts deploy-package/scripts/
+          cp scripts/check-auctionsdev-fresh-wallet-preflight.ts deploy-package/scripts/
+          cp scripts/check-auctionsdev-smoke-result.ts deploy-package/scripts/
+          cp scripts/check-auctionsdev-coco-health.ts deploy-package/scripts/
+          cp scripts/coco-artifact-contract.ts deploy-package/scripts/
+          mkdir -p deploy-package/scripts/schemas
+          cp scripts/schemas/fresh-auctionsdev-preflight-v1.schema.json deploy-package/scripts/schemas/
+          cp -R deploy-simple/auctionsdev deploy-package/deploy-simple/
+          mkdir -p deploy-package/deploy-simple/caddyfiles
+          cp deploy-simple/caddyfiles/Caddyfile.staging deploy-package/deploy-simple/caddyfiles/
+          cp "$(command -v bun)" deploy-package/runtime/bun
+          cp runtime/cdk-mintd deploy-package/runtime/cdk-mintd
+          chmod 0755 deploy-package/runtime/bun deploy-package/runtime/cdk-mintd
 
-      - name: Upload artifact
+          cp deploy-package/package.json /tmp/release-package.json.before
+          cp deploy-package/bun.lock /tmp/release-bun.lock.before
+          (
+            cd deploy-package
+            ./runtime/bun install --frozen-lockfile --production --omit=dev --ignore-scripts
+          )
+          cmp deploy-package/package.json /tmp/release-package.json.before
+          cmp deploy-package/bun.lock /tmp/release-bun.lock.before
+          find deploy-package -type f -name '*.map' -delete
+          find deploy-package -type l -delete
+          test -z "$(find deploy-package -type f -name '*.map' -print -quit)"
+          test -z "$(find deploy-package -type l -print -quit)"
+
+          FRESH_TEST_SHA256="$(sha256sum deploy-package/fresh-auctionsdev-test.json | cut -d' ' -f1)"
+          SMOKE_RESULT_SHA256="$(sha256sum deploy-package/coco-auctionsdev-smoke-result.json | cut -d' ' -f1)"
+          ./deploy-package/runtime/bun scripts/verify-auctionsdev-package.ts --root deploy-package --market-sha "$MARKET_SHA" --market-tree "$MARKET_TREE" --core-git-sha "$CORE_GIT_SHA" --core-sha256 "$CORE_SHA256" --indexeddb-sha256 "$INDEXEDDB_SHA256" --fresh-test deploy-package/fresh-auctionsdev-test.json --fresh-public-report deploy-package/fresh-auctionsdev-public-report.json --fresh-test-sha256 "$FRESH_TEST_SHA256" --smoke-result deploy-package/coco-auctionsdev-smoke-result.json --smoke-result-sha256 "$SMOKE_RESULT_SHA256" --write-manifest deploy-package/deployment-manifest.json
+
+      - name: Record candidate identity
+        id: identity
+        run: |
+          set -euo pipefail
+          ./deploy-package/runtime/bun -e "
+            const m = await Bun.file('deploy-package/deployment-manifest.json').json()
+            const out = Bun.file(process.env.GITHUB_OUTPUT).writer()
+            out.write('coco_identity=' + m.cocoPackageIdentity + '\n')
+            out.write('market_tree=' + m.marketGitTree + '\n')
+            out.write('core_git_sha=' + m.coreGitSha + '\n')
+            out.write('core_archive_sha256=' + m.archives.cocoCore.sha256 + '\n')
+            out.write('indexeddb_archive_sha256=' + m.archives.cocoIndexedDb.sha256 + '\n')
+            out.write('core_sha256=' + m.packages.cocoCore.sha256 + '\n')
+            out.write('indexeddb_sha256=' + m.packages.cocoIndexedDb.sha256 + '\n')
+            out.write('cashu_ts_sha256=' + m.packages.cashuTs.sha256 + '\n')
+            out.write('fresh_test_sha256=' + m.freshAuctionsdevTest.sha256 + '\n')
+            out.write('fresh_namespace_commitment=' + m.freshAuctionsdevTest.result.namespaceCommitment + '\n')
+            out.write('fresh_report_commitment=' + m.freshAuctionsdevTest.result.reportCommitment + '\n')
+            out.write('fresh_envelope_commitment=' + m.freshAuctionsdevTest.envelopeCommitment + '\n')
+            out.write('smoke_result_sha256=' + m.cocoAuctionsdevSmoke.sha256 + '\n')
+            out.write('smoke_envelope_commitment=' + m.cocoAuctionsdevSmoke.envelopeCommitment + '\n')
+            await out.end()
+          "
+
+      - name: Create immutable release archive
+        id: release
+        env:
+          MARKET_SHA: ${{ steps.exact_sha.outputs.market_sha }}
+        run: |
+          set -euo pipefail
+          RELEASE_NAME="market-auctionsdev-${MARKET_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -C deploy-package -cf - . | gzip -n > release.tar.gz
+          sha256sum release.tar.gz > release.tar.gz.sha256
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable release
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-package-auctionsdev
-          path: deploy-package/
-          retention-days: 1
+          name: auctionsdev-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            release.tar.gz
+            release.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
 
   deploy:
-    name: Deploy to AuctionsDev
+    name: Activate exact SHA on AuctionsDev
+    if: ${{ inputs.release_action == 'ACTIVATE_AUCTIONSDEV' && inputs.dual_red_team_core == 'DUAL_RED_TEAM_CORE_PASS' }}
     needs: build
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download artifact
+      - name: Download immutable release
         uses: actions/download-artifact@v4
         with:
-          name: deploy-package-auctionsdev
-          path: deploy-package/
+          name: auctionsdev-release-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Create ecosystem config
+      - name: Verify downloaded archive
+        run: sha256sum --check release.tar.gz.sha256
+
+      - name: Create private runtime environment
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.STAGING_APP_PRIVATE_KEY }}
+          CVM_SERVER_KEY: ${{ secrets.AUCTIONSDEV_CVM_SERVER_KEY || secrets.STAGING_CVM_SERVER_KEY }}
+          FAKE_MINT_MNEMONIC: ${{ secrets.AUCTIONSDEV_FAKE_MINT_MNEMONIC }}
         run: |
-          cat > deploy-package/ecosystem.config.cjs << 'EOF'
-          module.exports = {
-            apps: [
-              {
-                name: 'market-auctionsdev',
-                script: 'src/index.tsx',
-                interpreter: process.env.HOME + '/.bun/bin/bun',
-                cwd: '/home/deployer/market-auctionsdev',
-                instances: 1,
-                exec_mode: 'fork',
-                env_file: '.env',
-                error_file: '/home/deployer/logs/market-auctionsdev-error.log',
-                out_file: '/home/deployer/logs/market-auctionsdev-out.log',
-                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-                merge_logs: true,
-                autorestart: true,
-                max_restarts: 10,
-                min_uptime: '10s',
-                restart_delay: 5000,
-                max_memory_restart: '500M',
-                kill_timeout: 5000,
-                wait_ready: true,
-                listen_timeout: 10000,
-              },
-              // Auctionsdev runs its OWN parallel CVM server (a "second
-              // oracle") alongside the staging one (`market-contextvm-staging`).
-              // Both publish on `wss://relay.staging.plebeian.market` —
-              // each with its own pubkey derived from a separate
-              // `CVM_SERVER_KEY` — so the auctions/* feature branch can
-              // be exercised end-to-end (announcement publishing, gift-
-              // wrap mode, oracle-picker discovery) without waiting for
-              // the staging CVM to be redeployed via master.
-              //
-              // Same `cwd` as the web app so they share `.env` (same
-              // APP_RELAY_URL, APP_STAGE=staging, CVM_SERVER_KEY).
-              // Bidder/seller clients on auctionsdev will see BOTH
-              // oracles in the picker (staging's + auctionsdev's), with
-              // auctionsdev's pre-selected because it's what
-              // `/api/config.cvmServerPubkey` resolves to here.
-              {
-                name: 'market-contextvm-auctionsdev',
-                script: 'contextvm/server.ts',
-                interpreter: process.env.HOME + '/.bun/bin/bun',
-                cwd: '/home/deployer/market-auctionsdev',
-                instances: 1,
-                exec_mode: 'fork',
-                env_file: '.env',
-                error_file: '/home/deployer/logs/market-contextvm-auctionsdev-error.log',
-                out_file: '/home/deployer/logs/market-contextvm-auctionsdev-out.log',
-                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-                merge_logs: true,
-                autorestart: true,
-                max_restarts: 10,
-                min_uptime: '10s',
-                restart_delay: 5000,
-                max_memory_restart: '500M',
-                kill_timeout: 5000,
-              },
-            ],
-          };
-          EOF
+          set -euo pipefail
+          umask 077
+          {
+            printf 'APP_STAGE=%q\n' 'staging'
+            printf 'NODE_ENV=%q\n' 'production'
+            printf 'PORT=%q\n' '3002'
+            printf 'APP_RELAY_URL=%q\n' 'wss://relay.staging.plebeian.market'
+            printf 'APP_PRIVATE_KEY=%q\n' "$APP_PRIVATE_KEY"
+            printf 'CVM_SERVER_KEY=%q\n' "$CVM_SERVER_KEY"
+            printf 'NIP46_RELAY_URL=%q\n' 'wss://relay.nsec.app'
+            printf 'APP_DEPLOYMENT_ENVIRONMENT=%q\n' 'auctionsdev'
+            printf 'APP_MARKET_GIT_SHA=%q\n' '${{ needs.build.outputs.market_sha }}'
+            printf 'APP_MARKET_GIT_TREE=%q\n' '${{ needs.build.outputs.market_tree }}'
+            printf 'APP_COCO_PACKAGE_IDENTITY=%q\n' '${{ needs.build.outputs.coco_identity }}'
+            printf 'APP_COCO_CORE_GIT_SHA=%q\n' '${{ needs.build.outputs.core_git_sha }}'
+            printf 'APP_COCO_CORE_ARCHIVE_SHA256=%q\n' '${{ needs.build.outputs.core_archive_sha256 }}'
+            printf 'APP_COCO_CORE_SHA256=%q\n' '${{ needs.build.outputs.core_sha256 }}'
+            printf 'APP_COCO_INDEXEDDB_ARCHIVE_SHA256=%q\n' '${{ needs.build.outputs.indexeddb_archive_sha256 }}'
+            printf 'APP_COCO_INDEXEDDB_SHA256=%q\n' '${{ needs.build.outputs.indexeddb_sha256 }}'
+            printf 'APP_CASHU_TS_VERSION=%q\n' "$CASHU_TS_VERSION"
+            printf 'APP_CASHU_TS_SHA256=%q\n' '${{ needs.build.outputs.cashu_ts_sha256 }}'
+            printf 'APP_FAKE_MINT_VERSION=%q\n' "$CDK_MINTD_VERSION"
+            printf 'APP_BUN_VERSION=%q\n' "$BUN_VERSION"
+            printf 'APP_MONETARY_MODE=%q\n' 'coco-test'
+            printf 'APP_MINT_MODE=%q\n' 'fake'
+            printf 'APP_REAL_FUNDS_ENABLED=%q\n' 'false'
+            printf 'APP_FRESH_AUCTIONSDEV_TEST_SHA256=%q\n' '${{ needs.build.outputs.fresh_test_sha256 }}'
+            printf 'APP_FRESH_AUCTIONSDEV_TEST_VERDICT=%q\n' 'FRESH_AUCTIONSDEV_READY'
+            printf 'APP_FRESH_NAMESPACE_COMMITMENT=%q\n' '${{ needs.build.outputs.fresh_namespace_commitment }}'
+            printf 'APP_FRESH_REPORT_COMMITMENT=%q\n' '${{ needs.build.outputs.fresh_report_commitment }}'
+            printf 'APP_FRESH_ENVELOPE_COMMITMENT=%q\n' '${{ needs.build.outputs.fresh_envelope_commitment }}'
+            printf 'APP_FRESH_EVIDENCE_ENVIRONMENT=%q\n' 'test'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_SHA256=%q\n' '${{ needs.build.outputs.smoke_result_sha256 }}'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_STATUS=%q\n' 'passed'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_ENVELOPE_COMMITMENT=%q\n' '${{ needs.build.outputs.smoke_envelope_commitment }}'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_SCHEMA_VERSION=%q\n' '2'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_COLD_START=%q\n' 'true'
+            printf 'APP_COCO_AUCTIONSDEV_SMOKE_CHECKS_PASSED=%q\n' '10'
+            printf 'AUCTIONSDEV_FRESH_WALLET_ACCOUNT_PUBKEY=%q\n' '${{ inputs.fresh_wallet_account_pubkey }}'
+            printf 'CASHU_MINT_DIR=%q\n' '/home/deployer/market-auctionsdev-fake-mint'
+            printf 'CASHU_MINT_HOST=%q\n' '127.0.0.1'
+            printf 'CASHU_MINT_PORT=%q\n' '3338'
+            printf 'CASHU_MINT_PUBLIC_URL=%q\n' 'https://auctionsdev.plebeian.market/fake-mint/'
+            printf 'CDK_MINTD_MNEMONIC=%q\n' "$FAKE_MINT_MNEMONIC"
+          } > runtime.env
+          test -s runtime.env
 
-      - name: Create environment file
-        run: |
-          cat > deploy-package/.env << 'EOF'
-          APP_STAGE=staging
-          NODE_ENV=production
-          PORT=3002
-          APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
-          APP_PRIVATE_KEY=${{ secrets.STAGING_APP_PRIVATE_KEY }}
-          # Auctionsdev runs its OWN CVM server with a dedicated key so
-          # it announces itself separately from `market-contextvm-staging`
-          # on `wss://relay.staging.plebeian.market`. The web app's
-          # `/api/config.cvmServerPubkey` is derived from this same key,
-          # so the auctionsdev oracle picker pre-selects the auctionsdev
-          # oracle (the staging one still appears as a second option).
-          # Falls back to STAGING_CVM_SERVER_KEY if the dedicated secret
-          # isn't set yet — running both apps under the same key just
-          # means PM2 spawns a duplicate signer; the duplicate will lose
-          # the announcement race but is otherwise harmless.
-          CVM_SERVER_KEY=${{ secrets.AUCTIONSDEV_CVM_SERVER_KEY || secrets.STAGING_CVM_SERVER_KEY }}
-          NIP46_RELAY_URL=wss://relay.nsec.app
-          EOF
-
-      - name: Prepare server directories
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          script: |
-            mkdir -p ~/releases ~/logs
-            chmod 755 ~
-            rm -rf ~/deploy-package
-            mkdir -p ~/deploy-package
-            chmod 755 ~/deploy-package
-            rm -f ~/Caddyfile.staging
-            rm -f ~/deploy-package.tar.gz ~/caddyfile-staging.tar.gz
-
-      - name: Upload files to deployer staging
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          source: 'deploy-package/*'
-          target: '/home/deployer/deploy-package'
-          strip_components: 1
-          tar_tmp_path: '/home/deployer/deploy-package.tar.gz'
-
-      - name: Upload Caddyfile
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          source: 'deploy-simple/caddyfiles/Caddyfile.staging'
-          target: '/home/deployer'
-          strip_components: 2
-          tar_tmp_path: '/home/deployer/caddyfile-staging.tar.gz'
-
-      - name: Move files to release directory
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          script: |
-            mv ~/deploy-package ~/releases/${{ needs.build.outputs.release_name }}
-
-      - name: Activate release
+      - name: Prepare isolated incoming directory
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -215,79 +403,42 @@ jobs:
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             set -euo pipefail
-            RELEASE_DIR="/home/deployer/releases/${{ needs.build.outputs.release_name }}"
-            APP_DIR="/home/deployer/market-auctionsdev"
-            PREVIOUS_RELEASE="$(readlink -f "$APP_DIR" || true)"
-            CADDY_BACKUP="$(mktemp "$HOME/caddy-backup.XXXXXX")"
-            sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
+            INCOMING='/home/deployer/incoming/${{ needs.build.outputs.release_name }}'
+            test ! -e "$INCOMING"
+            mkdir -p "$INCOMING" /home/deployer/releases /home/deployer/logs /home/deployer/market-auctionsdev-fake-mint
+            chmod 0700 "$INCOMING" /home/deployer/market-auctionsdev-fake-mint
 
-            rollback() {
-              echo "Deployment failed, restoring previous release"
-              if [[ -f "$CADDY_BACKUP" ]]; then
-                sudo cp "$CADDY_BACKUP" /etc/caddy/Caddyfile || true
-                sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
-              fi
-              if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
-                ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
-                cd "$APP_DIR"
-                pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev || true
-                pm2 startOrReload ecosystem.config.cjs --only market-contextvm-auctionsdev || true
-                pm2 save --force || true
-              fi
-            }
+      - name: Upload immutable release and private environment
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          source: 'release.tar.gz,release.tar.gz.sha256,runtime.env'
+          target: '/home/deployer/incoming/${{ needs.build.outputs.release_name }}'
+          tar_tmp_path: '/home/deployer/incoming/${{ needs.build.outputs.release_name }}.upload.tar.gz'
 
-            trap rollback ERR
+      - name: Server preflight and atomic activation
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            RELEASE_NAME='${{ needs.build.outputs.release_name }}'
+            INCOMING="/home/deployer/incoming/$RELEASE_NAME"
+            RELEASE_DIR="/home/deployer/releases/$RELEASE_NAME"
+            CANDIDATE_DIR="/home/deployer/releases/.candidate-$RELEASE_NAME"
 
-            cd "$RELEASE_DIR"
-            export PATH="$HOME/.bun/bin:$PATH"
-            bun install --production
+            cd "$INCOMING"
+            sha256sum --check release.tar.gz.sha256
+            test ! -e "$RELEASE_DIR"
+            test ! -e "$CANDIDATE_DIR"
+            mkdir "$CANDIDATE_DIR"
+            tar -xzf release.tar.gz -C "$CANDIDATE_DIR"
+            install -m 0600 runtime.env "$CANDIDATE_DIR/.env.runtime"
+            mv "$CANDIDATE_DIR" "$RELEASE_DIR"
 
-            pm2 stop market-auctionsdev 2>/dev/null || true
-            pm2 stop market-contextvm-auctionsdev 2>/dev/null || true
-
-            ln -sfn "$RELEASE_DIR" "$APP_DIR"
-
-            cd "$APP_DIR"
-            pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev
-            pm2 startOrReload ecosystem.config.cjs --only market-contextvm-auctionsdev
-            pm2 save --force
-
-            grep -q 'auctionsdev\.plebeian\.market' /home/deployer/Caddyfile.staging
-            sudo cp /home/deployer/Caddyfile.staging /etc/caddy/Caddyfile
-            sudo mkdir -p /var/log/caddy
-            sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
-              sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
-            grep -q 'auctionsdev\.plebeian\.market' /etc/caddy/Caddyfile
-
-            curl -sf http://localhost:3002/api/config >/dev/null
-
-            # CVM server liveness — no HTTP surface, so we tail PM2's
-            # status. PM2 reports `online` once the bun process is up;
-            # the SDK's `Server is running` log marker comes a few
-            # seconds later but isn't required for liveness here.
-            for i in $(seq 1 15); do
-              if pm2 describe market-contextvm-auctionsdev 2>/dev/null | grep -q 'status .* online'; then
-                echo "CVM server is online"
-                break
-              fi
-              sleep 1
-              if [ "$i" = "15" ]; then
-                echo "CVM server failed to come online; recent logs:"
-                pm2 logs market-contextvm-auctionsdev --lines 50 --nostream || true
-                exit 1
-              fi
-            done
-
-            cd /home/deployer/releases
-            ls -t | grep '^market-auctionsdev' | tail -n +4 | xargs -r rm -rf
-
-            rm -f "$CADDY_BACKUP"
-            trap - ERR
-
-            echo "✅ AuctionsDev deployment complete"
-
-      - name: Health check
-        run: |
-          sleep 10
-          curl -sf https://auctionsdev.plebeian.market/api/config
-          echo "✅ AuctionsDev health check passed"
+            bash "$RELEASE_DIR/deploy-simple/auctionsdev/activate-release.sh" "$RELEASE_DIR" '${{ needs.build.outputs.market_sha }}' '${{ needs.build.outputs.core_sha256 }}' '${{ needs.build.outputs.indexeddb_sha256 }}' '${{ needs.build.outputs.fresh_test_sha256 }}' '${{ needs.build.outputs.smoke_result_sha256 }}' '${{ needs.build.outputs.core_git_sha }}' '${{ needs.build.outputs.market_tree }}'

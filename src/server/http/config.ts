@@ -8,11 +8,13 @@ import {
 	RELAY_URL,
 } from '../runtime'
 import type { BunRoutes } from './types'
+import { resolveDeploymentIdentity } from '../deploymentIdentity'
 
 export const configRoutes: BunRoutes = {
 	'/api/config': {
 		GET: () => {
 			const stage = determineStage()
+			const deployment = resolveDeploymentIdentity()
 			return Response.json({
 				appRelay: RELAY_URL,
 				stage,
@@ -23,6 +25,7 @@ export const configRoutes: BunRoutes = {
 				needsSetup: !getAppSettings(),
 				serverReady: isEventHandlerReady(),
 				externalZapRelaysEnabled: stage === 'production' || (stage === 'development' && process.env.LOCAL_RELAY_ONLY !== 'true'),
+				...(deployment ? { deployment } : {}),
 			})
 		},
 	},

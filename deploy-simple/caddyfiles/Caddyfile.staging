@@ -9,6 +9,12 @@ auctionsdev.plebeian.market {
 	root * /home/deployer/market-auctionsdev/dist
 	encode gzip
 
+	# AuctionsDev-only fake mint. `handle_path` strips `/fake-mint` before
+	# proxying; the CDK FakeWallet mint itself remains loopback-only.
+	handle_path /fake-mint/* {
+		reverse_proxy 127.0.0.1:3338
+	}
+
 	# API routes → Bun
 	handle /api/* {
 		reverse_proxy localhost:3002
