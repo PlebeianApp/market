@@ -8,6 +8,7 @@ import { bytesToHex } from '@noble/hashes/utils.js'
 import { schnorr } from '@noble/curves/secp256k1.js'
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionDerivationPath } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { buildDleqProofs } from '@/lib/cashu/dleq'
 import { type CocoAccountRuntime, CocoRuntimeRegistry } from '@/lib/coco/runtime'
 import { runBrowserFreshAuctionsdevCocoMutation } from '@/lib/coco/migration/runtimeGate'
 import { fingerprintCocoAuctionValue } from './canonical'
@@ -194,6 +195,7 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 			requireOperationBinding(operation, input, recipient, refund)
 			const lockSecrets = operation.token.proofs.map((proof) => proof.secret)
 			const proofYs = lockSecrets.map(hashToCurveHexFromString)
+			const dleqProofs = buildDleqProofs(operation.token.proofs)
 			const projection = this.project(input, operation, recipient, refund, 'executed')
 			return use({
 				operationId: operation.id,
@@ -208,6 +210,7 @@ export class CocoV2AuctionEnginePort implements CocoEnginePort {
 				commitmentFingerprint: projection.commitmentFingerprint,
 				lockSecrets,
 				proofYs,
+				dleqProofs,
 			})
 		})
 	}

@@ -19,6 +19,21 @@ const COCO_E2E_ENABLED = process.env.COCO_V2_E2E === '1'
 const FULL_LIFECYCLE_TITLE = `Coco v2 Full Lifecycle ${Date.now()}`
 const markSmokeCheck = (check: string): void => console.log(`COCO_AUCTIONSDEV_SMOKE_CHECK=${check}`)
 
+const expectDleqCollateral = (event: Event): void => {
+	const lockSecrets = event.tags.filter((tag) => tag[0] === 'lock_secret')
+	const proofYs = event.tags.filter((tag) => tag[0] === 'proof_y')
+	const dleqProofs = event.tags.filter((tag) => tag[0] === 'dleq_proof')
+	expect(lockSecrets.length).toBeGreaterThan(0)
+	expect(proofYs).toHaveLength(lockSecrets.length)
+	expect(dleqProofs).toHaveLength(lockSecrets.length)
+	for (const tag of dleqProofs) {
+		const proof = JSON.parse(tag[1] ?? '') as Record<string, unknown>
+		expect(Object.keys(proof).sort()).toEqual(['C', 'amount', 'e', 'id', 'r', 's'])
+		expect(typeof proof.r).toBe('string')
+		expect((proof.r as string).length).toBeGreaterThan(0)
+	}
+}
+
 const mintFakeToken = async (amount: number): Promise<string> => {
 	const wallet = new Wallet(MINT_URL)
 	await wallet.loadMint()
@@ -270,6 +285,7 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 
 			const bid = await waitForBid(relay, auction.id)
 			expect(bid.pubkey).toBe(devUser2.pk)
+			expectDleqCollateral(bid)
 			expect(bid.tags.some((tag) => tag[0] === 'coco_operation' && tag[1]?.startsWith('pm:coco-v2:auction:prepare-bid:'))).toBe(true)
 			expect(bid.tags.some((tag) => tag[0] === 'coco_condition' && /^[0-9a-f]{64}$/.test(tag[1] ?? ''))).toBe(true)
 			expect(bid.tags.some((tag) => tag[0] === 'coco_commitment' && /^[0-9a-f]{64}$/.test(tag[1] ?? ''))).toBe(true)
@@ -321,12 +337,14 @@ test.describe('Coco v2 normal Auction UI — fake funds', () => {
 
 			await placeCocoBid(buyerPage, auction, devUser2.pk, 100)
 			const bidA = await waitForRelayEvent(relay, { kinds: [1023], '#e': [auction.id], authors: [devUser2.pk] })
+			expectDleqCollateral(bidA)
 			markSmokeCheck('bidA')
 			markSmokeCheck('hardReloadRecovery')
 			await publishValidVerdict(relay, auction, bidA)
 
 			await placeCocoBid(newUserPage, auction, devUser3.pk, 110)
 			const bidB = await waitForRelayEvent(relay, { kinds: [1023], '#e': [auction.id], authors: [devUser3.pk] })
+			expectDleqCollateral(bidB)
 			markSmokeCheck('bidB')
 			await publishValidVerdict(relay, auction, bidB)
 			await newUserPage.reload()

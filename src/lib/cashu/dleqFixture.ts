@@ -24,11 +24,7 @@
  * tested accordingly.
  */
 
-import { createDLEQProof } from '@cashu/cashu-ts/crypto/mint/NUT12'
-import { getPubKeyFromPrivKey } from '@cashu/cashu-ts/crypto/mint'
-import { hashToCurve, pointFromHex } from '@cashu/cashu-ts/crypto/common'
-import { bytesToNumber } from '@cashu/cashu-ts/crypto/util'
-import type { MintKeys } from '@cashu/cashu-ts'
+import { createDLEQProof, getPubKeyFromPrivKey, hashToCurve, pointFromHex, type MintKeys } from '@cashu/cashu-ts'
 
 // ---------- Public types ----------------------------------------------------
 
@@ -174,7 +170,7 @@ export const makeHonestDleqProof = (
 	const B_ = Y.add(rG)
 
 	// Unblinded signature C = a·Y (what the wallet holds after unblinding).
-	const C = Y.multiply(bytesToNumber(aBytes))
+	const C = Y.multiply(BigInt(`0x${bytesToHex(aBytes)}`))
 
 	// Mint-side DLEQ proof over (B', C') with key a.
 	const { e, s } = createDLEQProof(B_, aBytes)

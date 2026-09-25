@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CashuMint } from '@cashu/cashu-ts'
+import type { Mint as CashuMint } from '@cashu/cashu-ts'
 import { mintSupportsDleq } from '../cashu/mintCapability'
 
 /**

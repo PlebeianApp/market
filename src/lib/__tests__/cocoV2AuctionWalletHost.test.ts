@@ -121,6 +121,16 @@ class FakeEngine implements CocoEnginePort {
 			commitmentFingerprint: 'commitment-fingerprint',
 			lockSecrets: ['publication-only-secret'],
 			proofYs: [`02${'7'.repeat(64)}`],
+			dleqProofs: [
+				{
+					id: '00deadbeef',
+					amount: 32,
+					C: `02${'8'.repeat(64)}`,
+					e: '11',
+					s: '22',
+					r: '33',
+				},
+			],
 		})
 	}
 

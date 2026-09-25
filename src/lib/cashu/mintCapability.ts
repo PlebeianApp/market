@@ -20,7 +20,7 @@
  * auction can never slip through on an unverified mint.
  */
 
-import { CashuMint } from '@cashu/cashu-ts'
+import { Mint as CashuMint } from '@cashu/cashu-ts'
 import type { CashuCustomRequest } from './nut7'
 
 // ---------- Configuration -----------------------------------------------------
@@ -71,7 +71,8 @@ export const mintSupportsDleq = async (mintUrl: string, options: MintDleqSupport
 	const timeoutMs = options.timeoutMs ?? DEFAULT_MINT_INFO_TIMEOUT_MS
 
 	try {
-		const mint = options.mintClient ?? new CashuMint(mintUrl, options.customRequest as never)
+		const mint =
+			options.mintClient ?? new CashuMint(mintUrl, options.customRequest ? { customRequest: options.customRequest as never } : undefined)
 		const info = await withTimeout(mint.getInfo(), timeoutMs, `mint /v1/info ${mintUrl}`)
 		return info?.nuts?.['12']?.supported === true
 	} catch {

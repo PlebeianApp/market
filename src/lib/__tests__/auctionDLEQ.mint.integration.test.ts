@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { CashuMint, CashuWallet, type MintKeys, type Proof } from '@cashu/cashu-ts'
+import { Mint, Wallet, type MintKeys, type Proof } from '@cashu/cashu-ts'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,10 +82,10 @@ const waitForMint = async (timeoutMs = 90_000): Promise<void> => {
  * is the real guarantee that the minted collateral is DLEQ-verifiable.
  */
 const mintDleqProofs = async (amount: number): Promise<{ proofs: Proof[]; dleqProofs: DleqProof[]; keyset: MintKeys }> => {
-	const mint = new CashuMint(MINT_URL)
-	const wallet = new CashuWallet(mint)
-	const quote = await wallet.createMintQuote(amount)
-	const proofs = await wallet.mintProofs(amount, quote.quote)
+	const wallet = new Wallet(MINT_URL)
+	await wallet.loadMint()
+	const quote = await wallet.createMintQuoteBolt11(amount)
+	const proofs = await wallet.mintProofsBolt11(amount, quote)
 	expect(proofs.length).toBeGreaterThan(0)
 
 	// serialize to dleq_proof (parallel to lockSecrets/proofYs, per buildDleqProofs contract)
@@ -117,7 +117,7 @@ beforeAll(async () => {
 	// FIRST gate: the mint MUST advertise NUT-12 DLEQ support before we mint
 	// anything — a mint without NUT-12 would make the whole collateral
 	// unverifiable, so we assert it up front rather than after the fact.
-	const info = await new CashuMint(MINT_URL).getInfo()
+	const info = await new Mint(MINT_URL).getInfo()
 	expect(info?.nuts?.['12']?.supported).toBe(true)
 
 	// Shared honest fixture: one real minted proof + serialized dleq_proof + keyset.
@@ -200,14 +200,19 @@ describe('DLEQ via a real local mint (NUT-12)', () => {
 		// shared fixture must stay untouched for the tests above.
 		const { proofs, keyset } = await mintDleqProofs(MINT_AMOUNT)
 
-		const wallet = new CashuWallet(new CashuMint(MINT_URL))
+		const wallet = new Wallet(MINT_URL)
+		await wallet.loadMint()
 		const lockPubkey = GENERATOR_HEX // any valid compressed secp256k1 point
 		const refundPubkey = GENERATOR_HEX
-		const result = await wallet.swap(32, proofs, {
-			p2pk: {
-				pubkey: lockPubkey,
-				locktime: Math.floor(Date.now() / 1000) + 3_600,
-				refundKeys: [refundPubkey],
+		const result = await wallet.send(32, proofs, undefined, {
+			send: {
+				type: 'p2pk',
+				options: {
+					kind: 'P2PK',
+					data: lockPubkey,
+					locktime: Math.floor(Date.now() / 1000) + 3_600,
+					refundKeys: [refundPubkey],
+				},
 			},
 		})
 
@@ -220,7 +225,7 @@ describe('DLEQ via a real local mint (NUT-12)', () => {
 		expect(dleqProofs).toHaveLength(result.send.length)
 		// 3. The serialized outputs verify against their own keyset and sum
 		//    to the locked leg amount (same call shape as computeValidatedBids).
-		const sendSum = result.send.reduce((sum, p) => sum + p.amount, 0)
+		const sendSum = dleqProofs.reduce((sum, proof) => sum + proof.amount, 0)
 		const withSecrets = dleqProofs.map((dp, i) => ({ ...dp, secret: result.send[i].secret }))
 		const keysets = new Map([[`${MINT_URL}:${keyset.id}`, keyset]])
 		const verdict = verifyBidDleqWithKeysets({ mint: MINT_URL, legDelta: sendSum, proofs: withSecrets }, keysets)

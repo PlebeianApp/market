@@ -9,7 +9,7 @@ import type { Page } from 'playwright/test'
 import { getAuctionHdAccountFromWalletKeys } from '../../src/lib/auctionHd'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '../../src/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '../../src/lib/cashu/hashToCurve'
-import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { Wallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
 
 // ---------------------------------------------------------------------------
 // Real local Cashu mint — nutshell 0.19.2 FakeWallet, V1 keyset, NUT-12 DLEQ on
@@ -57,12 +57,20 @@ async function mintAndLockP2pk(opts: {
 	locktime: number
 	refundPubkey: string
 }): Promise<{ token: string; proofs: Proof[] }> {
-	const wallet = new CashuWallet(new CashuMint(TEST_MINT_URL))
+	const wallet = new Wallet(TEST_MINT_URL)
 	await wallet.loadMint()
-	const quote = await wallet.createMintQuote(opts.amount)
-	const minted = await wallet.mintProofs(opts.amount, quote.quote)
-	const { send } = await wallet.swap(opts.amount, minted, {
-		p2pk: { pubkey: opts.lockPubkey, locktime: opts.locktime, refundKeys: [opts.refundPubkey] },
+	const quote = await wallet.createMintQuoteBolt11(opts.amount)
+	const minted = await wallet.mintProofsBolt11(opts.amount, quote)
+	const { send } = await wallet.send(opts.amount, minted, undefined, {
+		send: {
+			type: 'p2pk',
+			options: {
+				kind: 'P2PK',
+				data: opts.lockPubkey,
+				locktime: opts.locktime,
+				refundKeys: [opts.refundPubkey],
+			},
+		},
 	})
 	if (!send?.length) throw new Error('mintAndLockP2pk: swap returned no locked proofs')
 	const token = getEncodedToken({ mint: TEST_MINT_URL, proofs: send })

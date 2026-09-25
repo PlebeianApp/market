@@ -6,6 +6,7 @@ import type {
 	CocoAuctionWinnerReceiveInput,
 	CocoAuctionWinnerReleaseInput,
 } from './types'
+import type { DleqProof } from '@/lib/cashu/dleq'
 
 /**
  * Publication-only material. It is intentionally confined to the sealed
@@ -25,6 +26,7 @@ export interface SealedCocoBidPublicationMaterial {
 	commitmentFingerprint: string
 	lockSecrets: readonly string[]
 	proofYs: readonly string[]
+	dleqProofs: readonly DleqProof[]
 }
 
 /** @see SealedCocoBidPublicationMaterial */
