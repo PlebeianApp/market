@@ -250,14 +250,17 @@ function stubYadioRates(context: BrowserContext) {
 /**
  * The run's external request log. Records every HTTP response whose host is
  * neither loopback nor the app under test, annotated with the stub marker it
- * carries. A response for `api.yadio.io` that carries no `yadio` marker is a
- * violation: `route.fulfill()` never reaches the network, so the marker can
- * only be present if the stub — not the public API — served the request.
+ * carries. A response that carries NO marker is a violation: `route.fulfill()`
+ * never reaches the network, so the marker can only be present if a stub — not
+ * the public service — served the request. `api.yadio.io` is the subset this
+ * spec originally asserted on; the assertion now covers every host, because a
+ * spec that forgets one of its stubs still reaches the network (see
+ * `reportIsolation`).
  */
 function trackExternalHttp(context: BrowserContext) {
 	const appHost = new URL(BASE_URL).host
 	const external: string[] = []
-	const unstubbedYadio: string[] = []
+	const unstubbed: string[] = []
 	context.on('response', (response) => {
 		const url = response.url()
 		let host: string
@@ -269,17 +272,20 @@ function trackExternalHttp(context: BrowserContext) {
 		if (host === appHost || host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]')) return
 		const servedBy = response.headers()[STUB_MARKER_HEADER]
 		external.push(`${response.status()} ${url}${servedBy ? ` [served by the ${servedBy} route stub]` : ''}`)
-		if (host === 'api.yadio.io' && servedBy !== 'yadio') unstubbedYadio.push(url)
+		if (!servedBy) unstubbed.push(`${response.status()} ${url}`)
 	})
-	return () => ({ external, unstubbedYadio })
+	return () => ({ external, unstubbed })
 }
 
 /**
- * Print this run's isolation evidence to the reporter output and fail if any
- * `api.yadio.io` response was NOT served by the route stub — i.e. if the request
- * actually left the process (ADR-0005).
+ * Print this run's isolation evidence to the reporter output and fail if ANY
+ * external HTTP response was NOT served by a route stub — i.e. if the request
+ * actually left the process (ADR-0005). Asserting on every unmarked response
+ * rather than on `api.yadio.io` alone is what makes a spec that forgets one of
+ * its stubs (`stubExternalImages`, `stubYadioRates`) fail instead of merely
+ * logging the leak.
  */
-function reportIsolation(servedYadio: string[], log: { external: string[]; unstubbedYadio: string[] }) {
+function reportIsolation(servedYadio: string[], log: { external: string[]; unstubbed: string[] }) {
 	console.log(`  [isolation] yadio requests served by the route stub: ${servedYadio.length}`)
 	for (const url of servedYadio) console.log(`    - ${url}`)
 	console.log(
@@ -287,7 +293,7 @@ function reportIsolation(servedYadio: string[], log: { external: string[]; unstu
 			log.external.length ? `\n${log.external.map((line) => `    ${line}`).join('\n')}` : '(none)'
 		}`,
 	)
-	expect(log.unstubbedYadio, 'a yadio request reached the network instead of the route stub').toEqual([])
+	expect(log.unstubbed, `external response(s) reached the network instead of a route stub: ${log.unstubbed.join(', ')}`).toEqual([])
 }
 
 /** Open the login dialog from the header (same dance as e2e/tests/auth.spec.ts). */
@@ -348,6 +354,11 @@ test.describe('Authentication', () => {
 			// socket except the app's own relay so the DNS failure does not
 			// masquerade as app breakage.
 			await stubThirdPartyRelays(context)
+			// Hermetic (ADR-0005): the home feed renders the seeded products'
+			// remote `placehold.co` images. Registered BEFORE the yadio stub
+			// below — Playwright checks the most recently registered handler
+			// first, and this stub's catch-all `**/*` continues non-images.
+			await stubExternalImages(context)
 
 			// Hermetic (ADR-0005): the ContextVM -> Yadio rate fallback is
 			// served by the local stub, and every external HTTP response the
