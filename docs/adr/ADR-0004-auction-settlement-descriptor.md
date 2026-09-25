@@ -286,6 +286,39 @@ The publisher independently derives the canonical winner:
    succeeds, leg 2 fails, and the seller has partial funds with no valid
    settlement event.
 
+> **Amendment (2026-09-25, proposed — awaits maintainer sign-off): a
+> publish-path verdict read is a bounded re-read, not a single
+> observation.** The quorum gates above read kind-30440 verdicts scoped to
+> the auction's declared `auditors`, and a verdict that is published but not
+> yet indexed by the relay is absent from such a read: on a fail-closed gate
+> one racy read resolves the quorum to `0/N` and refuses a legitimate path
+> release or settlement. This amendment records the resulting relay
+> assumption — _a kind-30440 verdict MAY be absent from a read taken
+> immediately after publication, and a bounded re-read is expected to
+> resolve it_ — as part of the gate's contract
+> (`fetchAuctionVerdictsWithRetry`, `src/queries/auctions.tsx:599-664`).
+>
+> 1. **The window is bounded, and it is the only thing the re-read may act
+>    on.** The gate re-reads an empty result, or a transient transport
+>    failure, inside a 2500 ms window with a 300 ms step (≤ 9 reads), then
+>    stops. An auction that declares no auditors is a permanent condition,
+>    not propagation lag, and is deliberately not retried; a non-transient
+>    error propagates immediately. The re-read is publish-path only —
+>    read-path consumers keep their single read.
+> 2. **The re-read cannot weaken the gate.** When the window closes, the last
+>    observation is returned or the last transient error is rethrown, so
+>    every caller's quorum-shortfall throw still runs and a genuinely short
+>    quorum is never published. The measured consequence is latency, not
+>    permissiveness: worst case one extra 2500 ms per publish action, and a
+>    genuinely short quorum reports ~2500 ms later than before — consistent
+>    with this ADR's "Security takes priority over settlement speed".
+>
+> The propagation-lag premise behind the window is INFERRED from the code
+> path, not observed: no captured failing read with the relay's response
+> backs it. This extension of an ADR-owned gate is therefore proposed rather
+> than clarifying an accepted decision; the `Status` field above is
+> unchanged.
+
 ### 6. Self-verifiable events vs. network-consensus states (amendment)
 
 Auction end states are classified by verification category:
