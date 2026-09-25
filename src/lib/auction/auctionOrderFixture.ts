@@ -36,6 +36,7 @@ import {
 } from '@/lib/auction/tagBuilders'
 import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
+import { makeDleqKeyset, makeHonestDleqProofs } from '@/lib/cashu/dleqFixture'
 import { computeValidatedBids } from '@/lib/auction/bidValidation'
 import { validatePathRelease, validateSettlementCompleteness } from '@/lib/auction/validation'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
@@ -129,7 +130,7 @@ const buildAuctionLockSecret = (input: { childPubkey: string; refundPubkey: stri
  * `parseValidatorVerdictEvent`, `parsePathReleaseEvent`, `parseSettlementEvent`,
  * `validateBid`, `validatePathRelease`, `validateSettlementCompleteness`,
  * `computeValidatedBids`) accept the result. See
- * `e2e/scenarios/auctionOrderFixture.test.ts` for that cross-validation.
+ * `src/lib/__tests__/auctionOrderFixture.test.ts` for that cross-validation.
  */
 export function buildAuctionOrderFixture(input: { now: number; title?: string; description?: string }): AuctionOrderFixture {
 	const { now } = input
@@ -182,6 +183,10 @@ export function buildAuctionOrderFixture(input: { now: number; title?: string; d
 	const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(XPUB, E2E_AUCTION_DERIVATION_PATH)
 	const lockSecret = buildAuctionLockSecret({ childPubkey, refundPubkey, locktime, nonce: uuidv4() })
 	const proofY = hashToCurveHexFromString(lockSecret)
+	// ADR-0011: DLEQ is unconditional, so the seeded winning bid must carry a real
+	// NUT-12 proof for its locked proof — without it the auditor quorum below cannot
+	// make the bid canonical, and the whole chain becomes un-reproducible.
+	const { proofs: dleqProofs, keyset: dleqKeyset } = makeHonestDleqProofs([lockSecret], [amount])
 
 	const bidEvent = finalizeEvent(
 		{
@@ -199,6 +204,7 @@ export function buildAuctionOrderFixture(input: { now: number; title?: string; d
 				childPubkey,
 				lockSecrets: [lockSecret],
 				proofYs: [proofY],
+				dleqProofs,
 				createdForEndAt: endAt,
 				bidNonce: uuidv4(),
 			}),
@@ -362,12 +368,17 @@ export function assertAuctionOrderFixtureValid(fixture: AuctionOrderFixture): vo
 		throw new Error(`auction order fixture: settlement final_amount ${settlement.finalAmount} is below the reserve ${auction.reserve}`)
 	}
 
+	// The keyset the bid's proofs verify against, keyed the way the client keys fetched
+	// keysets (`${mint}:${keysetId}`). `makeDleqKeyset` is deterministic, so rebuilding it
+	// here yields exactly the keyset the builder proved against.
+	const dleqKeyset = makeDleqKeyset([bid.amount])
 	const quorum = computeValidatedBids({
 		auction,
 		bids: [bid],
 		verdicts: [verdict],
 		postSettlement: true,
 		settledBidIds: new Set([bid.id]),
+		dleqKeysets: new Map([[`${bid.mint}:${dleqKeyset.id}`, dleqKeyset]]),
 	})
 	if (quorum.canonicalWinner?.id !== bid.id) {
 		throw new Error(`auction order fixture: auditor quorum does not confirm ${bid.id} as the canonical winning bid`)

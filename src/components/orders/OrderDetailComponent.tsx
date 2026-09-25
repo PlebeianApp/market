@@ -82,6 +82,7 @@ import {
 	type GetSettlementDescriptorInput,
 	type SettlementDescriptor,
 } from '@/lib/auction/settlementDescriptor'
+import { useDleqKeysetPolling } from '@/lib/auction/useDleqKeysetPolling'
 import { parseAuctionEvent } from '@/lib/schemas/auction/auctionEvent'
 import { parseBidEvent } from '@/lib/schemas/auction/bidEvent'
 import { parsePathReleaseEvent, parseSettlementEvent } from '@/lib/schemas/auction/settlementEvents'
@@ -515,6 +516,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const [descriptorFailed, setDescriptorFailed] = useState(false)
 	const [descriptorReady, setDescriptorReady] = useState(false)
 
+	// ADR-0011: the DLEQ evidence gate is unconditional, so the descriptor needs the
+	// mint keysets the bid's proofs verify against — the same hook every other auction
+	// surface threads (`useDleqKeysetPolling`). Without them `computeValidatedBids`
+	// classifies every bid `pending`, no top bid is derived, and both the settlement
+	// card and the fulfillment authority below resolve to nothing.
+	const { keysets: dleqKeysets, unknownKeysets: dleqUnknownKeysets } = useDleqKeysetPolling(
+		parsedBidsForSettlement,
+		parsedAuctionForSettlement?.mints ?? [],
+	)
+
 	const descriptorInput = useMemo<GetSettlementDescriptorInput | null>(() => {
 		if (!parsedAuctionForSettlement) return null
 		const myBids = user?.pubkey ? parsedBidsForSettlement.filter((b) => b.bidderPubkey === user.pubkey) : []
@@ -536,6 +547,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			myTopBidEvent,
 			hasBidderRecord: !!(myTopBidEvent && findBidderRecord(myTopBidEvent.id)),
 			hasPlacedBid: myBids.length > 0,
+			dleqKeysets,
+			dleqUnknownKeysets,
 			now: Math.floor(Date.now() / 1000),
 		}
 	}, [
@@ -546,6 +559,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		parsedPathReleasesForSettlement,
 		auctionClaimOrders,
 		user?.pubkey,
+		dleqKeysets,
+		dleqUnknownKeysets,
 	])
 
 	useEffect(() => {
@@ -554,19 +569,31 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			return
 		}
 		let cancelled = false
-		getSettlementDescriptor(descriptorInput)
-			.then((d) => {
-				if (cancelled) return
-				setOrderSettlementDescriptor(d)
-				setDescriptorFailed(false)
-				setDescriptorReady(true)
-			})
-			.catch((err) => {
-				console.error('getSettlementDescriptor failed:', err)
-				if (!cancelled) setDescriptorFailed(true)
-			})
+		let retry: ReturnType<typeof setTimeout> | undefined
+		// A re-run clears a previous failure: `descriptorFailed` used to latch until a later
+		// success, and since this effect only re-runs on a new input, one transient throw
+		// pinned the card at "Validating…" with no way back. One bounded retry covers the
+		// transient case; a persistent failure still surfaces.
+		setDescriptorFailed(false)
+		const attempt = (retriesLeft: number): void => {
+			getSettlementDescriptor(descriptorInput)
+				.then((d) => {
+					if (cancelled) return
+					setOrderSettlementDescriptor(d)
+					setDescriptorFailed(false)
+					setDescriptorReady(true)
+				})
+				.catch((err) => {
+					console.error('getSettlementDescriptor failed:', err)
+					if (cancelled) return
+					setDescriptorFailed(true)
+					if (retriesLeft > 0) retry = setTimeout(() => !cancelled && attempt(retriesLeft - 1), 2_000)
+				})
+		}
+		attempt(1)
 		return () => {
 			cancelled = true
+			if (retry) clearTimeout(retry)
 		}
 	}, [descriptorInput])
 

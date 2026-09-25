@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { finalizeEvent, type VerifiedEvent } from 'nostr-tools/pure'
 import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1, devUser2 } from '@/lib/fixtures'
+import { makeDleqKeyset } from '@/lib/cashu/dleqFixture'
 import {
 	getSettlementDescriptor,
 	getAuctionFulfillmentAuthority,
@@ -165,11 +166,20 @@ describe('seeded auction order reaches validated fulfillment authority', () => {
 	}
 
 	type DescriptorInput = Parameters<typeof getAuctionFulfillmentAuthority>[0]
+	// The keyset the fixture's DLEQ proofs verify against. `makeDleqKeyset` is
+	// deterministic, so rebuilding it here is exactly the keyset the fixture proved
+	// against. `mintKeysets` is injected too, so the gate never reaches for
+	// `http://localhost:3338` — the descriptor documents that injection point as the
+	// hermetic path (N4).
+	const dleqKeyset = makeDleqKeyset([fixture.amount])
+	const parsedBid = parsed().bids[0]
 	const inputWith = (claimOrders: VerifiedEvent[], currentUserPubkey: string): DescriptorInput =>
 		({
 			...parsed(),
 			claimOrders,
 			currentUserPubkey,
+			dleqKeysets: new Map([[`${parsedBid.mint}:${dleqKeyset.id}`, dleqKeyset]]),
+			mintKeysets: [dleqKeyset],
 			now,
 		}) as unknown as DescriptorInput
 
