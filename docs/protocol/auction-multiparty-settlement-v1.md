@@ -190,13 +190,30 @@ row with no proofs (the zero-fee logical leg) is excluded from the completion re
 nothing to redeem reports `nothing_to_redeem` rather than an empty success. The transport (§5) and the
 confirmation claim (§7) still need rulings before the second half of this section can be written.
 
-## 9. Validator verification of the split
+## 9. Validator verification of the split — IMPLEMENTED
 
-Extends manifest §6 with what a validator attests and when: the three per-row checks
-(derivation reproduces `child_pubkey`; the leg's proofs are P2PK-locked to that key; amounts sum
-to the released leg total) plus the three commitment matches, performed for **every** row,
-before publishing a verdict that the auction settled. Failure codes already exist for these in
-manifest §7.
+Extends manifest §6 with what a validator attests and when: the three per-row checks (derivation
+reproduces `child_pubkey`; the leg's proofs are P2PK-locked to that key; amounts sum to the released leg
+total) plus the three commitment matches, performed for **every** row, before publishing a verdict that
+the auction settled.
+
+`src/lib/auction/multipartySettlementAttestation.ts` produces that attestation as one value: per row, the
+derivation result, the lock result and the amount result; plus the release's binding to this leg, the
+release's own failure codes, and the leg total. `mayPublishSettledVerdict` is false unless **every** row
+passed every check — a row whose proofs never arrived is `row_proofs_missing`, which is not a pass — and a
+binding failure is fatal on its own, even with perfect rows.
+
+**The check's honest limit, recorded here so nobody over-reads an attestation: it is parity-blind.**
+The manifest carries child keys x-only, and a proof locked to the parity twin of the intended key projects
+to the same x-only value, so a _settlement_ verifier cannot distinguish the two from the wire. Parity is
+knowable only where the compressed key is held — at construction (D16) — which is why that check is
+load-bearing and this one complements it. An attestation is evidence that the keys match the manifest, not
+that they are spendable by the intended recipient. A test asserts this limit rather than leaving it to be
+discovered.
+
+The leg total is checked against `expectedLegTotalSats` — the amount the bid actually locked — when the
+caller knows it, and against the manifest's row sum otherwise, so a manifest whose rows do not add up to
+what was locked is caught here.
 
 ## 10. Evidence rules — OPEN
 

@@ -114,6 +114,55 @@ as it is in a single-file run.
 
 ---
 
+## Stage J — the validator's settlement attestation
+
+**Status:** implemented as an unwired composition; nothing publishes a verdict from it yet.
+
+### What changed
+
+- `multipartySettlementAttestation.ts` — the join between the pieces that already existed: the parsed
+  release packet, the release binding check, the commitment binding, and per-row proof inspection, joined
+  into one value with `mayPublishSettledVerdict` false unless **every** row passed.
+- `docs/protocol/auction-multiparty-settlement-v1.md` §9 — was specified but unimplemented; now records
+  what the attestation is, and the check's honest limit.
+
+### Decisions taken
+
+1. **The attestation is a value, not a procedure.** §9 says the checks happen before a verdict is
+   published; the shape that makes that enforceable is a single object whose `mayPublishSettledVerdict`
+   can only be true when every row passed. A caller cannot publish "settled" from a partial read without
+   contradicting the value it holds.
+2. **A missing row is a failure, not a skip.** `row_proofs_missing` is its own code, so "we have not seen
+   that row's proofs yet" and "that row is wrong" are distinguishable — and neither is a pass. D7 makes
+   one unrespected recipient grief, so absence must never round up.
+3. **A binding failure is fatal even with perfect rows.** The binding check is separate from the per-row
+   checks and both must hold; a leg whose rows all attest but whose release binds another bid or another
+   manifest is refused, and the binding failure carries its own code.
+4. **The leg total is checked against what the bid actually locked**, not against the manifest's own row
+   sum, when the caller knows it (`expectedLegTotalSats`). That catches the case the per-row checks cannot:
+   a manifest whose rows are each internally consistent but do not add up to the locked amount.
+5. **The honest limit is recorded and tested: the settlement key check is parity-blind.** The manifest
+   carries x-only child keys and a proof locked to the parity twin projects identically, so a settlement
+   verifier cannot distinguish them from the wire alone. D16's construction-time check is the only place
+   parity is knowable; an attestation is evidence that keys match the manifest, **not** that they are
+   spendable by the intended recipient. A test asserts the limit, so a later reader cannot mistake this
+   check for the one that catches that bug — and the packet §9 says it too.
+
+### Evidence
+
+- 11 focused tests in `multipartySettlementAttestation.test.ts`; suite numbers in the commit and the PR
+  body. The two to read first: the missing-row refusal, and the parity-blindness test.
+
+### Left open
+
+- **Publishing the verdict.** The attestation is the gate's input; the verdict event and its trigger are
+  this stage's unwired half, and publishing is relay publication — the production gate applies.
+- **Whether the validator attests redemption as well as the split** (§9 covers the split), which interacts
+  with stage I's observation: a validator can attest what it can verify, and mint state is a client-side
+  observation today.
+
+---
+
 ## Stage I — redemption isolation
 
 **Status:** the isolation half implemented, unwired; the fallback half deliberately not decided.
