@@ -43,9 +43,9 @@
 			"required": ["marketCommit", "coreSha", "coreInstalledContentHash", "indexeddbInstalledContentHash"],
 			"properties": {
 				"marketCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-				"coreSha": { "const": "35941014a61af7dc112b31de8053db610b70085c" },
-				"coreInstalledContentHash": { "const": "sha256:fd0b207c45ace25a74525df283b3a75183bba046faab5a0b7772df3dbb56e8eb" },
-				"indexeddbInstalledContentHash": { "const": "sha256:efa6b6cadfaa7da1847c7beecea0b29e4f65052549410353e6c1d73b7013de91" }
+				"coreSha": { "const": "34f968f7032b8b2120ccd8eccdf60542a61a1aad" },
+				"coreInstalledContentHash": { "const": "sha256:70602fc9ce09751502977e64434ca3e2a475d700a46d0f2a4e95ed50f157f796" },
+				"indexeddbInstalledContentHash": { "const": "sha256:7507ff64326da39f1758fde233b318e454984142bb5e7e6ae5cac72a85e790fd" }
 			}
 		},
 		"checks": {

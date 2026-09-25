@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { build, type BuildConfig } from 'bun'
+import { build, type BuildConfig, type BunPlugin } from 'bun'
 import plugin from 'bun-plugin-tailwind'
 import { existsSync } from 'fs'
 import { rm } from 'fs/promises'
@@ -134,6 +134,27 @@ if (existsSync(outdir)) {
 
 const start = performance.now()
 
+const cocoCoreMemoryTreeShakePlugin: BunPlugin = {
+	name: 'coco-core-production-profile',
+	setup(builder) {
+		builder.onLoad({ filter: /@cashu\/coco-core\/dist\/index\.js$/ }, async ({ path: modulePath }) => {
+			const source = await Bun.file(modulePath).text()
+			const deadMemoryMarker = 'const COPY_MEMORY_REPOSITORY_STATE = Symbol("copyMemoryRepositoryState");'
+			const occurrences = source.split(deadMemoryMarker).length - 1
+			if (occurrences !== 1) {
+				throw new Error(`Coco Core production boundary expected one dead memory marker, found ${occurrences}`)
+			}
+			return {
+				contents: source.replace(
+					deadMemoryMarker,
+					'const COPY_MEMORY_REPOSITORY_STATE = /* @__PURE__ */ Symbol("copyMemoryRepositoryState");',
+				),
+				loader: 'js',
+			}
+		})
+	},
+}
+
 // Scan for all HTML files in the project
 const entrypoints = [...new Bun.Glob('**.html').scanSync('src')]
 	.map((a) => path.resolve('src', a))
@@ -144,7 +165,7 @@ console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? 
 const result = await build({
 	entrypoints,
 	outdir,
-	plugins: [plugin],
+	plugins: [cocoCoreMemoryTreeShakePlugin, plugin],
 	minify: true,
 	target: 'browser',
 	sourcemap: 'linked',
