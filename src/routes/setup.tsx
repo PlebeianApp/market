@@ -4,16 +4,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { submitAppSettings } from '@/lib/appSettings'
 import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
-import { createHandlerInfoEventData } from '@/publish/nip89'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
+import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -129,36 +127,6 @@ function SetupRoute() {
 					}
 				}
 
-				// Create 30000 event for admins - Submit this FIRST
-				const adminsTags: string[][] = [['d', 'admins'], ...Array.from(allAdminsHex).map((hex) => ['p', hex])]
-
-				let adminsEvent = {
-					kind: 30000,
-					created_at: Math.floor(Date.now() / 1000),
-					tags: adminsTags,
-					content: '',
-					pubkey: ownerPubkeyHex,
-				}
-
-				adminsEvent = finalizeEvent(adminsEvent, generateSecretKey())
-				await submitAppSettings(adminsEvent)
-
-				// Create 30000 event for editors - Submit this SECOND (if there are any editors)
-				if (allEditorsHex.size > 0) {
-					const editorsTags: string[][] = [['d', 'editors'], ...Array.from(allEditorsHex).map((hex) => ['p', hex])]
-
-					let editorsEvent = {
-						kind: 30000,
-						created_at: Math.floor(Date.now() / 1000),
-						tags: editorsTags,
-						content: '',
-						pubkey: ownerPubkeyHex,
-					}
-
-					editorsEvent = finalizeEvent(editorsEvent, generateSecretKey())
-					await submitAppSettings(editorsEvent)
-				}
-
 				const appSettingsContent = {
 					...value,
 					ownerPk: ownerPubkeyHex,
@@ -167,9 +135,19 @@ function SetupRoute() {
 				// Keep setup consistent with the resolved instance config, but preserve the
 				// legacy default when no custom handler has been configured yet.
 				const handlerId = config.handlerId || 'plebeian-market-handler'
-				let handlerEvent = createHandlerInfoEventData(ownerPubkeyHex, appSettingsContent, config.appRelay, handlerId)
-				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
-				await submitAppSettings(handlerEvent)
+				const response = await fetch('/api/setup', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						settings: { ...appSettingsContent, handlerId },
+						admins: Array.from(allAdminsHex),
+						editors: Array.from(allEditorsHex),
+					}),
+				})
+				if (!response.ok) {
+					const result = (await response.json().catch(() => null)) as { error?: string } | null
+					throw new Error(result?.error || 'Failed to initialize app settings')
+				}
 
 				// Wait a bit for the events to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))
