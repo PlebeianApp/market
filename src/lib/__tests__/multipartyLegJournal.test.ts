@@ -335,6 +335,22 @@ describe('multiparty leg journal', () => {
 		expect(again.ok).toBe(true)
 	})
 
+	test('resolves a row settled as uncertain, and refuses to re-mark it uncertain', () => {
+		const uncertain = settleMultipartyLegRow(attempted(), { manifestIndex: 0, outcome: 'uncertain', at: AT + 2 })
+		if (!uncertain.ok) throw new Error('fixture settle refused')
+
+		const resolved = settleMultipartyLegRow(uncertain.entry, { manifestIndex: 0, outcome: 'locked', at: AT + 3 })
+		expect(resolved.ok).toBe(true)
+		if (!resolved.ok) return
+		expect(resolved.entry.rows[0].state).toBe('locked')
+
+		// An `uncertain` row is unresolved, not done — but re-marking it uncertain changes nothing.
+		const again = settleMultipartyLegRow(uncertain.entry, { manifestIndex: 0, outcome: 'uncertain', at: AT + 3 })
+		expect(again.ok).toBe(false)
+		if (again.ok) return
+		expect(again.code).toBe('journal_row_already_settled')
+	})
+
 	test('refuses to reopen an uncertain, locked, or foreign-key row', () => {
 		for (const outcome of ['uncertain', 'locked', 'locked_to_foreign_key'] as const) {
 			const settled = settleMultipartyLegRow(attempted(), { manifestIndex: 0, outcome, at: AT + 2 })

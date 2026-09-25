@@ -204,7 +204,11 @@ export const settleMultipartyLegRow = (
 	if (row.state === 'planned') {
 		return fail('journal_row_never_attempted', `row ${input.manifestIndex} was never attempted, so it has no outcome to record`)
 	}
-	if (row.state !== 'attempted') {
+	// A row settled as `uncertain` is *unresolved* rather than done: evidence may resolve it once, to
+	// `locked` or `failed_pre_mint`. Any other settled state is final here (`failed_pre_mint` is reopened
+	// explicitly instead), and re-marking a row uncertain would be a write that changes nothing.
+	const resolvesUncertain = row.state === 'uncertain' && input.outcome !== 'uncertain'
+	if (row.state !== 'attempted' && !resolvesUncertain) {
 		return fail('journal_row_already_settled', `row ${input.manifestIndex} is already ${row.state}`)
 	}
 
@@ -355,7 +359,8 @@ export type MultipartyLegReconciliationResult =
 	| { readonly ok: false; readonly code: string; readonly detail: string }
 
 /**
- * Reconcile a journal against what the wallet can observe, and settle every `attempted` row it can.
+ * Reconcile a journal against what the wallet can observe, and settle every row whose outcome is still
+ * unresolved — an `attempted` row, or one already settled as `uncertain` — from evidence.
  *
  * The resolution table, and nothing beyond it:
  *
@@ -427,7 +432,11 @@ export const reconcileMultipartyLeg = (
 	let next: MultipartyLegJournalEntry = entry
 
 	for (const row of entry.rows) {
-		if (row.state !== 'attempted') continue
+		// Both an `attempted` row and one already settled as `uncertain` are unresolved: the journal's own
+		// promise is that a row whose outcome could not be determined stays uncertain *until evidence
+		// resolves it*. Settled states are left alone — and `failed_pre_mint` is reopened explicitly, not
+		// resolved by evidence.
+		if (row.state !== 'attempted' && row.state !== 'uncertain') continue
 		const evidence = input.evidence.find((candidate) => candidate.manifestIndex === row.manifestIndex)
 		const outcome: MultipartyLegRowOutcome | null =
 			evidence?.proofs && evidence.proofs.length > 0 ? 'locked' : evidence?.provenPreMintFailure ? 'failed_pre_mint' : null
