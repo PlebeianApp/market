@@ -1,11 +1,14 @@
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { DEFAULT_INSTANCE_CONFIG } from '@/lib/instance-config'
 import { AppSettingsSchema } from '@/lib/schemas/app'
+import { authActions } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
@@ -61,6 +64,7 @@ function SetupRoute() {
 	const [editorsList, setEditorsList] = useState<string[]>([])
 	const [inputValue, setInputValue] = useState('')
 	const [editorInputValue, setEditorInputValue] = useState('')
+	const [uploadErrorField, setUploadErrorField] = useState<'picture' | 'banner' | null>(null)
 
 	const form = useForm({
 		defaultValues: {
@@ -178,6 +182,37 @@ function SetupRoute() {
 		},
 	})
 
+	const hasOwnerKeyForUpload = (fieldName: 'picture' | 'banner') => {
+		try {
+			npubToHex(form.state.values.ownerPk)
+			setUploadErrorField(null)
+			return true
+		} catch {
+			setUploadErrorField(fieldName)
+			toast.error('Set the owner public key before uploading an image')
+			return false
+		}
+	}
+
+	const ensureOwnerSigner = async () => {
+		let ownerPubkey: string
+		try {
+			ownerPubkey = npubToHex(form.state.values.ownerPk)
+		} catch {
+			toast.error('Set the owner public key before uploading an image')
+			throw new Error('Set the owner public key before uploading an image')
+		}
+
+		let signer = ndkActions.getSigner()
+		if (!signer) {
+			await authActions.loginWithExtension()
+			signer = ndkActions.getSigner()
+		}
+
+		const signerPubkey = (await signer?.user())?.pubkey
+		if (signerPubkey !== ownerPubkey) throw new Error('The connected Nostr signer must match the owner public key')
+	}
+
 	const getOwnerPubkey = async (event: React.FormEvent) => {
 		event.preventDefault()
 		try {
@@ -186,6 +221,7 @@ function SetupRoute() {
 			if (user) {
 				const npub = nip19.npubEncode(user)
 				form.setFieldValue('ownerPk', npub)
+				setUploadErrorField(null)
 			}
 		} catch (error) {
 			toast.error('Failed to get public key from extension')
@@ -263,6 +299,7 @@ function SetupRoute() {
 														} catch {
 															field.handleChange(value)
 														}
+														setUploadErrorField(null)
 													}}
 													onBlur={field.handleBlur}
 													placeholder="Owner npub"
@@ -347,18 +384,22 @@ function SetupRoute() {
 												<Label className="font-bold" htmlFor={field.name}>
 													Logo URL
 												</Label>
-												<Select onValueChange={(value) => field.handleChange(value)} defaultValue={field.state.value}>
-													<SelectTrigger className="border-2">
-														<SelectValue placeholder="Select logo" />
-													</SelectTrigger>
-													<SelectContent>
-														{availableLogos.map((logo) => (
-															<SelectItem key={logo.value} value={logo.value}>
-																{logo.label}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
+												<ImageUploader
+													compact
+													src={null}
+													index={0}
+													imagesLength={1}
+													initialUrl={field.state.value}
+													preferredServer={config?.blossomServer}
+													onUploadAttempt={() => hasOwnerKeyForUpload('picture')}
+													onBeforeUpload={ensureOwnerSigner}
+													onSave={({ url }) => field.handleChange(url)}
+													onDelete={() => field.handleChange('')}
+													onUrlChange={field.handleChange}
+												/>
+												{uploadErrorField === 'picture' && (
+													<p className="text-destructive text-sm">Set the owner public key before uploading an image.</p>
+												)}
 											</div>
 											<div className="self-center">
 												{field.state.value && (
@@ -374,6 +415,32 @@ function SetupRoute() {
 													/>
 												)}
 											</div>
+										</div>
+									)}
+								</form.Field>
+
+								<form.Field name="banner">
+									{(field) => (
+										<div className="flex flex-col gap-2">
+											<Label className="font-bold" htmlFor={field.name}>
+												Banner URL
+											</Label>
+											<ImageUploader
+												compact
+												src={null}
+												index={0}
+												imagesLength={1}
+												initialUrl={field.state.value}
+												preferredServer={config?.blossomServer}
+												onUploadAttempt={() => hasOwnerKeyForUpload('banner')}
+												onBeforeUpload={ensureOwnerSigner}
+												onSave={({ url }) => field.handleChange(url)}
+												onDelete={() => field.handleChange('')}
+												onUrlChange={field.handleChange}
+											/>
+											{uploadErrorField === 'banner' && (
+												<p className="text-destructive text-sm">Set the owner public key before uploading an image.</p>
+											)}
 										</div>
 									)}
 								</form.Field>
