@@ -36,7 +36,11 @@ const locksByBid = new Map<string, { token: string; proofs: Proof[] }>()
 
 useWebSocketImplementation(WebSocket)
 
-test.use({ scenario: 'merchant', video: 'on' })
+test.use({ scenario: 'merchant' })
+// Record video for this suite (feature-quality-gate evidence). `recordVideo` is
+// the fixture option the authenticated page fixtures honour (Playwright's own
+// `video` option does not reach contexts those fixtures create themselves).
+test.use({ recordVideo: true })
 
 test.describe('Auction Claim Dialog', () => {
 	test('winner sees validation errors and can submit shipping details', async ({ buyerPage }: { buyerPage: Page }) => {
@@ -46,6 +50,11 @@ test.describe('Auction Claim Dialog', () => {
 		let auction: SeededAuction
 		let settlementId: string
 		try {
+			// `token: MOCK_TOKENS.unspentFuture` used to select the future locktime
+			// window; the current helper takes the window directly and locks real
+			// NUT-12 DLEQ collateral at the local mint. The claim publish needs only
+			// the active signer, so no page-level mint mock is set up — the mock
+			// module was removed with the base's ADR-0006 follow-up.
 			auction = await seedEndedAuction(relay, devUser1.sk, { reserve: 0, locktime: MOCK_LOCKTIME_FUTURE })
 			const bidId = await seedBid(relay, devUser2.sk, auction, { amount: MOCK_PROOF_AMOUNT })
 			const prId = await seedPathRelease(relay, devUser2.sk, auction, bidId)
