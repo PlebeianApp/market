@@ -2,7 +2,56 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { assertNoLocalDependencySpecs, forbiddenPackage, hashPackageDirectory } from './verify-auctionsdev-package'
+import {
+	assertNoLocalDependencySourcesInBunLock,
+	assertNoLocalDependencySpecs,
+	forbiddenPackage,
+	hashPackageDirectory,
+	type SealedBunLockArchive,
+} from './verify-auctionsdev-package'
+
+const coreName = '@cashu/coco-core'
+const indexedDbName = '@cashu/coco-indexeddb'
+const coreSpecifier = 'file:vendor/sealed/cashu-coco-core-2.0.0.tgz'
+const indexedDbSpecifier = 'file:vendor/sealed/cashu-coco-indexeddb-2.0.0.tgz'
+const sealedArchives: Record<string, SealedBunLockArchive> = {
+	[coreName]: { workspaceSpecifier: coreSpecifier, packageResolution: `${coreName}@${coreSpecifier.slice('file:'.length)}` },
+	[indexedDbName]: {
+		workspaceSpecifier: indexedDbSpecifier,
+		packageResolution: `${indexedDbName}@${indexedDbSpecifier.slice('file:'.length)}`,
+	},
+}
+
+const lock = (value: unknown): string => JSON.stringify(value)
+const dependencyGroups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
+interface WorkspaceFixture {
+	dependencies?: Record<string, string>
+	devDependencies?: Record<string, string>
+	optionalDependencies?: Record<string, string>
+	peerDependencies?: Record<string, string>
+}
+
+interface LockFixture {
+	lockfileVersion: number
+	workspaces: Record<string, WorkspaceFixture>
+	patchedDependencies: Record<string, string>
+	packages: Record<string, unknown>
+}
+
+const safeLock = (): LockFixture => ({
+	lockfileVersion: 1,
+	workspaces: {
+		'': {
+			dependencies: { [coreName]: coreSpecifier, [indexedDbName]: indexedDbSpecifier, react: '^19.0.0' },
+		},
+	},
+	patchedDependencies: { 'rxjs@7.8.2': 'patches/rxjs@7.8.2.patch' },
+	packages: {
+		[coreName]: [sealedArchives[coreName].packageResolution, { dependencies: { react: '^19.0.0' } }, 'sha512-core'],
+		[indexedDbName]: [sealedArchives[indexedDbName].packageResolution, { peerDependencies: { react: '^19.0.0' } }, 'sha512-db'],
+		react: ['react@19.0.0', '', { bin: './bin/react.js', scripts: { install: 'node ./bin/install.js' } }, 'sha512-react'],
+	},
+})
 
 describe('hashPackageDirectory', () => {
 	test('matches the UI installed-content hash algorithm', async () => {
@@ -33,6 +82,84 @@ describe('dependency exclusions', () => {
 				'Forbidden local dependency path',
 			)
 		}
+	})
+
+	test('accepts package bin metadata, tracked patch paths, and the exact sealed archive pins', () => {
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(safeLock()), sealedArchives)).not.toThrow()
+	})
+
+	test('parses Bun JSONC without treating arbitrary path strings as dependency sources', () => {
+		const jsonc = `{
+			"workspaces": { "": { "dependencies": { "react": "19.0.0" } } },
+			"patchedDependencies": { "rxjs@7.8.2": "patches/rxjs@7.8.2.patch" },
+			"packages": { "react": ["react@19.0.0", "", { "bin": "./bin/react.js" }, ""] },
+		}`
+		expect(() => assertNoLocalDependencySourcesInBunLock(jsonc)).not.toThrow()
+	})
+
+	test('rejects local sources in the root workspace', () => {
+		for (const source of [
+			'file:vendor/evil.tgz',
+			'link:../evil',
+			'portal:../evil',
+			'workspace:*',
+			'./evil',
+			'../evil',
+			'..\\evil',
+			'~/evil',
+			'/tmp/evil',
+			'C:\\evil',
+		]) {
+			const fixture = safeLock()
+			fixture.workspaces[''].dependencies.evil = source
+			expect(() => assertNoLocalDependencySourcesInBunLock(lock(fixture), sealedArchives)).toThrow('Forbidden local dependency source')
+		}
+	})
+
+	test('rejects local sources in non-root workspaces', () => {
+		const fixture = safeLock()
+		fixture.workspaces['packages/child'] = { optionalDependencies: { evil: 'file:../../evil.tgz' } }
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(fixture), sealedArchives)).toThrow('workspaces.packages/child')
+	})
+
+	test('inspects every dependency map in workspaces and package metadata', () => {
+		for (const group of dependencyGroups) {
+			const workspaceFixture = safeLock()
+			workspaceFixture.workspaces[''][group] = { evil: '../evil' }
+			expect(() => assertNoLocalDependencySourcesInBunLock(lock(workspaceFixture), sealedArchives)).toThrow(`workspaces.<root>.${group}`)
+
+			const packageFixture = safeLock()
+			packageFixture.packages.evil = ['evil@1.0.0', '', { [group]: { evil: '../evil' } }, '']
+			expect(() => assertNoLocalDependencySourcesInBunLock(lock(packageFixture), sealedArchives)).toThrow(`packages.evil[2].${group}`)
+		}
+	})
+
+	test('rejects local sources in transitive package dependency maps', () => {
+		const fixture = safeLock()
+		fixture.packages.react = ['react@19.0.0', '', { dependencies: { evil: '../evil' }, bin: './bin/react.js' }, '']
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(fixture), sealedArchives)).toThrow('packages.react[2].dependencies')
+	})
+
+	test('rejects normalized local package resolution and source slots', () => {
+		const resolutionFixture = safeLock()
+		resolutionFixture.packages.evil = ['evil@vendor/evil.tgz', '', {}, '']
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(resolutionFixture), sealedArchives)).toThrow('local package resolution')
+
+		const sourceFixture = safeLock()
+		sourceFixture.packages.evil = ['evil@1.0.0', '../evil', {}, '']
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(sourceFixture), sealedArchives)).toThrow('local package source')
+	})
+
+	test('rejects near-matches for sealed workspace pins and normalized resolutions', () => {
+		const workspaceNearMatch = safeLock()
+		workspaceNearMatch.workspaces[''].dependencies[coreName] = `${coreSpecifier}.stale`
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(workspaceNearMatch), sealedArchives)).toThrow(
+			'Forbidden local dependency source',
+		)
+
+		const resolutionNearMatch = safeLock()
+		resolutionNearMatch.packages[coreName] = [`${sealedArchives[coreName].packageResolution}.stale`, {}, '']
+		expect(() => assertNoLocalDependencySourcesInBunLock(lock(resolutionNearMatch), sealedArchives)).toThrow('local package resolution')
 	})
 
 	test('allows only an explicitly sealed in-repository archive', () => {

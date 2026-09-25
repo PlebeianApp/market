@@ -35,6 +35,13 @@ interface PackageJson {
 	peerDependencies?: Record<string, string>
 }
 
+export interface SealedBunLockArchive {
+	workspaceSpecifier: string
+	packageResolution: string
+}
+
+type SealedBunLockArchives = Readonly<Record<string, SealedBunLockArchive>>
+
 interface PackageIdentity {
 	name: string
 	version: string
@@ -146,6 +153,101 @@ export const assertNoLocalDependencySpecs = (packageJson: PackageJson, allowed: 
 			}
 		}
 	}
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const dependencyMapNames = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
+const externalSourcePrefix = /^(?:https?|git(?:\+https|\+ssh|\+git)?|ssh|github|gitlab|bitbucket|npm):/i
+
+const isLocalDependencySource = (source: string): boolean => {
+	if (/^(?:file|link|portal|workspace):/i.test(source)) return true
+	if (/^(?:\.{1,2}(?:[\\/]|$)|~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(source)) return true
+	if (source.split(/[\\/]+/).includes('..')) return true
+	if (externalSourcePrefix.test(source) || /^git@[^:]+:/.test(source)) return false
+	return source.includes('/') || source.includes('\\') || /\.tgz(?:$|[?#])/i.test(source)
+}
+
+const packageResolutionSource = (resolution: string): string => {
+	if (resolution.startsWith('@')) {
+		const scopeSeparator = resolution.indexOf('/')
+		if (scopeSeparator < 0) return resolution
+		const sourceSeparator = resolution.indexOf('@', scopeSeparator + 1)
+		return sourceSeparator < 0 ? resolution : resolution.slice(sourceSeparator + 1)
+	}
+	const sourceSeparator = resolution.indexOf('@')
+	return sourceSeparator < 0 ? resolution : resolution.slice(sourceSeparator + 1)
+}
+
+const assertDependencyMaps = (value: Record<string, unknown>, location: string, allowed: Readonly<Record<string, string>> = {}): void => {
+	for (const groupName of dependencyMapNames) {
+		const dependencies = value[groupName]
+		if (dependencies === undefined) continue
+		if (!isRecord(dependencies)) throw new Error(`Malformed Bun lockfile ${location}.${groupName}`)
+		for (const [name, source] of Object.entries(dependencies)) {
+			if (typeof source !== 'string') throw new Error(`Malformed Bun lockfile dependency source at ${location}.${groupName}.${name}`)
+			if (allowed[name] === source) continue
+			if (isLocalDependencySource(source)) {
+				throw new Error(`Forbidden local dependency source in Bun lockfile at ${location}.${groupName}: ${name}=${source}`)
+			}
+		}
+	}
+}
+
+const assertPackageEntry = (packageKey: string, entry: unknown, sealedArchives: SealedBunLockArchives): void => {
+	const location = `packages.${packageKey}`
+	if (Array.isArray(entry)) {
+		if (typeof entry[0] !== 'string') throw new Error(`Malformed Bun lockfile package resolution at ${location}[0]`)
+		const resolution = entry[0]
+		if (sealedArchives[packageKey]?.packageResolution !== resolution && isLocalDependencySource(packageResolutionSource(resolution))) {
+			throw new Error(`Forbidden local package resolution in Bun lockfile at ${location}[0]: ${resolution}`)
+		}
+		if (typeof entry[1] === 'string' && entry[1] !== '' && isLocalDependencySource(entry[1])) {
+			throw new Error(`Forbidden local package source in Bun lockfile at ${location}[1]: ${entry[1]}`)
+		}
+		for (const [index, value] of entry.entries()) {
+			if (isRecord(value)) assertDependencyMaps(value, `${location}[${index}]`)
+		}
+		return
+	}
+
+	if (!isRecord(entry)) throw new Error(`Malformed Bun lockfile package entry at ${location}`)
+	for (const field of ['resolution', 'resolved', 'source'] as const) {
+		const source = entry[field]
+		if (source === undefined) continue
+		if (typeof source !== 'string') throw new Error(`Malformed Bun lockfile package ${field} at ${location}.${field}`)
+		const allowedResolution = field === 'resolution' && sealedArchives[packageKey]?.packageResolution === source
+		const candidate = field === 'resolution' ? packageResolutionSource(source) : source
+		if (!allowedResolution && isLocalDependencySource(candidate)) {
+			throw new Error(`Forbidden local package ${field} in Bun lockfile at ${location}.${field}: ${source}`)
+		}
+	}
+	assertDependencyMaps(entry, location)
+	for (const [field, value] of Object.entries(entry)) {
+		if (isRecord(value)) assertDependencyMaps(value, `${location}.${field}`)
+	}
+}
+
+export const assertNoLocalDependencySourcesInBunLock = (lockText: string, sealedArchives: SealedBunLockArchives = {}): void => {
+	let parsed: unknown
+	try {
+		parsed = Bun.JSONC.parse(lockText)
+	} catch {
+		throw new Error('Bun lockfile is not valid JSONC')
+	}
+	if (!isRecord(parsed)) throw new Error('Bun lockfile root must be an object')
+	if (!isRecord(parsed.workspaces)) throw new Error('Bun lockfile workspaces must be an object')
+	if (!isRecord(parsed.packages)) throw new Error('Bun lockfile packages must be an object')
+
+	for (const [workspaceName, workspace] of Object.entries(parsed.workspaces)) {
+		if (!isRecord(workspace)) throw new Error(`Malformed Bun lockfile workspace: ${workspaceName}`)
+		const allowed =
+			workspaceName === ''
+				? Object.fromEntries(Object.entries(sealedArchives).map(([name, archive]) => [name, archive.workspaceSpecifier]))
+				: {}
+		assertDependencyMaps(workspace, `workspaces.${workspaceName || '<root>'}`, allowed)
+	}
+	for (const [packageKey, entry] of Object.entries(parsed.packages)) assertPackageEntry(packageKey, entry, sealedArchives)
 }
 
 export const forbiddenPackage = (packageJson: PackageJson): string | undefined => {
@@ -279,13 +381,16 @@ const main = async (): Promise<void> => {
 	if (rootPackage.dependencies?.[INDEXED_DB_PACKAGE] !== exactIndexedDbSpecifier)
 		throw new Error('Market IndexedDB archive pin is not exact')
 	const lockText = await readFile(path.join(root, 'bun.lock'), 'utf8')
-	const lockWithoutSealedArchives = lockText.replaceAll(exactCoreSpecifier, '').replaceAll(exactIndexedDbSpecifier, '')
-	if (
-		/\b(?:file|link|portal|workspace):/i.test(lockWithoutSealedArchives) ||
-		/["'](?:\.{1,2}\/|\/home\/|\/Users\/|~\/)/.test(lockWithoutSealedArchives)
-	) {
-		throw new Error('Frozen lockfile contains a forbidden local dependency path')
-	}
+	assertNoLocalDependencySourcesInBunLock(lockText, {
+		[CORE_PACKAGE]: {
+			workspaceSpecifier: exactCoreSpecifier,
+			packageResolution: `${CORE_PACKAGE}@${coreArchiveRelative}`,
+		},
+		[INDEXED_DB_PACKAGE]: {
+			workspaceSpecifier: exactIndexedDbSpecifier,
+			packageResolution: `${INDEXED_DB_PACKAGE}@${indexedDbArchiveRelative}`,
+		},
+	})
 	if (/NODE_PATH/.test(await readFile(path.join(root, 'deploy-simple/auctionsdev/ecosystem.config.cjs'), 'utf8'))) {
 		throw new Error('NODE_PATH is forbidden in the PM2 deployment configuration')
 	}
