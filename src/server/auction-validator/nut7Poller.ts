@@ -32,6 +32,7 @@ import {
 	type ValidatorAuctionState,
 	type ValidatorBidState,
 	type ValidatorState,
+	isSameBidderLeg,
 } from './state'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
@@ -138,7 +139,10 @@ const buildBidChain = (auctionState: ValidatorAuctionState, latestBidState: Vali
 		chain.push(current)
 		const prevBidId = current.bid.prevBidId?.trim()
 		if (!prevBidId) break
-		current = auctionState.bids.get(prevBidId)
+		const parent = auctionState.bids.get(prevBidId)
+		// Only this bidder's own legs belong to this chain (see isSameBidderLeg).
+		if (!parent || !isSameBidderLeg(current.bid, parent.bid)) break
+		current = parent
 	}
 	return chain
 }
