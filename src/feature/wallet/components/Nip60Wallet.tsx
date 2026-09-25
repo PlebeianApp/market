@@ -82,6 +82,7 @@ export function Nip60Wallet() {
 	const cocoMode = isCocoV2AuctionMode()
 	const { isAuthenticated, user } = useStore(authStore)
 	const appStage = useStore(configStore, (state) => state.config.stage)
+	const instanceDisplayName = useStore(configStore, (state) => state.config.displayName)
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
 	const { pendingTokens: cashuPendingTokens } = useStore(cashuStore)
 	const [isCreating, setIsCreating] = useState(false)
@@ -101,9 +102,19 @@ export function Nip60Wallet() {
 	const [lastDevMint, setLastDevMint] = useState<Nip60TestMintResult | null>(null)
 	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
 	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	// Instance-configured allowlist (ADR-018) takes precedence; DEFAULT_TRUSTED_MINTS
+	// is only the shipped tier-3 fallback for before config loads or an instance
+	// that hasn't set its own list.
+	const configTrustedMints = useStore(configStore, (state) => state.config.trustedMints)
 	const defaultMints = useMemo(
-		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
-		[walletDevMode],
+		() =>
+			Array.from(
+				new Set([
+					...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
+					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
+				]),
+			),
+		[configTrustedMints, walletDevMode],
 	)
 	const [tokenPendingRemoval, setTokenPendingRemoval] = useState<UnifiedPendingToken | null>(null)
 	const [cocoBalances, setCocoBalances] = useState<readonly CocoAuctionBalanceProjection[]>([])
@@ -582,7 +593,9 @@ export function Nip60Wallet() {
 						<Coins className="size-6" />
 					</div>
 					<p className="font-semibold">Create your private wallet</p>
-					<p className="mx-auto mt-1 max-w-64 text-sm text-white/50">Pay and get paid with Cashu, right inside Plebeian Market.</p>
+					<p className="mx-auto mt-1 max-w-64 text-sm text-white/50">
+						Pay and get paid with Cashu, right inside {instanceDisplayName || 'this marketplace'}.
+					</p>
 					<Button
 						onClick={handleCreateWallet}
 						disabled={isCreating}

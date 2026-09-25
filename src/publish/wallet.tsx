@@ -1,5 +1,6 @@
 import { ndkActions } from '../lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NIP89_CLIENT_SOFTWARE_NAME } from './nip89'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from '../queries/queryKeyFactory'
@@ -52,7 +53,8 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 	event.content = encryptedContent
 	event.tags = [
 		['l', USER_NWC_WALLET_LIST_LABEL],
-		['client', 'plebeian.market'],
+		// Frozen software identity (ADR-018), not instance branding — see nip89.ts.
+		['client', NIP89_CLIENT_SOFTWARE_NAME],
 	]
 
 	await event.sign(signer)

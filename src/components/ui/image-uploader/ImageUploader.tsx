@@ -27,8 +27,12 @@ interface ImageUploaderProps {
   index: number
   imagesLength: number
   forSingle?: boolean
+  compact?: boolean
   initialUrl?: string
   imageDimensionText?: string
+  preferredServer?: string
+  onUploadAttempt?: () => boolean
+  onBeforeUpload?: () => Promise<void>
   onSave: (data: { url: string; index: number }) => void
   onDelete: (index: number) => void
   onPromote?: (index: number) => void
@@ -42,6 +46,7 @@ export function ImageUploader({
   index,
   imagesLength,
   forSingle = false,
+  compact = false,
   initialUrl = '',
   onSave,
   onDelete,
@@ -50,6 +55,9 @@ export function ImageUploader({
   onInteraction,
   onUrlChange,
   imageDimensionText = "dimensions: 1600px High x 1600px Wide",
+  preferredServer,
+  onUploadAttempt,
+  onBeforeUpload,
 }: ImageUploaderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -61,12 +69,15 @@ export function ImageUploader({
   const [selectedServer, setSelectedServer] = useState<string>(BLOSSOM_SERVERS[0].url)
   const [compressionStatus, setCompressionStatus] = useState<string | null>(null)
   const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const compactInputRef = useRef<HTMLInputElement>(null)
 
   async function performBlossomUpload(file: File) {
     setIsLoading(true)
     const debug = isImageUploadDebugEnabled()
 
     try {
+      await onBeforeUpload?.()
+
       // Step 1: Compress image if it's compressible
       let fileToUpload = file
       if (isCompressibleImage(file)) {
@@ -111,7 +122,7 @@ export function ImageUploader({
       // Step 2: Upload to Blossom
       setIsLoading(true)
       const result = await uploadFileToBlossom(fileToUpload, {
-        preferredServer: selectedServer,
+        preferredServer: preferredServer || selectedServer,
         onProgress: (progress) => {
           const pct = Math.round((progress.loaded / progress.total) * 100)
           if (debug) {
@@ -292,6 +303,48 @@ export function ImageUploader({
     if (inputEditable) {
       setInputEditable(false)
     }
+  }
+
+  function handleCompactUploadIntent() {
+    if (onUploadAttempt && !onUploadAttempt()) return
+    compactInputRef.current?.click()
+  }
+
+  if (compact) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={inputValue}
+          type="url"
+          className="border-2"
+          placeholder="https://example.com/image.png"
+          onChange={handleInput}
+          onFocus={handleInputFocus}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={isLoading}
+          onClick={handleCompactUploadIntent}
+          aria-label={isLoading ? 'Uploading image' : 'Upload image to Blossom'}
+          title={isLoading ? 'Uploading image' : 'Upload image to Blossom'}
+        >
+          {isLoading ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <span className="w-4 h-4 i-upload" />}
+        </Button>
+        <input
+          ref={compactInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void performBlossomUpload(file)
+            event.target.value = ''
+          }}
+        />
+      </div>
+    )
   }
 
   return (

@@ -3,7 +3,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
-import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
@@ -192,12 +192,12 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			}
 			console.log('NDK instance obtained:', !!ndk)
 
-			const relayUrl = getMainRelay()
+			const relayUrl = getBugRelay()
 			if (!relayUrl) {
 				console.error('App relay is not configured')
 				return
 			}
-			console.log('Publishing bug report to the standard app relay:', relayUrl)
+			console.log('Publishing bug report to the bug relay:', relayUrl)
 
 			// Check if we have a signer
 			if (!ndk.signer) {
@@ -234,9 +234,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			await event.sign()
 			console.log('Event signed, ID:', event.id)
 
-			console.log('Publishing event to app relay only...')
+			console.log('Publishing event to the bug relay only...')
 
-			// Publish only to the standard app relay - never to public relays.
+			// Publish only to the instance's bug relay - never to public relays.
 			const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
 			const publishPromise = event.publish(bugRelaySet)
 			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
+import { getBugRelay, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 
@@ -20,13 +20,14 @@ export interface UserProfile {
 }
 
 /**
- * Fetches bug reports (kind 1 events) from the standard app relay
- * with t tag "plebian2beta"
+ * Fetches bug reports (kind 1 events) from the instance's bug relay
+ * (ADR-018 `bugRelay`, falling back to the main app relay) with t tag
+ * "plebian2beta"
  */
 export const fetchBugReports = async (limit: number = 20, until?: number): Promise<BugReport[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-	const relayUrl = getMainRelay()
+	const relayUrl = getBugRelay()
 	if (!relayUrl) throw new Error('App relay not configured')
 
 	const filter: NDKFilter = {
@@ -36,7 +37,7 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		...(until && { until }),
 	}
 
-	// Query the app relay explicitly so bug report history stays on the standard relay.
+	// Query the bug relay explicitly so bug report history stays off the write set.
 	const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
 	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
 	const bugReports = Array.from(events)

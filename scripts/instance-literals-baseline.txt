@@ -1,0 +1,43 @@
+src/components/BugReportModal.tsx|plebian2beta|2
+src/index.html|Plebeian Market|1
+src/lib/__tests__/appSettings.test.ts|plebeian-market|18
+src/lib/__tests__/auctionAdmission.test.ts|plebeian.market|1
+src/lib/__tests__/instance-config.test.ts|Plebeian Market|2
+src/lib/__tests__/ndkZapRelays.test.ts|plebeian.market|1
+src/lib/__tests__/ogTags.test.ts|Plebeian Market|1
+src/lib/__tests__/relay-policy.test.ts|plebeian.market|8
+src/lib/__tests__/server-bootstrap-persistence.test.ts|plebeian-market|1
+src/lib/appSettings.ts|Plebeian Market|1
+src/lib/appSettings.ts|plebeian-market|3
+src/lib/auctionHd.ts|plebeian.market|1
+# Frozen Coco protocol/storage identities: changing these values would orphan
+# existing browser databases, recovery records, or cryptographic commitments.
+src/lib/coco/auctions/cocoEngine.ts|plebeian.market|2
+src/lib/coco/auctions/commandRepository.ts|plebeian-market|1
+src/lib/coco/auctions/lifecycleRepository.ts|plebeian-market|1
+src/lib/coco/migration/__tests__/fixtures.ts|plebeian-market|1
+src/lib/coco/migration/__tests__/indexedDbContract.test.ts|plebeian-market|2
+src/lib/coco/migration/__tests__/productionAdapter.test.ts|plebeian-market|1
+src/lib/coco/migration/freshAuctionsdevBrowser.ts|plebeian-market|2
+src/lib/coco/migration/identity.ts|plebeian-market|1
+src/lib/coco/migration/indexedDbStore.ts|plebeian-market|1
+src/lib/coco/migration/legacyDisableSignal.ts|plebeian-market|1
+src/lib/coco/migration/productionAdapter.ts|plebeian-market|1
+src/lib/coco/recovery/__tests__/metadata.test.ts|plebeian-market|1
+src/lib/coco/recovery/indexedDbStore.ts|plebeian-market|1
+src/lib/coco/seedVault.ts|plebeian-market|1
+src/lib/constants.ts|plebeian.market|6
+src/lib/constants/testLabels.ts|Plebeian Market|1
+src/lib/constants/testLabels.ts|plebeian.market|1
+src/lib/instance-config.ts|Plebeian Market|2
+src/lib/instance-config.ts|plebeian-market|1
+src/lib/instance-config.ts|plebeian.market|3
+src/lib/nip53.ts|plebeian.market|1
+src/lib/ogTags.ts|Plebeian Market|2
+src/lib/schemas/cartPersistence.ts|plebeian-market|1
+src/publish/nip89.ts|Plebeian Market|4
+src/publish/nip89.ts|plebeian.market|2
+src/publish/relay-preferences.tsx|plebeian-market|1
+src/queries/bugReports.tsx|plebian2beta|3
+src/routes/products.$productId.tsx|Plebeian Market|2
+src/routes/setup.tsx|plebeian-market|1

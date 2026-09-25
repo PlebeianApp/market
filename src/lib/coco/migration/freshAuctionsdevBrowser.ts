@@ -331,7 +331,7 @@ const deleteDatabase = (name: string): Promise<void> =>
 		const request = indexedDB.deleteDatabase(name)
 		request.onsuccess = () => resolve()
 		request.onerror = () => reject(request.error ?? new Error(`Failed to reset ${name}`))
-		request.onblocked = () => reject(new Error(`Close other Plebeian Market tabs before resetting ${name}`))
+		request.onblocked = () => reject(new Error(`Close other marketplace tabs before resetting ${name}`))
 	})
 
 /**

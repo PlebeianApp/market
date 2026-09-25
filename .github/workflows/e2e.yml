@@ -183,7 +183,35 @@ jobs:
         # nak relay + dev server, so no new triggers, permissions, secrets, or
         # env are introduced. `src/lib/__tests__/e2e-workflow-gate-membership.test.ts`
         # fails if a describe in that spec stops matching this pattern.
+        #
         run: bun run test:e2e -- --grep 'Navigation|User Profile|Shipping Option Creation|Community Tab Progressive Loading|Order Details|Marketplace Display|V4V Dashboard Management|Receiving Payments Configuration|Product Page - View Only|Collection Management|Lightning Mock|OG Meta Tags|Auction Bidding|Direct Lightning Bid Funding|Auction Settlement Descriptor|publish events to relay|Cross-client|Test listing labels — auctions' --repeat-each=2
+
+      - name: Run self-hosted instance E2E test
+        run: |
+          E2E_TEST_PORT=34569 bun e2e/seed-relay.ts
+          PORT=34569 INSTANCE_HANDLER_ID=self-hosted-test-handler nohup bun dev > /tmp/self-hosted-devserver.log 2>&1 &
+          echo "Waiting for self-hosted dev server on port 34569..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:34569/api/config > /dev/null 2>&1; then
+              echo "Self-hosted dev server is ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:34569/api/config > /dev/null 2>&1; then
+            echo "::error::Self-hosted dev server failed to start. Logs:"
+            cat /tmp/self-hosted-devserver.log
+            exit 1
+          fi
+          E2E_TEST_PORT=34569 bun run test:e2e:self-hosted -- --repeat-each=2
+        env:
+          NODE_ENV: test
+          APP_RELAY_URL: ws://localhost:10547
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+          CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
+          LOCAL_RELAY_ONLY: 'true'
+          NIP46_RELAY_URL: ws://localhost:10547
+          APP_DEV_TEST_MINT_URL: 'http://localhost:3338'
 
       - name: Show server logs on failure
         if: failure()
@@ -312,6 +340,9 @@ jobs:
           APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
           CVM_SERVER_KEY: e2e2222222222222222222222222222222222222222222222222222222222222
           LOCAL_RELAY_ONLY: 'true'
+          # See the e2e-grep job's "Seed relay and start dev server" step for why
+          # this is needed on CI (must match SELF_HOSTED_HANDLER_ID in e2e/test-config.ts).
+          INSTANCE_HANDLER_ID: self-hosted-test-handler
 
       - name: Run remaining E2E tests
         env:

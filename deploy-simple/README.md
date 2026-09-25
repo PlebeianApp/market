@@ -187,6 +187,60 @@ git push origin v1.0.0-release
 
 ## Manual Deployment
 
+### Self-hosted instance configuration
+
+The marketplace supports runtime instance identity through `INSTANCE_*`
+environment variables and kind 31990 app-settings events. Values published in
+the app-settings event take precedence over environment variables, which take
+precedence over the shipped Plebeian defaults:
+
+```text
+kind 31990 event -> INSTANCE_* environment variables -> DEFAULT_INSTANCE_CONFIG
+```
+
+For app-settings discovery, `INSTANCE_HANDLER_ID` is tried first. The historical
+`plebeian-market-handler` d-tag is then used as a compatibility fallback, so
+existing Plebeian deployments continue to boot while a new self-hosted event is
+being published.
+
+Example self-hosted environment:
+
+```dotenv
+APP_STAGE=production
+NODE_ENV=production
+PORT=3001
+APP_RELAY_URL=wss://relay.market.example
+APP_PRIVATE_KEY=<64-char-hex-private-key>
+
+INSTANCE_NAME=Example Market
+INSTANCE_DISPLAY_NAME=Example Market
+INSTANCE_PICTURE_URL=https://market.example/images/logo.png
+INSTANCE_BANNER_URL=https://market.example/images/banner.png
+INSTANCE_OWNER_PUBKEY=<64-char-hex-owner-pubkey>
+INSTANCE_ALLOW_REGISTER=true
+INSTANCE_DEFAULT_CURRENCY=USD
+INSTANCE_HANDLER_ID=example-market-handler
+INSTANCE_SITE_URL=https://market.example
+INSTANCE_PUBLIC_RELAYS=wss://relay.market.example,wss://relay.example.net
+INSTANCE_TRUSTED_MINTS=https://mint.example.net
+INSTANCE_BUG_RELAY=wss://bugs.market.example
+INSTANCE_TERMS_URL=https://market.example/terms
+INSTANCE_CONTACT_EMAIL=contact@market.example
+INSTANCE_SUPPORT_CONTACT=support@market.example
+INSTANCE_SHOW_NOSTR_LINK=true
+INSTANCE_TWITTER_URL=https://twitter.com/examplemarket
+INSTANCE_NEWSLETTER_URL=https://examplemarket.substack.com
+INSTANCE_TELEGRAM_URL=https://t.me/examplemarket
+INSTANCE_GITHUB_URL=https://github.com/example/market
+INSTANCE_NOSTR_URL=https://njump.me/npub1example
+```
+
+After the server is running, publish a kind 31990 event using the owner/app
+workflow or `scripts/app-settings/publish.ts`. Its `d` tag should match
+`INSTANCE_HANDLER_ID`, and its content should satisfy the app-settings schema.
+Do not commit private keys, wallet material, or populated deployment `.env`
+files.
+
 ### Deploy to Staging
 
 ```bash

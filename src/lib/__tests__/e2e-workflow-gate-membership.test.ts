@@ -1,20 +1,23 @@
 /**
  * Guards per-PR gate membership for the gated e2e families in
- * `.github/workflows/e2e.yml`: `OG Meta Tags` and `Test listing labels —
- * auctions`.
+ * `.github/workflows/e2e.yml`: `OG Meta Tags`, `Test listing labels —
+ * auctions`, and `self-hosted instance`.
  *
  * The `e2e-grep` job runs one single-quoted `--grep` alternation of
  * deterministic test families on every pull request / push; that gate is the
  * only place the `OG Meta Tags` specs are exercised on a PR (the scheduled
  * `e2e-full` job also runs them, but it is not a merge gate). It is the only
- * merge gate for the `Test listing labels — auctions` spec at all.
+ * merge gate for the `Test listing labels — auctions` spec. The self-hosted
+ * config spec has a dedicated server process because its instance identity
+ * must not leak into the shared test server.
  *
- * A family that is renamed or added to `e2e/tests/og-meta-tags.spec.ts` or
- * `e2e/tests/test-labels-auctions.spec.ts` without a matching entry in the gate
- * pattern silently drops out of CI. This guard ties the specs and the workflow
- * together: every `test.describe` title in those specs must be matched by the
- * gate pattern, so removing an alternation term (or renaming a describe) fails
- * a unit test instead of quietly narrowing CI coverage.
+ * A family that is renamed or added to `e2e/tests/og-meta-tags.spec.ts`,
+ * `e2e/tests/test-labels-auctions.spec.ts`, or `e2e/tests/self-hosted-config.spec.ts`
+ * without a matching entry in the gate pattern silently drops out of CI. This
+ * guard ties the specs and the workflow together: every `test.describe` title
+ * in those specs must be matched by the gate pattern, so removing an
+ * alternation term (or renaming a describe) fails a unit test instead of
+ * quietly narrowing CI coverage.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -25,6 +28,7 @@ const REPO_ROOT = join(import.meta.dir, '..', '..', '..')
 const WORKFLOW_PATH = join(REPO_ROOT, '.github', 'workflows', 'e2e.yml')
 const OG_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'og-meta-tags.spec.ts')
 const AUCTIONS_LABEL_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'test-labels-auctions.spec.ts')
+const SELF_HOSTED_CONFIG_SPEC_PATH = join(REPO_ROOT, 'e2e', 'tests', 'self-hosted-config.spec.ts')
 
 /**
  * The single-quoted `--grep '<pattern>'` used by the per-PR `e2e-grep` gate.
@@ -105,5 +109,17 @@ describe('e2e-full exclusion list stays inside the per-PR gate', () => {
 		// any pull request: either add it to the gate or take it out of the
 		// invert list (and say why in this file).
 		expect(excludedOnlyWhenGated).toEqual([])
+	})
+})
+
+describe('e2e-grep gate membership (self-hosted instance family)', () => {
+	test('the per-PR gate runs the isolated self-hosted-config spec', async () => {
+		const [yaml, spec] = await Promise.all([readFile(WORKFLOW_PATH, 'utf8'), readFile(SELF_HOSTED_CONFIG_SPEC_PATH, 'utf8')])
+		// Two describes: instance-config discovery/branding, and the ADR-018
+		// browse/cart/checkout completion criterion.
+		expect([...spec.matchAll(/test\.describe\(\s*'([^']+)'/g)]).toHaveLength(2)
+		// The command enables the isolated project mode, which accepts only this
+		// spec and starts an app process with the self-hosted handler ID.
+		expect(yaml).toContain('E2E_TEST_PORT=34569 bun run test:e2e:self-hosted -- --repeat-each=2')
 	})
 })

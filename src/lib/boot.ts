@@ -5,6 +5,7 @@ import { ndkActions, ndkStore } from './stores/ndk'
 import { authActions } from './stores/auth'
 import { walletActions } from './stores/wallet'
 import { configKeys } from '@/queries/queryKeyFactory'
+import type { PublicAppConfig } from '@/lib/instance-config'
 
 /**
  * App bootstrap orchestrator.
@@ -135,11 +136,7 @@ const CONFIG_FETCH_TIMEOUT_MS = 10_000
 const CONFIG_FETCH_MAX_ATTEMPTS = 3
 const CONFIG_FETCH_BACKOFF_MS = [500, 1_500] as const
 
-async function fetchConfig(): Promise<{
-	appRelay?: string
-	stage?: string
-	[key: string]: any
-}> {
+async function fetchConfig(): Promise<PublicAppConfig> {
 	let lastError: unknown
 
 	for (let attempt = 1; attempt <= CONFIG_FETCH_MAX_ATTEMPTS; attempt++) {
@@ -174,11 +171,7 @@ class ConfigFetchError extends Error {
 	}
 }
 
-async function fetchConfigOnce(): Promise<{
-	appRelay?: string
-	stage?: string
-	[key: string]: any
-}> {
+async function fetchConfigOnce(): Promise<PublicAppConfig> {
 	const controller = new AbortController()
 	const timeout = setTimeout(() => controller.abort(), CONFIG_FETCH_TIMEOUT_MS)
 

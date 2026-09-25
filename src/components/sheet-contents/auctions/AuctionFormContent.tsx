@@ -1644,13 +1644,19 @@ export function AuctionFormContent() {
 	const userPubkey = authState.user?.pubkey || ''
 	const appStage = useStore(configStore, (state) => state.config.stage)
 	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	// Instance-configured allowlist (ADR-018) takes precedence outside Coco;
+	// the sealed Coco fake-mint allowlist remains authoritative in Coco mode.
+	const configTrustedMints = useStore(configStore, (state) => state.config.trustedMints)
 	const cocoMode = isCocoV2AuctionMode()
 	const cocoFakeMintAllowlist = useMemo(() => (cocoMode ? [...readCocoV2AuctionEnvironment().fakeMintAllowlist] : null), [cocoMode])
 
 	const availableMints = useMemo(
 		() =>
-			resolveAuctionFormAvailableMints(cocoFakeMintAllowlist, [...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])]),
-		[cocoFakeMintAllowlist, walletDevMode],
+			resolveAuctionFormAvailableMints(cocoFakeMintAllowlist, [
+				...(configTrustedMints?.length ? configTrustedMints : DEFAULT_TRUSTED_MINTS),
+				...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
+			]),
+		[cocoFakeMintAllowlist, configTrustedMints, walletDevMode],
 	)
 
 	const prevAvailableMintsRef = useRef(availableMints)
