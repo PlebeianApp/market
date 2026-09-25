@@ -140,10 +140,12 @@ const admissionLimitSchema = z.number().int().nonnegative()
 /**
  * The relay-facing admission declaration of a kind-30441 policy document.
  *
- * Every limit is required in the `enabled: true` shape: a reader must never
- * have to fall back to private defaults to learn what is enforced. Both
- * shapes are strict, so a document cannot claim "no admission checks" and
- * list limits in the same breath — that declaration contradicts itself.
+ * Every limit is required in the `enabled: true` shape except
+ * `lateSettlementObservationSec`, which stays optional so documents published
+ * before that bound existed still parse: a reader must never have to fall back
+ * to private defaults to learn what is enforced. Both shapes are strict, so a
+ * document cannot claim "no admission checks" and list limits in the same
+ * breath — that declaration contradicts itself.
  */
 export const ValidatorAdmissionPolicySchema = z.discriminatedUnion('enabled', [
 	z.strictObject({ enabled: z.literal(false) }),
@@ -153,6 +155,8 @@ export const ValidatorAdmissionPolicySchema = z.discriminatedUnion('enabled', [
 		rateWindowSec: admissionLimitSchema,
 		maxTrackedChildSubscriptions: admissionLimitSchema,
 		childReplayLookbackSec: admissionLimitSchema,
+		/** Optional for compatibility with policy events published before this bound was introduced. */
+		lateSettlementObservationSec: admissionLimitSchema.optional(),
 		maxTrackedBidsPerAuction: admissionLimitSchema,
 		maxSeenEventIds: admissionLimitSchema,
 		maxPendingEventsPerKey: admissionLimitSchema,

@@ -183,6 +183,10 @@ export const VALIDATOR_CONDEMN_CLAIMS: ReadonlySet<ValidatorClaim> = new Set<Val
  * Standardised machine codes for `bid_invalid` / negative verdicts — §4.4.3.
  * Validators MAY emit additional implementation-specific reasons; compliant
  * clients SHOULD show unknown reasons verbatim rather than ignoring them.
+ *
+ * The eight relay/admission abuse codes below are forward-declared vocabulary.
+ * The current subscriber refuses those events before verdict state exists and
+ * reports them only through operator logs; no kind-30440 producer emits them.
  */
 export const VALIDATOR_REASONS = [
 	// time-window
@@ -199,9 +203,7 @@ export const VALIDATOR_REASONS = [
 	'duplicate_bid_nonce',
 	'rate_limited',
 	'too_many_tracked_bids',
-	// Forward-declared for relay-side admission rules that this app boundary
-	// does not emit yet (review 5645059400 finding 5). Kept so consumers can
-	// narrow on a fixed vocabulary; nothing produces them today.
+	// Additional forward declarations for future policy rules.
 	'too_many_invalid_attempts',
 	'validator_policy_rejected',
 	// amount — ADR-0012 Phase 1: the absolute floor is the ONLY

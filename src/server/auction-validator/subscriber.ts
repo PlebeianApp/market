@@ -23,12 +23,18 @@
  *      there. All three child kinds do share the auction coordinate in
  *      `a`, so that is the narrow common live filter.
  *
- * Child REQs stay open until the auction is past the validator's own
- * close-time skew window (`max_end_at + max_skew_sec`) AND the tracked
- * bids are terminal AND no buffered children attributable to that
- * auction remain. We enforce closure by calling the unsubscribe handle,
- * not by `until`, so the validator never drops a still-replayable child
- * solely because its local clock advanced.
+ * Child REQs stay open through the bounded late-settlement observation
+ * window: `max_end_at + settlement_grace + lateSettlementObservationSec`.
+ * This makes `settled_late` observable after a winner first becomes
+ * `griefed`, while still giving every child subscription a finite lifetime.
+ * After that deadline, a watch remains open only for nonterminal work or
+ * buffered attributable children. We enforce closure by calling the
+ * unsubscribe handle, not by `until`.
+ *
+ * Admission refusals are intentionally log-only in this implementation: an
+ * event rejected before state admission has no kind-30440 verdict carrier.
+ * The matching ValidatorReason codes are forward declarations for a future
+ * relay-visible refusal protocol and are not produced as verdicts here.
  */
 
 import type { ApplesauceRelayPool } from '@contextvm/sdk'
@@ -94,6 +100,7 @@ export interface ValidatorSubscriber {
 }
 
 export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): ValidatorSubscriber => {
+	const CHILD_REPLAY_TIMEOUT_MS = 8_000
 	const now = deps.now ?? (() => Math.floor(Date.now() / 1000))
 	const logger = deps.logger ?? defaultLogger()
 	const resolvedPolicy = resolveBidSpamPolicy(deps.spamPolicy)
@@ -146,8 +153,8 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const auctionState = deps.state.auctions.get(auctionRootEventId)
 		if (!auctionState) return false
 		if (hasAttributablePendingChildren(auctionRootEventId)) return true
-		const childWindowClosesAt =
-			auctionState.auction.maxEndAt + Math.max(auctionState.auction.maxSkewSec, auctionState.auction.settlementGrace)
+		const graceExpiresAt = auctionState.auction.maxEndAt + auctionState.auction.settlementGrace
+		const childWindowClosesAt = graceExpiresAt + resolvedPolicy.lateSettlementObservationSec
 		if (now() <= childWindowClosesAt) return true
 		for (const bidState of Array.from(auctionState.bids.values())) {
 			if (bidState.currentClaim === null) return true
@@ -227,43 +234,60 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 				since: childReplaySince(auctionState.auction.startAt),
 			},
 		]
-		const unsubscribe = await deps.relayPool.subscribe(filters, (event) => {
-			switch (event.kind) {
-				case AUCTION_BID_KIND: {
-					const parsed = parseBidEvent(event)
-					if (
-						parsed.ok &&
-						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
-					) {
-						logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+		let replaySettled = false
+		let replayTimer: ReturnType<typeof setTimeout> | undefined
+		const settleReplay = (): void => {
+			if (replaySettled) return
+			replaySettled = true
+			if (replayTimer) clearTimeout(replayTimer)
+			void drainPending(auctionRootEventId).then(() => maybeRetireAuctionWatch(auctionRootEventId))
+		}
+		const rawUnsubscribe = await deps.relayPool.subscribe(
+			filters,
+			(event) => {
+				switch (event.kind) {
+					case AUCTION_BID_KIND: {
+						const parsed = parseBidEvent(event)
+						if (
+							parsed.ok &&
+							(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+						) {
+							logger.warn(`[validator] dropping bid ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
-				}
-				case AUCTION_PATH_RELEASE_KIND: {
-					const parsed = parsePathReleaseEvent(event)
-					if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
-						logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+					case AUCTION_PATH_RELEASE_KIND: {
+						const parsed = parsePathReleaseEvent(event)
+						if (parsed.ok && parsed.value.auctionCoordinate !== watchedCoordinate) {
+							logger.warn(`[validator] dropping kind-1025 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
-				}
-				case AUCTION_SETTLEMENT_KIND: {
-					const parsed = parseSettlementEvent(event)
-					if (
-						parsed.ok &&
-						(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
-					) {
-						logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
-						return
+					case AUCTION_SETTLEMENT_KIND: {
+						const parsed = parseSettlementEvent(event)
+						if (
+							parsed.ok &&
+							(parsed.value.auctionRootEventId !== auctionRootEventId || parsed.value.auctionCoordinate !== watchedCoordinate)
+						) {
+							logger.warn(`[validator] dropping kind-1024 ${parsed.value.id.slice(0, 8)}: child subscription auction mismatch`)
+							return
+						}
+						break
 					}
-					break
+					default:
+						break
 				}
-				default:
-					break
-			}
-			dispatchChildEvent(event)
-		})
+				dispatchChildEvent(event, now())
+			},
+			settleReplay,
+		)
+		if (!replaySettled) replayTimer = setTimeout(settleReplay, CHILD_REPLAY_TIMEOUT_MS)
+		const unsubscribe = () => {
+			if (replayTimer) clearTimeout(replayTimer)
+			rawUnsubscribe()
+		}
 		watchedAuctionUnsubscribes.set(auctionRootEventId, unsubscribe)
 	}
 
@@ -384,12 +408,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 			return
 		}
 		const bid = parsed.value
-		// Prefer an explicit observedAt (buffered replay preserves the
-		// original sighting), then the recovered seed (cross-restart
-		// first-observation, Fix 1), then a fresh `now()` (genuine first
-		// sight this process). This ordering keeps a single-process
-		// buffered sighting authoritative over the relay-recovered value.
-		const firstObservedAt = observedAt ?? deps.seedObservedAt?.get(bid.id) ?? now()
+		// A recovered timestamp is the earliest surviving observation from a
+		// prior process and therefore outranks this process's delivery time.
+		// Without a seed, preserve the explicit delivery/buffer timestamp and
+		// finally fall back to now() for a genuinely new sighting.
+		const firstObservedAt = deps.seedObservedAt?.get(bid.id) ?? observedAt ?? now()
 
 		// If the auction hasn't arrived yet on our relay, stash the bid
 		// and replay it (with this first-observed time) when the auction
@@ -619,10 +642,11 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 
 	const start = async (): Promise<void> => {
 		const since = childReplaySince()
-		const startupObservedAt = now()
 		let startupChildReplayDone = false
 		let startupChildReplayUnsub: (() => void) | null = null
+		let startupChildReplayTimer: ReturnType<typeof setTimeout> | undefined
 		const stopStartupChildReplay = (): void => {
+			if (startupChildReplayTimer) clearTimeout(startupChildReplayTimer)
 			const off = startupChildReplayUnsub
 			startupChildReplayUnsub = null
 			if (!off) return
@@ -635,13 +659,14 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		startupChildReplayUnsub = await deps.relayPool.subscribe(
 			[{ kinds: [bidKindAsNumber(), pathReleaseKindAsNumber(), settlementKindAsNumber()], since }],
 			(event) => {
-				dispatchChildEvent(event, startupObservedAt)
+				dispatchChildEvent(event, now())
 			},
 			() => {
 				startupChildReplayDone = true
 				stopStartupChildReplay()
 			},
 		)
+		startupChildReplayTimer = setTimeout(stopStartupChildReplay, CHILD_REPLAY_TIMEOUT_MS)
 		if (startupChildReplayDone) {
 			stopStartupChildReplay()
 		} else {

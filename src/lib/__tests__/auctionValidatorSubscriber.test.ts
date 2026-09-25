@@ -497,7 +497,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		await subscriber.stop()
 	})
 
-	test('startup child replay preserves first-observed time for later auction discovery', async () => {
+	test('startup child replay prefers a recovered bid observation over delivery time', async () => {
 		// Historical child events already on the relay at startup are
 		// captured with the startup observation time, so a later auction
 		// discovery does not re-stamp them to replay-time now().
@@ -516,6 +516,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		}
 		let t = 5_000
 		const now = () => t
+		const seedObservedAt = new Map<string, number>()
 
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		const relayPool = {
@@ -527,6 +528,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 				for (const event of history) {
 					if (filters.some((filter) => matchesFilter(event, filter))) {
 						handler(event)
+						t += 1
 					}
 				}
 				return () => undefined
@@ -538,6 +540,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: true }) } as any,
 			now,
+			seedObservedAt,
 		})
 
 		// A non-https mint so the reachability probe is rejected by the
@@ -598,6 +601,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 				['status', 'locked'],
 			],
 		} as unknown as EventTemplate)
+		seedObservedAt.set(bidEvent.id, 1_500)
 
 		// Release references the bid id.
 		const releaseEvent = createSignedEvent(bidderSk, {
@@ -615,7 +619,8 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		} as unknown as EventTemplate)
 
 		// 1. Release then bid are already on relay history when the
-		// subscriber starts; startup replay stamps both at t=5000.
+		// Each historical child gets its own delivery-time observation, but the
+		// bid's recovered pre-restart observation remains authoritative.
 		history.push(releaseEvent)
 		history.push(bidEvent)
 		await subscriber.start()
@@ -628,7 +633,7 @@ describe('auction validator subscriber authorizes before mutation', () => {
 		// time rather than re-stamp the bid/release to 9000.
 		const auctionState = state.auctions.get(auctionRootId)!
 		const bidState = auctionState.bids.get(bidEvent.id)!
-		expect(bidState.observedAt).toBe(5_000)
+		expect(bidState.observedAt).toBe(1_500)
 		expect(auctionState.pathReleaseObservedAt.get(releaseEvent.id)).toBe(5_000)
 		await subscriber.stop()
 	})
@@ -715,6 +720,31 @@ describe('auction validator subscriber subscription contract', () => {
 		await subscriber.stop()
 	})
 
+	test('gives startup and per-auction child replay an EOSE completion signal', async () => {
+		const state = createValidatorState(VALIDATOR_PUBKEY)
+		buildAuctionState(state)
+		const completionCallbacks: Array<(() => void) | undefined> = []
+		const relayPool = {
+			subscribe: async (_filters: Array<Record<string, unknown>>, _handler: (event: NostrEvent) => void, onEose?: () => void) => {
+				completionCallbacks.push(onEose)
+				return () => undefined
+			},
+			publish: async () => undefined,
+		}
+		const subscriber = createValidatorSubscriber({
+			state,
+			relayPool: relayPool as any,
+			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
+		})
+
+		await subscriber.start()
+
+		// Startup children, auction discovery, and scoped auction children.
+		expect(completionCallbacks[0]).toBeFunction()
+		expect(completionCallbacks[2]).toBeFunction()
+		await subscriber.stop()
+	})
+
 	test('caps live child subscriptions and backfills once a slot frees up', async () => {
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		const auctionA = buildAuctionState(state)
@@ -771,7 +801,7 @@ describe('auction validator subscriber subscription contract', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
 			now: () => t,
-			spamPolicy: { maxTrackedChildSubscriptions: 1 },
+			spamPolicy: { maxTrackedChildSubscriptions: 1, lateSettlementObservationSec: 0 },
 		})
 
 		await subscriber.start()
@@ -787,7 +817,7 @@ describe('auction validator subscriber subscription contract', () => {
 		await subscriber.stop()
 	})
 
-	test('keeps a child REQ through settlement grace and retires it afterward when no verdict work remains', async () => {
+	test('keeps a child REQ through the late-settlement window and retires it afterward', async () => {
 		const state = createValidatorState(VALIDATOR_PUBKEY)
 		buildAuctionState(state)
 		let t = 2_161
@@ -810,13 +840,18 @@ describe('auction validator subscriber subscription contract', () => {
 			relayPool: relayPool as any,
 			publisher: { publishIfChanged: async () => ({ verdict: { claim: 'bid_invalid', reason: 'test' }, published: false }) } as any,
 			now: () => t,
+			spamPolicy: { lateSettlementObservationSec: 60 },
 		})
 
 		await subscriber.start()
 		await subscriber.republishAll()
 
 		expect(childUnsubscribeCalls).toBe(0)
-		t = 5_701
+		t = 5_760
+		await subscriber.republishAll()
+
+		expect(childUnsubscribeCalls).toBe(0)
+		t = 5_761
 		await subscriber.republishAll()
 
 		expect(childUnsubscribeCalls).toBe(1)
