@@ -1275,7 +1275,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 	// terminal settlement, or the locktime may have changed since the UI read.
 	try {
 		const [
-			{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdicts },
+			{ fetchAuction, fetchAuctionBids, fetchAuctionSettlements, fetchAuctionVerdictsWithRetry },
 			{ parseAuctionEvent },
 			{ parseBidEvent },
 			{ parseSettlementEvent },
@@ -1300,7 +1300,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 
 		const [bidEvents, verdictEvents, settlementEvents] = await Promise.all([
 			fetchAuctionBids(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, true),
-			fetchAuctionVerdicts(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors, undefined),
+			fetchAuctionVerdictsWithRetry(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, parsedAuction.auditors),
 			fetchAuctionSettlements(latestLeg.auctionRootEventId, null, parsedAuction.coordinate, undefined, true),
 		])
 		const parsedBids = bidEvents
@@ -1353,7 +1353,7 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 	// and the auction is ready for settlement. This prevents premature
 	// release based on stale or incomplete information.
 	try {
-		const [{ fetchAuctionVerdicts, fetchAuction }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] = await Promise.all([
+		const [{ fetchAuctionVerdictsWithRetry, fetchAuction }, { parseValidatorVerdictEvent }, { parseAuctionEvent }] = await Promise.all([
 			import('@/queries/auctions'),
 			import('@/lib/schemas/auction/validatorEvents'),
 			import('@/lib/schemas/auction/auctionEvent'),
@@ -1363,12 +1363,11 @@ export const publishBidderPathRelease = async (input: PublishBidderPathReleaseIn
 		const parsedAuctionResult = parseAuctionEvent(toRawEvent(auctionEvent))
 		if (!parsedAuctionResult.ok) throw new Error('Auction is malformed')
 		const quorumAuction = parsedAuctionResult.value
-		const verdictEvents = await fetchAuctionVerdicts(
+		const verdictEvents = await fetchAuctionVerdictsWithRetry(
 			latestLeg.auctionRootEventId,
 			null,
 			latestLeg.auctionCoordinate,
 			quorumAuction.auditors,
-			undefined,
 		)
 		const parsedVerdicts = verdictEvents
 			.map((v) => parseValidatorVerdictEvent(toRawEvent(v)))
@@ -1545,7 +1544,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// Lazy imports to avoid pulling settlement-only deps into the bid
 	// path's bundle.
 	const [
-		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionSettlements, fetchAuctionVerdicts, getBidAmount },
+		{ fetchAuction, fetchAuctionBids, fetchAuctionPathReleases, fetchAuctionSettlements, fetchAuctionVerdictsWithRetry, getBidAmount },
 		auctionSettlementMod,
 		settlementEventsMod,
 		constantsMod,
@@ -1651,7 +1650,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		// winning bid must not be able to displace it with reserve_not_met.
 		const [rnmBids, rnmVerdicts] = await Promise.all([
 			fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-			fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+			fetchAuctionVerdictsWithRetry(formData.auctionEventId, null, auctionCoordinate, parsedAuction.auditors),
 		])
 		const rnmParsedBids = rnmBids
 			.map((b) => parseBidEvent(toRawEvent(b)))
@@ -1735,7 +1734,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	// winner independently from validator quorum evidence.
 	const [bids, verdictEvents] = await Promise.all([
 		fetchAuctionBids(formData.auctionEventId, null, auctionCoordinate, true),
-		fetchAuctionVerdicts(formData.auctionEventId, null, auctionCoordinate, undefined, undefined, true),
+		fetchAuctionVerdictsWithRetry(formData.auctionEventId, null, auctionCoordinate, parsedAuction.auditors),
 	])
 	if (!bids.length) {
 		throw new Error('No bids on this auction — nothing to settle. Use reserve_not_met to close it.')
