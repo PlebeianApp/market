@@ -66,7 +66,8 @@ The migration rule for data published before conformance:
 
 - **Spec:** a missing or unrecognised `type` tag resolves to `simple`; the listing's `format` is preserved on edit rather than re-stamped; an abandoned edit cannot leak into the next product.
 - **Vertical set:** `publish/products.tsx`, `lib/stores/product.ts`, `components/orders/StockUpdateDialog.tsx`, `components/sheet-contents/products/NameTab.tsx`, `routes/.../products/$productId.tsx`, plus the new `lib/utils/productType.ts`.
-- **Retro-compat:** a missing tag loads as `simple`; a genuine `variable` listing stays `variable`. A `variation` child loads as `simple`, which detaches it from its parent — the one case this state does not cure, and why State 6 is required.
+- **Retro-compat:** a missing tag loads as `simple`; a genuine `variable` listing stays `variable`.
+- **Child preservation (required, not optional).** Editing a listing whose `type[0]` is `variation` must **not** overwrite the parent relationship or the fact that it is a child. The form cannot model variations yet, so it must carry the loaded `type` tag and the parent `["a","30402:<pubkey>:<parent-d>"]` reference as opaque state and re-emit both **unchanged** on publish, while the merchant's other edits (title, price, stock, images, specs) apply normally. Mapping a `variation` child to `simple` and dropping the `a` tag silently detaches another client's child listing from its parent — a worse outcome than leaving the listing untouched. This closes the State 1 ↔ State 6 window by design instead of living with it.
 
 ### State 2 — The spec becomes a contract (issue #1374)
 
@@ -282,13 +283,13 @@ One PR per state, in order, each complete on its own:
 - `isProductInStock()` is a semantic shift requiring test and display updates.
 - Orders referencing products with no `stock` tag change behaviour in the stock dialog (skipped instead of errored).
 - State 1 normalises a `type` tag that another client wrote, on an unrelated edit by the merchant. The direction is right and the alternative is the defect, but it is a write to a foreign field and is recorded here as an accepted trade-off.
-- States 1 and 6 temporarily disagree about `variation` children: State 1 rewrites them to `simple`, State 6 reattaches them. The window is real and is why State 1's sign-off matters.
+- `variation` children are **preserved but not modelled** until State 6: editing one keeps it attached to its parent and keeps its own `type`, but Plebeian still cannot create, validate or sell variations. State 1 is required to preserve them precisely so that the support State 6 adds lands on listings that were never damaged in the meantime.
 - The ~30 childless `variable` parents are repaired by an explicit sweep that touches merchants' live listings.
 
 ## Open decisions
 
 1. The format default (State 4): follow the spec's `digital` or keep our historical `physical`, for reading foreign listings and for the form's default.
-2. Whether Plebeian normalises another client's `type` tag on an unrelated edit (State 1 sign-off).
+2. Whether Plebeian normalises another client's `type` tag on an unrelated edit (State 1 sign-off). Note that the normalisation **excludes** `variation` children, which are preserved verbatim.
 3. Whether the read-path contract (State 2) precedes the collection edge (State 3).
 4. Whether this ADR becomes the governing document for the whole plan, and whether PR #1201 is closed in its favour.
 5. Whether the products work lands on `master` or on the `auctions` integration line — State 6 touches orders, which the `auctions` line is also changing.

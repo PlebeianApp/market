@@ -43,6 +43,7 @@ The following unnumbered ADRs need permanent numbers. Assign them single-digit n
   - **0008** is proposed to resolve the #1230 conflict (lightning-bid-funding, currently 0004).
   - **0009 is NOT free** despite the earlier recommendation: `ADR-0009-test-listing-labels-via-nip-32.md` exists on `master`. PR #1215 was renumbered to **0017** for that reason, not to 0009.
 - **0013–0016** are held by the existing NIP-17 / NDK legacy cluster on `master`. Do not add new ADRs here.
+- **Number formatting is inconsistent, and the lines differ.** The legacy cluster uses three-digit filenames (`ADR-013-…`, `ADR-016-…`, `ADR-018-…`) while the rest use four (`ADR-0001-…`). Normalise both forms before deciding a number is free, and check **both** lines: `0003`, `0004`, `0008`, `0011`, `0012` exist only on `auctions`, as do `0018` and `0019`. Taken together (verified 2026-09-26), the first number free on both `master` and `auctions` is **0017**; `0013`–`0016` are held by the legacy cluster and must not be claimed.
 - **0017+** — the single-digit range is exhausted in practice: 0001–0012 are all in use across `master` and the `auctions` line taken together, so a new ADR should take **0017 or above** (this is why #1215 took 0017).
 
 ## Conflict History
