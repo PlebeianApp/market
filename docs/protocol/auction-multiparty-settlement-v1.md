@@ -5,6 +5,21 @@
 **Status:** Draft — for review. **No implementation is authorised by this document.**
 Nothing here is production-authorised until the open questions in §14 are ruled on.
 
+**Scope narrowed 2026-09-26 (maintainer direction):** the first phase implements **validator
+payout only**. The payee-side half of this packet — delivery to independent (non-validator)
+recipients, the recipient-facing confirmation flow, and the recipient payout module — is
+**explicitly deferred** to a separate step; the validator path is what ships first, because the
+validator already carries the payout key material, the offer-linked capability and the settlement
+watcher. The deferral is recorded in
+`docs/adr/proposals/auction-v4v-participation.md` §"Deferred to a separate step".
+
+**And one input to §7/§10 arrives from outside this packet:** attributing a spend to a key (its
+owner versus the refund path) is being tracked independently as issues #1397–#1400, because the
+existing single-party settlement path makes the same inference from timing. If that lands, the
+confirmation question in §7 gains an evidence-based answer — a `spent` proof whose witness verifies
+against the leg's own lock key, rather than a payee's word — and §10's evidence rules should say so
+rather than defining a second rule here.
+
 Inherits from, and does not restate:
 
 - `docs/protocol/auction-multiparty-v1.md` — the schedule packet (encodings, compile/parse,
@@ -241,6 +256,17 @@ Auto-settlement (D12); presence and the draft-time liveness probe (D13, #1328); 
 manifest encodings; UI copy beyond the D14 state sentences.
 
 ## 14. Open questions for ruling
+
+**Which of these block the first phase (validator payout), and which travel with the deferred
+recipient half — as of 2026-09-26:**
+
+- **Blocks phase 1:** #6 (the CI secret name/placement — the validator needs a seed to announce and
+  redeem) and the §4.2 payout-seed rules.
+- **Travels with the deferred recipient half:** #1 (transport), #3 (confirmation), #4 (isolation and
+  the never-redeemed leg), #5 (evidence — with #1397–#1400 as the likely answer).
+- **Still wants a ruling, but is not a blocker for either:** #2 (lifecycle: who asserts each
+  transition — the validator asserts what its own lifecycle derives; the multi-party case needs the
+  recipient half to be meaningful).
 
 1. **Transport (§5):** A, B or C — or B with A as fallback?
 2. **Lifecycle (§6):** who asserts each transition, and is non-confirmation a protocol verdict

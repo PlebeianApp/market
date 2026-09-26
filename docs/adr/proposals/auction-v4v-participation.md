@@ -4,9 +4,15 @@
 
 **Proposed — records maintainer direction of 2026-09-21, awaiting focused approval**
 
+**Scope narrowed 2026-09-26 (maintainer direction):** the first shipped phase covers **validator payout
+only**. Independent (non-validator) recipient payout — its capability discovery, its recipient-facing
+picker, the platform-contribution row and the recipient-side payout module — is **explicitly deferred**
+to a separate step after this one, and is tracked outside this proposal. What that removes from this
+phase, and what it leaves, is §"Deferred to a separate step" below.
+
 ## Date
 
-2026-09-21
+2026-09-21 (scope narrowed 2026-09-26)
 
 ## Context
 
@@ -355,6 +361,38 @@ locktime), because those two sets lead to different actions.
 - `src/lib/auction/multipartyLegConstruction.ts` — the construction loop over an injected mint seam (D16/D17, unwired).
 - `docs/handoffs/auction-multiparty-construction-log-2026-09-24.md` — the staged construction log: what each stage did and the decisions taken.
 - Later: the auction root tag builder, the bid manifest (Gate D2), the path release (Gate H), the validator service, and the auction detail UI.
+
+## Deferred to a separate step (2026-09-26)
+
+The first phase of this work ships **validator payout**: a validator announces its payout capability, and
+redeems what is locked to it. That is the whole payout path in one consumer, because the validator already
+carries the full machinery — payout key material with its fail-loud checks (`payoutKey.ts`), an offer that
+references the capability, and a settlement watcher — so the phase is wiring plus redemption, not new
+protocol.
+
+**Explicitly deferred, and not part of this proposal's implementation:**
+
+- **Independent (non-validator) recipients.** Their capability discovery, their entry in the seller's
+  picker, per-row capability warnings in the UI, and the recipient-facing side of the payout module.
+- **The platform-contribution row.** It is itself a non-validator recipient, so it needs a capability that
+  the platform side holds the key for. Until then the contribution stays optional and does not block
+  publishing — see the §14 open question on blocking versus warning.
+- **The recipient payout module and its spec**, including the node/CLI, its per-platform bindings and the
+  phone case.
+- **Any money-transmitter / custodial forwarding.** Deferred by maintainer direction 2026-09-26; the
+  protocol stays open to a _provider_ that publishes a capability like any other recipient, so nothing in
+  the wire format forecloses it.
+
+**Independent groundwork — tracked as its own issues, not in this proposal:**
+
+- #1397 — NUT-07 state reads should keep the spend witness.
+- #1398 — attribute a spent proof to a key (lock owner versus refund path).
+- #1399 — settlement and bid validity should attribute a spend by key, not by timing.
+- #1400 — validator verdicts should carry the same attribution.
+
+These four are about **who spent a proof**, a question the existing single-party path also answers by
+timing today. They are useful on their own merits, need no capability and no V4V, and they are the evidence
+layer this phase's settlement attestation would otherwise have to re-invent.
 
 ## Open questions
 
