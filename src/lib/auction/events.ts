@@ -10,7 +10,15 @@
  * tag access, or republish.
  */
 
-import type { AuctionSettlementStatus, Nut7ProofState, PathReleaseReason, ValidatorClaim, ValidatorReason } from './constants'
+import type {
+	AuctionLevelValidatorClaim,
+	AuctionSettlementPolicy,
+	AuctionSettlementStatus,
+	Nut7ProofState,
+	PathReleaseReason,
+	ValidatorClaim,
+	ValidatorReason,
+} from './constants'
 import type { NostrEventLike } from '../nostr/eventLike'
 import type { DleqProof } from '../cashu/dleq'
 
@@ -63,7 +71,7 @@ export interface ParsedAuctionEvent {
 	minBidCurve: MinBidCurve
 
 	// Cashu / key
-	settlementPolicy: 'cashu_p2pk_bidder_path_v1'
+	settlementPolicy: AuctionSettlementPolicy
 	keyScheme: 'hd_p2pk'
 	/** Allowed mints — at least one required. */
 	mints: string[]
@@ -364,7 +372,61 @@ export interface ValidatorPolicyDocument {
 	maxAcceptableSkewSec?: number
 	admission?: ValidatorAdmissionPolicy
 	griefingDecayDays?: number
+	/**
+	 * The validator's auditor ruleset (see `auctionValidatorPolicy.ts`): the smallest
+	 * validator pool it will validate, and the quorum it requires as a percentage of
+	 * that pool. The percentage MUST exceed 50 — a ruleset below the hard floor is
+	 * raised to it rather than honoured, because a lower value admits two disjoint
+	 * groups agreeing on opposite outcomes.
+	 */
+	minValidators?: number
+	minQuorumPercent?: number
 	notes?: string
+}
+
+/**
+ * The content document of an auction-level verdict (kind 30440, `claim =
+ * auction_policy_invalid`). Carries the assessment that warranted the claim, so a reader can
+ * re-derive it from the auction root and the validators' published rulesets rather than
+ * having to trust the wording.
+ */
+export interface AuctionPolicyVerdictDocument {
+	readonly type: 'auction_validator_policy_verdict_v1'
+	/** Distinct auditor pubkeys the auction listed. */
+	readonly pool_size: number
+	/** The quorum the auction declared (`auditor_quorum`), as read. */
+	readonly declared_quorum: number
+	/** The quorum the ruleset and the strict-majority floor actually demand. */
+	readonly required_quorum: number
+	/** Why the policy is broken — the issue codes and their human-readable detail. */
+	readonly issues: readonly { readonly code: string; readonly detail: string }[]
+}
+
+/**
+ * A kind-30440 verdict about the auction root rather than about a bid.
+ *
+ * Kept as its own type so that nothing in the bid path can consume it: the per-bid parser
+ * refuses these events outright (`auction_level_claim`), and the quorum screen never sees
+ * them. See ADR-0003 Appendix D.
+ */
+export interface ParsedAuctionPolicyVerdictEvent {
+	rawEvent: NostrEventLike
+
+	id: string
+	validatorPubkey: string
+	createdAt: number
+
+	/** `auction_policy:<auction_root_event_id>` — disjoint from the per-bid d-tag space. */
+	dTag: string
+	auctionRootEventId: string
+	auctionCoordinate: string
+
+	claim: AuctionLevelValidatorClaim
+	/** The validator's own observation timestamp, not the event's `created_at`. */
+	observedAt: number
+	reason?: string
+
+	document: AuctionPolicyVerdictDocument
 }
 
 export interface ParsedValidatorPolicyEvent {

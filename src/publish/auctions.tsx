@@ -5,7 +5,7 @@ import {
 	AUCTION_SETTLEMENT_POLICY,
 	getAuctionTagValue,
 } from '@/lib/auctionSettlement'
-import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
+import { AUCTION_MIN_DURATION_SECONDS, type ValidatedAuctionPublishData, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { nip60Actions, type AuctionP2pkKeyScheme, AuctionBidLockMutationPossibleError } from '@/lib/stores/nip60'
@@ -19,6 +19,11 @@ import { deriveAuctionChildP2pkPubkeyFromXpub } from '@/lib/auctionP2pk'
 import { hashToCurveHexFromString } from '@/lib/cashu/hashToCurve'
 import { buildDleqProofs, fetchDleqKeysetsForBidsDetailed } from '@/lib/cashu/dleq'
 import { buildBidEventTags, buildPathReleaseTags } from '@/lib/auction/tagBuilders'
+import { buildMultipartyRootTags } from '@/lib/auction/multipartyRootTags'
+import { parseMultipartyRecipientLines, resolveMultipartyPayoutSchedule } from '@/lib/auction/multipartyPublishSchedule'
+import { AUCTION_MULTIPARTY_SETTLEMENT_POLICY } from '@/lib/auction/multipartySchedule'
+import { requiredVerdictMajority } from '@/lib/auction/verdictMajority'
+import { resolveAuctionWorkflow } from '@/lib/workflow/auctionWorkflowResolver'
 import {
 	buildAuctionClaimPublicMarkerTags,
 	createPrivateAuctionClaimMessageForActiveSigner,
@@ -135,6 +140,26 @@ export interface AuctionFormData {
 	 * multi-select; for the demo a single pubkey is fine.
 	 */
 	auditorPubkey: string
+	/**
+	 * Validators for this auction, one pubkey per line. Preferred over
+	 * `auditorPubkey` when present. An auction needs at least two for corroboration
+	 * (three recommended: two must agree unanimously), and the V4V step refuses to
+	 * publish while the resolved pool is below the ruleset's minimum.
+	 */
+	auditorPubkeys?: string
+	/**
+	 * The quorum the seller chose, when they chose one. Only offered from four
+	 * validators up, and never below the strict-majority floor — a seller can raise
+	 * the bar, never lower it (verdictMajority.ts).
+	 */
+	auditorQuorum?: number
+	/**
+	 * Multiparty payout recipients, one per line:
+	 * `role, pubkey, bps, capability_event_id[, offer_event_id]`
+	 * (`validator` needs the offer id; `v4v` must not carry one). Empty = the
+	 * single-party auction this form published before multiparty existed.
+	 */
+	payoutRecipients?: string
 }
 
 export interface AuctionBidFormData {
@@ -219,12 +244,29 @@ const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
  * has no validator emitting kind-30440 verdicts, which means clients
  * have nothing to filter or aggregate against.
  */
-const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string): string[] => {
-	// Single auditor today; kind-30408 supports a list (multiple
-	// `auditors` tags). Phase 7 (reputation UI) is expected to grow this
-	// into a multi-select. Falls back to the app's configured validator
-	// pubkey when the form field is empty, so dev/seed flows that don't
-	// choose an auditor explicitly still get one.
+const getAuctionAuditorsOrThrow = (formAuditorPubkey?: string, formAuditorPubkeys?: string): string[] => {
+	// Multi-validator first (the V4V step): one pubkey per line, blank lines and
+	// comments ignored, duplicates collapsed.
+	const listed = (formAuditorPubkeys ?? '')
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0 && !line.startsWith('#'))
+		.map((line) => line.split(/[\s,]+/)[0] as string)
+
+	if (listed.length > 0) {
+		const invalid = listed.filter((pubkey) => !HEX_PUBKEY_RE.test(pubkey))
+		if (invalid.length > 0) {
+			throw new Error(
+				`Validator pubkey(s) not 32-byte hex: ${invalid.map((pubkey) => pubkey.slice(0, 12)).join(', ')}. One pubkey per line.`,
+			)
+		}
+		const unique = Array.from(new Set(listed))
+		if (unique.length !== listed.length) {
+			throw new Error('The same validator is listed more than once.')
+		}
+		return unique
+	}
+
 	const explicit = formAuditorPubkey?.trim()
 	if (explicit) {
 		if (!HEX_PUBKEY_RE.test(explicit)) {
@@ -251,6 +293,112 @@ const tagBidError = (step: string, cause: unknown): Error => {
 		tagged.stack = cause.stack
 	}
 	return tagged
+}
+
+export interface AuctionRootTagListInput {
+	id: string
+	validated: ValidatedAuctionPublishData
+	auditors: readonly string[]
+	p2pkXpub: string
+	settlementGraceSeconds: number
+	minBidCurveTagValue: string
+	keyScheme: AuctionP2pkKeyScheme
+	mainCategory?: string
+	categories: readonly string[]
+	specs: readonly AuctionSpecEntry[]
+	isNSFW?: boolean
+	enableLiveChat?: boolean
+	/**
+	 * The quorum the seller chose. Clamped to `[majorityFloor, poolSize]`: a seller may
+	 * raise the bar above the strict majority, never lower it below.
+	 */
+	auditorQuorum?: number
+}
+
+/**
+ * The single-party kind-30408 tag list.
+ *
+ * Pure and exported so that (a) the multiparty projection has exactly one place to
+ * build on — `buildMultipartyRootTags` takes this output and switches the
+ * settlement policy plus appends the schedule — and (b) the published tag list can
+ * be asserted in tests without standing up the publish flow.
+ */
+export const buildAuctionRootTagList = (input: AuctionRootTagListInput): string[][] => {
+	const { validated } = input
+	const startingBid = String(validated.startingBid)
+	const bidIncrement = String(validated.bidIncrement)
+	const reserve = String(validated.reserve ?? 0)
+
+	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
+
+	const categoryTags: string[][] = []
+	if (input.mainCategory) {
+		categoryTags.push(['t', input.mainCategory])
+	}
+	for (const category of input.categories) {
+		if (category && category.trim()) {
+			categoryTags.push(['t', category.trim()])
+		}
+	}
+
+	const specTags: string[][] = (input.specs ?? [])
+		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
+		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()])
+
+	const shippingTags: string[][] = validated.shippings.map((ship) =>
+		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
+	)
+
+	return [
+		['d', input.id],
+		['title', validated.title],
+		...(validated.summary ? [['summary', validated.summary]] : []),
+		['auction_type', 'english'],
+		['start_at', String(validated.startAt)],
+		['end_at', String(validated.endAt)],
+		['currency', 'SAT'],
+		['price', startingBid, 'SAT'],
+		['starting_bid', startingBid, 'SAT'],
+		['bid_increment', bidIncrement],
+		['reserve', reserve],
+		...validated.trustedMints.map((mint) => ['mint', mint]),
+		// Bidder-held-path scheme: list one or more validator pubkeys whose
+		// kind-30440 verdicts compliant clients consult to gate bid validity
+		// for THIS auction. See AUCTIONS.md §4.1.
+		...input.auditors.map((auditor) => ['auditors', auditor]),
+		// Explicit values for the per-auction validator parameters.
+		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
+		// in src/lib/auction/constants.ts — emitting them explicitly
+		// makes the auction round-trip cleanly through compliant
+		// validators that strictly check tag presence.
+		// The declared quorum is the strict-majority floor by default, not unanimity: two
+		// validators must agree either way, but a pool of three tolerates one being
+		// offline instead of stalling the auction. The seller may raise it (the quorum
+		// slider, offered from four validators up) but never below the floor.
+		[
+			'auditor_quorum',
+			String(
+				Math.min(
+					Math.max(input.auditorQuorum ?? requiredVerdictMajority(input.auditors.length), requiredVerdictMajority(input.auditors.length)),
+					input.auditors.length,
+				),
+			),
+		],
+		['max_skew_sec', '120'],
+		['max_end_at', String(validated.maxEndAt)],
+		['settlement_grace', String(input.settlementGraceSeconds)],
+		['min_bid_curve', input.minBidCurveTagValue],
+		['key_scheme', input.keyScheme],
+		['p2pk_xpub', input.p2pkXpub],
+		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
+		['schema', 'auction_v1'],
+		...imageTags,
+		...categoryTags,
+		...specTags,
+		...shippingTags,
+		...(input.isNSFW ? [['content-warning', 'nsfw']] : []),
+		...(input.enableLiveChat ? [['live_chat', 'enabled']] : []),
+	]
 }
 
 export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: string): Promise<EventTemplate> => {
@@ -282,7 +430,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 	// gives the seller a single field today and falls back to the app's
 	// configured default. Phase 7 (reputation UI) will grow this into a
 	// multi-select.
-	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey)
+	const auditorsList = getAuctionAuditorsOrThrow(formData.auditorPubkey, formData.auditorPubkeys)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags: string[][] = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)])
@@ -304,44 +452,49 @@ export const createAuctionEvent = async (formData: AuctionFormData, auctionId?: 
 		ship.extraCost ? ['shipping_option', ship.shippingRef, ship.extraCost] : ['shipping_option', ship.shippingRef],
 	)
 
-	const tags: string[][] = [
-		['d', id],
-		['title', validated.title],
-		...(validated.summary ? [['summary', validated.summary]] : []),
-		['auction_type', 'english'],
-		['start_at', String(validated.startAt)],
-		['end_at', String(validated.endAt)],
-		['currency', 'SAT'],
-		['price', startingBid, 'SAT'],
-		['starting_bid', startingBid, 'SAT'],
-		['bid_increment', bidIncrement],
-		['reserve', reserve],
-		...validated.trustedMints.map((mint) => ['mint', mint]),
-		// Bidder-held-path scheme: list one or more validator pubkeys whose
-		// kind-30440 verdicts compliant clients consult to gate bid validity
-		// for THIS auction. See AUCTIONS.md §4.1.
-		...auditorsList.map((auditor) => ['auditors', auditor]),
-		// Explicit values for the per-auction validator parameters.
-		// Defaults match `DEFAULT_AUDITOR_QUORUM` / `DEFAULT_MAX_SKEW_SECONDS`
-		// in src/lib/auction/constants.ts — emitting them explicitly
-		// makes the auction round-trip cleanly through compliant
-		// validators that strictly check tag presence.
-		['auditor_quorum', String(auditorsList.length)],
-		['max_skew_sec', '120'],
-		['max_end_at', String(validated.maxEndAt)],
-		['settlement_grace', String(settlementGraceSeconds)],
-		['min_bid_curve', minBidCurveTagValue],
-		['key_scheme', keyScheme],
-		['p2pk_xpub', p2pkXpub],
-		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
-		['schema', 'auction_v1'],
-		...imageTags,
-		...categoryTags,
-		...specTags,
-		...shippingTags,
-		...(formData.isNSFW ? [['content-warning', 'nsfw']] : []),
-		...(formData.enableLiveChat ? [['live_chat', 'enabled']] : []),
-	]
+	const baseTags = buildAuctionRootTagList({
+		id,
+		validated,
+		auditors: auditorsList,
+		p2pkXpub,
+		settlementGraceSeconds,
+		minBidCurveTagValue,
+		keyScheme,
+		mainCategory: formData.mainCategory,
+		categories: formData.categories,
+		specs: formData.specs ?? [],
+		isNSFW: formData.isNSFW,
+		enableLiveChat: formData.enableLiveChat,
+		auditorQuorum: formData.auditorQuorum,
+	})
+
+	// Multiparty payout (auction-v4v-participation, D2). The seller's recipient
+	// lines compile into the canonical schedule and the root carries it; with no
+	// recipients the single-party tags are published byte-for-byte as before.
+	const sellerPubkey = (await getUser())?.pubkey ?? ''
+	const payout = resolveMultipartyPayoutSchedule({
+		recipients: parseMultipartyRecipientLines(formData.payoutRecipients ?? ''),
+		auditors: auditorsList,
+		sellerPubkey,
+	})
+
+	// Fail closed. The publish path refuses a draft the V4V step has not completed
+	// rather than silently publishing a single-party auction: an inadmissible
+	// validator set, or a schedule that does not compile, must stop here and not
+	// reach a signature.
+	const workflow = resolveAuctionWorkflow({
+		mode: auctionId ? 'edit' : 'create',
+		auditors: auditorsList,
+		auditor_quorum: formData.auditorQuorum ?? requiredVerdictMajority(auditorsList.length),
+		settlement_policy: payout === null ? AUCTION_SETTLEMENT_POLICY : AUCTION_MULTIPARTY_SETTLEMENT_POLICY,
+		recipientLines: formData.payoutRecipients ?? '',
+		sellerPubkey,
+	})
+	if (!workflow.v4vComplete) {
+		throw new Error(`Auction is not publishable yet: ${workflow.blockingMessages.join(' ')}`)
+	}
+
+	const tags = payout === null ? baseTags : buildMultipartyRootTags({ baseTags, schedule: payout.schedule })
 
 	return {
 		kind: 30408,

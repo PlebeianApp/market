@@ -29,12 +29,14 @@ export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4
 	}
 
 	// The sales / "all products" adapter, with dialog-specific copy + config
-	// (confirm-and-save button, cancel button). The agnostic V4VManager receives
-	// this via props — it does not know it is inside a dialog.
+	// (confirm-and-save button, cancel button), passed as overrides so the helper
+	// keeps owning labels/config — including the live zap requirement it composes.
 	const sales = useV4VManager({ userPubkey, initialShares, initialTotalPercentage, onSaveSuccess: handleSaveSuccess })
 
-	const labels: V4VLabels = { ...salesV4VLabels, saveButtonText: 'Confirm & Save' }
-	const config: V4VConfig = { ...salesV4VConfig, showCancelButton: true, saveButtonTestId: 'confirm-v4v-setup-button' }
+	const props = salesV4VManagerProps(sales, {
+		labels: { saveButtonText: 'Confirm & Save' },
+		config: { showCancelButton: true, saveButtonTestId: 'confirm-v4v-setup-button' },
+	})
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,7 +49,7 @@ export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4
 				</DialogHeader>
 
 				<div className="space-y-6 py-4">
-					<V4VManager {...salesV4VManagerProps(sales)} onCancel={() => onOpenChange(false)} labels={labels} config={config} />
+					<V4VManager {...props} onCancel={() => onOpenChange(false)} />
 				</div>
 			</DialogContent>
 		</Dialog>

@@ -417,3 +417,135 @@ tolerance) likewise leaves the validity path.
 - Short-Circuit Evaluation: Validators must fail fast. If a structural check fails, do not proceed to expensive cryptographic or network checks.
 - Test Coverage: Every row in the Atomic Checklists must have at least one corresponding unit test (positive and negative).
 - Extensibility: New auction policies or curve shapes must add new rows to these checklists without altering existing logic.
+
+## Appendix D: Amendment — strict-majority quorum floor (2026-09)
+
+**Decision.** A quorum for a bid outcome is the strict majority of the auction's
+validator pool: `floor(P / 2) + 1` distinct auditor pubkeys, where `P` is the
+number of **distinct** pubkeys listed in the auction's `auditors` tags. The
+declared `auditor_quorum` may only raise this requirement, never lower it.
+
+**Why.** Without a majority floor, a pool splits: with four auditors and a
+declared quorum of two, validators `{A,B}` can confirm a bid while `{C,D}`
+condemn it, and both results satisfy the quorum. Two "valid" outcomes for one bid
+means no canonical winner, and every downstream decision that reads verdicts —
+ranking, display price, winner derivation, settlement and grief classification —
+becomes ambiguous. A majority floor makes the two groups impossible by
+construction: two disjoint sets cannot each exceed half of the pool.
+
+**Mechanism.**
+
+- Enforced at read time by every compliant client and validator, so a seller
+  cannot weaken an auction by declaring a low quorum. A declared value below the
+  floor is raised to the floor and reported (`quorum_below_majority` /
+  `declaredBelowMajority`).
+- Single-source implementation: `src/lib/auction/verdictMajority.ts`
+  (`requiredVerdictMajority`, `effectiveVerdictQuorum`), consumed by both the
+  verdict tally (`verdictQuorum.ts`) and the participation gate
+  (`multipartyParticipation.ts`), so the two cannot drift apart.
+- Pool size counts distinct pubkeys: duplicate `auditors` entries MUST NOT
+  inflate `P` and thereby weaken the floor.
+- `P ≤ 1` is unaffected (floor 1), so every existing single-validator auction
+  behaves exactly as before.
+
+**Consequences.**
+
+- Availability trades against pool size: `P = 2` requires unanimity, so one
+  unavailable validator stalls the auction. `P = 3` (floor 2) is the smallest
+  fork-proof pool that tolerates one absence; sellers wanting both properties
+  SHOULD list an odd number of validators ≥ 3, and MUST NOT expect a 2-validator
+  pool to survive a validator being offline.
+- A client that requires "at least 2 validators" MUST state the pool and quorum
+  separately: the count alone does not describe the requirement.
+- Supersedes the "quorum MAY equal the count to require unanimity" latitude: a
+  declared quorum equal to the count is still valid, it is simply not the only
+  admissible value.
+
+### Amendment — auction-level invalidity (2026-09)
+
+A broken validator configuration is a defect of the **auction**, not of any single
+bid, so it is reported about the auction: a validator observing an inadmissible
+configuration publishes a kind-30440 verdict with the claim
+`auction_policy_invalid`, and compliant clients MUST NOT treat any bid in that
+auction as valid.
+
+Inadmissible means any of:
+
+- fewer than **2 distinct** `auditors` on a multiparty auction
+  (`pool_below_minimum`);
+- a declared `auditor_quorum` **below the strict-majority floor**
+  (`quorum_below_majority`);
+- a declared `auditor_quorum` **above the pool**, which no outcome could reach
+  (`quorum_exceeds_pool`).
+
+Implementation: `src/lib/auction/auctionValidatorPolicy.ts`
+(`assessAuctionValidatorPolicy`) returns `valid`, the findings with their
+severity, and the floor/required quorum in one frozen object. The claim is
+deliberately **not** part of `VALIDATOR_CONDEMN_CLAIMS`: an invalid auction is not
+a condemned bid, and counting it as one would let an auction-level defect consume
+a bid's quorum.
+
+Two tolerances, both explicit rather than accidental:
+
+- **Grandfathering.** A single-validator auction under the legacy single-party
+  policy is reported at `warning` severity, never as invalid, so live auctions
+  published before this rule keep working. The pool requirement applies to
+  multiparty auctions and to new publishes; the severity is a one-line constant in
+  the assessment module when the team decides to apply it retroactively.
+- **Duplicate `auditors` tags** are a warning: they never inflate the pool size or
+  weaken the floor, and they do not invalidate the auction.
+
+The majority floor in the tally remains as a **backstop**: a client that fails to
+run the assessment still cannot accept an outcome with at most half the pool
+behind it.
+
+**Wire shape of the claim.** The claim is a kind-30440 event whose `claim` tag is
+`auction_policy_invalid`. It addresses the auction root, so it carries no `p` and no
+`bid` tag, and its `d` tag is `auction_policy:<auction_root_event_id>` — a namespace
+disjoint from the per-bid `<bidder>:<auction_root>:<bid>` by construction. Its content
+is `{ type: "auction_validator_policy_verdict_v1", pool_size, declared_quorum,
+required_quorum, issues: [{ code, detail }] }`: the assessment's own numbers, so a
+reader can re-derive the finding from the root and the validators' published rulesets
+rather than trusting the claim's wording. A validator publishes it only when the
+assessment is actually broken — a merely grandfathered legacy auction is not.
+
+Because both shapes share kind 30440, the per-bid parser **refuses** any event whose
+`claim` is auction-level, or whose `d` tag carries the `auction_policy:` prefix, with
+the code `auction_level_claim` — it never parses one into a bid verdict. An
+auction-level claim is parsed by `parseAuctionPolicyVerdictEvent` instead.
+
+Implementation: `src/lib/auction/auctionPolicyInvalidClaim.ts`
+(`assessAuctionPolicyClaim` → `buildAuctionPolicyInvalidClaimTags` →
+`verifyAuctionPolicyInvalidClaim`, the construct-then-verify discipline the multiparty
+publishers already use) and `src/lib/schemas/auction/validatorEvents.ts`.
+
+**Settlement policy is a set, not a literal, on the read path.** A reader must accept
+every `settlement_policy` a writer can emit: `cashu_p2pk_bidder_path_v1` and
+`cashu_p2pk_bidder_path_multiparty_v1` (`AUCTION_SETTLEMENT_POLICIES` in
+`src/lib/auction/constants.ts`). Pinning the read path to the single-party literal made
+the app unable to parse its own multiparty auctions — the root failed validation and the
+listing rendered as an empty card. Anything outside the set is still refused.
+
+### Amendment — the auditor ruleset, and one quorum implementation (2026-09)
+
+**The ruleset.** The minimum validator pool and the quorum minimum are the
+validator's own business, not a protocol constant. A validator declares
+`minValidators` and `minQuorumPercent` in its published policy document, and
+applies that ruleset to the auctions it validates. The ruleset is untrusted data
+from a third party, so `sanitizeAuctionValidatorRuleset` raises any percentage at or
+below **50** to the hard floor, falls back to the defaults for non-integer or
+out-of-range counts, and can only make the requirement stricter — never weaker.
+`minQuorumPercent` defaults to 51, which reproduces the strict-majority floor
+exactly at every pool size; `minValidators` defaults to 2 (3 recommended, since 2
+forces unanimity). The requirement an outcome must reach is
+`max(declared auditor_quorum, floor(P/2)+1, ceil(P × minQuorumPercent / 100))`.
+
+**One quorum implementation.** The rule now lives in `verdictMajority.ts` and is
+consumed by every path that decides whether a bid is valid: the verdict tally
+(`verdictQuorum.ts`, used by the bid-progress dialog), the participation gate
+(`multipartyParticipation.ts`), the bid classifier (`bidValidation.ts`), and the
+auction-level assessment. The classifier previously compared verdict counts against
+the declared `auditor_quorum` directly, which would have made it a second, weaker
+quorum implementation — a seller could have declared a forkable quorum and had bids
+classified as valid through that path alone. A test asserts each path's requirement
+for the same auction.

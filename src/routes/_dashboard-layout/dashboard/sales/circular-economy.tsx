@@ -1,5 +1,4 @@
 import { V4VManager } from '@/components/v4v/V4VManager'
-import { salesV4VConfig, salesV4VLabels } from '@/lib/v4v/labels'
 import { salesV4VManagerProps } from '@/lib/v4v/sales-props'
 import { deriveInitialSharesFromStored } from '@/lib/v4v/splits'
 import { authStore } from '@/lib/stores/auth'
@@ -54,7 +53,7 @@ function CircularEconomyComponent() {
 				<h1 className="text-2xl font-bold">Circular Economy</h1>
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
-				<V4VManager {...salesV4VManagerProps(sales)} labels={salesV4VLabels} config={salesV4VConfig} />
+				<V4VManager {...salesV4VManagerProps(sales)} />
 			</div>
 		</div>
 	)

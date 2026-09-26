@@ -258,6 +258,58 @@ exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
   is sufficient). MAY equal the count of `auditors` tags to require
   unanimity. Sellers running high-value auctions SHOULD raise this above
   `1` to dilute reliance on any one validator.
+
+  **Strict-majority floor (amendment 2026-09, ADR-0003).** Whatever the tag
+  declares, a compliant client MUST NOT accept an outcome unless it is confirmed
+  by **more than half of the auction's `auditors`** — `floor(P / 2) + 1` distinct
+  validators, where `P` counts **distinct** auditor pubkeys (a repeated pubkey
+  MUST NOT inflate the pool). The declared value may only raise this requirement,
+  never lower it: a declared quorum below the floor MUST be reported
+  (`quorum_below_majority`) and the floor applied in its place.
+
+  The reason is consensus safety, not preference. Were `floor(P / 2) + 1` not
+  enforced, two disjoint groups of validators could each reach quorum on opposite
+  outcomes, both outcomes would be "valid", and the auction would have no single
+  canonical result. Note the availability consequence: `P = 2` forces unanimity,
+  so a pool of **3** (floor 2) is the smallest that both resists forking and
+  tolerates one unavailable validator.
+
+  **Auction-level invalidity (amendment 2026-09).** A validator MUST mark the
+  **auction itself** invalid — not merely a bid — when the auction's declared
+  validator configuration is inadmissible:
+  - the pool lists fewer than **2 distinct** `auditors` on a multiparty auction;
+  - the declared `auditor_quorum` is **below the strict-majority floor**; or
+  - the declared `auditor_quorum` **exceeds the pool**, so no outcome could ever
+    reach it.
+
+  The claim is `auction_policy_invalid`, published as a kind-30440 verdict about
+  the auction root. It is **not** a bid condemnation and MUST NOT be counted as
+  one: it is not a member of the condemn claims. Compliant clients MUST NOT treat
+  any bid in such an auction as valid, and MUST surface the reason.
+
+  **The auditor ruleset (amendment 2026-09).** The minimum validator pool and the
+  quorum minimum are a **ruleset**, not a constant: a validator declares its own
+  `minValidators` and `minQuorumPercent` in its published policy document
+  (`ValidatorPolicyDocument`), and applies that ruleset to the auctions it
+  validates. A ruleset is data from a third party and is treated as untrusted:
+  a percentage at or below **50** is raised to the hard floor rather than honoured,
+  non-integer or out-of-range counts fall back to the defaults, and a ruleset can
+  only ever make the requirement **stricter** than the protocol floor, never
+  weaker.
+
+  The **only strict requirement** is that rule: an outcome needs more than half of
+  the pool. `minQuorumPercent` defaults to 51, which reproduces the strict-majority
+  floor exactly for every pool size; `minValidators` defaults to 2, with 3
+  recommended. The requirement an outcome must actually reach is
+  `max(declared auditor_quorum, floor(P/2)+1, ceil(P × minQuorumPercent / 100))`.
+
+  Two deliberate tolerances. **Single-validator auctions** published under the
+  legacy single-party policy are grandfathered: their pool size is reported as a
+  warning, never as invalidity, because invalidating live auctions for a rule their
+  sellers never had the chance to meet is indefensible — the pool requirement
+  applies to multiparty auctions and to new publishes. **Duplicate `auditors`
+  tags** are a warning and never count toward the quorum or the pool size.
+
 - `max_skew_sec`: integer, default `120`. Maximum acceptable difference
   between a bid event's claimed `created_at` and the validator's own
   `observed_at`. Bids exceeding this are flagged `timestamp_skew`.

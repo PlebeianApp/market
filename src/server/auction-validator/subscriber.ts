@@ -48,6 +48,7 @@ import { parsePathReleaseEvent, parseSettlementEvent } from '../../lib/schemas/a
 
 import { recordPathRelease, recordSettlement, upsertAuction, upsertBid, type ValidatorState } from './state'
 import { createPendingBuffer, createPendingBufferBudget } from './pendingBuffer'
+import type { AuctionPolicyClaimPublisher } from './policyClaim'
 import { refreshAuctionMintReachability, type MintProbePolicy } from './mintReachability'
 import type { createVerdictPublisher } from './publisher'
 import type { Nut7Poller } from './nut7Poller'
@@ -69,6 +70,12 @@ export interface ValidatorSubscriberDeps {
 	now?: () => number
 	/** Operator-controlled outbound-network + load policy for mint probes. */
 	mintProbePolicy?: MintProbePolicy
+	/**
+	 * Publishes the `auction_policy_invalid` claim when an auction this validator audits has a
+	 * broken validator policy. Optional so the daemon can run without the claim path (and so
+	 * existing tests need no new dependency), but the composed daemon always passes one.
+	 */
+	policyClaim?: Pick<AuctionPolicyClaimPublisher, 'consider'>
 	/**
 	 * First-observation `observed_at` recovered from the validator's own
 	 * prior kind-30440 verdicts on startup (`observedAtRecovery.ts`). When a
@@ -374,6 +381,18 @@ export const createValidatorSubscriber = (deps: ValidatorSubscriberDeps): Valida
 		const shouldDrain = result.status === 'inserted'
 		if (result.status === 'inserted') {
 			logger.info(`[validator] tracking new auction ${auction.dTag.slice(0, 16)} (root=${auction.rootEventId.slice(0, 8)})`)
+
+			// The auction's own validator policy: if it is broken, say so on the wire now, so a
+			// bidder can see that the outcome is inadmissible before locking funds. The root is
+			// immutable (`rejected_immutable` above), so this is assessed once per auction.
+			// Failure to publish must not stop the validator from tracking the auction.
+			if (deps.policyClaim) {
+				try {
+					await deps.policyClaim.consider(auction)
+				} catch (err) {
+					logger.warn(`[validator] policy claim for ${auction.rootEventId.slice(0, 8)} failed: ${err instanceof Error ? err.message : err}`)
+				}
+			}
 		}
 		if (shouldDrain) {
 			// Drain anything we'd buffered for this auction.
