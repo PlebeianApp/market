@@ -25,7 +25,7 @@
 | 0013         | NIP-17 Order Message Transport                                                       | Proposed | `ADR-013-nip17-order-message-transport.md`                          | On `master`. Legacy cluster (0013–0016) — reserved, no new ADRs in this range.                                                                                                                                                              |
 | 0014         | NIP-17 Order Transport Migration and Cutover Criteria                                | Proposed | `ADR-014-nip17-order-transport-migration.md`                        | On `master`. Legacy cluster (0013–0016) — reserved, no new ADRs in this range.                                                                                                                                                              |
 | 0015         | Production-safe NDK Filter Handling and Stable Kind-0 Profile Fetching               | Accepted | `ADR-015-production-safe-ndk-filters-and-stable-kind-0-fetching.md` | PR #1207 (fix/ai-guardrails-profile-unload). **Was also claimed by PR #1174 (staging-relay-recovery, CLOSED) — that ADR needs renumbering if revived.**                                                                                     |
-| 0016         | Zap NDK External Relay Isolation                                                     | Accepted | `ADR-016-zap-ndk-external-relay-isolation.md`                       | PR #1211. Legacy cluster (0013–0016) — reserved. **Conflict: PR #1215 (product-orthogonal-dimensions) also claims 0016 — needs renumbering to 0009.**                                                                                       |
+| 0017         | Product-Listing Conformance with the Gamma Markets Spec — a Six-State Migration      | Proposed | `ADR-017-product-listing-conformance-and-migration.md`              | PR #1215. Renumbered from the conflicting 0016 (see Conflict History). Carries the six-state migration plan; State 1 is PR #1396.                                                                                                           |
 | (unnumbered) | Add Product Workflow Boundaries                                                      | Accepted | `ADR-add-product-workflow-boundaries.md`                            | Predates the numbering system.                                                                                                                                                                                                              |
 
 ## Pending Number Assignments
@@ -41,13 +41,13 @@ The following unnumbered ADRs need permanent numbers. Assign them single-digit n
 
 - **0008–0012** are the recommended single-digit range for new ADRs.
   - **0008** is proposed to resolve the #1230 conflict (lightning-bid-funding, currently 0004).
-  - **0009** is proposed to resolve the #1215 conflict (product-orthogonal-dimensions, currently 0016).
+  - **0009 is NOT free** despite the earlier recommendation: `ADR-0009-test-listing-labels-via-nip-32.md` exists on `master`. PR #1215 was renumbered to **0017** for that reason, not to 0009.
 - **0013–0016** are held by the existing NIP-17 / NDK legacy cluster on `master`. Do not add new ADRs here.
-- **0017+** are available only once the single-digit range is exhausted.
+- **0017+** — the single-digit range is exhausted in practice: 0001–0012 are all in use across `master` and the `auctions` line taken together, so a new ADR should take **0017 or above** (this is why #1215 took 0017).
 
 ## Conflict History
 
 - **ADR-0004 collision (open):** Three PRs originally claimed 0004: #1144 (settlement-steps), #1198 (CMS), and #1205/#1230 (lightning-bid-funding). CMS was renumbered to 0006. Lightning-bid-funding (#1230) **still** claims 0004 — needs renumbering to 0008.
 - **ADR-0005 collision (resolved 2026-08-03):** PR #1209 (test-isolation) and the UI migration ADR both claimed 0005. Resolved: test-isolation keeps 0005, UI migration → 0007.
 - **ADR-015 collision (resolved):** PR #1207 (production-safe NDK filters, Accepted) vs PR #1174 (staging-relay-recovery, CLOSED). The closed PR's ADR was never merged. If revived, it needs a new number.
-- **ADR-016 collision (open):** Master's ADR-016 (Zap NDK isolation, PR #1211, Accepted) vs PR #1215 (product-orthogonal-dimensions). #1215 needs renumbering to 0009.
+- **ADR-016 collision (resolved 2026-09-26):** Master's ADR-016 (Zap NDK isolation, PR #1211, Accepted) vs PR #1215 (product-orthogonal-dimensions). #1215 is renumbered to **0017** — not to the 0009 the gap list suggested, because `ADR-0009-test-listing-labels-via-nip-32.md` already occupies it on `master`.
