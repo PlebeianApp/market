@@ -176,6 +176,16 @@ export const NOSTR_CONNECT_KEY = LEGACY_CONNECT_URL_KEY
 export const NOSTR_LOCAL_SIGNER_KEY = LEGACY_LOCAL_SIGNER_KEY
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
+/**
+ * Persisted identity marker: the account pubkey the last authority commit
+ * authenticated (`commitSignerAuthority`). Nothing under `src/` reads it back —
+ * it exists so the identity of the live session can be observed from outside
+ * the store; its consumers are the identity-separation unit tests
+ * (`auth-signer-attachment.test.ts`, `auth-nip07-extension.test.ts`) and the
+ * e2e login assertion (`e2e/tests/auth.spec.ts:138`). Because it is written at
+ * the commit point it must be rolled back there on failure and cleared on
+ * logout.
+ */
 export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
 
 interface AuthState {
