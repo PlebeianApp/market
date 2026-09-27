@@ -272,12 +272,13 @@ decision being smuggled in with the description.
 ### F4 — invalid-signature events are dropped on rehydration
 
 `rehydrateVerifiedNdkEvent` runs `verifyEvent` on every raw event and discards
-those failing. NDK's default subscription path did not verify signatures by
-default, so bad-signature events that previously flowed into query data are
-now filtered. This matches AGENTS.md ("Treat relay data as untrusted until
-validated"). The failure is silent (a relay serving malformed data now reads
-as absence). A debug-level drop counter does not exist today; it is a separate
-follow-up, not a behavior this addendum asserts.
+those failing. NDK's default relay path verifies signatures and drops failures,
+but the applesauce relay adapter these reads route through does not, so
+bad-signature events that previously flowed into query data are now filtered.
+This matches AGENTS.md ("Treat relay data as untrusted until validated"). The
+failure is silent (a relay serving malformed data now reads as absence). A
+debug-level drop counter does not exist today; it is a separate follow-up, not
+a behavior this addendum asserts.
 
 **Scope of this behavior.** It applies where events are rehydrated through
 `rehydrateVerifiedNdkEvent` — the seam fetch path (`src/lib/nostr/ndk-events.ts:55`)
