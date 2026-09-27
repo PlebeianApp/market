@@ -41,6 +41,15 @@ const WORKFLOWS_DIR = join(REPO_ROOT, '.github', 'workflows')
  */
 const PR_GATED_WORKFLOWS = ['ci-ndk-guard.yml', 'ci-unit.yml', 'e2e.yml', 'prettier.yml']
 
+/**
+ * The mapping keys under `pull_request:` that filter on the PR's **base ref**.
+ * `branches-ignore` is the complement of `branches` and re-narrows CI exactly
+ * the same way: `pull_request: branches-ignore: [auctions]` runs no check-suite
+ * for a PR whose base *is* `auctions`, which is the zero-run class this guard
+ * exists to prevent.
+ */
+const BASE_FILTER_KEYS = ['branches', 'branches-ignore']
+
 function workflowText(name: string): string {
 	return readFileSync(join(WORKFLOWS_DIR, name), 'utf8')
 }
@@ -122,14 +131,14 @@ describe('PR-gated workflows accept every PR base', () => {
 			expect(branchEntries(push).length).toBeGreaterThan(0)
 		})
 
-		test(`${name} pull_request has no branches filter — re-adding one sends stacked PRs back to zero check-runs`, () => {
+		test(`${name} pull_request has no branches/branches-ignore filter — re-adding one sends stacked PRs back to zero check-runs`, () => {
 			// The regression this guards: a PR based on `auctions`, `security/**`
 			// or `pr/**` matches no base branch, so GitHub creates no check-suite
-			// for it at all. A `branches:` key under `pull_request:` here fails
-			// with the offending line named.
+			// for it at all. A `branches:` or `branches-ignore:` key under
+			// `pull_request:` here fails with the offending line named.
 			const children = triggerChildren(onBlock(workflowText(name)), 'pull_request')
-			const branchesLines = (children ?? []).filter((line) => /^branches\s*:/.test(line))
-			expect(branchesLines).toEqual([])
+			const baseFilterLines = (children ?? []).filter((line) => /^branches(-ignore)?\s*:/.test(line))
+			expect(baseFilterLines).toEqual([])
 		})
 	}
 })
@@ -137,14 +146,15 @@ describe('PR-gated workflows accept every PR base', () => {
 describe('no workflow gates pull_request on the base branch', () => {
 	test('every workflow in .github/workflows is base-agnostic for pull_request', () => {
 		// The sweep, not just the four: a fifth workflow added later with
-		// `pull_request: branches:` would recreate the same zero-run class for
-		// whatever base it omits. `types:` (preview-deploy.yml) and `paths:`
+		// `pull_request: branches:` (or `branches-ignore:`, its base-ref
+		// complement) would recreate the same zero-run class for whatever base it
+		// omits. `types:` (preview-deploy.yml) and `paths:`
 		// (preview-infra-tests.yml) are legitimate activity/path filters and are
-		// not `branches:` filters.
+		// not base filters.
 		const offenders: string[] = []
 		for (const name of readdirSync(WORKFLOWS_DIR).filter((file) => file.endsWith('.yml'))) {
 			const children = triggerChildren(onBlock(workflowText(name)), 'pull_request')
-			if (children !== null && triggerKeys(children).includes('branches')) offenders.push(name)
+			if (children !== null && triggerKeys(children).some((key) => BASE_FILTER_KEYS.includes(key))) offenders.push(name)
 		}
 		expect(offenders).toEqual([])
 	})
