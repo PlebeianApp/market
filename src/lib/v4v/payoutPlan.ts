@@ -46,7 +46,7 @@ export type ZapPayoutRowAction = 'pay' | 'roll_up' | 'skip'
 
 /** Skip reason: the announced share truncates to nothing. */
 export const ZAP_PAYOUT_REASON_ZERO_SHARE = 'zero_share'
-/** Roll-up reason: the share is real but below the minimum zap (§6.2). */
+/** Roll-up reason: the share is real but below the minimum zap, so it is not paid (§6.2). */
 export const ZAP_PAYOUT_REASON_BELOW_MINIMUM = 'below_minimum'
 
 /** One row's planned outcome. `sats` is what the row's share came to, before roll-up. */
@@ -66,7 +66,12 @@ export interface ZapPayoutPlan {
 	readonly sellerSats: number
 	/** Sats to send as this row's own zap. */
 	readonly paidSats: number
-	/** Sats folded into another payment because they were below the minimum. */
+	/**
+	 * Sats on rows below the minimum zap, which this payout therefore did **not**
+	 * send (§6.2). They stay unspent with the seller and are reported here so the
+	 * ledger discloses them instead of absorbing them. Nothing is "combined": a zap
+	 * reaches one recipient, so two rows cannot share a payment.
+	 */
 	readonly rolledUpSats: number
 	/** Sats on announced rows that truncate to nothing (always 0 in exact terms). */
 	readonly skippedSats: number

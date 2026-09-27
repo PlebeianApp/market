@@ -17,11 +17,12 @@ const SPEC_SENTENCES: Readonly<Record<ZapPayoutRowStatus, string>> = {
 	planned: 'This share is scheduled to be paid when the auction settles.',
 	paid: "This share was paid and the recipient's server published a receipt.",
 	paid_unconfirmed: 'This share was paid, but no receipt was published yet.',
-	rolled_up: 'This share was too small to send on its own and was paid together with another row.',
+	rolled_up: 'This share was too small to send on its own, so this payout did not pay it and its sats stay unspent.',
 	no_receipt_expected: 'This destination is a plain Lightning address, so no zap receipt exists.',
 	address_unreachable: "The recipient's Lightning address did not answer.",
 	not_zap_capable: "The recipient's endpoint does not accept zaps.",
-	below_minimum: 'The share is smaller than this endpoint accepts.',
+	below_minimum: 'This share is smaller than this endpoint accepts.',
+	above_endpoint_maximum: 'This share is larger than this endpoint accepts, so this payout did not pay it.',
 	payment_failed: 'The Lightning payment did not complete.',
 	not_paid: 'This share has not been paid.',
 }
@@ -37,9 +38,9 @@ const base: ZapPayoutEvidence = {
 }
 
 describe('payout ledger vocabulary', () => {
-	test('the vocabulary is exactly the ten statuses of §8', () => {
+	test('the vocabulary is exactly the eleven statuses of §8', () => {
 		expect([...ZAP_PAYOUT_ROW_STATUSES].sort()).toEqual(Object.keys(SPEC_SENTENCES).sort())
-		expect(ZAP_PAYOUT_ROW_STATUSES).toHaveLength(10)
+		expect(ZAP_PAYOUT_ROW_STATUSES).toHaveLength(11)
 	})
 
 	test('every status has exactly the spec sentence, verbatim', () => {
@@ -51,12 +52,12 @@ describe('payout ledger vocabulary', () => {
 	test('the sentences are non-empty and distinct', () => {
 		const sentences = ZAP_PAYOUT_ROW_STATUSES.map(describeZapPayoutRowStatus)
 		expect(sentences.every((sentence) => sentence.length > 0)).toBe(true)
-		expect(new Set(sentences).size).toBe(10)
+		expect(new Set(sentences).size).toBe(11)
 	})
 })
 
 describe('zapPayoutRowStatusFrom precedence', () => {
-	test('each of the ten statuses is reachable from some evidence combination', () => {
+	test('each of the eleven statuses is reachable from some evidence combination', () => {
 		const reachable = new Set<ZapPayoutRowStatus>()
 		reachable.add(zapPayoutRowStatusFrom({ ...base, planned: true }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, rolledUp: true }))
@@ -64,6 +65,7 @@ describe('zapPayoutRowStatusFrom precedence', () => {
 		reachable.add(zapPayoutRowStatusFrom({ ...base, zapCapable: false, receiptExpected: false }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, zapCapable: false, receiptExpected: true }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, withinLimits: false }))
+		reachable.add(zapPayoutRowStatusFrom({ ...base, withinLimits: false, aboveMaximum: true }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, paymentSucceeded: false, paymentAttempted: false }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, paymentSucceeded: false }))
 		reachable.add(zapPayoutRowStatusFrom({ ...base, receiptVerified: true }))
@@ -93,9 +95,13 @@ describe('zapPayoutRowStatusFrom precedence', () => {
 		expect(zapPayoutRowStatusFrom({ ...base, zapCapable: false, receiptExpected: true })).toBe('not_zap_capable')
 	})
 
-	test('outside min/max is below_minimum, ahead of any payment claim', () => {
+	test('below the minimum and above the maximum are different states, ahead of any payment claim', () => {
 		expect(zapPayoutRowStatusFrom({ ...base, withinLimits: false, paymentSucceeded: false })).toBe('below_minimum')
 		expect(zapPayoutRowStatusFrom({ ...base, withinLimits: false, receiptVerified: true })).toBe('below_minimum')
+		// a share above the endpoint's maximum is its own state: a different problem, a different fix
+		expect(zapPayoutRowStatusFrom({ ...base, withinLimits: false, aboveMaximum: true, receiptVerified: true })).toBe(
+			'above_endpoint_maximum',
+		)
 	})
 
 	test('a failed payment is payment_failed, never paid and never not_paid', () => {
@@ -126,10 +132,11 @@ describe('zapPayoutRowStatusFrom precedence', () => {
 })
 
 describe('isZapPayoutRowSettled', () => {
-	test('settled: paid, paid_unconfirmed, rolled_up, no_receipt_expected', () => {
+	test('settled: paid, paid_unconfirmed, no_receipt_expected — but NOT a deferred row', () => {
 		expect(isZapPayoutRowSettled('paid')).toBe(true)
 		expect(isZapPayoutRowSettled('paid_unconfirmed')).toBe(true)
-		expect(isZapPayoutRowSettled('rolled_up')).toBe(true)
+		// a deferred row's sats were never spent, so they are still owed: settled would hide that
+		expect(isZapPayoutRowSettled('rolled_up')).toBe(false)
 		expect(isZapPayoutRowSettled('no_receipt_expected')).toBe(true)
 	})
 
@@ -147,7 +154,7 @@ describe('isZapPayoutRowSettled', () => {
 
 	test('covers every status in the vocabulary', () => {
 		const settled = ZAP_PAYOUT_ROW_STATUSES.filter(isZapPayoutRowSettled)
-		expect(settled).toHaveLength(4)
-		expect([...settled].sort()).toEqual(['no_receipt_expected', 'paid', 'paid_unconfirmed', 'rolled_up'])
+		expect(settled).toHaveLength(3)
+		expect([...settled].sort()).toEqual(['no_receipt_expected', 'paid', 'paid_unconfirmed'])
 	})
 })

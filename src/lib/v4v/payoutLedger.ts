@@ -19,6 +19,7 @@ export const ZAP_PAYOUT_ROW_STATUSES = [
 	'address_unreachable',
 	'not_zap_capable',
 	'below_minimum',
+	'above_endpoint_maximum',
 	'payment_failed',
 	'not_paid',
 ] as const
@@ -34,11 +35,12 @@ const STATUS_SENTENCES: Readonly<Record<ZapPayoutRowStatus, string>> = Object.fr
 	planned: 'This share is scheduled to be paid when the auction settles.',
 	paid: "This share was paid and the recipient's server published a receipt.",
 	paid_unconfirmed: 'This share was paid, but no receipt was published yet.',
-	rolled_up: 'This share was too small to send on its own and was paid together with another row.',
+	rolled_up: 'This share was too small to send on its own, so this payout did not pay it and its sats stay unspent.',
 	no_receipt_expected: 'This destination is a plain Lightning address, so no zap receipt exists.',
 	address_unreachable: "The recipient's Lightning address did not answer.",
 	not_zap_capable: "The recipient's endpoint does not accept zaps.",
-	below_minimum: 'The share is smaller than this endpoint accepts.',
+	below_minimum: 'This share is smaller than this endpoint accepts.',
+	above_endpoint_maximum: 'This share is larger than this endpoint accepts, so this payout did not pay it.',
 	payment_failed: 'The Lightning payment did not complete.',
 	not_paid: 'This share has not been paid.',
 })
@@ -51,12 +53,16 @@ export const describeZapPayoutRowStatus = (status: ZapPayoutRowStatus): string =
  *
  * The six flags the spec's verification rules produce (§7.1, §6) are the core.
  * Three optional flags let the *plan* phase and the *attempt* phase be expressed
- * in the same vocabulary, so every one of the ten statuses is reachable here and
+ * in the same vocabulary, so every one of the eleven statuses is reachable here and
  * callers do not invent an eleventh:
  *
  * - `planned` — the row has been planned but the payout has not run yet.
- * - `rolledUp` — the plan folded this row into another payment (§6.2); it has no
- *   zap of its own to verify.
+ * - `rolledUp` — the row's share was below the minimum zap, so this payout
+ *   deliberately did not pay it (§6.2) and its sats stay unspent. It is *not*
+ *   "paid as part of another payment": a zap resolves to one recipient, so two
+ *   rows cannot be combined, and two rows for one destination are refused as
+ *   duplicates. The status exists so the unspent amount is disclosed rather
+ *   than quietly absorbed.
  * - `paymentAttempted` — a payment was actually attempted. Defaults to `true`
  *   (a reachable, in-limits row is attempted), so a caller that says nothing
  *   still gets `payment_failed` rather than the weaker `not_paid`.
@@ -66,6 +72,8 @@ export interface ZapPayoutEvidence {
 	readonly endpointAnswered: boolean
 	readonly zapCapable: boolean
 	readonly withinLimits: boolean
+	/** Which side of the endpoint's limits failed, when they did. Defaults to the minimum side. */
+	readonly aboveMaximum?: boolean
 	readonly paymentSucceeded: boolean
 	readonly receiptExpected: boolean
 	readonly planned?: boolean
@@ -81,13 +89,15 @@ export interface ZapPayoutEvidence {
  *
  * 1. `planned` — nothing has happened yet, so nothing else is known; reporting a
  *    planned row as a failure would be a lie in the other direction.
- * 2. `rolledUp` — the row was paid as part of another row, so this row has no
- *    payment of its own to succeed, fail or confirm.
+ * 2. `rolledUp` — the row was not part of this payout at all (§6.2), so it has
+ *    no payment to succeed, fail or confirm.
  * 3. no answer → `address_unreachable`: the endpoint is the first hard fact.
  * 4. answered, not zap-capable, no receipt expected → `no_receipt_expected`
  *    (the accepted plain-Lightning-address tier, §10 open question 1).
  * 5. answered, not zap-capable, a receipt was expected → `not_zap_capable`.
- * 6. outside the endpoint's min/max → `below_minimum`.
+ * 6. below the endpoint's minimum → `below_minimum`; above its maximum →
+ *    `above_endpoint_maximum`. Two states, not one: a share too small and a share too large are
+ *    different problems with different fixes, and it is the endpoint's own limit that decides.
  * 7. not attempted → `not_paid` (never conflated with a failed attempt).
  * 8. attempted and failed → `payment_failed`.
  * 9. paid with a verified receipt → `paid`.
@@ -100,7 +110,7 @@ export function zapPayoutRowStatusFrom(evidence: ZapPayoutEvidence): ZapPayoutRo
 	if (evidence.rolledUp) return 'rolled_up'
 	if (!evidence.endpointAnswered) return 'address_unreachable'
 	if (!evidence.zapCapable) return evidence.receiptExpected ? 'not_zap_capable' : 'no_receipt_expected'
-	if (!evidence.withinLimits) return 'below_minimum'
+	if (!evidence.withinLimits) return evidence.aboveMaximum ? 'above_endpoint_maximum' : 'below_minimum'
 	if (!evidence.paymentSucceeded) return evidence.paymentAttempted === false ? 'not_paid' : 'payment_failed'
 	if (evidence.receiptVerified) return 'paid'
 	return evidence.receiptExpected ? 'paid_unconfirmed' : 'paid'
@@ -111,16 +121,18 @@ export function zapPayoutRowStatusFrom(evidence: ZapPayoutEvidence): ZapPayoutRo
  *
  * `paid_unconfirmed` counts: the money moved and only the receipt is outstanding,
  * which §7.1 explicitly makes the strongest claim available without one.
- * `rolled_up` counts: the sats were paid, just not as this row's own zap.
+ * `rolled_up` does **not** count: the row's sats were never spent by this payout, so they are still
+ * owed. Calling it settled would be the same mistake as marking a failed payment done — it would
+ * hide an unspent amount behind a word that sounds finished.
  * `no_receipt_expected` counts: a plain Lightning address is a destination the
  * spec accepts paying.
  *
  * Deliberately NOT settled, though all are terminal and the row is finished:
- * `payment_failed`, `address_unreachable`, `not_zap_capable`, `below_minimum`,
+ * `payment_failed`, `address_unreachable`, `not_zap_capable`, `below_minimum`, `above_endpoint_maximum`,
  * `not_paid` — the recipient was not paid. `payment_failed` must never be folded
  * into "settled": that fold is exactly how an unpaid row would pass an audit.
  * `planned` is not settled because it is not terminal — it is still pending.
  */
 export function isZapPayoutRowSettled(status: ZapPayoutRowStatus): boolean {
-	return status === 'paid' || status === 'paid_unconfirmed' || status === 'rolled_up' || status === 'no_receipt_expected'
+	return status === 'paid' || status === 'paid_unconfirmed' || status === 'no_receipt_expected'
 }
