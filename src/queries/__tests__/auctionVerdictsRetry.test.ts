@@ -18,11 +18,14 @@ if (!('localStorage' in globalThis)) {
 	})
 }
 
-// Same seam the sibling verdict-query test mocks, with the same shape: bun
-// applies `mock.module` process-wide for the whole test run, so the mocks here
-// must stay identical to `auctionVerdicts.test.ts`. The signature seam is
-// deliberately NOT mocked — the fixtures below are really signed, so the parse
-// boundary under it behaves as it does in production.
+// Mock registration, not isolation. `mock.module` applies process-wide for the
+// whole `bun run test:unit` run, so this file does NOT control the registry:
+// the mocks below are registered with the same shape as the sibling
+// verdict-query test (`auctionVerdicts.test.ts`) so the two agree whichever
+// loads first, but another co-running file's registration can still win. What
+// this file does control is its own fixtures: they are really signed, so the
+// parse boundary under the deliberately unmocked signature seam behaves as it
+// does in production.
 mock.module('@/lib/stores/blacklist', () => ({
 	blacklistActions: {
 		isBlacklistLoaded: () => false,
