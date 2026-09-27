@@ -92,8 +92,10 @@ export const bolt11AmountSats = (bolt11: string): number | null => {
 	if (!invoice.startsWith('lnbc')) return null
 
 	const rest = invoice.slice(4)
-	const separatorAt = rest.indexOf('1')
-	// The last '1' is the human-readable/bech32 boundary; with no amount the first char is '1'.
+	// The separator is the **last** `1`: bech32's data alphabet excludes `1` entirely, while the
+	// amount itself may well contain one (`1u`, `10n`, `1000p` are all ordinary amounts). Searching
+	// from the front finds that digit and reports a real invoice as amountless.
+	const separatorAt = rest.lastIndexOf('1')
 	const amountPart = separatorAt <= 0 ? '' : rest.slice(0, separatorAt)
 	if (!amountPart) return null
 
