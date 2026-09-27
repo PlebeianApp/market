@@ -87,10 +87,15 @@ function readSecretSlot(value: unknown): string | undefined {
  * - the object `{ secret }` form this repo's NIP-46 fixtures and the e2e mock
  *   use.
  *
- * This is the single-value reader. `isMatchingConnectSecret` is the gate and
- * checks BOTH array positions, so the app's `[<secret>]` shorthand keeps
- * working. Returns `undefined` when no secret is present, which the caller
- * treats as "not approved".
+ * This is the single-value reader, and it is ambiguous BY CONSTRUCTION: a
+ * one-element `[<secret>]` shorthand is indistinguishable from a bare
+ * `[<remote-signer-pubkey>]`, so `extractConnectSecret([<pubkey>])` returns the
+ * pubkey. That is harmless only because the single consumer is the gate,
+ * `isMatchingConnectSecret`, which compares whatever is returned against the
+ * temp secret and fails closed — the GATE, not this reader, is what enforces
+ * the secret. `isMatchingConnectSecret` checks BOTH array positions, so the
+ * app's `[<secret>]` shorthand keeps working. Returns `undefined` when no
+ * secret is present, which the caller treats as "not approved".
  */
 export function extractConnectSecret(params: unknown): string | undefined {
 	if (Array.isArray(params)) {
