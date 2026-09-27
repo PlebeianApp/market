@@ -296,7 +296,7 @@ The publisher independently derives the canonical winner:
 > assumption — _a kind-30440 verdict MAY be absent from a read taken
 > immediately after publication, and a bounded re-read is expected to
 > resolve it_ — as part of the gate's contract
-> (`fetchAuctionVerdictsWithRetry`, `src/queries/auctions.tsx:599-664`).
+> (`fetchAuctionVerdictsWithRetry` in `src/queries/auctions.tsx`).
 >
 > 1. **The window is bounded, and it is the only thing the re-read may act
 >    on.** The gate re-reads an empty result, or a transient transport
