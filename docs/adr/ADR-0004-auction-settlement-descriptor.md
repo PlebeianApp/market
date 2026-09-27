@@ -309,9 +309,21 @@ The publisher independently derives the canonical winner:
 >    observation is returned or the last transient error is rethrown, so
 >    every caller's quorum-shortfall throw still runs and a genuinely short
 >    quorum is never published. The measured consequence is latency, not
->    permissiveness: worst case one extra 2500 ms per publish action, and a
->    genuinely short quorum reports ~2500 ms later than before — consistent
->    with this ADR's "Security takes priority over settlement speed".
+>    permissiveness, and the worst case is per publish-path entry point, not
+>    per read: `publishBidderPathRelease` performs **two** sequential
+>    publish-path verdict reads on a single click — one in the pre-release
+>    re-resolve (`src/publish/auctions.tsx`, the `Promise.all` above the
+>    settlement check) and one in the `won_pending_settlement` quorum gate —
+>    and both are reached whenever the verdict is genuinely absent, so the
+>    worst case there is two windows, ≈ 2 × 2500 ms (each read stops at the
+>    last step inside its own window, ≈ 2.4 s). In
+>    `publishAuctionSettlement` the two reads sit in mutually exclusive
+>    branches (the `reserve_not_met` shortcut and the winning-bid path), so
+>    there it really is one window (≈ 2500 ms). A genuinely short quorum
+>    therefore reports up to ~2 × 2500 ms later than before on the
+>    path-release path, and ~2500 ms later on the settlement path —
+>    consistent with this ADR's "Security takes priority over settlement
+>    speed".
 >
 > The propagation-lag premise behind the window is INFERRED from the code
 > path, not observed: no captured failing read with the relay's response
