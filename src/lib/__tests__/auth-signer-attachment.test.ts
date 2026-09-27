@@ -2,6 +2,19 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 
 const USER_PUBKEY = 'aa'.repeat(32)
 const PRIOR_USER_PUBKEY = 'cc'.repeat(32)
+// Invariant 2 fixture keys (ADR-0002: remote signer != authenticated user).
+// The adapter's `user()` seam is driven by `adapterUserPubkey` so a test can
+// resolve the identity to a key DISTINCT from every other key in play — the
+// extension lane's identity (`USER_PUBKEY`), the NIP-46 bunker endpoint
+// (`NIP46_ENDPOINT_PUBKEY`) and the NIP-46 client / channel key the transport
+// rides on (`NIP46_CLIENT_KEY`, the same value `makeBundle` reports as
+// `clientKeyHex`). Hardwiring the seam to `USER_PUBKEY` is what made the two
+// identity-separation assertions below unfalsifiable: nothing in the fixture
+// could then ever let the client key reach `user()`.
+const NIP46_ENDPOINT_PUBKEY = 'ee'.repeat(32)
+const NIP46_CLIENT_KEY = 'bb'.repeat(32)
+const NIP46_RESOLVED_PUBKEY = 'dd'.repeat(32)
+let adapterUserPubkey = USER_PUBKEY
 
 let readinessError: Error | undefined
 let userError: Error | undefined
@@ -52,7 +65,7 @@ class FakeNdkSignerAdapter {
 	}
 	async user() {
 		if (userError) throw userError
-		return ndkActions.getNDK()?.getUser({ pubkey: USER_PUBKEY }) ?? { pubkey: USER_PUBKEY }
+		return ndkActions.getNDK()?.getUser({ pubkey: adapterUserPubkey }) ?? { pubkey: adapterUserPubkey }
 	}
 }
 mock.module('@/lib/nostr/ndk-signer-adapter', () => ({ NdkSignerAdapter: FakeNdkSignerAdapter }))
@@ -183,6 +196,7 @@ beforeEach(async () => {
 	readinessError = undefined
 	userError = undefined
 	persistenceError = undefined
+	adapterUserPubkey = USER_PUBKEY
 	adapterCount = 0
 	readinessGates = []
 	readinessStarted = []
@@ -677,21 +691,30 @@ describe('transactional signer authority attachment', () => {
 	})
 
 	test('the NIP-46 lane persists the resolved USER identity, never the remote/client key (invariant 2)', async () => {
-		const CLIENT_KEY = 'bb'.repeat(32)
+		// Drive the identity seam with a pubkey distinct from the bunker
+		// endpoint and the client/channel key, so the assertions below fail
+		// (rather than passing by construction) if the identity collapses onto
+		// either transport key.
+		adapterUserPubkey = NIP46_RESOLVED_PUBKEY
+		const CLIENT_KEY = NIP46_CLIENT_KEY
 
-		const user = await authActions.loginWithNip46('bunker://identity-marker', CLIENT_KEY)
+		const user = await authActions.loginWithNip46(`bunker://${NIP46_ENDPOINT_PUBKEY}`, CLIENT_KEY)
 
 		// `user()` resolves the account identity via get_public_key. The client /
 		// channel key that carries the NIP-46 transport — and the remote-signer
 		// endpoint it talks to — must never be persisted as the user identity.
-		expect(user.pubkey).toBe(USER_PUBKEY)
-		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(USER_PUBKEY)
+		// The collapse checks come first so a leak fails at the assertion that
+		// names it.
 		expect(storage.get(NOSTR_USER_PUBKEY)).not.toBe(CLIENT_KEY)
+		expect(storage.get(NOSTR_USER_PUBKEY)).not.toBe(NIP46_ENDPOINT_PUBKEY)
+		expect(user.pubkey).toBe(NIP46_RESOLVED_PUBKEY)
+		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(NIP46_RESOLVED_PUBKEY)
 	})
 
 	test('logout clears the persisted user-identity marker with the rest of the auth state', async () => {
-		await authActions.loginWithNip46('bunker://identity-marker')
-		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(USER_PUBKEY)
+		adapterUserPubkey = NIP46_RESOLVED_PUBKEY
+		await authActions.loginWithNip46(`bunker://${NIP46_ENDPOINT_PUBKEY}`)
+		expect(storage.get(NOSTR_USER_PUBKEY)).toBe(NIP46_RESOLVED_PUBKEY)
 
 		authActions.logout()
 
