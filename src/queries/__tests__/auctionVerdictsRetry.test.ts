@@ -187,6 +187,27 @@ describe('publish-path verdict reads — bounded transient retry', () => {
 		expect(calls.length).toBe(2)
 	})
 
+	test('retries the browser-level TypeError: Failed to fetch', async () => {
+		// A browser transport failure surfaces as `TypeError: Failed to fetch`
+		// — the Web Fetch API's wording — not Bun's `fetch failed`. Both are
+		// transport-level, so both must be retried inside the window rather
+		// than propagating out of the gate on the first read.
+		const { fn, calls } = scriptedFetch([new TypeError('Failed to fetch'), [verdict]])
+
+		const result = await queries.fetchAuctionVerdictsWithRetry(
+			AUCTION_ROOT_EVENT_ID,
+			null,
+			AUCTION_COORDINATE,
+			[validatorPubkey],
+			fn,
+			500,
+			10,
+		)
+
+		expect(calls.length).toBe(2)
+		expect(result.map((e) => e.id)).toEqual([verdict.id])
+	})
+
 	test('rethrows the transient error once the window closes', async () => {
 		const { fn, calls } = scriptedFetch([new Error('relay connection timeout')])
 

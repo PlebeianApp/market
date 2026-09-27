@@ -635,12 +635,14 @@ export const AUCTION_VERDICT_RETRY_STEP_MS = 300
 
 /**
  * Transport-level failures a retry can plausibly clear — socket closed,
- * connection refused, timeouts/aborts. Deliberately narrow: a semantic
- * failure (bad filter, malformed response, verification error) must
- * propagate immediately rather than be hidden behind a retry window.
+ * connection refused, timeouts/aborts, and the Web Fetch API's
+ * `TypeError: Failed to fetch` (the browser wording for a network-layer
+ * failure, distinct from Bun's `fetch failed`). Deliberately narrow: a
+ * semantic failure (bad filter, malformed response, verification error)
+ * must propagate immediately rather than be hidden behind a retry window.
  */
 const TRANSIENT_FETCH_ERROR_PATTERN =
-	/timeout|timed out|abort|network|fetch failed|econnreset|econnrefused|econnaborted|socket|closed|unavailable|not connected|relay.*(error|unreachable)/i
+	/timeout|timed out|abort|network|fetch failed|failed to fetch|econnreset|econnrefused|econnaborted|socket|closed|unavailable|not connected|relay.*(error|unreachable)/i
 
 const isTransientAuctionFetchError = (err: unknown): boolean => {
 	if (!err) return false
