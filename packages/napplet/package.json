@@ -1,0 +1,12 @@
+{
+	"name": "@plebeian/napplet",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The sandboxed napplet implementation of the contract, over the host's capability object.",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"dependencies": {
+		"@plebeian/contract": "0.1.0"
+	}
+}
