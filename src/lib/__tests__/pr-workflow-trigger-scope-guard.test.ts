@@ -19,6 +19,22 @@
  * the trigger line to its consequence, so re-adding a base filter fails a unit
  * test instead of quietly re-narrowing CI coverage.
  *
+ * What this guard catches: a `branches:` **or `branches-ignore:`** key under
+ * `pull_request:` — both filter on the PR's **base ref**, so either one
+ * re-narrows CI on the base — declared in any of the four PR-gated workflows
+ * (the per-workflow tests) and in **any** `*.yml`/`*.yaml` file under
+ * `.github/workflows`, including ones written later (the sweep test). Both the
+ * block form (`branches:` on its own child line, the house convention) and the
+ * inline flow-mapping form (`pull_request: { branches: [main] }`, which puts
+ * the whole mapping on the `pull_request:` line) are read, so neither shape
+ * can pass this guard while CI is re-narrowed.
+ *
+ * What this guard does not catch: a base filter hidden behind a YAML anchor /
+ * alias or any indirection this text-level reader cannot follow, and a future
+ * base predicate under a key other than `branches`/`branches-ignore`. The
+ * assertion is on those bytes, so a re-formatted-but-equivalent workflow is
+ * judged as written.
+ *
  * These are text-level assertions on purpose: the workflow file is the artifact
  * under test and the repo carries no YAML dependency to parse it with — the
  * same approach as `e2e-workflow-gate-membership.test.ts`,
@@ -152,10 +168,12 @@ describe('PR-gated workflows accept every PR base', () => {
 			expect(children).not.toBeNull()
 		})
 
-		test(`${name} keeps push and pull_request on the same activity, filtered push intact`, () => {
+		test(`${name} keeps the push: branch filter intact (so dropping the on: block is not a pass)`, () => {
 			// Deleting the whole `on:` block would also satisfy "no branches under
 			// pull_request", so pin the push filter that must survive: the fix
 			// drops the base filter for PRs, it does not change push behaviour.
+			// This test therefore says nothing about pull_request activity types;
+			// test 1 (`declares pull_request`) is what pins its presence.
 			const on = onBlock(workflowText(name))
 			const push = triggerChildren(on, 'push')
 			expect(push).not.toBeNull()
@@ -185,9 +203,10 @@ describe('no workflow gates pull_request on the base branch', () => {
 		// complement) would recreate the same zero-run class for whatever base it
 		// omits. `types:` (preview-deploy.yml) and `paths:`
 		// (preview-infra-tests.yml) are legitimate activity/path filters and are
-		// not base filters.
+		// not base filters. `.yaml` is read as well as `.yml`, so a workflow
+		// written with the long extension is swept too.
 		const offenders: string[] = []
-		for (const name of readdirSync(WORKFLOWS_DIR).filter((file) => file.endsWith('.yml'))) {
+		for (const name of readdirSync(WORKFLOWS_DIR).filter((file) => /\.ya?ml$/.test(file))) {
 			const children = triggerChildren(onBlock(workflowText(name)), 'pull_request')
 			if (children !== null && triggerKeys(children).some((key) => BASE_FILTER_KEYS.includes(key))) offenders.push(name)
 		}
