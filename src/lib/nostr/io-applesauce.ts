@@ -87,10 +87,9 @@ export const applesauceIo: NostrIo = {
 			}, opts?.timeoutMs ?? 8000)
 			subscription = getPool()
 				.request(urls, filters, {
-					// v6 request() defaults to completeOnAny(completeAfterFirstRelay(5s), completeOnAllEose()):
-					// the FIRST relay's EOSE starts a 5s fuse that can end the request before slower relays
-					// deliver their events. Pin all-EOSE completion so every relay's events are collected
-					// within our own timeoutMs window instead.
+					// The v6 default starts a five-second fuse after the first relay's
+					// EOSE. Wait for all relays instead and let our timeout bound relays
+					// that never finish.
 					complete: RelayGroup.completeOnAllEose(),
 				})
 				.subscribe({
