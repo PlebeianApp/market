@@ -87,9 +87,41 @@ function triggerChildren(on: string[], key: string): string[] | null {
 	return children
 }
 
-/** The mapping keys a trigger declares, e.g. `['branches']` or `['types']`. */
+/**
+ * The mapping keys declared on one inline flow-mapping line, e.g.
+ * `{ branches: [main], types: [opened] }` → `['branches', 'types']`.
+ *
+ * `null` means the line is not an inline flow mapping. The split on `,` is
+ * deliberately shallow — a nested list value (`branches: [main, dev]`) yields a
+ * trailing fragment like `dev]`, which is harmless because a base-filter key is
+ * always the *first* token of its entry and is always found.
+ */
+function inlineMappingKeys(line: string): string[] | null {
+	const trimmed = line.trim()
+	if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null
+	return trimmed
+		.slice(1, -1)
+		.split(',')
+		.map((entry) =>
+			entry
+				.split(':')[0]
+				.trim()
+				.replace(/^['"]|['"]$/g, ''),
+		)
+		.filter((entry) => entry !== '')
+}
+
+/**
+ * The mapping keys a trigger declares, e.g. `['branches']` or `['types']`.
+ *
+ * Reads both the block form (`branches:` as its own child line, the house
+ * convention) and the inline flow-mapping form (`pull_request: { branches:
+ * [main] }`), which carries the whole mapping on one child line. Without the
+ * inline branch the key would read as `{ branches` and slip past both this
+ * guard's offender check and the isolated third test.
+ */
 function triggerKeys(children: string[] | null): string[] {
-	return (children ?? []).map((line) => line.split(':')[0].trim())
+	return (children ?? []).flatMap((line) => inlineMappingKeys(line) ?? [line.split(':')[0].trim()])
 }
 
 /** Every branch name a `branches:` filter declares, inline or list form. */
@@ -135,9 +167,12 @@ describe('PR-gated workflows accept every PR base', () => {
 			// The regression this guards: a PR based on `auctions`, `security/**`
 			// or `pr/**` matches no base branch, so GitHub creates no check-suite
 			// for it at all. A `branches:` or `branches-ignore:` key under
-			// `pull_request:` here fails with the offending line named.
+			// `pull_request:` here fails with the offending line named — in block
+			// form or in the inline flow-mapping form (`{ branches: [main] }`).
 			const children = triggerChildren(onBlock(workflowText(name)), 'pull_request')
-			const baseFilterLines = (children ?? []).filter((line) => /^branches(-ignore)?\s*:/.test(line))
+			const baseFilterLines = (children ?? []).filter(
+				(line) => /^branches(-ignore)?\s*:/.test(line) || (inlineMappingKeys(line) ?? []).some((key) => BASE_FILTER_KEYS.includes(key)),
+			)
 			expect(baseFilterLines).toEqual([])
 		})
 	}
