@@ -29,6 +29,7 @@
  * not, and why — with nothing spent.
  */
 
+import { nip19 } from 'nostr-tools'
 import type { NostrEventLike } from '../nostr/eventLike'
 import { type ZapPayoutPlan, type ZapPayoutRowPlan } from './payoutPlan'
 import { describeZapPayoutRowStatus, zapPayoutRowStatusFrom, type ZapPayoutEvidence, type ZapPayoutRowStatus } from './payoutLedger'
@@ -145,6 +146,26 @@ const entry = (row: ZapPayoutRowPlan, status: ZapPayoutRowStatus, detail?: strin
 	...(receiptId ? { receiptId } : {}),
 })
 
+/**
+ * The recipient's identity pubkey from a destination, when the destination states one.
+ *
+ * Only an `npub` destination does. A lightning address names an endpoint, not a person, so the identity
+ * has to come from somewhere else — and when it is absent the request carries no `p`, which a NIP-57
+ * server may refuse. That is a real limitation of address-only rows, not something to paper over.
+ */
+const readIdentityPubkey = (destination: ZapDestination): string | undefined => {
+	if (destination.kind !== 'npub') return undefined
+	try {
+		const decoded = nip19.decode(destination.normalized)
+		const data: unknown = decoded.data
+		if (typeof data === 'string' && /^[0-9a-f]{64}$/.test(data)) return data
+		if (data instanceof Uint8Array && data.length === 32) return [...data].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+	} catch {
+		return undefined
+	}
+	return undefined
+}
+
 const fromEvidence = (row: ZapPayoutRowPlan, evidence: ZapPayoutEvidence, detail?: string, receiptId?: string): ZapPayoutLedgerEntry =>
 	entry(row, zapPayoutRowStatusFrom(evidence), detail, receiptId)
 
@@ -190,6 +211,11 @@ export const runZapPayout = async (input: ZapPayoutRunInput): Promise<ZapPayoutR
 		}
 
 		const document = resolution.document
+		// Two different keys, and conflating them was a real bug caught by a test: the recipient's identity
+		// (the `p` tag of the zap request, and of the receipt) is not their LNURL server's pubkey (which only
+		// signs the receipt). For an `npub` destination the identity is known exactly; for a plain lightning
+		// address it is not, and a NIP-57 server is entitled to refuse a request that names no recipient.
+		const identityPubkey = readIdentityPubkey(parsed.destination)
 		if (!document.allowsNostr && receiptRequired) {
 			// A plain Lightning address pays but leaves no receipt. Under the strict rule the run does
 			// not pay it: paying without evidence would produce a payment this model cannot verify.
@@ -226,7 +252,7 @@ export const runZapPayout = async (input: ZapPayoutRunInput): Promise<ZapPayoutR
 		let zapRequest: SignedZapRequest
 		try {
 			zapRequest = await input.seams.buildZapRequest({
-				recipientPubkey: document.nostrPubkey,
+				...(identityPubkey ? { recipientPubkey: identityPubkey } : {}),
 				amountSats: row.sats,
 				relays: input.relays,
 				...(input.auctionAnchor ? { auctionAnchor: input.auctionAnchor } : {}),
@@ -291,7 +317,7 @@ export const runZapPayout = async (input: ZapPayoutRunInput): Promise<ZapPayoutR
 		let receipt: (NostrEventLike & { readonly tags?: readonly (readonly string[])[] }) | null = null
 		try {
 			receipt = await input.seams.fetchReceipt({
-				recipientPubkey: zapRequest.recipientPubkey ?? document.nostrPubkey,
+				...(identityPubkey ? { recipientPubkey: identityPubkey } : {}),
 				serverPubkey: document.nostrPubkey,
 				...(input.auctionAnchor ? { auctionAnchor: input.auctionAnchor } : {}),
 				since: input.now,
@@ -304,9 +330,9 @@ export const runZapPayout = async (input: ZapPayoutRunInput): Promise<ZapPayoutR
 			? verifyZapReceipt({
 					event: receipt,
 					expected: {
-						...((zapRequest.recipientPubkey ?? document.nostrPubkey)
-							? { recipientPubkey: zapRequest.recipientPubkey ?? document.nostrPubkey }
-							: {}),
+						// The recipient is the identity, never the server: conflating the two made every receipt
+						// from an address-only row fail as a recipient mismatch.
+						...(identityPubkey ? { recipientPubkey: identityPubkey } : {}),
 						...(document.nostrPubkey ? { recipientServerPubkey: document.nostrPubkey } : {}),
 						...(input.auctionAnchor ? { auctionAnchor: input.auctionAnchor } : {}),
 						plannedSats: row.sats,
@@ -326,7 +352,11 @@ export const runZapPayout = async (input: ZapPayoutRunInput): Promise<ZapPayoutR
 						paymentSucceeded: true,
 						receiptExpected: true,
 					},
-					undefined,
+					// A row that names no recipient identity can only be matched on server, amount and auction,
+					// so the row says so rather than presenting weaker evidence as the strong case.
+					identityPubkey
+						? undefined
+						: 'the receipt verified, but this row names no recipient identity — matched on server, amount and auction only',
 					(receipt as { id?: string })?.id,
 				),
 			)

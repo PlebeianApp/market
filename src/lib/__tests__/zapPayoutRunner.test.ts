@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
+import { nip19 } from 'nostr-tools'
 import { planZapPayout, type ZapPayoutPlan } from '../v4v/payoutPlan'
 import { runZapPayout, type LnurlPayDocument, type LnurlResolution, type ZapPayoutSeams } from '../v4v/zapPayoutRunner'
 
@@ -148,14 +149,28 @@ describe('a row that can be paid', () => {
 		expect(result.rows[0].detail).toContain('receipt_amount_mismatch')
 	})
 
-	test('a receipt for another recipient is not evidence either', async () => {
+	test('a receipt for another recipient is not evidence — when the row names a recipient to compare against', async () => {
+		// an npub row carries an identity, so the `p` tag is checkable; an address-only row cannot check it
+		// and discloses the weaker match instead (see the next test)
+		const npub = nip19.npubEncode(getPublicKey(sha256(new TextEncoder().encode('runner-own-identity'))))
 		const { seams: api } = seams({ receipt: receipt('1u', { recipient: getPublicKey(sha256(new TextEncoder().encode('somebody-else'))) }) })
 		const result = await run({
-			plan: plan({ rows: [{ id: '1', destination: 'alice@example.com', bps: 10000 }], settledSats: 100 }),
+			plan: plan({ rows: [{ id: '1', destination: npub, bps: 10000 }], settledSats: 100 }),
 			seams: api,
 		})
 		expect(result.rows[0].status).toBe('paid_unconfirmed')
 		expect(result.rows[0].detail).toContain('receipt_')
+	})
+
+	test('an address-only row says the receipt was matched without a recipient identity', async () => {
+		const { seams: api } = seams({ receipt: receipt('1u') })
+		const result = await run({
+			plan: plan({ rows: [{ id: '1', destination: 'alice@example.com', bps: 10000 }], settledSats: 100 }),
+			seams: api,
+		})
+		expect(result.rows[0].status).toBe('paid')
+		// the disclosure is the point: a lightning address names an endpoint, not a person
+		expect(result.rows[0].detail).toContain('no recipient identity')
 	})
 })
 
