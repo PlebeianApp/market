@@ -35,7 +35,7 @@ test.describe('V4V zap split editor', () => {
 		// 3. the totals: 60% to recipients, the remaining 40% staying with the seller, and nothing claimed
 		//    as paid
 		const summary = page.getByTestId('v4v-summary')
-		await expect(summary).toContainText('60% to recipients')
+		await expect(summary).toContainText('60.01% to recipients')
 		await expect(summary).toContainText('stay')
 		// it may say what *will* be paid, and must never say what *was* paid: "sats paid" unqualified is
 		// the phrase a surface would use after money moved, and a preview has no business using it
@@ -45,7 +45,8 @@ test.describe('V4V zap split editor', () => {
 		// the commitment the seller is about to make is shown, because publishing will bind them to it
 		await expect(page.getByTestId('v4v-commitment')).toContainText('Committed split:')
 
-		await page.screenshot({ path: 'e2e/artifacts/v4v-zap-split-editor.png', fullPage: true })
+		await page.screenshot({ path: 'e2e/artifacts/gate-1-split-editor.png', fullPage: true })
+		await editor.screenshot({ path: 'e2e/artifacts/gate-2-editor-detail.png' })
 	})
 
 	test('an invalid split names the row to fix instead of silently emptying itself', async ({ page }) => {
@@ -58,19 +59,18 @@ test.describe('V4V zap split editor', () => {
 		// the moment they can still act on it
 		await expect(page.getByTestId('v4v-refusal')).toContainText('Row 2')
 		await expect(page.getByTestId('v4v-summary')).toHaveCount(0)
+		await page.screenshot({ path: 'e2e/artifacts/gate-3-invalid-destination.png', fullPage: true })
 	})
 
 	test('a share that falls below the minimum zap is disclosed as unpaid, never absorbed', async ({ page }) => {
 		await page.goto('/dev/v4v-zap-preview')
 
-		// carol's share down to 10 bps: 100000 sats of settlement makes that 100 sats, under the 100-sat
-		// minimum in the fixtures once rounding applies — so it must be reported, not quietly dropped
-		await page
-			.getByTestId('v4v-row-3')
-			.getByLabel(/basis points/)
-			.fill('10')
-
-		// the row states its own condition, and the summary stops claiming every sat will be paid
-		await expect(page.getByTestId('v4v-row-3-status')).toBeVisible()
+		// dave is announced, reachable and zap-capable, and still will not be paid: 1 bp of the fixture
+		// settlement is 10 sats, under the 100-sat minimum. The row must say so rather than disappear, and
+		// the summary must stop claiming every announced sat will be paid.
+		await expect(page.getByTestId('v4v-row-4-status')).toContainText('too small to send on its own')
+		await expect(page.getByTestId('v4v-summary')).toContainText('will not be paid')
+		await page.screenshot({ path: 'e2e/artifacts/gate-4-below-minimum.png', fullPage: true })
+		await page.getByTestId('v4v-row-4-status').screenshot({ path: 'e2e/artifacts/gate-5-below-minimum-row.png' })
 	})
 })

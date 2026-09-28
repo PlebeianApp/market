@@ -20,6 +20,9 @@ const FIXTURES: V4VSplitRow[] = [
 	{ id: '1', destination: 'alice@example.com', bps: 2500, name: 'Alice' },
 	{ id: '2', destination: 'bob@example.com', bps: 2500, name: 'Bob' },
 	{ id: '3', destination: 'carol@example.com', bps: 1000, name: 'Carol' },
+	// 1 bp of the fixture settlement is 10 sats, below the 100-sat minimum: a row that is announced, is
+	// reachable, and still will not be paid — the case the spec has to be able to see
+	{ id: '4', destination: 'dave@example.com', bps: 1, name: 'Dave' },
 ]
 
 function V4VZapPreviewPage() {
@@ -45,6 +48,7 @@ function V4VZapPreviewPage() {
 						'alice@example.com': { answered: true, zapCapable: true },
 						'bob@example.com': { answered: true, zapCapable: false },
 						'carol@example.com': { answered: false, zapCapable: false },
+						'dave@example.com': { answered: true, zapCapable: true },
 					}}
 				/>
 			</div>
