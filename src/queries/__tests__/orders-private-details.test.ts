@@ -10,6 +10,7 @@ import {
 	type OrderWithRelatedEvents,
 	type SellerPrivateOrderDetailsCandidate,
 } from '../orders'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const PII_SENTINELS = [
@@ -18,7 +19,7 @@ const PII_SENTINELS = [
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -94,7 +95,7 @@ function privateOrderDetails(
 				firstLineOfAddress: '123 Main Street',
 				additionalInformation: 'Apt Secret Notes',
 				city: 'Los Angeles',
-				zipPostcode: '90210',
+				zipPostcode: POSTCODE_PII_SENTINEL,
 				country: 'United States',
 			},
 		},
@@ -179,6 +180,12 @@ function expectNoPii(value: unknown): void {
 }
 
 describe('seller private order details query helpers', () => {
+	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
+		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
+		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
+	})
+
 	test('valid kind 1059 gift wrap decrypts and attaches private details to the matching public order', async () => {
 		const buyer = keyPair()
 		const seller = keyPair()

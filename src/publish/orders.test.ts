@@ -184,6 +184,7 @@ import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm
 import { decryptPrivateOrderMessage } from '@/lib/orders/privateOrderMessage'
 import { createOrder, createOrderCreationEvent, publishOrderWithDependencies } from '@/publish/orders'
 import { privateDetailsMatchPublicOrder } from '@/queries/orders'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const PII_SENTINELS = [
 	'buyer@example.com',
@@ -191,7 +192,7 @@ const PII_SENTINELS = [
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	'90210',
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -201,7 +202,7 @@ const baseShippingData: CheckoutFormData = {
 	email: 'buyer@example.com',
 	phone: '+15551234567',
 	firstLineOfAddress: '123 Main Street',
-	zipPostcode: '90210',
+	zipPostcode: POSTCODE_PII_SENTINEL,
 	city: 'Los Angeles',
 	country: 'United States',
 	additionalInformation: 'Apt Secret Notes',
@@ -319,6 +320,13 @@ async function decryptGiftWrapForSeller(event: PublishedEvent, seller: TestKeyPa
 describe('public order privacy guard', () => {
 	beforeEach(() => {
 		resetTestState()
+	})
+
+	test('distinguishes unrelated hex identifiers from the plaintext postcode sentinel', () => {
+		const unrelatedHexIdentifier = HEX_IDENTIFIER_WITH_POSTCODE
+		expect(unrelatedHexIdentifier).toHaveLength(64)
+		expect(() => expectNoBuyerPii({ id: unrelatedHexIdentifier })).not.toThrow()
+		expect(() => expectNoBuyerPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
 	})
 
 	test('sanitizes the spec order creation constructor', async () => {
