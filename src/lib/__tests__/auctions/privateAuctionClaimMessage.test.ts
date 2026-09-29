@@ -12,19 +12,18 @@ import {
 	privateAuctionClaimMatchesPublicMarker,
 	type AuctionClaimMessageFields,
 } from '../../auctions/privateAuctionClaimMessage'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
 const AUCTION_EVENT_ID = 'a'.repeat(64)
 const SETTLEMENT_EVENT_ID = 'b'.repeat(64)
 const ORDER_ID = 'order-123'
-const PRIVATE_POSTCODE_MARKER = 'private-postcode::90210::plaintext-only'
-const HEX_IDENTIFIER_WITH_POSTCODE = `${'a'.repeat(29)}90210${'b'.repeat(30)}`
 
 const PII_SENTINELS = [
 	'Satoshi Nakamoto',
 	'123 Main Street',
 	'Los Angeles',
-	PRIVATE_POSTCODE_MARKER,
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 	'buyer@example.com',
@@ -57,7 +56,7 @@ function baseFields(overrides: Partial<AuctionClaimMessageFields> = {}): Auction
 			name: 'Satoshi Nakamoto',
 			firstLineOfAddress: '123 Main Street',
 			city: 'Los Angeles',
-			zipPostcode: PRIVATE_POSTCODE_MARKER,
+			zipPostcode: POSTCODE_PII_SENTINEL,
 			country: 'United States',
 			additionalInformation: 'Apt Secret Notes',
 		},
@@ -116,7 +115,7 @@ describe('private auction claim message', () => {
 	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
 		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
 		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
-		expect(() => expectNoPii({ content: PRIVATE_POSTCODE_MARKER })).toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
 	})
 
 	test('rejects invalid auction coordinate', () => {

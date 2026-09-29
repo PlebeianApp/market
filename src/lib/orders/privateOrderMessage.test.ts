@@ -11,17 +11,16 @@ import {
 	serializeBuyerAddress,
 	type PrivateOrderDeliveryDetails,
 } from './privateOrderMessage'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
-const PRIVATE_POSTCODE_MARKER = 'private-postcode::90210::plaintext-only'
-const HEX_IDENTIFIER_WITH_POSTCODE = `${'a'.repeat(29)}90210${'b'.repeat(30)}`
 const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	PRIVATE_POSTCODE_MARKER,
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -94,7 +93,7 @@ function privateOrderDetails(
 				firstLineOfAddress: '123 Main Street',
 				additionalInformation: 'Apt Secret Notes',
 				city: 'Los Angeles',
-				zipPostcode: PRIVATE_POSTCODE_MARKER,
+				zipPostcode: POSTCODE_PII_SENTINEL,
 				country: 'United States',
 			},
 		},
@@ -132,7 +131,7 @@ describe('private order message helper', () => {
 	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
 		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
 		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
-		expect(() => expectNoPii({ content: PRIVATE_POSTCODE_MARKER })).toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
 	})
 
 	test('creates valid Gamma-compatible unsigned kind 16/type=1 order details rumor', () => {
@@ -157,7 +156,7 @@ describe('private order message helper', () => {
 		expect(rumor.tags).toContainEqual(['name', 'Satoshi Nakamoto'])
 		expect(rumor.tags).toContainEqual([
 			'address',
-			`123 Main Street\nApt Secret Notes\nLos Angeles\n${PRIVATE_POSTCODE_MARKER}\nUnited States`,
+			`123 Main Street\nApt Secret Notes\nLos Angeles\n${POSTCODE_PII_SENTINEL}\nUnited States`,
 		])
 		expect(rumor.tags).toContainEqual(['email', 'buyer@example.com'])
 		expect(rumor.tags).toContainEqual(['phone', '+15551234567'])
@@ -443,11 +442,11 @@ describe('private order message helper', () => {
 			firstLineOfAddress: '123 Main Street',
 			additionalInformation: 'Apt Secret Notes',
 			city: 'Los Angeles',
-			zipPostcode: PRIVATE_POSTCODE_MARKER,
+			zipPostcode: POSTCODE_PII_SENTINEL,
 			country: 'United States',
 		})
 
-		expect(addressString).toBe(`123 Main Street\nApt Secret Notes\nLos Angeles\n${PRIVATE_POSTCODE_MARKER}\nUnited States`)
+		expect(addressString).toBe(`123 Main Street\nApt Secret Notes\nLos Angeles\n${POSTCODE_PII_SENTINEL}\nUnited States`)
 	})
 
 	test('private order details can omit optional buyer fields', () => {

@@ -13,17 +13,16 @@ import {
 	unwrapNip59GiftWrapWithSigner,
 	type UnsignedRumor,
 } from '../../nostr/nip59'
+import { HEX_IDENTIFIER_WITH_POSTCODE, POSTCODE_PII_SENTINEL } from '@/lib/piiSentinelFixture'
 
 const CREATED_AT = 1_700_000_000
-const PRIVATE_POSTCODE_MARKER = 'private-postcode::90210::plaintext-only'
-const HEX_IDENTIFIER_WITH_POSTCODE = `${'a'.repeat(29)}90210${'b'.repeat(30)}`
 const PII_SENTINELS = [
 	'buyer@example.com',
 	'123 Main Street',
 	'Satoshi Nakamoto',
 	'+15551234567',
 	'Los Angeles',
-	PRIVATE_POSTCODE_MARKER,
+	POSTCODE_PII_SENTINEL,
 	'United States',
 	'Apt Secret Notes',
 ]
@@ -85,7 +84,7 @@ function rumorFor(buyerPubkey: string): UnsignedRumor {
 			['p', 'seller'],
 			['subject', 'order-info'],
 		],
-		content: `Satoshi Nakamoto buyer@example.com 123 Main Street Apt Secret Notes ${PRIVATE_POSTCODE_MARKER}`,
+		content: `Satoshi Nakamoto buyer@example.com 123 Main Street Apt Secret Notes ${POSTCODE_PII_SENTINEL}`,
 	}
 }
 
@@ -144,7 +143,7 @@ describe('NIP-59 helper', () => {
 	test('PII scan permits an unrelated hex identifier but rejects the exact plaintext postcode marker', () => {
 		expect(HEX_IDENTIFIER_WITH_POSTCODE).toHaveLength(64)
 		expect(() => expectNoPii({ id: HEX_IDENTIFIER_WITH_POSTCODE })).not.toThrow()
-		expect(() => expectNoPii({ content: PRIVATE_POSTCODE_MARKER })).toThrow()
+		expect(() => expectNoPii({ content: POSTCODE_PII_SENTINEL })).toThrow()
 	})
 
 	test('wraps an unsigned rumor as a signed kind 13 seal and signed kind 1059 gift wrap', () => {
