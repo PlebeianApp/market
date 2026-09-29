@@ -4,11 +4,17 @@
 # reformatting code does not rewrite this file, and a diagnostic that gets fixed
 # keeps its count, so the guard ratchets downward instead of re-baselining.
 #
-# Generated from `tsc --noEmit` with tsconfig target ES2022, excluding node_modules
-# (pinned dependencies, not ours to fix). 62 first-party diagnostics in the
+# Generated from `tsc --noEmit` on a clean `bun install --frozen-lockfile` tree,
+# which is the environment CI runs. 62 first-party diagnostics in the
 # downlevel/ES5-fallback class (TS1378 top-level await, TS2802 iteration) were
-# removed by the target change before this file was taken, so they are absent here
-# rather than tolerated.
+# removed by the tsconfig target change before this file was taken, so they are
+# absent here rather than tolerated.
+#
+# One entry is environment-dependent by design:
+# src/lib/__tests__/relay-applesauce-semantics.test.ts writes a hermetic shim into
+# node_modules at import time, so a clean checkout yields TS2307 for its two
+# dynamic imports while a worktree where that suite has already run yields TS2352
+# instead. Take the baseline from a clean install, not from a working tree.
 #
 # This is a debt ledger, not an allowance. Every entry is a known defect the
 # checker can see; the guard's job is to stop the set from growing while it is paid
@@ -62,6 +68,7 @@ src/lib/__tests__/io.test.ts|TS2769|2
 src/lib/__tests__/io.test.ts|TS7006|2
 src/lib/__tests__/nip17OrderTransport.test.ts|TS18047|4
 src/lib/__tests__/nip17Relays.test.ts|TS2339|2
+src/lib/__tests__/relay-applesauce-semantics.test.ts|TS2307|2
 src/lib/__tests__/reserveGuard.test.ts|TS2322|1
 src/lib/__tests__/settlementDescriptor.test.ts|TS2339|2
 src/lib/__tests__/theme-contrast.test.ts|TS2556|4
