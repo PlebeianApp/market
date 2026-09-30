@@ -104,15 +104,28 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
 	if (showSidebar) return null
 
+	const emojiOf = (title: string) => title.match(/^([^ ]+) /)?.[1] ?? null
+
+	// Exact match first. Prefix matching alone picks the wrong entry whenever one
+	// nav path is a prefix of another (/account/profile vs /account/profile-page),
+	// and it returns whichever the nav happens to list first.
 	for (const section of dashboardNavigation) {
 		for (const item of section.items) {
-			if (currentPath.startsWith(item.path)) {
-				const match = item.title.match(/^([^ ]+) /)
-				return match ? match[1] : null
+			if (currentPath === item.path) return emojiOf(item.title)
+		}
+	}
+
+	// Fall back to the longest matching prefix, so nested detail routes still
+	// inherit their section's emoji.
+	let best: { path: string; title: string } | null = null
+	for (const section of dashboardNavigation) {
+		for (const item of section.items) {
+			if (currentPath.startsWith(item.path) && (!best || item.path.length > best.path.length)) {
+				best = { path: item.path, title: item.title }
 			}
 		}
 	}
-	return null
+	return best ? emojiOf(best.title) : null
 }
 
 // Helper to get notification count for a navigation item
@@ -458,6 +471,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/profile-page' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
@@ -487,6 +501,7 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/products/receiving-payments' &&
 												location.pathname !== '/dashboard/products/shipping-options' &&
 												location.pathname !== '/dashboard/account/profile' &&
+												location.pathname !== '/dashboard/account/profile-page' &&
 												location.pathname !== '/dashboard/account/making-payments' &&
 												location.pathname !== '/dashboard/account/receiving-payments' &&
 												location.pathname !== '/dashboard/account/your-purchases' &&
@@ -523,6 +538,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/products/receiving-payments' &&
 														location.pathname !== '/dashboard/products/shipping-options' &&
 														location.pathname !== '/dashboard/account/profile' &&
+														location.pathname !== '/dashboard/account/profile-page' &&
 														location.pathname !== '/dashboard/account/making-payments' &&
 														location.pathname !== '/dashboard/account/receiving-payments' &&
 														location.pathname !== '/dashboard/account/your-purchases' &&

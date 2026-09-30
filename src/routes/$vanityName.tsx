@@ -1,4 +1,4 @@
-import { ProfilePage } from '@/components/pages/ProfilePage'
+import { StorefrontOrProfilePage } from '@/components/pages/StorefrontOrProfilePage'
 import { vanityActions, vanityStore } from '@/lib/stores/vanity'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
@@ -37,9 +37,10 @@ function VanityRouteComponent() {
 		)
 	}
 
-	// Vanity URL resolved - render profile page directly
+	// Vanity URL resolved - render the author's custom page if they built and
+	// enabled one, otherwise the standard profile (ADR-019 fallback chain).
 	if (resolvedPubkey) {
-		return <ProfilePage profileId={resolvedPubkey} />
+		return <StorefrontOrProfilePage profileId={resolvedPubkey} />
 	}
 
 	// Vanity URL not found - show 404-like message

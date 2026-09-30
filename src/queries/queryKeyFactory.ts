@@ -203,3 +203,9 @@ export const liveActivityKeys = {
 	byCoord: (auctionCoord: string) => [...liveActivityKeys.all, 'byCoord', auctionCoord] as const,
 	chatMessages: (liveActivityCoord: string) => [...liveActivityKeys.all, 'chat', liveActivityCoord] as const,
 } as const
+
+export const storefrontKeys = {
+	all: ['storefront'] as const,
+	/** One author's storefront page document (kind 30024, d=storefront-page). */
+	page: (pubkey: string) => [...storefrontKeys.all, 'page', pubkey] as const,
+} as const

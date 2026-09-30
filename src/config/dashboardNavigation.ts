@@ -73,6 +73,10 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/account/profile',
 			},
 			{
+				title: '🎨 Profile Page',
+				path: '/dashboard/account/profile-page',
+			},
+			{
 				title: '💳 Make Payments',
 				path: '/dashboard/account/making-payments',
 			},

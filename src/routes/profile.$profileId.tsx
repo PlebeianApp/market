@@ -1,4 +1,4 @@
-import { ProfilePage } from '@/components/pages/ProfilePage'
+import { StorefrontOrProfilePage } from '@/components/pages/StorefrontOrProfilePage'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/profile/$profileId')({
@@ -7,5 +7,5 @@ export const Route = createFileRoute('/profile/$profileId')({
 
 function RouteComponent() {
 	const { profileId } = Route.useParams()
-	return <ProfilePage profileId={profileId} />
+	return <StorefrontOrProfilePage profileId={profileId} />
 }
