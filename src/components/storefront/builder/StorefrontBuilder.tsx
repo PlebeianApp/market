@@ -277,7 +277,7 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 						onChange={handleChange}
 						onPublish={handlePublish}
 						renderHeaderActions={headerActions}
-						headerTitle="Your profile page"
+						headerTitle="Your storefront"
 						// Rendering inline instead of in an iframe keeps the canvas
 						// inside the app's own stylesheet and React tree, so blocks
 						// look in the editor exactly as they will on the page.

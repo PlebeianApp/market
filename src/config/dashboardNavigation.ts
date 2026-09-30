@@ -73,7 +73,7 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/account/profile',
 			},
 			{
-				title: '🎨 Profile Page',
+				title: '🎨 Storefront',
 				path: '/dashboard/account/profile-page',
 			},
 			{

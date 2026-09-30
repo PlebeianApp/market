@@ -21,7 +21,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profi
  * has not arrived yet.
  */
 function ProfilePageBuilderRoute() {
-	useDashboardTitle('🎨 Profile Page')
+	useDashboardTitle('🎨 Storefront')
 	const user = useStore(authStore, (state) => state.user)
 	const pubkey = user?.pubkey
 
