@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createProductEvent, type ProductFormData } from '@/publish/products'
-import { productFormTypeFromTag, productTypeTag } from '@/lib/utils/productType'
+import { productFormTypeFromTags, productTypeTag } from '@/lib/utils/productType'
 
 const BASE_FORM_DATA: ProductFormData = {
 	name: 'Product',
@@ -24,24 +24,24 @@ const BASE_FORM_DATA: ProductFormData = {
 
 const typeTagOf = (formData: ProductFormData) => createProductEvent(formData, {} as any, {} as any).tags.find((tag) => tag[0] === 'type')
 
-describe('productFormTypeFromTag', () => {
+describe('productFormTypeFromTags', () => {
 	test('a listing without a type tag loads as a single physical product', () => {
-		expect(productFormTypeFromTag(undefined)).toEqual({ productType: 'single', format: 'physical' })
+		expect(productFormTypeFromTags([])).toMatchObject({ productType: 'single', format: 'physical' })
 	})
 
 	test('simple and variable tags keep their type', () => {
-		expect(productFormTypeFromTag(['type', 'simple', 'physical']).productType).toBe('single')
-		expect(productFormTypeFromTag(['type', 'variable', 'physical']).productType).toBe('variable')
+		expect(productFormTypeFromTags([['type', 'simple', 'physical']]).productType).toBe('single')
+		expect(productFormTypeFromTags([['type', 'variable', 'physical']]).productType).toBe('variable')
 	})
 
 	test('unknown or malformed type values load as single', () => {
-		expect(productFormTypeFromTag(['type', '', 'physical']).productType).toBe('single')
-		expect(productFormTypeFromTag(['type']).productType).toBe('single')
-		expect(productFormTypeFromTag(['type', 'Variable', 'physical']).productType).toBe('single')
+		expect(productFormTypeFromTags([['type', '', 'physical']]).productType).toBe('single')
+		expect(productFormTypeFromTags([['type']]).productType).toBe('single')
+		expect(productFormTypeFromTags([['type', 'Variable', 'physical']]).productType).toBe('single')
 	})
 
 	test('keeps the digital format', () => {
-		expect(productFormTypeFromTag(['type', 'simple', 'digital']).format).toBe('digital')
+		expect(productFormTypeFromTags([['type', 'simple', 'digital']]).format).toBe('digital')
 	})
 })
 
@@ -71,5 +71,28 @@ describe('createProductEvent type tag', () => {
 
 	test('a digital product stays digital', () => {
 		expect(typeTagOf({ ...BASE_FORM_DATA, format: 'digital' })).toEqual(['type', 'simple', 'digital'])
+	})
+})
+
+describe('preserved type tags', () => {
+	const parent = ['a', `30402:${'b'.repeat(64)}:parent-d`]
+
+	test('a variation child publishes its original type tag and parent reference', () => {
+		const preserved = productFormTypeFromTags([['type', 'variation', 'physical'], parent])
+		const tags = createProductEvent({ ...BASE_FORM_DATA, ...preserved }, {} as any, {} as any).tags
+
+		expect(tags.find((tag) => tag[0] === 'type')).toEqual(['type', 'variation', 'physical'])
+		expect(tags.find((tag) => tag[0] === 'a')).toEqual(parent)
+	})
+
+	test('a listing without a type tag publishes none', () => {
+		const tags = createProductEvent({ ...BASE_FORM_DATA, ...productFormTypeFromTags([]) }, {} as any, {} as any).tags
+
+		expect(tags.some((tag) => tag[0] === 'type')).toBe(false)
+	})
+
+	test('simple and variable listings are rebuilt from the form', () => {
+		expect(productFormTypeFromTags([['type', 'simple', 'digital']]).preservedTypeTag).toBeUndefined()
+		expect(productFormTypeFromTags([['type', 'variable', 'physical']]).preservedTypeTag).toBeUndefined()
 	})
 })

@@ -14,7 +14,6 @@ import {
 	getProductStock,
 	getProductSummary,
 	getProductTitle,
-	getProductType,
 	getProductVisibility,
 	getProductWeight,
 	isNSFWProduct,
@@ -22,7 +21,7 @@ import {
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
 import { resolvePublishPrice } from '@/lib/utils/productPriceResolution'
-import { productFormTypeFromTag, type ProductFormat } from '@/lib/utils/productType'
+import { productFormTypeFromTags, type ProductFormat } from '@/lib/utils/productType'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
@@ -75,6 +74,8 @@ export interface ProductFormState {
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
 	format: ProductFormat
+	preservedTypeTag?: string[] | null
+	preservedParentTag?: string[]
 	mainCategory: string | null
 	selectedCollection: string | null
 	specs: ProductSpec[]
@@ -256,7 +257,6 @@ export const productFormActions = {
 			const collection = getProductCollection(event)
 			const specs = getProductSpecs(event)
 			const stockTag = getProductStock(event)
-			const typeTag = getProductType(event)
 			const visibilityTag = getProductVisibility(event)
 			const weightTag = getProductWeight(event)
 			const dimensionsTag = getProductDimensions(event)
@@ -300,7 +300,7 @@ export const productFormActions = {
 					bitcoinUnit: priceCurrency === 'BTC' ? 'BTC' : 'SATS',
 					quantity: stockTag?.[1] || '',
 					status: visibilityTag?.[1] || 'hidden',
-					...productFormTypeFromTag(typeTag),
+					...productFormTypeFromTags(event.tags),
 					mainCategory: mainCategoryFromTags || null,
 					selectedCollection: collection,
 					categories: subCategoriesFromTags || [],
@@ -473,6 +473,8 @@ export const productFormActions = {
 			status: state.status,
 			productType: state.productType,
 			format: state.format,
+			preservedTypeTag: state.preservedTypeTag,
+			preservedParentTag: state.preservedParentTag,
 			mainCategory: state.mainCategory || '',
 			selectedCollection: state.selectedCollection,
 			categories: state.categories,
