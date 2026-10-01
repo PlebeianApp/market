@@ -369,7 +369,10 @@ export const ndkActions = {
 				settled = true
 				if (timer) clearTimeout(timer)
 				subscription?.stop()
-				if (requireEose && outcome === 'timeout' && !sawEose) {
+				// `outcome !== 'eose'` covers both the deadline and a subscription that
+				// closed early (relay drop): neither is an answer. Only an EOSE has
+				// settled the read, which is what the option name promises.
+				if (requireEose && outcome !== 'eose' && !sawEose) {
 					reject(new Error(`relay subscription produced no EOSE within ${timeoutMs}ms`))
 					return
 				}

@@ -84,7 +84,7 @@ describe('safeNpubEncode', () => {
 })
 
 describe('fetchEventsWithTimeout: a deadline is not an answer', () => {
-	const setFakeNdk = (mode: 'eose' | 'silent') => {
+	const setFakeNdk = (mode: 'eose' | 'silent' | 'close') => {
 		ndkStore.setState((state) => ({
 			...state,
 			ndk: {
@@ -92,6 +92,7 @@ describe('fetchEventsWithTimeout: a deadline is not an answer', () => {
 					// Async, like a real relay: the helper assigns `subscription`
 					// after subscribe() returns, and onEose reads it.
 					if (mode === 'eose') queueMicrotask(() => opts.onEose?.())
+					if (mode === 'close') queueMicrotask(() => opts.onClose?.())
 					return { stop: () => {} }
 				},
 			} as never,
@@ -106,6 +107,17 @@ describe('fetchEventsWithTimeout: a deadline is not an answer', () => {
 		setFakeNdk('silent')
 
 		await expect(ndkActions.fetchEventsWithTimeout({ kinds: [30402] }, { timeoutMs: 20, requireEose: true })).rejects.toThrow(
+			'produced no EOSE',
+		)
+	})
+
+	// Reported in review: the guard covered only the timeout path, so a
+	// subscription that closed before EOSE (a relay drop) still resolved
+	// whatever had arrived -- the same false answer on a different exit.
+	test('requireEose: a close before EOSE rejects instead of answering "none"', async () => {
+		setFakeNdk('close')
+
+		await expect(ndkActions.fetchEventsWithTimeout({ kinds: [30402] }, { timeoutMs: 200, requireEose: true })).rejects.toThrow(
 			'produced no EOSE',
 		)
 	})
