@@ -347,23 +347,32 @@ export const ndkActions = {
 	 */
 	fetchEventsWithTimeout: async (
 		filters: NDKFilter | NDKFilter[],
-		opts?: NDKSubscriptionOptions & { timeoutMs?: number; relaySet?: NDKRelaySet },
+		opts?: NDKSubscriptionOptions & { timeoutMs?: number; relaySet?: NDKRelaySet; requireEose?: boolean },
 	): Promise<Set<NDKEvent>> => {
 		const ndk = ndkStore.state.ndk
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const { timeoutMs = 8000, relaySet, ...subOpts } = opts ?? {}
+		const { timeoutMs = 8000, relaySet, requireEose = false, ...subOpts } = opts ?? {}
 
-		return await new Promise<Set<NDKEvent>>((resolve) => {
+		return await new Promise<Set<NDKEvent>>((resolve, reject) => {
 			const events = new Map<string, NDKEvent>()
 			let settled = false
+			let sawEose = false
 			let timer: ReturnType<typeof setTimeout> | undefined
 
-			const finalize = (subscription?: { stop: () => void }) => {
+			// `outcome` matters only for `requireEose`: a deadline that fires before
+			// EOSE yields whatever happened to arrive (often nothing), and publishing
+			// that as a settled result is how an unresolved relay read becomes a
+			// confident "this seller has no products".
+			const finalize = (subscription: { stop: () => void } | undefined, outcome: 'eose' | 'close' | 'timeout') => {
 				if (settled) return
 				settled = true
 				if (timer) clearTimeout(timer)
 				subscription?.stop()
+				if (requireEose && outcome === 'timeout' && !sawEose) {
+					reject(new Error(`relay subscription produced no EOSE within ${timeoutMs}ms`))
+					return
+				}
 				resolve(new Set(events.values()))
 			}
 
@@ -383,13 +392,16 @@ export const ndkActions = {
 						events.set(key, event)
 					}
 				},
-				onEose: () => finalize(subscription),
-				onClose: () => finalize(subscription),
+				onEose: () => {
+					sawEose = true
+					finalize(subscription, 'eose')
+				},
+				onClose: () => finalize(subscription, 'close'),
 			}
 
 			const subscription = relaySet ? ndk.subscribe(filters, subscriptionOpts, relaySet) : ndk.subscribe(filters, subscriptionOpts)
 
-			timer = setTimeout(() => finalize(subscription), timeoutMs)
+			timer = setTimeout(() => finalize(subscription, 'timeout'), timeoutMs)
 		})
 	},
 

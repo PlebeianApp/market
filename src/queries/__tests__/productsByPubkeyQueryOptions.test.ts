@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { fetchProductsByPubkey, productsByPubkeyQueryOptions } from '../products'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { safeNpubEncode } from '@/lib/utils'
 
 const VALID_PUBKEY = 'a'.repeat(64)
@@ -79,5 +80,57 @@ describe('safeNpubEncode', () => {
 
 		expect(result).not.toBeNull()
 		expect(result!.startsWith('npub1')).toBe(true)
+	})
+})
+
+describe('fetchEventsWithTimeout: a deadline is not an answer', () => {
+	const setFakeNdk = (mode: 'eose' | 'silent') => {
+		ndkStore.setState((state) => ({
+			...state,
+			ndk: {
+				subscribe: (_filters: unknown, opts: { onEose?: () => void }) => {
+					// Async, like a real relay: the helper assigns `subscription`
+					// after subscribe() returns, and onEose reads it.
+					if (mode === 'eose') queueMicrotask(() => opts.onEose?.())
+					return { stop: () => {} }
+				},
+			} as never,
+		}))
+	}
+
+	afterEach(() => {
+		ndkStore.setState((state) => ({ ...state, ndk: null }))
+	})
+
+	test('requireEose: a timeout before EOSE rejects instead of answering "none"', async () => {
+		setFakeNdk('silent')
+
+		await expect(ndkActions.fetchEventsWithTimeout({ kinds: [30402] }, { timeoutMs: 20, requireEose: true })).rejects.toThrow(
+			'produced no EOSE',
+		)
+	})
+
+	test('requireEose: EOSE with zero events still resolves empty (a seller with no products)', async () => {
+		setFakeNdk('eose')
+
+		const events = await ndkActions.fetchEventsWithTimeout({ kinds: [30402] }, { timeoutMs: 200, requireEose: true })
+
+		expect(events.size).toBe(0)
+	})
+
+	test('the default is unchanged for existing callers: a timeout still resolves', async () => {
+		setFakeNdk('silent')
+
+		const events = await ndkActions.fetchEventsWithTimeout({ kinds: [30402] }, { timeoutMs: 20 })
+
+		expect(events.size).toBe(0)
+	})
+})
+
+describe('fetchProductsByPubkey: relay readiness is not an empty result', () => {
+	test('rejects while the relay connection is not ready, instead of resolving []', async () => {
+		ndkStore.setState((state) => ({ ...state, ndk: null }))
+
+		await expect(fetchProductsByPubkey(VALID_PUBKEY)).rejects.toThrow('not ready yet')
 	})
 })

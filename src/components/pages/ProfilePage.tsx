@@ -77,7 +77,17 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	}, [user])
 
 	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
-	const { data: sellerProducts = [], isLoading: sellerProductsIsLoading } = useQuery({
+	// `isPending` (no data yet), deliberately not `isLoading` (pending AND
+	// fetching): between retry attempts the request is not in flight, so
+	// `isLoading` is false and the previous two-state render called that empty.
+	// This condition means "not known yet", which is not a claim about the seller.
+	const {
+		data: sellerProducts = [],
+		isPending: sellerProductsIsPending,
+		isError: sellerProductsIsError,
+		error: sellerProductsError,
+		refetch: refetchSellerProducts,
+	} = useQuery({
 		...sellerProductOptions,
 		enabled: sellerProductOptions.enabled,
 	})
@@ -364,11 +374,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				</div>
 
 				<div className="flex flex-col flex-1 p-4">
-					{sellerProductsIsLoading ? (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Loading products...</span>
-						</div>
-					) : sellerProducts.length > 0 ? (
+					{sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
 								<div className="flex sm:flex-row flex-col sm:items-center sm:gap-2 sm:text-left text-center">
@@ -381,6 +387,26 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 								<ProductCard key={product.id} product={product} />
 							))}
 						</ItemGrid>
+					) : sellerProductsIsError ? (
+						// A read that failed is not a seller with no products. Per
+						// src/queries/AGENTS.md, "empty" and "could not load" stay
+						// distinct, and this one is retryable.
+						<div className="flex flex-col flex-1 justify-center items-center gap-4">
+							<span className="font-heading text-2xl">Could not load products</span>
+							<span className="max-w-md text-center text-sm text-gray-500">
+								{sellerProductsError instanceof Error
+									? `${sellerProductsError.message}. Please try again.`
+									: 'The relay may be unreachable or still connecting. Please try again.'}
+							</span>
+							<Button onClick={() => void refetchSellerProducts()} variant="secondary" className="flex items-center gap-2">
+								<RotateCcw className="w-4 h-4" />
+								Try again
+							</Button>
+						</div>
+					) : sellerProductsIsPending ? (
+						<div className="flex flex-col flex-1 justify-center items-center gap-4">
+							<span className="font-heading text-2xl">Loading products...</span>
+						</div>
 					) : (
 						<div className="flex flex-col flex-1 justify-center items-center gap-4">
 							<span className="font-heading text-2xl">No products found</span>

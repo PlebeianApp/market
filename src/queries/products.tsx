@@ -254,8 +254,12 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
-		console.warn('NDK not ready, returning empty products by pubkey list')
-		return []
+		// A relay connection that is still starting is not an answer. Returning []
+		// here published a transient state as a settled empty result, which the
+		// seller profile rendered as "No products found" for merchants who do have
+		// products; a later refetch then found them. Fail instead, so React Query
+		// retries and the UI can tell "no products" from "not loaded yet".
+		throw new Error('fetchProductsByPubkey: the relay connection is not ready yet')
 	}
 
 	const filter: NDKFilter = {
@@ -264,7 +268,10 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 		limit,
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	// requireEose: a deadline before EOSE yields a partial (often empty) set. Here
+	// empty means "this seller has no products" on a public page, so an unanswered
+	// read must not be allowed to claim it.
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000, requireEose: true })
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)
