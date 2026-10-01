@@ -95,11 +95,6 @@ export default function CartItem({
 		[productShippingSelections, sellerShippingOptions],
 	)
 
-	const selectedShippingOption = useMemo(() => {
-		if (!currentShippingId) return null
-		return productShippingOptions.find((option) => option.shippingRef === currentShippingId || option.id === currentShippingId) ?? null
-	}, [currentShippingId, productShippingOptions])
-
 	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
 	const isShippingOptionsLoading = productQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
 	const isShippingOptionsUnavailable = productQuery.isError || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
@@ -142,43 +137,6 @@ export default function CartItem({
 	useEffect(() => {
 		setQuantity(amount)
 	}, [amount])
-
-	const formatShippingCost = (cost: number | null | undefined): string => {
-		return typeof cost === 'number' && Number.isFinite(cost) ? cost.toLocaleString() : ''
-	}
-
-	const formatShippingAmount = (cost: number | null | undefined, shippingCurrency?: string | null): string => {
-		return [formatShippingCost(cost), shippingCurrency?.trim()].filter(Boolean).join(' ')
-	}
-
-	const cartSelectedShipping = (() => {
-		const product = cartStore.state.cart.products[productId]
-		if (!product || typeof product.shippingCost !== 'number' || !Number.isFinite(product.shippingCost)) return null
-		return {
-			cost: product.shippingCost,
-			currency: product.shippingCostCurrency,
-		}
-	})()
-
-	const selectedShippingCost = selectedShippingOption
-		? {
-				cost: selectedShippingOption.cost,
-				currency: selectedShippingOption.currency,
-			}
-		: cartSelectedShipping
-
-	const selectedShippingCostText = selectedShippingCost
-		? formatShippingAmount(selectedShippingCost.cost, selectedShippingCost.currency)
-		: ''
-	const hasAdditiveShippingMetadata =
-		selectedShippingOption && Number.isFinite(selectedShippingOption.baseCost) && Number.isFinite(selectedShippingOption.extraCostAmount)
-	const selectedShippingBreakdownText =
-		hasAdditiveShippingMetadata && selectedShippingOption.extraCostAmount !== 0
-			? `${formatShippingAmount(selectedShippingOption.baseCost, selectedShippingOption.currency)} base cost + ${formatShippingAmount(
-					selectedShippingOption.extraCostAmount,
-					selectedShippingOption.currency,
-				)} product cost`
-			: ''
 
 	if (isLoading) {
 		return (
@@ -304,12 +262,6 @@ export default function CartItem({
 					)}
 
 					{!hasShipping && <div className="text-sm font-medium text-red-600">Select a shipping option before continuing.</div>}
-
-					{hasShipping && selectedShippingCostText && (
-						<div className="text-sm text-muted-foreground">Shipping cost: {selectedShippingCostText}</div>
-					)}
-
-					{selectedShippingBreakdownText && <div className="text-xs text-muted-foreground">{selectedShippingBreakdownText}</div>}
 				</div>
 			)}
 		</li>

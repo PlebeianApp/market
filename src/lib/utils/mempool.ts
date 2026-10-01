@@ -47,6 +47,44 @@ export class MempoolService {
 	/**
 	 * Fetches transactions for a given Bitcoin address
 	 */
+	static convertSatsToCurrency({
+		sats,
+		targetCurrency,
+		exchangeRates,
+	}: {
+		sats: number
+		targetCurrency: string
+		exchangeRates: Record<string, number> | undefined
+	}): number {
+		if (targetCurrency === 'SATS') return sats
+		if (targetCurrency === 'BTC') return this.satoshisToBtc(sats)
+		if (!exchangeRates) return 0
+
+		const btcAmount = sats / 100_000_000
+		const rate = exchangeRates[targetCurrency]
+		return rate ? btcAmount * rate : 0
+	}
+
+	static convertCurrencyToSats({
+		amount,
+		fromCurrency,
+		exchangeRates,
+	}: {
+		amount: number
+		fromCurrency: string
+		exchangeRates: Record<string, number> | undefined
+	}): number {
+		if (fromCurrency === 'SATS') return amount
+		if (fromCurrency === 'BTC') return this.btcToSatoshis(amount)
+		if (!exchangeRates) return NaN
+
+		const rate = exchangeRates[fromCurrency]
+		if (!rate) return NaN
+
+		const btcAmount = amount / rate
+		return Math.round(btcAmount * 100_000_000)
+	}
+
 	static async fetchAddressTransactions(address: string): Promise<MempoolTransaction[]> {
 		const response = await fetch(`${MEMPOOL_API_BASE}/address/${address}/txs`)
 		if (!response.ok) {

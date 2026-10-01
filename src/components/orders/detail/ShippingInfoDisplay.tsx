@@ -1,7 +1,6 @@
 interface ShippingInfoDisplayProps {
 	shippingInfo: {
 		title: string
-		price: { amount: string | number; currency: string }
 		service?: string
 		carrier?: string
 		duration?: { min?: string | number; max?: string | number; unit?: string }
@@ -16,10 +15,6 @@ export function ShippingInfoDisplay({ shippingInfo }: ShippingInfoDisplayProps) 
 			<div>
 				<span className="text-sm text-muted-foreground">Method:</span>
 				<span className="ml-2 font-medium">{shippingInfo.title}</span>
-			</div>
-			<div>
-				<span className="text-sm text-muted-foreground">Cost:</span>
-				<span className="ml-2 font-medium">{`${shippingInfo.price.amount} ${shippingInfo.price.currency}`}</span>
 			</div>
 			{shippingInfo.service && (
 				<div>

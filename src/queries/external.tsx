@@ -3,8 +3,7 @@ import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES, getCurrencyServerRelays } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
 import { PlebianCurrencyClient } from '@/lib/ctxcn-client'
-
-const numSatsInBtc = 100000000
+import { MempoolService } from '@/lib/utils/mempool'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
 export const CURRENCY_CACHE_CONFIG = {
@@ -124,21 +123,25 @@ export const fetchCurrencyExchangeRate = async (currency: SupportedCurrency): Pr
 export const convertCurrencyToSats = async (currency: string, amount: number): Promise<number | null> => {
 	if (!currency || !amount || amount <= 0.0001) return null
 
-	if (['sats', 'sat'].includes(currency.toLowerCase())) {
+	const normalizedCurrency = currency.toUpperCase()
+	if (['SATS', 'SAT'].includes(normalizedCurrency)) {
 		return amount
 	}
 
 	try {
-		const normalizedCurrency = currency.toUpperCase()
-
 		if (CURRENCIES.includes(normalizedCurrency as SupportedCurrency)) {
 			const rate = await fetchCurrencyExchangeRate(normalizedCurrency as SupportedCurrency)
+			const sats = MempoolService.convertCurrencyToSats({
+				amount,
+				fromCurrency: normalizedCurrency,
+				exchangeRates: { [normalizedCurrency]: rate },
+			})
 
-			return (amount / rate) * numSatsInBtc
-		} else {
-			console.warn(`Unsupported currency: ${currency}`)
-			return null
+			return Number.isFinite(sats) ? sats : null
 		}
+
+		console.warn(`Unsupported currency: ${currency}`)
+		return null
 	} catch (error) {
 		console.error(`Currency conversion failed for ${currency}:`, error)
 		return null
