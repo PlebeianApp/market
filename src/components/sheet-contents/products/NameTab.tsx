@@ -66,11 +66,9 @@ export function NameTab() {
 
 			<div className="grid w-full gap-1.5">
 				<Label>Product Type</Label>
-				<Select
-					value={productType}
-					onValueChange={(value) => productFormActions.updateValues({ productType: value as 'single' | 'variable' })}
-				>
-					{/* TODO: add variants */}
+				{/* TODO: add variants. Display-only until then: with an onValueChange handler, Radix's hidden
+				    native <select> can write "" into the store when the form mounts, which published as variable. */}
+				<Select value={productType}>
 					<SelectTrigger className="border-2" disabled>
 						<SelectValue placeholder="Single Product" />
 					</SelectTrigger>

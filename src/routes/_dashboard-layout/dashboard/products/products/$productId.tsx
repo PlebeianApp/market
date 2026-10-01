@@ -90,6 +90,12 @@ function EditProductComponent() {
 		lockRef.current = false
 	}, [productId])
 
+	// Reset the form when leaving this edit view, unless another session has already taken over
+	useEffect(() => {
+		if (!productDTag) return
+		return () => productFormActions.endEditProductSession(productDTag)
+	}, [productDTag])
+
 	// Effect to start initialization when ready
 	const canInitialize = productExists && productDTag !== null && initState === 'idle'
 	useEffect(() => {

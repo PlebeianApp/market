@@ -1,6 +1,7 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
+import { assertVariationHasParent, productTypeTag, type ProductFormat } from '@/lib/utils/productType'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -17,6 +18,10 @@ export interface ProductFormData {
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
+	format?: ProductFormat
+	// Pass-through of type tags the form cannot express; see PreservedTypeTags
+	preservedTypeTag?: string[] | null
+	preservedParentTag?: string[]
 	mainCategory: string
 	selectedCollection: string | null
 	categories: Array<{ key: string; name: string; checked: boolean }>
@@ -87,7 +92,10 @@ export const createProductEvent = (
 		['d', id], // Product identifier - this is the key for updates!
 		['title', formData.name],
 		['price', formData.price, formData.currency],
-		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
+		...(formData.preservedTypeTag === null
+			? []
+			: [(formData.preservedTypeTag ?? productTypeTag(formData.productType, formData.format)) as NDKTag]),
+		...(formData.preservedParentTag ? [formData.preservedParentTag as NDKTag] : []),
 		['visibility', formData.status],
 		['stock', formData.quantity],
 		...(formData.summary ? [['summary', formData.summary] as NDKTag] : []),
@@ -161,6 +169,8 @@ export const updateProduct = async (
 	if (!productDTag) {
 		throw new Error('Product d tag is required for updates')
 	}
+
+	assertVariationHasParent({ preservedTypeTag: formData.preservedTypeTag, preservedParentTag: formData.preservedParentTag })
 
 	if (!formData.name.trim()) {
 		throw new Error('Product name is required')

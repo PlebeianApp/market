@@ -8,6 +8,7 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
+import { productFormTypeFromTags } from '@/lib/utils/productType'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
 	getProductTitle,
@@ -16,7 +17,6 @@ import {
 	getProductPrice,
 	getProductImages,
 	getProductSpecs,
-	getProductType,
 	getProductVisibility,
 	getProductWeight,
 	getProductDimensions,
@@ -147,7 +147,6 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 
 				// Build form data from existing product event
 				const priceTag = getProductPrice(product.productEvent)
-				const typeTag = getProductType(product.productEvent)
 				const visibilityTag = getProductVisibility(product.productEvent)
 				const weightTag = getProductWeight(product.productEvent)
 				const dimensionsTag = getProductDimensions(product.productEvent)
@@ -167,7 +166,7 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 					quantity: product.newStock.toString(),
 					currency: priceTag?.[2] || 'USD',
 					status: (visibilityTag?.[1] || 'on-sale') as 'hidden' | 'on-sale' | 'pre-order',
-					productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
+					...productFormTypeFromTags(product.productEvent.tags),
 					mainCategory: categories[0]?.[1] || '',
 					selectedCollection: collectionTag,
 					categories: categories.slice(1).map((cat) => ({
