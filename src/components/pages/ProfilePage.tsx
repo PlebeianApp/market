@@ -10,6 +10,7 @@ import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useStreamingProducts } from '@/hooks/useStreamingProducts'
 import { RelayLoadingBar } from '@/components/shared/RelayLoadingBar'
+import { StateMessage } from '@/components/shared/StateMessage'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable, isValidHexKey } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -390,28 +391,22 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 						</ItemGrid>
 					) : sellerProductsStreaming ? (
 						// Not an empty shelf: the relays have not all answered yet.
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Fetching products from relays…</span>
-						</div>
+						<StateMessage title="Fetching products from relays…" />
 					) : !sellerProductsConnected ? (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Could not load products</span>
-							<span className="max-w-md text-center text-sm text-gray-500">No relay connection is available. Please try again.</span>
-							<Button onClick={() => setProductsReloadToken((token) => token + 1)} variant="secondary" className="flex items-center gap-2">
-								<RotateCcw className="w-4 h-4" />
-								Try again
-							</Button>
-						</div>
+						<StateMessage
+							title="Could not load products"
+							description="No relay connection is available. Please try again."
+							onRetry={() => setProductsReloadToken((token) => token + 1)}
+						/>
 					) : (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">No products found</span>
+						<StateMessage title="No products found">
 							{permissions.canEdit && (
 								<Button onClick={handleAddProduct} className="flex items-center gap-2">
 									<Plus className="w-5 h-5" />
 									Add Your First Product
 								</Button>
 							)}
-						</div>
+						</StateMessage>
 					)}
 				</div>
 			</div>
