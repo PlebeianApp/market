@@ -89,7 +89,7 @@ export const isProductDeleted = (dTag: string, eventCreatedAt?: number) => {
 	return eventCreatedAt < deletionTimestamp
 }
 
-const filterDeletedProducts = (events: NDKEvent[]): NDKEvent[] => {
+export const filterDeletedProducts = (events: NDKEvent[]): NDKEvent[] => {
 	return events.filter((event) => {
 		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
 		if (!dTag) return true

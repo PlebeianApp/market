@@ -8,6 +8,8 @@ import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useStreamingProducts } from '@/hooks/useStreamingProducts'
+import { RelayLoadingBar } from '@/components/shared/RelayLoadingBar'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable, isValidHexKey } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -18,7 +20,6 @@ import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
-import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { getProfileIdentifierValidationError } from '@/lib/utils/profileValidation'
@@ -76,20 +77,19 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}, [user])
 
-	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
-	// `isPending` (no data yet), deliberately not `isLoading` (pending AND
-	// fetching): between retry attempts the request is not in flight, so
-	// `isLoading` is false and the previous two-state render called that empty.
-	// This condition means "not known yet", which is not a claim about the seller.
+	// Products stream in as relays deliver them, the same way the feed works
+	// (useStreamingProducts), instead of arriving as one settled list. The
+	// one-shot read could conclude "no products" while another relay still held
+	// them, which is the reported false empty on this page.
+	const [productsReloadToken, setProductsReloadToken] = useState(0)
 	const {
-		data: sellerProducts = [],
-		isPending: sellerProductsIsPending,
-		isError: sellerProductsIsError,
-		error: sellerProductsError,
-		refetch: refetchSellerProducts,
-	} = useQuery({
-		...sellerProductOptions,
-		enabled: sellerProductOptions.enabled,
+		products: sellerProducts,
+		isStreaming: sellerProductsStreaming,
+		isConnected: sellerProductsConnected,
+	} = useStreamingProducts({
+		limit: 50,
+		authors: profilePubkey ? [profilePubkey] : [],
+		reloadToken: productsReloadToken,
 	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
@@ -374,6 +374,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				</div>
 
 				<div className="flex flex-col flex-1 p-4">
+					<RelayLoadingBar active={sellerProductsStreaming} className="mb-2" />
 					{sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
@@ -387,25 +388,19 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 								<ProductCard key={product.id} product={product} />
 							))}
 						</ItemGrid>
-					) : sellerProductsIsError ? (
-						// A read that failed is not a seller with no products. Per
-						// src/queries/AGENTS.md, "empty" and "could not load" stay
-						// distinct, and this one is retryable.
+					) : sellerProductsStreaming ? (
+						// Not an empty shelf: the relays have not all answered yet.
+						<div className="flex flex-col flex-1 justify-center items-center gap-4">
+							<span className="font-heading text-2xl">Fetching products from relays…</span>
+						</div>
+					) : !sellerProductsConnected ? (
 						<div className="flex flex-col flex-1 justify-center items-center gap-4">
 							<span className="font-heading text-2xl">Could not load products</span>
-							<span className="max-w-md text-center text-sm text-gray-500">
-								{sellerProductsError instanceof Error
-									? `${sellerProductsError.message}. Please try again.`
-									: 'The relay may be unreachable or still connecting. Please try again.'}
-							</span>
-							<Button onClick={() => void refetchSellerProducts()} variant="secondary" className="flex items-center gap-2">
+							<span className="max-w-md text-center text-sm text-gray-500">No relay connection is available. Please try again.</span>
+							<Button onClick={() => setProductsReloadToken((token) => token + 1)} variant="secondary" className="flex items-center gap-2">
 								<RotateCcw className="w-4 h-4" />
 								Try again
 							</Button>
-						</div>
-					) : sellerProductsIsPending ? (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Loading products...</span>
 						</div>
 					) : (
 						<div className="flex flex-col flex-1 justify-center items-center gap-4">

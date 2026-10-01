@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { testLabelStore } from '@/lib/stores/testLabels'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { isProductInStock } from '@/queries/products'
+import { filterDeletedProducts, isProductInStock } from '@/queries/products'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
 import { fetchTestLabels } from '@/queries/testLabels'
+import { buildProductStreamFilter } from '@/lib/utils/productStreamFilter'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 
@@ -21,6 +22,14 @@ interface UseStreamingProductsOptions {
 	hidePreorder?: boolean
 	/** Country name to filter products by location */
 	country?: string
+	/**
+	 * Restrict the stream to these authors (e.g. one seller's profile).
+	 * Invalid entries are dropped; an empty result streams nothing rather than
+	 * matching every author on the relay. See buildProductStreamFilter.
+	 */
+	authors?: string[]
+	/** Bump to re-open the subscription (the profile's "Try again"). */
+	reloadToken?: number
 }
 
 interface UseStreamingProductsReturn {
@@ -50,6 +59,8 @@ export function useStreamingProducts({
 	showOutOfStock = false,
 	hidePreorder = false,
 	country = '',
+	authors,
+	reloadToken,
 }: UseStreamingProductsOptions = {}): UseStreamingProductsReturn {
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
@@ -71,6 +82,11 @@ export function useStreamingProducts({
 		(event: NDKEvent): boolean => {
 			// Filter out blacklisted products and authors
 			if (filterBlacklistedEvents([event]).length === 0) return false
+
+			// Filter out locally-deleted products. The one-shot product reads
+			// always applied this (src/queries/products.tsx); without it here a
+			// streamed surface would resurrect a product the merchant deleted.
+			if (filterDeletedProducts([event]).length === 0) return false
 
 			// Check visibility
 			const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
@@ -159,6 +175,8 @@ export function useStreamingProducts({
 		[flushPendingEvents],
 	)
 
+	const authorsKey = (authors ?? []).join(',')
+
 	useEffect(() => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) {
@@ -176,11 +194,7 @@ export function useStreamingProducts({
 		}
 		setIsStreaming(true)
 
-		const filter: NDKFilter = {
-			kinds: [30402],
-			limit,
-			...(tag && { '#t': [tag] }),
-		}
+		const filter = buildProductStreamFilter({ limit, tag, authors }) as NDKFilter
 
 		const subscription = ndk.subscribe(filter, {
 			closeOnEose: true,
@@ -216,7 +230,10 @@ export function useStreamingProducts({
 			subscription.stop()
 			subscriptionRef.current = null
 		}
-	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country, flushPendingEvents])
+		// `authorsKey` keeps the dependency on author *content*, so a caller that
+		// rebuilds the array on every render does not re-open the subscription
+		// in a loop.
+	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country, flushPendingEvents, authorsKey, reloadToken])
 
 	return {
 		products,
