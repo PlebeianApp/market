@@ -8,6 +8,9 @@ import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useStreamingProducts } from '@/hooks/useStreamingProducts'
+import { RelayLoadingBar } from '@/components/shared/RelayLoadingBar'
+import { StateMessage } from '@/components/shared/StateMessage'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable, isValidHexKey } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -18,10 +21,10 @@ import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
-import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { getProfileIdentifierValidationError } from '@/lib/utils/profileValidation'
+import { profileIdentifierToPubkey } from '@/lib/utils/profileIdentifier'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
@@ -76,10 +79,27 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 	}, [user])
 
-	const sellerProductOptions = productsByPubkeyQueryOptions(profilePubkey ?? '')
-	const { data: sellerProducts = [], isLoading: sellerProductsIsLoading } = useQuery({
-		...sellerProductOptions,
-		enabled: sellerProductOptions.enabled,
+	// Products stream in as relays deliver them, the same way the feed works
+	// (useStreamingProducts), instead of arriving as one settled list. The
+	// one-shot read could conclude "no products" while another relay still held
+	// them, which is the reported false empty on this page.
+	const [productsReloadToken, setProductsReloadToken] = useState(0)
+	// Who the products belong to. The route identifier already carries the pubkey
+	// for hex/npub/nprofile, so we take it from there instead of waiting for the
+	// kind-0 fetch: that fetch is a second, unrelated round-trip, and when it fails
+	// the products section lost its author entirely. NIP-05 and vanity names have
+	// no synchronous form, so those still fall back to the resolved profile.
+	const routeAuthor = useMemo(() => profileIdentifierToPubkey(profileId), [profileId])
+	const sellerAuthor = routeAuthor ?? profilePubkey
+	const {
+		products: sellerProducts,
+		isStreaming: sellerProductsStreaming,
+		isConnected: sellerProductsConnected,
+		streamIncomplete: sellerProductsIncomplete,
+	} = useStreamingProducts({
+		limit: 50,
+		authors: sellerAuthor ? [sellerAuthor] : [],
+		reloadToken: productsReloadToken,
 	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
@@ -364,11 +384,8 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				</div>
 
 				<div className="flex flex-col flex-1 p-4">
-					{sellerProductsIsLoading ? (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">Loading products...</span>
-						</div>
-					) : sellerProducts.length > 0 ? (
+					<RelayLoadingBar active={sellerProductsStreaming} className="mb-2" />
+					{sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
 								<div className="flex sm:flex-row flex-col sm:items-center sm:gap-2 sm:text-left text-center">
@@ -381,16 +398,30 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 								<ProductCard key={product.id} product={product} />
 							))}
 						</ItemGrid>
+					) : sellerProductsStreaming ? (
+						// Not an empty shelf: the relays have not all answered yet.
+						<StateMessage title="Fetching products from relays…" />
+					) : !sellerProductsConnected || sellerProductsIncomplete ? (
+						// No connection, or the stream ended without every relay reporting
+						// what it holds: neither is a statement about this seller.
+						<StateMessage
+							title="Could not load products"
+							description={
+								sellerProductsConnected
+									? 'Some relays did not answer in time. Please try again.'
+									: 'No relay connection is available. Please try again.'
+							}
+							onRetry={() => setProductsReloadToken((token) => token + 1)}
+						/>
 					) : (
-						<div className="flex flex-col flex-1 justify-center items-center gap-4">
-							<span className="font-heading text-2xl">No products found</span>
+						<StateMessage title="No products found">
 							{permissions.canEdit && (
 								<Button onClick={handleAddProduct} className="flex items-center gap-2">
 									<Plus className="w-5 h-5" />
 									Add Your First Product
 								</Button>
 							)}
-						</div>
+						</StateMessage>
 					)}
 				</div>
 			</div>
