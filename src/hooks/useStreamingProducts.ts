@@ -5,7 +5,7 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { filterDeletedProducts, isProductInStock } from '@/queries/products'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
 import { fetchTestLabels } from '@/queries/testLabels'
-import { buildProductStreamFilter } from '@/lib/utils/productStreamFilter'
+import { buildProductStreamFilter, isConclusiveEnd, type ProductStreamEnd } from '@/lib/utils/productStreamFilter'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 
@@ -64,6 +64,7 @@ export function useStreamingProducts({
 }: UseStreamingProductsOptions = {}): UseStreamingProductsReturn {
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
+	const [streamIncomplete, setStreamIncomplete] = useState(false)
 	const isConnected = useStore(ndkStore, (s) => s.isConnected)
 	const showTestListings = useStore(testLabelStore, (s) => s.showTestListings)
 
@@ -76,6 +77,13 @@ export function useStreamingProducts({
 	const pendingBufferRef = useRef<NDKEvent[]>([])
 	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const flushLockRef = useRef(false)
+	const [productsKey, setProductsKey] = useState<string | null>(null)
+	const [relayEpoch, setRelayEpoch] = useState(0)
+	// Did any relay report end-of-stored-events? Only then is an empty list a fact.
+	const sawEoseRef = useRef(false)
+	// Which seller the buffered products belong to, so a navigation cannot flash
+	// the previous seller's products under the new seller's heading.
+	const authorKeyRef = useRef<string | null>(null)
 
 	// Stable per-event business filters (blacklist, visibility, stock, country)
 	const passesBusinessFilters = useCallback(
@@ -180,7 +188,10 @@ export function useStreamingProducts({
 	useEffect(() => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) {
-			// NDK not ready yet - will re-run when connected
+			// NDK not ready yet. The effect re-runs when the connection state
+			// changes, but until then nothing is being fetched, so the caller must
+			// not be told that it is (that state hides the retry affordance).
+			setIsStreaming(false)
 			return
 		}
 
@@ -213,30 +224,59 @@ export function useStreamingProducts({
 		// others), which renders as "this seller has no products". The unscoped feed
 		// read keeps the library's default selection.
 		const scopedRelaySet = filter.authors ? ndkActions.getConnectedRelaySet() : null
+		if (filter.authors && !scopedRelaySet) {
+			// We know which author we want but not which relays to ask. Subscribing
+			// without a relay set would hand the choice back to NDK's per-filter
+			// selection, which is the behaviour this scoped read exists to avoid;
+			// an unscoped-author filter would be strictly worse. Report instead.
+			setIsStreaming(false)
+			setStreamIncomplete(true)
+			return
+		}
 		const subscription = scopedRelaySet
 			? ndk.subscribe(filter, { closeOnEose: true }, scopedRelaySet)
 			: ndk.subscribe(filter, {
 					closeOnEose: true,
 				})
 
+		sawEoseRef.current = false
+		setStreamIncomplete(false)
+		setProductsKey(authorsKey)
+		const onRelayConnect = () => setRelayEpoch((epoch) => epoch + 1)
+		ndk.pool.on('relay:connect', onRelayConnect)
 		subscriptionRef.current = subscription
 
 		subscription.on('event', (event: NDKEvent) => {
 			addProduct(event)
 		})
 
+		const settle = (end: ProductStreamEnd) => {
+			void flushPendingEvents().finally(() => {
+				setStreamIncomplete(!isConclusiveEnd(end, sawEoseRef.current))
+				setIsStreaming(false)
+			})
+		}
+
 		subscription.on('eose', () => {
-			// Flush whatever is still buffered before declaring the stream done
-			void flushPendingEvents().finally(() => setIsStreaming(false))
+			sawEoseRef.current = true
+			settle('eose')
 		})
 
 		subscription.on('close', () => {
-			void flushPendingEvents().finally(() => setIsStreaming(false))
+			// A relay drop before EOSE is not an answer about the seller, and must
+			// not render as "No products found".
+			settle('close')
 		})
 
-		// Timeout fallback - stop streaming after 10s even if no EOSE
+		// Deadline fallback - stop waiting after 10s, but a deadline says nothing
+		// about the seller either, so it must not settle as an empty result.
+		subscription.on('close', () => {
+			ndk.pool.off('relay:connect', onRelayConnect)
+		})
+
 		const timeout = setTimeout(() => {
-			void flushPendingEvents().finally(() => setIsStreaming(false))
+			subscription.stop()
+			settle('timeout')
 		}, 10000)
 
 		return () => {
@@ -252,12 +292,17 @@ export function useStreamingProducts({
 		// `authorsKey` keeps the dependency on author *content*, so a caller that
 		// rebuilds the array on every render does not re-open the subscription
 		// in a loop.
-	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country, flushPendingEvents, authorsKey, reloadToken])
+	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country, flushPendingEvents, authorsKey, reloadToken, relayEpoch])
+
+	// productsKey is set when the subscription for the current author is created;
+	// until then the previous author's list must not render under this heading.
+	const scopedProducts = productsKey === authorsKey ? products : []
 
 	return {
-		products,
+		products: scopedProducts,
 		isStreaming,
+		streamIncomplete,
 		isConnected,
-		count: products.length,
+		count: scopedProducts.length,
 	}
 }

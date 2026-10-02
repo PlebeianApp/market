@@ -29,7 +29,7 @@ export function profileIdentifierToPubkey(identifier: string): string | null {
 	try {
 		switch (validation.type) {
 			case 'hex':
-				return identifier
+				return identifier.toLowerCase()
 			case 'npub': {
 				const decoded = decode(identifier)
 				return decoded.type === 'npub' && typeof decoded.data === 'string' ? decoded.data : null

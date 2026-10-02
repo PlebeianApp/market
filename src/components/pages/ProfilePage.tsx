@@ -95,6 +95,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		products: sellerProducts,
 		isStreaming: sellerProductsStreaming,
 		isConnected: sellerProductsConnected,
+		streamIncomplete: sellerProductsIncomplete,
 	} = useStreamingProducts({
 		limit: 50,
 		authors: sellerAuthor ? [sellerAuthor] : [],
@@ -400,10 +401,16 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					) : sellerProductsStreaming ? (
 						// Not an empty shelf: the relays have not all answered yet.
 						<StateMessage title="Fetching products from relays…" />
-					) : !sellerProductsConnected ? (
+					) : !sellerProductsConnected || sellerProductsIncomplete ? (
+						// No connection, or the stream ended without every relay reporting
+						// what it holds: neither is a statement about this seller.
 						<StateMessage
 							title="Could not load products"
-							description="No relay connection is available. Please try again."
+							description={
+								sellerProductsConnected
+									? 'Some relays did not answer in time. Please try again.'
+									: 'No relay connection is available. Please try again.'
+							}
 							onRetry={() => setProductsReloadToken((token) => token + 1)}
 						/>
 					) : (

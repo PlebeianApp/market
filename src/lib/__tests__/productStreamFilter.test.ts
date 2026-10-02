@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildProductStreamFilter } from '@/lib/utils/productStreamFilter'
+import { buildProductStreamFilter, isConclusiveEnd } from '@/lib/utils/productStreamFilter'
 
 const VALID = 'a'.repeat(64)
 const OTHER = 'b'.repeat(64)
@@ -62,5 +62,25 @@ describe('buildProductStreamFilter', () => {
 
 	test('defaults the limit so a caller cannot request an unbounded stream', () => {
 		expect(buildProductStreamFilter({}).limit).toBe(500)
+	})
+})
+
+describe('isConclusiveEnd', () => {
+	test('EOSE is conclusive whether or not events arrived', () => {
+		expect(isConclusiveEnd('eose', false)).toBe(true)
+		expect(isConclusiveEnd('eose', true)).toBe(true)
+	})
+
+	test('a relay dropping the subscription before EOSE is not an answer', () => {
+		expect(isConclusiveEnd('close', false)).toBe(false)
+	})
+
+	test('our own deadline expiring before EOSE is not an answer', () => {
+		expect(isConclusiveEnd('timeout', false)).toBe(false)
+	})
+
+	test('a close or deadline after EOSE keeps the answer EOSE established', () => {
+		expect(isConclusiveEnd('close', true)).toBe(true)
+		expect(isConclusiveEnd('timeout', true)).toBe(true)
 	})
 })

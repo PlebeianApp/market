@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { nprofileEncode, npubEncode } from 'nostr-tools/nip19'
+import { isValidHexKey } from '@/lib/utils'
 import { profileIdentifierToPubkey } from '@/lib/utils/profileIdentifier'
 
 const HEX = 'a'.repeat(64)
@@ -36,5 +37,13 @@ describe('profileIdentifierToPubkey', () => {
 			const result = profileIdentifierToPubkey(input)
 			if (result !== null) expect(/^[0-9a-f]{64}$/i.test(result)).toBe(true)
 		}
+	})
+})
+
+describe('encoding hygiene', () => {
+	test('an uppercase hex route is normalised, so the relay filter matches', () => {
+		const upper = 'A'.repeat(64)
+		expect(isValidHexKey(upper)).toBe(true)
+		expect(profileIdentifierToPubkey(upper)).toBe(upper.toLowerCase())
 	})
 })

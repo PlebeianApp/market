@@ -48,3 +48,21 @@ export function buildProductStreamFilter({ limit = 500, tag, authors }: ProductS
 
 	return { kinds: [30402], limit, ...scope, authors: validAuthors }
 }
+
+/**
+ * How a product stream ended. `eose` means every relay we asked has reported
+ * what it holds; the others are not answers about the seller.
+ */
+export type ProductStreamEnd = 'eose' | 'close' | 'timeout'
+
+/**
+ * Whether a stream that ended this way is conclusive about the seller.
+ *
+ * The same rule the one-shot read enforces via `requireEose`: a relay dropping
+ * the subscription, or our own deadline expiring, tells us nothing about
+ * whether products exist. Rendering "No products found" on those ends is how a
+ * slow relay produces a false statement about a merchant.
+ */
+export function isConclusiveEnd(end: ProductStreamEnd, sawEose: boolean): boolean {
+	return end === 'eose' || sawEose
+}
