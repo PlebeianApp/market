@@ -5,7 +5,7 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { filterDeletedProducts, isProductInStock } from '@/queries/products'
 import { collectTestLabelCoordinates, filterTestLabeledEvents } from '@/lib/utils/testLabelFilters'
 import { fetchTestLabels } from '@/queries/testLabels'
-import { buildProductStreamFilter, isConclusiveEnd, type ProductStreamEnd } from '@/lib/utils/productStreamFilter'
+import { allRelaysAnswered, buildProductStreamFilter, isConclusiveEnd, type ProductStreamEnd } from '@/lib/utils/productStreamFilter'
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 

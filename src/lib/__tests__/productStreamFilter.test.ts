@@ -1,23 +1,29 @@
 import { describe, expect, test } from 'bun:test'
 import { allRelaysAnswered, buildProductStreamFilter, isConclusiveEnd } from '@/lib/utils/productStreamFilter'
 
+/** Narrow the nullable filter for assertions. */
+function requireFilter(f: ReturnType<typeof buildProductStreamFilter>) {
+	if (!f) throw new Error('expected a filter')
+	return f
+}
+
 const VALID = 'a'.repeat(64)
 const OTHER = 'b'.repeat(64)
 
 describe('buildProductStreamFilter', () => {
 	test('always asks for kind 30402', () => {
-		expect(buildProductStreamFilter({}).kinds).toEqual([30402])
+		expect(requireFilter(buildProductStreamFilter({})).kinds).toEqual([30402])
 	})
 
 	test('streams one author when the profile resolves', () => {
-		const filter = buildProductStreamFilter({ authors: [VALID], limit: 50 })
+		const filter = requireFilter(buildProductStreamFilter({ authors: [VALID], limit: 50 }))
 
 		expect(filter.authors).toEqual([VALID])
 		expect(filter.limit).toBe(50)
 	})
 
 	test('drops malformed authors instead of sending them to relays', () => {
-		const filter = buildProductStreamFilter({ authors: [VALID, 'not-a-key', ''] })
+		const filter = requireFilter(buildProductStreamFilter({ authors: [VALID, 'not-a-key', ''] }))
 
 		expect(filter.authors).toEqual([VALID])
 	})
@@ -26,7 +32,7 @@ describe('buildProductStreamFilter', () => {
 	// uses to disable a query: hex is matched case-insensitively. Pinned here so a
 	// later "tighten the filter" change is a deliberate decision, not a surprise.
 	test('accepts uppercase hex, matching isValidHexKey', () => {
-		const filter = buildProductStreamFilter({ authors: ['A'.repeat(64)] })
+		const filter = requireFilter(buildProductStreamFilter({ authors: ['A'.repeat(64)] }))
 
 		expect(filter.authors).toEqual(['A'.repeat(64)])
 	})
@@ -42,7 +48,7 @@ describe('buildProductStreamFilter', () => {
 	})
 
 	test('an absent authors field means an unscoped stream (the feed)', () => {
-		const filter = buildProductStreamFilter({ limit: 10 })
+		const filter = requireFilter(buildProductStreamFilter({ limit: 10 }))
 
 		expect(filter).not.toBeNull()
 		expect(filter && 'authors' in filter).toBe(false)
@@ -50,7 +56,7 @@ describe('buildProductStreamFilter', () => {
 	})
 
 	test('keeps several valid authors', () => {
-		const filter = buildProductStreamFilter({ authors: [VALID, OTHER] })
+		const filter = requireFilter(buildProductStreamFilter({ authors: [VALID, OTHER] }))
 
 		expect(filter.authors).toEqual([VALID, OTHER])
 	})
