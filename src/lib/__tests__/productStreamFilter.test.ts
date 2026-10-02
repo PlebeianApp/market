@@ -62,12 +62,12 @@ describe('buildProductStreamFilter', () => {
 	})
 
 	test('tag narrows the stream when present', () => {
-		expect(buildProductStreamFilter({ tag: 'Food' })['#t']).toEqual(['Food'])
-		expect('#t' in buildProductStreamFilter({})).toBe(false)
+		expect(requireFilter(buildProductStreamFilter({ tag: 'Food' }))['#t']).toEqual(['Food'])
+		expect('#t' in requireFilter(buildProductStreamFilter({}))).toBe(false)
 	})
 
 	test('defaults the limit so a caller cannot request an unbounded stream', () => {
-		expect(buildProductStreamFilter({}).limit).toBe(500)
+		expect(requireFilter(buildProductStreamFilter({})).limit).toBe(500)
 	})
 })
 

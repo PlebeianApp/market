@@ -88,7 +88,7 @@ describe('fetchEventsWithTimeout: a deadline is not an answer', () => {
 		ndkStore.setState((state) => ({
 			...state,
 			ndk: {
-				subscribe: (_filters: unknown, opts: { onEose?: () => void }) => {
+				subscribe: (_filters: unknown, opts: { onEose?: () => void; onClose?: () => void }) => {
 					// Async, like a real relay: the helper assigns `subscription`
 					// after subscribe() returns, and onEose reads it.
 					if (mode === 'eose') queueMicrotask(() => opts.onEose?.())
