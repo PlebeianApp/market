@@ -1,3 +1,4 @@
+import { getStorefrontTheme, storefrontThemeCssVars } from '@/config/storefrontThemes'
 import { cn } from '@/lib/utils'
 import type { StorefrontBlock, StorefrontPage, StorefrontRootProps } from '@/lib/schemas/storefront'
 import type { ReactNode } from 'react'
@@ -24,27 +25,42 @@ import { DividerBlock, SpacerBlock } from './blocks/SpacingBlocks'
  * production, and the author discovers the difference after publishing.
  */
 
-const backgroundClass: Record<StorefrontRootProps['background'], string> = {
-	default: 'bg-background text-foreground',
-	muted: 'bg-muted/40 text-foreground',
-	dark: 'bg-secondary-black text-white',
-}
-
 /**
- * Root-level page styling. Exported so the Puck canvas can wrap its children in
- * the identical element — without this, the background the author picks would
- * show on the published page but not in the editor, which is exactly the
- * preview drift this design exists to prevent.
+ * Root-level page styling. Exported so every surface that renders a page —
+ * the published page, the Puck canvas, and the setup wizard's template/theme
+ * previews — wraps its children in the identical element. Without this, a
+ * theme the author picks would look different in each place, which is
+ * exactly the preview drift this design exists to prevent.
+ *
+ * The theme is applied as CSS custom properties on this wrapper (ADR-0006
+ * §"Theme Integration"), not as a Tailwind class switch: every block already
+ * styles itself with token classes (`bg-card`, `text-primary`, …), so
+ * overriding the token *values* here is enough — no block needs to know a
+ * theme exists.
  */
-export function StorefrontRoot({ props, children, className }: { props: StorefrontRootProps; children: ReactNode; className?: string }) {
+export function StorefrontRoot({
+	props,
+	children,
+	className,
+	/** False for compact previews (wizard cards) that must not claim the viewport height they're scaled inside. */
+	fullHeight = true,
+}: {
+	props: StorefrontRootProps
+	children: ReactNode
+	className?: string
+	fullHeight?: boolean
+}) {
 	const { isEditing } = useStorefrontContext()
+	const theme = getStorefrontTheme(props.theme)
 	return (
 		<div
-			// Only the live page carries the marker. The editor canvas renders the
-			// same element, and a test asserting "the visitor sees a storefront"
-			// must not be satisfied by the builder.
+			// Only the live page carries the marker. The editor canvas and wizard
+			// previews render the same element, and a test asserting "the visitor
+			// sees a storefront" must not be satisfied by either of those.
 			data-testid={isEditing ? undefined : 'storefront-page'}
-			className={cn('min-h-screen w-full', backgroundClass[props.background], className)}
+			data-storefront-theme={theme.id}
+			className={cn('w-full bg-background text-foreground', fullHeight && 'min-h-screen', className)}
+			style={storefrontThemeCssVars(theme)}
 		>
 			{children}
 		</div>

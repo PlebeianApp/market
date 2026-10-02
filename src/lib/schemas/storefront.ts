@@ -254,13 +254,24 @@ export const STOREFRONT_BLOCK_TYPES = [
 ] as const satisfies readonly StorefrontBlockType[]
 
 /**
+ * Closed set of page themes. Each id maps to a fixed CSS-custom-property token
+ * set in `src/config/storefrontThemes.ts` — the registry the author's CMS
+ * sidebar and the setup wizard both read from. Closed for the same reason the
+ * block union is closed: a free-form color picker is an open-ended surface
+ * (arbitrary CSS injected into every page on the app), and an id drawn from a
+ * fixed list is not.
+ */
+export const STOREFRONT_THEME_IDS = ['default', 'midnight', 'sunset', 'forest', 'mono'] as const
+export type StorefrontThemeId = (typeof STOREFRONT_THEME_IDS)[number]
+
+/**
  * Page-level settings. Deliberately minimal: per-block width already exists, so
  * a page-level width control would be a second, conflicting answer to the same
  * question.
  */
 export const StorefrontRootPropsSchema = z.object({
 	title: shortText.default(''),
-	background: z.enum(['default', 'muted', 'dark']).default('default'),
+	theme: z.enum(STOREFRONT_THEME_IDS).default('default'),
 })
 
 export type StorefrontRootProps = z.infer<typeof StorefrontRootPropsSchema>
@@ -312,11 +323,20 @@ export function createEmptyStorefrontPage(): StorefrontPage {
 /**
  * Parses an event's `content` into a renderable page.
  *
- * Partial failure is normal and non-fatal: unknown or malformed blocks are
- * dropped and counted, and the surviving blocks still render. Total failure
- * (unparseable JSON, wrong version, wrong envelope shape) returns
- * `page: null` with a reason, which the route turns into the profile-page
- * fallback rather than an error screen.
+ * Partial failure is normal and non-fatal, and it now applies at two levels:
+ *
+ *   - **Blocks** (as before): an unknown type or a prop that fails validation
+ *     drops that one block and counts it; the rest of the page still renders.
+ *   - **Root props** (`title`, `theme`): a value the schema rejects — e.g. a
+ *     `theme` id outside the closed set — falls back to that field's default
+ *     instead of invalidating the document. A page must not go dark because one
+ *     enum value on the root object was garbled; only a bad *block* should ever
+ *     cost the author that block, never the whole page.
+ *
+ * Only a structurally wrong document is total failure: unparseable JSON, a
+ * non-object top level, or a `version` this build does not understand. Those
+ * return `page: null` with a reason, which the route turns into the
+ * profile-page fallback rather than an error screen.
  */
 export function parseStorefrontPage(raw: string | null | undefined): StorefrontParseResult {
 	if (typeof raw !== 'string' || raw.trim().length === 0) {
@@ -330,15 +350,34 @@ export function parseStorefrontPage(raw: string | null | undefined): StorefrontP
 		return { page: null, droppedBlocks: 0, error: 'Page document is not valid JSON' }
 	}
 
-	const envelope = StorefrontPageEnvelopeSchema.safeParse(json)
-	if (!envelope.success) {
+	if (typeof json !== 'object' || json === null || Array.isArray(json)) {
+		return { page: null, droppedBlocks: 0, error: 'Page document does not match the expected format' }
+	}
+	const doc = json as Record<string, unknown>
+
+	// The version gate stays strict and total: an incompatible document shape
+	// cannot be salvaged field-by-field the way a bad block or a bad root prop
+	// can, since the whole schema could have moved out from under it.
+	if (doc.version !== STOREFRONT_PAGE_VERSION) {
 		return { page: null, droppedBlocks: 0, error: 'Page document does not match the expected format' }
 	}
 
+	// A non-boolean `enabled` falls back to `false` (the safer reading) rather
+	// than failing the document — an ambiguous "should this replace the
+	// profile page" value must not resolve to "yes".
+	const enabled = doc.enabled === true
+
+	const rootCandidate =
+		doc.root && typeof doc.root === 'object' && !Array.isArray(doc.root) ? (doc.root as Record<string, unknown>).props : undefined
+	const rootParsed = StorefrontRootPropsSchema.safeParse(rootCandidate)
+	const root = { props: rootParsed.success ? rootParsed.data : StorefrontRootPropsSchema.parse({}) }
+
+	const rawContent = Array.isArray(doc.content) ? doc.content : []
+
 	// Truncate before validating: a hostile document should not get to spend
 	// validation time proportional to its own length.
-	const candidates = envelope.data.content.slice(0, STOREFRONT_LIMITS.maxBlocks)
-	const overflow = Math.max(0, envelope.data.content.length - candidates.length)
+	const candidates = rawContent.slice(0, STOREFRONT_LIMITS.maxBlocks)
+	const overflow = Math.max(0, rawContent.length - candidates.length)
 
 	const content: StorefrontBlock[] = []
 	let droppedBlocks = overflow
@@ -353,12 +392,7 @@ export function parseStorefrontPage(raw: string | null | undefined): StorefrontP
 	}
 
 	return {
-		page: {
-			version: STOREFRONT_PAGE_VERSION,
-			enabled: envelope.data.enabled,
-			root: envelope.data.root,
-			content,
-		},
+		page: { version: STOREFRONT_PAGE_VERSION, enabled, root, content },
 		droppedBlocks,
 		error: null,
 	}

@@ -1,6 +1,7 @@
 import { CollectionPickerField, ProductPickerField } from '@/components/storefront/builder/fields/ItemPickerField'
+import { ThemeSwatchGrid } from '@/components/storefront/builder/fields/ThemePickerField'
 import { StorefrontBlockView, StorefrontRoot } from '@/components/storefront/StorefrontRenderer'
-import type { StorefrontBlock, StorefrontBlockType, StorefrontRootProps } from '@/lib/schemas/storefront'
+import type { StorefrontBlock, StorefrontBlockType, StorefrontRootProps, StorefrontThemeId } from '@/lib/schemas/storefront'
 import { StorefrontRootPropsSchema } from '@/lib/schemas/storefront'
 import type { Config } from '@puckeditor/core'
 
@@ -57,17 +58,15 @@ export const storefrontCmsConfig: Config = {
 	root: {
 		fields: {
 			title: { type: 'text', label: 'Page title' },
-			background: {
-				type: 'select',
-				label: 'Background',
-				options: [
-					{ label: 'Default', value: 'default' },
-					{ label: 'Muted', value: 'muted' },
-					{ label: 'Dark', value: 'dark' },
-				],
+			theme: {
+				type: 'custom',
+				label: 'Theme',
+				render: ({ value, onChange, readOnly }) => (
+					<ThemeSwatchGrid value={(value as StorefrontThemeId) ?? 'default'} onChange={onChange} readOnly={readOnly} />
+				),
 			},
 		},
-		defaultProps: { title: '', background: 'default' },
+		defaultProps: { title: '', theme: 'default' },
 		// The canvas wraps children in the very element the published page uses,
 		// so a background chosen here looks the same in both places.
 		render: ({ children, ...rootProps }: { children?: React.ReactNode } & Partial<StorefrontRootProps>) => {

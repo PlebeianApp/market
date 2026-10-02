@@ -1,19 +1,30 @@
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { storefrontCmsConfig } from '@/config/storefrontCms'
 import {
 	STOREFRONT_PAGE_VERSION,
-	createEmptyStorefrontPage,
 	validateStorefrontPageForPublish,
 	type StorefrontPage,
+	type StorefrontThemeId,
 } from '@/lib/schemas/storefront'
 import { cn } from '@/lib/utils'
 import { shouldRenderStorefrontPage, useStorefrontPage, usePublishStorefrontPage } from '@/queries/storefront'
 import { Puck, type Data } from '@puckeditor/core'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink, Loader2, Palette } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { StorefrontProvider } from '../StorefrontContext'
+import { StorefrontSetupWizard } from './StorefrontSetupWizard'
 import { clearStorefrontDraft, loadStorefrontDraft, saveStorefrontDraft } from './draftStorage'
 
 import '@puckeditor/core/puck.css'
@@ -21,10 +32,21 @@ import '@puckeditor/core/puck.css'
 /**
  * The page builder.
  *
- * Puck owns the canvas, the block list, and the property sidebar. This shell
- * owns the three things Puck cannot know about: where a page comes from (a
- * relay), where it goes (a signed event), and what "saved" means when the
- * destination is a network of relays that may each refuse.
+ * This is a small state machine over three modes:
+ *
+ *   `loading` — the published page query hasn't settled yet.
+ *   `wizard`  — `StorefrontSetupWizard`: pick a template, pick a theme. Shown
+ *               whenever there's no usable starting content (a first-time
+ *               author, or a document that parsed to zero blocks), and
+ *               reachable any time afterward via "Change template".
+ *   `editor`  — Puck, seeded from whatever the wizard (or a prior session's
+ *               draft, or the published page) produced.
+ *
+ * Puck owns the canvas, the block list, and the property sidebar once in
+ * `editor` mode. This shell owns the things Puck cannot know about: where a
+ * page comes from (a relay), where it goes (a signed event), what "saved"
+ * means when the destination is a network of relays that may each refuse, and
+ * — new in this file — what the author sees before there is anything to edit.
  *
  * Draft handling is deliberately local-first. Every keystroke lands in
  * localStorage, and *nothing* reaches a relay until the author presses Publish
@@ -33,37 +55,7 @@ import '@puckeditor/core/puck.css'
  * half-finished pages live on their storefront.
  */
 
-/** A first page that shows the author something, rather than a blank canvas. */
-function starterPage(): StorefrontPage {
-	const base = createEmptyStorefrontPage()
-	return {
-		...base,
-		content: [
-			{ type: 'ProfileHeader', props: { id: 'starter-profile', showBanner: true, showAbout: true, showNip05: true, align: 'center' } },
-			{
-				type: 'Text',
-				props: {
-					id: 'starter-intro',
-					markdown: 'Tell visitors who you are and what you sell.',
-					align: 'center',
-					width: 'normal',
-				},
-			},
-			{
-				type: 'ProductGrid',
-				props: {
-					id: 'starter-products',
-					title: 'What I am selling',
-					source: 'all',
-					collectionDTag: '',
-					limit: 12,
-					columns: 3,
-					emptyMessage: 'Nothing listed here yet.',
-				},
-			},
-		],
-	}
-}
+type BuilderMode = 'loading' | 'wizard' | 'editor'
 
 /** Puck's `Data` and our document share a shape, so these are projections, not conversions. */
 function toPuckData(page: StorefrontPage): Data {
@@ -83,19 +75,21 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 	const { data: published, isLoading } = useStorefrontPage(pubkey)
 	const publish = usePublishStorefrontPage()
 
+	const [mode, setMode] = useState<BuilderMode>('loading')
 	const [initialData, setInitialData] = useState<Data | null>(null)
 	const [enabled, setEnabled] = useState(false)
 	const [isDirty, setIsDirty] = useState(false)
 	const [errors, setErrors] = useState<string[]>([])
+	const [confirmChangeTemplateOpen, setConfirmChangeTemplateOpen] = useState(false)
 
 	// The live document. Held in a ref rather than state because Puck fires
 	// onChange on every keystroke: re-rendering this shell each time would
 	// remount the editor and steal focus mid-word.
 	const currentData = useRef<Data | null>(null)
 
-	// Seed the editor once, from the draft if there is one, else from the
-	// published page, else from the starter. Re-seeding after the query settles
-	// would discard whatever the author typed while it was in flight.
+	// Decide the starting mode once, from the draft if there is one, else the
+	// published page. Re-deciding after the query settles would discard
+	// whatever the author typed while it was in flight.
 	const seeded = useRef(false)
 	useEffect(() => {
 		if (seeded.current || isLoading) return
@@ -103,19 +97,42 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 
 		const draft = loadStorefrontDraft(pubkey)
 		const existing = draft ?? published?.page
-		// An existing document with no blocks is indistinguishable from no
-		// document at all as far as the author is concerned, so both get the
-		// starter rather than a blank canvas. The `enabled` flag is still taken
-		// from the existing document — emptying a live page should not quietly
-		// switch it back on.
-		const page = existing && existing.content.length > 0 ? existing : { ...starterPage(), enabled: existing?.enabled ?? false }
 
-		setEnabled(page.enabled)
-		setIsDirty(Boolean(draft))
-		const data = toPuckData(page)
-		currentData.current = data
-		setInitialData(data)
+		// A document with no blocks is indistinguishable from no document at
+		// all as far as the author is concerned — both send them to the setup
+		// wizard rather than a blank Puck canvas with nothing to click on.
+		if (existing && existing.content.length > 0) {
+			setEnabled(existing.enabled)
+			setIsDirty(Boolean(draft))
+			const data = toPuckData(existing)
+			currentData.current = data
+			setInitialData(data)
+			setMode('editor')
+		} else {
+			// The `enabled` flag is still taken from the existing document if one
+			// exists — arriving at the wizard (e.g. because every block failed to
+			// parse) must not quietly switch a previously-live page back on.
+			setEnabled(existing?.enabled ?? false)
+			setMode('wizard')
+		}
 	}, [isLoading, published, pubkey])
+
+	const handleWizardComplete = useCallback(
+		(page: StorefrontPage) => {
+			setEnabled(page.enabled)
+			setIsDirty(true)
+			const data = toPuckData(page)
+			currentData.current = data
+			setInitialData(data)
+			setErrors([])
+			// Persisted immediately: the author's template/theme choice is real
+			// work, and a refresh before their first edit inside Puck must not
+			// lose it and send them back to the wizard.
+			saveStorefrontDraft(pubkey, page)
+			setMode('editor')
+		},
+		[pubkey],
+	)
 
 	const handleChange = useCallback(
 		(data: Data) => {
@@ -173,17 +190,39 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 
 	const handleDiscardDraft = useCallback(() => {
 		clearStorefrontDraft(pubkey)
-		const page = published?.page ?? starterPage()
-		setEnabled(page.enabled)
-		const data = toPuckData(page)
-		currentData.current = data
-		setInitialData(data)
+		const page = published?.page
+
+		if (page && page.content.length > 0) {
+			setEnabled(page.enabled)
+			const data = toPuckData(page)
+			currentData.current = data
+			setInitialData(data)
+			setMode('editor')
+		} else {
+			// Nothing published to fall back to either — the only honest
+			// "discard" is to send the author back to step one.
+			setEnabled(false)
+			currentData.current = null
+			setInitialData(null)
+			setMode('wizard')
+		}
 		setIsDirty(false)
 		setErrors([])
 		toast.success('Unpublished changes discarded')
 	}, [published, pubkey])
 
+	// Reopening the wizard always asks first: `finish()` there REPLACES the
+	// whole block list, and there is no separate "are you sure" inside the
+	// wizard itself (its own Back/Cancel are about navigating the wizard, not
+	// about the data loss this specific entry point risks).
+	const requestChangeTemplate = useCallback(() => setConfirmChangeTemplateOpen(true), [])
+	const confirmChangeTemplate = useCallback(() => {
+		setConfirmChangeTemplateOpen(false)
+		setMode('wizard')
+	}, [])
+
 	const isLive = shouldRenderStorefrontPage(published)
+	const currentThemeId = (currentData.current?.root?.props as { theme?: StorefrontThemeId } | undefined)?.theme
 
 	// `renderHeaderActions` REPLACES Puck's default action area, Publish button
 	// included — so this has to supply its own. That suits us anyway: publishing
@@ -215,6 +254,16 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 							</a>
 						)}
 
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={requestChangeTemplate}
+							disabled={publish.isPending}
+							data-testid="storefront-change-template"
+						>
+							<Palette className="mr-1.5 size-3.5" /> Change template
+						</Button>
+
 						{isDirty && (
 							<Button
 								variant="ghost"
@@ -239,15 +288,35 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 					</div>
 				)
 			},
-		[enabled, handleToggleEnabled, isLive, pubkey, isDirty, handleDiscardDraft, handlePublish, publish.isPending],
+		[enabled, handleToggleEnabled, isLive, pubkey, isDirty, handleDiscardDraft, handlePublish, publish.isPending, requestChangeTemplate],
 	)
 
-	if (isLoading || !initialData) {
+	if (mode === 'loading') {
 		return (
 			<div className="flex min-h-96 items-center justify-center">
 				<Loader2 className="size-6 animate-spin text-muted-foreground" />
 			</div>
 		)
+	}
+
+	if (mode === 'wizard') {
+		return (
+			<StorefrontSetupWizard
+				pubkey={pubkey}
+				initialThemeId={currentThemeId}
+				// Only offer a way back out when there's an editor session to
+				// return to — true first-time setup has nothing to cancel to.
+				onCancel={initialData ? () => setMode('editor') : undefined}
+				onComplete={handleWizardComplete}
+			/>
+		)
+	}
+
+	if (!initialData) {
+		// Unreachable in practice — `editor` mode is only entered with
+		// `initialData` set — but keeps this component total rather than
+		// asserting at the Puck call below.
+		return null
 	}
 
 	return (
@@ -286,6 +355,42 @@ export function StorefrontBuilder({ pubkey }: { pubkey: string }) {
 					/>
 				</div>
 			</div>
+
+			<ChangeTemplateDialog
+				open={confirmChangeTemplateOpen}
+				onOpenChange={setConfirmChangeTemplateOpen}
+				onConfirm={confirmChangeTemplate}
+			/>
 		</StorefrontProvider>
+	)
+}
+
+function ChangeTemplateDialog({
+	open,
+	onOpenChange,
+	onConfirm,
+}: {
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onConfirm: () => void
+}) {
+	return (
+		<AlertDialog open={open} onOpenChange={onOpenChange}>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Start over from a template?</AlertDialogTitle>
+					<AlertDialogDescription>
+						Picking a new template replaces every block currently on the canvas. This only affects your draft — nothing is published until
+						you press Publish, so your live page (if you have one) stays exactly as it is until then.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel>Keep editing</AlertDialogCancel>
+					<AlertDialogAction onClick={onConfirm} data-testid="storefront-change-template-confirm">
+						Choose a different template
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	)
 }

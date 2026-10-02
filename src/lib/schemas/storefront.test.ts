@@ -194,6 +194,52 @@ describe('parseStorefrontPage — valid documents', () => {
 		const page = parseStorefrontPage(raw).page
 		expect(page?.content).toHaveLength(1)
 	})
+
+	test('accepts a valid theme id on the root', () => {
+		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, root: { props: { theme: 'midnight' } }, content: [] })
+		expect(parseStorefrontPage(raw).page?.root.props.theme).toBe('midnight')
+	})
+})
+
+describe('parseStorefrontPage — a bad root prop falls back to its default, the page still renders', () => {
+	test('an unknown theme id does not take down the whole document', () => {
+		const raw = JSON.stringify({
+			version: STOREFRONT_PAGE_VERSION,
+			enabled: true,
+			root: { props: { theme: 'rainbow-explosion-9000' } },
+			content: [block('Text', { markdown: 'still here' })],
+		})
+
+		const result = parseStorefrontPage(raw)
+		expect(result.error).toBeNull()
+		expect(result.page?.root.props.theme).toBe('default')
+		expect(result.page?.content).toHaveLength(1)
+	})
+
+	test('a non-string theme value falls back the same way', () => {
+		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, root: { props: { theme: 42 } }, content: [] })
+		expect(parseStorefrontPage(raw).page?.root.props.theme).toBe('default')
+	})
+
+	test('a missing root object entirely still parses, using every default', () => {
+		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, content: [] })
+		const page = parseStorefrontPage(raw).page
+		expect(page?.root.props).toEqual({ title: '', theme: 'default' })
+	})
+
+	test('a non-boolean enabled value is treated as false — the safer reading, not a thrown error', () => {
+		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: 'yes-please', root: { props: {} }, content: [] })
+		const result = parseStorefrontPage(raw)
+		expect(result.error).toBeNull()
+		expect(result.page?.enabled).toBe(false)
+	})
+
+	test('a non-array content value is treated as an empty page rather than failing', () => {
+		const raw = JSON.stringify({ version: STOREFRONT_PAGE_VERSION, enabled: true, root: { props: {} }, content: 'not-an-array' })
+		const result = parseStorefrontPage(raw)
+		expect(result.error).toBeNull()
+		expect(result.page?.content).toEqual([])
+	})
 })
 
 describe('validateStorefrontPageForPublish — the author is told, not silently trimmed', () => {

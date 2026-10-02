@@ -41,7 +41,7 @@ test.describe('storefront page builder', () => {
 		return {
 			version: STOREFRONT_PAGE_VERSION,
 			enabled,
-			root: { props: { title: '', background: 'default' } },
+			root: { props: { title: '', theme: 'default' } },
 			content: [
 				{ type: 'ProfileHeader', props: { id: 'p1', showBanner: true, showAbout: true, showNip05: true, align: 'center' } },
 				{ type: 'Text', props: { id: 't1', markdown: SEED_MARKER, align: 'center', width: 'normal' } },
@@ -154,7 +154,9 @@ test.describe('storefront page builder', () => {
 		await publishStorefrontPage(bytesToHex(sk), {
 			version: STOREFRONT_PAGE_VERSION,
 			enabled: true,
-			root: { props: { title: 'Hostile', background: 'default', width: 'normal' } },
+			// An invalid theme id is hostile input too — it must fall back to the
+			// default theme rather than taking the whole page down with it.
+			root: { props: { title: 'Hostile', theme: 'javascript:alert(1)' } },
 			content: [
 				// Safe block: proves the page rendered at all, so a passing
 				// assertion below is "the hostile block was dropped", not "the
@@ -178,8 +180,13 @@ test.describe('storefront page builder', () => {
 		})
 
 		await unauthenticatedPage.goto(`/profile/${pk}`)
-		await expect(unauthenticatedPage.getByTestId('storefront-page')).toBeVisible({ timeout: 25_000 })
+		const storefront = unauthenticatedPage.getByTestId('storefront-page')
+		await expect(storefront).toBeVisible({ timeout: 25_000 })
 		await expect(unauthenticatedPage.getByText('Legitimate content')).toBeVisible()
+
+		// The invalid theme id fell back to the default rather than failing the
+		// whole document — the page above would not have rendered at all otherwise.
+		await expect(storefront).toHaveAttribute('data-storefront-theme', 'default')
 
 		// None of the hostile blocks produced anything navigable or loadable.
 		await expect(unauthenticatedPage.locator('a[href^="javascript:"]')).toHaveCount(0)
@@ -209,6 +216,117 @@ test.describe('storefront page builder', () => {
 		// No storefront, no crash — the ordinary profile view takes over.
 		await expect(unauthenticatedPage.getByTestId('storefront-page')).toHaveCount(0)
 		await expect(unauthenticatedPage.locator('body')).toBeVisible()
+	})
+})
+
+test.describe('storefront setup wizard', () => {
+	test.use({ scenario: 'merchant', recordVideo: true })
+
+	// devUser3 is the fixture's intentionally-fresh account: the 'merchant'
+	// scenario seeds profiles and products for devUser1/devUser2 only, and no
+	// prior test in this file publishes a 30024 event for it. That is exactly
+	// the "no usable content yet" condition the wizard exists for — using a
+	// seeded account here would risk the wizard never appearing at all, because
+	// a leftover page from a previous run would route straight to the editor.
+	const NEW_USER_SK = 'e61ae5a4f505026e3d2b5aeba82c748b6b799346a1e98e266d7252cddb8f502b'
+	const NEW_USER_PK = '2edec1b799cd2f41f70a5ff0edc10d2260a57d62f39072aab4eb8174b7ca912a'
+
+	const BUILDER_PATH = '/dashboard/account/profile-page'
+
+	// Disabled unconditionally, win or fail — `newUserPage` is shared with other
+	// spec files (user-profile.spec.ts), and an enabled page would change what
+	// a visit to this account's profile shows there.
+	test.afterAll(async () => {
+		await publishStorefrontPage(NEW_USER_SK, {
+			version: STOREFRONT_PAGE_VERSION,
+			enabled: false,
+			root: { props: { title: '', theme: 'default' } },
+			content: [],
+		})
+	})
+
+	test('a first-time author is offered the wizard, picks a template and a theme, and publishes it', async ({ newUserPage }) => {
+		await newUserPage.goto(BUILDER_PATH)
+
+		const wizard = newUserPage.getByTestId('storefront-wizard')
+		await expect(wizard).toBeVisible({ timeout: 20_000 })
+
+		// Step 1: template. No "Cancel" on first-time setup — there is nothing
+		// yet to cancel back to.
+		await expect(newUserPage.getByTestId('storefront-wizard-cancel')).toHaveCount(0)
+		await expect(newUserPage.getByTestId('storefront-template-shop')).toBeVisible()
+		await newUserPage.getByTestId('storefront-template-showcase').click()
+		await newUserPage.getByTestId('storefront-wizard-next').click()
+
+		// Step 2: theme. "Back" is available here.
+		await expect(newUserPage.getByTestId('storefront-wizard-back')).toBeVisible()
+		await expect(newUserPage.getByTestId('storefront-theme-sunset')).toBeVisible()
+		await newUserPage.getByTestId('storefront-theme-sunset').click()
+		await newUserPage.getByTestId('storefront-wizard-finish').click()
+
+		// The editor opens seeded with the showcase template's blocks — proof the
+		// wizard's choice, not some other default, is what landed in Puck.
+		await expect(newUserPage.getByTestId('storefront-builder')).toBeVisible({ timeout: 20_000 })
+		await expect(newUserPage.getByText('More from this shop')).toBeVisible({ timeout: 20_000 })
+
+		await newUserPage.getByTestId('storefront-enable-toggle').click()
+		await newUserPage.getByTestId('storefront-publish').click()
+		await expect(newUserPage.getByText(/published to \d+ relay/i)).toBeVisible({ timeout: 20_000 })
+
+		const event = await fetchStorefrontEvent(NEW_USER_PK)
+		expect(event).not.toBeNull()
+		const document = JSON.parse(event!.content)
+		expect(document.enabled).toBe(true)
+		expect(document.root.props.theme).toBe('sunset')
+		expect(document.content.map((b: { type: string }) => b.type)).toEqual(['ProfileHeader', 'FeaturedProduct', 'ProductGrid'])
+
+		// The published page actually renders with the chosen theme.
+		const visitor = await newUserPage.context().browser()!.newContext()
+		const visitorPage = await visitor.newPage()
+		try {
+			await visitorPage.goto(`/profile/${NEW_USER_PK}`)
+			const storefront = visitorPage.getByTestId('storefront-page')
+			await expect(storefront).toBeVisible({ timeout: 25_000 })
+			await expect(storefront).toHaveAttribute('data-storefront-theme', 'sunset')
+		} finally {
+			await visitorPage.close()
+			await visitor.close()
+		}
+	})
+
+	test('"Change template" asks for confirmation before replacing the canvas', async ({ newUserPage }) => {
+		// Seed existing content so the builder opens straight into the editor —
+		// this test is about reopening the wizard from there, not reaching it
+		// the first time (covered above).
+		await publishStorefrontPage(NEW_USER_SK, {
+			version: STOREFRONT_PAGE_VERSION,
+			enabled: false,
+			root: { props: { title: '', theme: 'default' } },
+			content: [{ type: 'Text', props: { id: 't1', markdown: 'Existing content', align: 'left', width: 'normal' } }],
+		})
+
+		await newUserPage.goto(BUILDER_PATH)
+		await expect(newUserPage.getByTestId('storefront-builder')).toBeVisible({ timeout: 20_000 })
+		await expect(newUserPage.getByText('Existing content')).toBeVisible({ timeout: 20_000 })
+
+		await newUserPage.getByTestId('storefront-change-template').click()
+		await expect(newUserPage.getByText(/replaces every block/i)).toBeVisible()
+
+		// Backing out of the confirmation leaves the existing canvas untouched.
+		await newUserPage.getByRole('button', { name: 'Keep editing' }).click()
+		await expect(newUserPage.getByTestId('storefront-builder')).toBeVisible()
+		await expect(newUserPage.getByText('Existing content')).toBeVisible()
+
+		// Confirming reopens the wizard, this time with a way back (there is now
+		// an editor session to return to).
+		await newUserPage.getByTestId('storefront-change-template').click()
+		await newUserPage.getByTestId('storefront-change-template-confirm').click()
+		await expect(newUserPage.getByTestId('storefront-wizard')).toBeVisible({ timeout: 10_000 })
+		await expect(newUserPage.getByTestId('storefront-wizard-cancel')).toBeVisible()
+
+		await newUserPage.getByTestId('storefront-wizard-cancel').click()
+		await expect(newUserPage.getByTestId('storefront-builder')).toBeVisible({ timeout: 10_000 })
+		await expect(newUserPage.getByText('Existing content')).toBeVisible()
 	})
 })
 
