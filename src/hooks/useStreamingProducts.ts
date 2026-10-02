@@ -214,6 +214,11 @@ export function useStreamingProducts({
 			// stream nothing until the caller has an author to scope by.
 			setProducts([])
 			setIsStreaming(false)
+			// Not settled: nothing was asked of any relay, so an empty list says
+			// nothing about the seller. Reporting it as settled is what turns this
+			// into a false "No products found" (raised in review: the refusal path
+			// still published an empty result).
+			setStreamIncomplete(true)
 			return
 		}
 
