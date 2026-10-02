@@ -37,6 +37,11 @@ interface UseStreamingProductsReturn {
 	products: NDKEvent[]
 	/** Whether we're still actively receiving products */
 	isStreaming: boolean
+	/**
+	 * The stream ended without every relay we asked reporting what it holds, so
+	 * an empty list is not a statement about the seller.
+	 */
+	streamIncomplete: boolean
 	/** Whether NDK is connected */
 	isConnected: boolean
 	/** Number of products received */
@@ -81,9 +86,9 @@ export function useStreamingProducts({
 	const [relayEpoch, setRelayEpoch] = useState(0)
 	// Did any relay report end-of-stored-events? Only then is an empty list a fact.
 	const sawEoseRef = useRef(false)
-	// Which seller the buffered products belong to, so a navigation cannot flash
-	// the previous seller's products under the new seller's heading.
-	const authorKeyRef = useRef<string | null>(null)
+	// Whether the run that just ended failed to reach a conclusion, so a relay
+	// connecting later knows whether a re-subscribe would add anything.
+	const inconclusiveRef = useRef(false)
 
 	// Stable per-event business filters (blacklist, visibility, stock, country)
 	const passesBusinessFilters = useCallback(
@@ -192,6 +197,8 @@ export function useStreamingProducts({
 			// changes, but until then nothing is being fetched, so the caller must
 			// not be told that it is (that state hides the retry affordance).
 			setIsStreaming(false)
+			setStreamIncomplete(true)
+			inconclusiveRef.current = true
 			return
 		}
 
@@ -238,16 +245,25 @@ export function useStreamingProducts({
 			setStreamIncomplete(true)
 			return
 		}
+		// closeOnEose stays off: the library closes the subscription on its own
+		// early EOSE, which would cut off the relays still holding this seller's
+		// products. The subscription ends when every relay we asked has answered,
+		// or at the deadline below.
 		const subscription = scopedRelaySet
-			? ndk.subscribe(filter, { closeOnEose: true }, scopedRelaySet)
+			? ndk.subscribe(filter, { closeOnEose: false }, scopedRelaySet)
 			: ndk.subscribe(filter, {
-					closeOnEose: true,
+					closeOnEose: false,
 				})
 
 		sawEoseRef.current = false
 		setStreamIncomplete(false)
 		setProductsKey(authorsKey)
-		const onRelayConnect = () => setRelayEpoch((epoch) => epoch + 1)
+		// A late relay only justifies a re-subscribe when the run ended without a
+		// conclusion; otherwise every relay connecting would restart the stream and
+		// blank the product list (N relays → N restarts).
+		const onRelayConnect = () => {
+			if (inconclusiveRef.current) setRelayEpoch((epoch) => epoch + 1)
+		}
 		ndk.pool.on('relay:connect', onRelayConnect)
 		subscriptionRef.current = subscription
 
@@ -256,16 +272,38 @@ export function useStreamingProducts({
 		})
 
 		const settle = (end: ProductStreamEnd) => {
+			// A previous run's close (subscription.stop() emits it synchronously on
+			// cleanup) must not write state over the run that replaced it.
+			if (subscriptionRef.current !== subscription) return
 			void flushPendingEvents().finally(() => {
-				setStreamIncomplete(!isConclusiveEnd(end, sawEoseRef.current))
+				const conclusive = isConclusiveEnd(end, sawEoseRef.current)
+				inconclusiveRef.current = !conclusive
+				setStreamIncomplete(!conclusive)
 				setIsStreaming(false)
 			})
 		}
 
-		subscription.on('eose', () => {
+		// The library's own eose fires on a subset; only count it when every relay
+		// we asked has answered. Later answers do not re-emit eose, hence the poll.
+		const relaysAsked = () => subscription.relayFilters?.size ?? 0
+		const relaysAnswered = () => subscription.eosesSeen?.size ?? 0
+		const noteEose = () => {
+			if (!allRelaysAnswered(relaysAsked(), relaysAnswered())) return false
 			sawEoseRef.current = true
-			settle('eose')
+			return true
+		}
+
+		subscription.on('eose', () => {
+			if (noteEose()) settle('eose')
 		})
+
+		const eosePoll = setInterval(() => {
+			if (subscriptionRef.current !== subscription) return
+			if (noteEose()) {
+				subscription.stop()
+				settle('eose')
+			}
+		}, 250)
 
 		subscription.on('close', () => {
 			// A relay drop before EOSE is not an answer about the seller, and must
@@ -286,6 +324,7 @@ export function useStreamingProducts({
 
 		return () => {
 			clearTimeout(timeout)
+			clearInterval(eosePoll)
 			if (flushTimerRef.current) {
 				clearTimeout(flushTimerRef.current)
 				flushTimerRef.current = null

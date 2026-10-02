@@ -50,6 +50,20 @@ export function buildProductStreamFilter({ limit = 500, tag, authors }: ProductS
 }
 
 /**
+ * Whether every relay the subscription was sent to has reported end-of-stored-events.
+ *
+ * The library's own `eose` event is NOT this: it fires early by design when at
+ * least two relays have answered and half of them have (`eoseReceived` in
+ * @nostr-dev-kit/ndk, `hasSeenAllEoses` vs its 2-relay/50% fallback), so a
+ * subset that holds none of the requested data can produce an `eose` while the
+ * relays that do hold it are still answering. Counting the relays we asked
+ * against the relays that have answered is the only way to know.
+ */
+export function allRelaysAnswered(asked: number, seen: number): boolean {
+	return asked > 0 && seen >= asked
+}
+
+/**
  * How a product stream ended. `eose` means every relay we asked has reported
  * what it holds; the others are not answers about the seller.
  */

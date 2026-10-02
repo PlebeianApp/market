@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildProductStreamFilter, isConclusiveEnd } from '@/lib/utils/productStreamFilter'
+import { allRelaysAnswered, buildProductStreamFilter, isConclusiveEnd } from '@/lib/utils/productStreamFilter'
 
 const VALID = 'a'.repeat(64)
 const OTHER = 'b'.repeat(64)
@@ -82,5 +82,24 @@ describe('isConclusiveEnd', () => {
 	test('a close or deadline after EOSE keeps the answer EOSE established', () => {
 		expect(isConclusiveEnd('close', true)).toBe(true)
 		expect(isConclusiveEnd('timeout', true)).toBe(true)
+	})
+})
+
+describe('allRelaysAnswered', () => {
+	test('only a full set of answers makes the stream conclusive', () => {
+		expect(allRelaysAnswered(4, 4)).toBe(true)
+		expect(allRelaysAnswered(4, 5)).toBe(true)
+	})
+
+	test('the library reporting eose from a subset is not a conclusion', () => {
+		// @nostr-dev-kit/ndk emits eose once 2 relays answer and half have answered,
+		// while the relays holding the data may still be answering.
+		expect(allRelaysAnswered(4, 2)).toBe(false)
+		expect(allRelaysAnswered(9, 5)).toBe(false)
+		expect(allRelaysAnswered(3, 0)).toBe(false)
+	})
+
+	test('no relays asked is never a conclusion', () => {
+		expect(allRelaysAnswered(0, 0)).toBe(false)
 	})
 })
