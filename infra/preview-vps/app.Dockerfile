@@ -23,7 +23,8 @@
 FROM oven/bun:latest
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
-RUN bun install
+COPY patches ./patches
+RUN bun install --frozen-lockfile
 # Build identity, baked into the image ENV so the running preview reports the
 # exact commit it was built from (the deploy health check asserts it via
 # /api/config). Kept after `RUN bun install` so a new commit does not
