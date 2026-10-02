@@ -24,6 +24,7 @@ import { useFeaturedUsers } from '@/queries/featured'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { getProfileIdentifierValidationError } from '@/lib/utils/profileValidation'
+import { profileIdentifierToPubkey } from '@/lib/utils/profileIdentifier'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
@@ -83,13 +84,20 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	// one-shot read could conclude "no products" while another relay still held
 	// them, which is the reported false empty on this page.
 	const [productsReloadToken, setProductsReloadToken] = useState(0)
+	// Who the products belong to. The route identifier already carries the pubkey
+	// for hex/npub/nprofile, so we take it from there instead of waiting for the
+	// kind-0 fetch: that fetch is a second, unrelated round-trip, and when it fails
+	// the products section lost its author entirely. NIP-05 and vanity names have
+	// no synchronous form, so those still fall back to the resolved profile.
+	const routeAuthor = useMemo(() => profileIdentifierToPubkey(profileId), [profileId])
+	const sellerAuthor = routeAuthor ?? profilePubkey
 	const {
 		products: sellerProducts,
 		isStreaming: sellerProductsStreaming,
 		isConnected: sellerProductsConnected,
 	} = useStreamingProducts({
 		limit: 50,
-		authors: profilePubkey ? [profilePubkey] : [],
+		authors: sellerAuthor ? [sellerAuthor] : [],
 		reloadToken: productsReloadToken,
 	})
 

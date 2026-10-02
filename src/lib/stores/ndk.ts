@@ -877,6 +877,26 @@ export const ndkActions = {
 		return ndkStore.state.ndk
 	},
 
+	/**
+	 * Relay set covering every relay we are currently connected to.
+	 *
+	 * For a read whose author is already known ("this seller, everywhere we are
+	 * reachable"), NDK's per-filter relay selection can pick a subset that cannot
+	 * answer: measured on a seller profile, the subscription reached 2 relays while
+	 * the seller's products sat on 2 different ones, so the page concluded the
+	 * seller had no products. Callers that know they want the whole connected set
+	 * pass this instead of letting the library choose.
+	 */
+	getConnectedRelaySet: (): NDKRelaySet | null => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk) return null
+
+		const relayUrls = ndk.pool.connectedRelays().map((relay) => relay.url)
+		if (relayUrls.length === 0) return null
+
+		return NDKRelaySet.fromRelayUrls(relayUrls, ndk)
+	},
+
 	getZapNdk: () => {
 		return ndkStore.state.zapNdk
 	},

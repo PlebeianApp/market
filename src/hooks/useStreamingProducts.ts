@@ -206,9 +206,18 @@ export function useStreamingProducts({
 			return
 		}
 
-		const subscription = ndk.subscribe(filter, {
-			closeOnEose: true,
-		})
+		// An author-scoped read must reach every relay we are connected to. NDK picks
+		// relays per filter, and for an `authors` filter that selection can be a
+		// subset holding none of that author's products (measured on a seller
+		// profile: the subscription reached 2 relays while her products sat on 2
+		// others), which renders as "this seller has no products". The unscoped feed
+		// read keeps the library's default selection.
+		const scopedRelaySet = filter.authors ? ndkActions.getConnectedRelaySet() : null
+		const subscription = scopedRelaySet
+			? ndk.subscribe(filter, { closeOnEose: true }, scopedRelaySet)
+			: ndk.subscribe(filter, {
+					closeOnEose: true,
+				})
 
 		subscriptionRef.current = subscription
 
