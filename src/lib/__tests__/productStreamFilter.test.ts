@@ -31,14 +31,22 @@ describe('buildProductStreamFilter', () => {
 		expect(filter.authors).toEqual(['A'.repeat(64)])
 	})
 
-	// The dangerous case: an empty (or fully invalid) author list must not produce
-	// a filter with no author constraint, which would stream every seller's
-	// products on the relay into one seller's profile.
-	test('never emits a filter without an author constraint', () => {
-		for (const authors of [[], ['nope'], ['']]) {
-			const filter = buildProductStreamFilter({ authors })
-			expect('authors' in filter).toBe(false)
+	// The dangerous case, and the one this function exists for: a caller that
+	// asked for author scoping must never receive a filter without an author
+	// constraint, because that filter matches every seller on the relay and the
+	// results get labelled as the one seller the page is about.
+	test('refuses to build an unscoped filter when author scoping was requested', () => {
+		for (const authors of [[], ['nope'], [''], ['nope', '']]) {
+			expect(buildProductStreamFilter({ authors })).toBeNull()
 		}
+	})
+
+	test('an absent authors field means an unscoped stream (the feed)', () => {
+		const filter = buildProductStreamFilter({ limit: 10 })
+
+		expect(filter).not.toBeNull()
+		expect(filter && 'authors' in filter).toBe(false)
+		expect(filter?.limit).toBe(10)
 	})
 
 	test('keeps several valid authors', () => {

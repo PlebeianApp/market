@@ -194,7 +194,17 @@ export function useStreamingProducts({
 		}
 		setIsStreaming(true)
 
-		const filter = buildProductStreamFilter({ limit, tag, authors }) as NDKFilter
+		const filter = buildProductStreamFilter({ limit, tag, authors })
+		if (!filter) {
+			// Author scoping was requested (authors !== undefined) but no valid author
+			// is available yet -- typically a profile page that rendered before its
+			// pubkey resolved. Subscribing here would ask every relay for every
+			// author and then label the results as that seller's products, so we
+			// stream nothing until the caller has an author to scope by.
+			setProducts([])
+			setIsStreaming(false)
+			return
+		}
 
 		const subscription = ndk.subscribe(filter, {
 			closeOnEose: true,
