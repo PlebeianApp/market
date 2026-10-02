@@ -253,6 +253,11 @@ describe('preview app serves a real document', () => {
 		expect(body).toContain('app.Dockerfile deploy-package/Dockerfile')
 	})
 
+	test('the deploy package ships Bun patchedDependencies inputs', () => {
+		const body = runBody(stepNamed(deployJob, PACKAGE_STEP))
+		expect(body).toContain('cp -r patches deploy-package/')
+	})
+
 	test('the app container starts the prebuilt image (no install at container start)', () => {
 		// Deps are baked into market-app:<sha> by the VPS build step, so the
 		// compose must not install anything when the container starts (that was
@@ -341,6 +346,13 @@ describe('preview app serves a real document', () => {
 		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
 		expect(dockerfile).toContain('bun install')
 		expect(dockerfile).not.toContain('bun install --production')
+	})
+
+	test('the image copies dependency patches before the frozen install', () => {
+		const dockerfile = readFileSync(join(REPO_ROOT, 'infra/preview-vps/app.Dockerfile'), 'utf8')
+		expect(dockerfile).toContain('COPY patches ./patches')
+		expect(dockerfile).toContain('RUN bun install --frozen-lockfile')
+		expect(dockerfile.indexOf('COPY patches ./patches')).toBeLessThan(dockerfile.indexOf('RUN bun install --frozen-lockfile'))
 	})
 
 	test('the health check requires a non-empty HTML body, not merely a status', () => {
