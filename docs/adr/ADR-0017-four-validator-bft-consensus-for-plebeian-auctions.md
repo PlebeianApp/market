@@ -1,4 +1,4 @@
-# ADR-0011: Four-Validator BFT Consensus for Plebeian Auctions
+# ADR-0017: Four-Validator BFT Consensus for Plebeian Auctions
 
 ## Status
 
